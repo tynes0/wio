@@ -1,3 +1,5 @@
+#pragma once
+
 #include <vector>
 #include <cctype>
 
@@ -39,9 +41,13 @@ namespace wio
                 {
                     tokens.push_back(read_number());
                 }
-                else if (current == '"')
+                else if (current == '\"')
                 {
                     tokens.push_back(read_string());
+                }
+                else if (current == '\'')
+                {
+                    tokens.push_back(read_char());
                 }
                 else if (is_operator(current))
                 {
@@ -51,11 +57,11 @@ namespace wio
                 else if (is_seperator(current))
                 {
                     std::string op(1, advance());
-                    tokens.push_back({ token_map.at(op), op });
+                    tokens.push_back({ token_map.at(op), op, m_loc });
                 }
                 else if (current == '\0')
                 {
-                    tokens.push_back({ token_map.at("eof"), "eof" });
+                    tokens.push_back({ token_map.at("eof"), "eof", m_loc });
                     break;
                 }
                 else
@@ -131,7 +137,6 @@ namespace wio
             return false;
         }
 
-
         token read_identifier()
         {
             std::string result;
@@ -139,16 +144,22 @@ namespace wio
             while (std::isalnum(peek()) || peek() == '_')
                 result += advance();
 
-            if (token_map.count(result) && token_map.at(result) == token_type::keyword)
-                return { token_type::keyword, result };
+            if (token_map.count(result) && frenum::index(token_map.at(result)) < frenum::index(token_type::KW_COUNT))
+                return { token_map.at(result), result, m_loc };
 
-            return { token_type::identifier, result };
+            return { token_type::identifier, result, m_loc };
         }
 
         token read_number()
         {
             std::string result;
             bool is_float = false, is_scientific = false;
+
+            if (peek() == '-')
+            {
+                result += '-';
+                advance();
+            }
 
             if (peek() == '0')
             {
@@ -222,7 +233,7 @@ namespace wio
                     result += advance();
             }
 
-            return { token_type::number, result };
+            return { token_type::number, result, m_loc };
         }
 
         token read_string()
@@ -267,7 +278,16 @@ namespace wio
 
             advance();
 
-            return { token_type::string, result };
+            return { token_type::string, result, m_loc };
+        }
+
+        token read_char()
+        {
+            advance();
+            std::string op(1, advance());
+            token result({ token_type::character, op, m_loc });
+            advance();
+            return result;
         }
 
         token read_operator()
@@ -285,7 +305,7 @@ namespace wio
             }
 
             advance();
-            return { token_map.at(op), op };
+            return { token_map.at(op), op, m_loc };
         }
 
         bool is_operator(char ch)

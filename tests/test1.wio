@@ -1,0 +1,29 @@
+import "test";
+
+local var a = 42;
+
+global array col = [1, 'c', "string"];
+
+func test(array collection)
+{
+    const const_var = -0.2;
+    global var b = "hello";
+    for (var i = 0; i < 10; i++) 
+    {
+        print(i);
+        if (i == 5) break;
+
+        #* this should be a
+        multiline comment *#
+
+        var cond = true;
+    }
+
+    ## this is a line comment
+
+    foreach (item in collection) {
+        print(item);
+    }
+}
+
+test(col);

@@ -101,6 +101,13 @@ namespace wio
 		explicit unexpected_character_error(const std::string& message) noexcept : local_exception(message.c_str()) {}
 	};
 
+	class unexpected_token_error : public local_exception
+	{
+	public:
+		explicit unexpected_token_error(const std::string& message, const location& loc) noexcept : local_exception(message, loc) {}
+		explicit unexpected_token_error(const std::string& message) noexcept : local_exception(message.c_str()) {}
+	};
+
 	class parse_error : public local_exception
 	{
 	public:

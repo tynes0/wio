@@ -27,8 +27,8 @@ namespace wio
         }
     };
 
-    var_dictionary::value_type dict_v(ref<variable_base> left_var, ref<variable_base> right_var)
+    /*var_dictionary::value_type dict_v(ref<variable_base> left_var, ref<variable_base> right_var)
     {
         return make_ref<std::pair<ref<variable_base>, ref<variable_base>>>(std::make_pair<>(left_var, right_var));
-    }
+    }*/
 }

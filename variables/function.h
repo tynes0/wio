@@ -1,55 +1,36 @@
 #pragma once
 
+#include <string>
 #include <vector>
-#include <memory>
+#include "variables/variable.h" // variable_type
 
-#include "../base.h"
-#include "variable.h"
-
-namespace wio
+namespace wio 
 {
-	class function : public variable_base
-	{
-	public:
-        function() {}
 
-        function(const std::string& id, ref<void> reference, variable_type return_type, const std::vector<variable_base_type>& parameter_types)
-            : m_id(id), m_reference(reference), m_return_type(return_type), m_parameter_types(parameter_types) {}
+    class function : public variable_base 
+    {
+    public:
+        function(const std::string& name, const std::vector<std::string>& param_names, variable_type return_type)
+            : m_name(name), m_param_names(param_names), m_return_type(return_type) {}
 
-        const std::string& get_id() const
-        {
-            return m_id;
-        }
+        function() : m_return_type(variable_type::vt_none) {}
 
-        ref<void> get_ref()
-        {
-            return m_reference;
-        }
+        const std::string& get_name() const { return m_name; }
 
-        const std::vector<variable_base_type>& get_parameter_types() const
-        {
-            return m_parameter_types;
-        }
+        const std::vector<std::string>& get_param_names() const { return m_param_names; }
 
-        variable_type get_return_type() const
-        {
-            return m_return_type;
-        }
 
-        bool has_value() const
-        {
-            return (bool)m_reference;
-        }
+        variable_type get_return_type() const { return m_return_type; }
 
-        virtual variable_base_type get_base_type() const override
-        {
-            return variable_base_type::function;
-        }
+        void set_return_type(variable_type type) { m_return_type = type; }
+
+        variable_base_type get_base_type() const override { return variable_base_type::function; }
+        std::string to_string() const override { return "function " + m_name; }
 
     private:
-        std::string m_id;
-        ref<void> m_reference;
-        variable_type m_return_type = variable_type::vt_none;
-        std::vector<variable_base_type> m_parameter_types;
-	};
-}
+        std::string m_name;
+        std::vector<std::string> m_param_names;
+        variable_type m_return_type;
+    };
+
+} // namespace wio
