@@ -1,11 +1,7 @@
 #pragma once
 
 #include <vector>
-#include <string>
 
-#include "base.h"
-#include "exception.h"
-#include "token.h"
 #include "ast.h"
 
 namespace wio
@@ -16,7 +12,7 @@ namespace wio
     public:
         parser(const std::vector<token>& tokens) : m_tokens(tokens), m_current_token_index(0) {}
 
-        ref<ast_node> parse();
+        ref<program> parse();
 
     private:
         std::vector<token> m_tokens;
@@ -27,6 +23,8 @@ namespace wio
         token next_token();
         bool match_token(token_type type);
         bool match_token(token_type type, const std::string& value);
+        bool match_token_no_consume(token_type type);
+        bool match_token_no_consume(token_type type, const std::string& value);
         token consume_token(token_type type);
         token consume_token(token_type type, const std::string& value);
 
@@ -37,6 +35,7 @@ namespace wio
         ref<statement> parse_statement();
         ref<expression> parse_expression();
         ref<expression> parse_primary_expression();
+        ref<expression> parse_null_expression();
         ref<expression> parse_assignment_expression();
         ref<expression> parse_binary_expression(int precedence = 0);
         ref<expression> parse_unary_expression();

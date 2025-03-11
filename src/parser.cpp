@@ -2,7 +2,7 @@
 
 namespace wio
 {
-    ref<ast_node> parser::parse()
+    ref<program> parser::parse()
     {
         std::vector<ref<statement>> statements;
 
@@ -66,6 +66,15 @@ namespace wio
         return false;
     }
 
+    bool parser::match_token_no_consume(token_type type)
+    {
+        return (current_token().type == type);
+    }
+
+    bool parser::match_token_no_consume(token_type type, const std::string& value)
+    {
+        return (current_token().type == type && current_token().value == value);
+    }
 
     token parser::consume_token(token_type type)
     {
@@ -73,7 +82,7 @@ namespace wio
             return next_token();
         else
             error("Unexpected token: expected " + frenum::to_string(type) + ", but got " +
-                frenum::to_string(current_token().type), current_token().loc);
+                frenum::to_string(current_token().type) + '!', current_token().loc);
         return token(token_type::end_of_file, "", location());
     }
 
@@ -83,7 +92,7 @@ namespace wio
             return next_token();
         else
             error("Unexpected token: expected " + frenum::to_string(type) + " with value of " + value + ", but got " +
-                frenum::to_string(current_token().type) + " with value of " + current_token().value, current_token().loc);
+                frenum::to_string(current_token().type) + " with value of " + current_token().value + '.', current_token().loc);
         return token(token_type::end_of_file, "", location());
     }
 
@@ -248,6 +257,11 @@ namespace wio
             left = parse_typeof_expression();
             return left;
         }
+        else if (current_token().type == token_type::kw_null)
+        {
+            left = parse_null_expression();
+            return left;
+        }
         else
         {
             left = parse_binary_expression();
@@ -311,6 +325,13 @@ namespace wio
         return nullptr;
     }
 
+    ref<expression> parser::parse_null_expression()
+    {
+        token tok = current_token();
+        consume_token(token_type::kw_null);
+        return make_ref<null_expression>(tok);
+    }
+
 
     ref<expression> parser::parse_assignment_expression()
     {
@@ -356,17 +377,23 @@ namespace wio
     ref<expression> parser::parse_unary_expression()
     {
         token current = current_token();
-        if (current.type == token_type::op && (current.value == "+" || current.value == "-" || current.value == "!"))
+        if (current.type == token_type::op && (current.value == "+" || current.value == "-" || current.value == "!" || current.value == "~"))
         {
             next_token();
             ref<expression> operand = parse_unary_expression();
-            return make_ref<unary_expression>(current, operand, unary_operator_type::prefix);
+            return std::make_shared<unary_expression>(current, operand, unary_operator_type::prefix);
         }
-        else if (current.type == token_type::bang /* || current.type == token_type::minus*/) // TODO: keywords.h
+        else if (current.type == token_type::bang)
         {
             next_token();
             ref<expression> operand = parse_unary_expression();
-            return make_ref<unary_expression>(current, operand, unary_operator_type::prefix);
+            return std::make_shared<unary_expression>(current, operand, unary_operator_type::prefix);
+        }
+        else if (current.type == token_type::bitwise_not)
+        {
+            next_token();
+            ref<expression> operand = parse_unary_expression();
+            return std::make_shared<unary_expression>(current, operand, unary_operator_type::prefix);
         }
         else
         {
@@ -374,7 +401,7 @@ namespace wio
             if (current_token().type == token_type::op && (current_token().value == "++" || current_token().value == "--"))
             {
                 token op = next_token();
-                return make_ref<unary_expression>(op, primary, unary_operator_type::postfix);
+                return std::make_shared<unary_expression>(op, primary, unary_operator_type::postfix);
             }
             return primary;
         }
@@ -433,17 +460,22 @@ namespace wio
 
     ref<statement> parser::parse_assignment_or_function_call()
     {
+        ref<identifier> id = make_ref<identifier>(current_token());
+        next_token();
         token current = current_token();
 
-        ref<identifier> id = make_ref<identifier>(current);
-        next_token();
-
-        if (match_token(token_type::op, "="))
+        if (match_token_no_consume(token_type::op, "=") ||
+            match_token_no_consume(token_type::op, "+=") ||
+            match_token_no_consume(token_type::op, "-=") ||
+            match_token_no_consume(token_type::op, "*=") || 
+            match_token_no_consume(token_type::op, "/=") ||
+            match_token_no_consume(token_type::op, "%="))
         {
+            token tok = next_token();
             ref<expression> value = parse_assignment_expression();
             consume_token(token_type::semicolon);
 
-            return make_ref<expression_statement>(make_ref<assignment_expression>(id, current_token(), value));
+            return make_ref<expression_statement>(make_ref<assignment_expression>(id, tok, value));
         }
         else if (current_token().type == token_type::left_parenthesis)
         {
@@ -584,7 +616,7 @@ namespace wio
 
         ref<block_statement> body = parse_block_statement();
 
-        return make_ref<function_declaration>(id, params, body, variable_type::vt_none, is_local, is_global);
+        return make_ref<function_declaration>(id, params, body, variable_type::vt_null, is_local, is_global);
     }
 
     ref<statement> parser::parse_parameter_declaration()
@@ -602,9 +634,9 @@ namespace wio
         ref<expression> initializer = nullptr;
 
         bool is_const = false;
-        variable_type type = variable_type::vt_none;
+        variable_type type = variable_type::vt_null;
         if (type_token.value == "var")
-            type = variable_type::vt_none;
+            type = variable_type::vt_any;
         else if (type_token.value == "array")
             type = variable_type::vt_array;
         else if (type_token.value == "dict")

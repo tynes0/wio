@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <cctype>
+#include <iostream>
 
 #include "exception.h"
 #include "token.h"
@@ -13,10 +14,8 @@ namespace wio
     public:
         explicit lexer(std::string src) : m_source(std::move(src)) {}
 
-        std::vector<token> get_tokens()
+        std::vector<token>& get_tokens()
         {
-            std::vector<token> tokens;
-
             m_loc = { 1, 1 };
 
             while (m_pos < m_source.size())
@@ -35,33 +34,42 @@ namespace wio
 
                 if (std::isalpha(current) || current == '_')
                 {
-                    tokens.push_back(read_identifier());
+                    m_tokens.push_back(read_identifier());
                 }
                 else if (std::isdigit(current))
                 {
-                    tokens.push_back(read_number());
+                    m_tokens.push_back(read_number());
                 }
                 else if (current == '\"')
                 {
-                    tokens.push_back(read_string());
+                    m_tokens.push_back(read_string());
                 }
                 else if (current == '\'')
                 {
-                    tokens.push_back(read_char());
+                    m_tokens.push_back(read_char());
+                }
+                else if (current == '!')
+                {
+                    std::string op(1, advance());
+                    m_tokens.push_back({ token_map.at(op), op, m_loc });
                 }
                 else if (is_operator(current))
                 {
-                    tokens.push_back(read_operator());
+                    m_tokens.push_back(read_operator());
                 }
-
                 else if (is_seperator(current))
                 {
                     std::string op(1, advance());
-                    tokens.push_back({ token_map.at(op), op, m_loc });
+                    m_tokens.push_back({ token_map.at(op), op, m_loc });
+                }
+                else if (is_bitwise_op(current))
+                {
+                    std::string op(1, advance());
+                    m_tokens.push_back({ token_map.at(op), op, m_loc });
                 }
                 else if (current == '\0')
                 {
-                    tokens.push_back({ token_map.at("eof"), "eof", m_loc });
+                    m_tokens.push_back({ token_map.at("eof"), "eof", m_loc });
                     break;
                 }
                 else
@@ -70,11 +78,26 @@ namespace wio
                 }
             }
 
-            return tokens;
+            return m_tokens;
+        }
+
+        void print_tokens()
+        {
+            for (const auto& token : m_tokens)
+            {
+                std::cout << "Token: " << frenum::to_string(token.type);
+                if (frenum::to_string(token.type).size() < 9)
+                    std::cout << "\t\t";
+                else if (frenum::to_string(token.type).size() < 17)
+                    std::cout << "\t";
+                std::cout << "\t";
+                std::cout << "Value: " << token.value << std::endl;
+            }
         }
 
 
     private:
+        std::vector<token> m_tokens;
         std::string m_source;
         size_t m_pos = 0;
         location m_loc;
@@ -105,7 +128,7 @@ namespace wio
                 if (advance() == '\n')
                 {
                     m_loc.line++;
-                    m_loc.row = 1;
+                    m_loc.row = 0;
                 }
             }
 
@@ -176,7 +199,7 @@ namespace wio
                     if (std::isalnum(peek()))
                         throw invalid_number_error("Invalid character in binary number!", m_loc);
                 }
-                else if (next == 'x' || next == 'X') 
+                else if (next == 'x' || next == 'X')
                 {
                     result += advance(); result += advance();
                     if (!std::isxdigit(peek()))
@@ -292,19 +315,18 @@ namespace wio
 
         token read_operator()
         {
-            std::string op(1, peek());
+            std::string op(1, advance());
 
-            if (token_map.contains(op + peek(1) + peek(2)))
+            if (token_map.contains(op + peek() + peek(1)))
             {
                 op += advance();
                 op += advance();
             }
-            else if (token_map.contains(op + peek(1)))
+            else if (token_map.contains(op + peek()))
             {
                 op += advance();
             }
 
-            advance();
             return { token_map.at(op), op, m_loc };
         }
 
@@ -318,6 +340,11 @@ namespace wio
         bool is_seperator(char ch)
         {
             return (ch == '(' || ch == ')' || ch == '[' || ch == ']' || ch == '{' || ch == '}' || ch == '.' || ch == ',' || ch == ';');
+        }
+
+        bool is_bitwise_op(char ch)
+        {
+            return (ch == '~' || ch == '|' || ch == '&');
         }
     };
 }

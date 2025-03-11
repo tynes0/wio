@@ -1,0 +1,50 @@
+// scope.h
+#pragma once
+
+#include <map>
+#include <string>
+#include <memory>
+#include "base.h"
+#include "variables/variable.h"
+
+namespace wio
+{
+    enum class scope_type 
+    {
+        global,
+        local,
+        function,
+        block
+    };
+
+    struct symbol 
+    {
+        std::string name;
+        variable_type type = variable_type::vt_null;
+        scope_type scope_t = scope_type::local;
+        bool is_const = false;
+        ref<variable_base> var_ref;
+
+        symbol() {}
+
+        symbol(const std::string& name, variable_type type, scope_type scope, bool is_const, ref<variable_base> var_ref = nullptr)
+            : name(name), type(type), scope_t(scope), is_const(is_const), var_ref(var_ref) {}
+    };
+
+    class scope 
+    {
+    public:
+        scope(scope_type type, ref<scope> parent = nullptr) : m_type(type), m_parent(parent) {}
+
+        void insert(const std::string& name, const symbol& symbol);
+        symbol* lookup(const std::string& name);
+        scope_type get_type() { return m_type; }
+        ref<scope> get_parent() { return m_parent; }
+        std::map<std::string, symbol>& get_symbols() { return m_symbols; }
+    private:
+        scope_type m_type;
+        std::map<std::string, symbol> m_symbols;
+        ref<scope> m_parent;
+    };
+
+} // namespace wio

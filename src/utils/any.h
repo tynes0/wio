@@ -4,6 +4,9 @@
 
 #include "../exception.h"
 
+#include <any>
+
+
 namespace wio
 {
     class bad_any_cast : public exception
@@ -11,7 +14,7 @@ namespace wio
     public:
         const char* what() const override
         {
-            return "vtl::bad_any_cast: failed conversion using vtl::any_cast";
+            return "wio::bad_any_cast: failed conversion using wio::any_cast";
         }
     };
 

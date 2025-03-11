@@ -1,23 +1,41 @@
-import "test";
+var cond = 4;
+cond += 2;
+var cond2 = cond;
+import "test2";
 
-local var a = 42;
+local var a = 42 + (124 - 3);
 
 global array col = [1, 'c', "string"];
 
+
+
+var type = typeof cond;
+
+    global const dict dictionary
+    {
+        [12,2],
+        ["test", 5],
+        ["as", 61],
+        ['c', "something"]
+    };
+
+func print(){}
+
 func test(array collection)
 {
-    const const_var = -0.2;
+    const const_var = ~12;
     global var b = "hello";
     for (var i = 0; i < 10; i++) 
     {
-        print(i);
+        print();
         if (i == 5) break;
 
         #* this should be a
         multiline comment *#
 
-        var cond = true;
     }
+    
+    const var val_1 = col[1];
 
     ## this is a line comment
 
