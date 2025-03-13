@@ -3,9 +3,8 @@
 
 namespace wio
 {
-    var_dictionary::var_dictionary(const map_t& data, bool is_const, bool is_local, bool is_global) : m_data(data)
+    var_dictionary::var_dictionary(const map_t& data, packed_bool flags) : m_data(data), variable_base(flags)
     {
-        init_flags(is_const, is_local, is_global);
     }
 
     variable_base_type wio::var_dictionary::get_base_type() const
@@ -58,6 +57,11 @@ namespace wio
             m_data[skey] = value->clone();
     }
 
+    size_t var_dictionary::size() const
+    {
+        return m_data.size();
+    }
+
     bool var_dictionary::check_existance(const std::string& key)
     {
         return (m_data.find(key) != m_data.end());
@@ -79,13 +83,13 @@ namespace wio
         case wio::variable_type::vt_string:
             return var->get_data_as<std::string>();
         case wio::variable_type::vt_character:
-            return std::string(1, var->get_data_as<char>());
+            return std::string(1, var->get_data_as<char_reference>().get());
         case wio::variable_type::vt_bool:
         case wio::variable_type::vt_null:
         case wio::variable_type::vt_dictionary:
         case wio::variable_type::vt_array:
         case wio::variable_type::vt_function:
-        case wio::variable_type::vt_any:
+        case wio::variable_type::vt_var_param:
         default:
             throw invalid_key_error("Type '" + frenum::to_string(var->get_type()) + "' can not be used as key!");
         }

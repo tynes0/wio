@@ -10,16 +10,9 @@ namespace wio
         {
             ref<statement> stmt = parse_statement();
             if (stmt)
-            {
                 statements.push_back(stmt);
-            }
             else
-            {
-                // parse_statement hata döndürdüyse, burada bir þeyler yapmalýyýz.
-                // Þimdilik, programý durduruyoruz.
-                // Ýleride, error recovery (hatadan kurtarma) mekanizmasý eklenebilir.
-                return nullptr;
-            }
+                throw parse_error("Parsing failed!");
         }
 
         return make_ref<program>(statements);
@@ -96,6 +89,11 @@ namespace wio
         return token(token_type::end_of_file, "", location());
     }
 
+    bool parser::match_ref()
+    {
+        return (match_token(token_type::kw_ref));
+    }
+
     void parser::error(const std::string& message, location loc)
     {
         throw local_exception(message, loc);
@@ -128,37 +126,37 @@ namespace wio
         bool is_local = false;
         bool is_global = false;
 
+        if (current.value == "global")
+        {
+            is_global = true;
+            next_token();
+            current = current_token();
+        }
         if (current.value == "local")
         {
             is_local = true;
             next_token();
             current = current_token();
         }
-        else if (current.value == "global")
-        {
-            is_global = true;
-            next_token();
-            current = current_token();
-        }
 
         if (frenum::index(current.type) < frenum::index(token_type::KW_COUNT))
         {
-            if (current.value == "const")
+            if (current.type == token_type::kw_const)
             {
                 next_token();
                 if (current_token().type == token_type::kw_var || current_token().type == token_type::kw_array || current_token().type == token_type::kw_dict)
                 {
-                    if (current_token().value == "var")
+                    if (current_token().type == token_type::kw_var)
                     {
                         next_token();
                         return parse_variable_declaration(true, is_local, is_global);
                     }
-                    else if (current_token().value == "array")
+                    else if (current_token().type == token_type::kw_array)
                     {
                         next_token();
                         return parse_array_declaration(true, is_local, is_global);
                     }
-                    else if (current_token().value == "dict")
+                    else if (current_token().type == token_type::kw_dict)
                     {
                         next_token();
                         return parse_dictionary_declaration(true, is_local, is_global);
@@ -171,65 +169,65 @@ namespace wio
                 }
 
             }
-            else if (current.value == "var")
+            else if (current.type == token_type::kw_var)
             {
                 next_token();
                 return parse_variable_declaration(false, is_local, is_global);
             }
-            else if (current.value == "array")
+            else if (current.type == token_type::kw_array)
             {
                 next_token();
                 return parse_array_declaration(false, is_local, is_global);
             }
-            else if (current.value == "dict")
+            else if (current.type == token_type::kw_dict)
             {
                 next_token();
                 return parse_dictionary_declaration(false, is_local, is_global);
             }
-            else if (current.value == "if")
+            else if (current.type == token_type::kw_if)
             {
                 next_token();
                 return parse_if_statement();
             }
-            else if (current.value == "for")
+            else if (current.type == token_type::kw_for)
             {
                 next_token();
                 return parse_for_statement();
             }
-            else if (current.value == "while")
+            else if (current.type == token_type::kw_while)
             {
                 next_token();
                 return parse_while_statement();
             }
-            else if (current.value == "foreach")
+            else if (current.type == token_type::kw_foreach)
             {
                 next_token();
                 return parse_foreach_statement();
             }
-            else if (current.value == "break")
+            else if (current.type == token_type::kw_break)
             {
                 location loc = current_token().loc;
                 next_token();
                 return parse_break_statement(loc);
             }
-            else if (current.value == "continue")
+            else if (current.type == token_type::kw_continue)
             {
                 location loc = current_token().loc;
                 next_token();
                 return parse_continue_statement(loc);
             }
-            else if (current.value == "return")
+            else if (current.type == token_type::kw_return)
             {
                 location loc = current_token().loc;
                 next_token();
                 return parse_return_statement(loc);
             }
-            else if (current.value == "import")
+            else if (current.type == token_type::kw_import)
             {
                 next_token();
                 return parse_import_statement();
             }
-            else if (current.value == "func")
+            else if (current.type == token_type::kw_func)
             {
                 next_token();
                 return parse_function_declaration(is_local, is_global);
@@ -237,11 +235,17 @@ namespace wio
         }
         else if (current.type == token_type::identifier)
         {
-            return parse_assignment_or_function_call();
+            return parse_identifier();
         }
         else if (current.type == token_type::left_curly_bracket)
         {
             return parse_block_statement();
+        }
+        else if (current.type == token_type::op)
+        {
+            auto stmt = make_ref<expression_statement>(parse_unary_expression());
+            consume_token(token_type::semicolon);
+            return stmt;
         }
 
         error("Unexpected token in statement: " + frenum::to_string(current.type), current.loc);
@@ -251,15 +255,21 @@ namespace wio
     ref<expression> parser::parse_expression()
     {
         ref<expression> left = nullptr;
+        token current = current_token();
 
-        if (current_token().type == token_type::kw_typeof)
+        if (current.type == token_type::kw_typeof)
         {
             left = parse_typeof_expression();
             return left;
         }
-        else if (current_token().type == token_type::kw_null)
+        else if (current.type == token_type::kw_null)
         {
             left = parse_null_expression();
+            return left;
+        }
+        else if (current.type == token_type::kw_ref)
+        {
+            left = parse_ref_expression();
             return left;
         }
         else
@@ -267,11 +277,11 @@ namespace wio
             left = parse_binary_expression();
         }
 
-        if (current_token().type == token_type::left_parenthesis)
+        if (current.type == token_type::left_parenthesis)
             return parse_function_call(left);
-        if (current_token().type == token_type::dot)
+        if (current.type == token_type::dot)
             return parse_member_access(left);
-        if (current_token().type == token_type::left_bracket)
+        if (current.type == token_type::left_bracket)
             return parse_array_access(left);
 
         return left;
@@ -290,7 +300,7 @@ namespace wio
         {
             next_token();
             ref<expression> primary = make_ref<identifier>(current);
-
+            
             if (current_token().type == token_type::op && (current_token().value == "++" || current_token().value == "--"))
             {
                 token op = next_token();
@@ -347,7 +357,7 @@ namespace wio
                 error("Invalid left-hand side of assignment.", op.loc);
                 return nullptr;
             }
-            return make_ref<assignment_expression>(std::static_pointer_cast<identifier>(target), op, value);
+            return make_ref<assignment_expression>(target, op, value);
         }
         return target;
     }
@@ -377,7 +387,7 @@ namespace wio
     ref<expression> parser::parse_unary_expression()
     {
         token current = current_token();
-        if (current.type == token_type::op && (current.value == "+" || current.value == "-" || current.value == "!" || current.value == "~"))
+        if (current.type == token_type::op && (current.value == "+" || current.value == "-" || current.value == "!" || current.value == "~" || current.value == "++" || current.value == "--"))
         {
             next_token();
             ref<expression> operand = parse_unary_expression();
@@ -398,13 +408,46 @@ namespace wio
         else
         {
             ref<expression> primary = parse_primary_expression();
-            if (current_token().type == token_type::op && (current_token().value == "++" || current_token().value == "--"))
+            current = current_token();
+            if (current.type == token_type::op && (current.value == "++" || current.value == "--"))
             {
                 token op = next_token();
-                return std::make_shared<unary_expression>(op, primary, unary_operator_type::postfix);
+                return make_ref<unary_expression>(op, primary, unary_operator_type::postfix);
+            }
+            else if (current.type == token_type::left_bracket)
+            {
+                return parse_array_access(primary);
+            }
+            else if (current.type == token_type::dot)
+            {
+                return parse_member_access(primary);
+            }
+            else if(current.type == token_type::left_parenthesis)
+            { 
+                return parse_function_call(primary);
             }
             return primary;
         }
+    }
+
+    ref<expression> parser::parse_ref_expression()
+    {
+        consume_token(token_type::kw_ref);
+        token current = current_token();
+        if (current.type == token_type::identifier)
+        {
+            next_token();
+            ref<expression> primary = make_ref<identifier>(current, true);
+
+            if (current_token().type == token_type::left_bracket)
+                return parse_array_access(primary);
+            else if (current_token().type == token_type::dot)
+                return parse_member_access(primary);
+
+            consume_token(token_type::semicolon);
+            return primary;
+        }
+        throw unexpected_token_error("Expected identifier after 'ref' keyword!");
     }
 
     ref<expression> parser::parse_function_call(ref<expression> caller)
@@ -430,17 +473,9 @@ namespace wio
     ref<expression> parser::parse_array_access(ref<expression> array)
     {
         consume_token(token_type::left_bracket);
-        ref<expression> index = parse_expression();
+        ref<expression> index_or_key = parse_expression();
         consume_token(token_type::right_bracket);
-        return make_ref<array_access_expression>(array, index);
-    }
-
-    ref<expression> parser::parse_dictionary_access(ref<expression> dictionary)
-    {
-        consume_token(token_type::left_bracket);
-        ref<expression> key = parse_expression();
-        consume_token(token_type::right_bracket);
-        return make_ref<dictionary_access_expression>(dictionary, key);
+        return make_ref<array_access_expression>(std::dynamic_pointer_cast<identifier>(array), index_or_key);
     }
 
     ref<expression> parser::parse_member_access(ref<expression> object)
@@ -458,9 +493,9 @@ namespace wio
         return make_ref<typeof_expression>(expr);
     }
 
-    ref<statement> parser::parse_assignment_or_function_call()
+    ref<statement> parser::parse_identifier()
     {
-        ref<identifier> id = make_ref<identifier>(current_token());
+        ref<identifier> id = make_ref<identifier>(current_token(), false, true);
         next_token();
         token current = current_token();
 
@@ -474,8 +509,13 @@ namespace wio
             token tok = next_token();
             ref<expression> value = parse_assignment_expression();
             consume_token(token_type::semicolon);
-
             return make_ref<expression_statement>(make_ref<assignment_expression>(id, tok, value));
+        }
+        else if (match_token_no_consume(token_type::op, "++") || match_token_no_consume(token_type::op, "++"))
+        {
+            token tok = next_token();
+            consume_token(token_type::semicolon);
+            return make_ref<expression_statement>(make_ref<unary_expression>(tok, id));
         }
         else if (current_token().type == token_type::left_parenthesis)
         {
@@ -483,9 +523,32 @@ namespace wio
             consume_token(token_type::semicolon);
             return make_ref<expression_statement>(call);
         }
+        else if (current_token().type == token_type::left_bracket)
+        {
+            ref<expression> access = parse_array_access(id);
+            token tok = current_token();
+            if (match_token_no_consume(token_type::op, "=") ||
+                match_token_no_consume(token_type::op, "+=") ||
+                match_token_no_consume(token_type::op, "-=") ||
+                match_token_no_consume(token_type::op, "*=") ||
+                match_token_no_consume(token_type::op, "/=") ||
+                match_token_no_consume(token_type::op, "%="))
+            {
+                token tok = next_token();
+                ref<expression> value = parse_assignment_expression();
+                consume_token(token_type::semicolon);
+                return make_ref<expression_statement>(make_ref<assignment_expression>(access, tok, value));
+            }
+            else
+            {
+                consume_token(token_type::semicolon);
+                return make_ref<expression_statement>(access);
+            }
+
+        }
         else
         {
-            error("Expected '=' or '(' after identifier.", current.loc);
+            error("Expected '=' or '(' or '[' after identifier.", current.loc);
             return nullptr;
         }
     }
@@ -501,7 +564,7 @@ namespace wio
 
         consume_token(token_type::semicolon);
 
-        return make_ref<variable_declaration>(id, initializer, is_const, is_local, is_global);
+        return make_ref<variable_declaration>(id, initializer, is_const, is_local, is_global, false);
     }
 
     ref<statement> parser::parse_array_declaration(bool is_const, bool is_local, bool is_global)
@@ -549,6 +612,7 @@ namespace wio
 
     ref<statement> parser::parse_dictionary_declaration(bool is_const, bool is_local, bool is_global)
     {
+        bool is_ref = match_ref();
         token id_token = consume_token(token_type::identifier);
         ref<identifier> id = make_ref<identifier>(id_token);
 
@@ -628,21 +692,19 @@ namespace wio
             return nullptr;
         }
 
-        token id_token = consume_token(token_type::identifier); // Parametre adý
+        bool is_ref = match_ref();
+        token id_token = consume_token(token_type::identifier);
         ref<identifier> id = make_ref<identifier>(id_token);
 
-        ref<expression> initializer = nullptr;
-
-        bool is_const = false;
         variable_type type = variable_type::vt_null;
         if (type_token.value == "var")
-            type = variable_type::vt_any;
+            type = variable_type::vt_var_param;
         else if (type_token.value == "array")
             type = variable_type::vt_array;
         else if (type_token.value == "dict")
             type = variable_type::vt_dictionary;
 
-        return make_ref<variable_declaration>(id, initializer, false, true, false, type);
+        return make_ref<variable_declaration>(id, nullptr, false, true, false, is_ref, type);
     }
 
     ref<statement> parser::parse_if_statement()

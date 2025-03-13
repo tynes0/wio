@@ -27,6 +27,7 @@ namespace wio
         bool match_token_no_consume(token_type type, const std::string& value);
         token consume_token(token_type type);
         token consume_token(token_type type, const std::string& value);
+        bool match_ref();
 
         void error(const std::string& message, location loc);
 
@@ -39,13 +40,13 @@ namespace wio
         ref<expression> parse_assignment_expression();
         ref<expression> parse_binary_expression(int precedence = 0);
         ref<expression> parse_unary_expression();
+        ref<expression> parse_ref_expression();
         ref<expression> parse_function_call(ref<expression> caller);
         ref<expression> parse_array_access(ref<expression> array);
-        ref<expression> parse_dictionary_access(ref<expression> dict);
         ref<expression> parse_member_access(ref<expression> object);
         ref<expression> parse_typeof_expression();
 
-        ref<statement> parse_assignment_or_function_call();
+        ref<statement> parse_identifier();
         ref<statement> parse_variable_declaration(bool is_const, bool is_local, bool is_global);
         ref<statement> parse_array_declaration(bool is_const, bool is_local, bool is_global);
         ref<statement> parse_dictionary_declaration(bool is_const, bool is_local, bool is_global);

@@ -10,7 +10,7 @@ namespace wio
 	class var_array : public variable_base
 	{
 	public:
-		var_array(const std::vector<ref<variable_base>>& data, bool is_const = false, bool is_local = false, bool is_global = false);
+		var_array(const std::vector<ref<variable_base>>& data, packed_bool flags = {});
 
 		virtual variable_base_type get_base_type() const override;
 		virtual variable_type get_type() const override;
@@ -21,6 +21,7 @@ namespace wio
 		std::vector<ref<variable_base>>& get_data();
 		const std::vector<ref<variable_base>>& get_data() const;
 		ref<variable_base> get_element(long long index);
+		size_t size() const;
 
 		void set_data(const std::vector<ref<variable_base>>& data);
 		void set_element(long long index, ref<variable_base> value);

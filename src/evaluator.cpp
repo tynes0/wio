@@ -1,25 +1,28 @@
-// evaluator.cpp
 #include "evaluator.h"
 #include "exception.h"
-#include "variables/variable.h" // Deðerleri temsil etmek için
+#include "lexer.h"
+#include "parser.h"
+#include "utils/filesystem.h"
+
+#include "variables/variable.h"
 #include "variables/array.h"
 #include "variables/dictionary.h"
 #include "variables/function.h"
 
-#include <iostream>
+#include "builtin.h"
+
+#include <filesystem>
 
 namespace wio 
 {
     evaluator::evaluator() 
     {
-        current_scope = make_ref<scope>(scope_type::global);
+        current_scope = builtin::load();
     }
 
     void evaluator::evaluate_program(ref<program> program_node) 
     {
         enter_scope(scope_type::global);
-
-        //preprocess_declarations(program_node);
 
         for (auto& stmt : program_node->m_statements) 
             evaluate_statement(stmt);
@@ -27,47 +30,9 @@ namespace wio
         exit_scope();
     }
 
-    void evaluator::preprocess_declarations(ref<ast_node> node)
+    std::map<std::string, symbol>& evaluator::get_symbols()
     {
-        if (auto program_node = std::dynamic_pointer_cast<program>(node)) 
-        {
-            for (auto& stmt : program_node->m_statements)
-            {
-                if (auto decl = std::dynamic_pointer_cast<variable_declaration>(stmt))
-                    evaluate_variable_declaration(decl);
-                else if (auto decl = std::dynamic_pointer_cast<function_declaration>(stmt))
-                    evaluate_function_declaration(decl);
-                else if (auto decl = std::dynamic_pointer_cast<array_declaration>(stmt))
-                    evaluate_array_declaration(decl);
-                else if (auto decl = std::dynamic_pointer_cast<dictionary_declaration>(stmt)) 
-                    evaluate_dictionary_declaration(decl);
-                else if (auto import_stmt = std::dynamic_pointer_cast<import_statement>(stmt)) 
-                    evaluate_import_statement(import_stmt);
-            }
-        }
-        else if (auto func_decl = std::dynamic_pointer_cast<function_declaration>(node)) 
-        {
-            enter_scope(scope_type::function);
-            if (func_decl->m_body != nullptr)
-            {
-                if (auto block_stmt = std::dynamic_pointer_cast<block_statement>(func_decl->m_body)) 
-                {
-                    for (auto& stmt : block_stmt->m_statements) 
-                    {
-                        if (auto decl = std::dynamic_pointer_cast<variable_declaration>(stmt)) 
-                            evaluate_variable_declaration(decl);
-                        else if (auto decl = std::dynamic_pointer_cast<function_declaration>(stmt)) 
-                            evaluate_function_declaration(decl);
-                        else if (auto decl = std::dynamic_pointer_cast<array_declaration>(stmt)) 
-                            evaluate_array_declaration(decl);
-                        else if (auto decl = std::dynamic_pointer_cast<dictionary_declaration>(stmt)) 
-                            evaluate_dictionary_declaration(decl);
-                    }
-                }
-
-            }
-            exit_scope();
-        }
+        return current_scope->get_symbols();
     }
 
     ref<variable_base> evaluator::evaluate_expression(ref<expression> node)
@@ -77,6 +42,9 @@ namespace wio
 
     void evaluator::evaluate_statement(ref<statement> node)
     {
+        if (m_call_states.b1 || m_call_states.b2 || m_call_states.b3)
+            return;
+
         if (auto decl = std::dynamic_pointer_cast<variable_declaration>(node))
             evaluate_variable_declaration(decl);
         else if (auto decl = std::dynamic_pointer_cast<function_declaration>(node))
@@ -99,7 +67,7 @@ namespace wio
             evaluate_foreach_statement(foreach_s);
         else if (auto while_s = std::dynamic_pointer_cast<while_statement>(node))
             evaluate_while_statement(while_s);
-        else if (auto break_s = std::dynamic_pointer_cast<break_statement>(node))
+        if (auto break_s = std::dynamic_pointer_cast<break_statement>(node))
             evaluate_break_statement(break_s);
         else if (auto continue_s = std::dynamic_pointer_cast<continue_statement>(node))
             evaluate_continue_statement(continue_s);
@@ -129,7 +97,7 @@ namespace wio
         else if (node->m_token.type == token_type::character) 
         {
             if (node->m_token.value.size() == 1) 
-                return make_ref<variable>(any(node->m_token.value[0]), variable_type::vt_character);
+                return make_ref<variable>(any(char_reference(node->m_token.value[0])), variable_type::vt_character);
             else 
                 throw evaluation_error("Invalid character literal", node->get_location());
         }
@@ -157,21 +125,30 @@ namespace wio
 
         if (sym->var_ref) 
         {
-            if (auto var = std::dynamic_pointer_cast<variable>(sym->var_ref)) 
-                return var;
-            else if (auto arr = std::dynamic_pointer_cast<var_array>(sym->var_ref)) 
-                return arr;
-            else if (auto dict = std::dynamic_pointer_cast<var_dictionary>(sym->var_ref)) 
-                return dict;
+            if (auto var = std::dynamic_pointer_cast<variable>(sym->var_ref))
+            {
+                if(sym->var_ref->is_ref() || node->m_is_lhs)
+                    return var;
+                return var->clone();
+            }
+            else if (auto arr = std::dynamic_pointer_cast<var_array>(sym->var_ref))
+            {
+                if (sym->var_ref->is_ref() || node->m_is_lhs)
+                    return arr;
+                return arr->clone();
+            }
+            else if (auto dict = std::dynamic_pointer_cast<var_dictionary>(sym->var_ref))
+            {
+                if (sym->var_ref->is_ref() || node->m_is_lhs)
+                    return dict;
+                return dict->clone();
+            }
             //else if (auto func = std::dynamic_pointer_cast<function>(sym->var_ref)) 
             //    return func;
             else 
                 throw evaluation_error("Identifier '" + node->m_token.value + "' refers to an unsupported type.", node->get_location());
         }
-        else 
-        {
-            throw evaluation_error("Identifier '" + node->m_token.value + "' does not refer to a value.", node->get_location());
-        }
+        return get_null_var();
     }
 
     ref<variable_base> evaluator::evaluate_binary_expression(ref<binary_expression> node) 
@@ -382,6 +359,21 @@ namespace wio
                     else 
                         throw type_mismatch_error("Invalid operand types for '||' operator (logical OR). Operands must be booleans.", node->get_location());
                 }
+                else if (op.value == "==")
+                {
+                    // NOT COMPAREABLE PROBABLY
+                    if (lv_ref->get_type() == rv_ref->get_type() && lv_ref->get_type() == variable_type::vt_null)
+                        return make_ref<variable>(any(true), variable_type::vt_bool);
+                    return make_ref<variable>(any(false), variable_type::vt_bool);
+                }
+                else if (op.value == "!=")
+                {
+                    // NOT COMPAREABLE PROBABLY
+                    if (lv_ref->get_type() == rv_ref->get_type() && lv_ref->get_type() == variable_type::vt_null)
+                        return make_ref<variable>(any(false), variable_type::vt_bool);
+                    return make_ref<variable>(any(true), variable_type::vt_bool);
+
+                }
                 else
                 {
                     throw type_mismatch_error("Invalid operand types for compare operator.", node->get_location());
@@ -410,7 +402,7 @@ namespace wio
     ref<variable_base> evaluator::evaluate_unary_expression(ref<unary_expression> node)
     {
         ref<variable_base> operand_ref = get_value(node->m_operand);
-        any operand_value = std::dynamic_pointer_cast<variable>(operand_ref)->get_data();
+        any& operand_value = std::dynamic_pointer_cast<variable>(operand_ref)->get_data();
 
         token op = node->m_operator;
 
@@ -436,17 +428,16 @@ namespace wio
             }
             else if (op.value == "++" || op.value == "--") 
             {
-                if (!(std::dynamic_pointer_cast<identifier>(node->m_operand) ||
-                    std::dynamic_pointer_cast<array_access_expression>(node->m_operand) ||
-                    std::dynamic_pointer_cast<dictionary_access_expression>(node->m_operand) ||
+                if (!(std::dynamic_pointer_cast<identifier>(node->m_operand) || 
+                    std::dynamic_pointer_cast<array_access_expression>(node->m_operand) || 
                     std::dynamic_pointer_cast<member_access_expression>(node->m_operand)))
-                {
                     throw  invalid_operation_error("Invalid operand to increment/decrement operator.", node->get_location());
-                }
+                if (operand_ref->is_constant())
+                    throw constant_value_assignment_error("Constant values cannot be changed!", node->get_location());
 
                 if (operand_value.type() == typeid(long long)) 
                 {
-                    long long value = wio::any_cast<long long>(operand_value);
+                    long long& value = any_cast<long long&>(operand_value);
                     long long old_value = value;
 
                     if (op.value == "++") 
@@ -454,94 +445,31 @@ namespace wio
                     else 
                         value--;
 
-                    if (auto id_node = std::dynamic_pointer_cast<identifier>(node->m_operand)) 
-                    {
-                        if (id_node->var_ref && id_node->var_ref->get_base_type() == variable_base_type::variable) 
-                            std::dynamic_pointer_cast<variable>(id_node->var_ref)->get_data() = any(value);
-                    }
-                    else if (auto array_access = std::dynamic_pointer_cast<array_access_expression>(node->m_operand)) 
-                    {
-                        // TODO: 
-                        throw invalid_operation_error("array access ++ and -- not supported(for now).", node->get_location());
-                    }
-                    else if (auto dict_access = std::dynamic_pointer_cast<dictionary_access_expression>(node->m_operand))
-                    {
-                        // TODO: 
-                        throw invalid_operation_error("dict access ++ and -- not supported(for now).", node->get_location());
-                    }
-                    else if (auto member_access = std::dynamic_pointer_cast<member_access_expression>(node->m_operand)) 
-                    {
-                        // TODO: 
-                        throw invalid_operation_error("member access ++ and -- not supported(for now).", node->get_location());
-                    }
-
                     return make_ref<variable>(any(node->m_op_type == unary_operator_type::prefix ? value : old_value), variable_type::vt_integer);
 
                 }
                 else if (operand_value.type() == typeid(double)) 
                 {
-                    double value = wio::any_cast<double>(operand_value);
+                    double& value = any_cast<double&>(operand_value);
                     double old_value = value;
                     if (op.value == "++") 
                         value++;
                     else 
                         value--;
 
-                    if (auto id_node = std::dynamic_pointer_cast<identifier>(node->m_operand))
-                    {
-                        if (id_node->var_ref && id_node->var_ref->get_base_type() == variable_base_type::variable) 
-                            std::dynamic_pointer_cast<variable>(id_node->var_ref)->get_data() = any(value);
-                    }
-                    else if (auto array_access = std::dynamic_pointer_cast<array_access_expression>(node->m_operand))
-                    {
-                        // TODO: 
-                        throw invalid_operation_error("array access ++ and -- not supported(for now).", node->get_location());
-                    }
-                    else if (auto dict_access = std::dynamic_pointer_cast<dictionary_access_expression>(node->m_operand))
-                    {
-                        // TODO: 
-                        throw invalid_operation_error("dict access ++ and -- not supported(for now).", node->get_location());
-                    }
-                    else if (auto member_access = std::dynamic_pointer_cast<member_access_expression>(node->m_operand))
-                    {
-                        // TODO: 
-                        throw invalid_operation_error("member access ++ and -- not supported(for now).", node->get_location());
-                    }
-
                     return make_ref<variable>(any(node->m_op_type == unary_operator_type::prefix ? value : old_value), variable_type::vt_float);
 
                 }
-                else if (operand_value.type() == typeid(char)) 
+                else if (operand_value.type() == typeid(char_reference)) 
                 {
-                    char value = wio::any_cast<char>(operand_value);
+                    char_reference& value = any_cast<char_reference&>(operand_value);
                     char old_value = value;
                     if (op.value == "++") 
-                        value++;
+                        value.get()++;
                     else 
-                        value--;
+                        value.get()--;
 
-                    if (auto id_node = std::dynamic_pointer_cast<identifier>(node->m_operand))
-                    {
-                        if (id_node->var_ref && id_node->var_ref->get_base_type() == variable_base_type::variable) 
-                            std::dynamic_pointer_cast<variable>(id_node->var_ref)->get_data() = any(value);
-                    }
-                    else if (auto array_access = std::dynamic_pointer_cast<array_access_expression>(node->m_operand))
-                    {
-                        // TODO: 
-                        throw invalid_operation_error("array access ++ and -- not supported(for now).", node->get_location());
-                    }
-                    else if (auto dict_access = std::dynamic_pointer_cast<dictionary_access_expression>(node->m_operand))
-                    {
-                        // TODO: 
-                        throw invalid_operation_error("dict access ++ and -- not supported(for now).", node->get_location());
-                    }
-                    else if (auto member_access = std::dynamic_pointer_cast<member_access_expression>(node->m_operand))
-                    {
-                        // TODO: 
-                        throw invalid_operation_error("member access ++ and -- not supported(for now).", node->get_location());
-                    }
-
-                    return make_ref<variable>(any(node->m_op_type == unary_operator_type::prefix ? value : old_value), variable_type::vt_character);
+                    return make_ref<variable>(any(node->m_op_type == unary_operator_type::prefix ? value : char_reference(old_value)), variable_type::vt_character);
                 }
                 else
                 {
@@ -549,11 +477,11 @@ namespace wio
                 }
             }
         }
-        else if (op.type == token_type::bang) 
+        else if (op.type == token_type::bang)
         {
-            if (operand_value.type() == typeid(bool)) 
+            if (operand_value.type() == typeid(bool))
                 return make_ref<variable>(any(!wio::any_cast<bool>(operand_value)), variable_type::vt_bool);
-            else 
+            else
                 throw invalid_type_error("Unary '!' operator requires a boolean operand.", node->get_location());
         }
         else if (op.type == token_type::bitwise_not)
@@ -563,7 +491,7 @@ namespace wio
             else
                 throw invalid_type_error("Unary '~' operator requires an integer operand.", node->get_location());
         }
-        else if (op.type == token_type::kw_typeof)
+        else if (op.type == token_type::kw_typeof) // WE DONT NEED THIS PROBABLY
         {
             return make_ref<variable>(any(frenum::to_string(node->m_operand->get_expression_type())), variable_type::vt_string); // TODOOOOO
         }
@@ -580,6 +508,9 @@ namespace wio
         any& lhs_value = variable_lhs->get_data();
         any& rhs_value = variable_rhs->get_data();
         token op = node->m_operator;
+
+        if (variable_lhs->is_constant())
+            throw constant_value_assignment_error("Constant values cannot be changed!", node->get_location());
 
         if (op.value == "=")
         {
@@ -598,8 +529,8 @@ namespace wio
                 any_cast<double&>(lhs_value) += any_cast<long long>(rhs_value);
             else if (lhs_value.type() == typeid(std::string) && rhs_value.type() == typeid(std::string))
                 any_cast<std::string&>(lhs_value) += any_cast<std::string>(rhs_value);
-            else if (lhs_value.type() == typeid(std::string) && rhs_value.type() == typeid(char))
-                any_cast<std::string&>(lhs_value) += any_cast<char>(rhs_value);
+            else if (lhs_value.type() == typeid(std::string) && rhs_value.type() == typeid(char_reference))
+                any_cast<std::string&>(lhs_value) += any_cast<char_reference>(rhs_value).get();
             else if (lhs_value.type() == typeid(std::string) && rhs_value.type() == typeid(long long))
                 any_cast<std::string&>(lhs_value) += std::to_string(any_cast<long long>(rhs_value));
             else if (lhs_value.type() == typeid(std::string) && rhs_value.type() == typeid(double))
@@ -655,7 +586,7 @@ namespace wio
         }
         else
             throw invalid_operator_error("Invalid assignment error!", node->get_location());
-        return lhs;
+        return lhs->clone();
     }
 
     ref<variable_base> evaluator::evaluate_typeof_expression(ref<typeof_expression> node)
@@ -664,82 +595,411 @@ namespace wio
         return make_ref<variable>(frenum::to_string(value_base->get_type()), variable_type::vt_string);
     }
 
+    ref<variable_base> evaluator::evaluate_array_access_expression(ref<array_access_expression> node)
+    {
+        symbol* sym = lookup(node->m_array->m_token.value);
+
+        if(!sym)
+            throw local_exception("Variable '" + node->m_array->m_token.value + "' is not exists", node->m_array->get_location());
+
+        variable_base_type base_t = sym->var_ref->get_base_type();
+
+        if (base_t == variable_base_type::array)
+        {
+            ref<variable_base> index_base = evaluate_expression(node->m_key_or_index);
+            if (index_base->get_base_type() != variable_base_type::variable)
+                throw invalid_type_error("Index's type should be integer!", node->m_key_or_index->get_location());
+
+            ref<variable> index_var = std::dynamic_pointer_cast<variable>(index_base);
+            if (index_var->get_type() != variable_type::vt_integer)
+                throw invalid_type_error("Index's type should be integer!", node->m_key_or_index->get_location());
+
+            ref<var_array> array_var = std::dynamic_pointer_cast<var_array>(sym->var_ref);
+
+            if (node->m_array->m_is_ref || node->m_array->m_is_lhs)
+            {
+                auto var = array_var->get_element(index_var->get_data_as<long long>());
+                return var;
+            }
+            return array_var->get_element(index_var->get_data_as<long long>())->clone();
+        }
+        else if (base_t == variable_base_type::variable)
+        {
+            if(sym->var_ref->get_type() != variable_type::vt_string)
+            throw invalid_type_error("Type should be array or string or dictionary!", node->m_array->get_location());
+
+            ref<variable_base> index_base = evaluate_expression(node->m_key_or_index);
+            if (index_base->get_base_type() != variable_base_type::variable)
+                throw invalid_type_error("Index's type should be integer!", node->m_key_or_index->get_location());
+
+            ref<variable> index_var = std::dynamic_pointer_cast<variable>(index_base);
+            if (index_var->get_type() != variable_type::vt_integer)
+                throw invalid_type_error("Index's type should be integer!", node->m_key_or_index->get_location());
+
+            ref<variable> str_var = std::dynamic_pointer_cast<variable>(sym->var_ref);
+            std::string& value = str_var->get_data_as<std::string>();
+            long long index = index_var->get_data_as<long long>();
+            if (index < 0 || index >= long long(value.size()))
+                throw out_of_bounds_error("String index out of the bounds!");
+
+            char_reference ch = (node->m_array->m_is_ref || node->m_array->m_is_lhs) ? char_reference(value, index) : char_reference(value[index]);
+
+            return make_ref<variable>(any(ch), variable_type::vt_character);
+        }
+        else if (base_t == variable_base_type::dictionary)
+        {
+            ref<variable_base> key_base = evaluate_expression(node->m_key_or_index);
+            if (key_base->get_base_type() != variable_base_type::variable)
+                throw invalid_type_error("Index's type should be variable!", node->m_key_or_index->get_location());
+
+            ref<var_dictionary> dict_var = std::dynamic_pointer_cast<var_dictionary>(sym->var_ref);
+
+            if (node->m_array->m_is_ref || node->m_array->m_is_lhs)
+            {
+                auto var = dict_var->get_element(key_base);
+                return var;
+            }
+            return dict_var->get_element(key_base)->clone();
+        }
+        else
+        {
+            throw invalid_type_error("Type should be array or string or dictionary!", node->m_array->get_location());
+        }
+    }
+
+    ref<variable_base> evaluator::evaluate_function_call(ref<function_call> node)
+    {
+        ref<identifier> id = std::dynamic_pointer_cast<identifier>(node->m_caller);
+        std::string name = id->m_token.value;
+        symbol* sym = lookup(name);
+
+        if(!sym)
+            throw local_exception("Function '" + name + "' not found!", id->get_location());
+        if(sym->type != variable_type::vt_function)
+           throw invalid_type_error("Type should be function!", id->get_location());
+
+        ref<var_function> func = std::dynamic_pointer_cast<var_function>(sym->var_ref);
+
+        if(!func)
+           throw undefined_identifier_error("Invalid function!", id->get_location());
+        if(node->m_arguments.size() != func->parameter_count())
+           throw invalid_argument_count_error("Invalid parameter count!", id->get_location());
+
+        std::vector<ref<variable_base>> parameters;
+        for (auto& arg : node->m_arguments)
+            parameters.push_back(get_value(arg));
+
+        const auto& real_params = func->get_parameters();
+        for (size_t i = 0; i < real_params.size(); ++i)
+            if (parameters[i]->get_type() != real_params[i].type && real_params[i].type != variable_type::vt_any)
+                throw type_mismatch_error("Parameter types not matching!");
+
+        return func->call(parameters);
+    }
+
+    void evaluator::evaluate_block_statement(ref<block_statement> node)
+    {
+        enter_scope(scope_type::block);
+        for (auto& stmt : node->m_statements)
+            evaluate_statement(stmt);
+        exit_scope();
+    }
+
     void evaluator::evaluate_expression_statement(ref<expression_statement> node)
     {
         evaluate_expression(node->m_expression);
     }
 
-    void evaluator::evaluate_variable_declaration(ref<variable_declaration> node) 
+    void evaluator::evaluate_if_statement(ref<if_statement> node)
+    {
+        ref<variable_base> cond = get_value(node->m_condition);
+        
+        if (cond->get_base_type() != variable_base_type::variable)
+            throw invalid_type_error("Type should be variable!", node->m_condition->get_location());
+
+        ref<variable> var = std::dynamic_pointer_cast<variable>(cond);
+
+        if (cond->get_type() == variable_type::vt_bool)
+        {
+            bool value = var->get_data_as<bool>();
+            if (value)
+                evaluate_statement(node->m_then_branch);
+            else
+                evaluate_statement(node->m_else_branch);
+        }
+        else if (cond->get_type() == variable_type::vt_integer)
+        {
+            long long value = var->get_data_as<long long>();
+            if (value)
+                evaluate_statement(node->m_then_branch);
+            else
+                evaluate_statement(node->m_else_branch);
+        }
+        else if (cond->get_type() == variable_type::vt_float)
+        {
+            double value = var->get_data_as<double>();
+            if (value)
+                evaluate_statement(node->m_then_branch);
+            else
+                evaluate_statement(node->m_else_branch);
+        }
+        else
+            throw invalid_type_error("Type should be boolean or integer or float!", node->m_condition->get_location());
+    }
+
+    void evaluator::evaluate_for_statement(ref<for_statement> node)
+    {
+        enter_scope(scope_type::block);
+        evaluate_statement(node->m_initialization);
+
+        m_loop_depth++;
+        while(true)
+        {
+            ref<variable_base> cond = get_value(node->m_condition);
+            if (cond->get_base_type() != variable_base_type::variable)
+                throw invalid_type_error("Type should be variable!", node->m_condition->get_location());
+
+            ref<variable> var = std::dynamic_pointer_cast<variable>(cond);
+            if (var->get_type() != variable_type::vt_bool)
+                throw invalid_type_error("Type should be boolean!", node->m_condition->get_location());
+
+            bool value = var->get_data_as<bool>();
+            if (!value)
+            {
+                m_call_states.b1 = false;
+                m_call_states.b2 = false;
+                break;
+            }
+
+            for (auto& stmt : node->m_body->m_statements)
+                evaluate_statement(stmt);
+
+            if (m_call_states.b1)
+            {
+                m_call_states.b1 = false;
+                break;
+            }
+            else if (m_call_states.b2)
+            {
+                evaluate_expression(node->m_increment);
+                m_call_states.b2 = false;
+            }
+        }
+        m_loop_depth--;
+
+        exit_scope();
+    }
+
+    void evaluator::evaluate_foreach_statement(ref<foreach_statement> node)
+    {
+        enter_scope(scope_type::block);
+        m_loop_depth++;
+        evaluate_variable_declaration(make_ref<variable_declaration>(node->m_item, nullptr, false, false, false, false));
+        ref<variable_base> col_base = evaluate_expression(node->m_collection);
+        if (col_base->get_base_type() == variable_base_type::array)
+        {
+            ref<var_array> array = std::dynamic_pointer_cast<var_array>(col_base);
+            for (size_t i = 0; i < array->size(); ++i)
+            {
+                symbol* sym = lookup(node->m_item->m_token.value);
+                sym->var_ref = array->get_element(i);
+
+                for (auto& stmt : node->m_body->m_statements)
+                    evaluate_statement(stmt);
+
+                if (m_call_states.b1)
+                {
+                    m_call_states.b1 = false;
+                    break;
+                }
+                else if (m_call_states.b2)
+                {
+                    m_call_states.b2 = false;
+                }
+            }
+        }
+        else if (col_base->get_base_type() == variable_base_type::array)
+        {
+            // TODO
+        }
+        else if (col_base->get_base_type() == variable_base_type::array)
+        {
+            // TODO
+        }
+        else
+        {
+            throw type_mismatch_error("Type should be array or dict or string", node->m_collection->get_location());
+        }
+
+        m_loop_depth--;
+        exit_scope();
+    }
+
+    void evaluator::evaluate_while_statement(ref<while_statement> node)
+    {
+        enter_scope(scope_type::block);
+        m_loop_depth++;
+        while (true)
+        {
+            ref<variable_base> cond = get_value(node->m_condition);
+            if (cond->get_base_type() != variable_base_type::variable)
+                throw invalid_type_error("Type should be variable!", node->m_condition->get_location());
+
+            ref<variable> var = std::dynamic_pointer_cast<variable>(cond);
+            if (var->get_type() != variable_type::vt_bool)
+                throw invalid_type_error("Type should be boolean!", node->m_condition->get_location());
+
+            bool value = var->get_data_as<bool>();
+            if (!value)
+            {
+                m_call_states.b1 = false;
+                m_call_states.b2 = false;
+                break;
+            }
+
+            for (auto& stmt : node->m_body->m_statements)
+                evaluate_statement(stmt);
+
+            if (m_call_states.b1)
+            {
+                m_call_states.b1 = false;
+                break;
+            }
+            else if (m_call_states.b2)
+            {
+                m_call_states.b2 = false;
+            }
+        }
+        m_loop_depth--;
+
+        exit_scope();
+    }
+
+    void evaluator::evaluate_break_statement(ref<break_statement> node)
+    {
+        if (!m_loop_depth)
+            throw invalid_break_statement("Break statement called out of the loop!", node->m_loc);
+        m_call_states.b1 = true;
+    }
+
+    void evaluator::evaluate_continue_statement(ref<continue_statement> node)
+    {
+        if (!m_loop_depth)
+            throw invalid_continue_statement("Continue statement called out of the loop!", node->m_loc);
+        m_call_states.b1 = true;
+    }
+
+    void evaluator::evaluate_import_statement(ref<import_statement> node)
+    {
+        std::string filepath = node->m_module_path;
+        if (!check_extension(filepath, ".wio"))
+        {
+            if(std::filesystem::path(filepath).has_extension())
+                throw file_error("\'" + filepath + "\' is not a wio file!");
+            if (has_prefix(filepath, "wio."))
+            {
+                // BUILTINS
+            }
+            else
+            {
+                filepath += ".wio";
+            }
+        }
+        if (!file_exists(filepath))
+        {
+            throw file_error("\'" + filepath + "\' not exists!");
+        }
+
+        std::string content = read_file(filepath);
+        std::filesystem::path cp = std::filesystem::current_path();
+
+        std::filesystem::path temp_cp = std::filesystem::current_path();
+        temp_cp /= filepath;
+        std::filesystem::path rd = temp_cp.parent_path();
+        std::filesystem::current_path(rd);
+
+        lexer l_lexer(content);
+        auto& tokens = l_lexer.get_tokens();
+        parser l_parser(tokens);
+        ref<program> tree = l_parser.parse();
+        evaluator eval;
+        eval.evaluate_program(tree);
+        auto& symbols = eval.get_symbols();
+
+        for (auto& [key, value] : symbols)
+        {
+            if (value.flags.b1)
+                continue;
+            current_scope->insert(key, value);
+        }
+
+        std::filesystem::current_path(cp);
+    }
+
+    void evaluator::evaluate_return_statement(ref<return_statement> node)
+    {
+        if (current_scope->get_type() == scope_type::function)
+        {
+            m_last_return_value = evaluate_expression(node->m_value);
+            m_call_states.b3 = true;
+        }
+        else
+            throw invalid_return_statement("Return statement out of the function", node->get_location());
+    }
+
+    void evaluator::evaluate_variable_declaration(ref<variable_declaration> node, bool is_parameter)
     {
         std::string name = node->m_id->m_token.value;
         variable_type type = node->m_type;
 
-        if (lookup(name) != nullptr) 
-            throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
+        if (is_parameter)
+        {
+            if (lookup_current_and_global(name) != nullptr)
+                throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
+            if (node->m_type == variable_type::vt_array)
+                evaluate_array_declaration(make_ref<array_declaration>(node->m_id, std::vector<ref<expression>>{}, false, false, false));
+            if (node->m_type == variable_type::vt_dictionary)
+                evaluate_dictionary_declaration(make_ref<dictionary_declaration>(node->m_id, std::vector<std::pair<ref<expression>, ref<expression>>>{}, false, false, false));
+        }
+        else
+        {
+            if (lookup(name) != nullptr)
+            {
+                if (node->m_flags.b3)
+                    return; // GLOBAL VALUE DETECTED -> not works fine TODOOOOO
+                throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
+            }
+        }
 
-        any initializer_value;
 
         if (node->m_initializer)
         {
-            initializer_value = std::dynamic_pointer_cast<variable>(evaluate_expression(node->m_initializer))->get_data();
+            auto var = std::dynamic_pointer_cast<variable>(evaluate_expression(node->m_initializer));
 
-            if (node->m_type != variable_type::vt_any) 
+            if (node->m_type != variable_type::vt_var_param)
             {
                 auto initializer_expression_type = node->m_initializer->get_expression_type();
-                if (initializer_expression_type != node->m_type)
+                if (initializer_expression_type != node->m_type || !var)
                     throw local_exception("initializer has an invalid type.", node->m_initializer->get_location());
             }
-            
-            node->m_id->var_ref = std::make_shared<variable>(initializer_value, type, node->m_is_const, node->m_is_local, node->m_is_global);
-        }
 
-        symbol symbol(name, type, current_scope->get_type(), node->m_is_const, node->m_id->var_ref);
-        current_scope->insert(name, symbol);
-    }
-
-    void evaluator::evaluate_function_declaration(ref<function_declaration> node)
-    {
-        std::string name = node->m_id->m_token.value;
-        variable_type return_type = node->m_return_type;
-
-        if (lookup(name) != nullptr) 
-            throw invalid_declaration_error("Symbol '" + name + "' already defined in this scope.", node->m_id->get_location());
-
-        symbol function_symbol(name, variable_type::vt_function, current_scope->get_type(), false);
-        current_scope->insert(name, function_symbol);
-
-        std::vector<variable_type> param_types;
-        for (auto& param : node->m_params) 
-            param_types.push_back(param->m_type);
-
-        //auto func = make_ref<wio::function>(name, param_types, return_type);
-        //node->m_id->var_ref = func;
-
-        current_function = node;
-        enter_scope(scope_type::function);
-
-        for (ref<variable_declaration>& param : node->m_params)
-        {
-            std::string param_name = param->m_id->m_token.value;
-            variable_type param_type = param->m_type;
-            symbol param_symbol(param_name, param_type, scope_type::function, param->m_is_const);
-
-            if (lookup(param_name) != nullptr)
+            node->m_id->var_ref = var;
+            if (!var->is_ref())
             {
-                throw invalid_declaration_error("Duplicate parameter name: " + param_name, param->m_id->get_location());
-                exit_scope();
-                current_function = nullptr;
-                return;
+                node->m_id->var_ref->set_flags({ node->m_flags.b2, node->m_flags.b3 });
             }
-            current_scope->insert(param_name, param_symbol);
-
-            param->m_id->var_ref = std::make_shared<variable>(any(), param_type, false);
+            else
+            {
+                if (node->m_flags.b1)
+                    node->m_id->var_ref->set_const(true);
+            }
         }
 
-        //preprocess_declarations(node);
-
-        exit_scope();
-        current_function = nullptr;
+        symbol symbol(name, type, current_scope->get_type(), node->m_id->var_ref, {node->m_flags.b2, node->m_flags.b3});
+        if (node->m_flags.b3)
+            current_scope->insert_to_global(name, symbol);
+        else
+            current_scope->insert(name, symbol);
     }
 
     void evaluator::evaluate_array_declaration(ref<array_declaration> node)
@@ -747,17 +1007,22 @@ namespace wio
         std::string name = node->m_id->m_token.value;
         if (lookup(name) != nullptr)
             throw invalid_declaration_error("Symbol '" + name + "' already defined in this scope.", node->m_id->get_location());
-        if (current_scope->get_type() == scope_type::function && (node->m_is_local || node->m_is_global)) 
-            throw invalid_declaration_error("Arrays declared in function parameters cannot be local or global.", node->m_id->get_location());
 
         std::vector<ref<variable_base>> elements;
 
         for (auto& item : node->m_elements)
-            elements.push_back(evaluate_expression(item));
+        {
+            ref<variable_base> var = evaluate_expression(item)->clone();
+            var->set_const(node->m_flags.b1);
+            elements.push_back(var);
+        }
 
-       node->m_id->var_ref = make_ref<var_array>(elements, node->m_is_const, node->m_is_local, node->m_is_global);
-       symbol array_symbol(name, variable_type::vt_array, current_scope->get_type(), node->m_is_const, node->m_id->var_ref);
-       current_scope->insert(name, array_symbol);
+        node->m_id->var_ref = make_ref<var_array>(elements, packed_bool{ node->m_flags.b1, node->m_flags.b4 });
+        symbol array_symbol(name, variable_type::vt_array, current_scope->get_type(), node->m_id->var_ref, { node->m_flags.b2, node->m_flags.b3 });
+        if (node->m_flags.b3)
+            current_scope->insert_to_global(name, array_symbol);
+        else
+            current_scope->insert(name, array_symbol);
     }
 
     void evaluator::evaluate_dictionary_declaration(ref<dictionary_declaration> node)
@@ -765,21 +1030,84 @@ namespace wio
         std::string name = node->m_id->m_token.value;
         if (lookup(name) != nullptr)
             throw invalid_declaration_error("Symbol '" + name + "' already defined in this scope.", node->m_id->get_location());
-        if (current_scope->get_type() == scope_type::function && (node->m_is_local || node->m_is_global))
-            throw invalid_declaration_error("Dictionaries declared in function parameters cannot be local or global.", node->m_id->get_location());
 
         var_dictionary::map_t elements;
 
         for (auto& item : node->m_pairs)
-            elements[var_dictionary::as_key(evaluate_expression(item.first))] = evaluate_expression(item.second);
-            
-        node->m_id->var_ref = make_ref<var_dictionary>(elements, node->m_is_const, node->m_is_local, node->m_is_global);
-        symbol dict_symbol(name, variable_type::vt_dictionary, current_scope->get_type(), node->m_is_const, node->m_id->var_ref);
-        current_scope->insert(name, dict_symbol);
+        {
+            ref<variable_base> var = evaluate_expression(item.second)->clone();
+            var->set_const(node->m_flags.b1);
+            elements[var_dictionary::as_key(evaluate_expression(item.first))] = var;
+        }
+
+        node->m_id->var_ref = make_ref<var_dictionary>(elements, packed_bool{ node->m_flags.b1, node->m_flags.b4 });
+        symbol dict_symbol(name, variable_type::vt_dictionary, current_scope->get_type(), node->m_id->var_ref, { node->m_flags.b2, node->m_flags.b3 });
+        if (node->m_flags.b3)
+            current_scope->insert_to_global(name, dict_symbol);
+        else
+            current_scope->insert(name, dict_symbol);
     }
 
-    void evaluator::evaluate_import_statement(ref<import_statement> node)
+    void evaluator::evaluate_function_declaration(ref<function_declaration> node)
     {
+        std::string name = node->m_id->m_token.value;
+        variable_type return_type = node->m_return_type;
+
+        std::vector<function_param> param_types;
+
+        for (auto& param : node->m_params)
+            param_types.emplace_back(param->m_type, param->m_id->m_token.value);
+
+        if (lookup(name) != nullptr)
+            throw invalid_declaration_error("Symbol '" + name + "' already defined in this scope.", node->m_id->get_location());
+
+        for (auto& stmt : node->m_body->m_statements)
+            if (auto var_decl = std::dynamic_pointer_cast<variable_declaration>(stmt))
+                if (var_decl->m_flags.b3)
+                    evaluate_variable_declaration(var_decl);
+
+        auto func_lambda = [this, node](const std::vector<function_param>& param_ids, std::vector<ref<variable_base>>& parameters)->ref<variable_base>
+            {
+                enter_scope(scope_type::function);
+                for (auto& param : node->m_params)
+                {
+                    if (param->m_type == variable_type::vt_var_param)
+                        evaluate_variable_declaration(param, true);
+                }
+
+                for (size_t i = 0; i < parameters.size(); ++i)
+                {
+                    symbol* sym = lookup(param_ids[i].id);
+                    sym->var_ref = parameters[i];
+                }
+
+                for (auto& stmt : node->m_body->m_statements)
+                {
+                    evaluate_statement(stmt);
+                    if (m_call_states.b3)
+                    {
+                        m_call_states.b3 = false;
+                        ref<variable_base> retval = m_last_return_value;
+                        m_last_return_value = nullptr;
+                        exit_scope();
+                        return retval;
+                    }
+                }
+
+                for (size_t i = 0; i < parameters.size(); ++i)
+                {
+                    symbol* sym = lookup(param_ids[i].id);
+                    sym->var_ref = nullptr;
+                }
+
+                return get_null_var();
+                exit_scope();
+            };
+
+
+        ref<var_function> func = make_ref<var_function>(func_lambda, variable_type::vt_null, param_types, node->m_is_local);
+        symbol function_symbol(name, variable_type::vt_function, current_scope->get_type(), func, { node->m_is_local, node->m_is_global });
+        current_scope->insert(name, function_symbol);
     }
 
     void evaluator::enter_scope(scope_type type) 
@@ -800,6 +1128,16 @@ namespace wio
         return current_scope->lookup(name);
     }
 
+    symbol* evaluator::lookup_current_and_global(const std::string& name)
+    {
+        return current_scope->lookup_current_and_global(name);
+    }
+
+    ref<variable_base> evaluator::get_null_var()
+    {
+        return make_ref<variable>(any(), variable_type::vt_null);
+    }
+
     ref<variable_base> evaluator::get_value(ref<expression> node)
     {
         if (auto lit = std::dynamic_pointer_cast<literal>(node))
@@ -809,7 +1147,7 @@ namespace wio
         else if (auto id = std::dynamic_pointer_cast<identifier>(node))
             return evaluate_identifier(id);
         else if (auto null_exp = std::dynamic_pointer_cast<null_expression>(node))
-            return make_ref<variable>(any(), variable_type::vt_null);
+            return get_null_var();
         else if (auto bin_expr = std::dynamic_pointer_cast<binary_expression>(node)) 
             return evaluate_binary_expression(bin_expr);
         else if (auto unary_expr = std::dynamic_pointer_cast<unary_expression>(node)) 
@@ -820,41 +1158,11 @@ namespace wio
             return evaluate_typeof_expression(typeof_expr);
         else if (auto arr_access = std::dynamic_pointer_cast<array_access_expression>(node)) 
             return evaluate_array_access_expression(arr_access);
-        else if (auto dict_access = std::dynamic_pointer_cast<dictionary_access_expression>(node)) 
-            return evaluate_dictionary_access_expression(dict_access);
         else if (auto member_access = std::dynamic_pointer_cast<member_access_expression>(node)) 
             return evaluate_member_access_expression(member_access);
         else if (auto func_call = std::dynamic_pointer_cast<function_call>(node)) 
             return evaluate_function_call(func_call);
         else 
             throw evaluation_error("Cannot evaluate expression of unknown type.");
-    }
-
-    variable_type evaluator::get_expression_type(ref<expression> node) 
-    {
-        if (auto lit = std::dynamic_pointer_cast<literal>(node))
-            return lit->get_expression_type();
-        else if (auto str_lit = std::dynamic_pointer_cast<string_literal>(node))
-            return str_lit->get_expression_type();
-        else if (auto id = std::dynamic_pointer_cast<identifier>(node))
-            return id->get_expression_type();
-        else if (auto bin_expr = std::dynamic_pointer_cast<binary_expression>(node))
-            bin_expr->get_expression_type();
-        else if (auto unary_expr = std::dynamic_pointer_cast<unary_expression>(node))
-            return unary_expr->get_expression_type();
-        else if (auto assign_expr = std::dynamic_pointer_cast<assignment_expression>(node))
-            return assign_expr->get_expression_type();
-        else if (auto typeof_expr = std::dynamic_pointer_cast<typeof_expression>(node))
-            return typeof_expr->get_expression_type();
-        else if (auto arr_access = std::dynamic_pointer_cast<array_access_expression>(node)) 
-            return arr_access->get_expression_type();
-        else if (auto dict_access = std::dynamic_pointer_cast<dictionary_access_expression>(node))
-            return dict_access->get_expression_type();
-        else if (auto member_access = std::dynamic_pointer_cast<member_access_expression>(node)) 
-            member_access->get_expression_type();
-        else if (auto func_call = std::dynamic_pointer_cast<function_call>(node)) 
-            return func_call->get_expression_type();
-        throw evaluation_error("Cannot get expression type of unknown type.", node->get_location());
-    }
-    
+    }    
 } // namespace wio

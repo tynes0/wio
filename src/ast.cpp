@@ -44,7 +44,7 @@ namespace wio
         return "null";
     }
 
-    identifier::identifier(token tok) : m_token(tok)
+    identifier::identifier(token tok, bool is_ref, bool is_lhs) : m_token(tok), m_is_ref(is_ref), m_is_lhs(is_lhs)
     {
         if (tok.type != token_type::identifier)
             throw unexpected_token_error("When creating identifier, the token type must be identifier!");
@@ -187,22 +187,7 @@ namespace wio
 
     std::string array_access_expression::to_string() const
     {
-        return m_array->to_string() + "[" + m_index->to_string() + "]";
-    }
-
-    variable_type dictionary_access_expression::get_expression_type() const
-    {
-        auto dict_type = m_dictionary->get_expression_type();
-        if (dict_type == variable_type::vt_dictionary)
-        {
-            // TODO
-        }
-        return variable_type::vt_null;
-    }
-
-    std::string dictionary_access_expression::to_string() const
-    {
-        return m_dictionary->to_string() + "[" + m_key->to_string() + "]";
+        return m_array->to_string() + "[" + m_key_or_index->to_string() + "]";
     }
 
     variable_type member_access_expression::get_expression_type() const
@@ -321,7 +306,7 @@ namespace wio
         case wio::variable_type::vt_function:
             return token_type::kw_func;
         default:
-            if (m_is_const)
+            if (m_flags.b1)
                 return token_type::kw_const;
             return token_type::kw_var;
         }
@@ -330,11 +315,11 @@ namespace wio
     std::string variable_declaration::to_string() const
     {
         std::string result;
-        if (m_is_local)
-            result += "local ";
-        else if (m_is_global)
+        if (m_flags.b3)
             result += "global ";
-        if (m_is_const)
+        if (m_flags.b2)
+            result += "local ";
+        if (m_flags.b1)
             result += "const ";
 
         result += frenum::to_string(m_type) + " " + m_id->to_string();
@@ -346,7 +331,7 @@ namespace wio
 
     std::string array_declaration::to_string() const
     {
-        std::string result = (m_is_const ? "const " : "") + std::string("array ") + m_id->to_string() + " = [";
+        std::string result = (m_flags.b1 ? "const " : "") + std::string("array ") + m_id->to_string() + " = [";
         for (size_t i = 0; i < m_elements.size(); ++i)
         {
             result += m_elements[i]->to_string();
@@ -359,7 +344,7 @@ namespace wio
 
     std::string dictionary_declaration::to_string() const
     {
-        std::string result = (m_is_const ? "const " : "") + std::string("dict ") + m_id->to_string() + " = {";
+        std::string result = (m_flags.b1 ? "const " : "") + std::string("dict ") + m_id->to_string() + " = {";
         for (size_t i = 0; i < m_pairs.size(); ++i)
         {
             result += "[" + m_pairs[i].first->to_string() + ", ";

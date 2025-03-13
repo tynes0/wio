@@ -12,7 +12,7 @@ namespace wio
 	public:
 		using map_t = std::map<std::string, ref<variable_base>>; // std::map could be change
 
-		var_dictionary(const map_t& data, bool is_const = false, bool is_local = false, bool is_global = false);
+		var_dictionary(const map_t& data, packed_bool flags = {});
 
 		virtual variable_base_type get_base_type() const override;
 		virtual variable_type get_type() const override;
@@ -28,6 +28,7 @@ namespace wio
 
 		void set_data(const map_t& data);
 		void set_element(ref<variable_base> key, ref<variable_base> value);
+		size_t size() const;
 	private:
 		bool check_existance(const std::string& key);
 

@@ -36,4 +36,9 @@ namespace wio
 	{
 		return std::filesystem::exists(filepath);
 	}
+
+	inline bool has_prefix(const std::string& str, const std::string& prefix)
+	{
+		return (str.substr(0, prefix.size()) == prefix);
+	}
 }

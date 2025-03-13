@@ -85,8 +85,10 @@ namespace wio
 
 	application::application(int argc, const char** argv)
 	{
-		s_app_data.args.reserve(argc);
-		for (int i = 0; i < argc; ++i)
+		if (argc <= 1)
+			return;
+		s_app_data.args.reserve(argc - 1);
+		for (int i = 1; i < argc; ++i)
 			s_app_data.args.emplace_back(argv[i]);
 	}
 
@@ -116,17 +118,29 @@ namespace wio
 				}
 				else
 				{
-					const std::string& filepath = s_app_data.args[i];
+					std::string filepath = s_app_data.args[i];
+					if (!check_extension(filepath, ".wio"))
+					{
+						if (std::filesystem::path(filepath).has_extension())
+							throw file_error("\'" + filepath + "\' is not a wio file!");
+						if (has_prefix(filepath, "wio."))
+						{
+							// BUILTINS
+						}
+						else
+						{
+							filepath += ".wio";
+						}
+					}
 					if (!file_exists(filepath))
+					{
 						throw file_error("\'" + filepath + "\' not exists!");
-					if(!check_extension(filepath, ".wio"))
-						throw file_error("\'" + filepath + "\' is not a wio file!");
+					}
 					content = read_file(filepath);
 					std::filesystem::path cp = std::filesystem::current_path();
 					cp /= filepath;
 					std::filesystem::path rd = cp.parent_path();
 					std::filesystem::current_path(rd);
-					cp = std::filesystem::current_path();
 
 					file_passed = true;
 				}

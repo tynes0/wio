@@ -29,10 +29,11 @@ namespace wio
         vt_array,
         vt_dictionary,
         vt_function,
+        vt_var_param,
         vt_any
     };
 
-    MakeFrenumInNamespace(wio, variable_type, vt_null, vt_integer, vt_float, vt_string, vt_character, vt_bool, vt_array, vt_dictionary, vt_function, vt_any)
+    MakeFrenumInNamespace(wio, variable_type, vt_null, vt_integer, vt_float, vt_string, vt_character, vt_bool, vt_array, vt_dictionary, vt_function, vt_var_param)
 
     class variable_base
     {
@@ -44,16 +45,16 @@ namespace wio
         virtual ref<variable_base> clone() const = 0;
 
         bool is_constant() const { return m_flags.b1; }
-        bool is_local() const { return m_flags.b2; }
-        bool is_global() const { return m_flags.b3; }
+        bool is_ref() const { return m_flags.b2; }
 
         void set_const(bool flag) { m_flags.b1 = flag; }
-        void set_local(bool flag) { m_flags.b2 = flag; }
-        void set_global(bool flag) { m_flags.b3 = flag; }
+        void set_ref(bool flag) { m_flags.b2 = flag; }
+
+        void set_flags(packed_bool flags) { m_flags = flags; }
     protected:
-        void init_flags(bool cf, bool lf, bool gf) { set_const(cf); set_local(lf); set_global(gf); }
+        variable_base(packed_bool flags) : m_flags(flags) { }
     private:
-        packed_bool m_flags = {}; // b1 -> const --- b2 -> local --- b3 -> global
+        packed_bool m_flags = {}; // b1 -> const --- b2 ref
     };
 
 } // namespace wio

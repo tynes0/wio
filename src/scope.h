@@ -11,6 +11,7 @@ namespace wio
 {
     enum class scope_type 
     {
+        builtin,
         global,
         local,
         function,
@@ -22,13 +23,13 @@ namespace wio
         std::string name;
         variable_type type = variable_type::vt_null;
         scope_type scope_t = scope_type::local;
-        bool is_const = false;
         ref<variable_base> var_ref;
+        packed_bool flags = {}; // 1-> is_local ---  2-> is_global
 
         symbol() {}
 
-        symbol(const std::string& name, variable_type type, scope_type scope, bool is_const, ref<variable_base> var_ref = nullptr)
-            : name(name), type(type), scope_t(scope), is_const(is_const), var_ref(var_ref) {}
+        symbol(const std::string& name, variable_type type, scope_type scope, ref<variable_base> var_ref = nullptr, packed_bool flags = {})
+            : name(name), type(type), scope_t(scope), var_ref(var_ref), flags(flags) {}
     };
 
     class scope 
@@ -37,7 +38,9 @@ namespace wio
         scope(scope_type type, ref<scope> parent = nullptr) : m_type(type), m_parent(parent) {}
 
         void insert(const std::string& name, const symbol& symbol);
+        void insert_to_global(const std::string& name, const symbol& symbol);
         symbol* lookup(const std::string& name);
+        symbol* lookup_current_and_global(const std::string& name);
         scope_type get_type() { return m_type; }
         ref<scope> get_parent() { return m_parent; }
         std::map<std::string, symbol>& get_symbols() { return m_symbols; }

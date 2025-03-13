@@ -2,9 +2,8 @@
 
 namespace wio
 {
-    var_array::var_array(const std::vector<ref<variable_base>>& data, bool is_const, bool is_local, bool is_global) : m_data(data)
+    var_array::var_array(const std::vector<ref<variable_base>>& data, packed_bool flags) : m_data(data), variable_base(flags)
     {
-        init_flags(is_const, is_local, is_global);
     }
 
     variable_base_type var_array::get_base_type() const
@@ -36,6 +35,11 @@ namespace wio
     {
         check_index(index);
         return m_data[index];
+    }
+
+    size_t var_array::size() const
+    {
+        return m_data.size();
     }
 
     void var_array::set_data(const std::vector<ref<variable_base>>& data)

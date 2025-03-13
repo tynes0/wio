@@ -250,4 +250,17 @@ namespace wio
 	public:
 		explicit invalid_key_error(const std::string& message) noexcept : exception(message.c_str()) {}
 	};
+
+	class constant_value_assignment_error : public local_exception
+	{
+	public:
+		explicit constant_value_assignment_error(const std::string& message, const location& loc) noexcept : local_exception(message, loc) {}
+		explicit constant_value_assignment_error(const std::string& message) noexcept : local_exception(message.c_str()) {}
+	};
+
+	class builtin_error : public exception
+	{
+	public:
+		explicit builtin_error(const std::string& message) noexcept : exception(message.c_str()) {}
+	};
 }

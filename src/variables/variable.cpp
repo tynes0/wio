@@ -2,10 +2,9 @@
 
 namespace wio
 {
-    variable::variable( const any& data, variable_type type, bool is_const, bool is_local, bool is_global) :
-        m_data(data), m_type(type)
+    variable::variable( const any& data, variable_type type, packed_bool flags) :
+        m_data(data), m_type(type), variable_base(flags)
     {
-        init_flags(is_const, is_local, is_global);
     }
 
     variable_base_type variable::get_base_type() const

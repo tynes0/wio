@@ -10,7 +10,7 @@ namespace wio
 {
     enum class token_type
     {
-        kw_if, kw_else, kw_for, kw_foreach, kw_in, kw_while, kw_break, kw_continue, kw_return, kw_func, kw_null,
+        kw_if, kw_else, kw_for, kw_foreach, kw_in, kw_while, kw_break, kw_continue, kw_return, kw_func, kw_null, kw_ref,
         kw_var, kw_const, kw_array, kw_dict, kw_local, kw_global, kw_import, kw_typeof, kw_true, kw_false, KW_COUNT /* JUST A COUNTER! NOT A KW*/,
         identifier, number, string, character, boolean, op, bang, bitwise_or, bitwise_and, bitwise_not, 
         left_bracket, right_bracket,
@@ -21,7 +21,7 @@ namespace wio
     };
 
     MakeFrenumInNamespace(wio, token_type,
-        kw_if, kw_else, kw_for, kw_foreach, kw_in, kw_while, kw_break, kw_continue, kw_return, kw_func, kw_null,
+        kw_if, kw_else, kw_for, kw_foreach, kw_in, kw_while, kw_break, kw_continue, kw_return, kw_func, kw_null, kw_ref,
         kw_var, kw_const, kw_array, kw_dict, kw_local, kw_global, kw_import, kw_typeof, kw_true, kw_false, KW_COUNT,
         identifier, number, string, character, boolean, op, bang, bitwise_or, bitwise_and, bitwise_not,
         left_bracket, right_bracket,
@@ -60,6 +60,7 @@ namespace wio
         {"typeof", token_type::kw_typeof},
         {"true", token_type::kw_true},
         {"false", token_type::kw_false},
+        {"ref", token_type::kw_ref},
 
         {"+", token_type::op},
         {"-", token_type::op},
