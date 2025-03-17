@@ -15,28 +15,29 @@ namespace wio
     class statement;
     class literal;
     class identifier;
+    class string_literal;
+    class program;
     class binary_expression;
     class unary_expression;
     class assignment_expression;
-    class variable_declaration;
-    class array_declaration;
-    class dictionary_declaration;
-    class function_declaration;
-    class function_call;
+    class array_access_expression;
+    class member_access_expression;
+    class block_statement;
     class if_statement;
     class for_statement;
-    class foreach_statement;
     class while_statement;
+    class foreach_statement;
     class break_statement;
     class continue_statement;
     class return_statement;
     class import_statement;
     class typeof_expression;
-    class block_statement;
-    class array_access_expression;
-    class member_access_expression;
-    class program;
-    class string_literal;
+    class variable_declaration;
+    class array_declaration;
+    class dictionary_declaration;
+    class function_declaration;
+    class function_call;
+    class function_definition;
 
     class ast_node
     {
@@ -385,16 +386,17 @@ namespace wio
     class array_declaration : public statement
     {
     public:
-        array_declaration(ref<identifier> id, std::vector<ref<expression>> elements, bool is_const, bool is_local, bool is_global)
-            : m_id(id), m_elements(elements), m_flags({is_const, is_local, is_global}) { }
+        array_declaration(ref<identifier> id, ref<expression> initializer, std::vector<ref<expression>> elements, bool is_const, bool is_local, bool is_global, bool is_element_initializer)
+            : m_id(id), m_initializer(initializer), m_elements(elements), m_flags({is_const, is_local, is_global, is_element_initializer}) { }
 
         token_type get_type() const override { return token_type::kw_array; }
         location get_location() const override { return m_id->get_location(); }
         std::string to_string() const override;
 
         ref<identifier> m_id;
+        ref<expression> m_initializer;
         std::vector<ref<expression>> m_elements;
-        packed_bool m_flags; // 1- const 2-local 3- global
+        packed_bool m_flags; // 1- const 2-local 3- global 4- is element initializer
     };
 
     class dictionary_declaration : public statement
@@ -444,5 +446,22 @@ namespace wio
 
         ref<expression> m_caller;
         std::vector<ref<expression>> m_arguments;
+    };
+
+    class function_definition : public statement
+    {
+    public:
+        function_definition(ref<identifier> id, std::vector<ref<variable_declaration>> params, bool is_local, bool is_global)
+            : m_id(id), m_params(params), m_is_local(is_local), m_is_global(is_global) {
+        }
+
+        token_type get_type() const override { return token_type::kw_func; }
+        location get_location() const override { return m_id->get_location(); }
+        std::string to_string() const override;
+
+        ref<identifier> m_id;
+        std::vector<ref<variable_declaration>> m_params;
+        bool m_is_local;
+        bool m_is_global;
     };
 } // namespace wio

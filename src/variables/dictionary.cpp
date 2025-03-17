@@ -83,7 +83,7 @@ namespace wio
         case wio::variable_type::vt_string:
             return var->get_data_as<std::string>();
         case wio::variable_type::vt_character:
-            return std::string(1, var->get_data_as<char_reference>().get());
+            return std::string(1, var->get_data_as<char>());
         case wio::variable_type::vt_bool:
         case wio::variable_type::vt_null:
         case wio::variable_type::vt_dictionary:

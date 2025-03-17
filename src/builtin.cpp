@@ -30,7 +30,9 @@ namespace wio
                 else if (var->get_type() == variable_type::vt_bool)
                     result = var->get_data_as<bool>() ? "true" : "false";
                 else if (var->get_type() == variable_type::vt_character)
-                    result = std::string(1, var->get_data_as<char_reference>().get());
+                    result = std::string(1, var->get_data_as<char>());
+                else if (var->get_type() == variable_type::vt_null)
+                    result = "null";
                 else
                     throw builtin_error("Invalid expression in print parameter!");
             }
@@ -78,7 +80,7 @@ namespace wio
     {
         ref<scope> result_scope = make_ref<scope>(scope_type::builtin);
         std::vector<function_param> params;
-        params.emplace_back(variable_type::vt_any, "");
+        params.emplace_back("", variable_type::vt_any, false);
         var_function func([](const std::vector<function_param>&, std::vector<ref<variable_base>>& parameters)
             { 
                 detail::builtin_print(parameters.front()); 

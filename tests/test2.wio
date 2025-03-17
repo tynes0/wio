@@ -1,4 +1,4 @@
-##{
-##	global var PI = 3.14;
-##}
+{
+	global var PI = 3.14;
+}
 

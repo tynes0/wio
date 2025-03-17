@@ -42,27 +42,36 @@ namespace wio
         void evaluate_break_statement(ref<break_statement> node);
         void evaluate_continue_statement(ref<continue_statement> node);
         void evaluate_import_statement(ref<import_statement> node);
-
         void evaluate_return_statement(ref<return_statement> node);
 
         void evaluate_variable_declaration(ref<variable_declaration> node, bool is_parameter = false);
         void evaluate_array_declaration(ref<array_declaration> node);
         void evaluate_dictionary_declaration(ref<dictionary_declaration> node);
         void evaluate_function_declaration(ref<function_declaration> node);
+        void evaluate_function_definition(ref<function_definition> node);
+
+        void evaluate_only_global_declarations();
 
         void enter_scope(scope_type type);
         void exit_scope();
+        void enter_statement_stack(std::vector<ref<statement>>* list);
+        void exit_statement_stack();
         symbol* lookup(const std::string& name);
         symbol* lookup_current_and_global(const std::string& name);
+        symbol* lookup_only_global(const std::string& name);
+        var_func_definition* lookup_def(const std::string& name);
+        ref<function_declaration> get_func_decl(const std::string& name);
         ref<variable_base> get_null_var();
+        ref<variable_base> get_value(ref<expression> node);
 
-        ref<scope> current_scope;
-        int m_loop_depth = 0;
-        packed_bool m_call_states{}; // break, continue, return
-        ref<variable_base> m_last_return_value;
         std::set<std::string> m_imported_modules;
+        ref<scope> m_current_scope;
+        ref<variable_base> m_last_return_value;
+        ref<statement_stack> m_statement_stack;
+        int m_loop_depth = 0;
+        uint16_t m_func_body_counter = 0;
+        packed_bool m_flags{}; // 1- break, 2 - continue, 3 - return, 4 - only global decl, 5 - in func call
 
-        ref<variable_base> get_value(ref<expression>);
     };
 
 } // namespace wio

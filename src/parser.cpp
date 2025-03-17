@@ -117,7 +117,6 @@ namespace wio
             return 8;
         }
         return -1;
-
     }
 
     ref<statement> parser::parse_statement()
@@ -376,13 +375,14 @@ namespace wio
 
             next_token();
 
-            ref<expression> right = parse_unary_expression();
+            ref<expression> right = parse_binary_expression(current_precedence + 1);
 
             left = make_ref<binary_expression>(left, op, right);
         }
 
         return left;
     }
+
 
     ref<expression> parser::parse_unary_expression()
     {
@@ -444,7 +444,6 @@ namespace wio
             else if (current_token().type == token_type::dot)
                 return parse_member_access(primary);
 
-            consume_token(token_type::semicolon);
             return primary;
         }
         throw unexpected_token_error("Expected identifier after 'ref' keyword!");
@@ -572,7 +571,10 @@ namespace wio
         token id_token = consume_token(token_type::identifier);
         ref<identifier> id = make_ref<identifier>(id_token);
 
+        bool is_element_initializer = true;
+        ref<expression> exp;
         std::vector<ref<expression>> elements;
+
         if (match_token(token_type::op, "="))
         {
             if (match_token(token_type::left_bracket))
@@ -587,9 +589,39 @@ namespace wio
                     consume_token(token_type::right_bracket);
                 }
             }
+            else if (current_token().type == (token_type::kw_null))
+            {
+                next_token();
+                is_element_initializer = false;
+                exp = nullptr;
+            }
+            else if (current_token().type == (token_type::kw_ref))
+            {
+                consume_token(token_type::kw_ref);
+                token current = current_token();
+                ref<expression> result;
+                if (current.type == token_type::identifier)
+                {
+                    next_token();
+                    result = make_ref<identifier>(current, true);
+                }
+                else
+                {
+                    error("Expected identifier after 'ref' keyword!", current.loc);
+                }
+                is_element_initializer = false;
+                exp = result;
+            }
+            else if (current_token().type == (token_type::identifier))
+            {
+                ref<identifier> result = make_ref<identifier>(current_token());
+                is_element_initializer = false;
+                next_token();
+                exp = result;
+            }
             else
             {
-                error("Expected '[' after '=' in array declaration.", current_token().loc);
+                error("Expected '[' or identifier after '=' in array declaration.", current_token().loc);
                 return nullptr;
             }
 
@@ -607,7 +639,7 @@ namespace wio
             }
         }
         consume_token(token_type::semicolon);
-        return make_ref<array_declaration>(id, elements, is_const, is_local, is_global);
+        return make_ref<array_declaration>(id, exp, elements, is_const, is_local, is_global, is_element_initializer);
     }
 
     ref<statement> parser::parse_dictionary_declaration(bool is_const, bool is_local, bool is_global)
@@ -678,8 +710,10 @@ namespace wio
             consume_token(token_type::right_parenthesis);
         }
 
-        ref<block_statement> body = parse_block_statement();
+        if(match_token(token_type::semicolon))
+            return make_ref<function_definition>(id, params, is_local, is_global);
 
+        ref<block_statement> body = parse_block_statement();
         return make_ref<function_declaration>(id, params, body, variable_type::vt_null, is_local, is_global);
     }
 

@@ -1,15 +1,1 @@
-import "test2";
-
-##func factorial(var v)
-##{
-##	if(v <= 2)
-##		return v;
-##	return v * factorial(v - 1);
-##}
-
-const array ar[3, "test", 'x'];
-array x = ar;
-
-print(ar[1]);
-
-func f();
+## import "test2";

@@ -54,7 +54,7 @@ namespace wio
     protected:
         variable_base(packed_bool flags) : m_flags(flags) { }
     private:
-        packed_bool m_flags = {}; // b1 -> const --- b2 ref
+        packed_bool m_flags = {}; // b1 -> const --- b2 -> ref --- 
     };
 
 } // namespace wio

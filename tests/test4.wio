@@ -1,0 +1,9 @@
+## recursive test
+func factorial(var v)
+{
+	if(v <= 2)
+		return v;
+	return v * factorial(v - 1);
+}
+
+##

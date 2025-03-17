@@ -15,24 +15,50 @@
 
 namespace wio 
 {
+    namespace util
+    {
+        static bool is_var_t(variable_type vt)
+        {
+            switch (vt)
+            {
+            case wio::variable_type::vt_null:
+            case wio::variable_type::vt_var_param:
+            case wio::variable_type::vt_integer:
+            case wio::variable_type::vt_float:
+            case wio::variable_type::vt_string:
+            case wio::variable_type::vt_character:
+            case wio::variable_type::vt_bool:
+            case wio::variable_type::vt_any:
+                return true;
+            case wio::variable_type::vt_array:
+            case wio::variable_type::vt_dictionary:
+            case wio::variable_type::vt_function:
+            default:
+                return false;
+            }
+        }
+    }
+
     evaluator::evaluator() 
     {
-        current_scope = builtin::load();
+        m_current_scope = builtin::load();
     }
 
     void evaluator::evaluate_program(ref<program> program_node) 
     {
         enter_scope(scope_type::global);
+        enter_statement_stack(&program_node->m_statements);
 
         for (auto& stmt : program_node->m_statements) 
             evaluate_statement(stmt);
 
+        exit_statement_stack();
         exit_scope();
     }
 
     std::map<std::string, symbol>& evaluator::get_symbols()
     {
-        return current_scope->get_symbols();
+        return m_current_scope->get_symbols();
     }
 
     ref<variable_base> evaluator::evaluate_expression(ref<expression> node)
@@ -42,20 +68,23 @@ namespace wio
 
     void evaluator::evaluate_statement(ref<statement> node)
     {
-        if (m_call_states.b1 || m_call_states.b2 || m_call_states.b3)
+        if (m_flags.b1 || m_flags.b2 || m_flags.b3)
             return;
 
+        
         if (auto decl = std::dynamic_pointer_cast<variable_declaration>(node))
             evaluate_variable_declaration(decl);
-        else if (auto decl = std::dynamic_pointer_cast<function_declaration>(node))
-            evaluate_function_declaration(decl);
-        else if (auto decl = std::dynamic_pointer_cast<array_declaration>(node))
-            evaluate_array_declaration(decl);
-        else if (auto decl = std::dynamic_pointer_cast<dictionary_declaration>(node))
-            evaluate_dictionary_declaration(decl);
+        else if (auto fdecl = std::dynamic_pointer_cast<function_declaration>(node))
+            evaluate_function_declaration(fdecl);
+        else if (auto def = std::dynamic_pointer_cast<function_definition>(node))
+            evaluate_function_definition(def);
+        else if (auto adecl = std::dynamic_pointer_cast<array_declaration>(node))
+            evaluate_array_declaration(adecl);
+        else if (auto ddecl = std::dynamic_pointer_cast<dictionary_declaration>(node))
+            evaluate_dictionary_declaration(ddecl);
         else if (auto import_s = std::dynamic_pointer_cast<import_statement>(node))
             evaluate_import_statement(import_s);
-        if (auto block_s = std::dynamic_pointer_cast<block_statement>(node))
+        else if (auto block_s = std::dynamic_pointer_cast<block_statement>(node))
             evaluate_block_statement(block_s);
         else if (auto expression_s = std::dynamic_pointer_cast<expression_statement>(node))
             evaluate_expression_statement(expression_s);
@@ -73,6 +102,7 @@ namespace wio
             evaluate_continue_statement(continue_s);
         else if (auto return_s = std::dynamic_pointer_cast<return_statement>(node))
             evaluate_return_statement(return_s);
+        // MAYBE: UNKNOWN STATEMENT ERR
     }
 
     ref<variable_base> evaluator::evaluate_literal(ref<literal> node)
@@ -97,7 +127,7 @@ namespace wio
         else if (node->m_token.type == token_type::character) 
         {
             if (node->m_token.value.size() == 1) 
-                return make_ref<variable>(any(char_reference(node->m_token.value[0])), variable_type::vt_character);
+                return make_ref<variable>(any(node->m_token.value[0]), variable_type::vt_character);
             else 
                 throw evaluation_error("Invalid character literal", node->get_location());
         }
@@ -123,6 +153,9 @@ namespace wio
         if (!sym) 
             throw undefined_identifier_error("Undefined identifier: " + node->m_token.value, node->get_location());
 
+        if (node->m_is_ref)
+            sym->var_ref->set_ref(true);
+
         if (sym->var_ref) 
         {
             if (auto var = std::dynamic_pointer_cast<variable>(sym->var_ref))
@@ -143,8 +176,8 @@ namespace wio
                     return dict;
                 return dict->clone();
             }
-            //else if (auto func = std::dynamic_pointer_cast<function>(sym->var_ref)) 
-            //    return func;
+            else if (auto func = std::dynamic_pointer_cast<var_function>(sym->var_ref)) 
+                return func->clone();
             else 
                 throw evaluation_error("Identifier '" + node->m_token.value + "' refers to an unsupported type.", node->get_location());
         }
@@ -460,16 +493,16 @@ namespace wio
                     return make_ref<variable>(any(node->m_op_type == unary_operator_type::prefix ? value : old_value), variable_type::vt_float);
 
                 }
-                else if (operand_value.type() == typeid(char_reference)) 
+                else if (operand_value.type() == typeid(char)) 
                 {
-                    char_reference& value = any_cast<char_reference&>(operand_value);
+                    char& value = any_cast<char&>(operand_value);
                     char old_value = value;
                     if (op.value == "++") 
-                        value.get()++;
+                        value++;
                     else 
-                        value.get()--;
+                        value--;
 
-                    return make_ref<variable>(any(node->m_op_type == unary_operator_type::prefix ? value : char_reference(old_value)), variable_type::vt_character);
+                    return make_ref<variable>(any(node->m_op_type == unary_operator_type::prefix ? value : old_value), variable_type::vt_character);
                 }
                 else
                 {
@@ -503,90 +536,139 @@ namespace wio
     {
         ref<variable_base> lhs = get_value(node->m_target);
         ref<variable_base> rhs = get_value(node->m_value);
-        ref<variable> variable_lhs = std::dynamic_pointer_cast<variable>(lhs);
-        ref<variable> variable_rhs = std::dynamic_pointer_cast<variable>(rhs);
-        any& lhs_value = variable_lhs->get_data();
-        any& rhs_value = variable_rhs->get_data();
-        token op = node->m_operator;
 
-        if (variable_lhs->is_constant())
+        if (lhs->is_constant())
             throw constant_value_assignment_error("Constant values cannot be changed!", node->get_location());
 
-        if (op.value == "=")
+        token op = node->m_operator;
+
+        if (lhs->get_base_type() == variable_base_type::array)
         {
-            variable_lhs->set_data(variable_rhs->get_data());
-            variable_lhs->set_type(variable_rhs->get_type());
-        }
-        else if (op.value == "+=")
-        {
-            if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(long long))
-                any_cast<long long&>(lhs_value) += any_cast<long long>(rhs_value);
-            else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(double))
-                any_cast<double&>(lhs_value) += any_cast<double>(rhs_value);
-            else if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(double))
-                any_cast<long long&>(lhs_value) += static_cast<long long>(any_cast<double>(rhs_value));
-            else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(long long))
-                any_cast<double&>(lhs_value) += any_cast<long long>(rhs_value);
-            else if (lhs_value.type() == typeid(std::string) && rhs_value.type() == typeid(std::string))
-                any_cast<std::string&>(lhs_value) += any_cast<std::string>(rhs_value);
-            else if (lhs_value.type() == typeid(std::string) && rhs_value.type() == typeid(char_reference))
-                any_cast<std::string&>(lhs_value) += any_cast<char_reference>(rhs_value).get();
-            else if (lhs_value.type() == typeid(std::string) && rhs_value.type() == typeid(long long))
-                any_cast<std::string&>(lhs_value) += std::to_string(any_cast<long long>(rhs_value));
-            else if (lhs_value.type() == typeid(std::string) && rhs_value.type() == typeid(double))
-                any_cast<std::string&>(lhs_value) += std::to_string(any_cast<double>(rhs_value));
+            if (rhs->get_base_type() != variable_base_type::array)
+                throw type_mismatch_error("Target type is 'array' but source type is not!", node->m_value->get_location());
+            ref<var_array> array_lhs = std::dynamic_pointer_cast<var_array>(lhs);
+            ref<var_array> array_rhs = std::dynamic_pointer_cast<var_array>(rhs);
+
+            if (op.value == "=")
+                array_lhs->set_data(array_rhs->get_data());
             else
-                throw invalid_type_error("Invalid addition assignment: (Type '" + frenum::to_string(variable_rhs->get_type()) + "' cannot be added to type '" + frenum::to_string(variable_lhs->get_type()) + "')", node->get_location());
+                throw invalid_operator_error("Invalid assignment error!", node->get_location());
+            return array_lhs->clone();
         }
-        else if (op.value == "-=")
+        else if (lhs->get_base_type() == variable_base_type::dictionary)
         {
-            if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(long long))
-                any_cast<long long&>(lhs_value) -= any_cast<long long>(rhs_value);
-            else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(double))
-                any_cast<double&>(lhs_value) -= any_cast<double>(rhs_value);
-            else if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(double))
-                any_cast<long long&>(lhs_value) -= static_cast<long long>(any_cast<double>(rhs_value));
-            else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(long long))
-                any_cast<double&>(lhs_value) -= any_cast<long long>(rhs_value);
+            if (rhs->get_base_type() != variable_base_type::dictionary)
+                throw type_mismatch_error("Target type is 'dict' but source type is not!", node->m_value->get_location());
+            ref<var_dictionary> dict_lhs = std::dynamic_pointer_cast<var_dictionary>(lhs);
+            ref<var_dictionary> dict_rhs = std::dynamic_pointer_cast<var_dictionary>(rhs);
+
+            if (op.value == "=")
+                dict_lhs->set_data(dict_rhs->get_data());
             else
-                throw invalid_type_error("Invalid subtraction assignment: (Type '" + frenum::to_string(variable_rhs->get_type()) + "' cannot be subtract from type '" + frenum::to_string(variable_lhs->get_type()) + "')", node->get_location());
+                throw invalid_operator_error("Invalid assignment error!", node->get_location());
+            return dict_lhs->clone();
         }
-        else if (op.value == "*=")
+        else if (lhs->get_base_type() == variable_base_type::function)
         {
-            if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(long long))
-                any_cast<long long&>(lhs_value) *= any_cast<long long>(rhs_value);
-            else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(double))
-                any_cast<double&>(lhs_value) *= any_cast<double>(rhs_value);
-            else if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(double))
-                any_cast<long long&>(lhs_value) *= static_cast<long long>(any_cast<double>(rhs_value));
-            else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(long long))
-                any_cast<double&>(lhs_value) *= any_cast<long long>(rhs_value);
+            if (rhs->get_base_type() != variable_base_type::function)
+                throw type_mismatch_error("Target type is 'func' but source type is not!", node->m_value->get_location());
+            ref<var_function> func_lhs = std::dynamic_pointer_cast<var_function>(lhs);
+            ref<var_function> func_rhs = std::dynamic_pointer_cast<var_function>(rhs);
+
+            if (op.value == "=")
+                func_lhs->set_data(func_rhs->get_data());
             else
-                throw invalid_type_error("Invalid multiplication assignment: (Type '" + frenum::to_string(variable_rhs->get_type()) + "' cannot be multiplied by type '" + frenum::to_string(variable_lhs->get_type()) + "')", node->get_location());
+                throw invalid_operator_error("Invalid assignment error!", node->get_location());
+            return func_lhs->clone();
         }
-        else if (op.value == "/=")
+        else if(lhs->get_base_type() == variable_base_type::variable)
         {
-            if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(long long))
-                any_cast<long long&>(lhs_value) /= any_cast<long long>(rhs_value);
-            else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(double))
-                any_cast<double&>(lhs_value) /= any_cast<double>(rhs_value);
-            else if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(double))
-                any_cast<long long&>(lhs_value) /= static_cast<long long>(any_cast<double>(rhs_value));
-            else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(long long))
-                any_cast<double&>(lhs_value) /= any_cast<long long>(rhs_value);
+            if (rhs->get_base_type() != variable_base_type::variable)
+                throw type_mismatch_error("Target type is 'var' but source type is not!", node->m_value->get_location());
+
+            ref<variable> variable_lhs = std::dynamic_pointer_cast<variable>(lhs);
+            ref<variable> variable_rhs = std::dynamic_pointer_cast<variable>(rhs);
+            any& lhs_value = variable_lhs->get_data();
+            any& rhs_value = variable_rhs->get_data();
+
+            if (op.value == "=")
+            {
+                variable_lhs->set_data(variable_rhs->get_data());
+                variable_lhs->set_type(variable_rhs->get_type());
+            }
+            else if (op.value == "+=")
+            {
+                if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(long long))
+                    any_cast<long long&>(lhs_value) += any_cast<long long>(rhs_value);
+                else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(double))
+                    any_cast<double&>(lhs_value) += any_cast<double>(rhs_value);
+                else if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(double))
+                    any_cast<long long&>(lhs_value) += static_cast<long long>(any_cast<double>(rhs_value));
+                else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(long long))
+                    any_cast<double&>(lhs_value) += any_cast<long long>(rhs_value);
+                else if (lhs_value.type() == typeid(std::string) && rhs_value.type() == typeid(std::string))
+                    any_cast<std::string&>(lhs_value) += any_cast<std::string>(rhs_value);
+                else if (lhs_value.type() == typeid(std::string) && rhs_value.type() == typeid(char))
+                    any_cast<std::string&>(lhs_value) += any_cast<char>(rhs_value);
+                else if (lhs_value.type() == typeid(std::string) && rhs_value.type() == typeid(long long))
+                    any_cast<std::string&>(lhs_value) += std::to_string(any_cast<long long>(rhs_value));
+                else if (lhs_value.type() == typeid(std::string) && rhs_value.type() == typeid(double))
+                    any_cast<std::string&>(lhs_value) += std::to_string(any_cast<double>(rhs_value));
+                else
+                    throw invalid_type_error("Invalid addition assignment: (Type '" + frenum::to_string(variable_rhs->get_type()) + "' cannot be added to type '" + frenum::to_string(variable_lhs->get_type()) + "')", node->get_location());
+            }
+            else if (op.value == "-=")
+            {
+                if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(long long))
+                    any_cast<long long&>(lhs_value) -= any_cast<long long>(rhs_value);
+                else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(double))
+                    any_cast<double&>(lhs_value) -= any_cast<double>(rhs_value);
+                else if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(double))
+                    any_cast<long long&>(lhs_value) -= static_cast<long long>(any_cast<double>(rhs_value));
+                else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(long long))
+                    any_cast<double&>(lhs_value) -= any_cast<long long>(rhs_value);
+                else
+                    throw invalid_type_error("Invalid subtraction assignment: (Type '" + frenum::to_string(variable_rhs->get_type()) + "' cannot be subtract from type '" + frenum::to_string(variable_lhs->get_type()) + "')", node->get_location());
+            }
+            else if (op.value == "*=")
+            {
+                if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(long long))
+                    any_cast<long long&>(lhs_value) *= any_cast<long long>(rhs_value);
+                else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(double))
+                    any_cast<double&>(lhs_value) *= any_cast<double>(rhs_value);
+                else if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(double))
+                    any_cast<long long&>(lhs_value) *= static_cast<long long>(any_cast<double>(rhs_value));
+                else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(long long))
+                    any_cast<double&>(lhs_value) *= any_cast<long long>(rhs_value);
+                else
+                    throw invalid_type_error("Invalid multiplication assignment: (Type '" + frenum::to_string(variable_rhs->get_type()) + "' cannot be multiplied by type '" + frenum::to_string(variable_lhs->get_type()) + "')", node->get_location());
+            }
+            else if (op.value == "/=")
+            {
+                if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(long long))
+                    any_cast<long long&>(lhs_value) /= any_cast<long long>(rhs_value);
+                else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(double))
+                    any_cast<double&>(lhs_value) /= any_cast<double>(rhs_value);
+                else if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(double))
+                    any_cast<long long&>(lhs_value) /= static_cast<long long>(any_cast<double>(rhs_value));
+                else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(long long))
+                    any_cast<double&>(lhs_value) /= any_cast<long long>(rhs_value);
+                else
+                    throw invalid_type_error("Invalid division assignment: (Type '" + frenum::to_string(variable_rhs->get_type()) + "' cannot be divided by type '" + frenum::to_string(variable_lhs->get_type()) + "')", node->get_location());
+            }
+            else if (op.value == "%=")
+            {
+                if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(long long))
+                    any_cast<long long&>(lhs_value) %= any_cast<long long>(rhs_value);
+                else
+                    throw invalid_type_error("Invalid modulo assignment: Types should be integer!", node->get_location());
+            }
             else
-                throw invalid_type_error("Invalid division assignment: (Type '" + frenum::to_string(variable_rhs->get_type()) + "' cannot be divided by type '" + frenum::to_string(variable_lhs->get_type()) + "')", node->get_location());
+                throw invalid_operator_error("Invalid assignment error!", node->get_location());
+            return lhs->clone();
         }
-        else if (op.value == "%=")
-        {
-            if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(long long))
-                any_cast<long long&>(lhs_value) %= any_cast<long long>(rhs_value);
-            else
-                throw invalid_type_error("Invalid modulo assignment: Types should be integer!", node->get_location());
-        }
-        else
-            throw invalid_operator_error("Invalid assignment error!", node->get_location());
-        return lhs->clone();
+        throw invalid_operator_error("Invalid assignment error!", node->get_location());
+        return nullptr;
     }
 
     ref<variable_base> evaluator::evaluate_typeof_expression(ref<typeof_expression> node)
@@ -642,9 +724,7 @@ namespace wio
             if (index < 0 || index >= long long(value.size()))
                 throw out_of_bounds_error("String index out of the bounds!");
 
-            char_reference ch = (node->m_array->m_is_ref || node->m_array->m_is_lhs) ? char_reference(value, index) : char_reference(value[index]);
-
-            return make_ref<variable>(any(ch), variable_type::vt_character);
+            return make_ref<variable>(any(value[index]), variable_type::vt_character);
         }
         else if (base_t == variable_base_type::dictionary)
         {
@@ -673,10 +753,23 @@ namespace wio
         std::string name = id->m_token.value;
         symbol* sym = lookup(name);
 
-        if(!sym)
-            throw local_exception("Function '" + name + "' not found!", id->get_location());
-        if(sym->type != variable_type::vt_function)
+        if (!sym)
+        {
+            var_func_definition* def = lookup_def(name);
+            if(!def)
+                throw local_exception("Function '" + name + "' not found!", id->get_location());
+
+            ref<function_declaration> decl = get_func_decl(name);
+            if(!decl)
+                throw local_exception("Function '" + name + "' defined but not declared!", id->get_location());
+
+            evaluate_function_declaration(decl);
+            sym = lookup(name);
+        }
+        else if (sym->type != variable_type::vt_function)
+        {
            throw invalid_type_error("Type should be function!", id->get_location());
+        }
 
         ref<var_function> func = std::dynamic_pointer_cast<var_function>(sym->var_ref);
 
@@ -691,7 +784,8 @@ namespace wio
 
         const auto& real_params = func->get_parameters();
         for (size_t i = 0; i < real_params.size(); ++i)
-            if (parameters[i]->get_type() != real_params[i].type && real_params[i].type != variable_type::vt_any)
+            if (parameters[i]->get_type() != real_params[i].type && real_params[i].type != variable_type::vt_any &&
+                !(parameters[i]->get_base_type() == variable_base_type::variable && util::is_var_t(real_params[i].type)))
                 throw type_mismatch_error("Parameter types not matching!");
 
         return func->call(parameters);
@@ -700,18 +794,31 @@ namespace wio
     void evaluator::evaluate_block_statement(ref<block_statement> node)
     {
         enter_scope(scope_type::block);
+        enter_statement_stack(&node->m_statements);
+
         for (auto& stmt : node->m_statements)
             evaluate_statement(stmt);
+
+        exit_statement_stack();
         exit_scope();
     }
 
     void evaluator::evaluate_expression_statement(ref<expression_statement> node)
     {
+        if (m_flags.b4)
+            return;
         evaluate_expression(node->m_expression);
     }
 
     void evaluator::evaluate_if_statement(ref<if_statement> node)
     {
+        if (m_flags.b4)
+        {
+            evaluate_statement(node->m_then_branch);
+            evaluate_statement(node->m_else_branch);
+            return;
+        }
+
         ref<variable_base> cond = get_value(node->m_condition);
         
         if (cond->get_base_type() != variable_base_type::variable)
@@ -749,6 +856,19 @@ namespace wio
 
     void evaluator::evaluate_for_statement(ref<for_statement> node)
     {
+        if (m_flags.b4)
+        {
+            enter_scope(scope_type::block);
+            enter_statement_stack(&node->m_body->m_statements);
+
+            for (auto& stmt : node->m_body->m_statements)
+                evaluate_statement(stmt);
+
+            exit_statement_stack();
+            exit_scope();
+            return;
+        }
+
         enter_scope(scope_type::block);
         evaluate_statement(node->m_initialization);
 
@@ -766,23 +886,27 @@ namespace wio
             bool value = var->get_data_as<bool>();
             if (!value)
             {
-                m_call_states.b1 = false;
-                m_call_states.b2 = false;
+                m_flags.b1 = false;
+                m_flags.b2 = false;
                 break;
             }
+
+            enter_statement_stack(&node->m_body->m_statements);
 
             for (auto& stmt : node->m_body->m_statements)
                 evaluate_statement(stmt);
 
-            if (m_call_states.b1)
+            exit_statement_stack();
+
+            if (m_flags.b1)
             {
-                m_call_states.b1 = false;
+                m_flags.b1 = false;
                 break;
             }
-            else if (m_call_states.b2)
+            else if (m_flags.b2)
             {
                 evaluate_expression(node->m_increment);
-                m_call_states.b2 = false;
+                m_flags.b2 = false;
             }
         }
         m_loop_depth--;
@@ -792,6 +916,19 @@ namespace wio
 
     void evaluator::evaluate_foreach_statement(ref<foreach_statement> node)
     {
+        if (m_flags.b4)
+        {
+            enter_scope(scope_type::block);
+            enter_statement_stack(&node->m_body->m_statements);
+
+            for (auto& stmt : node->m_body->m_statements)
+                evaluate_statement(stmt);
+
+            exit_statement_stack();
+            exit_scope();
+            return;
+        }
+
         enter_scope(scope_type::block);
         m_loop_depth++;
         evaluate_variable_declaration(make_ref<variable_declaration>(node->m_item, nullptr, false, false, false, false));
@@ -804,17 +941,20 @@ namespace wio
                 symbol* sym = lookup(node->m_item->m_token.value);
                 sym->var_ref = array->get_element(i);
 
+
+                enter_statement_stack(&node->m_body->m_statements);
                 for (auto& stmt : node->m_body->m_statements)
                     evaluate_statement(stmt);
+                exit_statement_stack();
 
-                if (m_call_states.b1)
+                if (m_flags.b1)
                 {
-                    m_call_states.b1 = false;
+                    m_flags.b1 = false;
                     break;
                 }
-                else if (m_call_states.b2)
+                else if (m_flags.b2)
                 {
-                    m_call_states.b2 = false;
+                    m_flags.b2 = false;
                 }
             }
         }
@@ -837,6 +977,19 @@ namespace wio
 
     void evaluator::evaluate_while_statement(ref<while_statement> node)
     {
+        if (m_flags.b4)
+        {
+            enter_scope(scope_type::block);
+            enter_statement_stack(&node->m_body->m_statements);
+
+            for (auto& stmt : node->m_body->m_statements)
+                evaluate_statement(stmt);
+
+            exit_statement_stack();
+            exit_scope();
+            return;
+        }
+
         enter_scope(scope_type::block);
         m_loop_depth++;
         while (true)
@@ -852,22 +1005,24 @@ namespace wio
             bool value = var->get_data_as<bool>();
             if (!value)
             {
-                m_call_states.b1 = false;
-                m_call_states.b2 = false;
+                m_flags.b1 = false;
+                m_flags.b2 = false;
                 break;
             }
 
+            enter_statement_stack(&node->m_body->m_statements);
             for (auto& stmt : node->m_body->m_statements)
                 evaluate_statement(stmt);
+            exit_statement_stack();
 
-            if (m_call_states.b1)
+            if (m_flags.b1)
             {
-                m_call_states.b1 = false;
+                m_flags.b1 = false;
                 break;
             }
-            else if (m_call_states.b2)
+            else if (m_flags.b2)
             {
-                m_call_states.b2 = false;
+                m_flags.b2 = false;
             }
         }
         m_loop_depth--;
@@ -877,20 +1032,26 @@ namespace wio
 
     void evaluator::evaluate_break_statement(ref<break_statement> node)
     {
+        if (m_flags.b4)
+            return;
         if (!m_loop_depth)
             throw invalid_break_statement("Break statement called out of the loop!", node->m_loc);
-        m_call_states.b1 = true;
+        m_flags.b1 = true;
     }
 
     void evaluator::evaluate_continue_statement(ref<continue_statement> node)
     {
+        if (m_flags.b4)
+            return;
         if (!m_loop_depth)
             throw invalid_continue_statement("Continue statement called out of the loop!", node->m_loc);
-        m_call_states.b1 = true;
+        m_flags.b1 = true;
     }
 
     void evaluator::evaluate_import_statement(ref<import_statement> node)
     {
+        if (m_flags.b4)
+            return;
         std::string filepath = node->m_module_path;
         if (!check_extension(filepath, ".wio"))
         {
@@ -930,18 +1091,20 @@ namespace wio
         {
             if (value.flags.b1)
                 continue;
-            current_scope->insert(key, value);
+            m_current_scope->insert(key, value);
         }
+
+        
 
         std::filesystem::current_path(cp);
     }
 
     void evaluator::evaluate_return_statement(ref<return_statement> node)
     {
-        if (current_scope->get_type() == scope_type::function)
+        if (m_current_scope->get_type() == scope_type::function_body)
         {
             m_last_return_value = evaluate_expression(node->m_value);
-            m_call_states.b3 = true;
+            m_flags.b3 = true;
         }
         else
             throw invalid_return_statement("Return statement out of the function", node->get_location());
@@ -949,6 +1112,9 @@ namespace wio
 
     void evaluator::evaluate_variable_declaration(ref<variable_declaration> node, bool is_parameter)
     {
+        if (m_flags.b4 && !node->m_flags.b3)
+            return;
+
         std::string name = node->m_id->m_token.value;
         variable_type type = node->m_type;
 
@@ -957,16 +1123,20 @@ namespace wio
             if (lookup_current_and_global(name) != nullptr)
                 throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
             if (node->m_type == variable_type::vt_array)
-                evaluate_array_declaration(make_ref<array_declaration>(node->m_id, std::vector<ref<expression>>{}, false, false, false));
+                evaluate_array_declaration(make_ref<array_declaration>(node->m_id, nullptr, std::vector<ref<expression>>{}, false, false, false, true));
             if (node->m_type == variable_type::vt_dictionary)
                 evaluate_dictionary_declaration(make_ref<dictionary_declaration>(node->m_id, std::vector<std::pair<ref<expression>, ref<expression>>>{}, false, false, false));
         }
         else
         {
-            if (lookup(name) != nullptr)
+            symbol* sym = lookup(name);
+            if (sym != nullptr)
             {
-                if (node->m_flags.b3)
-                    return; // GLOBAL VALUE DETECTED -> not works fine TODOOOOO
+                if (node->m_flags.b3 && !sym->flags.b3 && m_flags.b5)
+                {
+                    sym->flags.b3 = true;
+                    return;
+                }
                 throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
             }
         }
@@ -974,7 +1144,11 @@ namespace wio
 
         if (node->m_initializer)
         {
-            auto var = std::dynamic_pointer_cast<variable>(evaluate_expression(node->m_initializer));
+            auto exp = evaluate_expression(node->m_initializer);
+            if(exp->get_base_type() != variable_base_type::variable)
+                throw local_exception("initializer has an invalid type.", node->m_initializer->get_location());
+               
+            auto var = std::dynamic_pointer_cast<variable>(exp);
 
             if (node->m_type != variable_type::vt_var_param)
             {
@@ -995,41 +1169,96 @@ namespace wio
             }
         }
 
-        symbol symbol(name, type, current_scope->get_type(), node->m_id->var_ref, {node->m_flags.b2, node->m_flags.b3});
+        symbol symbol(name, type, m_current_scope->get_type(), node->m_id->var_ref, { node->m_flags.b2, node->m_flags.b3, m_flags.b5 });
         if (node->m_flags.b3)
-            current_scope->insert_to_global(name, symbol);
+            m_current_scope->insert_to_global(name, symbol);
         else
-            current_scope->insert(name, symbol);
+            m_current_scope->insert(name, symbol);
     }
 
     void evaluator::evaluate_array_declaration(ref<array_declaration> node)
     {
+        if (m_flags.b4 && !node->m_flags.b3)
+            return;
+
         std::string name = node->m_id->m_token.value;
-        if (lookup(name) != nullptr)
-            throw invalid_declaration_error("Symbol '" + name + "' already defined in this scope.", node->m_id->get_location());
 
-        std::vector<ref<variable_base>> elements;
-
-        for (auto& item : node->m_elements)
+        symbol* sym = lookup(name);
+        if (sym != nullptr)
         {
-            ref<variable_base> var = evaluate_expression(item)->clone();
-            var->set_const(node->m_flags.b1);
-            elements.push_back(var);
+            if (node->m_flags.b3 && !sym->flags.b3 && m_flags.b5)
+            {
+                sym->flags.b3 = true;
+                return;
+            }
+            throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
         }
 
-        node->m_id->var_ref = make_ref<var_array>(elements, packed_bool{ node->m_flags.b1, node->m_flags.b4 });
-        symbol array_symbol(name, variable_type::vt_array, current_scope->get_type(), node->m_id->var_ref, { node->m_flags.b2, node->m_flags.b3 });
-        if (node->m_flags.b3)
-            current_scope->insert_to_global(name, array_symbol);
+        if (node->m_flags.b4)
+        {
+            std::vector<ref<variable_base>> elements;
+
+            for (auto& item : node->m_elements)
+            {
+                ref<variable_base> var = evaluate_expression(item)->clone();
+                var->set_const(node->m_flags.b1);
+                elements.push_back(var);
+            }
+
+            node->m_id->var_ref = make_ref<var_array>(elements, packed_bool{ node->m_flags.b1, node->m_flags.b4 });
+        }
         else
-            current_scope->insert(name, array_symbol);
+        {
+            if (node->m_initializer)
+            {
+                ref<variable_base> value = get_value(node->m_initializer);
+                if (value->get_base_type() != variable_base_type::array)
+                    throw local_exception("initializer has an invalid type.", node->m_initializer->get_location());
+
+                auto array = std::dynamic_pointer_cast<var_array>(value);
+                
+                node->m_id->var_ref = array;
+                if (!array->is_ref())
+                {
+                    node->m_id->var_ref->set_flags({ node->m_flags.b2, node->m_flags.b3 });
+                }
+                else
+                {
+                    if (node->m_flags.b1)
+                        node->m_id->var_ref->set_const(true);
+                }
+            }
+            else
+            {
+                node->m_id->var_ref = make_ref<var_array>(std::vector<ref<variable_base>>{}, packed_bool{ node->m_flags.b1, node->m_flags.b4 });
+            }
+        }
+
+
+        symbol array_symbol(name, variable_type::vt_array, m_current_scope->get_type(), node->m_id->var_ref, { node->m_flags.b2, node->m_flags.b3, m_flags.b5 });
+        if (node->m_flags.b3)
+            m_current_scope->insert_to_global(name, array_symbol);
+        else
+            m_current_scope->insert(name, array_symbol);
     }
 
     void evaluator::evaluate_dictionary_declaration(ref<dictionary_declaration> node)
     {
+        if (m_flags.b4 && !node->m_flags.b3)
+            return;
+
         std::string name = node->m_id->m_token.value;
-        if (lookup(name) != nullptr)
-            throw invalid_declaration_error("Symbol '" + name + "' already defined in this scope.", node->m_id->get_location());
+
+        symbol* sym = lookup(name);
+        if (sym != nullptr)
+        {
+            if (node->m_flags.b3 && !sym->flags.b3 && m_flags.b5)
+            {
+                sym->flags.b3 = true;
+                return;
+            }
+            throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
+        }
 
         var_dictionary::map_t elements;
 
@@ -1041,96 +1270,219 @@ namespace wio
         }
 
         node->m_id->var_ref = make_ref<var_dictionary>(elements, packed_bool{ node->m_flags.b1, node->m_flags.b4 });
-        symbol dict_symbol(name, variable_type::vt_dictionary, current_scope->get_type(), node->m_id->var_ref, { node->m_flags.b2, node->m_flags.b3 });
+        symbol dict_symbol(name, variable_type::vt_dictionary, m_current_scope->get_type(), node->m_id->var_ref, { node->m_flags.b2, node->m_flags.b3, m_flags.b5 });
         if (node->m_flags.b3)
-            current_scope->insert_to_global(name, dict_symbol);
+            m_current_scope->insert_to_global(name, dict_symbol);
         else
-            current_scope->insert(name, dict_symbol);
+            m_current_scope->insert(name, dict_symbol);
     }
 
     void evaluator::evaluate_function_declaration(ref<function_declaration> node)
     {
+        if (m_flags.b4 && !node->m_is_global)
+            return;
+
         std::string name = node->m_id->m_token.value;
-        variable_type return_type = node->m_return_type;
 
+        symbol* sym = lookup(name);
+        if (sym != nullptr)
+        {
+            if (node->m_is_global && !sym->flags.b3 && m_flags.b5)
+            {
+                sym->flags.b3 = true;
+                return;
+            }
+            throw local_exception("Duplicate function declaration: " + name, node->m_id->get_location());
+        }
+
+        // parameter types and ids
         std::vector<function_param> param_types;
-
         for (auto& param : node->m_params)
-            param_types.emplace_back(param->m_type, param->m_id->m_token.value);
+            param_types.emplace_back(param->m_id->m_token.value, param->m_type, (bool)param->m_flags.b4);
 
-        if (lookup(name) != nullptr)
-            throw invalid_declaration_error("Symbol '" + name + "' already defined in this scope.", node->m_id->get_location());
+        var_func_definition* def = lookup_def(name);
+        if (def != nullptr)
+        {
+            if(param_types.size() != def->params.size())
+                throw invalid_argument_count_error("Invalid parameter count in decl!", node->m_id->get_location());
 
-        for (auto& stmt : node->m_body->m_statements)
-            if (auto var_decl = std::dynamic_pointer_cast<variable_declaration>(stmt))
-                if (var_decl->m_flags.b3)
-                    evaluate_variable_declaration(var_decl);
+            for (size_t i = 0; i < param_types.size(); ++i)
+                if(param_types[i].type != def->params[i].type || param_types[i].is_ref != def->params[i].is_ref)
+                    throw type_mismatch_error("Parameter types not matching!", node->m_id->get_location());
 
+            if (node->m_is_local != def->flags.b2 || 
+                (node->m_is_global != def->flags.b3 && !(def->flags.b3 && m_current_scope->get_type() == scope_type::global)))
+                throw type_mismatch_error("Declaration keywords not matching!", node->m_id->get_location());
+
+            def->flags.b1 = true;
+        }
+
+        enter_scope(scope_type::function);
+        enter_statement_stack(&node->m_body->m_statements);
+        evaluate_only_global_declarations();
+        exit_statement_stack();
+        exit_scope();
+
+        // Generate func body
         auto func_lambda = [this, node](const std::vector<function_param>& param_ids, std::vector<ref<variable_base>>& parameters)->ref<variable_base>
             {
-                enter_scope(scope_type::function);
+                enter_scope(scope_type::function_body);
+
+                // Create parameters
                 for (auto& param : node->m_params)
                 {
                     if (param->m_type == variable_type::vt_var_param)
                         evaluate_variable_declaration(param, true);
                 }
 
+                // use variable ref's
                 for (size_t i = 0; i < parameters.size(); ++i)
                 {
                     symbol* sym = lookup(param_ids[i].id);
                     sym->var_ref = parameters[i];
                 }
 
+                enter_statement_stack(&node->m_body->m_statements);
                 for (auto& stmt : node->m_body->m_statements)
                 {
                     evaluate_statement(stmt);
-                    if (m_call_states.b3)
+                    // return check
+                    if (m_flags.b3)
                     {
-                        m_call_states.b3 = false;
+                        m_flags.b3 = false;
                         ref<variable_base> retval = m_last_return_value;
                         m_last_return_value = nullptr;
+                        exit_statement_stack();
                         exit_scope();
                         return retval;
                     }
                 }
+                exit_statement_stack();
 
-                for (size_t i = 0; i < parameters.size(); ++i)
-                {
-                    symbol* sym = lookup(param_ids[i].id);
-                    sym->var_ref = nullptr;
-                }
-
-                return get_null_var();
                 exit_scope();
+                return get_null_var();
             };
 
 
         ref<var_function> func = make_ref<var_function>(func_lambda, variable_type::vt_null, param_types, node->m_is_local);
-        symbol function_symbol(name, variable_type::vt_function, current_scope->get_type(), func, { node->m_is_local, node->m_is_global });
-        current_scope->insert(name, function_symbol);
+        symbol function_symbol(name, variable_type::vt_function, m_current_scope->get_type(), func, { node->m_is_local, node->m_is_global, m_flags.b5 });
+        if (node->m_is_global)
+            m_current_scope->insert_to_global(name, function_symbol);
+        else
+            m_current_scope->insert(name, function_symbol);
+    }
+
+    void evaluator::evaluate_function_definition(ref<function_definition> node)
+    {
+        if (m_flags.b4 && !node->m_is_global)
+            return;
+
+        // Check
+        std::string name = node->m_id->m_token.value;
+
+        var_func_definition* ldef = lookup_def(name);
+        if (ldef != nullptr)
+        {
+            if (node->m_is_global && !ldef->flags.b4 && m_flags.b5)
+            {
+                ldef->flags.b4 = true;
+                return;
+            }
+            throw local_exception("Duplicate function declaration: " + name, node->m_id->get_location());
+        }
+        if(lookup(name))
+            throw local_exception("Duplicate function declaration: " + name, node->m_id->get_location());
+
+        // Parameter types and id's
+        std::vector<function_param> param_types;
+        for (auto& param : node->m_params)
+            param_types.emplace_back(param->m_id->m_token.value, param->m_type, (bool)param->m_flags.b4);
+
+        // Definiton
+        var_func_definition def(param_types, packed_bool{ false, node->m_is_local, node->m_is_global, m_flags.b5 });
+        if (node->m_is_global)
+            m_current_scope->insert_def_to_global(name, def);
+        else
+            m_current_scope->insert_def(name, def);
+    }
+
+    void evaluator::evaluate_only_global_declarations()
+    {
+        m_flags.b4 = true;
+        for (auto& stmt : *m_statement_stack->list)
+            evaluate_statement(stmt);
+        m_flags.b4 = false;
     }
 
     void evaluator::enter_scope(scope_type type) 
     {
-        current_scope = make_ref<scope>(type, current_scope);
+        if (type == scope_type::function_body)
+        {
+            ++m_func_body_counter;
+            m_flags.b5 = true;
+        }
+        m_current_scope = make_ref<scope>(type, m_current_scope);
     }
 
     void evaluator::exit_scope() 
     {
-        if (current_scope->get_type() == scope_type::global)
+        if (m_current_scope->get_type() == scope_type::global)
             return;
-        if (current_scope->get_parent()) 
-            current_scope = current_scope->get_parent();
+        if (m_current_scope->get_type() == scope_type::function_body)
+        {
+            if (m_func_body_counter)
+            {
+                m_func_body_counter--;
+                if (!m_func_body_counter)
+                    m_flags.b5 = false;
+            }
+            else
+            {
+                throw exception("Unexpected error!");
+            }
+        }
+        if (m_current_scope->get_parent()) 
+            m_current_scope = m_current_scope->get_parent();
+    }
+
+    void evaluator::enter_statement_stack(std::vector<ref<statement>>* list)
+    {
+        m_statement_stack = make_ref<statement_stack>(list, m_statement_stack);
+    }
+
+    void evaluator::exit_statement_stack()
+    {
+        if (m_statement_stack->parent)
+            m_statement_stack = m_statement_stack->parent;
     }
 
     symbol* evaluator::lookup(const std::string& name) 
     {
-        return current_scope->lookup(name);
+        return m_current_scope->lookup(name);
     }
 
     symbol* evaluator::lookup_current_and_global(const std::string& name)
     {
-        return current_scope->lookup_current_and_global(name);
+        return m_current_scope->lookup_current_and_global(name);
+    }
+
+    symbol* evaluator::lookup_only_global(const std::string& name)
+    {
+        return m_current_scope->lookup_only_global(name);
+    }
+
+    var_func_definition* evaluator::lookup_def(const std::string& name)
+    {
+        return m_current_scope->lookup_def(name);
+    }
+
+    ref<function_declaration> evaluator::get_func_decl(const std::string& name)
+    {
+        for (auto& stmt : *m_statement_stack->list)
+            if (auto func_decl = std::dynamic_pointer_cast<function_declaration>(stmt))
+                if (func_decl->m_id->m_token.value == name)
+                    return func_decl;
+        return nullptr;
     }
 
     ref<variable_base> evaluator::get_null_var()

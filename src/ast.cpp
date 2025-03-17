@@ -406,4 +406,17 @@ namespace wio
         result += ")";
         return result;
     }
+    std::string function_definition::to_string() const
+    {
+        std::string result = "func " + m_id->to_string() + "(";
+        for (size_t i = 0; i < m_params.size(); ++i)
+        {
+            result += m_params[i]->to_string();
+
+            if (i < m_params.size() - 1)
+                result += ", ";
+        }
+        result += ");";
+        return result;
+    }
 }

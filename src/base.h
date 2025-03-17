@@ -204,28 +204,4 @@ namespace wio
     {
         return minimal_ref<_Ty>(new _Ty(static_cast<_Args&&>(args)...));
     }
-
-
-    struct char_reference
-    {
-        char_reference() : m_ref(new char{}) {}
-        char_reference(char ch) : m_ref(new char(ch)) {}
-        char_reference(char* ptr) : m_ref(ptr) {}
-        char_reference(char* ptr, no_delete) : m_ref(ptr, no_delete{}) {}
-        char_reference(std::string& str, size_t index) : m_ref(&str[index], no_delete{}) {}
-
-        char& get() { return *m_ref; }
-        const char& get() const { return *m_ref; }
-        void set(char ch) { *m_ref = ch; }
-        void set_refer(char* chptr) { minimal_ref<char>(chptr).swap(m_ref); }
-        void set_refer(char* chptr, no_delete) { minimal_ref<char>(chptr, no_delete{}).swap(m_ref); }
-        bool is_valid() const { return bool(m_ref); }
-        void set_delete_state(bool state) { m_ref.set_delete_state(state); }
-
-        operator char() const { return get(); }
-        operator const char&() const { return get(); }
-        operator char&() { return get(); }
-    private:
-        minimal_ref<char> m_ref = nullptr;
-    };
 }

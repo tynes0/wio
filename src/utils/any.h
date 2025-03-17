@@ -34,7 +34,7 @@ namespace wio
         constexpr any() noexcept : m_content(nullptr) {}
 
         template <class _Ty>
-        any(const _Ty& value) : m_content(std::shared_ptr<placeholder>(new holder<std::remove_cv_t<std::decay_t<const _Ty>>>(value))) {}
+        any(const _Ty& value) : m_content(new holder<std::remove_cv_t<std::decay_t<const _Ty>>>(value)) {}
 
         any(const any& right) : m_content(right.m_content ? right.m_content->clone() : nullptr) {}
 
@@ -45,7 +45,7 @@ namespace wio
 
         template <class _Ty>
         any(_Ty&& value, std::enable_if_t<!std::is_same_v<any&, _Ty>>* = 0, std::enable_if_t<!std::is_const_v<_Ty>>* = 0)
-            : m_content(std::shared_ptr<placeholder>(new holder<std::decay_t<_Ty>>(std::forward<_Ty>(value)))) {
+            : m_content(new holder<std::decay_t<_Ty>>(std::forward<_Ty>(value))) {
         }
 
         ~any()
@@ -55,7 +55,12 @@ namespace wio
         any& swap(any& right) noexcept
         {
             if (std::addressof(right) != this)
-                m_content.swap(right.m_content);
+            {
+                placeholder* temp = m_content;
+                m_content = right.m_content;
+                right.m_content = temp;
+                
+            }
             return *this;
         }
 
@@ -105,7 +110,7 @@ namespace wio
         class placeholder : public detail_any::placeholder
         {
         public:
-            virtual std::shared_ptr<placeholder> clone() const = 0;
+            virtual placeholder* clone() const = 0;
         };
 
         template <class _Ty>
@@ -121,9 +126,9 @@ namespace wio
                 return typeid(_Ty);
             }
 
-            std::shared_ptr<placeholder> clone() const override
+            placeholder* clone() const override
             {
-                return std::make_shared<holder>(held);
+                return new holder(held);
             }
 
             _Ty held;
@@ -134,7 +139,7 @@ namespace wio
     private:
         template <class _Ty>
         friend _Ty* unsafe_any_cast(any*) noexcept;
-        std::shared_ptr<placeholder> m_content;
+        placeholder* m_content;
     };
 
     inline void swap(any& left, any& right) noexcept
@@ -145,7 +150,7 @@ namespace wio
     template <class _Ty>
     inline _Ty* unsafe_any_cast(any* operand) noexcept
     {
-        return std::addressof(std::static_pointer_cast<any::holder<_Ty>>(operand->m_content)->held);
+        return std::addressof(static_cast<any::holder<_Ty>*>(operand->m_content)->held);
     }
 
     template <class _Ty>
