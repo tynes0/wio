@@ -3,13 +3,14 @@
 #include <string>
 #include "../utils/frenum.h"
 #include "../utils/any.h"
-#include "../base.h"
+#include "../interpreter/base.h"
 
 namespace wio 
 {
 
     enum class variable_base_type 
     {
+        null,
         variable,
         array,
         dictionary,
@@ -30,6 +31,7 @@ namespace wio
         vt_dictionary,
         vt_function,
         vt_var_param,
+        vt_file,
         vt_any
     };
 
@@ -55,6 +57,16 @@ namespace wio
         variable_base(packed_bool flags) : m_flags(flags) { }
     private:
         packed_bool m_flags = {}; // b1 -> const --- b2 -> ref --- 
+    };
+
+    class null_var : public variable_base
+    {
+    public:
+        null_var() :variable_base({}) {}
+        null_var(packed_bool flags) : variable_base(flags) {}
+        variable_base_type get_base_type() const override { return variable_base_type::null; }
+        variable_type get_type() const override { return variable_type::vt_null; }
+        ref<variable_base> clone() const override { return make_ref<null_var>(*this); }
     };
 
 } // namespace wio

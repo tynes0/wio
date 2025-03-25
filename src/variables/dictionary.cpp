@@ -3,7 +3,7 @@
 
 namespace wio
 {
-    var_dictionary::var_dictionary(const map_t& data, packed_bool flags) : m_data(data), variable_base(flags)
+    var_dictionary::var_dictionary(const map_t& data, packed_bool flags) : m_data(data), null_var(flags)
     {
     }
 
@@ -38,7 +38,7 @@ namespace wio
         if (check_existance(skey))
             return m_data[skey];
         else
-            throw invalid_key_error("Key '" + skey + "'' is not exists!");
+            throw invalid_key_error("Key '" + skey + "' is not exists!");
     }
 
     void var_dictionary::set_data(const map_t& data)

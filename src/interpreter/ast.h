@@ -1,6 +1,6 @@
 #pragma once
 
-#include "variables/variable.h"
+#include "../variables/variable.h"
 
 #include "base.h"
 #include "token.h"
@@ -14,8 +14,11 @@ namespace wio
     class expression;
     class statement;
     class literal;
-    class identifier;
     class string_literal;
+    class array_literal;
+    class dictionary_literal;
+    class null_expression;
+    class identifier;
     class program;
     class binary_expression;
     class unary_expression;
@@ -78,6 +81,47 @@ namespace wio
         variable_type m_type;
     };
 
+    class string_literal : public literal
+    {
+    public:
+        string_literal(token tok) 
+            : literal(tok)
+        {
+            m_expression_type = variable_type::vt_string;
+        }
+
+        token_type get_type() const override { return token_type::string; }
+        std::string to_string() const override;
+    };
+
+    class array_literal : public expression
+    {
+    public:
+        array_literal(const std::vector<ref<expression>>& elements, location loc) : m_elements(elements), m_loc(loc) {}
+
+        token_type get_type() const override { return token_type::kw_array; }
+        std::string to_string() const override;
+        variable_type get_expression_type() const override { return variable_type::vt_array; }
+        location get_location() const override { return m_loc; }
+
+        std::vector<ref<expression>> m_elements;
+        location m_loc;
+    };
+
+    class dictionary_literal : public expression
+    {
+    public:
+        dictionary_literal(const std::vector<std::pair<ref<expression>, ref<expression>>>& pairs, location loc) : m_pairs(pairs), m_loc(loc) {}
+
+        token_type get_type() const override { return token_type::kw_dict; }
+        std::string to_string() const override;
+        variable_type get_expression_type() const override { return variable_type::vt_dictionary; }
+        location get_location() const override { return m_loc; }
+
+        std::vector<std::pair<ref<expression>, ref<expression>>> m_pairs;
+        location m_loc;
+    };
+
     class null_expression : public expression
     {
     public:
@@ -101,8 +145,8 @@ namespace wio
         variable_type get_expression_type() const override;
         std::string to_string() const override;
 
-        ref<variable_base> var_ref = nullptr;
         token m_token;
+        //ref<variable_base> var_ref = nullptr;
         variable_type m_type = variable_type::vt_null;
         bool m_is_ref;
         bool m_is_lhs;
@@ -111,27 +155,15 @@ namespace wio
     class program : public ast_node
     {
     public:
-        program(std::vector<ref<statement>> statements) 
-            : m_statements(statements) {}
+        program(std::vector<ref<statement>> statements)
+            : m_statements(statements) {
+        }
 
         token_type get_type() const override { return token_type::end_of_file; }
         location get_location() const override;
         std::string to_string() const override;
 
         std::vector<ref<statement>> m_statements;
-    };
-
-    class string_literal : public literal
-    {
-    public:
-        string_literal(token tok) 
-            : literal(tok)
-        {
-            m_expression_type = variable_type::vt_string;
-        }
-
-        token_type get_type() const override { return token_type::string; }
-        std::string to_string() const override;
     };
 
     class binary_expression : public expression
@@ -199,22 +231,24 @@ namespace wio
     class array_access_expression : public expression
     {
     public:
-        array_access_expression(ref<identifier> array, ref<expression> index) 
-            : m_array(array), m_key_or_index(index) {}
+        array_access_expression(ref<expression> array, ref<expression> index, bool is_ref = false, bool is_lhs = false)
+            : m_array(array), m_key_or_index(index), m_is_ref(is_ref), m_is_lhs(is_lhs) {}
 
         token_type get_type() const override { return token_type::left_bracket; }
         location get_location() const override { return m_array->get_location(); }
         variable_type get_expression_type() const override;
         std::string to_string() const override;
 
-        ref<identifier> m_array;
+        ref<expression> m_array;
         ref<expression> m_key_or_index;
+        bool m_is_ref;
+        bool m_is_lhs;
     };
 
     class member_access_expression : public expression
     {
     public:
-        member_access_expression(ref<expression> object, ref<identifier> member)
+        member_access_expression(ref<expression> object, ref<expression> member)
             : m_object(object), m_member(member) {}
 
         token_type get_type() const override { return token_type::dot; } // "."
@@ -223,7 +257,7 @@ namespace wio
         std::string to_string() const override;
 
         ref<expression> m_object;
-        ref<identifier> m_member;
+        ref<expression> m_member;
     };
 
     class block_statement : public statement
@@ -386,7 +420,7 @@ namespace wio
     class array_declaration : public statement
     {
     public:
-        array_declaration(ref<identifier> id, ref<expression> initializer, std::vector<ref<expression>> elements, bool is_const, bool is_local, bool is_global, bool is_element_initializer)
+        array_declaration(ref<identifier> id, ref<expression> initializer, const std::vector<ref<expression>>& elements, bool is_const, bool is_local, bool is_global, bool is_element_initializer)
             : m_id(id), m_initializer(initializer), m_elements(elements), m_flags({is_const, is_local, is_global, is_element_initializer}) { }
 
         token_type get_type() const override { return token_type::kw_array; }
@@ -402,16 +436,17 @@ namespace wio
     class dictionary_declaration : public statement
     {
     public:
-        dictionary_declaration(ref<identifier> id, std::vector<std::pair<ref<expression>, ref<expression>>> pairs, bool is_const, bool is_local, bool is_global)
-            : m_id(id), m_pairs(pairs), m_flags({ is_const, is_local, is_global }) {}
+        dictionary_declaration(ref<identifier> id, ref<expression> initializer, const std::vector<std::pair<ref<expression>, ref<expression>>>& pairs, bool is_const, bool is_local, bool is_global, bool is_element_initializer)
+            : m_id(id), m_initializer(initializer), m_pairs(pairs), m_flags({is_const, is_local, is_global, is_element_initializer}) { }
 
         token_type get_type() const override { return token_type::kw_dict; }
         location get_location() const override { return m_id->get_location(); }
         std::string to_string() const override;
 
         ref<identifier> m_id;
+        ref<expression> m_initializer;
         std::vector<std::pair<ref<expression>, ref<expression>>> m_pairs;
-        packed_bool m_flags; // 1- const 2-local 3- global
+        packed_bool m_flags; // 1- const 2-local 3- global 4- is element initializer
     };
 
     class function_declaration : public statement

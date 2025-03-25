@@ -2,13 +2,13 @@
 
 #include "../utils/any.h"
 #include "../utils/frenum.h"
-#include "../base.h"
+#include "../interpreter/base.h"
 #include <string>
 #include "variable_base.h"
 
 namespace wio 
 {
-    class variable : public variable_base 
+    class variable : public null_var 
     {
     public:
         variable(const any& data, variable_type type, packed_bool flags = {});

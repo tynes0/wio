@@ -1,0 +1,350 @@
+## Abs tests
+{
+    Println("=== Abs Tests ===");
+    Println(Abs(-12));     ## Expected: 12
+    Println(Abs(12));      ## Expected: 12
+    Println(Abs(-12.34));  ## Expected: 12.34
+    Println(Abs(12.34));   ## Expected: 12.34
+    #*
+    println(abs("abc")); ## Expected Error: Invalid parameter type for 'abs'. Expected: integer or float, but got: string
+    *#
+}
+
+## Sin tests
+{
+    Println("=== Sin Tests ===");
+    Println(Sin(0.0));       ## Expected: 0.0
+    Println(Sin(3.14159/2)); ## Expected: ~1.0 (approximately)
+    #*
+    Println(sin(1)); ## Expected Error: Invalid parameter type for 'sin'. Expected: float, but got: integer
+    *#
+}
+
+## Cos tests
+{
+    Println("=== Cos Tests ===");
+    Println(Cos(0.0));       ## Expected: 1.0
+    Println(Cos(3.14159));   ## Expected: ~-1.0 (approximately)
+    #*
+    Println(Cos(1)); ## Expected Error: Invalid parameter type for 'Cos'. Expected: float, but got: integer
+    *#
+}
+
+## Tan tests
+{
+    Println("=== Tan Tests ===");
+    Println(Tan(0.0));       ## Expected: 0.0
+    #*
+    Println(Tan(1)); ## Expected Error: Invalid parameter type for 'Tan'. Expected: float, but got: integer
+    *#
+}
+
+## Sqrt tests
+{
+    Println("=== Sqrt Tests ===");
+    Println(Sqrt(4.0));     ## Expected: 2.0
+    Println(Sqrt(4));      ## Expected: 2.0 (will return as float)
+    Println(Sqrt(0));    ## Expected: 0.0
+    #*
+    Println(Sqrt(-4.0));  ## Expected Error: Cannot take square root of negative number
+    Println(Sqrt(-4));   ## Expected Error: Cannot take square root of negative number
+    *#
+}
+
+## Pow tests
+{
+    Println("=== Pow Tests ===");
+    Println(Pow(2.0, 3.0));   ## Expected: 8.0
+    Println(Pow(2, 3));       ## Expected: 8
+    Println(Pow(2.0, 3));   ## Expected: 8.0
+    Println(Pow(2, 3.0));    ## Expected: 8.0
+    #*
+    Println(Pow("a", 2));  ## Expected Error: Invalid types for pow.  Expected (float, float), (int, int), (float, int) or (int, float)
+    *#
+}
+
+## Log tests
+{
+    Println("=== Log Tests ===");
+    Println(Log(2.71828)); ## Expected: ~1.0 (approximately)
+    Println(Log(10));     ## Expected: ~2.3 (approximately)
+    #*
+    Println(Log(0.0));      ## Expected Error: Logarithm of zero or negative number is undefined.
+    Println(Log(-2.0));   ## Expected Error: Logarithm of zero or negative number is undefined.
+    Println(Log(0));       ## Expected Error: Logarithm of zero or negative number is undefined.
+    Println(Log(-2));      ## Expected Error:  Logarithm of zero or negative number is undefined.
+    *#
+}
+
+## Log10 tests
+{
+    Println("=== Log10 Tests ===");
+    Println(Log10(100.0));  ## Expected: 2.0
+    Println(Log10(100));    ## Expected: 2.0
+    #*
+    Println(Log10(0.0));     ## Expected Error: Logarithm of zero or negative number is undefined.
+    Println(Log10(-2.0));  ## Expected Error: Logarithm of zero or negative number is undefined.
+    Println(Log10(0));      ## Expected Error: Logarithm of zero or negative number is undefined.
+    Println(Log10(-2));     ## Expected Error: Logarithm of zero or negative number is undefined.
+    *#
+}
+
+## ArcSin tests
+{
+    Println("=== ArcSin Tests ===");
+    Println(ArcSin(0.0));     ## Expected: 0.0
+    Println(ArcSin(1.0));     ## Expected: ~1.57 (approximately pi/2)
+    Println(ArcSin(-1.0));    ## Expected: ~-1.57
+    #*
+    Println(ArcSin(2.0));     ## Expected Error: Arcsin input must be in the range [-1, 1]
+    Println(ArcSin(1));       ## Expected Error: Invalid parameter type for 'asin'. Expected: float, but got: integer
+    *#
+
+}
+
+## ArcCos tests
+{
+  Println("=== ArcCos Tests ===");
+  Println(ArcCos(1.0)); ## Expected: 0.0
+  Println(ArcCos(0.0)); ## Expected: ~1.57 (approximately pi/2)
+  Println(ArcCos(-1.0));## Expected: ~3.14 (approximately pi)
+  #*
+  Println(ArcCos(2.0)); ## Expected Error: Arccos input must be in the range [-1, 1]
+  Println(ArcCos(1));   ## Expected Error: Invalid parameter type for 'acos'. Expected: float, but got: integer
+  *#
+}
+
+
+## ArcTan tests
+{
+    Println("=== ArcTan Tests ===");
+    Println(ArcTan(0.0)); ## Expected: 0.0
+    Println(ArcTan(1.0)); ## Expected: ~0.785 (approximately pi/4)
+    #*
+    Println(ArcTan(1)); ## Expected Error: Invalid parameter type for 'atan'. Expected: float, but got: integer
+    *#
+}
+
+## Ceil tests
+{
+    Println("=== Ceil Tests ===");
+    Println(Ceil(2.3));     ## Expected: 3.0
+    Println(Ceil(2.0));    ## Expected: 2.0
+    Println(Ceil(-2.3));    ## Expected: -2.0
+    Println(Ceil(5));      ## Expected: 5
+    Println(Ceil(-5));     ## Expected: -5
+    #*
+    ## No specific error cases for ceil, as it handles integers and floats.
+    *#
+}
+
+## Floor tests
+{
+    Println("=== Floor Tests ===");
+    Println(Floor(2.3));    ## Expected: 2.0
+    Println(Floor(2.0));   ## Expected: 2.0
+    Println(Floor(-2.3));   ## Expected: -3.0
+    Println(Floor(5));   ## Expected: 5
+    Println(Floor(-5));  ## Expected: -5
+     #*
+    ## No specific error cases for floor, as it handles integers and floats.
+    *#
+}
+
+## Round tests
+{
+    Println("=== Round Tests ===");
+    Println(Round(2.3));    ## Expected: 2.0
+    Println(Round(2.7));    ## Expected: 3.0
+    Println(Round(2.5));    ## Expected: 3.0
+    Println(Round(-2.3));   ## Expected: -2.0
+    Println(Round(-2.7));   ## Expected: -3.0
+    Println(Round(5));   ## Expected: 5
+    #*
+    ## No specific error cases for round, as it handles integers and floats
+    *#
+}
+
+## Exp tests
+{
+  Println("=== Exp Tests ===");
+  Println(Exp(0.0)); ## Expected: 1.0
+  Println(Exp(1.0)); ## Expected: ~2.718 (approximately e)
+  Println(Exp(1)); ## Expected: ~2.718
+  #*
+  Println(Exp("test")); ## Expected Error: Invalid parameter type for 'exp'. Expected: float or integer, but got: string
+  *#
+}
+
+## ArcTan2 tests
+{
+    Println("=== ArcTan2 Tests ===");
+    Println(ArcTan2(1.0, 1.0));  ## Expected: ~0.785 (approximately pi/4)
+    Println(ArcTan2(1, 1));      ## Expected: ~0.785
+    #*
+    Println(ArcTan2(1, "a"));  ## Expected Error: Invalid types for atan2. Expected (float, float), (int, int), (float, int) or (int, float)
+    *#
+
+}
+
+## Fmod tests
+{
+    Println("=== Fmod Tests ===");
+    Println(Fmod(5.3, 2.0));  ## Expected: 1.3
+    Println(Fmod(5, 2));      ## Expected: 1.0
+    #*
+    Println(Fmod(5, 0));   ## Expected Error: (Division by zero error in C++)
+    *#
+}
+
+## Sinh tests
+{
+  Println("=== Sinh Tests ===");
+  Println(Sinh(0.0)); ## Expected: 0.0
+  Println(Sinh(1.0)); ## Expected: ~1.175
+  Println(Sinh(1)); ## Expected: ~1.175
+  #*
+  Println(Sinh("test")); ## Expected Error: Invalid parameter type for 'sinh'. Expected: float or integer, but got: string
+ *#
+}
+
+## Cosh tests
+{
+  Println("=== Cosh Tests ===");
+  Println(Cosh(0.0)); ## Expected: 1.0
+  Println(Cosh(1.0)); ## Expected: ~1.543
+  Println(Cosh(1));   ## Expected: ~1.543
+  #*
+  Println(Cosh("test")); ## Expected Error: Invalid parameter type for 'cosh'. Expected: float or integer, but got: string
+  *#
+}
+
+## Tanh tests
+{
+  Println("=== Tanh Tests ===");
+  Println(Tanh(0.0)); ## Expected: 0.0
+  Println(Tanh(1.0)); ## Expected: ~0.761
+  Println(Tanh(1));   ## Expected: ~0.761
+   #*
+  Println(Tanh("test")); ## Expected Error: Invalid parameter type for 'tanh'. Expected: float or integer, but got: string
+  *#
+}
+
+## ArcSinh tests
+{
+  Println("=== ArcSinh Tests ===");
+  Println(ArcSinh(0.0)); ## Expected: 0.0
+  Println(ArcSinh(1.0)); ## Expected: ~0.881
+  Println(ArcSinh(1)); ## Expected: ~0.881
+  #*
+  Println(ArcSinh("test")); ## Expected Error: Invalid parameter type for 'asinh'. Expected: float or integer, but got: string
+  *#
+}
+
+## ArcCosh Tests
+{
+    Println("=== ArcCosh Tests ===");
+    Println(ArcCosh(1.0));    ## Expected: 0.0
+    Println(ArcCosh(2.0));    ## Expected: ~1.317
+    Println(ArcCosh(2));      ## Expected: ~1.317
+    #*
+    Println(ArcCosh(0.5));    ## Expected Error: arccosh input must be greater than or equal to 1
+    Println(ArcCosh(0));    ## Expected Error: arccosh input must be greater than or equal to 1
+    *#
+}
+
+## ArcTanh tests
+{
+    Println("=== ArcTanh Tests ===");
+    Println(ArcTanh(0.0));    ## Expected: 0.0
+    Println(ArcTanh(0.5));    ## Expected: ~0.549
+    Println(ArcTanh(0));       ## Expected 0.0
+    #*
+    Println(ArcTanh(1.0));    ## Expected Error: arctanh input must be between -1 and 1 (exclusive)
+    Println(ArcTanh(-1.0));   ## Expected Error: arctanh input must be between -1 and 1 (exclusive)
+    *#
+}
+
+## Root tests
+{
+    Println("=== Root Tests ===");
+    Println(Root(8.0, 3.0));   ## Expected: 2.0
+    Println(Root(8, 3));       ## Expected: 2.0
+    Println(Root(9.0, 2));   ## Expected: 3.0
+    #*
+    Println(Root(8, 0));     ## Expected Error: Cannot take 0th root.
+    *#
+}
+
+## LogBase tests
+{
+    Println("=== LogBase Tests ===");
+    Println(LogBase(8.0, 2.0));   ## Expected: 3.0
+    Println(LogBase(8, 2));       ## Expected: 3.0
+    #*
+    Println(LogBase(8.0, 1.0));   ## Expected Error: Logarithm base cannot be zero, one, or negative.
+    Println(LogBase(8.0, 0.0));   ## Expected Error: Logarithm base cannot be zero, one, or negative.
+    Println(LogBase(0.0, 2.0));   ## Expected Error: Logarithm of zero or negative number is undefined.
+    Println(LogBase(-1,2)); ##Expected Error: Logarithm of zero or negative number is undefined.
+    *#
+}
+
+## Min tests
+{
+    Println("=== Min Tests ===");
+    Println(Min(5, 10));       ## Expected: 5
+    Println(Min(5.0, 10.0));   ## Expected: 5.0
+    Println(Min(5, 10.0));     ## Expected: 5.0
+    Println(Min(5.0, 10));     ## Expected: 5.0
+    #*
+    Println(Min(5, "a"));    ## Expected Error: Invalid types for min. Expected (float, float), (int, int), (float, int) or (int, float)
+    *#
+}
+
+## Max tests
+{
+    Println("=== Max Tests ===");
+    Println(Max(5, 10));       ## Expected: 10
+    Println(Max(5.0, 10.0));   ## Expected: 10.0
+    Println(Max(5, 10.0));     ## Expected: 10.0
+    Println(Max(5.0, 10));     ## Expected: 10.0
+    #*
+    Println(Max(5, "a"));    ## Expected Error: Invalid types for max. Expected (float, float), (int, int), (float, int) or (int, float)
+    *#
+}
+
+{
+    Println("=== Constant Tests ===");
+
+    Println(PI);               ## Expected: 3.141592653589793
+    Println(E);                ## Expected: 2.718281828459045
+    Println(LOG2E);            ## Expected: 1.4426950408889634
+    Println(LOG10E);           ## Expected: 0.4342944819032518
+    Println(LN2);              ## Expected: 0.6931471805599453
+    Println(LN10);             ## Expected: 2.302585092994046
+    Println(SQRT2);            ## Expected: 1.4142135623730951
+    Println(SQRT3);            ## Expected: 1.7320508075688772
+    Println(PHI);              ## Expected: 1.618033988749895
+    Println(GAMMA);            ## Expected: 0.5772156649015329
+    Println(FEIGENBAUM_DELTA); ## Expected: 4.669201609102991
+    Println(FEIGENBAUM_ALPHA); ## Expected: 2.502907875095893
+    Println(CATALAN);          ## Expected: 0.915965594177219
+    Println(APERYS_CONSTANT);  ## Expected: 1.2020569031595942
+    Println(PLANCK);           ## Expected: 6.62607015e-34
+    Println(GRAVITY);          ## Expected: 6.6743e-11
+    Println(LIGHT_SPEED);      ## Expected: 299792458.0
+    Println(BOLTZMANN);        ## Expected: 1.380649e-23
+    Println(AVOGADRO);         ## Expected: 6.02214076e23
+    Println(NAN);              ## Expected: NaN (Not a Number)
+    Println(INF);              ## Expected: Inf (Infinity)
+    Println(MU0);              ## Expected: 1.25663706212e-06
+    Println(EPSILON0);         ## Expected: 8.8541878128e-12
+    Println(STANDARD_GRAVITY); ## Expected: 9.80665
+    Println(RYDBERG);          ## Expected: 10973731.56816
+    Println(BOHR_RADIUS);      ## Expected: 5.29177210903e-11
+    Println(ELECTRON_MASS);    ## Expected: 9.1093837015e-31
+    Println(PROTON_MASS);      ## Expected: 1.67262192369e-27
+    Println(NEUTRON_MASS);     ## Expected: 1.67492749804e-27
+    Println(GOLDEN_RATIO);     ## Expected: 1.618033988749895
+    Println(SPEED_OF_SOUND);   ## Expected: 340.29
+}

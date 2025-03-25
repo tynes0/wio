@@ -3,4 +3,27 @@
 - Update 1.0.0: Initial update.
 - Update 1.0.1: Fixed a bug where operator order was not handled correctly in binary expressions.
 - Update 1.0.2: Now wio supports the ability for function definitions to be separate from declarations.
-- 
+- Update 1.0.3: Arrays can now be copied and referenced.
+- Update 1.0.4: Fixed issues with incorrect declaration of global variables.
+- Update 1.1.1: Arrays can now be copied and referenced.
+- Update 1.1.2: Added all_tests.wio file to track tests one by one.
+- Update 1.1.3: Fixed continue statement working like break.
+- Update 1.1.4: Empty for loops are now supported [ for(;;){} ]
+- Update 1.1.5: Fixed a bug that caused the return statement to give an error as if it were outside the function even though it was inside the function.
+- Update 1.1.6: Has value '?' operator has been added.
+- Update 1.2.0: Project filing has been changed.
+- Update 1.2.1: Started adding built-in methods. Currently adding instant math and io built-in methods.
+- Update 1.2.2: Nested arrays and dictionaries are now supported.
+- Update 1.2.3: Members are currently being added for the array type.
+- Update 1.2.4: Fixed the error that accessing multidimensional arrays and members could not be done. (Things like arr[1][1] were giving errors.)
+- Update 1.2.5: A module tracker has been added to ensure that a file is added only once, to prevent files from being added more than once.
+- Update 1.2.6: Added 'file' type.
+- Update 1.2.7: Removed the need for a semicolon after the import keyword. It is now optional.
+- Update 1.2.8: Fixed a bug that caused the program to stop working if a semicolon was used more than once. Empty semicolons are now passed directly without being evaluated.
+- Update 1.2.9: Added test/math.wio file to test the math library.
+- Update 1.2.10: The interpreter class was made static, thus ensuring that the same interpreter will be used when using the import keyword.
+- Update 1.2.11: Some parser and evaluator issues have been fixed.
+- Update 1.2.12: Fixed an issue where the ref keyword was not working correctly in array and dict types.
+- Update 1.2.13: A type-specific member table was created so that member functions would not take up space in the symbol table. (If it had been created in the symbol table, member functions of that type would have been added to the table for each variable in a type that had a member. This is a huge density.)
+- Update 1.2.14: Fixed issues with null usage.
+- Update 1.2.15: The keywords pure, entity, package, as, were added. However, it is currently ignored, it just gives an error.

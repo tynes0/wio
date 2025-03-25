@@ -1,0 +1,61 @@
+## recursive test
+func factorial(var v)
+{
+	if(v <= 2)
+		return v;
+	return v * factorial(v - 1);
+}
+
+## global decl test
+{
+	func foo(var x)
+	{
+		if(false)
+		{
+			while(true)
+			{
+				for(;;)
+				{
+					global var x = 1.52;
+				}
+			}
+		}
+	}
+	print(x + "\n"); ## works fine 
+}
+
+## ref keyword test
+{
+	dict kvp
+	{
+		[1, 2],
+		["x", 4],
+		['c', 6.21]
+	};
+
+	dict ref_dict = ref kvp;
+
+	ref_dict['c'] = "Hello, world!";
+
+	print(kvp['c']);
+} 
+
+## ? operator
+{
+	dict z = {};
+	var y = 23;
+	if(?z)
+	{
+		print("\nNot reached!");
+	}
+	if(?y)
+	{
+		print("\nReached");
+	}
+}
+
+## nested array - dict
+{
+	array arr = [[1, [156, 12, 'c'], { [1, ["test", 'y']], ['x', 6.2] }], 3];
+	print(arr);
+}

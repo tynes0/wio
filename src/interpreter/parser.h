@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "exception.h"
 #include "ast.h"
 
 namespace wio
@@ -32,6 +33,8 @@ namespace wio
         void error(const std::string& message, location loc);
 
         int get_operator_precedence(token tok);
+        location get_array_elements(std::vector<ref<expression>>& elements);
+        location get_dict_element(std::vector<std::pair<ref<expression>, ref<expression>>>& elements);
 
         ref<statement> parse_statement();
         ref<expression> parse_expression();

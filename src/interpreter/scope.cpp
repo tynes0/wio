@@ -1,4 +1,5 @@
 #include "scope.h"
+#include "exception.h"
 
 namespace wio
 {

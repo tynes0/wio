@@ -1,13 +1,13 @@
 #pragma once
 
 #include "variable_base.h"
-#include "../base.h"
+#include "../interpreter/base.h"
 
 #include <vector>
 
 namespace wio
 {
-	class var_array : public variable_base
+	class var_array : public null_var
 	{
 	public:
 		var_array(const std::vector<ref<variable_base>>& data, packed_bool flags = {});

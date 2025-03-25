@@ -2,7 +2,7 @@
 
 namespace wio
 {
-    var_array::var_array(const std::vector<ref<variable_base>>& data, packed_bool flags) : m_data(data), variable_base(flags)
+    var_array::var_array(const std::vector<ref<variable_base>>& data, packed_bool flags) : m_data(data), null_var(flags)
     {
     }
 

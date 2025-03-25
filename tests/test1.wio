@@ -1,1 +1,17 @@
-## import "test2";
+import "test2";
+
+Print(PI2);
+#* 
+array arr = [2, [1,2,3], "String", 'C'];
+
+arr.Append("Test");
+
+var front = arr.Front();
+
+front = "Merhaba";
+
+Println(arr);
+
+Println(arr.At(1).Length());
+
+*#

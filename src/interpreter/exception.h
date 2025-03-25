@@ -263,4 +263,5 @@ namespace wio
 	public:
 		explicit builtin_error(const std::string& message) noexcept : exception(message.c_str()) {}
 	};
+
 }

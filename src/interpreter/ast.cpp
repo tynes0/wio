@@ -1,4 +1,5 @@
 #include "ast.h"
+#include "exception.h"
 
 namespace wio
 {
@@ -30,6 +31,39 @@ namespace wio
         return "Literal(" + m_token.value + ":" + frenum::to_string(m_type) + ")";
     }
 
+
+    std::string string_literal::to_string() const
+    {
+        return "StringLiteral(" + m_token.value + ")";
+    }
+
+    std::string array_literal::to_string() const
+    {
+        std::string result = "[";
+        for (size_t i = 0; i < m_elements.size(); ++i)
+        {
+            result += m_elements[i]->to_string();
+            if (i < m_elements.size() - 1)
+                result += ", ";
+        }
+        result += "];";
+        return result;
+    }
+
+    std::string dictionary_literal::to_string() const
+    {
+        std::string result = "{";
+        for (size_t i = 0; i < m_pairs.size(); ++i)
+        {
+            result += "[" + m_pairs[i].first->to_string() + ", ";
+            result += m_pairs[i].second->to_string() + "]";
+            if (i < m_pairs.size() - 1)
+                result += ", ";
+        }
+        result += "};";
+        return result;
+    }
+
     null_expression::null_expression(token tok) : m_token(tok)
     {
     }
@@ -52,19 +86,7 @@ namespace wio
 
     variable_type identifier::get_expression_type() const
     {
-        if (var_ref != nullptr)
-        {
-            if (var_ref->get_base_type() == variable_base_type::variable)
-                return std::dynamic_pointer_cast<variable>(var_ref)->get_type();
-            else if (var_ref->get_base_type() == variable_base_type::array)
-                return variable_type::vt_array;
-            else if (var_ref->get_base_type() == variable_base_type::dictionary)
-                return variable_type::vt_dictionary;
-            else if (var_ref->get_base_type() == variable_base_type::function)
-                return variable_type::vt_function;
-        }
-
-        return m_type;
+        return variable_type::vt_any;
     }
 
     std::string identifier::to_string() const
@@ -86,11 +108,6 @@ namespace wio
         for (const auto& stmt : m_statements)
             result += stmt->to_string() + "\n";
         return result;
-    }
-
-    std::string string_literal::to_string() const
-    {
-        return "StringLiteral(" + m_token.value + ")";
     }
 
     variable_type binary_expression::get_expression_type() const
@@ -201,10 +218,7 @@ namespace wio
         }
         else if (object_type == variable_type::vt_array)
         {
-            if (m_member->m_token.value == "length") // ext.
-            {
-                return variable_type::vt_integer;
-            }
+
         }
 
         return variable_type::vt_null;

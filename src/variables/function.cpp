@@ -1,9 +1,10 @@
 #include "function.h"
+#include "../interpreter/exception.h"
 
 namespace wio
 {
     var_function::var_function(const type& data, variable_type return_type, const std::vector<function_param>& params, bool is_local, bool is_global)
-        : m_data(data), m_return_type(return_type), m_params(params), variable_base({is_local, is_global})
+        : m_data(data), m_return_type(return_type), m_params(params), null_var({is_local, is_global})
     {
     }
 

@@ -1,13 +1,13 @@
 #pragma once
 
 #include "variable_base.h"
-#include "../base.h"
+#include "../interpreter/base.h"
 
 #include <map>
 
 namespace wio
 {
-	class var_dictionary : public variable_base
+	class var_dictionary : public null_var
 	{
 	public:
 		using map_t = std::map<std::string, ref<variable_base>>; // std::map could be change

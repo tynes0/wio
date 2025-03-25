@@ -2,10 +2,9 @@
 #pragma once
 
 #include "ast.h"
-#include "scope.h"  // Artýk scope.h'ý include ediyoruz
-#include "base.h"   // ref için
-#include <memory>
-#include <set>
+#include "scope.h"
+#include "base.h"
+
 #include <map>
 
 namespace wio 
@@ -17,21 +16,23 @@ namespace wio
 
         void evaluate_program(ref<program> program_node);
 
-        std::map<std::string, symbol>& get_symbols();
+        symbol_table_t& get_symbols();
     private:
         ref<variable_base> evaluate_expression(ref<expression> node);
         void evaluate_statement(ref<statement> node);
 
         ref<variable_base> evaluate_literal(ref<literal> node);
         ref<variable_base> evaluate_string_literal(ref<string_literal> node);
-        ref<variable_base> evaluate_identifier(ref<identifier> node);
+        ref<variable_base> evaluate_array_literal(ref<array_literal> node);
+        ref<variable_base> evaluate_dictionary_literal(ref<dictionary_literal> node);
         ref<variable_base> evaluate_binary_expression(ref<binary_expression> node);
         ref<variable_base> evaluate_unary_expression(ref<unary_expression> node);
         ref<variable_base> evaluate_assignment_expression(ref<assignment_expression> node);
         ref<variable_base> evaluate_typeof_expression(ref<typeof_expression> node);
-        ref<variable_base> evaluate_array_access_expression(ref<array_access_expression> node);
-        ref<variable_base> evaluate_member_access_expression(ref<member_access_expression> node) { return make_ref<variable>(any(), variable_type::vt_null); }
-        ref<variable_base> evaluate_function_call(ref<function_call> node);
+        ref<variable_base> evaluate_identifier(ref<identifier> node, ref<variable_base> object = nullptr);
+        ref<variable_base> evaluate_array_access_expression(ref<array_access_expression> node, ref<variable_base> object = nullptr);
+        ref<variable_base> evaluate_member_access_expression(ref<member_access_expression> node, ref<variable_base> object = nullptr);
+        ref<variable_base> evaluate_function_call(ref<function_call> node, ref<variable_base> object = nullptr);
 
         void evaluate_block_statement(ref<block_statement> node);
         void evaluate_expression_statement(ref<expression_statement> node);
@@ -62,15 +63,19 @@ namespace wio
         var_func_definition* lookup_def(const std::string& name);
         ref<function_declaration> get_func_decl(const std::string& name);
         ref<variable_base> get_null_var();
-        ref<variable_base> get_value(ref<expression> node);
+        ref<variable_base> get_value(ref<expression> node, ref<variable_base> object = nullptr);
 
-        std::set<std::string> m_imported_modules;
         ref<scope> m_current_scope;
+        std::map<variable_type, ref<scope>> m_object_members;
+
         ref<variable_base> m_last_return_value;
         ref<statement_stack> m_statement_stack;
+
         int m_loop_depth = 0;
         uint16_t m_func_body_counter = 0;
-        packed_bool m_flags{}; // 1- break, 2 - continue, 3 - return, 4 - only global decl, 5 - in func call
+
+        packed_bool m_eval_flags{}; // 1- break, 2 - continue, 3 - return, 4 - only global decl, 5 - in func call
+        packed_bool m_program_flags{}; // 1- single file 2- pure 3- package
 
     };
 

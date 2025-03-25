@@ -17,7 +17,7 @@ namespace wio
 		function_param(const std::string& id, variable_type type, bool is_ref) : id(id), type(type), is_ref(is_ref) {}
 	};
 
-	class var_function : public variable_base
+	class var_function : public null_var
 	{
 	public:
 		using type = std::function<ref<variable_base>(const std::vector<function_param>&, std::vector<ref<variable_base>>&)>;

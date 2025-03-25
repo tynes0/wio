@@ -2,7 +2,7 @@
 
 #include <type_traits>
 
-#include "../exception.h"
+#include "../interpreter/exception.h"
 
 #include <memory>
 

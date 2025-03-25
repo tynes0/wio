@@ -3,7 +3,7 @@
 namespace wio
 {
     variable::variable( const any& data, variable_type type, packed_bool flags) :
-        m_data(data), m_type(type), variable_base(flags)
+        m_data(data), m_type(type), null_var(flags)
     {
     }
 
