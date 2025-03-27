@@ -17,6 +17,26 @@ namespace wio
         bool b8 : 1;
     };
 
+    struct packed_bool16
+    {
+        bool b1 : 1;
+        bool b2 : 1;
+        bool b3 : 1;
+        bool b4 : 1;
+        bool b5 : 1;
+        bool b6 : 1;
+        bool b7 : 1;
+        bool b8 : 1;
+        bool b9 : 1;
+        bool b10 : 1;
+        bool b11 : 1;
+        bool b12 : 1;
+        bool b13 : 1;
+        bool b14 : 1;
+        bool b15 : 1;
+        bool b16 : 1;
+    };
+
     template <class _Ty>
     using ref = std::shared_ptr<_Ty>;
 

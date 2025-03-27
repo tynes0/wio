@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "exception.h"
+#include "../base/exception.h"
 #include "ast.h"
 
 namespace wio

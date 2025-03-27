@@ -1,13 +1,14 @@
 #include "evaluator.h"
-#include "exception.h"
 #include "lexer.h"
 #include "parser.h"
 
+#include "../base/exception.h"
 #include "../utils/filesystem.h"
 #include "../variables/variable.h"
 #include "../variables/array.h"
 #include "../variables/dictionary.h"
 #include "../variables/function.h"
+#include "../builtin/builtin_base.h"
 #include "../builtin/builtin_manager.h"
 #include "../interpreter.h"
 
@@ -41,20 +42,18 @@ namespace wio
 
     evaluator::evaluator() 
     {
-        m_current_scope = make_ref<scope>(scope_type::builtin);
-        builtin_manager::load(m_current_scope, m_object_members);
+        m_current_scope = make_ref<scope>(scope_type::global);
+        builtin_manager::load(m_object_members);
     }
 
     void evaluator::evaluate_program(ref<program> program_node) 
     {
-        enter_scope(scope_type::global);
         enter_statement_stack(&program_node->m_statements);
 
         for (auto& stmt : program_node->m_statements) 
             evaluate_statement(stmt);
 
         exit_statement_stack();
-        exit_scope();
     }
 
     symbol_table_t& evaluator::get_symbols()
@@ -423,7 +422,7 @@ namespace wio
 
     ref<variable_base> evaluator::evaluate_unary_expression(ref<unary_expression> node)
     {
-        ref<variable_base> operand_ref = get_value(node->m_operand);
+        ref<variable_base> operand_ref = get_value(node->m_operand, nullptr, node->m_is_ref);
         token op = node->m_operator;
 
         if (operand_ref->get_base_type() != variable_base_type::variable)
@@ -550,10 +549,6 @@ namespace wio
                 return make_ref<variable>(any(~any_cast<long long>(operand_value)), variable_type::vt_integer);
             else
                 throw invalid_type_error("Unary '~' operator requires an integer operand.", node->get_location());
-        }
-        else if (op.type == token_type::kw_typeof) // WE DONT NEED THIS PROBABLY
-        {
-            return make_ref<variable>(any(frenum::to_string(node->m_operand->get_expression_type())), variable_type::vt_string); // TODOOOOO
         }
 
         throw invalid_operator_error("Invalid unary operator: " + op.value, node->get_location());
@@ -719,7 +714,7 @@ namespace wio
         return make_ref<variable>(frenum::to_string(value_base->get_type()), variable_type::vt_string);
     }
 
-    ref<variable_base> evaluator::evaluate_identifier(ref<identifier> node, ref<variable_base> object)
+    ref<variable_base> evaluator::evaluate_identifier(ref<identifier> node, ref<variable_base> object, bool is_ref)
     {
         ref<scope> target_scope = (object == nullptr) ? nullptr : m_object_members[object->get_type()];
         symbol* sym = (target_scope == nullptr) ? lookup(node->m_token.value) : target_scope->lookup(node->m_token.value);
@@ -739,19 +734,19 @@ namespace wio
         {
             if (auto var = std::dynamic_pointer_cast<variable>(sym->var_ref))
             {
-                if (sym->var_ref->is_ref() || node->m_is_lhs)
+                if (sym->var_ref->is_ref() || node->m_is_lhs || is_ref)
                     return var;
                 return var->clone();
             }
             else if (auto arr = std::dynamic_pointer_cast<var_array>(sym->var_ref))
             {
-                if (sym->var_ref->is_ref() || node->m_is_lhs)
+                if (sym->var_ref->is_ref() || node->m_is_lhs || is_ref)
                     return arr;
                 return arr->clone();
             }
             else if (auto dict = std::dynamic_pointer_cast<var_dictionary>(sym->var_ref))
             {
-                if (sym->var_ref->is_ref() || node->m_is_lhs)
+                if (sym->var_ref->is_ref() || node->m_is_lhs || is_ref)
                     return dict;
                 return dict->clone();
             }
@@ -769,9 +764,9 @@ namespace wio
         return get_null_var();
     }
 
-    ref<variable_base> evaluator::evaluate_array_access_expression(ref<array_access_expression> node, ref<variable_base> object)
+    ref<variable_base> evaluator::evaluate_array_access_expression(ref<array_access_expression> node, ref<variable_base> object, bool is_ref)
     {
-        ref<variable_base> item = get_value(node->m_array, object);
+        ref<variable_base> item = get_value(node->m_array, object, is_ref);
 
         variable_base_type base_t = item->get_base_type();
 
@@ -787,11 +782,8 @@ namespace wio
 
             ref<var_array> array_var = std::dynamic_pointer_cast<var_array>(item);
 
-            if (node->m_is_ref || node->m_is_lhs)
-            {
-                auto var = array_var->get_element(index_var->get_data_as<long long>());
-                return var;
-            }
+            if (node->m_is_ref || node->m_is_lhs || is_ref)
+                return array_var->get_element(index_var->get_data_as<long long>());
             return array_var->get_element(index_var->get_data_as<long long>())->clone();
         }
         else if (base_t == variable_base_type::variable)
@@ -823,11 +815,8 @@ namespace wio
 
             ref<var_dictionary> dict_var = std::dynamic_pointer_cast<var_dictionary>(item);
 
-            if (node->m_is_ref || node->m_is_lhs)
-            {
-                auto var = dict_var->get_element(key_base);
-                return var;
-            }
+            if (node->m_is_ref || node->m_is_lhs || is_ref)
+                return dict_var->get_element(key_base);
             return dict_var->get_element(key_base)->clone();
         }
         else
@@ -836,9 +825,9 @@ namespace wio
         }
     }
 
-    ref<variable_base> evaluator::evaluate_member_access_expression(ref<member_access_expression> node, ref<variable_base> object)
+    ref<variable_base> evaluator::evaluate_member_access_expression(ref<member_access_expression> node, ref<variable_base> object, bool is_ref)
     {
-        ref<variable_base> object_value = get_value(node->m_object, object);
+        ref<variable_base> object_value = get_value(node->m_object, object, is_ref);
         ref<scope> target_scope = (object == nullptr) ? nullptr : m_object_members[object->get_type()];
         ref<variable_base> member = get_value(node->m_member, object_value);
         return member;
@@ -1164,6 +1153,9 @@ namespace wio
         
         raw_buffer buf = interpreter::get().run_f(node->m_module_path.c_str());
 
+        if (!buf)
+            return;
+
         auto& symbols = buf.load<symbol_table_t>();
 
         for (auto& [key, value] : symbols)
@@ -1178,13 +1170,14 @@ namespace wio
     {
         if (m_eval_flags.b4 == true)
             return;
-        if (m_current_scope->get_type() == scope_type::function_body)
-        {
-            m_last_return_value = evaluate_expression(node->m_value);
-            m_eval_flags.b3 = true;
-        }
-        else
+        ref<scope> temp = m_current_scope;
+        while (temp && temp->get_type() != scope_type::function_body)
+            temp = temp->get_parent();
+        if(!temp)
             throw invalid_return_statement("Return statement out of the function", node->get_location());
+
+        m_last_return_value = evaluate_expression(node->m_value);
+        m_eval_flags.b3 = true;
     }
 
     void evaluator::evaluate_variable_declaration(ref<variable_declaration> node, bool is_parameter)
@@ -1226,13 +1219,6 @@ namespace wio
             if (exp->get_base_type() == variable_base_type::variable)
             {
                 var = std::dynamic_pointer_cast<variable>(exp);
-
-                if (node->m_type != variable_type::vt_var_param)
-                {
-                    auto initializer_expression_type = node->m_initializer->get_expression_type();
-                    if (initializer_expression_type != node->m_type || !var)
-                        throw local_exception("initializer has an invalid type.", node->m_initializer->get_location());
-                }
 
                 if (node->m_flags.b1)
                     var->set_const(true);
@@ -1588,7 +1574,7 @@ namespace wio
         return make_ref<null_var>(packed_bool{});
     }
 
-    ref<variable_base> evaluator::get_value(ref<expression> node, ref<variable_base> object)
+    ref<variable_base> evaluator::get_value(ref<expression> node, ref<variable_base> object, bool is_ref)
     {
         if (auto lit = std::dynamic_pointer_cast<literal>(node))
             return evaluate_literal(lit);
@@ -1609,11 +1595,11 @@ namespace wio
         else if (auto typeof_expr = std::dynamic_pointer_cast<typeof_expression>(node))
             return evaluate_typeof_expression(typeof_expr);
         else if (auto id = std::dynamic_pointer_cast<identifier>(node))
-            return evaluate_identifier(id, object);
+            return evaluate_identifier(id, object, is_ref);
         else if (auto arr_access = std::dynamic_pointer_cast<array_access_expression>(node))
-            return evaluate_array_access_expression(arr_access, object);
+            return evaluate_array_access_expression(arr_access, object, is_ref);
         else if (auto member_access = std::dynamic_pointer_cast<member_access_expression>(node))
-            return evaluate_member_access_expression(member_access, object);
+            return evaluate_member_access_expression(member_access, object, is_ref);
         else if (auto func_call = std::dynamic_pointer_cast<function_call>(node))
             return evaluate_function_call(func_call, object);
         else

@@ -4,8 +4,9 @@
 #include <string>
 #include <memory>
 #include <vector>
-#include "base.h"
+
 #include "ast.h"
+#include "../base/base.h"
 #include "../variables/variable.h"
 #include "../variables/function.h"
 
@@ -54,18 +55,22 @@ namespace wio
         symbol* lookup(const std::string& name);
         symbol* lookup_only_global(const std::string& name);
         symbol* lookup_current_and_global(const std::string& name);
+        symbol* lookup_builtin(const std::string& name);
         var_func_definition* lookup_def(const std::string& name);
 
         scope_type get_type() const { return m_type; }
         ref<scope> get_parent() { return m_parent; }
         symbol_table_t& get_symbols() { return m_symbols; }
         definition_table_t& get_definitions() { return m_definitions; }
+
     private:
         symbol_table_t m_symbols;
         definition_table_t m_definitions;
         ref<scope> m_parent;
         scope_type m_type;
     };
+
+    inline ref<scope> builtin_scope = make_ref<scope>(scope_type::builtin);
 
     struct statement_stack
     {

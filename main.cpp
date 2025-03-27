@@ -6,8 +6,8 @@
 
 int main(int argc, char* argv[])
 {
-    const char* args[] = { "",/*"-t", "-p",*/"tests/test1.wio"};
-    wio::interpreter::get().load_args(sizeof(args) / sizeof(const char*), args);
+    const char* args[] = { "", /*"-h", "-nr", "-st",*/ "tests/test1.wio" };
+    wio::interpreter::get().load_args(sizeof(args) / sizeof(const char*), (char**)args);
     wio::interpreter::get().run();
 }
 

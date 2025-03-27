@@ -1,6 +1,6 @@
 #include "lexer.h"
 
-#include "exception.h"
+#include "../base/exception.h"
 
 #include <cctype>
 #include <sstream>

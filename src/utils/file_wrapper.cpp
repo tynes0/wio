@@ -1,5 +1,5 @@
 #include "file_wrapper.h"
-#include "../interpreter/exception.h"
+#include "../base/exception.h"
 
 namespace wio 
 {

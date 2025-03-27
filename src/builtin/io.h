@@ -9,7 +9,7 @@ namespace wio
         class io
         {
         public:
-            void load(ref<scope> target_scope);
+            static void load();
         };
     }
 }

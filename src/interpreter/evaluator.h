@@ -3,7 +3,7 @@
 
 #include "ast.h"
 #include "scope.h"
-#include "base.h"
+#include "../base/base.h"
 
 #include <map>
 
@@ -29,9 +29,9 @@ namespace wio
         ref<variable_base> evaluate_unary_expression(ref<unary_expression> node);
         ref<variable_base> evaluate_assignment_expression(ref<assignment_expression> node);
         ref<variable_base> evaluate_typeof_expression(ref<typeof_expression> node);
-        ref<variable_base> evaluate_identifier(ref<identifier> node, ref<variable_base> object = nullptr);
-        ref<variable_base> evaluate_array_access_expression(ref<array_access_expression> node, ref<variable_base> object = nullptr);
-        ref<variable_base> evaluate_member_access_expression(ref<member_access_expression> node, ref<variable_base> object = nullptr);
+        ref<variable_base> evaluate_identifier(ref<identifier> node, ref<variable_base> object = nullptr, bool is_ref = false);
+        ref<variable_base> evaluate_array_access_expression(ref<array_access_expression> node, ref<variable_base> object = nullptr, bool is_ref = false);
+        ref<variable_base> evaluate_member_access_expression(ref<member_access_expression> node, ref<variable_base> object = nullptr, bool is_ref = false);
         ref<variable_base> evaluate_function_call(ref<function_call> node, ref<variable_base> object = nullptr);
 
         void evaluate_block_statement(ref<block_statement> node);
@@ -63,7 +63,7 @@ namespace wio
         var_func_definition* lookup_def(const std::string& name);
         ref<function_declaration> get_func_decl(const std::string& name);
         ref<variable_base> get_null_var();
-        ref<variable_base> get_value(ref<expression> node, ref<variable_base> object = nullptr);
+        ref<variable_base> get_value(ref<expression> node, ref<variable_base> object = nullptr, bool is_ref = false);
 
         ref<scope> m_current_scope;
         std::map<variable_type, ref<scope>> m_object_members;

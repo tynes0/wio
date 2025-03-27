@@ -13,7 +13,7 @@ PRIORITIES
 LIST
 -----------------------------------------
 1. [x] We need to fix a bug where operator order was not handled correctly in binary expressions. ![highp]
-2. [ ] add -h and -help to app. ![lowp]
+2. [x] add -h and -help to app. ![lowp]
 3. [ ] add -sf and -single-file to app. ![lowp]
 4. [x] Provide nested array and dictionary support. ![highp]
 5. [x] Make arrays and dictionaries copyable or referenceable.![highp]
@@ -35,4 +35,4 @@ LIST
 16. [ ] Fix import keyword (definitions) ![mediump]
 16. [ ] Fix strings (index ref's)![highp]
 16. [ ] Fix ref ![highp]
-16. [ ] Fix return in loops ![highp]
+16. [x] Fix return in loops ![highp]

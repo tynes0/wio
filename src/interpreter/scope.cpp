@@ -1,5 +1,5 @@
 #include "scope.h"
-#include "exception.h"
+#include "../base/exception.h"
 
 namespace wio
 {
@@ -75,7 +75,7 @@ namespace wio
             return m_parent->lookup(name);
         }
 
-        return nullptr;
+        return lookup_builtin(name);
     }
     symbol* scope::lookup_only_global(const std::string& name)
     {
@@ -88,7 +88,7 @@ namespace wio
             return parent->lookup(name);
         }
 
-        return nullptr;
+        return lookup_builtin(name);
     }
     symbol* scope::lookup_current_and_global(const std::string& name)
     {
@@ -105,6 +105,14 @@ namespace wio
             return parent->lookup(name);
         }
 
+        return lookup_builtin(name);
+    }
+
+    symbol* scope::lookup_builtin(const std::string& name)
+    {
+        auto it = builtin_scope->m_symbols.find(name);
+        if (it != builtin_scope->m_symbols.end())
+            return &(it->second);
         return nullptr;
     }
 

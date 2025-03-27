@@ -350,7 +350,7 @@ namespace wio
             if (current_token().type == token_type::op && (current_token().value == "++" || current_token().value == "--"))
             {
                 token op = next_token();
-                primary = make_ref<unary_expression>(op, primary, unary_operator_type::postfix);
+                primary = make_ref<unary_expression>(op, primary, unary_operator_type::postfix, true);
             }
             return primary;
         }
@@ -456,7 +456,7 @@ namespace wio
         {
             next_token();
             ref<expression> operand = parse_unary_expression();
-            return std::make_shared<unary_expression>(current, operand, unary_operator_type::prefix);
+            return std::make_shared<unary_expression>(current, operand, unary_operator_type::prefix, true);
         }
         else
         {
@@ -465,7 +465,7 @@ namespace wio
             if (current.type == token_type::op && (current.value == "++" || current.value == "--"))
             {
                 token op = next_token();
-                return make_ref<unary_expression>(op, primary, unary_operator_type::postfix);
+                return make_ref<unary_expression>(op, primary, unary_operator_type::postfix, true);
             }
             else if (current.type == token_type::left_bracket)
             {
@@ -566,7 +566,7 @@ namespace wio
         {
             token tok = next_token();
             consume_token(token_type::semicolon);
-            return make_ref<expression_statement>(make_ref<unary_expression>(tok, id));
+            return make_ref<expression_statement>(make_ref<unary_expression>(tok, id, unary_operator_type::postfix));
         }
         else if (current_token().type == token_type::left_parenthesis)
         {
@@ -896,13 +896,15 @@ namespace wio
         token current = current_token();
         ref<expression> module_path_expr = parse_primary_expression();
 
-        if (module_path_expr->get_expression_type() != variable_type::vt_string)
+        ref<string_literal> lit = std::dynamic_pointer_cast<string_literal>(module_path_expr);
+
+        if (!lit)
         {
             error("Expected a string literal for the module path in import statement.", module_path_expr->get_location());
             return nullptr;
         }
 
-        std::string module_path = std::dynamic_pointer_cast<literal>(module_path_expr)->m_token.value;
+        std::string module_path = lit->m_token.value;
 
         match_token(token_type::semicolon);
 

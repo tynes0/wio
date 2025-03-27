@@ -4,7 +4,7 @@
 #include <fstream>
 #include <filesystem>
 
-#include "../interpreter/exception.h"
+#include "../base/exception.h"
 
 #define WIO_BUFSIZ 8192
 

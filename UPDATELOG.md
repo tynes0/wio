@@ -27,3 +27,10 @@
 - Update 1.2.13: A type-specific member table was created so that member functions would not take up space in the symbol table. (If it had been created in the symbol table, member functions of that type would have been added to the table for each variable in a type that had a member. This is a huge density.)
 - Update 1.2.14: Fixed issues with null usage.
 - Update 1.2.15: The keywords pure, entity, package, as, were added. However, it is currently ignored, it just gives an error.
+- Update 1.3.0: The project has been reorganized.
+- Update 1.3.1: The built-in libraries are no longer directly included. You now need to import the desired built-in library.
+- Update 1.3.2: Program arguments are now checked by an argument parser.
+- Update 1.3.3: Fixed a bug that caused unary expressions not to be processed.
+- Update 1.3.4: Fixed a bug that caused the return statement not to be processed correctly when inside a block.
+- Update 1.3.5: Fixed an issue where all files had to import built-in libraries individually. Now built-in libraries are imported once.
+- Update 1.3.5: New arguments added to the application.

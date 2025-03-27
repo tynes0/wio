@@ -1,6 +1,19 @@
-import "test2";
+import "wio.io"
 
-Print(PI2);
+func f()
+{
+	for(var i = 0; i < 10; ++i)
+	{
+		Println(i);
+		if(i == 5)
+		{
+			return i;
+		}
+	}
+}
+
+Println(f());
+
 #* 
 array arr = [2, [1,2,3], "String", 'C'];
 

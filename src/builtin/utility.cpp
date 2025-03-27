@@ -14,9 +14,9 @@ namespace wio
 			}
 		}
 
-		void utility::load(ref<scope> target_scope)
+		void utility::load()
 		{
-			loader::load_function<2>(target_scope, "Swap", detail::b_swap, variable_type::vt_null, { variable_type::vt_any, variable_type::vt_any }, std::bitset<2>("11"));
+			loader::load_function<2>("Swap", detail::b_swap, variable_type::vt_null, { variable_type::vt_any, variable_type::vt_any }, std::bitset<2>("11"));
 		}
 	}
 }

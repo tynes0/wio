@@ -1,5 +1,7 @@
 #include "builtin_manager.h"
 
+#include "builtin_base.h"
+
 #include "io.h"
 #include "math.h"
 #include "utility.h"
@@ -8,26 +10,9 @@
 namespace wio
 {
     static packed_bool s_member_load_flags_1{}; // 1->array 2->string 3->dict 4->file
-    static packed_bool s_lib_load_flags_1{}; // 1->io 2->math 3->util 4->range
 
-    void builtin_manager::load(ref<scope> target_scope, std::map<variable_type, ref<scope>>& target_member_scope_map)
+    void builtin_manager::load(std::map<variable_type, ref<scope>>& target_member_scope_map)
     {
-        if (!s_lib_load_flags_1.b1)
-        {
-            builtin::io io_loader;
-            io_loader.load(target_scope);
-        }
-        if (!s_lib_load_flags_1.b2)
-        {
-            builtin::math math_loader;
-            math_loader.load(target_scope);
-        }
-        if (!s_lib_load_flags_1.b3)
-        {
-            builtin::utility utility_loader;
-            utility_loader.load(target_scope);
-        }
-
         if (!s_member_load_flags_1.b1)
         {
             builtin::b_array array_member_loader;

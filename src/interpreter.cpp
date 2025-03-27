@@ -5,139 +5,85 @@
 #include <vector>
 #include <filesystem>
 
+#include "base/exception.h"
+#include "base/argument_parser.h"
 #include "utils/filesystem.h"
-#include "interpreter/exception.h"
 #include "interpreter/lexer.h"
 #include "interpreter/parser.h"
 #include "interpreter/evaluator.h"
 #include "interpreter/module_tracker.h"
+#include "builtin/io.h"
+#include "builtin/math.h"
+#include "builtin/utility.h"
 
 namespace wio
 {
-	namespace detail
-	{
-		struct arg_data
-		{
-			bool show_tokens = false;
-			bool show_parse_tree = false;
-			bool run = true;
-		};
-
-		static arg_data s_arg_data;
-		static std::filesystem::path base_path;
-		static symbol_table_t temp_table;
-		using arg_pr = std::pair<const char*, void(*)()>;
-
-		static void show_tokens()
-		{
-			s_arg_data.show_tokens = true;
-		}
-
-		static void show_parse_tree()
-		{
-			s_arg_data.show_parse_tree = true;
-		}
-
-		static void no_run()
-		{
-			s_arg_data.run = false;
-		}
-
-
-		static constexpr std::array<arg_pr, 8> s_argument_array
-		{
-			arg_pr{ "-T", show_tokens },
-			arg_pr{ "-P", show_parse_tree },
-			arg_pr{ "-NR", no_run },
-			arg_pr{ "", nullptr },
-			arg_pr{ "", nullptr },
-			arg_pr{ "", nullptr },
-			arg_pr{ "", nullptr },
-			arg_pr{ "", nullptr },
-		};
-
-		static bool is_starts_with(const std::string& str, char ch)
-		{
-			if (str.empty())
-				return false;
-			return str[0] == ch;
-		}
-
-		static void to_upper(std::string& str)
-		{
-			for (char& ch : str)
-				if (islower(ch))
-					ch = toupper(ch);
-		}
-
-		static arg_pr find_arg(const std::string& arg)
-		{
-			for (auto& item : s_argument_array)
-				if (arg == item.first)
-					return item;
-			return arg_pr{ "", nullptr };
-		}
-	}
-
 	struct app_data
 	{
-		std::vector<std::string> args;
-		std::vector<std::string> wio_args;
+		std::filesystem::path base_path;
+		symbol_table_t temp_table;
+		argument_parser arg_parser;
+		packed_bool flags{}; // 1- single file 2- show tokens 3- show ast 4- no run 5- no built-in
+		packed_bool buitin_imports{}; // 1-io 2-math 3-util
 	};
 
 	static app_data s_app_data;
 
-	interpreter::interpreter() {}
-
-	void interpreter::load_args(int argc, const char** argv)
+	interpreter::interpreter() 
 	{
-		if (argc <= 1)
-			return;
-		s_app_data.args.reserve(argc - 1);
-		for (int i = 1; i < argc; ++i)
-			s_app_data.args.emplace_back(argv[i]);
+		s_app_data.arg_parser.set_program_name("wio");
+		s_app_data.arg_parser.enable_required_file(".wio");
+
+		s_app_data.arg_parser.add_argument("help", { "-h", "--help" }, "Shows the help message.", [](const std::string&) {
+			filesystem::write_stdout(s_app_data.arg_parser.help());
+			}, true);
+
+		s_app_data.arg_parser.add_argument("single-file", { "-sf", "--single-file" }, "imports are ignored. It is treated as a single file.", [](const std::string&) {
+			s_app_data.flags.b1 = true;
+			});
+
+		s_app_data.arg_parser.add_argument("show-tokens", { "-st", "--show-tokens" }, "Shows tokens.", [](const std::string&) {
+			s_app_data.flags.b2 = true;
+			});
+
+		s_app_data.arg_parser.add_argument("show-ast", { "-sa", "-ast", "--show-ast"}, "Shows ast.", [](const std::string&) {
+			s_app_data.flags.b3 = true;
+			});
+
+		s_app_data.arg_parser.add_argument("no-run", { "-nr", "--no-run" }, "It just creates the ast without running the program.", [](const std::string&) {
+			s_app_data.flags.b4 = true;
+			});
+
+		s_app_data.arg_parser.add_argument("no-builtin", { "-nb", "--no-builtin" }, "Wio built-in library imports are ignored. Basic built-ins are also ignored.", [](const std::string&) {
+			s_app_data.flags.b5 = true;
+			});
+	}
+
+	void interpreter::load_args(int argc, char* argv[])
+	{
+		try
+		{
+			s_app_data.arg_parser.parse(argc, argv);
+			if (s_app_data.arg_parser.help_called())
+				exit(EXIT_SUCCESS);
+		}
+		catch (const exception& e)
+		{
+			filesystem::write_file(stderr, e.what());
+			exit(EXIT_FAILURE);
+		}
 	}
 
 	void interpreter::run()
 	{
 		try
 		{
-			bool file_passed = false;
-			raw_buffer content;
-
-			if (s_app_data.args.empty())
-				throw file_error("No argument provided!");
-
-			for (int i = 0; i < (int)s_app_data.args.size(); ++i)
-			{
-				if (file_passed)
-				{
-					s_app_data.wio_args.push_back(s_app_data.args[i]);
-				}
-				else if (detail::is_starts_with(s_app_data.args[i], '-'))
-				{
-					detail::to_upper(s_app_data.args[i]);
-					auto arg_pair = detail::find_arg(s_app_data.args[i]);
-					if (arg_pair.second == nullptr)
-						throw undefined_argument_error("Undefined argument! (" + s_app_data.args[i] + ")");
-					(arg_pair.second)();
-				}
-				else
-				{
-					content = run_f_p1(s_app_data.args[i].c_str());
-					file_passed = true;
-				}
-			}
-
-			if (!file_passed)
-				throw file_error("No wio file provided!");
-
-			run_f_p2(content, false);
-			// TODO
+			raw_buffer buf = run_f_p1(s_app_data.arg_parser.get_file().c_str());
+			run_f_p2(buf);
 		}
 		catch (const exception& e)
 		{
-			filesystem::write_file(stderr, e.what()); // TODO
+			filesystem::write_file(stderr, e.what());
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -148,27 +94,44 @@ namespace wio
 		return main_interpreter;
 	}
 
-	raw_buffer interpreter::run_f(const char* fp, bool sf)
+	raw_buffer interpreter::run_f(const char* fp)
 	{
 		raw_buffer content = run_f_p1(fp);
-		raw_buffer result = run_f_p2(content, sf);
+		if (!content)
+			return raw_buffer(nullptr);
+		raw_buffer result = run_f_p2(content);
 		run_f_p3();
 		return result;
 	}
 
 	raw_buffer interpreter::run_f_p1(const char* fp)
 	{
-		raw_buffer content;
-
 		std::string filepath = fp;
 		if (!filesystem::check_extension(filepath, ".wio"))
 		{
-			if (std::filesystem::path(filepath).has_extension())
-				throw file_error("\'" + filepath + "\' is not a wio file!");
-
 			if (filesystem::has_prefix(filepath, "wio."))
 			{
-				// BUILTINS import "wio	"
+				std::string_view view(filepath);
+				view.remove_prefix(4);
+				
+				if (view == "io")
+				{
+					if (module_tracker::get().add_module(std::filesystem::path(filepath)))
+						builtin::io::load();
+				}
+				else if (view == "math")
+				{
+					if (module_tracker::get().add_module(std::filesystem::path(filepath)))
+						builtin::math::load();
+
+				}
+				else if (view == "util")
+				{
+					if (module_tracker::get().add_module(std::filesystem::path(filepath)))
+						builtin::utility::load();
+				}
+
+				return raw_buffer(nullptr);
 			}
 			else
 			{
@@ -179,11 +142,11 @@ namespace wio
 		if (!filesystem::file_exists(filepath))
 			throw file_error("\'" + filepath + "\' not exists!");
 
-		if (!module_tracker::get().add_module(filepath))
-			return raw_buffer{ nullptr };
+		if (!module_tracker::get().add_module(std::filesystem::path(filepath)))
+			return raw_buffer(nullptr);
 		
-		content = filesystem::read_file(filepath);
-		detail::base_path = std::filesystem::current_path();
+		raw_buffer content = filesystem::read_file(filepath);
+		s_app_data.base_path = std::filesystem::current_path();
 
 		std::filesystem::path abs_path = filesystem::get_abs_path(filepath);
 		std::filesystem::path rd = abs_path.parent_path();
@@ -192,7 +155,7 @@ namespace wio
 		return content;
 	}
 
-	raw_buffer interpreter::run_f_p2(raw_buffer content, bool sf)
+	raw_buffer interpreter::run_f_p2(raw_buffer content)
 	{
 		if (!content)
 			return raw_buffer(nullptr);
@@ -200,28 +163,31 @@ namespace wio
 		lexer l_lexer(content.as<const char>());
 		auto& tokens = l_lexer.get_tokens();
 
-		if (detail::s_arg_data.show_tokens)
+		if (s_app_data.flags.b2)
 			filesystem::write_stdout(l_lexer.to_string());
 
 		parser l_parser(tokens);
 		ref<program> tree = l_parser.parse();
 
-		if (detail::s_arg_data.show_parse_tree)
+		if (s_app_data.flags.b3)
 			filesystem::write_stdout(tree->to_string());
+
+		if (s_app_data.flags.b4)
+			return raw_buffer(nullptr);
 
 		evaluator eval;
 		eval.evaluate_program(tree);
 
-		detail::temp_table = eval.get_symbols();
+		s_app_data.temp_table = eval.get_symbols();
 
 		raw_buffer result;
-		result.store(detail::temp_table);
+		result.store(s_app_data.temp_table);
 
 		return result;
 	}
 
 	void interpreter::run_f_p3()
 	{
-		std::filesystem::current_path(detail::base_path);
+		std::filesystem::current_path(s_app_data.base_path);
 	}
 }

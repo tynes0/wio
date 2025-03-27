@@ -3,7 +3,7 @@
 #include <string>
 #include "../utils/frenum.h"
 #include "../utils/any.h"
-#include "../interpreter/base.h"
+#include "../base/base.h"
 
 namespace wio 
 {

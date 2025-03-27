@@ -1,7 +1,7 @@
 #pragma once
 
 #include "variable_base.h"
-#include "../interpreter/base.h"
+#include "../base/base.h"
 
 #include <map>
 

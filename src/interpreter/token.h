@@ -4,7 +4,7 @@
 #include <string>
 
 #include "../utils/frenum.h"
-#include "location.h"
+#include "../base/location.h"
 
 namespace wio
 {
