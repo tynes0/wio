@@ -1,3 +1,5 @@
+import "wio.io"
+
 ## recursive test
 func factorial(var v)
 {
@@ -8,7 +10,7 @@ func factorial(var v)
 
 ## global decl test
 {
-	func foo(var x)
+	func foo(var v)
 	{
 		if(false)
 		{
@@ -21,7 +23,7 @@ func factorial(var v)
 			}
 		}
 	}
-	print(x + "\n"); ## works fine 
+	Println(x); ## works fine 
 }
 
 ## ref keyword test
@@ -37,7 +39,7 @@ func factorial(var v)
 
 	ref_dict['c'] = "Hello, world!";
 
-	print(kvp['c']);
+	Println(kvp['c']);
 } 
 
 ## ? operator
@@ -46,16 +48,43 @@ func factorial(var v)
 	var y = 23;
 	if(?z)
 	{
-		print("\nNot reached!");
+		Println("Not reached!");
 	}
 	if(?y)
 	{
-		print("\nReached");
+		Println("Reached");
 	}
 }
 
 ## nested array - dict
 {
 	array arr = [[1, [156, 12, 'c'], { [1, ["test", 'y']], ['x', 6.2] }], 3];
-	print(arr);
+	Println(arr);
 }
+
+## member test
+{
+	array arr = [2, [1,2,3], "String", 'C'];
+	arr.Append("Test");
+
+	var front = arr.Front();
+	front = "Merhaba";
+
+	Println(arr);
+	Println(arr.At(1).Length());
+}
+
+## ref parameter test
+{
+	var v = 10;
+
+	func foo(var ref y)
+	{
+		Println(y);
+		y = 5;
+	}
+	foo(v);
+	Println(v);
+}
+
+func testf();

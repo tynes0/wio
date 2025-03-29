@@ -1,36 +1,49 @@
 ### UPDATELOG
 
-- Update 1.0.0: Initial update.
-- Update 1.0.1: Fixed a bug where operator order was not handled correctly in binary expressions.
-- Update 1.0.2: Now wio supports the ability for function definitions to be separate from declarations.
-- Update 1.0.3: Arrays can now be copied and referenced.
-- Update 1.0.4: Fixed issues with incorrect declaration of global variables.
-- Update 1.1.1: Arrays can now be copied and referenced.
-- Update 1.1.2: Added all_tests.wio file to track tests one by one.
-- Update 1.1.3: Fixed continue statement working like break.
-- Update 1.1.4: Empty for loops are now supported [ for(;;){} ]
-- Update 1.1.5: Fixed a bug that caused the return statement to give an error as if it were outside the function even though it was inside the function.
-- Update 1.1.6: Has value '?' operator has been added.
-- Update 1.2.0: Project filing has been changed.
-- Update 1.2.1: Started adding built-in methods. Currently adding instant math and io built-in methods.
-- Update 1.2.2: Nested arrays and dictionaries are now supported.
-- Update 1.2.3: Members are currently being added for the array type.
-- Update 1.2.4: Fixed the error that accessing multidimensional arrays and members could not be done. (Things like arr[1][1] were giving errors.)
-- Update 1.2.5: A module tracker has been added to ensure that a file is added only once, to prevent files from being added more than once.
-- Update 1.2.6: Added 'file' type.
-- Update 1.2.7: Removed the need for a semicolon after the import keyword. It is now optional.
-- Update 1.2.8: Fixed a bug that caused the program to stop working if a semicolon was used more than once. Empty semicolons are now passed directly without being evaluated.
-- Update 1.2.9: Added test/math.wio file to test the math library.
-- Update 1.2.10: The interpreter class was made static, thus ensuring that the same interpreter will be used when using the import keyword.
-- Update 1.2.11: Some parser and evaluator issues have been fixed.
-- Update 1.2.12: Fixed an issue where the ref keyword was not working correctly in array and dict types.
-- Update 1.2.13: A type-specific member table was created so that member functions would not take up space in the symbol table. (If it had been created in the symbol table, member functions of that type would have been added to the table for each variable in a type that had a member. This is a huge density.)
-- Update 1.2.14: Fixed issues with null usage.
-- Update 1.2.15: The keywords pure, entity, package, as, were added. However, it is currently ignored, it just gives an error.
-- Update 1.3.0: The project has been reorganized.
-- Update 1.3.1: The built-in libraries are no longer directly included. You now need to import the desired built-in library.
-- Update 1.3.2: Program arguments are now checked by an argument parser.
-- Update 1.3.3: Fixed a bug that caused unary expressions not to be processed.
-- Update 1.3.4: Fixed a bug that caused the return statement not to be processed correctly when inside a block.
-- Update 1.3.5: Fixed an issue where all files had to import built-in libraries individually. Now built-in libraries are imported once.
-- Update 1.3.5: New arguments added to the application.
+- __Update 1.0.0:__ Initial update.
+- __Update 1.0.1:__ Fixed a bug where operator order was not handled correctly in binary expressions.
+- __Update 1.0.2:__ Now wio supports the ability for function definitions to be separate from declarations.
+- __Update 1.0.3:__ Arrays can now be copied and referenced.
+- __Update 1.0.4:__ Fixed issues with incorrect declaration of global variables.
+- __Update 1.1.1:__ Arrays can now be copied and referenced.
+- __Update 1.1.2:__ Added all_tests.wio file to track tests one by one.
+- __Update 1.1.3:__ Fixed continue statement working like break.
+- __Update 1.1.4:__ Empty for loops are now supported [ for(;;){} ]
+- __Update 1.1.5:__ Fixed a bug that caused the return statement to give an error as if it were outside the function even though it was inside the function.
+- __Update 1.1.6:__ Has value '?' operator has been added.
+- __Update 1.2.0:__ Project filing has been changed.
+- __Update 1.2.1:__ Started adding built-in methods. Currently adding instant math and io built-in methods.
+- __Update 1.2.2:__ Nested arrays and dictionaries are now supported.
+- __Update 1.2.3:__ Members are currently being added for the array type.
+- __Update 1.2.4:__ Fixed the error that accessing multidimensional arrays and members could not be done. (Things like arr[1][1] were giving errors.)
+- __Update 1.2.5:__ A module tracker has been added to ensure that a file is added only once, to prevent files from being added more than once.
+- __Update 1.2.6:__ Added 'file' type.
+- __Update 1.2.7:__ Removed the need for a semicolon after the import keyword. It is now optional.
+- __Update 1.2.8:__ Fixed a bug that caused the program to stop working if a semicolon was used more than once. Empty semicolons are now passed directly without being evaluated.
+- __Update 1.2.9:__ Added test/math.wio file to test the math library.
+- __Update 1.2.10:__ The interpreter class was made static, thus ensuring that the same interpreter will be used when using the import keyword.
+- __Update 1.2.11:__ Some parser and evaluator issues have been fixed.
+- __Update 1.2.12:__ Fixed an issue where the ref keyword was not working correctly in array and dict types.
+- __Update 1.2.13:__ A type-specific member table was created so that member functions would not take up space in the symbol table. (If it had been created in the symbol table, member functions of that type would have been added to the table for each variable in a type that had a member. This is a huge density.)
+- __Update 1.2.14:__ Fixed issues with null usage.
+- __Update 1.2.15:__ The keywords pure, entity, package, as, were added. However, it is currently ignored, it just gives an error.
+- __Update 1.3.0:__ The project has been reorganized.
+- __Update 1.3.1:__ The built-in libraries are no longer directly included. You now need to import the desired built-in library.
+- __Update 1.3.2:__ Program arguments are now checked by an argument parser.
+- __Update 1.3.3:__ Fixed a bug that caused unary expressions not to be processed.
+- __Update 1.3.4:__ Fixed a bug that caused the return statement not to be processed correctly when inside a block.
+- __Update 1.3.5:__ Fixed an issue where all files had to import built-in libraries individually. Now built-in libraries are imported once.
+- __Update 1.3.6:__ New arguments added to the application.
+- __Update 1.4.0:__ When adding a wio library, the program will now give an error if an incorrect library is added.
+- __Update 1.4.1:__ Fixed an issue where the ref keyword did not work on types other than var and on array and member accesses.
+- __Update 1.4.2:__ The ref keyword now works correctly in function parameters.
+- __Update 1.4.3:__ Fixed an issue where print functions were not giving correct output for characters and strings.
+- __Update 1.4.4:__ The default buffer size for stdout readings is set to 2Kib.
+- __Update 1.4.5:__ -sf argument is now working correctly.
+- __Update 1.4.6:__ 'type' type added.
+- __Update 1.4.7:__ Added '=?'(type equals) operator.
+- __Update 1.4.8:__ The typeof operator now returns type, not string.
+- __Update 1.4.9:__ Fixed the problem of definitions not being imported.
+- __Update 1.4.10:__ Fixed an error that could not be assigned to variables initialized with null.
+- __Update 1.4.11:__ Added 'pure' keyword. This keyword ensures that function calls in imported files are ignored.
+- __Update 1.4.12:__ Although the entity and package keywords were not added yet, they were there as tokens. They were renamed. They will now be used as unit and realm.

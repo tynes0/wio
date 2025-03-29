@@ -105,7 +105,7 @@ namespace wio
             if (op == "=") return 1;
             if (op == "||") return 2;
             if (op == "&&") return 4;
-            if (op == "==" || op == "!=") return 7;
+            if (op == "==" || op == "!=" || "=?") return 7;
             if (op == "<" || op == "<=" || op == ">" || op == ">=") return 8;
             if (op == "+" || op == "-") return 10;
             if (op == "*" || op == "/" || op == "%") return 11;
@@ -493,9 +493,9 @@ namespace wio
             ref<expression> primary = make_ref<identifier>(current, true);
 
             if (current_token().type == token_type::left_bracket)
-                return parse_array_access(primary);
+                return parse_array_access(primary, true);
             else if (current_token().type == token_type::dot)
-                return parse_member_access(primary);
+                return parse_member_access(primary, true);
 
             return primary;
         }
@@ -522,19 +522,19 @@ namespace wio
         return make_ref<function_call>(caller, arguments);
     }
 
-    ref<expression> parser::parse_array_access(ref<expression> array)
+    ref<expression> parser::parse_array_access(ref<expression> array, bool is_ref, bool is_lhs)
     {
         consume_token(token_type::left_bracket);
         ref<expression> index_or_key = parse_expression();
         consume_token(token_type::right_bracket);
-        return make_ref<array_access_expression>(array, index_or_key);
+        return make_ref<array_access_expression>(array, index_or_key, is_ref, is_lhs);
     }
 
-    ref<expression> parser::parse_member_access(ref<expression> object)
+    ref<expression> parser::parse_member_access(ref<expression> object, bool is_ref, bool is_lhs)
     {
         consume_token(token_type::dot);
         ref<expression> member_exp = parse_expression();
-        return make_ref<member_access_expression>(object, member_exp);
+        return make_ref<member_access_expression>(object, member_exp, is_ref, is_lhs);
     }
 
     ref<expression> parser::parse_typeof_expression()
@@ -576,7 +576,7 @@ namespace wio
         }
         else if (current_token().type == token_type::left_bracket)
         {
-            ref<expression> access = parse_array_access(id);
+            ref<expression> access = parse_array_access(id, false, true);
             token tok = current_token();
             if (match_token_no_consume(token_type::op, "=") ||
                 match_token_no_consume(token_type::op, "+=") ||
@@ -598,9 +598,9 @@ namespace wio
         }
         else if (current_token().type == token_type::dot)
         {
-            ref<expression> mem_acc = parse_member_access(id);
+            ref<expression> access = parse_member_access(id, false, true);
             consume_token(token_type::semicolon);
-            return make_ref<expression_statement>(mem_acc);
+            return make_ref<expression_statement>(access);
         }
         else
         {
@@ -894,6 +894,8 @@ namespace wio
     ref<statement> parser::parse_import_statement()
     {
         token current = current_token();
+        bool is_pure = match_token(token_type::kw_pure);
+
         ref<expression> module_path_expr = parse_primary_expression();
 
         ref<string_literal> lit = std::dynamic_pointer_cast<string_literal>(module_path_expr);
@@ -908,7 +910,7 @@ namespace wio
 
         match_token(token_type::semicolon);
 
-        return make_ref<import_statement>(module_path_expr->get_location(), module_path);
+        return make_ref<import_statement>(module_path_expr->get_location(), module_path, is_pure);
     }
 
     ref<block_statement> parser::parse_block_statement()

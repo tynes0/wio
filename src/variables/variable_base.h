@@ -10,7 +10,6 @@ namespace wio
 
     enum class variable_base_type 
     {
-        null,
         variable,
         array,
         dictionary,
@@ -32,10 +31,11 @@ namespace wio
         vt_function,
         vt_var_param,
         vt_file,
+        vt_type,
         vt_any
     };
 
-    MakeFrenumInNamespace(wio, variable_type, vt_null, vt_integer, vt_float, vt_string, vt_character, vt_bool, vt_array, vt_dictionary, vt_function, vt_var_param)
+    MakeFrenumInNamespace(wio, variable_type, vt_null, vt_integer, vt_float, vt_string, vt_character, vt_bool, vt_array, vt_dictionary, vt_function, vt_var_param, vt_var_param, vt_file, vt_type, vt_any)
 
     class variable_base
     {
@@ -62,11 +62,13 @@ namespace wio
     class null_var : public variable_base
     {
     public:
-        null_var() :variable_base({}) {}
+        null_var(variable_base_type vt = variable_base_type::variable) :variable_base({}), m_vbt(vt) {}
         null_var(packed_bool flags) : variable_base(flags) {}
-        variable_base_type get_base_type() const override { return variable_base_type::null; }
+        variable_base_type get_base_type() const override { return m_vbt; }
         variable_type get_type() const override { return variable_type::vt_null; }
         ref<variable_base> clone() const override { return make_ref<null_var>(*this); }
+    private:
+        variable_base_type m_vbt = variable_base_type::variable;
     };
 
 } // namespace wio

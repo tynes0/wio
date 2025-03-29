@@ -45,8 +45,8 @@ namespace wio
         ref<expression> parse_unary_expression();
         ref<expression> parse_ref_expression();
         ref<expression> parse_function_call(ref<expression> caller);
-        ref<expression> parse_array_access(ref<expression> array);
-        ref<expression> parse_member_access(ref<expression> object);
+        ref<expression> parse_array_access(ref<expression> array, bool is_ref = false, bool is_lhs = false);
+        ref<expression> parse_member_access(ref<expression> object, bool is_ref = false, bool is_lhs = false);
         ref<expression> parse_typeof_expression();
 
         ref<statement> parse_identifier();

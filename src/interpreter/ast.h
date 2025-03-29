@@ -139,7 +139,6 @@ namespace wio
         std::string to_string() const override;
 
         token m_token;
-        //ref<variable_base> var_ref = nullptr;
         variable_type m_type = variable_type::vt_null;
         bool m_is_ref;
         bool m_is_lhs;
@@ -379,8 +378,8 @@ namespace wio
     class import_statement : public statement
     {
     public:
-        import_statement(location loc, std::string module_path) 
-            : m_location(loc), m_module_path(module_path) {}
+        import_statement(location loc, std::string module_path, bool is_pure = false) 
+            : m_location(loc), m_module_path(module_path), m_is_pure(is_pure) {}
 
         token_type get_type() const override { return token_type::kw_import; }
         location get_location() const override { return m_location; }
@@ -388,6 +387,7 @@ namespace wio
 
         std::string m_module_path;
         location m_location;
+        bool m_is_pure;
     };
 
     class variable_declaration : public statement

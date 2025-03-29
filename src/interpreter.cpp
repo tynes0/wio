@@ -21,7 +21,8 @@ namespace wio
 	struct app_data
 	{
 		std::filesystem::path base_path;
-		symbol_table_t temp_table;
+		symbol_table_t temp_sym_table;
+		definition_table_t temp_def_table;
 		argument_parser arg_parser;
 		packed_bool flags{}; // 1- single file 2- show tokens 3- show ast 4- no run 5- no built-in
 		packed_bool buitin_imports{}; // 1-io 2-math 3-util
@@ -38,7 +39,7 @@ namespace wio
 			filesystem::write_stdout(s_app_data.arg_parser.help());
 			}, true);
 
-		s_app_data.arg_parser.add_argument("single-file", { "-sf", "--single-file" }, "imports are ignored. It is treated as a single file.", [](const std::string&) {
+		s_app_data.arg_parser.add_argument("single-file", { "-sf", "--single-file" }, "imports are ignored (Built-in imports not). It is treated as a single file.", [](const std::string&) {
 			s_app_data.flags.b1 = true;
 			});
 
@@ -78,8 +79,8 @@ namespace wio
 	{
 		try
 		{
-			raw_buffer buf = run_f_p1(s_app_data.arg_parser.get_file().c_str());
-			run_f_p2(buf);
+			raw_buffer buf = run_f_p1(s_app_data.arg_parser.get_file().c_str(), { s_app_data.flags.b1 });
+			run_f_p2(buf, { s_app_data.flags.b1 });
 		}
 		catch (const exception& e)
 		{
@@ -94,17 +95,17 @@ namespace wio
 		return main_interpreter;
 	}
 
-	raw_buffer interpreter::run_f(const char* fp)
+	raw_buffer interpreter::run_f(const char* fp, packed_bool flags)
 	{
-		raw_buffer content = run_f_p1(fp);
+		raw_buffer content = run_f_p1(fp, flags);
 		if (!content)
 			return raw_buffer(nullptr);
-		raw_buffer result = run_f_p2(content);
+		raw_buffer result = run_f_p2(content, flags);
 		run_f_p3();
 		return result;
 	}
 
-	raw_buffer interpreter::run_f_p1(const char* fp)
+	raw_buffer interpreter::run_f_p1(const char* fp, packed_bool flags)
 	{
 		std::string filepath = fp;
 		if (!filesystem::check_extension(filepath, ".wio"))
@@ -130,11 +131,17 @@ namespace wio
 					if (module_tracker::get().add_module(std::filesystem::path(filepath)))
 						builtin::utility::load();
 				}
+				else
+				{
+					throw invalid_import_error("wio does not have a library called '" + std::string(view) + "'.");
+				}
 
 				return raw_buffer(nullptr);
 			}
 			else
 			{
+				if (flags.b1)
+					return raw_buffer(nullptr);
 				filepath += ".wio";
 			}
 		}
@@ -155,7 +162,7 @@ namespace wio
 		return content;
 	}
 
-	raw_buffer interpreter::run_f_p2(raw_buffer content)
+	raw_buffer interpreter::run_f_p2(raw_buffer content, packed_bool flags)
 	{
 		if (!content)
 			return raw_buffer(nullptr);
@@ -175,13 +182,15 @@ namespace wio
 		if (s_app_data.flags.b4)
 			return raw_buffer(nullptr);
 
-		evaluator eval;
+		evaluator eval(flags);
 		eval.evaluate_program(tree);
 
-		s_app_data.temp_table = eval.get_symbols();
+		s_app_data.temp_sym_table = eval.get_symbols();
+		s_app_data.temp_def_table = eval.get_definitions();
 
 		raw_buffer result;
-		result.store(s_app_data.temp_table);
+		result.store(s_app_data.temp_sym_table);
+		result.append(&s_app_data.temp_def_table, sizeof(s_app_data.temp_def_table));
 
 		return result;
 	}

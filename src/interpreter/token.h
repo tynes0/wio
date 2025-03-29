@@ -10,10 +10,12 @@ namespace wio
 {
     enum class token_type
     {
-        kw_if, kw_else, kw_for, kw_foreach, kw_in, kw_while, kw_break, kw_continue, kw_return, kw_func, kw_null, kw_ref, kw_pure, kw_entity,
-        kw_package, kw_as, kw_var, kw_const, kw_array, kw_dict, kw_local, kw_global, kw_import, kw_typeof, kw_true, kw_false, KW_COUNT /* JUST A COUNTER! NOT A KW*/,
+        kw_if, kw_else, kw_for, kw_foreach, kw_in, kw_while, kw_break, kw_continue, kw_return, kw_func, kw_null, kw_ref, kw_pure, kw_unit,
+        kw_realm, kw_as, kw_var, kw_const, kw_array, kw_dict, kw_local, kw_global, kw_import, kw_typeof, kw_true, kw_false, 
         
-        identifier, number, string, character, boolean, op, bang, question_mark, bitwise_or, bitwise_and, bitwise_not, 
+        KW_COUNT /* JUST A COUNTER! NOT A KW*/,
+        
+        identifier, number, string, character, op, bang, question_mark, bitwise_or, bitwise_and, bitwise_not, 
         
         left_bracket, right_bracket,
         left_curly_bracket, right_curly_bracket,
@@ -21,18 +23,19 @@ namespace wio
         
         dot, comma, semicolon,
         
-        end_of_line, end_of_file
+        end_of_file
     };
 
     MakeFrenumInNamespace(wio, token_type,
-        kw_if, kw_else, kw_for, kw_foreach, kw_in, kw_while, kw_break, kw_continue, kw_return, kw_func, kw_null, kw_ref, kw_pure, kw_entity,
-        kw_package, kw_as, kw_var, kw_const, kw_array, kw_dict, kw_local, kw_global, kw_import, kw_typeof, kw_true, kw_false, KW_COUNT,
-        identifier, number, string, character, boolean, op, bang, question_mark, bitwise_or, bitwise_and, bitwise_not,
+        kw_if, kw_else, kw_for, kw_foreach, kw_in, kw_while, kw_break, kw_continue, kw_return, kw_func, kw_null, kw_ref, kw_pure, kw_unit,
+        kw_realm, kw_as, kw_var, kw_const, kw_array, kw_dict, kw_local, kw_global, kw_import, kw_typeof, kw_true, kw_false, 
+        KW_COUNT,
+        identifier, number, string, character, op, bang, question_mark, bitwise_or, bitwise_and, bitwise_not,
         left_bracket, right_bracket,
         left_curly_bracket, right_curly_bracket,
         left_parenthesis, right_parenthesis,
         dot, comma, semicolon,
-        end_of_line, end_of_file)
+        end_of_file)
 
     struct token
     {
@@ -66,8 +69,8 @@ namespace wio
         {"false", token_type::kw_false},
         {"ref", token_type::kw_ref},
         {"pure", token_type::kw_pure},
-        {"entity", token_type::kw_entity},
-        {"package", token_type::kw_package},
+        {"unit", token_type::kw_unit},
+        {"realm", token_type::kw_realm},
         {"as", token_type::kw_as},
 
         {"+", token_type::op},
@@ -84,6 +87,7 @@ namespace wio
         {"||", token_type::op},
         {"==", token_type::op},
         {"!=", token_type::op},
+        {"=?", token_type::op},
         {"++", token_type::op},
         {"--", token_type::op},
         {"+=", token_type::op},
@@ -95,6 +99,11 @@ namespace wio
         {"&", token_type::bitwise_and},
         {"|", token_type::bitwise_or},
         {"~", token_type::bitwise_not},
+        {"!", token_type::bang},
+        {"?", token_type::question_mark},
+        {".", token_type::dot},
+        {",", token_type::comma},
+        {";", token_type::semicolon},
 
         {"{", token_type::left_curly_bracket},
         {"}", token_type::right_curly_bracket},
@@ -102,13 +111,7 @@ namespace wio
         {"]", token_type::right_bracket},
         {"(", token_type::left_parenthesis},
         {")", token_type::right_parenthesis},
-        {"!", token_type::bang},
-        {"?", token_type::question_mark},
-        {".", token_type::dot},
-        {",", token_type::comma},
-        {";", token_type::semicolon},
 
-        {"\n", token_type::end_of_line }, // \n
         {"eof", token_type::end_of_file } // \0
     };
 }

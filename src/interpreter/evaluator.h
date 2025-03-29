@@ -12,11 +12,12 @@ namespace wio
     class evaluator 
     {
     public:
-        evaluator();
+        evaluator(packed_bool flags = {});
 
         void evaluate_program(ref<program> program_node);
 
         symbol_table_t& get_symbols();
+        definition_table_t& get_definitions();
     private:
         ref<variable_base> evaluate_expression(ref<expression> node);
         void evaluate_statement(ref<statement> node);
@@ -59,10 +60,9 @@ namespace wio
         void exit_statement_stack();
         symbol* lookup(const std::string& name);
         symbol* lookup_current_and_global(const std::string& name);
-        symbol* lookup_only_global(const std::string& name);
         var_func_definition* lookup_def(const std::string& name);
         ref<function_declaration> get_func_decl(const std::string& name);
-        ref<variable_base> get_null_var();
+        ref<variable_base> get_null_var(variable_base_type vbt = variable_base_type::variable);
         ref<variable_base> get_value(ref<expression> node, ref<variable_base> object = nullptr, bool is_ref = false);
 
         ref<scope> m_current_scope;
@@ -75,7 +75,7 @@ namespace wio
         uint16_t m_func_body_counter = 0;
 
         packed_bool m_eval_flags{}; // 1- break, 2 - continue, 3 - return, 4 - only global decl, 5 - in func call
-        packed_bool m_program_flags{}; // 1- single file 2- pure 3- package
+        packed_bool m_program_flags{}; // 1- single file 2- pure 3- realm
 
     };
 

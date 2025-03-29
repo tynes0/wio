@@ -1,6 +1,7 @@
 #pragma once
 
 #include "utils/buffer.h"
+#include "base/base.h"
 
 namespace wio
 {
@@ -13,9 +14,9 @@ namespace wio
 
 		static interpreter& get();
 	private:
-		raw_buffer run_f(const char* fp);
-		raw_buffer run_f_p1(const char* fp);
-		raw_buffer run_f_p2(raw_buffer content);
+		raw_buffer run_f(const char* fp, packed_bool flags);
+		raw_buffer run_f_p1(const char* fp, packed_bool flags);
+		raw_buffer run_f_p2(raw_buffer content, packed_bool flags);
 		void run_f_p3();
 
 		friend class evaluator;

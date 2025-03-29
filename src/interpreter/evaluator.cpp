@@ -40,7 +40,7 @@ namespace wio
         }
     }
 
-    evaluator::evaluator() 
+    evaluator::evaluator(packed_bool flags) : m_program_flags(flags)
     {
         m_current_scope = make_ref<scope>(scope_type::global);
         builtin_manager::load(m_object_members);
@@ -59,6 +59,11 @@ namespace wio
     symbol_table_t& evaluator::get_symbols()
     {
         return m_current_scope->get_symbols();
+    }
+
+    definition_table_t& evaluator::get_definitions()
+    {
+        return m_current_scope->get_definitions();
     }
 
     ref<variable_base> evaluator::evaluate_expression(ref<expression> node)
@@ -401,6 +406,10 @@ namespace wio
                 }
 
             }
+            else if (op.value == "=?")
+            {
+                return make_ref<variable>(any(lv_ref->get_type() == rv_ref->get_type()), variable_type::vt_bool);
+            }
         }
         else if (node->m_operator.type == token_type::bitwise_and)
         {
@@ -429,6 +438,9 @@ namespace wio
         {
             if (op.type == token_type::question_mark)
             {
+                if (operand_ref->get_type() == variable_type::vt_null)
+                    return make_ref<variable>(any(false), variable_type::vt_bool);
+
                 switch (operand_ref->get_base_type())
                 {
                 case wio::variable_base_type::array:
@@ -445,10 +457,6 @@ namespace wio
                 {
                     ref<var_function> func = std::dynamic_pointer_cast<var_function>(operand_ref);
                     return make_ref<variable>(any(((bool)func->get_data())), variable_type::vt_bool);
-                }
-                case wio::variable_base_type::null:
-                {
-                    return make_ref<variable>(any(false), variable_type::vt_bool);
                 }
                 case wio::variable_base_type::variable:
                 default:
@@ -563,10 +571,18 @@ namespace wio
             throw constant_value_assignment_error("Constant values cannot be changed!", node->get_location());
 
         token op = node->m_operator;
-
-        if (lhs->get_base_type() == variable_base_type::array)
+        if (lhs->get_type() == variable_type::vt_null)
         {
-            if (rhs->get_base_type() != variable_base_type::array && rhs->get_base_type() != variable_base_type::null)
+            if (rhs->get_base_type() != lhs->get_base_type() && rhs->get_type() != variable_type::vt_null)
+                throw type_mismatch_error("Types are not matching!", node->m_value->get_location());
+
+            if (op.value == "=")
+                lhs = rhs->clone();
+            return lhs->clone();
+        }
+        else if (lhs->get_base_type() == variable_base_type::array)
+        {
+            if (rhs->get_base_type() != variable_base_type::array && rhs->get_type() != variable_type::vt_null)
                 throw type_mismatch_error("Target type is 'array' but source type is not!", node->m_value->get_location());
             ref<var_array> array_lhs = std::dynamic_pointer_cast<var_array>(lhs);
             ref<var_array> array_rhs = std::dynamic_pointer_cast<var_array>(rhs);
@@ -582,7 +598,7 @@ namespace wio
                 throw invalid_operator_error("Invalid assignment error!", node->get_location());
             return array_lhs->clone();
         }
-        else if (lhs->get_base_type() == variable_base_type::dictionary && rhs->get_base_type() != variable_base_type::null)
+        else if (lhs->get_base_type() == variable_base_type::dictionary && rhs->get_type() != variable_type::vt_null)
         {
             if (rhs->get_base_type() != variable_base_type::dictionary)
                 throw type_mismatch_error("Target type is 'dict' but source type is not!", node->m_value->get_location());
@@ -602,7 +618,7 @@ namespace wio
         }
         else if (lhs->get_base_type() == variable_base_type::function)
         {
-            if (rhs->get_base_type() != variable_base_type::function && rhs->get_base_type() != variable_base_type::null)
+            if (rhs->get_base_type() != variable_base_type::function && rhs->get_type() != variable_type::vt_null)
                 throw type_mismatch_error("Target type is 'func' but source type is not!", node->m_value->get_location());
             ref<var_function> func_lhs = std::dynamic_pointer_cast<var_function>(lhs);
             ref<var_function> func_rhs = std::dynamic_pointer_cast<var_function>(rhs);
@@ -711,7 +727,7 @@ namespace wio
     ref<variable_base> evaluator::evaluate_typeof_expression(ref<typeof_expression> node)
     {
         ref<variable_base> value_base = evaluate_expression(node->m_expr);
-        return make_ref<variable>(frenum::to_string(value_base->get_type()), variable_type::vt_string);
+        return make_ref<variable>(value_base->get_type(), variable_type::vt_type);
     }
 
     ref<variable_base> evaluator::evaluate_identifier(ref<identifier> node, ref<variable_base> object, bool is_ref)
@@ -835,10 +851,14 @@ namespace wio
 
     ref<variable_base> evaluator::evaluate_function_call(ref<function_call> node, ref<variable_base> object)
     {
+        if (m_program_flags.b2)
+            return get_null_var();
+
         ref<variable_base> caller_value = get_value(node->m_caller, object);
 
         if (!caller_value)
         {
+            // this is not working properly
             ref<identifier> id = std::dynamic_pointer_cast<identifier>(node->m_caller);
             if(!id)
                 throw local_exception("Function not found!", node->m_caller->get_location());
@@ -868,16 +888,20 @@ namespace wio
 
         std::vector<ref<variable_base>> parameters;
         
+        int padding = 0;
         if (object)
+        {
+            padding = 1;
             parameters.push_back(object);
+        }
+        const auto& real_params = func->get_parameters();
 
-        for (auto& arg : node->m_arguments)
-            parameters.push_back(get_value(arg));
+        for (size_t i = 0; i < node->m_arguments.size(); ++i)
+            parameters.push_back(get_value(node->m_arguments[i], nullptr, real_params[padding + i].is_ref));
 
-        if(parameters.size() != func->parameter_count())
+        if(parameters.size() != real_params.size())
            throw invalid_argument_count_error("Invalid parameter count!", node->m_caller->get_location());
 
-        const auto& real_params = func->get_parameters();
         for (size_t i = 0; i < real_params.size(); ++i)
             if (parameters[i]->get_type() != real_params[i].type && real_params[i].type != variable_type::vt_any &&
                 !(parameters[i]->get_base_type() == variable_base_type::variable && util::is_var_t(real_params[i].type)))
@@ -1151,18 +1175,27 @@ namespace wio
         if (m_eval_flags.b4)
             return;
         
-        raw_buffer buf = interpreter::get().run_f(node->m_module_path.c_str());
+        raw_buffer buf = interpreter::get().run_f(node->m_module_path.c_str(), { m_program_flags.b1, node->m_is_pure });
 
         if (!buf)
             return;
 
         auto& symbols = buf.load<symbol_table_t>();
+        raw_buffer buf2(buf.data + sizeof(symbol_table_t), sizeof(definition_table_t));
+        auto& defs = buf2.load<definition_table_t>();
 
         for (auto& [key, value] : symbols)
         {
             if (value.flags.b1)
                 continue;
             m_current_scope->insert(key, value);
+        }
+
+        for (auto& [key, value] : defs)
+        {
+            if (value.flags.b1)
+                continue;
+            m_current_scope->insert_def(key, value);
         }
     }
 
@@ -1223,7 +1256,7 @@ namespace wio
                 if (node->m_flags.b1)
                     var->set_const(true);
             }
-            else if (exp->get_base_type() == variable_base_type::null)
+            else if (exp->get_type() == variable_type::vt_null)
             {
                 var = get_null_var();
             }
@@ -1550,11 +1583,6 @@ namespace wio
         return m_current_scope->lookup_current_and_global(name);
     }
 
-    symbol* evaluator::lookup_only_global(const std::string& name)
-    {
-        return m_current_scope->lookup_only_global(name);
-    }
-
     var_func_definition* evaluator::lookup_def(const std::string& name)
     {
         return m_current_scope->lookup_def(name);
@@ -1569,9 +1597,9 @@ namespace wio
         return nullptr;
     }
 
-    ref<variable_base> evaluator::get_null_var()
+    ref<variable_base> evaluator::get_null_var(variable_base_type vbt)
     {
-        return make_ref<null_var>(packed_bool{});
+        return make_ref<null_var>(vbt);
     }
 
     ref<variable_base> evaluator::get_value(ref<expression> node, ref<variable_base> object, bool is_ref)

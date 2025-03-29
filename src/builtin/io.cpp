@@ -29,23 +29,45 @@ namespace wio
 
         namespace detail
         {
+            static int s_member_count = 0;
+
             static ref<variable_base> b_print(ref<variable_base> base)
             {
-                if (base->get_base_type() == variable_base_type::variable)
+                if(base->get_type() == variable_type::vt_null)
+                    filesystem::write_stdout("null");
+                else if (base->get_base_type() == variable_base_type::variable)
                 {
                     ref<variable> var = std::dynamic_pointer_cast<variable>(base);
                     if (var->get_type() == variable_type::vt_string)
-                        filesystem::write_stdout('\"' + var->get_data_as<std::string>() + '\"');
+                    {
+                        filesystem::write_stdout(s_member_count ? ('\"' + var->get_data_as<std::string>() + '\"') : var->get_data_as<std::string>());
+                    }
                     else if (var->get_type() == variable_type::vt_integer)
+                    {
                         filesystem::write_stdout(std::to_string(var->get_data_as<long long>()));
+                    }
                     else if (var->get_type() == variable_type::vt_float)
+                    {
                         filesystem::write_stdout(std::to_string(var->get_data_as<double>()));
+                    }
                     else if (var->get_type() == variable_type::vt_bool)
+                    {
                         filesystem::write_stdout(var->get_data_as<bool>() ? "true" : "false");
+                    }
                     else if (var->get_type() == variable_type::vt_character)
-                        filesystem::write_stdout("'"s + var->get_data_as<char>() + '\'');
+                    {
+                        filesystem::write_stdout(s_member_count ? ("'"s + var->get_data_as<char>() + '\'') : std::string(1, var->get_data_as<char>()));
+                    }
                     else if (var->get_type() == variable_type::vt_null)
+                    {
                         filesystem::write_stdout("null");
+                    }
+                    else if (var->get_type() == variable_type::vt_type)
+                    {
+                        std::string_view view = frenum::to_string_view(var->get_data_as<variable_type>());
+                        view.remove_prefix(3); // vt_
+                        filesystem::write_stdout(view.data());
+                    }
                     else
                         throw builtin_error("Invalid expression in print parameter!");
                 }
@@ -53,12 +75,14 @@ namespace wio
                 {
                     ref<var_array> arr = std::dynamic_pointer_cast<var_array>(base);
                     filesystem::write_stdout("[");
+                    s_member_count++;
                     for (size_t i = 0; i < arr->size(); ++i)
                     {
                         b_print(arr->get_element(i));
                         if (i != arr->size() - 1)
                             filesystem::write_stdout(", ");
                     }
+                    s_member_count--;
                     filesystem::write_stdout("]");
 
                 }
@@ -69,10 +93,11 @@ namespace wio
                     const auto& dict_map = dict->get_data();
 
                     size_t i = 0;
+                    s_member_count++;
                     for (const auto& [key, value] : dict_map)
                     {
                         filesystem::write_stdout("[");
-                        filesystem::write_stdout(key);
+                        filesystem::write_stdout('\"' + key + '\"');
                         filesystem::write_stdout(", ");
                         b_print(value);
                         filesystem::write_stdout("]");
@@ -80,14 +105,10 @@ namespace wio
                             filesystem::write_stdout(", ");
                         i++;
                     }
+                    s_member_count--;
 
                     filesystem::write_stdout("}");
                 }
-                else if (base->get_base_type() == variable_base_type::null)
-                {
-                    filesystem::write_stdout("null");
-                }
-
 
                 return make_ref<null_var>();
             }

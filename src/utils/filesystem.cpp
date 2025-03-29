@@ -6,7 +6,7 @@
 
 #include "../base/exception.h"
 
-#define WIO_BUFSIZ 8192
+static constexpr size_t WIO_BUFSIZ = 2048; // 2 Kib
 
 namespace wio
 {
