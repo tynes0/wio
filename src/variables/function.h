@@ -7,15 +7,7 @@ namespace wio
 {
 	class function_call;
 
-	struct function_param
-	{
-		std::string id;
-		variable_type type = variable_type::vt_null;
-		bool is_ref = false;
-
-		function_param(){}
-		function_param(const std::string& id, variable_type type, bool is_ref) : id(id), type(type), is_ref(is_ref) {}
-	};
+	struct function_param;
 
 	class var_function : public null_var
 	{
@@ -42,14 +34,5 @@ namespace wio
 		type m_data;
 		std::vector<function_param> m_params;
 		variable_type m_return_type;
-	};
-
-	struct var_func_definition
-	{
-		std::vector<function_param> params;
-		packed_bool flags = {}; // 1- declared 2- local 3- global -> original position passed
-		var_func_definition() {}
-		var_func_definition(const std::vector<function_param>& params, packed_bool flags)
-			: params(params), flags(flags) { }
 	};
 }

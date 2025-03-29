@@ -5,10 +5,9 @@
 #include <memory>
 #include <vector>
 
-#include "ast.h"
 #include "../base/base.h"
-#include "../variables/variable.h"
-#include "../variables/function.h"
+#include "../variables/variable_type.h"
+#include "../variables/function_param.h"
 
 namespace wio
 {
@@ -22,21 +21,30 @@ namespace wio
         block
     };
 
+    struct var_func_definition
+    {
+        std::vector<function_param> params;
+        packed_bool flags = {}; // 1- declared 2- local 3- global -> original position passed
+        var_func_definition() {}
+        var_func_definition(const std::vector<function_param>& params, packed_bool flags)
+            : params(params), flags(flags) {
+        }
+    };
+
+    class variable_base;
+
     struct symbol 
     {
         friend class scope;
 
         std::string name;
-        variable_type type = variable_type::vt_null;
-        scope_type scope_t = scope_type::local;
         ref<variable_base> var_ref;
-        ref<scope> members;
         packed_bool flags = {}; // 1-> is_local --- 2-> is_global --- 3-> original position passed
 
         symbol() {}
 
-        symbol(const std::string& name, variable_type type, scope_type scope, ref<variable_base> var_ref = nullptr, packed_bool flags = {})
-            : name(name), type(type), scope_t(scope), var_ref(var_ref), flags(flags) {}
+        symbol(const std::string& name, ref<variable_base> var_ref = nullptr, packed_bool flags = {})
+            : name(name), var_ref(var_ref), flags(flags) {}
     };
 
     using symbol_table_t = std::map<std::string, symbol>;
@@ -71,11 +79,5 @@ namespace wio
     };
 
     inline ref<scope> builtin_scope = make_ref<scope>(scope_type::builtin);
-
-    struct statement_stack
-    {
-        std::vector<ref<statement>>* list = nullptr;
-        ref<statement_stack> parent;
-    };
 
 } // namespace wio

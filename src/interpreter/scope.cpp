@@ -1,6 +1,9 @@
 #include "scope.h"
 #include "../base/exception.h"
 
+#include "../variables/variable_base.h"
+#include "../variables/function.h"
+
 namespace wio
 {
     void scope::insert(const std::string& name, const symbol& symbol)

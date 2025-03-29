@@ -15,7 +15,7 @@ int main(int argc, char* argv[])
 
 int main(int argc, char* argv[])
 {
-    wio::interpreter::get().load_args(argc, (const char**)argv);
+    wio::interpreter::get().load_args(argc, argv);
     wio::interpreter::get().run();
 }
 

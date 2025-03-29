@@ -9,6 +9,7 @@
 #include "../variables/dictionary.h"
 #include "../variables/function.h"
 #include "../builtin/builtin_base.h"
+#include "../builtin/helpers.h"
 #include "../builtin/builtin_manager.h"
 #include "../interpreter.h"
 
@@ -43,7 +44,7 @@ namespace wio
     evaluator::evaluator(packed_bool flags) : m_program_flags(flags)
     {
         m_current_scope = make_ref<scope>(scope_type::global);
-        builtin_manager::load(m_object_members);
+        builtin_manager::load(m_constant_object_members);
     }
 
     void evaluator::evaluate_program(ref<program> program_node) 
@@ -73,9 +74,9 @@ namespace wio
 
     void evaluator::evaluate_statement(ref<statement> node)
     {
+        // Should evaluate statement be made or not? Check the flags
         if (m_eval_flags.b1 || m_eval_flags.b2 || m_eval_flags.b3)
             return;
-
         
         if (auto decl = std::dynamic_pointer_cast<variable_declaration>(node))
             evaluate_variable_declaration(decl);
@@ -177,9 +178,15 @@ namespace wio
         return make_ref<var_dictionary>(elements);
     }
 
-    ref<variable_base> evaluator::evaluate_binary_expression(ref<binary_expression> node) 
+    ref<variable_base> evaluator::evaluate_typeof_expression(ref<typeof_expression> node)
     {
-        ref<variable_base> lv_ref = get_value(node->m_left);
+        ref<variable_base> value_base = evaluate_expression(node->m_expr);
+        return make_ref<variable>(value_base->get_type(), variable_type::vt_type);
+    }
+
+    ref<variable_base> evaluator::evaluate_binary_expression(ref<binary_expression> node, ref<variable_base> object, bool is_ref)
+    {
+        ref<variable_base> lv_ref = get_value(node->m_left, object, is_ref);
         ref<variable_base> rv_ref = get_value(node->m_right);
 
         // TODO: array (+ operator)
@@ -429,9 +436,9 @@ namespace wio
         throw invalid_operator_error("Invalid binary operator: " + node->m_operator.value, node->get_location());
     }
 
-    ref<variable_base> evaluator::evaluate_unary_expression(ref<unary_expression> node)
+    ref<variable_base> evaluator::evaluate_unary_expression(ref<unary_expression> node, ref<variable_base> object, bool is_ref)
     {
-        ref<variable_base> operand_ref = get_value(node->m_operand, nullptr, node->m_is_ref);
+        ref<variable_base> operand_ref = get_value(node->m_operand, object, node->m_is_ref);
         token op = node->m_operator;
 
         if (operand_ref->get_base_type() != variable_base_type::variable)
@@ -562,9 +569,9 @@ namespace wio
         throw invalid_operator_error("Invalid unary operator: " + op.value, node->get_location());
     }
 
-    ref<variable_base> evaluator::evaluate_assignment_expression(ref<assignment_expression> node)
+    ref<variable_base> evaluator::evaluate_assignment_expression(ref<assignment_expression> node, ref<variable_base> object, bool is_ref)
     {
-        ref<variable_base> lhs = get_value(node->m_target);
+        ref<variable_base> lhs = get_value(node->m_target, object, is_ref);
         ref<variable_base> rhs = get_value(node->m_value);
 
         if (lhs->is_constant())
@@ -724,16 +731,9 @@ namespace wio
         return nullptr;
     }
 
-    ref<variable_base> evaluator::evaluate_typeof_expression(ref<typeof_expression> node)
-    {
-        ref<variable_base> value_base = evaluate_expression(node->m_expr);
-        return make_ref<variable>(value_base->get_type(), variable_type::vt_type);
-    }
-
     ref<variable_base> evaluator::evaluate_identifier(ref<identifier> node, ref<variable_base> object, bool is_ref)
     {
-        ref<scope> target_scope = (object == nullptr) ? nullptr : m_object_members[object->get_type()];
-        symbol* sym = (target_scope == nullptr) ? lookup(node->m_token.value) : target_scope->lookup(node->m_token.value);
+        symbol* sym = lookup_member(node->m_token.value, object);
 
         if (!sym)
         {
@@ -844,12 +844,11 @@ namespace wio
     ref<variable_base> evaluator::evaluate_member_access_expression(ref<member_access_expression> node, ref<variable_base> object, bool is_ref)
     {
         ref<variable_base> object_value = get_value(node->m_object, object, is_ref);
-        ref<scope> target_scope = (object == nullptr) ? nullptr : m_object_members[object->get_type()];
-        ref<variable_base> member = get_value(node->m_member, object_value);
+        ref<variable_base> member = get_value(node->m_member, object_value, node->m_is_lhs || node->m_is_ref);
         return member;
     }
 
-    ref<variable_base> evaluator::evaluate_function_call(ref<function_call> node, ref<variable_base> object)
+    ref<variable_base> evaluator::evaluate_function_call(ref<function_call> node, ref<variable_base> object, bool is_ref)
     {
         if (m_program_flags.b2)
             return get_null_var();
@@ -891,23 +890,28 @@ namespace wio
         int padding = 0;
         if (object)
         {
+            object->set_pf_return_ref(is_ref);
             padding = 1;
             parameters.push_back(object);
         }
         const auto& real_params = func->get_parameters();
 
+        if ((node->m_arguments.size() + padding) != real_params.size())
+            throw invalid_argument_count_error("Invalid parameter count!", node->m_caller->get_location());
+
         for (size_t i = 0; i < node->m_arguments.size(); ++i)
             parameters.push_back(get_value(node->m_arguments[i], nullptr, real_params[padding + i].is_ref));
 
-        if(parameters.size() != real_params.size())
-           throw invalid_argument_count_error("Invalid parameter count!", node->m_caller->get_location());
 
         for (size_t i = 0; i < real_params.size(); ++i)
             if (parameters[i]->get_type() != real_params[i].type && real_params[i].type != variable_type::vt_any &&
                 !(parameters[i]->get_base_type() == variable_base_type::variable && util::is_var_t(real_params[i].type)))
                 throw type_mismatch_error("Parameter types not matching!");
 
-        return func->call(parameters);
+        ref<variable_base> result = func->call(parameters);
+        if (object)
+            object->set_pf_return_ref(false);
+        return result;
     }
 
     void evaluator::evaluate_block_statement(ref<block_statement> node)
@@ -1055,12 +1059,12 @@ namespace wio
         m_loop_depth++;
         evaluate_variable_declaration(make_ref<variable_declaration>(node->m_item, nullptr, false, false, false, false));
         ref<variable_base> col_base = evaluate_expression(node->m_collection);
+        symbol* sym = lookup(node->m_item->m_token.value);
         if (col_base->get_base_type() == variable_base_type::array)
         {
             ref<var_array> array = std::dynamic_pointer_cast<var_array>(col_base);
             for (size_t i = 0; i < array->size(); ++i)
             {
-                symbol* sym = lookup(node->m_item->m_token.value);
                 sym->var_ref = array->get_element(i);
 
 
@@ -1080,13 +1084,52 @@ namespace wio
                 }
             }
         }
-        else if (col_base->get_base_type() == variable_base_type::array)
+        else if (col_base->get_base_type() == variable_base_type::dictionary)
         {
-            // TODO
+            ref<var_dictionary> dict = std::dynamic_pointer_cast<var_dictionary>(col_base);
+            for (auto& it : dict->get_data())
+            {
+                sym->var_ref = builtin::helpers::create_pair(make_ref<variable>(it.first, variable_type::vt_string), it.second);
+
+                enter_statement_stack(&node->m_body->m_statements);
+                for (auto& stmt : node->m_body->m_statements)
+                    evaluate_statement(stmt);
+                exit_statement_stack();
+
+                if (m_eval_flags.b1)
+                {
+                    m_eval_flags.b1 = false;
+                    break;
+                }
+                else if (m_eval_flags.b2)
+                {
+                    m_eval_flags.b2 = false;
+                }
+            }
         }
-        else if (col_base->get_base_type() == variable_base_type::array)
+        else if (col_base->get_type() == variable_type::vt_string)
         {
-            // TODO
+            ref<variable> str = std::dynamic_pointer_cast<variable>(col_base);
+            ref<var_array> array = std::dynamic_pointer_cast<var_array>(builtin::helpers::string_as_array(str));
+            for (size_t i = 0; i < array->size(); ++i)
+            {
+                sym->var_ref = array->get_element(i);
+
+                enter_statement_stack(&node->m_body->m_statements);
+                for (auto& stmt : node->m_body->m_statements)
+                    evaluate_statement(stmt);
+                exit_statement_stack();
+
+                if (m_eval_flags.b1)
+                {
+                    m_eval_flags.b1 = false;
+                    break;
+                }
+                else if (m_eval_flags.b2)
+                {
+                    m_eval_flags.b2 = false;
+                }
+            }
         }
         else
         {
@@ -1175,7 +1218,7 @@ namespace wio
         if (m_eval_flags.b4)
             return;
         
-        raw_buffer buf = interpreter::get().run_f(node->m_module_path.c_str(), { m_program_flags.b1, node->m_is_pure });
+        raw_buffer buf = interpreter::get().run_f(node->m_module_path.c_str(), { m_program_flags.b1, node->m_is_pure, false, m_program_flags.b4 });
 
         if (!buf)
             return;
@@ -1266,7 +1309,7 @@ namespace wio
             }
         }
 
-        symbol symbol(name, type, m_current_scope->get_type(), var, { node->m_flags.b2, node->m_flags.b3, m_eval_flags.b5 });
+        symbol symbol(name, var, { node->m_flags.b2, node->m_flags.b3, m_eval_flags.b5 });
         if (node->m_flags.b3)
             m_current_scope->insert_to_global(name, symbol);
         else
@@ -1304,7 +1347,7 @@ namespace wio
                 elements.push_back(var);
             }
 
-            var = make_ref<var_array>(elements, packed_bool{ node->m_flags.b1, node->m_flags.b4 });
+            var = make_ref<var_array>(elements, packed_bool{ node->m_flags.b1, node->m_id->m_is_ref });
         }
         else
         {
@@ -1321,12 +1364,12 @@ namespace wio
             }
             else
             {
-                var = make_ref<var_array>(std::vector<ref<variable_base>>{}, packed_bool{ node->m_flags.b1, node->m_flags.b4 });
+                var = make_ref<var_array>(std::vector<ref<variable_base>>{}, packed_bool{ node->m_flags.b1, node->m_id->m_is_ref });
             }
         }
 
 
-        symbol array_symbol(name, variable_type::vt_array, m_current_scope->get_type(), var, { node->m_flags.b2, node->m_flags.b3, m_eval_flags.b5 });
+        symbol array_symbol(name, var, { node->m_flags.b2, node->m_flags.b3, m_eval_flags.b5 });
         if (node->m_flags.b3)
             m_current_scope->insert_to_global(name, array_symbol);
         else
@@ -1364,7 +1407,7 @@ namespace wio
                 elements[var_dictionary::as_key(evaluate_expression(item.first))] = var;
             }
 
-            var = make_ref<var_dictionary>(elements, packed_bool{ node->m_flags.b1, node->m_flags.b4 });
+            var = make_ref<var_dictionary>(elements, packed_bool{ node->m_flags.b1, node->m_id->m_is_ref });
         }
         else
         {
@@ -1383,11 +1426,11 @@ namespace wio
             }
             else
             {
-                var = make_ref<var_dictionary>(var_dictionary::map_t{}, packed_bool{ node->m_flags.b1, node->m_flags.b4 });
+                var = make_ref<var_dictionary>(var_dictionary::map_t{}, packed_bool{ node->m_flags.b1, node->m_id->m_is_ref });
             }
         }
 
-        symbol dict_symbol(name, variable_type::vt_dictionary, m_current_scope->get_type(), var, { node->m_flags.b2, node->m_flags.b3, m_eval_flags.b5 });
+        symbol dict_symbol(name, var, { node->m_flags.b2, node->m_flags.b3, m_eval_flags.b5 });
         if (node->m_flags.b3)
             m_current_scope->insert_to_global(name, dict_symbol);
         else
@@ -1482,7 +1525,7 @@ namespace wio
 
 
         ref<var_function> func = make_ref<var_function>(func_lambda, variable_type::vt_null, param_types, node->m_is_local);
-        symbol function_symbol(name, variable_type::vt_function, m_current_scope->get_type(), func, { node->m_is_local, node->m_is_global, m_eval_flags.b5 });
+        symbol function_symbol(name, func, { node->m_is_local, node->m_is_global, m_eval_flags.b5 });
         if (node->m_is_global)
             m_current_scope->insert_to_global(name, function_symbol);
         else
@@ -1573,6 +1616,28 @@ namespace wio
             m_statement_stack = m_statement_stack->parent;
     }
 
+    symbol* evaluator::lookup_member(const std::string& name, ref<variable_base> object)
+    {
+        symbol* sym = nullptr;
+        if (object)
+        {
+            if (m_constant_object_members[object->get_type()])
+            {
+                sym = m_constant_object_members[object->get_type()]->lookup(name);
+            }
+            if (!sym)
+            {
+                ref<scope> member_scope = object->get_members();
+                if (!member_scope)
+                    return nullptr;
+                return member_scope->lookup(name);
+            }
+            else
+                return sym;
+        }
+        return lookup(name);
+    }
+
     symbol* evaluator::lookup(const std::string& name) 
     {
         return m_current_scope->lookup(name);
@@ -1614,14 +1679,14 @@ namespace wio
             return evaluate_dictionary_literal(dict_lit);
         else if (auto null_exp = std::dynamic_pointer_cast<null_expression>(node))
             return get_null_var();
-        else if (auto bin_expr = std::dynamic_pointer_cast<binary_expression>(node))
-            return evaluate_binary_expression(bin_expr);
-        else if (auto unary_expr = std::dynamic_pointer_cast<unary_expression>(node))
-            return evaluate_unary_expression(unary_expr);
-        else if (auto assign_expr = std::dynamic_pointer_cast<assignment_expression>(node))
-            return evaluate_assignment_expression(assign_expr);
         else if (auto typeof_expr = std::dynamic_pointer_cast<typeof_expression>(node))
             return evaluate_typeof_expression(typeof_expr);
+        else if (auto bin_expr = std::dynamic_pointer_cast<binary_expression>(node))
+            return evaluate_binary_expression(bin_expr, object, is_ref);
+        else if (auto unary_expr = std::dynamic_pointer_cast<unary_expression>(node))
+            return evaluate_unary_expression(unary_expr, object, is_ref);
+        else if (auto assign_expr = std::dynamic_pointer_cast<assignment_expression>(node))
+            return evaluate_assignment_expression(assign_expr, object, is_ref);
         else if (auto id = std::dynamic_pointer_cast<identifier>(node))
             return evaluate_identifier(id, object, is_ref);
         else if (auto arr_access = std::dynamic_pointer_cast<array_access_expression>(node))
@@ -1629,7 +1694,7 @@ namespace wio
         else if (auto member_access = std::dynamic_pointer_cast<member_access_expression>(node))
             return evaluate_member_access_expression(member_access, object, is_ref);
         else if (auto func_call = std::dynamic_pointer_cast<function_call>(node))
-            return evaluate_function_call(func_call, object);
+            return evaluate_function_call(func_call, object, is_ref);
         else
             return nullptr;
     }

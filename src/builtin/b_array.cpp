@@ -30,25 +30,32 @@ namespace wio
             static ref<variable_base> b_array_front(ref<variable_base> base_array)
             {
                 ref<var_array> array = get_var_array(base_array);
-                return array->get_element(0);
+                if(array->is_pf_return_ref())
+                    return array->get_element(0);
+                return array->get_element(0)->clone();
             }
 
             static ref<variable_base> b_array_back(ref<variable_base> base_array)
             {
                 ref<var_array> array = get_var_array(base_array);
                 return array->get_element(array->size() - 1);
+                if (array->is_pf_return_ref())
+                    return array->get_element(array->size() - 1);
+                return array->get_element(array->size() - 1)->clone();
             }
 
             static ref<variable_base> b_array_at(ref<variable_base> base_array, ref<variable_base> idx)
             {
                 ref<var_array> array = get_var_array(base_array);
-                return array->get_element(std::dynamic_pointer_cast<variable>(idx)->get_data_as<long long>());
+                if (array->is_pf_return_ref())
+                    return array->get_element(std::dynamic_pointer_cast<variable>(idx)->get_data_as<long long>());
+                return array->get_element(std::dynamic_pointer_cast<variable>(idx)->get_data_as<long long>())->clone();
             }
 
             static  ref<variable_base> b_array_append(ref<variable_base> base_array, ref<variable_base> value)
             {
                 ref<var_array> array = get_var_array(base_array);
-                array->get_data().push_back(value);
+                array->push(value);
                 return make_ref<null_var>();
             }
 
@@ -58,16 +65,14 @@ namespace wio
                 auto& data = array->get_data();
                 long long ll_idx = std::dynamic_pointer_cast<variable>(idx)->get_data_as<long long>();
                 ref<variable_base> result = array->get_element(ll_idx);
-                data.erase(data.begin() + ll_idx, data.begin() + ll_idx + 1);
+                array->erase(ll_idx);
                 return result;
             }
 
             static ref<variable_base> b_array_pop_back(ref<variable_base> base_array)
             {
                 ref<var_array> array = get_var_array(base_array);
-                auto& result = array->get_data().back();
-                array->get_data().pop_back();
-                return result;
+                return array->pop();
             }
 
             static ref<variable_base> b_array_extend(ref<variable_base> base_array, ref<variable_base> right_array)
@@ -76,7 +81,7 @@ namespace wio
                 ref<var_array> rarray = get_var_array(right_array);
 
                 for (auto& item : rarray->get_data())
-                    array->get_data().push_back(item);
+                    array->push(item);
 
                 return make_ref<null_var>();
             }
@@ -84,7 +89,7 @@ namespace wio
             static ref<variable_base> b_array_clear(ref<variable_base> base_array)
             {
                 ref<var_array> array = get_var_array(base_array);
-                array->get_data().clear();
+                array->clear();
                 return make_ref<null_var>();
             }
 

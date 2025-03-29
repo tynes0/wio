@@ -42,6 +42,11 @@
 #include <utility>
 #include <optional>
 
+#ifdef _MSC_VER
+#pragma warning (disable : 5103)
+#endif // _MSC_VER
+
+
 #define __FRENUM_EXPAND(x) x
 #define __FRENUM_CONCAT__(L, R) L##R
 #define __FRENUM_CONCAT(L, R) __FRENUM_CONCAT__(L, R)

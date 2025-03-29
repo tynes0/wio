@@ -4,11 +4,19 @@
 #include "ast.h"
 #include "scope.h"
 #include "../base/base.h"
+#include "../utils/uuid.h"
 
 #include <map>
+#include <vector>
 
 namespace wio 
 {
+    struct statement_stack
+    {
+        std::vector<ref<statement>>* list = nullptr;
+        ref<statement_stack> parent;
+    };
+
     class evaluator 
     {
     public:
@@ -26,14 +34,14 @@ namespace wio
         ref<variable_base> evaluate_string_literal(ref<string_literal> node);
         ref<variable_base> evaluate_array_literal(ref<array_literal> node);
         ref<variable_base> evaluate_dictionary_literal(ref<dictionary_literal> node);
-        ref<variable_base> evaluate_binary_expression(ref<binary_expression> node);
-        ref<variable_base> evaluate_unary_expression(ref<unary_expression> node);
-        ref<variable_base> evaluate_assignment_expression(ref<assignment_expression> node);
         ref<variable_base> evaluate_typeof_expression(ref<typeof_expression> node);
+        ref<variable_base> evaluate_binary_expression(ref<binary_expression> node, ref<variable_base> object = nullptr, bool is_ref = false);
+        ref<variable_base> evaluate_unary_expression(ref<unary_expression> node, ref<variable_base> object = nullptr, bool is_ref = false);
+        ref<variable_base> evaluate_assignment_expression(ref<assignment_expression> node, ref<variable_base> object = nullptr, bool is_ref = false);
         ref<variable_base> evaluate_identifier(ref<identifier> node, ref<variable_base> object = nullptr, bool is_ref = false);
         ref<variable_base> evaluate_array_access_expression(ref<array_access_expression> node, ref<variable_base> object = nullptr, bool is_ref = false);
         ref<variable_base> evaluate_member_access_expression(ref<member_access_expression> node, ref<variable_base> object = nullptr, bool is_ref = false);
-        ref<variable_base> evaluate_function_call(ref<function_call> node, ref<variable_base> object = nullptr);
+        ref<variable_base> evaluate_function_call(ref<function_call> node, ref<variable_base> object = nullptr, bool is_ref = false);
 
         void evaluate_block_statement(ref<block_statement> node);
         void evaluate_expression_statement(ref<expression_statement> node);
@@ -58,6 +66,7 @@ namespace wio
         void exit_scope();
         void enter_statement_stack(std::vector<ref<statement>>* list);
         void exit_statement_stack();
+        symbol* lookup_member(const std::string& name, ref<variable_base> object);
         symbol* lookup(const std::string& name);
         symbol* lookup_current_and_global(const std::string& name);
         var_func_definition* lookup_def(const std::string& name);
@@ -66,7 +75,7 @@ namespace wio
         ref<variable_base> get_value(ref<expression> node, ref<variable_base> object = nullptr, bool is_ref = false);
 
         ref<scope> m_current_scope;
-        std::map<variable_type, ref<scope>> m_object_members;
+        std::map<variable_type, ref<scope>> m_constant_object_members;
 
         ref<variable_base> m_last_return_value;
         ref<statement_stack> m_statement_stack;
@@ -75,7 +84,7 @@ namespace wio
         uint16_t m_func_body_counter = 0;
 
         packed_bool m_eval_flags{}; // 1- break, 2 - continue, 3 - return, 4 - only global decl, 5 - in func call
-        packed_bool m_program_flags{}; // 1- single file 2- pure 3- realm
+        packed_bool m_program_flags{}; // 1- single file 2- pure 3- realm 4- no builtin
 
     };
 

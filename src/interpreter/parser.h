@@ -38,9 +38,9 @@ namespace wio
 
         ref<statement> parse_statement();
         ref<expression> parse_expression();
-        ref<expression> parse_primary_expression();
+        ref<expression> parse_primary_expression(bool is_lhs = false);
         ref<expression> parse_null_expression();
-        ref<expression> parse_assignment_expression();
+        ref<expression> parse_assignment_expression(ref<expression> base);
         ref<expression> parse_binary_expression(int precedence = 0);
         ref<expression> parse_unary_expression();
         ref<expression> parse_ref_expression();
@@ -48,8 +48,9 @@ namespace wio
         ref<expression> parse_array_access(ref<expression> array, bool is_ref = false, bool is_lhs = false);
         ref<expression> parse_member_access(ref<expression> object, bool is_ref = false, bool is_lhs = false);
         ref<expression> parse_typeof_expression();
+        ref<expression> parse_identifier(bool is_lhs = false);
+        ref<expression> parse_postfix_expression(bool is_lhs = false);
 
-        ref<statement> parse_identifier();
         ref<statement> parse_variable_declaration(bool is_const, bool is_local, bool is_global);
         ref<statement> parse_array_declaration(bool is_const, bool is_local, bool is_global);
         ref<statement> parse_dictionary_declaration(bool is_const, bool is_local, bool is_global);

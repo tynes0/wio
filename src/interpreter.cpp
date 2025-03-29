@@ -15,6 +15,7 @@
 #include "builtin/io.h"
 #include "builtin/math.h"
 #include "builtin/utility.h"
+#include "variables/function.h"
 
 namespace wio
 {
@@ -55,7 +56,7 @@ namespace wio
 			s_app_data.flags.b4 = true;
 			});
 
-		s_app_data.arg_parser.add_argument("no-builtin", { "-nb", "--no-builtin" }, "Wio built-in library imports are ignored. Basic built-ins are also ignored.", [](const std::string&) {
+		s_app_data.arg_parser.add_argument("no-builtin", { "-nb", "--no-builtin" }, "Wio built-in library imports are ignored.", [](const std::string&) {
 			s_app_data.flags.b5 = true;
 			});
 	}
@@ -79,8 +80,9 @@ namespace wio
 	{
 		try
 		{
-			raw_buffer buf = run_f_p1(s_app_data.arg_parser.get_file().c_str(), { s_app_data.flags.b1 });
-			run_f_p2(buf, { s_app_data.flags.b1 });
+			packed_bool flags = { s_app_data.flags.b1, false, false, s_app_data.flags.b5 };
+			raw_buffer buf = run_f_p1(s_app_data.arg_parser.get_file().c_str(), flags);
+			run_f_p2(buf, flags);
 		}
 		catch (const exception& e)
 		{
@@ -112,6 +114,8 @@ namespace wio
 		{
 			if (filesystem::has_prefix(filepath, "wio."))
 			{
+				if (flags.b4)
+					return raw_buffer(nullptr);
 				std::string_view view(filepath);
 				view.remove_prefix(4);
 				

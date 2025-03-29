@@ -1,1 +1,15 @@
-import pure "all_tests"
+import "wio.util"
+import "wio.io"
+
+dict d
+{
+	[1, 2],
+	["String", "test"],
+	['c', 4]
+};
+
+foreach(item in d["String"])
+{
+	Println(item);
+}
+Println(d);

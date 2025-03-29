@@ -47,3 +47,18 @@
 - __Update 1.4.10:__ Fixed an error that could not be assigned to variables initialized with null.
 - __Update 1.4.11:__ Added 'pure' keyword. This keyword ensures that function calls in imported files are ignored.
 - __Update 1.4.12:__ Although the entity and package keywords were not added yet, they were there as tokens. They were renamed. They will now be used as unit and realm.
+- __Update 1.5.0:__ Fixed the problem where chained member and array accesses gave errors.
+- __Update 1.5.1:__ 'pair' type added.
+- __Update 1.5.2:__ Fixed an issue where identifiers were rendered incorrectly in some cases.
+- __Update 1.5.3:__ Added support for modifiable member values.
+- __Update 1.5.4:__ Some built-in methods have been added for String. More will be added.
+- __Update 1.5.5:__ Member value have been added for the pair type. first and key hold the same value and second and value hold the same value.
+- __Update 1.5.6:__ ToString function added. Now all types can be converted to string.
+- __Update 1.5.7:__ Suppressed some msvc compiler warnings.
+- __Update 1.5.8:__ Fixed a bug where it was not possible to assign a value to a member, array  element or dictionary element even though access was the left-hand operand.
+- __Update 1.5.9:__ Removed unnecessary variables from the symbols.
+- __Update 1.5.10:__ Fixed a bug that caused the condition in for loops to be applied as an assignment expression.
+- __Update 1.5.11:__ Fixed the issue where some array methods returned ref under all circumstances.
+- __Update 1.5.12:__ Fixed the problem where the program crashed instead of giving an error when searching for a member of type 'type'.
+- __Update 1.5.13:__ Fixed an issue where -nb --no-builtin arguments were not working.
+- __Update 1.5.14:__ The -nb --no-builtin argument will no longer block directly included built-in methods. It will only block all built-in library imports.

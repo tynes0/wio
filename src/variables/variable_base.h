@@ -1,42 +1,18 @@
 #pragma once
 
 #include <string>
+#include "variable_type.h"
+
 #include "../utils/frenum.h"
 #include "../utils/any.h"
+#include "../utils/pair.h"
+#include "../utils/uuid.h"
 #include "../base/base.h"
+
+#include "../interpreter/scope.h"
 
 namespace wio 
 {
-
-    enum class variable_base_type 
-    {
-        variable,
-        array,
-        dictionary,
-        function
-    };
-
-    MakeFrenumInNamespace(wio, variable_base_type, variable, array, dictionary, function)
-
-    enum class variable_type
-    {
-        vt_null,
-        vt_integer,
-        vt_float,
-        vt_string,
-        vt_character,
-        vt_bool,
-        vt_array,
-        vt_dictionary,
-        vt_function,
-        vt_var_param,
-        vt_file,
-        vt_type,
-        vt_any
-    };
-
-    MakeFrenumInNamespace(wio, variable_type, vt_null, vt_integer, vt_float, vt_string, vt_character, vt_bool, vt_array, vt_dictionary, vt_function, vt_var_param, vt_var_param, vt_file, vt_type, vt_any)
-
     class variable_base
     {
     public:
@@ -48,16 +24,25 @@ namespace wio
 
         bool is_constant() const { return m_flags.b1; }
         bool is_ref() const { return m_flags.b2; }
+        // pf -> param flag
+        bool is_pf_return_ref() const { return m_flags.b5; }
 
         void set_const(bool flag) { m_flags.b1 = flag; }
         void set_ref(bool flag) { m_flags.b2 = flag; }
+        // pf -> param flag
+        void set_pf_return_ref(bool flag) { m_flags.b5 = flag; }
 
         void set_flags(packed_bool flags) { m_flags = flags; }
+        ref<scope> get_members() const { return m_members; }
+        void init_members() { if (m_members) return; m_members = make_ref<scope>(scope_type::builtin); }
     protected:
         variable_base(packed_bool flags) : m_flags(flags) { }
     private:
-        packed_bool m_flags = {}; // b1 -> const --- b2 -> ref --- 
+        ref<scope> m_members;
+        packed_bool m_flags = {}; // b1 -> const --- b2 -> ref --- b3-> * --- b4-> * --- b5-> return ref --- b6-> * --- b7-> * --- b8-> *  (b1-b2-b3-b4 default flags  ---  b5-b6-b7-b8 func parameter flags)
     };
+
+    using pair_t = pair<ref<variable_base>, ref<variable_base>>;
 
     class null_var : public variable_base
     {

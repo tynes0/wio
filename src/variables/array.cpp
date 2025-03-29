@@ -1,9 +1,11 @@
 #include "array.h"
+#include "variable.h"
 
 namespace wio
 {
     var_array::var_array(const std::vector<ref<variable_base>>& data, packed_bool flags) : m_data(data), null_var(flags)
     {
+        this->init_members();
     }
 
     variable_base_type var_array::get_base_type() const
@@ -21,11 +23,6 @@ namespace wio
         return make_ref<var_array>(*this);
     }
 
-    std::vector<ref<variable_base>>& var_array::get_data()
-    {
-        return m_data;
-    }
-
     const std::vector<ref<variable_base>>& var_array::get_data() const
     {
         return m_data;
@@ -40,6 +37,30 @@ namespace wio
     size_t var_array::size() const
     {
         return m_data.size();
+    }
+
+    void var_array::push(ref<variable_base> data)
+    {
+        m_data.push_back(data->clone());
+    }
+
+    ref<variable_base> var_array::pop()
+    {
+        ref<variable_base> result = m_data.back();
+        m_data.pop_back();
+        return result;
+    }
+
+    ref<variable_base> var_array::erase(long long idx)
+    {
+        ref<variable_base> result = m_data[idx];
+        m_data.erase(m_data.begin() + idx, m_data.begin() + idx + 1);
+        return result;
+    }
+
+    void var_array::clear()
+    {
+        m_data.clear();
     }
 
     void var_array::set_data(const std::vector<ref<variable_base>>& data)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../interpreter/scope.h"
+#include "../variables/function.h"
 #include <bitset>
 
 namespace wio
@@ -33,7 +34,7 @@ namespace wio
 
                     }, return_type, params, false);
 
-                symbol sym(name, variable_type::vt_function, scope_type::builtin, make_ref<var_function>(varFunc), { false, true });
+                symbol sym(name, make_ref<var_function>(varFunc), { false, true });
                 target_scope->insert(name, sym);
             }
 
@@ -46,25 +47,25 @@ namespace wio
             template <class T>
             void load_constant(ref<scope> target_scope, const std::string& name, variable_type type, T value)
             {
-                target_scope->insert(name, symbol(name, type, scope_type::builtin, make_ref<variable>(any(value), type, packed_bool{ true, false }), {false, true}));
+                target_scope->insert(name, symbol(name, make_ref<variable>(any(value), type, packed_bool{ true, false }), {false, true}));
             }
 
             template <class T>
             void load_constant(const std::string& name, variable_type type, T value)
             {
-                builtin_scope->insert(name, symbol(name, type, scope_type::builtin, make_ref<variable>(any(value), type, packed_bool{ true, false }), { false, true }));
+                builtin_scope->insert(name, symbol(name, make_ref<variable>(any(value), type, packed_bool{ true, false }), { false, true }));
             }
 
             template <class T>
             void load_variable(ref<scope> target_scope, const std::string& name, ref<variable_base> var)
             {
-                target_scope->insert(name, symbol(name, var->get_type(), scope_type::builtin, var), {false, true});
+                target_scope->insert(name, symbol(name, var), {false, true});
             }
 
             template <class T>
             void load_variable(const std::string& name, ref<variable_base> var)
             {
-                builtin_scope->insert(name, symbol(name, var->get_type(), scope_type::builtin, var), { false, true });
+                builtin_scope->insert(name, symbol(name, var), { false, true });
             }
 		}
 	}

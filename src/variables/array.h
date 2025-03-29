@@ -16,12 +16,14 @@ namespace wio
 		virtual variable_type get_type() const override;
 		virtual ref<variable_base> clone() const override;
 
-		// TODO: Member functions
-
-		std::vector<ref<variable_base>>& get_data();
 		const std::vector<ref<variable_base>>& get_data() const;
 		ref<variable_base> get_element(long long index);
 		size_t size() const;
+
+		void push(ref<variable_base> data);
+		ref<variable_base> pop();
+		ref<variable_base> erase(long long idx);
+		void clear();
 
 		void set_data(const std::vector<ref<variable_base>>& data);
 		void set_element(long long index, ref<variable_base> value);
