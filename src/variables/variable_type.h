@@ -10,7 +10,8 @@ namespace wio
         variable,
         array,
         dictionary,
-        function
+        function,
+        realm // 
     };
 
     MakeFrenumInNamespace(wio, variable_base_type, variable, array, dictionary, function)
@@ -30,7 +31,8 @@ namespace wio
         vt_file,
         vt_type,
         vt_pair,
-        vt_any
+        vt_realm, // 
+        vt_any,
     };
 
     MakeFrenumInNamespace(wio, variable_type, vt_null, vt_integer, vt_float, vt_string, vt_character, vt_bool, vt_array, vt_dictionary, vt_function, vt_var_param, vt_var_param, vt_file, vt_type, vt_pair, vt_any)

@@ -1,15 +1,7 @@
 import "wio.util"
 import "wio.io"
+import "wio.math"
 
-dict d
-{
-	[1, 2],
-	["String", "test"],
-	['c', 4]
-};
+import pure "test2" as realm test2;
 
-foreach(item in d["String"])
-{
-	Println(item);
-}
-Println(d);
+Print(test2.PI2);

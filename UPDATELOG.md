@@ -62,3 +62,8 @@
 - __Update 1.5.12:__ Fixed the problem where the program crashed instead of giving an error when searching for a member of type 'type'.
 - __Update 1.5.13:__ Fixed an issue where -nb --no-builtin arguments were not working.
 - __Update 1.5.14:__ The -nb --no-builtin argument will no longer block directly included built-in methods. It will only block all built-in library imports.
+- __Update 1.6.0:__ Function overload support has been added.
+- __Update 1.6.1:__ Added several members to array.
+- __Update 1.6.2:__ Added 'realm' keyword. Allows you to name scopes and call them from outside the scope.
+- __Update 1.6.3:__ Fixed an issue where loops could not run a single action without curly braces.
+- __Update 1.6.4:__ 'as' keyword has been added. Allows import as realm.

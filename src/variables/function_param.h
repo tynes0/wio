@@ -13,6 +13,11 @@ namespace wio
 
 		function_param() {}
 		function_param(const std::string& id, variable_type type, bool is_ref) : id(id), type(type), is_ref(is_ref) {}
+
+		bool operator==(const function_param& other) const
+		{
+			return (id == other.id && type == other.type && is_ref == other.is_ref);
+		}
 	};
 
 }

@@ -2,6 +2,7 @@
 
 #include "variable.h"
 #include <functional>
+#include <vector>
 
 namespace wio
 {
@@ -12,9 +13,10 @@ namespace wio
 	class var_function : public null_var
 	{
 	public:
-		using type = std::function<ref<variable_base>(const std::vector<function_param>&, std::vector<ref<variable_base>>&)>;
+		using fun_type = std::function<ref<variable_base>(const std::vector<function_param>&, std::vector<ref<variable_base>>&)>;
 
-		var_function(const type& data, variable_type return_type, const std::vector<function_param>& params, bool is_local = false, bool is_global = false);
+		var_function(const std::vector<function_param>& params, bool is_local = false, bool is_global = false);
+		var_function(const fun_type& data, const std::vector<function_param>& params, bool is_local = false, bool is_global = false);
 
 		virtual variable_base_type get_base_type() const override;
 		virtual variable_type get_type() const override;
@@ -22,17 +24,31 @@ namespace wio
 
 		ref<variable_base> call(std::vector<ref<variable_base>>& parameters);
 
-		type& get_data();
-		const type& get_data() const;
-		variable_type get_return_type() const;
-		size_t parameter_count() const;
+		fun_type& get_data();
+		const fun_type& get_data() const;
+		symbol* get_overload(size_t idx);
 		const std::vector<function_param>& get_parameters() const;
+		size_t parameter_count() const;
+		bool declared() const;
+		bool early_declared() const;
+		bool compare_parameters(const std::vector<function_param>& params) const;
+		const std::string& get_symbol_id() const;
 
-		void set_data(const type& data);
+		void set_data(const fun_type& data);
 		void add_parameter(const function_param& param);
+		void add_overload(symbol overload);
+		void set_symbol_id(const std::string& id);
+		void set_early_declared(bool decl);
+
+		symbol* find_overload(const std::vector<function_param>& parameters);
+
+		size_t overload_count() const;
 	private:
-		type m_data;
+		fun_type m_data;
 		std::vector<function_param> m_params;
-		variable_type m_return_type;
+		std::vector<symbol> m_overloads;
+		std::string m_symbol_id;
+		bool m_declared;
+		bool m_early_decl;
 	};
 }

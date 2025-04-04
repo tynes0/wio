@@ -25,7 +25,6 @@ namespace wio
         void evaluate_program(ref<program> program_node);
 
         symbol_table_t& get_symbols();
-        definition_table_t& get_definitions();
     private:
         ref<variable_base> evaluate_expression(ref<expression> node);
         void evaluate_statement(ref<statement> node);
@@ -43,7 +42,8 @@ namespace wio
         ref<variable_base> evaluate_member_access_expression(ref<member_access_expression> node, ref<variable_base> object = nullptr, bool is_ref = false);
         ref<variable_base> evaluate_function_call(ref<function_call> node, ref<variable_base> object = nullptr, bool is_ref = false);
 
-        void evaluate_block_statement(ref<block_statement> node);
+        ref<scope> evaluate_block_statement(ref<block_statement> node);
+
         void evaluate_expression_statement(ref<expression_statement> node);
         void evaluate_if_statement(ref<if_statement> node);
         void evaluate_for_statement(ref<for_statement> node);
@@ -59,18 +59,18 @@ namespace wio
         void evaluate_dictionary_declaration(ref<dictionary_declaration> node);
         void evaluate_function_declaration(ref<function_declaration> node);
         void evaluate_function_definition(ref<function_definition> node);
+        void evaluate_realm_declaration(ref<realm_declaration> node);
 
         void evaluate_only_global_declarations();
 
         void enter_scope(scope_type type);
-        void exit_scope();
+        ref<scope> exit_scope();
         void enter_statement_stack(std::vector<ref<statement>>* list);
         void exit_statement_stack();
         symbol* lookup_member(const std::string& name, ref<variable_base> object);
         symbol* lookup(const std::string& name);
         symbol* lookup_current_and_global(const std::string& name);
-        var_func_definition* lookup_def(const std::string& name);
-        ref<function_declaration> get_func_decl(const std::string& name);
+        ref<function_declaration> get_func_decl(const std::string& name, std::vector<function_param> real_parameters);
         ref<variable_base> get_null_var(variable_base_type vbt = variable_base_type::variable);
         ref<variable_base> get_value(ref<expression> node, ref<variable_base> object = nullptr, bool is_ref = false);
 

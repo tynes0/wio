@@ -55,6 +55,7 @@ namespace wio
         ref<statement> parse_array_declaration(bool is_const, bool is_local, bool is_global);
         ref<statement> parse_dictionary_declaration(bool is_const, bool is_local, bool is_global);
         ref<statement> parse_function_declaration(bool is_local, bool is_global);
+        ref<statement> parse_realm_declaration(bool is_local, bool is_global);
         ref<statement> parse_parameter_declaration();
         ref<statement> parse_if_statement();
         ref<statement> parse_for_statement();

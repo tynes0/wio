@@ -1,4 +1,5 @@
 {
 	global var PI2 = 3.14;
+	Print("tst");
 }
 

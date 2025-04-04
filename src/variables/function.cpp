@@ -4,9 +4,17 @@
 
 namespace wio
 {
-    var_function::var_function(const type& data, variable_type return_type, const std::vector<function_param>& params, bool is_local, bool is_global)
-        : m_data(data), m_return_type(return_type), m_params(params), null_var({is_local, is_global})
+    var_function::var_function(const std::vector<function_param>& params, bool is_local, bool is_global) 
+        : m_params(params), null_var({ is_local, is_global }), m_declared(false), m_early_decl(false)
     {
+        symbol sym("", make_ref<var_function>(*this), { is_local, is_global, true });
+        m_overloads.push_back(sym);
+    }
+    var_function::var_function(const fun_type& data, const std::vector<function_param>& params, bool is_local, bool is_global)
+        : m_data(data), m_params(params), null_var({is_local, is_global}), m_declared(true), m_early_decl(false)
+    {
+        symbol sym("", make_ref<var_function>(*this), { is_local, is_global, true });
+        m_overloads.push_back(sym);
     }
 
     variable_base_type var_function::get_base_type() const
@@ -32,19 +40,14 @@ namespace wio
             throw exception("Invalid function!");
     }
 
-    var_function::type& var_function::get_data()
+    var_function::fun_type& var_function::get_data()
     {
         return m_data;
     }
 
-    const var_function::type& var_function::get_data() const
+    const var_function::fun_type& var_function::get_data() const
     {
         return m_data;
-    }
-
-    variable_type var_function::get_return_type() const
-    {
-        return m_return_type;
     }
 
     size_t var_function::parameter_count() const
@@ -57,8 +60,29 @@ namespace wio
         return m_params;
     }
 
-    void var_function::set_data(const type& data)
+    bool var_function::declared() const
     {
+        return m_declared;
+    }
+
+    bool var_function::early_declared() const
+    {
+        return m_early_decl;
+    }
+
+    bool var_function::compare_parameters(const std::vector<function_param>& params) const
+    {
+        return std::equal(m_params.begin(), m_params.end(), params.begin(), params.end());
+    }
+
+    const std::string& var_function::get_symbol_id() const
+    {
+        return m_symbol_id;
+    }
+
+    void var_function::set_data(const fun_type& data)
+    {
+        m_declared = bool(data);
         m_data = data;
     }
     void var_function::add_parameter(const function_param& param)
@@ -66,4 +90,34 @@ namespace wio
         m_params.push_back(param);
     }
 
+    void var_function::add_overload(symbol overload)
+    {
+        m_overloads.push_back(overload);
+    }
+
+    void var_function::set_symbol_id(const std::string& id)
+    {
+        m_symbol_id = id;
+    }
+
+    void var_function::set_early_declared(bool decl)
+    {
+        m_early_decl = decl;
+    }
+
+    symbol* var_function::get_overload(size_t idx)
+    {
+        return &m_overloads.at(idx);
+    }
+    symbol* var_function::find_overload(const std::vector<function_param>& parameters)
+    {
+        for (auto& overload : m_overloads)
+            if (std::dynamic_pointer_cast<var_function>(overload.var_ref)->m_params == parameters)
+                return &overload;
+        return nullptr;
+    }
+    size_t var_function::overload_count() const
+    {
+        return m_overloads.size();
+    }
 }

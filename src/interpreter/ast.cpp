@@ -188,6 +188,11 @@ namespace wio
         return "while (" + m_condition->to_string() + ") " + m_body->to_string();
     }
 
+    std::string realm_declaration::to_string() const
+    {
+        return "realm " + m_id->to_string() + "\n{\n" + m_body->to_string() + "\n}";
+    }
+
     std::string break_statement::to_string() const
     {
         return "break;";

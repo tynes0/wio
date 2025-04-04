@@ -35,6 +35,8 @@ namespace wio
         void set_flags(packed_bool flags) { m_flags = flags; }
         ref<scope> get_members() const { return m_members; }
         void init_members() { if (m_members) return; m_members = make_ref<scope>(scope_type::builtin); }
+        void load_members(ref<scope> members) { m_members = members; }
+        void load_members(const symbol_table_t& table) { if (!m_members) init_members(); m_members->set_symbols(table); }
     protected:
         variable_base(packed_bool flags) : m_flags(flags) { }
     private:

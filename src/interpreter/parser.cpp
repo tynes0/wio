@@ -277,6 +277,11 @@ namespace wio
                 next_token();
                 return parse_function_declaration(is_local, is_global);
             }
+            else if (current.type == token_type::kw_realm)
+            {
+                next_token();
+                return parse_realm_declaration(is_local, is_global);
+            }
         }
         else if (current.type == token_type::identifier)
         {
@@ -686,33 +691,35 @@ namespace wio
         token id_token = consume_token(token_type::identifier);
         ref<identifier> id = make_ref<identifier>(id_token);
 
-        consume_token(token_type::left_parenthesis);
-
-        std::vector<ref<variable_declaration>> params;
-        if (!match_token(token_type::right_parenthesis))
+        if(match_token(token_type::left_parenthesis))
         {
-            do {
-                ref<statement> param_decl = parse_parameter_declaration();
-                if (auto var_decl = std::dynamic_pointer_cast<variable_declaration>(param_decl))
-                {
-                    params.push_back(var_decl);
-                }
-                else
-                {
-                    error("Invalid parameter declaration.", current_token().loc);
-                    return nullptr;
-                }
+            std::vector<ref<variable_declaration>> params;
+            if (!match_token(token_type::right_parenthesis))
+            {
+                do {
+                    ref<statement> param_decl = parse_parameter_declaration();
+                    if (auto var_decl = std::dynamic_pointer_cast<variable_declaration>(param_decl))
+                    {
+                        params.push_back(var_decl);
+                    }
+                    else
+                    {
+                        error("Invalid parameter declaration.", current_token().loc);
+                        return nullptr;
+                    }
 
-            } while (match_token(token_type::comma));
+                } while (match_token(token_type::comma));
 
-            consume_token(token_type::right_parenthesis);
+                consume_token(token_type::right_parenthesis);
+            }
+
+            if (match_token(token_type::semicolon))
+                return make_ref<function_definition>(id, params, is_local, is_global);
+
+            ref<block_statement> body = parse_block_statement();
+            return make_ref<function_declaration>(id, params, body, variable_type::vt_null, is_local, is_global);
         }
-
-        if(match_token(token_type::semicolon))
-            return make_ref<function_definition>(id, params, is_local, is_global);
-
-        ref<block_statement> body = parse_block_statement();
-        return make_ref<function_declaration>(id, params, body, variable_type::vt_null, is_local, is_global);
+        return nullptr; // TODO
     }
 
     ref<statement> parser::parse_parameter_declaration()
@@ -793,9 +800,9 @@ namespace wio
         }
         else
         {
-            body = std::static_pointer_cast<block_statement>(parse_statement());
+            auto stmt = parse_statement();
             std::vector<ref<statement>> statements;
-            statements.push_back(body);
+            statements.push_back(stmt);
             body = make_ref<block_statement>(statements);
         }
 
@@ -815,7 +822,18 @@ namespace wio
 
         consume_token(token_type::right_parenthesis);
 
-        ref<block_statement> body = parse_block_statement();
+        ref<block_statement> body;
+        if (current_token().type == token_type::left_curly_bracket)
+        {
+            body = parse_block_statement();
+        }
+        else
+        {
+            auto stmt = parse_statement();
+            std::vector<ref<statement>> statements;
+            statements.push_back(stmt);
+            body = make_ref<block_statement>(statements);
+        }
 
         return make_ref<foreach_statement>(item, collection, body);
     }
@@ -823,10 +841,33 @@ namespace wio
     ref<statement> parser::parse_while_statement()
     {
         consume_token(token_type::left_parenthesis);
+
         ref<expression> condition = parse_expression();
+
         consume_token(token_type::right_parenthesis);
-        ref<block_statement> body = parse_block_statement();
+
+        ref<block_statement> body;
+        if (current_token().type == token_type::left_curly_bracket)
+        {
+            body = parse_block_statement();
+        }
+        else
+        {
+            auto stmt = parse_statement();
+            std::vector<ref<statement>> statements;
+            statements.push_back(stmt);
+            body = make_ref<block_statement>(statements);
+        }
+
         return make_ref<while_statement>(condition, body);
+    }
+
+    ref<statement> parser::parse_realm_declaration(bool is_local, bool is_global)
+    {
+        ref<identifier> id = make_ref<identifier>(current_token(), false, false);
+        next_token();
+        ref<statement> block = parse_block_statement();
+        return make_ref<realm_declaration>(id, std::dynamic_pointer_cast<block_statement>(block), is_local, is_global);
     }
 
     ref<statement> parser::parse_break_statement(location loc)
@@ -867,6 +908,21 @@ namespace wio
         }
 
         std::string module_path = lit->m_token.value;
+
+        if (match_token(token_type::kw_as))
+        {
+            if (match_token(token_type::kw_realm))
+            {
+                match_token(token_type::semicolon);
+
+                return make_ref<import_statement>(module_path_expr->get_location(), module_path, is_pure, true, make_ref<identifier>(next_token(), false, false));
+            }
+            else
+            {
+                // for now
+                error("Expected realm.", module_path_expr->get_location());
+            }
+        }
 
         match_token(token_type::semicolon);
 

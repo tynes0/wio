@@ -23,7 +23,6 @@ namespace wio
 	{
 		std::filesystem::path base_path;
 		symbol_table_t temp_sym_table;
-		definition_table_t temp_def_table;
 		argument_parser arg_parser;
 		packed_bool flags{}; // 1- single file 2- show tokens 3- show ast 4- no run 5- no built-in
 		packed_bool buitin_imports{}; // 1-io 2-math 3-util
@@ -190,11 +189,9 @@ namespace wio
 		eval.evaluate_program(tree);
 
 		s_app_data.temp_sym_table = eval.get_symbols();
-		s_app_data.temp_def_table = eval.get_definitions();
 
 		raw_buffer result;
 		result.store(s_app_data.temp_sym_table);
-		result.append(&s_app_data.temp_def_table, sizeof(s_app_data.temp_def_table));
 
 		return result;
 	}

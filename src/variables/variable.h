@@ -1,7 +1,6 @@
 #pragma once 
 
 #include "../utils/any.h"
-#include "../utils/frenum.h"
 #include "../base/base.h"
 #include <string>
 #include "variable_base.h"

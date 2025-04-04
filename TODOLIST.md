@@ -30,8 +30,8 @@ LIST
 	5. [ ] graphics lib
 11. [ ] Add unit keyword -> similar to class ![lowp]
 12. [x] Add pure keywords. (import type) ![lowp]
-13. [ ] Add realm keywords. (import type and scope name) ![lowp]
-14. [ ] Add as keyword! ([import realm "path" as;] and [id 'as' type;]) ![lowp]
+13. [x] Add realm keywords. (import type and scope name) ![lowp]
+14. [ ] Add as keyword! ([import "path" as realm id;] and [id 'as' type;]) ![lowp]
 15. [ ] Add members to array - dict - string ![mediump]
 16. [x] Fix import keyword (definitions) ![mediump]
 17. [ ] Fix strings (index ref's)![highp]
@@ -41,3 +41,4 @@ LIST
 20. [ ] Binary operations for dict and array ![highp]
 20. [ ] Vectors ![lowp]
 20. [x] foreach string and dict ![lowp]
+20. [ ] Fix function overloads ![mediump]

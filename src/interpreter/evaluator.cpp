@@ -8,6 +8,7 @@
 #include "../variables/array.h"
 #include "../variables/dictionary.h"
 #include "../variables/function.h"
+#include "../variables/realm.h"
 #include "../builtin/builtin_base.h"
 #include "../builtin/helpers.h"
 #include "../builtin/builtin_manager.h"
@@ -62,11 +63,6 @@ namespace wio
         return m_current_scope->get_symbols();
     }
 
-    definition_table_t& evaluator::get_definitions()
-    {
-        return m_current_scope->get_definitions();
-    }
-
     ref<variable_base> evaluator::evaluate_expression(ref<expression> node)
     {
         return get_value(node);
@@ -88,6 +84,8 @@ namespace wio
             evaluate_array_declaration(adecl);
         else if (auto ddecl = std::dynamic_pointer_cast<dictionary_declaration>(node))
             evaluate_dictionary_declaration(ddecl);
+        else if (auto rdecl = std::dynamic_pointer_cast<realm_declaration>(node))
+            evaluate_realm_declaration(rdecl);
         else if (auto import_s = std::dynamic_pointer_cast<import_statement>(node))
             evaluate_import_statement(import_s);
         else if (auto block_s = std::dynamic_pointer_cast<block_statement>(node))
@@ -748,7 +746,7 @@ namespace wio
 
         if (sym->var_ref)
         {
-            if (auto var = std::dynamic_pointer_cast<variable>(sym->var_ref))
+            if (auto var = std::dynamic_pointer_cast<variable>(sym->var_ref)) // test.length
             {
                 if (sym->var_ref->is_ref() || node->m_is_lhs || is_ref)
                     return var;
@@ -856,31 +854,12 @@ namespace wio
         ref<variable_base> caller_value = get_value(node->m_caller, object);
 
         if (!caller_value)
-        {
-            // this is not working properly
-            ref<identifier> id = std::dynamic_pointer_cast<identifier>(node->m_caller);
-            if(!id)
-                throw local_exception("Function not found!", node->m_caller->get_location());
-
-            std::string name = id->m_token.value;
-
-            var_func_definition* def = lookup_def(name);
-            if(!def)
-                throw local_exception("Function '" + name + "' not found!", node->m_caller->get_location());
-
-            ref<function_declaration> decl = get_func_decl(name);
-            if(!decl)
-                throw local_exception("Function '" + name + "' defined but not declared!", node->m_caller->get_location());
-
-            evaluate_function_declaration(decl);
-            caller_value = get_value(node->m_caller, object);
-        }
+           throw undefined_identifier_error("Invalid function!", node->m_caller->get_location());
         else if (caller_value->get_type() != variable_type::vt_function)
-        {
            throw invalid_type_error("Type should be function!", node->m_caller->get_location());
-        }
 
         ref<var_function> func = std::dynamic_pointer_cast<var_function>(caller_value);
+        ref<var_function> func_res;
 
         if(!func)
            throw undefined_identifier_error("Invalid function!", node->m_caller->get_location());
@@ -888,33 +867,59 @@ namespace wio
         std::vector<ref<variable_base>> parameters;
         
         int padding = 0;
-        if (object)
+        if (object && object->get_type() != variable_type::vt_realm)
         {
             object->set_pf_return_ref(is_ref);
             padding = 1;
             parameters.push_back(object);
         }
-        const auto& real_params = func->get_parameters();
 
-        if ((node->m_arguments.size() + padding) != real_params.size())
-            throw invalid_argument_count_error("Invalid parameter count!", node->m_caller->get_location());
+        for (size_t i = 0; i < func->overload_count(); ++i)
+        {
+            func_res = std::dynamic_pointer_cast<var_function>(func->get_overload(i)->var_ref);
+            const auto& real_params = func_res->get_parameters();
 
-        for (size_t i = 0; i < node->m_arguments.size(); ++i)
-            parameters.push_back(get_value(node->m_arguments[i], nullptr, real_params[padding + i].is_ref));
+            if ((node->m_arguments.size() + padding) != real_params.size())
+            {
+                if (i == (func->overload_count() - 1))
+                    throw invalid_argument_count_error("Invalid parameter count!", node->m_caller->get_location());
+                continue;
+            }
+
+            for (size_t i = 0; i < node->m_arguments.size(); ++i)
+                parameters.push_back(get_value(node->m_arguments[i], nullptr, real_params[padding + i].is_ref));
 
 
-        for (size_t i = 0; i < real_params.size(); ++i)
-            if (parameters[i]->get_type() != real_params[i].type && real_params[i].type != variable_type::vt_any &&
-                !(parameters[i]->get_base_type() == variable_base_type::variable && util::is_var_t(real_params[i].type)))
-                throw type_mismatch_error("Parameter types not matching!");
+            for (size_t i = 0; i < real_params.size(); ++i)
+            {
+                if (parameters[i]->get_type() != real_params[i].type && real_params[i].type != variable_type::vt_any &&
+                    !(parameters[i]->get_base_type() == variable_base_type::variable && util::is_var_t(real_params[i].type)))
+                {
+                    if (i == (func->overload_count() - 1))
+                        throw type_mismatch_error("Parameter types not matching!");
+                    continue;
+                }
+            }
+            break;
+        }
 
-        ref<variable_base> result = func->call(parameters);
+        if (!func_res->declared())
+        {
+            auto decl = get_func_decl(func_res->get_symbol_id(), func_res->get_parameters());
+            if(!decl)
+                throw local_exception("Function '" + func_res->get_symbol_id() + "' defined but not declared!", node->m_caller->get_location());
+
+            evaluate_function_declaration(decl);
+            func_res->set_early_declared(true);
+        }
+
+        ref<variable_base> result = func_res->call(parameters);
         if (object)
             object->set_pf_return_ref(false);
         return result;
     }
 
-    void evaluator::evaluate_block_statement(ref<block_statement> node)
+    ref<scope> evaluator::evaluate_block_statement(ref<block_statement> node)
     {
         enter_scope(scope_type::block);
         enter_statement_stack(&node->m_statements);
@@ -923,7 +928,7 @@ namespace wio
             evaluate_statement(stmt);
 
         exit_statement_stack();
-        exit_scope();
+        return exit_scope();
     }
 
     void evaluator::evaluate_expression_statement(ref<expression_statement> node)
@@ -1218,27 +1223,35 @@ namespace wio
         if (m_eval_flags.b4)
             return;
         
-        raw_buffer buf = interpreter::get().run_f(node->m_module_path.c_str(), { m_program_flags.b1, node->m_is_pure, false, m_program_flags.b4 });
+        raw_buffer buf = interpreter::get().run_f(node->m_module_path.c_str(), { m_program_flags.b1, node->m_flags.b1, false, m_program_flags.b4 });
 
         if (!buf)
             return;
 
         auto& symbols = buf.load<symbol_table_t>();
-        raw_buffer buf2(buf.data + sizeof(symbol_table_t), sizeof(definition_table_t));
-        auto& defs = buf2.load<definition_table_t>();
 
-        for (auto& [key, value] : symbols)
+        if (!node->m_flags.b2)
         {
-            if (value.flags.b1)
-                continue;
-            m_current_scope->insert(key, value);
+            for (auto& [key, value] : symbols)
+            {
+                if (value.flags.b1)
+                    continue;
+                m_current_scope->insert(key, value);
+            }
         }
-
-        for (auto& [key, value] : defs)
+        else
         {
-            if (value.flags.b1)
-                continue;
-            m_current_scope->insert_def(key, value);
+            std::string name = node->m_realm_id->m_token.value;
+
+            if (lookup(name))
+                throw local_exception("Duplicate variable declaration: " + name, node->m_realm_id->get_location());
+
+            ref<realm> realm_var = make_ref<realm>();
+            realm_var->load_members(symbols);
+
+            symbol realm_symbol(name, realm_var, { false, false, m_eval_flags.b5 });
+
+            m_current_scope->insert(name, realm_symbol);
         }
     }
 
@@ -1444,37 +1457,52 @@ namespace wio
 
         std::string name = node->m_id->m_token.value;
 
+        // parameter types and ids
+        std::vector<function_param> parameters;
+        for (auto& param : node->m_params)
+            parameters.emplace_back(param->m_id->m_token.value, param->m_type, (bool)param->m_flags.b4);
+
+        packed_bool flags = {}; // 1- add overload 2- declare
+
         symbol* sym = lookup(name);
+        symbol* overload = nullptr;
+
         if (sym != nullptr)
         {
-            if (node->m_is_global && !sym->flags.b3 && m_eval_flags.b5)
+            ref<var_function> func_ref = std::dynamic_pointer_cast<var_function>(sym->var_ref);
+            if (!func_ref)
+                throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
+
+            overload = func_ref->find_overload(parameters);
+
+            if (overload)
             {
-                sym->flags.b3 = true;
-                return;
+                if (node->m_is_global && !overload->flags.b3 && m_eval_flags.b5)
+                {
+                    overload->flags.b3 = true;
+                    return;
+                }
+
+                auto fref = std::dynamic_pointer_cast<var_function>(overload->var_ref);
+
+                if (!fref->declared())
+                {
+                    flags.b2 = true;
+                }
+                else if (fref->early_declared())
+                {
+                    fref->set_early_declared(false);
+                    return;
+                }
+                else
+                {
+                    throw local_exception("Duplicate function declaration: " + name, node->m_id->get_location());
+                }
             }
-            throw local_exception("Duplicate function declaration: " + name, node->m_id->get_location());
-        }
-
-        // parameter types and ids
-        std::vector<function_param> param_types;
-        for (auto& param : node->m_params)
-            param_types.emplace_back(param->m_id->m_token.value, param->m_type, (bool)param->m_flags.b4);
-
-        var_func_definition* def = lookup_def(name);
-        if (def != nullptr)
-        {
-            if(param_types.size() != def->params.size())
-                throw invalid_argument_count_error("Invalid parameter count in decl!", node->m_id->get_location());
-
-            for (size_t i = 0; i < param_types.size(); ++i)
-                if(param_types[i].type != def->params[i].type || param_types[i].is_ref != def->params[i].is_ref)
-                    throw type_mismatch_error("Parameter types not matching!", node->m_id->get_location());
-
-            if (node->m_is_local != def->flags.b2 || 
-                (node->m_is_global != def->flags.b3 && !(def->flags.b3 && m_current_scope->get_type() == scope_type::global)))
-                throw type_mismatch_error("Declaration keywords not matching!", node->m_id->get_location());
-
-            def->flags.b1 = true;
+            else
+            {
+                flags.b1 = true;
+            }
         }
 
         enter_scope(scope_type::function);
@@ -1498,8 +1526,8 @@ namespace wio
                 // use variable ref's
                 for (size_t i = 0; i < parameters.size(); ++i)
                 {
-                    symbol* sym = lookup(param_ids[i].id);
-                    sym->var_ref = parameters[i];
+                    symbol* s = lookup(param_ids[i].id);
+                    s->var_ref = parameters[i];
                 }
 
                 enter_statement_stack(&node->m_body->m_statements);
@@ -1523,13 +1551,25 @@ namespace wio
                 return get_null_var();
             };
 
+        if (flags.b1)
+        {
+            symbol function_symbol(name, make_ref<var_function>(func_lambda, parameters, node->m_is_local), { node->m_is_local, node->m_is_global, m_eval_flags.b5 });
 
-        ref<var_function> func = make_ref<var_function>(func_lambda, variable_type::vt_null, param_types, node->m_is_local);
-        symbol function_symbol(name, func, { node->m_is_local, node->m_is_global, m_eval_flags.b5 });
-        if (node->m_is_global)
-            m_current_scope->insert_to_global(name, function_symbol);
+            std::dynamic_pointer_cast<var_function>(sym->var_ref)->add_overload(function_symbol);
+        }
+        else if (flags.b2)
+        {
+            std::dynamic_pointer_cast<var_function>(overload->var_ref)->set_data(func_lambda);
+        }
         else
-            m_current_scope->insert(name, function_symbol);
+        {
+            symbol function_symbol(name, make_ref<var_function>(func_lambda, parameters, node->m_is_local), { node->m_is_local, node->m_is_global, m_eval_flags.b5 });
+
+            if (node->m_is_global)
+                m_current_scope->insert_to_global(name, function_symbol);
+            else
+                m_current_scope->insert(name, function_symbol);
+        }
     }
 
     void evaluator::evaluate_function_definition(ref<function_definition> node)
@@ -1540,30 +1580,65 @@ namespace wio
         // Check
         std::string name = node->m_id->m_token.value;
 
-        var_func_definition* ldef = lookup_def(name);
-        if (ldef != nullptr)
+        // Parameter types and id's
+        std::vector<function_param> parameters;
+        for (auto& param : node->m_params)
+            parameters.emplace_back(param->m_id->m_token.value, param->m_type, (bool)param->m_flags.b4);
+
+        symbol* sym = lookup(name);
+        if (sym != nullptr)
         {
-            if (node->m_is_global && !ldef->flags.b4 && m_eval_flags.b5)
+            auto func_ref = std::dynamic_pointer_cast<var_function>(sym->var_ref);
+            if (!func_ref)
+                throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
+
+            auto overload_ref = func_ref->find_overload(parameters);
+            if (overload_ref)
+                throw local_exception("Duplicate function definition: " + name, node->m_id->get_location());
+
+            auto fun_v = make_ref<var_function>(parameters);
+            fun_v->set_symbol_id(name);
+
+            func_ref->add_overload(symbol("", fun_v, { node->m_is_local, node->m_is_global }));
+        }
+        else
+        {
+            auto fun_v = make_ref<var_function>(parameters);
+            std::dynamic_pointer_cast<var_function>(fun_v->get_overload(0)->var_ref)->set_symbol_id(name);
+            symbol function_symbol(node->m_id->m_token.value, fun_v, { node->m_is_local, node->m_is_global });
+
+            if (node->m_is_global)
+                m_current_scope->insert_to_global(name, function_symbol);
+            else
+                m_current_scope->insert(name, function_symbol);
+        }
+    }
+
+    void evaluator::evaluate_realm_declaration(ref<realm_declaration> node)
+    {
+        if (m_eval_flags.b4 && !node->m_is_global)
+            return;
+
+        std::string name = node->m_id->m_token.value;
+
+        symbol* sym = lookup(name);
+        if (sym != nullptr)
+        {
+            if (node->m_is_global && !sym->flags.b3 && m_eval_flags.b5)
             {
-                ldef->flags.b4 = true;
+                sym->flags.b3 = true;
                 return;
             }
-            throw local_exception("Duplicate function declaration: " + name, node->m_id->get_location());
+            throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
         }
-        if(lookup(name))
-            throw local_exception("Duplicate function declaration: " + name, node->m_id->get_location());
 
-        // Parameter types and id's
-        std::vector<function_param> param_types;
-        for (auto& param : node->m_params)
-            param_types.emplace_back(param->m_id->m_token.value, param->m_type, (bool)param->m_flags.b4);
-
-        // Definiton
-        var_func_definition def(param_types, packed_bool{ false, node->m_is_local, node->m_is_global, m_eval_flags.b5 });
+        ref<realm> realm_var = make_ref<realm>();
+        realm_var->load_members(evaluate_block_statement(node->m_body));
+        symbol realm_symbol(name, realm_var, { node->m_is_local, node->m_is_global, m_eval_flags.b5 });
         if (node->m_is_global)
-            m_current_scope->insert_def_to_global(name, def);
+            m_current_scope->insert_to_global(name, realm_symbol);
         else
-            m_current_scope->insert_def(name, def);
+            m_current_scope->insert(name, realm_symbol);
     }
 
     void evaluator::evaluate_only_global_declarations()
@@ -1574,7 +1649,7 @@ namespace wio
         m_eval_flags.b4 = false;
     }
 
-    void evaluator::enter_scope(scope_type type) 
+    void evaluator::enter_scope(scope_type type)
     {
         if (type == scope_type::function_body)
         {
@@ -1584,10 +1659,10 @@ namespace wio
         m_current_scope = make_ref<scope>(type, m_current_scope);
     }
 
-    void evaluator::exit_scope() 
+    ref<scope> evaluator::exit_scope()
     {
         if (m_current_scope->get_type() == scope_type::global)
-            return;
+            return nullptr;
         if (m_current_scope->get_type() == scope_type::function_body)
         {
             if (m_func_body_counter)
@@ -1601,8 +1676,11 @@ namespace wio
                 throw exception("Unexpected error!");
             }
         }
+
+        ref<scope> child = m_current_scope;
         if (m_current_scope->get_parent()) 
             m_current_scope = m_current_scope->get_parent();
+        return child;
     }
 
     void evaluator::enter_statement_stack(std::vector<ref<statement>>* list)
@@ -1648,17 +1726,24 @@ namespace wio
         return m_current_scope->lookup_current_and_global(name);
     }
 
-    var_func_definition* evaluator::lookup_def(const std::string& name)
-    {
-        return m_current_scope->lookup_def(name);
-    }
-
-    ref<function_declaration> evaluator::get_func_decl(const std::string& name)
+    ref<function_declaration> evaluator::get_func_decl(const std::string& name, std::vector<function_param> real_parameters)
     {
         for (auto& stmt : *m_statement_stack->list)
+        {
             if (auto func_decl = std::dynamic_pointer_cast<function_declaration>(stmt))
+            {
                 if (func_decl->m_id->m_token.value == name)
-                    return func_decl;
+                {
+                    std::vector<function_param> parameters;
+                    for (auto& param : func_decl->m_params)
+                        parameters.emplace_back(param->m_id->m_token.value, param->m_type, (bool)param->m_flags.b4);
+
+                    if (std::equal(parameters.begin(), parameters.end(), real_parameters.begin(), real_parameters.end()))
+                        return func_decl;
+                }
+            }
+        }
+
         return nullptr;
     }
 

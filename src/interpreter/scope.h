@@ -4,6 +4,7 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <utility>
 
 #include "../base/base.h"
 #include "../variables/variable_type.h"
@@ -19,16 +20,6 @@ namespace wio
         function,
         function_body,
         block
-    };
-
-    struct var_func_definition
-    {
-        std::vector<function_param> params;
-        packed_bool flags = {}; // 1- declared 2- local 3- global -> original position passed
-        var_func_definition() {}
-        var_func_definition(const std::vector<function_param>& params, packed_bool flags)
-            : params(params), flags(flags) {
-        }
     };
 
     class variable_base;
@@ -48,7 +39,6 @@ namespace wio
     };
 
     using symbol_table_t = std::map<std::string, symbol>;
-    using definition_table_t = std::map<std::string, var_func_definition>;
 
     class scope 
     {
@@ -57,23 +47,20 @@ namespace wio
 
         void insert(const std::string& name, const symbol& symbol);
         void insert_to_global(const std::string& name, const symbol& symbol);
-        void insert_def(const std::string& name, const var_func_definition& def);
-        void insert_def_to_global(const std::string& name, const var_func_definition& def);
 
         symbol* lookup(const std::string& name);
         symbol* lookup_only_global(const std::string& name);
         symbol* lookup_current_and_global(const std::string& name);
         symbol* lookup_builtin(const std::string& name);
-        var_func_definition* lookup_def(const std::string& name);
 
         scope_type get_type() const { return m_type; }
         ref<scope> get_parent() { return m_parent; }
         symbol_table_t& get_symbols() { return m_symbols; }
-        definition_table_t& get_definitions() { return m_definitions; }
+
+        void set_symbols(const symbol_table_t& table) { m_symbols = table; }
 
     private:
         symbol_table_t m_symbols;
-        definition_table_t m_definitions;
         ref<scope> m_parent;
         scope_type m_type;
     };

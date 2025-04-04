@@ -170,23 +170,23 @@ namespace wio
 
         void io::load()
         {
-            loader::load_function<1>("Print", detail::b_print, variable_type::vt_null, { variable_type::vt_any });
-            loader::load_function<1>("Println", detail::b_println, variable_type::vt_null, { variable_type::vt_any });
-            loader::load_function<0>("Input", detail::b_input, variable_type::vt_string, {});
-            loader::load_function<2>("OpenFile", detail::b_open_file, variable_type::vt_file, { variable_type::vt_string, variable_type::vt_integer });
-            loader::load_function<1>("CloseFile", detail::b_close_file, variable_type::vt_null, { variable_type::vt_file });
-            loader::load_function<2>("Write", detail::b_write, variable_type::vt_null, { variable_type::vt_any, variable_type::vt_string });
-            loader::load_function<1>("Read", detail::b_read, variable_type::vt_string, { variable_type::vt_file });
+            loader::load_function<1>("Print",       detail::b_print,        { variable_type::vt_any });
+            loader::load_function<1>("Println",     detail::b_println,      { variable_type::vt_any });
+            loader::load_function<0>("Input",       detail::b_input,        {});
+            loader::load_function<2>("OpenFile",    detail::b_open_file,    { variable_type::vt_string, variable_type::vt_integer });
+            loader::load_function<1>("CloseFile",   detail::b_close_file,   { variable_type::vt_file });
+            loader::load_function<2>("Write",       detail::b_write,        { variable_type::vt_any, variable_type::vt_string });
+            loader::load_function<1>("Read",        detail::b_read,         { variable_type::vt_file });
 
-            loader::load_constant("OPEN_MODE_READ", variable_type::vt_integer, FILE_MODE_READ);
-            loader::load_constant("OPEN_MODE_WRITE", variable_type::vt_integer, FILE_MODE_WRITE);
-            loader::load_constant("OPEN_MODE_APPEND", variable_type::vt_integer, FILE_MODE_APPEND);
-            loader::load_constant("OPEN_MODE_BINARY", variable_type::vt_integer, FILE_MODE_BINARY);
-            loader::load_constant("OPEN_MODE_TRUNC", variable_type::vt_integer, FILE_MODE_TRUNC);
-            loader::load_constant("OPEN_MODE_ATE", variable_type::vt_integer, FILE_MODE_ATE);
-            loader::load_constant("STDOUT", variable_type::vt_file, wrapped_stdout);
-            loader::load_constant("STDERR", variable_type::vt_file, wrapped_stderr);
-            loader::load_constant("STDIN", variable_type::vt_file, wrapped_stdin);
+            loader::load_constant("OPEN_MODE_READ",     variable_type::vt_integer,  FILE_MODE_READ);
+            loader::load_constant("OPEN_MODE_WRITE",    variable_type::vt_integer,  FILE_MODE_WRITE);
+            loader::load_constant("OPEN_MODE_APPEND",   variable_type::vt_integer,  FILE_MODE_APPEND);
+            loader::load_constant("OPEN_MODE_BINARY",   variable_type::vt_integer,  FILE_MODE_BINARY);
+            loader::load_constant("OPEN_MODE_TRUNC",    variable_type::vt_integer,  FILE_MODE_TRUNC);
+            loader::load_constant("OPEN_MODE_ATE",      variable_type::vt_integer,  FILE_MODE_ATE);
+            loader::load_constant("STDOUT",             variable_type::vt_file,     wrapped_stdout);
+            loader::load_constant("STDERR",             variable_type::vt_file,     wrapped_stderr);
+            loader::load_constant("STDIN",              variable_type::vt_file,     wrapped_stdin);
         }
     }
 }

@@ -35,9 +35,9 @@ namespace wio
 
 		void utility::load()
 		{
-			loader::load_function<2>("Swap", detail::b_swap, variable_type::vt_null, { variable_type::vt_any, variable_type::vt_any }, std::bitset<2>("11"));
-			loader::load_function<1>("ToString", detail::b_to_string, variable_type::vt_string, { variable_type::vt_any });
-			loader::load_function<2>("Pair", detail::b_pair, variable_type::vt_pair, { variable_type::vt_any, variable_type::vt_any });
+			loader::load_function<2>("Swap",		detail::b_swap,			{ variable_type::vt_any, variable_type::vt_any }, std::bitset<2>("11"));
+			loader::load_function<1>("ToString",	detail::b_to_string,	{ variable_type::vt_any });
+			loader::load_function<2>("Pair",		detail::b_pair,			{ variable_type::vt_any, variable_type::vt_any });
 		}
 	}
 }

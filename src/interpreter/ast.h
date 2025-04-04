@@ -25,11 +25,13 @@ namespace wio
     class assignment_expression;
     class array_access_expression;
     class member_access_expression;
+    class function_call;
     class block_statement;
     class if_statement;
     class for_statement;
     class while_statement;
     class foreach_statement;
+    class realm_declaration;
     class break_statement;
     class continue_statement;
     class return_statement;
@@ -39,7 +41,6 @@ namespace wio
     class array_declaration;
     class dictionary_declaration;
     class function_declaration;
-    class function_call;
     class function_definition;
 
     class ast_node
@@ -249,6 +250,21 @@ namespace wio
         bool m_is_lhs;
     };
 
+    class function_call : public expression
+    {
+    public:
+        function_call(ref<expression> caller, std::vector<ref<expression>> args)
+            : m_caller(caller), m_arguments(args) {
+        }
+
+        token_type get_type() const override { return token_type::identifier; }
+        location get_location() const override { return m_caller->get_location(); }
+        std::string to_string() const override;
+
+        ref<expression> m_caller;
+        std::vector<ref<expression>> m_arguments;
+    };
+
     class block_statement : public statement
     {
     public:
@@ -378,8 +394,9 @@ namespace wio
     class import_statement : public statement
     {
     public:
-        import_statement(location loc, std::string module_path, bool is_pure = false) 
-            : m_location(loc), m_module_path(module_path), m_is_pure(is_pure) {}
+        import_statement(location loc, std::string module_path, bool is_pure = false, bool is_realm = false, ref<identifier> realm_id = nullptr)
+            : m_location(loc), m_module_path(module_path), m_flags({ is_pure, is_realm }), m_realm_id(realm_id) {
+        }
 
         token_type get_type() const override { return token_type::kw_import; }
         location get_location() const override { return m_location; }
@@ -387,7 +404,8 @@ namespace wio
 
         std::string m_module_path;
         location m_location;
-        bool m_is_pure;
+        ref<identifier> m_realm_id;
+        packed_bool m_flags; // 1- is_pure 2-is_realm
     };
 
     class variable_declaration : public statement
@@ -458,20 +476,6 @@ namespace wio
         bool m_is_global;
     };
 
-    class function_call : public expression
-    {
-    public:
-        function_call(ref<expression> caller, std::vector<ref<expression>> args)
-            : m_caller(caller), m_arguments(args) {}
-
-        token_type get_type() const override { return token_type::identifier; }
-        location get_location() const override { return m_caller->get_location(); }
-        std::string to_string() const override;
-
-        ref<expression> m_caller;
-        std::vector<ref<expression>> m_arguments;
-    };
-
     class function_definition : public statement
     {
     public:
@@ -488,4 +492,22 @@ namespace wio
         bool m_is_local;
         bool m_is_global;
     };
+
+    class realm_declaration : public statement
+    {
+    public:
+        realm_declaration(ref<identifier> id, ref<block_statement> body, bool is_local, bool is_global)
+            :m_id(id), m_body(body), m_is_local(is_local), m_is_global(is_global) {
+        }
+
+        token_type get_type() const override { return token_type::kw_foreach; }
+        location get_location() const override { return m_id->get_location(); }
+        std::string to_string() const override;
+
+        ref<identifier> m_id;
+        ref<block_statement> m_body;
+        bool m_is_local;
+        bool m_is_global;
+    };
+
 } // namespace wio
