@@ -104,23 +104,14 @@ namespace wio
             std::string op = tok.value;
             if (op == "=") return 1;
             if (op == "||") return 2;
+            if (op == "|") return 3;
             if (op == "&&") return 4;
+            if (op == "&") return 6;
             if (op == "==" || op == "!=" || "=?") return 7;
             if (op == "<" || op == "<=" || op == ">" || op == ">=") return 8;
             if (op == "+" || op == "-") return 10;
             if (op == "*" || op == "/" || op == "%") return 11;
-        }
-        else if (tok.type == token_type::bitwise_or)
-        {
-            return 3;
-        }
-        else if (tok.type == token_type::bitwise_and)
-        {
-            return 6;
-        }
-        else if (tok.type == token_type::bang || tok.type == token_type::question_mark || tok.type == token_type::bitwise_or)
-        {
-            return 12;
+            if (op == "!" || op == "?" || op == "~") return 12;
         }
         return -1;
     }
@@ -411,26 +402,6 @@ namespace wio
         return make_ref<null_expression>(tok);
     }
 
-
-    ref<expression> parser::parse_assignment_expression(ref<expression> base)
-    {
-        if (match_token_no_consume(token_type::op, "=") ||
-            match_token_no_consume(token_type::op, "+=") ||
-            match_token_no_consume(token_type::op, "-=") ||
-            match_token_no_consume(token_type::op, "*=") ||
-            match_token_no_consume(token_type::op, "/=") ||
-            match_token_no_consume(token_type::op, "%="))
-        {
-            token tok = next_token();
-            ref<expression> value = parse_binary_expression();
-            return make_ref<assignment_expression>(base, tok, value);
-        }
-        else
-        {
-            return base;
-        }
-    }
-
     ref<expression> parser::parse_binary_expression(int precedence)
     {
         ref<expression> left = parse_unary_expression();
@@ -458,7 +429,7 @@ namespace wio
         token current = current_token();
         if (current.type == token_type::op && 
             (current.value == "+" || current.value == "-" || current.value == "!" || current.value == "~" || current.value == "++" || current.value == "--") ||
-            (current.type == token_type::bang) || (current.type == token_type::question_mark) || (current.type == token_type::bitwise_not))
+            (current.value == "!") || (current.value == "?") || (current.value == "~"))
         {
             next_token();
             ref<expression> operand = parse_unary_expression();
@@ -553,7 +524,14 @@ namespace wio
     ref<expression> parser::parse_identifier(bool is_lhs)
     {
         ref<expression> exp = parse_postfix_expression(is_lhs);
-        return parse_assignment_expression(exp);
+        
+        if (match_token_no_consume(token_type::op))
+        {
+            token tok = next_token();
+            ref<expression> value = parse_binary_expression();
+            return make_ref<binary_expression>(exp, tok, value);
+        }
+        return exp;
     }
 
     ref<expression> parser::parse_postfix_expression(bool is_lhs) 
@@ -911,17 +889,13 @@ namespace wio
 
         if (match_token(token_type::kw_as))
         {
-            if (match_token(token_type::kw_realm))
-            {
-                match_token(token_type::semicolon);
+            match_token(token_type::kw_realm);
 
-                return make_ref<import_statement>(module_path_expr->get_location(), module_path, is_pure, true, make_ref<identifier>(next_token(), false, false));
-            }
-            else
-            {
-                // for now
-                error("Expected realm.", module_path_expr->get_location());
-            }
+            auto result = make_ref<import_statement>(module_path_expr->get_location(), module_path, is_pure, true, make_ref<identifier>(next_token(), false, false));
+
+            match_token(token_type::semicolon);
+
+            return result;
         }
 
         match_token(token_type::semicolon);

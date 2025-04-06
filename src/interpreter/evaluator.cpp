@@ -1,18 +1,27 @@
 #include "evaluator.h"
+
 #include "lexer.h"
 #include "parser.h"
+#include "evaluator_helper.h"
 
 #include "../base/exception.h"
 #include "../utils/filesystem.h"
+
 #include "../variables/variable.h"
 #include "../variables/array.h"
 #include "../variables/dictionary.h"
 #include "../variables/function.h"
 #include "../variables/realm.h"
+
 #include "../builtin/builtin_base.h"
 #include "../builtin/helpers.h"
 #include "../builtin/builtin_manager.h"
+
 #include "../interpreter.h"
+#include "../types/vec2.h"
+#include "../types/vec3.h"
+#include "../types/vec4.h"
+#include "../types/pair.h"
 
 #include <filesystem>
 
@@ -187,248 +196,74 @@ namespace wio
         ref<variable_base> lv_ref = get_value(node->m_left, object, is_ref);
         ref<variable_base> rv_ref = get_value(node->m_right);
 
-        // TODO: array (+ operator)
-        any left_value = std::dynamic_pointer_cast<variable>(lv_ref)->get_data();
-        any right_value = std::dynamic_pointer_cast<variable>(rv_ref)->get_data();
+        any left_value;
+        any right_value;
+
+        if(lv_ref->get_base_type() == variable_base_type::variable)
+            left_value = std::dynamic_pointer_cast<variable>(lv_ref)->get_data();
+        if(rv_ref->get_base_type() == variable_base_type::variable)
+            right_value = std::dynamic_pointer_cast<variable>(rv_ref)->get_data();
 
         token op = node->m_operator;
 
         if (op.type == token_type::op) 
         {
             if (op.value == "+") 
-            {
-                if (left_value.type() == typeid(long long) && right_value.type() == typeid(long long)) 
-                    return make_ref<variable>(any(any_cast<long long>(left_value) + any_cast<long long>(right_value)), variable_type::vt_integer);
-                else if (left_value.type() == typeid(double) && right_value.type() == typeid(double)) 
-                    return make_ref<variable>(any(any_cast<double>(left_value) + any_cast<double>(right_value)), variable_type::vt_float);
-                else if (left_value.type() == typeid(long long) && right_value.type() == typeid(double))
-                    return make_ref<variable>(any(any_cast<long long>(left_value) + any_cast<double>(right_value)), variable_type::vt_float);
-                else if (left_value.type() == typeid(double) && right_value.type() == typeid(long long)) 
-                    return make_ref<variable>(any(any_cast<double>(left_value) + any_cast<long long>(right_value)), variable_type::vt_float);
-                else if (left_value.type() == typeid(std::string) && right_value.type() == typeid(std::string)) 
-                    return make_ref<variable>(any(any_cast<std::string>(left_value) + any_cast<std::string>(right_value)), variable_type::vt_string);
-                else if (left_value.type() == typeid(std::string) && right_value.type() == typeid(long long)) 
-                    return make_ref<variable>(any(any_cast<std::string>(left_value) + std::to_string(any_cast<long long>(right_value))), variable_type::vt_string);
-                else if (left_value.type() == typeid(std::string) && right_value.type() == typeid(double)) 
-                    return make_ref<variable>(any(any_cast<std::string>(left_value) + std::to_string(any_cast<double>(right_value))), variable_type::vt_string);
-                else if (left_value.type() == typeid(long long) && right_value.type() == typeid(std::string)) 
-                    return make_ref<variable>(any(std::to_string(any_cast<long long>(left_value)) + any_cast<std::string>(right_value)), variable_type::vt_string);
-                else if (left_value.type() == typeid(double) && right_value.type() == typeid(std::string)) 
-                    return make_ref<variable>(any(std::to_string(any_cast<double>(left_value)) + any_cast<std::string>(right_value)), variable_type::vt_string);
-                else 
-                    throw type_mismatch_error("Invalid operand types for '+' operator.", node->get_location());
-            }
+                return helper::eval_binary_exp_addition(lv_ref, rv_ref, node->get_location());
             else if (op.value == "-") 
-            {
-                if (left_value.type() == typeid(long long) && right_value.type() == typeid(long long)) 
-                    return make_ref<variable>(any(any_cast<long long>(left_value) - any_cast<long long>(right_value)), variable_type::vt_integer);
-                else if (left_value.type() == typeid(double) && right_value.type() == typeid(double)) 
-                    return make_ref<variable>(any(any_cast<double>(left_value) - any_cast<double>(right_value)), variable_type::vt_float);
-                else if (left_value.type() == typeid(long long) && right_value.type() == typeid(double)) 
-                    return make_ref<variable>(any(any_cast<long long>(left_value) - any_cast<double>(right_value)), variable_type::vt_float);
-                else if (left_value.type() == typeid(double) && right_value.type() == typeid(long long)) 
-                    return make_ref<variable>(any(any_cast<double>(left_value) - any_cast<long long>(right_value)), variable_type::vt_float);
-                else 
-                    throw type_mismatch_error("Invalid operand types for '-' operator.", node->get_location());
-            }
+                return helper::eval_binary_exp_subtraction(lv_ref, rv_ref, node->get_location());
             else if (op.value == "*") 
-            {
-                if (left_value.type() == typeid(long long) && right_value.type() == typeid(long long)) 
-                    return make_ref<variable>(any(any_cast<long long>(left_value) * any_cast<long long>(right_value)), variable_type::vt_integer);
-                else if (left_value.type() == typeid(double) && right_value.type() == typeid(double)) 
-                    return make_ref<variable>(any(any_cast<double>(left_value) * any_cast<double>(right_value)), variable_type::vt_float);
-                else if (left_value.type() == typeid(long long) && right_value.type() == typeid(double)) 
-                    return make_ref<variable>(any(any_cast<long long>(left_value) * any_cast<double>(right_value)), variable_type::vt_float);
-                else if (left_value.type() == typeid(double) && right_value.type() == typeid(long long)) 
-                    return make_ref<variable>(any(any_cast<double>(left_value) * any_cast<long long>(right_value)), variable_type::vt_float);
-                else 
-                    throw type_mismatch_error("Invalid operand types for '*' operator.", node->get_location());
-            }
+                return helper::eval_binary_exp_multiplication(lv_ref, rv_ref, node->get_location());
             else if (op.value == "/") 
-            {
-                if (left_value.type() == typeid(long long) && right_value.type() == typeid(long long)) 
-                {
-                    if (any_cast<long long>(right_value) == 0)
-                        throw invalid_operation_error("Division by zero error.", node->get_location());
-                    return make_ref<variable>(any(any_cast<long long>(left_value) / any_cast<long long>(right_value)), variable_type::vt_integer);
-                }
-                else if (left_value.type() == typeid(double) && right_value.type() == typeid(double)) 
-                {
-                    if (any_cast<double>(right_value) == 0.0)
-                        throw invalid_operation_error("Division by zero error.", node->get_location());
-                    return make_ref<variable>(any(any_cast<double>(left_value) / any_cast<double>(right_value)), variable_type::vt_float);
-                }
-                else if (left_value.type() == typeid(long long) && right_value.type() == typeid(double)) 
-                {
-                    if (any_cast<double>(right_value) == 0.0)
-                        throw invalid_operation_error("Division by zero error.", node->get_location());
-                    return make_ref<variable>(any(any_cast<long long>(left_value) / any_cast<double>(right_value)), variable_type::vt_float);
-                }
-                else if (left_value.type() == typeid(double) && right_value.type() == typeid(long long)) 
-                {
-                    if (any_cast<long long>(right_value) == 0)
-                        throw invalid_operation_error("Division by zero error.", node->get_location());
-                    return make_ref<variable>(any(any_cast<double>(left_value) / any_cast<long long>(right_value)), variable_type::vt_float);
-                }
-                else 
-                {
-                    throw type_mismatch_error("Invalid operand types for '/' operator.", node->get_location());
-                }
-            }
+                return helper::eval_binary_exp_division(lv_ref, rv_ref, node->get_location());
             else if (op.value == "%") 
-            {
-                if (left_value.type() == typeid(long long) && right_value.type() == typeid(long long))
-                {
-                    if (any_cast<long long>(right_value) == 0)
-                        throw invalid_operation_error("Division by zero error.", node->get_location());
-                    return make_ref<variable>(any(any_cast<long long>(left_value) % any_cast<long long>(right_value)), variable_type::vt_integer);
-                }
-                else
-                {
-                    throw type_mismatch_error("Invalid operand types for '%' operator.", node->get_location());
-                }
-
-            }
-            else if (op.value == "<" || op.value == ">" || op.value == "<=" || op.value == ">=" || op.value == "==" || op.value == "!=") 
-            {
-                if (left_value.type() == typeid(long long) && right_value.type() == typeid(long long))
-                {
-                    long long left = any_cast<long long>(left_value);
-                    long long right = any_cast<long long>(right_value);
-                    if (op.value == "<")
-                        return make_ref<variable>(any(left < right), variable_type::vt_bool);
-                    else if (op.value == ">")
-                        return make_ref<variable>(any(left > right), variable_type::vt_bool);
-                    else if (op.value == "<=")
-                        return make_ref<variable>(any(left <= right), variable_type::vt_bool);
-                    else if (op.value == ">=")
-                        return make_ref<variable>(any(left >= right), variable_type::vt_bool);
-                    else if (op.value == "==")
-                        return make_ref<variable>(any(left == right), variable_type::vt_bool);
-                    else if (op.value == "!=")
-                        return make_ref<variable>(any(left != right), variable_type::vt_bool);
-                }
-                else if (left_value.type() == typeid(double) && right_value.type() == typeid(double))
-                {
-                    double left = any_cast<double>(left_value);
-                    double right = any_cast<double>(right_value);
-                    if (op.value == "<")
-                        return make_ref<variable>(any(left < right), variable_type::vt_bool);
-                    else if (op.value == ">")
-                        return make_ref<variable>(any(left > right), variable_type::vt_bool);
-                    else if (op.value == "<=")
-                        return make_ref<variable>(any(left <= right), variable_type::vt_bool);
-                    else if (op.value == ">=")
-                        return make_ref<variable>(any(left >= right), variable_type::vt_bool);
-                    else if (op.value == "==")
-                        return make_ref<variable>(any(left == right), variable_type::vt_bool);
-                    else if (op.value == "!=")
-                        return make_ref<variable>(any(left != right), variable_type::vt_bool);
-                }
-                else if (left_value.type() == typeid(long long) && right_value.type() == typeid(double))
-                {
-                    long long left = any_cast<long long>(left_value);
-                    double right = any_cast<double>(right_value);
-                    if (op.value == "<")
-                        return make_ref<variable>(any(left < right), variable_type::vt_bool);
-                    else if (op.value == ">")
-                        return make_ref<variable>(any(left > right), variable_type::vt_bool);
-                    else if (op.value == "<=")
-                        return make_ref<variable>(any(left <= right), variable_type::vt_bool);
-                    else if (op.value == ">=")
-                        return make_ref<variable>(any(left >= right), variable_type::vt_bool);
-                    else if (op.value == "==")
-                        return make_ref<variable>(any(left == right), variable_type::vt_bool);
-                    else if (op.value == "!=")
-                        return make_ref<variable>(any(left != right), variable_type::vt_bool);
-                }
-                else if (left_value.type() == typeid(double) && right_value.type() == typeid(long long))
-                {
-                    double left = any_cast<double>(left_value);
-                    long long right = any_cast<long long>(right_value);
-                    if (op.value == "<")
-                        return make_ref<variable>(any(left < right), variable_type::vt_bool);
-                    else if (op.value == ">")
-                        return make_ref<variable>(any(left > right), variable_type::vt_bool);
-                    else if (op.value == "<=")
-                        return make_ref<variable>(any(left <= right), variable_type::vt_bool);
-                    else if (op.value == ">=")
-                        return make_ref<variable>(any(left >= right), variable_type::vt_bool);
-                    else if (op.value == "==")
-                        return make_ref<variable>(any(left == right), variable_type::vt_bool);
-                    else if (op.value == "!=")
-                        return make_ref<variable>(any(left != right), variable_type::vt_bool);
-                }
-                else if (left_value.type() == typeid(std::string) && right_value.type() == typeid(std::string))
-                {
-                    std::string left = any_cast<std::string>(left_value);
-                    std::string right = any_cast<std::string>(right_value);
-                    if (op.value == "<")
-                        return make_ref<variable>(any(left < right), variable_type::vt_bool);
-                    else if (op.value == ">")
-                        return make_ref<variable>(any(left > right), variable_type::vt_bool);
-                    else if (op.value == "<=")
-                        return make_ref<variable>(any(left <= right), variable_type::vt_bool);
-                    else if (op.value == ">=")
-                        return make_ref<variable>(any(left >= right), variable_type::vt_bool);
-                    else if (op.value == "==")
-                        return make_ref<variable>(any(left == right), variable_type::vt_bool);
-                    else if (op.value == "!=")
-                        return make_ref<variable>(any(left != right), variable_type::vt_bool);
-                }
-                else if (op.value == "&&") 
-                { 
-                    if (left_value.type() == typeid(bool) && right_value.type() == typeid(bool))
-                        return make_ref<variable>(any(any_cast<bool>(left_value) && wio::any_cast<bool>(right_value)), variable_type::vt_bool);
-                    else 
-                        throw type_mismatch_error("Invalid operand types for '&&' operator (logical AND). Operands must be booleans.", node->get_location());
-                }
-                else if (op.value == "||") 
-                {
-                    if (left_value.type() == typeid(bool) && right_value.type() == typeid(bool))
-                        return make_ref<variable>(any(any_cast<bool>(left_value) | wio::any_cast<bool>(right_value)), variable_type::vt_bool);
-                    else 
-                        throw type_mismatch_error("Invalid operand types for '||' operator (logical OR). Operands must be booleans.", node->get_location());
-                }
-                else if (op.value == "==")
-                {
-                    // NOT COMPAREABLE PROBABLY
-                    if (lv_ref->get_type() == rv_ref->get_type() && lv_ref->get_type() == variable_type::vt_null)
-                        return make_ref<variable>(any(true), variable_type::vt_bool);
-                    return make_ref<variable>(any(false), variable_type::vt_bool);
-                }
-                else if (op.value == "!=")
-                {
-                    // NOT COMPAREABLE PROBABLY
-                    if (lv_ref->get_type() == rv_ref->get_type() && lv_ref->get_type() == variable_type::vt_null)
-                        return make_ref<variable>(any(false), variable_type::vt_bool);
-                    return make_ref<variable>(any(true), variable_type::vt_bool);
-
-                }
-                else
-                {
-                    throw type_mismatch_error("Invalid operand types for compare operator.", node->get_location());
-                }
-
-            }
+                return helper::eval_binary_exp_modulo(lv_ref, rv_ref, node->get_location());
+            else if (op.value == "=")
+                return helper::eval_binary_exp_assignment(lv_ref, rv_ref, node->get_location());
+            else if (op.value == "+=")
+                return helper::eval_binary_exp_add_assign(lv_ref, rv_ref, node->get_location());
+            else if (op.value == "-=")
+                return helper::eval_binary_exp_subtract_assign(lv_ref, rv_ref, node->get_location());
+            else if (op.value == "*=")
+                return helper::eval_binary_exp_multiply_assign(lv_ref, rv_ref, node->get_location());
+            else if (op.value == "/=")
+                return helper::eval_binary_exp_divide_assign(lv_ref, rv_ref, node->get_location());
+            else if (op.value == "%=")
+                return helper::eval_binary_exp_modulo_assign(lv_ref, rv_ref, node->get_location());
+            else if (op.value == "<")
+                return helper::eval_binary_exp_less_than(lv_ref, rv_ref, node->get_location());
+            else if (op.value == ">")
+                return helper::eval_binary_exp_greater_than(lv_ref, rv_ref, node->get_location());
+            else if (op.value == "<=")
+                return helper::eval_binary_exp_less_than_or_equal_to(lv_ref, rv_ref, node->get_location());
+            else if (op.value == ">=")
+                return helper::eval_binary_exp_greater_than_or_equal_to(lv_ref, rv_ref, node->get_location());
+            else if (op.value == "==")
+                return helper::eval_binary_exp_equal_to(lv_ref, rv_ref, node->get_location());
+            else if (op.value == "!=")
+                return helper::eval_binary_exp_not_equal_to(lv_ref, rv_ref, node->get_location());
             else if (op.value == "=?")
-            {
-                return make_ref<variable>(any(lv_ref->get_type() == rv_ref->get_type()), variable_type::vt_bool);
-            }
-        }
-        else if (node->m_operator.type == token_type::bitwise_and)
-        {
-            if (left_value.type() == typeid(long long) && right_value.type() == typeid(long long))
-                return make_ref<variable>(any(any_cast<long long>(left_value) & any_cast<long long>(right_value)), variable_type::vt_integer);
-            else
-                throw type_mismatch_error("Invalid operand types for '&' operator (bitwise AND). Operands must be integers.", node->get_location());
-        }
-        else if (node->m_operator.type == token_type::bitwise_or)
-        {
-            if (left_value.type() == typeid(long long) && right_value.type() == typeid(long long))
-                return make_ref<variable>(any(any_cast<long long>(left_value) | any_cast<long long>(right_value)), variable_type::vt_integer);
-            else
-                throw type_mismatch_error("Invalid operand types for '|' operator (bitwise OR). Operands must be integers.", node->get_location());
+                return helper::eval_binary_exp_type_equal(lv_ref, rv_ref, node->get_location());
+            else if (op.value == "&&")
+                return helper::eval_binary_exp_logical_and(lv_ref, rv_ref, node->get_location());
+            else if (op.value == "||")
+                return helper::eval_binary_exp_logical_or(lv_ref, rv_ref, node->get_location());
+            else if (op.value == "&")
+                return helper::eval_binary_exp_bitwise_and(lv_ref, rv_ref, node->get_location());
+            else if (op.value == "|")
+                return helper::eval_binary_exp_bitwise_or(lv_ref, rv_ref, node->get_location());
+            else if (op.value == "<<")
+                return helper::eval_binary_exp_left_shift(lv_ref, rv_ref, node->get_location());
+            else if (op.value == ">>")
+                return helper::eval_binary_exp_right_shift(lv_ref, rv_ref, node->get_location());
+            else if (op.value == "<<=")
+                return helper::eval_binary_exp_left_shift_assign(lv_ref, rv_ref, node->get_location());
+            else if (op.value == ">>=")
+                return helper::eval_binary_exp_right_shift_assign(lv_ref, rv_ref, node->get_location());
+            else if (op.value == "<-")
+                return helper::eval_binary_exp_to_left(lv_ref, rv_ref, node->get_location());
+            else if (op.value == "->")
+                return helper::eval_binary_exp_to_right(lv_ref, rv_ref, node->get_location());
         }
 
         throw invalid_operator_error("Invalid binary operator: " + node->m_operator.value, node->get_location());
@@ -441,7 +276,7 @@ namespace wio
 
         if (operand_ref->get_base_type() != variable_base_type::variable)
         {
-            if (op.type == token_type::question_mark)
+            if (op.value == "?")
             {
                 if (operand_ref->get_type() == variable_type::vt_null)
                     return make_ref<variable>(any(false), variable_type::vt_bool);
@@ -544,189 +379,27 @@ namespace wio
                     throw invalid_type_error("Unary '++' and '--' operators require a numeric or character operand.", node->get_location());
                 }
             }
-        }
-        else if (op.type == token_type::bang)
-        {
-            if (operand_value.type() == typeid(bool))
-                return make_ref<variable>(any(!wio::any_cast<bool>(operand_value)), variable_type::vt_bool);
-            else
-                throw invalid_type_error("Unary '!' operator requires a boolean operand.", node->get_location());
-        }
-        else if (op.type == token_type::question_mark)
-        {
-            return make_ref<variable>(any(!operand_value.empty()), variable_type::vt_bool);
-        }
-        else if (op.type == token_type::bitwise_not)
-        {
-            if (operand_value.type() == typeid(long long))
-                return make_ref<variable>(any(~any_cast<long long>(operand_value)), variable_type::vt_integer);
-            else
-                throw invalid_type_error("Unary '~' operator requires an integer operand.", node->get_location());
+            else if (op.value == "!")
+            {
+                if (operand_value.type() == typeid(bool))
+                    return make_ref<variable>(any(!wio::any_cast<bool>(operand_value)), variable_type::vt_bool);
+                else
+                    throw invalid_type_error("Unary '!' operator requires a boolean operand.", node->get_location());
+            }
+            else if (op.value == "?")
+            {
+                return make_ref<variable>(any(!operand_value.empty()), variable_type::vt_bool);
+            }
+            else if (op.value == "~")
+            {
+                if (operand_value.type() == typeid(long long))
+                    return make_ref<variable>(any(~any_cast<long long>(operand_value)), variable_type::vt_integer);
+                else
+                    throw invalid_type_error("Unary '~' operator requires an integer operand.", node->get_location());
+            }
         }
 
         throw invalid_operator_error("Invalid unary operator: " + op.value, node->get_location());
-    }
-
-    ref<variable_base> evaluator::evaluate_assignment_expression(ref<assignment_expression> node, ref<variable_base> object, bool is_ref)
-    {
-        ref<variable_base> lhs = get_value(node->m_target, object, is_ref);
-        ref<variable_base> rhs = get_value(node->m_value);
-
-        if (lhs->is_constant())
-            throw constant_value_assignment_error("Constant values cannot be changed!", node->get_location());
-
-        token op = node->m_operator;
-        if (lhs->get_type() == variable_type::vt_null)
-        {
-            if (rhs->get_base_type() != lhs->get_base_type() && rhs->get_type() != variable_type::vt_null)
-                throw type_mismatch_error("Types are not matching!", node->m_value->get_location());
-
-            if (op.value == "=")
-                lhs = rhs->clone();
-            return lhs->clone();
-        }
-        else if (lhs->get_base_type() == variable_base_type::array)
-        {
-            if (rhs->get_base_type() != variable_base_type::array && rhs->get_type() != variable_type::vt_null)
-                throw type_mismatch_error("Target type is 'array' but source type is not!", node->m_value->get_location());
-            ref<var_array> array_lhs = std::dynamic_pointer_cast<var_array>(lhs);
-            ref<var_array> array_rhs = std::dynamic_pointer_cast<var_array>(rhs);
-
-            if (op.value == "=")
-            {
-                if(array_rhs)
-                    array_lhs->set_data(array_rhs->get_data());
-                else
-                    array_lhs->set_data({});
-            }
-            else
-                throw invalid_operator_error("Invalid assignment error!", node->get_location());
-            return array_lhs->clone();
-        }
-        else if (lhs->get_base_type() == variable_base_type::dictionary && rhs->get_type() != variable_type::vt_null)
-        {
-            if (rhs->get_base_type() != variable_base_type::dictionary)
-                throw type_mismatch_error("Target type is 'dict' but source type is not!", node->m_value->get_location());
-            ref<var_dictionary> dict_lhs = std::dynamic_pointer_cast<var_dictionary>(lhs);
-            ref<var_dictionary> dict_rhs = std::dynamic_pointer_cast<var_dictionary>(rhs);
-
-            if (op.value == "=")
-            {
-                if (dict_rhs)
-                    dict_lhs->set_data(dict_rhs->get_data());
-                else
-                    dict_lhs->set_data({});
-            }
-            else
-                throw invalid_operator_error("Invalid assignment error!", node->get_location());
-            return dict_lhs->clone();
-        }
-        else if (lhs->get_base_type() == variable_base_type::function)
-        {
-            if (rhs->get_base_type() != variable_base_type::function && rhs->get_type() != variable_type::vt_null)
-                throw type_mismatch_error("Target type is 'func' but source type is not!", node->m_value->get_location());
-            ref<var_function> func_lhs = std::dynamic_pointer_cast<var_function>(lhs);
-            ref<var_function> func_rhs = std::dynamic_pointer_cast<var_function>(rhs);
-
-            if (op.value == "=")
-            {
-                if (func_rhs)
-                    func_lhs->set_data(func_rhs->get_data());
-                else
-                    func_lhs->set_data({});
-            }
-            else
-                throw invalid_operator_error("Invalid assignment error!", node->get_location());
-            return func_lhs->clone();
-        }
-        else if(lhs->get_base_type() == variable_base_type::variable)
-        {
-            if (rhs->get_base_type() != variable_base_type::variable)
-                throw type_mismatch_error("Target type is 'var' but source type is not!", node->m_value->get_location());
-
-            ref<variable> variable_lhs = std::dynamic_pointer_cast<variable>(lhs);
-            ref<variable> variable_rhs = std::dynamic_pointer_cast<variable>(rhs);
-            any& lhs_value = variable_lhs->get_data();
-            any& rhs_value = variable_rhs->get_data();
-
-            if (op.value == "=")
-            {
-                variable_lhs->set_data(variable_rhs->get_data());
-                variable_lhs->set_type(variable_rhs->get_type());
-            }
-            else if (op.value == "+=")
-            {
-                if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(long long))
-                    any_cast<long long&>(lhs_value) += any_cast<long long>(rhs_value);
-                else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(double))
-                    any_cast<double&>(lhs_value) += any_cast<double>(rhs_value);
-                else if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(double))
-                    any_cast<long long&>(lhs_value) += static_cast<long long>(any_cast<double>(rhs_value));
-                else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(long long))
-                    any_cast<double&>(lhs_value) += any_cast<long long>(rhs_value);
-                else if (lhs_value.type() == typeid(std::string) && rhs_value.type() == typeid(std::string))
-                    any_cast<std::string&>(lhs_value) += any_cast<std::string>(rhs_value);
-                else if (lhs_value.type() == typeid(std::string) && rhs_value.type() == typeid(char))
-                    any_cast<std::string&>(lhs_value) += any_cast<char>(rhs_value);
-                else if (lhs_value.type() == typeid(std::string) && rhs_value.type() == typeid(long long))
-                    any_cast<std::string&>(lhs_value) += std::to_string(any_cast<long long>(rhs_value));
-                else if (lhs_value.type() == typeid(std::string) && rhs_value.type() == typeid(double))
-                    any_cast<std::string&>(lhs_value) += std::to_string(any_cast<double>(rhs_value));
-                else
-                    throw invalid_type_error("Invalid addition assignment: (Type '" + frenum::to_string(variable_rhs->get_type()) + "' cannot be added to type '" + frenum::to_string(variable_lhs->get_type()) + "')", node->get_location());
-            }
-            else if (op.value == "-=")
-            {
-                if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(long long))
-                    any_cast<long long&>(lhs_value) -= any_cast<long long>(rhs_value);
-                else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(double))
-                    any_cast<double&>(lhs_value) -= any_cast<double>(rhs_value);
-                else if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(double))
-                    any_cast<long long&>(lhs_value) -= static_cast<long long>(any_cast<double>(rhs_value));
-                else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(long long))
-                    any_cast<double&>(lhs_value) -= any_cast<long long>(rhs_value);
-                else
-                    throw invalid_type_error("Invalid subtraction assignment: (Type '" + frenum::to_string(variable_rhs->get_type()) + "' cannot be subtract from type '" + frenum::to_string(variable_lhs->get_type()) + "')", node->get_location());
-            }
-            else if (op.value == "*=")
-            {
-                if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(long long))
-                    any_cast<long long&>(lhs_value) *= any_cast<long long>(rhs_value);
-                else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(double))
-                    any_cast<double&>(lhs_value) *= any_cast<double>(rhs_value);
-                else if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(double))
-                    any_cast<long long&>(lhs_value) *= static_cast<long long>(any_cast<double>(rhs_value));
-                else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(long long))
-                    any_cast<double&>(lhs_value) *= any_cast<long long>(rhs_value);
-                else
-                    throw invalid_type_error("Invalid multiplication assignment: (Type '" + frenum::to_string(variable_rhs->get_type()) + "' cannot be multiplied by type '" + frenum::to_string(variable_lhs->get_type()) + "')", node->get_location());
-            }
-            else if (op.value == "/=")
-            {
-                if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(long long))
-                    any_cast<long long&>(lhs_value) /= any_cast<long long>(rhs_value);
-                else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(double))
-                    any_cast<double&>(lhs_value) /= any_cast<double>(rhs_value);
-                else if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(double))
-                    any_cast<long long&>(lhs_value) /= static_cast<long long>(any_cast<double>(rhs_value));
-                else if (lhs_value.type() == typeid(double) && rhs_value.type() == typeid(long long))
-                    any_cast<double&>(lhs_value) /= any_cast<long long>(rhs_value);
-                else
-                    throw invalid_type_error("Invalid division assignment: (Type '" + frenum::to_string(variable_rhs->get_type()) + "' cannot be divided by type '" + frenum::to_string(variable_lhs->get_type()) + "')", node->get_location());
-            }
-            else if (op.value == "%=")
-            {
-                if (lhs_value.type() == typeid(long long) && rhs_value.type() == typeid(long long))
-                    any_cast<long long&>(lhs_value) %= any_cast<long long>(rhs_value);
-                else
-                    throw invalid_type_error("Invalid modulo assignment: Types should be integer!", node->get_location());
-            }
-            else
-                throw invalid_operator_error("Invalid assignment error!", node->get_location());
-            return lhs->clone();
-        }
-        throw invalid_operator_error("Invalid assignment error!", node->get_location());
-        return nullptr;
     }
 
     ref<variable_base> evaluator::evaluate_identifier(ref<identifier> node, ref<variable_base> object, bool is_ref)
@@ -1222,8 +895,35 @@ namespace wio
     {
         if (m_eval_flags.b4)
             return;
+
+        ref<scope> target_scope = nullptr;
+        ref<realm> realm_var = nullptr;
+
+        if (node->m_flags.b2)
+        {
+            if (!node->m_realm_id)
+                throw local_exception("Unexpected error!", node->get_location());
+
+            std::string name = node->m_realm_id->m_token.value;
+
+            if (lookup(name))
+                throw local_exception("Duplicate variable declaration: " + name, node->m_realm_id->get_location());
+
+            ref<realm> realm_var = make_ref<realm>();
+            realm_var->init_members();
+
+            target_scope = realm_var->get_members();
+
+            if (target_scope)
+            {
+                symbol realm_symbol(name, realm_var, { false, true });
+
+                builtin_scope->insert(name, realm_symbol);
+            }
+
+        }
         
-        raw_buffer buf = interpreter::get().run_f(node->m_module_path.c_str(), { m_program_flags.b1, node->m_flags.b1, false, m_program_flags.b4 });
+        raw_buffer buf = interpreter::get().run_f(node->m_module_path.c_str(), { m_program_flags.b1, node->m_flags.b1, false, m_program_flags.b4 }, target_scope);
 
         if (!buf)
             return;
@@ -1241,17 +941,11 @@ namespace wio
         }
         else
         {
-            std::string name = node->m_realm_id->m_token.value;
-
-            if (lookup(name))
-                throw local_exception("Duplicate variable declaration: " + name, node->m_realm_id->get_location());
-
-            ref<realm> realm_var = make_ref<realm>();
             realm_var->load_members(symbols);
 
-            symbol realm_symbol(name, realm_var, { false, false, m_eval_flags.b5 });
+            symbol realm_symbol(node->m_realm_id->m_token.value, realm_var, { false, false, m_eval_flags.b5 });
 
-            m_current_scope->insert(name, realm_symbol);
+            m_current_scope->insert(node->m_realm_id->m_token.value, realm_symbol);
         }
     }
 
@@ -1770,8 +1464,6 @@ namespace wio
             return evaluate_binary_expression(bin_expr, object, is_ref);
         else if (auto unary_expr = std::dynamic_pointer_cast<unary_expression>(node))
             return evaluate_unary_expression(unary_expr, object, is_ref);
-        else if (auto assign_expr = std::dynamic_pointer_cast<assignment_expression>(node))
-            return evaluate_assignment_expression(assign_expr, object, is_ref);
         else if (auto id = std::dynamic_pointer_cast<identifier>(node))
             return evaluate_identifier(id, object, is_ref);
         else if (auto arr_access = std::dynamic_pointer_cast<array_access_expression>(node))

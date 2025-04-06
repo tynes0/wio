@@ -6,11 +6,10 @@ namespace wio
 {
     namespace builtin
     {
-        class io
+        class b_vec2
         {
         public:
-            static void load(ref<scope> target_scope = nullptr);
+            static ref<scope> load();
         };
     }
 }
-

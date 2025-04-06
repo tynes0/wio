@@ -20,7 +20,6 @@ namespace wio
         char advance();
         bool is_operator(char ch);
         bool is_seperator(char ch);
-        bool is_bitwise_op(char ch);
         bool skip_whitespace();
         bool skip_comments();
         token read_identifier();

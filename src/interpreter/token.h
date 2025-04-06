@@ -15,7 +15,7 @@ namespace wio
         
         KW_COUNT /* JUST A COUNTER! NOT A KW*/,
         
-        identifier, number, string, character, op, bang, question_mark, bitwise_or, bitwise_and, bitwise_not, 
+        identifier, number, string, character, op,
         
         left_bracket, right_bracket,
         left_curly_bracket, right_curly_bracket,
@@ -30,7 +30,7 @@ namespace wio
         kw_if, kw_else, kw_for, kw_foreach, kw_in, kw_while, kw_break, kw_continue, kw_return, kw_func, kw_null, kw_ref, kw_pure, kw_unit,
         kw_realm, kw_as, kw_var, kw_const, kw_array, kw_dict, kw_local, kw_global, kw_import, kw_typeof, kw_true, kw_false, 
         KW_COUNT,
-        identifier, number, string, character, op, bang, question_mark, bitwise_or, bitwise_and, bitwise_not,
+        identifier, number, string, character, op,
         left_bracket, right_bracket,
         left_curly_bracket, right_curly_bracket,
         left_parenthesis, right_parenthesis,
@@ -78,29 +78,41 @@ namespace wio
         {"*", token_type::op},
         {"/", token_type::op},
         {"%", token_type::op},
+
         {"=", token_type::op},
-        {"<", token_type::op},
-        {">", token_type::op},
-        {">=", token_type::op},
-        {"<=", token_type::op},
-        {"&&", token_type::op},
-        {"||", token_type::op},
-        {"==", token_type::op},
-        {"!=", token_type::op},
-        {"=?", token_type::op},
-        {"++", token_type::op},
-        {"--", token_type::op},
         {"+=", token_type::op},
         {"-=", token_type::op},
         {"*=", token_type::op},
         {"/=", token_type::op},
         {"%=", token_type::op},
 
-        {"&", token_type::bitwise_and},
-        {"|", token_type::bitwise_or},
-        {"~", token_type::bitwise_not},
-        {"!", token_type::bang},
-        {"?", token_type::question_mark},
+        {"<", token_type::op},
+        {">", token_type::op},
+        {"<=", token_type::op},
+        {">=", token_type::op},
+        {"==", token_type::op},
+        {"!=", token_type::op},
+        {"=?", token_type::op}, // Exclusive to wio.(type equal)
+        {"&&", token_type::op},
+        {"||", token_type::op},
+
+        {"&", token_type::op},
+        {"|", token_type::op},
+
+        {"<<", token_type::op},
+        {">>", token_type::op},
+        {"<<=", token_type::op},
+        {">>=", token_type::op},
+
+        {"++", token_type::op},
+        {"--", token_type::op},
+        {"~", token_type::op},
+        {"!", token_type::op},
+        {"?", token_type::op},  // Exclusive to wio. (is not null)
+
+        {"->", token_type::op}, // Exclusive to wio. (to right)
+        {"<-", token_type::op}, // Exclusive to wio. (to left)
+
         {".", token_type::dot},
         {",", token_type::comma},
         {";", token_type::semicolon},

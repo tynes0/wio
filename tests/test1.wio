@@ -1,7 +1,9 @@
 import "wio.util"
 import "wio.io"
-import "wio.math"
+import "wio.math" as math;
 
-import pure "test2" as realm test2;
+var x = 3;
 
-Print(test2.PI2);
+x = 2;
+
+Print(x);

@@ -8,7 +8,6 @@
 namespace wio
 {
     enum class unary_operator_type { prefix, postfix };
-    enum class access_ref_type { value, lvalue };
 
     class ast_node;
     class expression;
@@ -22,7 +21,6 @@ namespace wio
     class program;
     class binary_expression;
     class unary_expression;
-    class assignment_expression;
     class array_access_expression;
     class member_access_expression;
     class function_call;
@@ -188,21 +186,6 @@ namespace wio
         ref<expression> m_operand;
         unary_operator_type m_op_type;
         bool m_is_ref;
-    };
-
-    class assignment_expression : public expression
-    {
-    public:
-        assignment_expression(ref<expression> target, token op, ref<expression> value)
-            : m_target(target), m_operator(op), m_value(value) {}
-
-        token_type get_type() const override { return m_operator.type; }
-        location get_location() const override { return m_operator.loc; }
-        std::string to_string() const override;
-
-        ref<expression> m_target;
-        token m_operator;
-        ref<expression> m_value;
     };
 
     class typeof_expression : public expression

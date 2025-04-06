@@ -96,9 +96,9 @@ namespace wio
 		return main_interpreter;
 	}
 
-	raw_buffer interpreter::run_f(const char* fp, packed_bool flags)
+	raw_buffer interpreter::run_f(const char* fp, packed_bool flags, ref<scope> target_scope)
 	{
-		raw_buffer content = run_f_p1(fp, flags);
+		raw_buffer content = run_f_p1(fp, flags, target_scope);
 		if (!content)
 			return raw_buffer(nullptr);
 		raw_buffer result = run_f_p2(content, flags);
@@ -106,7 +106,7 @@ namespace wio
 		return result;
 	}
 
-	raw_buffer interpreter::run_f_p1(const char* fp, packed_bool flags)
+	raw_buffer interpreter::run_f_p1(const char* fp, packed_bool flags, ref<scope> target_scope)
 	{
 		std::string filepath = fp;
 		if (!filesystem::check_extension(filepath, ".wio"))
@@ -121,18 +121,18 @@ namespace wio
 				if (view == "io")
 				{
 					if (module_tracker::get().add_module(std::filesystem::path(filepath)))
-						builtin::io::load();
+						builtin::io::load(target_scope);
 				}
 				else if (view == "math")
 				{
 					if (module_tracker::get().add_module(std::filesystem::path(filepath)))
-						builtin::math::load();
+						builtin::math::load(target_scope);
 
 				}
 				else if (view == "util")
 				{
 					if (module_tracker::get().add_module(std::filesystem::path(filepath)))
-						builtin::utility::load();
+						builtin::utility::load(target_scope);
 				}
 				else
 				{

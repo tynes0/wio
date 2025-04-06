@@ -112,11 +112,6 @@ namespace wio
         return "UnaryExpr(" + m_operand->to_string() + " " + m_operator.value + ")";
     }
 
-    std::string assignment_expression::to_string() const
-    {
-        return "AssignmentExpr(" + m_target->to_string() + " " + m_operator.value + " " + m_value->to_string() + ")";
-    }
-
     std::string typeof_expression::to_string() const
     {
         return "typeof " + m_expr->to_string();

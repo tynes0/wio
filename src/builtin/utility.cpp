@@ -33,11 +33,14 @@ namespace wio
             }
 		}
 
-		void utility::load()
+		void utility::load(ref<scope> target_scope)
 		{
-			loader::load_function<2>("Swap",		detail::b_swap,			{ variable_type::vt_any, variable_type::vt_any }, std::bitset<2>("11"));
-			loader::load_function<1>("ToString",	detail::b_to_string,	{ variable_type::vt_any });
-			loader::load_function<2>("Pair",		detail::b_pair,			{ variable_type::vt_any, variable_type::vt_any });
+			if (!target_scope)
+				target_scope = builtin_scope;
+
+			loader::load_function<2>(target_scope, "Swap",		detail::b_swap,			{ variable_type::vt_any, variable_type::vt_any }, std::bitset<2>("11"));
+			loader::load_function<1>(target_scope, "ToString",	detail::b_to_string,	{ variable_type::vt_any });
+			loader::load_function<2>(target_scope, "Pair",		detail::b_pair,			{ variable_type::vt_any, variable_type::vt_any });
 		}
 	}
 }

@@ -126,6 +126,12 @@ namespace wio
 
                 return result;
             }
+
+            ref<variable_base> create_vec2(ref<variable_base> xvb, ref<variable_base> yvb)
+            {
+                return nullptr;
+            }
+
             ref<variable_base> string_as_array(ref<variable_base> base_str)
             {
                 if (!base_str)

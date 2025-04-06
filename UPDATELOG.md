@@ -67,3 +67,8 @@
 - __Update 1.6.2:__ Added 'realm' keyword. Allows you to name scopes and call them from outside the scope.
 - __Update 1.6.3:__ Fixed an issue where loops could not run a single action without curly braces.
 - __Update 1.6.4:__ 'as' keyword has been added. Allows import as realm.
+- __Update 1.7.0:__ The requirement for the realm keyword after the as keyword has been removed. It has been made optional.
+- __Update 1.7.1:__ Fixed the issue where the builtin library was being imported with the as keyword as if it were being imported normally.
+- __Update 1.7.2:__ The 'types' folder was created to track the implementations of variable types more easily.
+- __Update 1.7.3:__ Binary expressions have been updated and made more organized. New operator overloads have been added. Problems with assignment operators have been fixed. Prepared for new types. Unary expressions will also be updated in the next update.
+- __Update 1.7.4:__ Preparations have been made for the 1.8 update.

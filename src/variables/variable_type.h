@@ -16,7 +16,7 @@ namespace wio
 
     MakeFrenumInNamespace(wio, variable_base_type, variable, array, dictionary, function)
 
-        enum class variable_type
+    enum class variable_type
     {
         vt_null,
         vt_integer,
@@ -31,6 +31,9 @@ namespace wio
         vt_file,
         vt_type,
         vt_pair,
+        vt_vec2,
+        vt_vec3,
+        vt_vec4,
         vt_realm, // 
         vt_any,
     };

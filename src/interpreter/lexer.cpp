@@ -51,16 +51,16 @@ namespace wio
                 std::string op(1, advance());
                 m_tokens.push_back({ token_map.at(op), op, m_loc });
             }
+            else if (current == '~')
+            {
+                std::string op(1, advance());
+                m_tokens.push_back({ token_map.at(op), op, m_loc });
+            }
             else if (is_operator(current))
             {
                 m_tokens.push_back(read_operator());
             }
             else if (is_seperator(current))
-            {
-                std::string op(1, advance());
-                m_tokens.push_back({ token_map.at(op), op, m_loc });
-            }
-            else if (is_bitwise_op(current))
             {
                 std::string op(1, advance());
                 m_tokens.push_back({ token_map.at(op), op, m_loc });
@@ -121,11 +121,6 @@ namespace wio
     bool lexer::is_seperator(char ch)
     {
         return (ch == '(' || ch == ')' || ch == '[' || ch == ']' || ch == '{' || ch == '}' || ch == '.' || ch == ',' || ch == ';');
-    }
-
-    bool lexer::is_bitwise_op(char ch)
-    {
-        return (ch == '~' || ch == '|' || ch == '&');
     }
 
     bool lexer::skip_whitespace()

@@ -36,7 +36,6 @@ namespace wio
         ref<variable_base> evaluate_typeof_expression(ref<typeof_expression> node);
         ref<variable_base> evaluate_binary_expression(ref<binary_expression> node, ref<variable_base> object = nullptr, bool is_ref = false);
         ref<variable_base> evaluate_unary_expression(ref<unary_expression> node, ref<variable_base> object = nullptr, bool is_ref = false);
-        ref<variable_base> evaluate_assignment_expression(ref<assignment_expression> node, ref<variable_base> object = nullptr, bool is_ref = false);
         ref<variable_base> evaluate_identifier(ref<identifier> node, ref<variable_base> object = nullptr, bool is_ref = false);
         ref<variable_base> evaluate_array_access_expression(ref<array_access_expression> node, ref<variable_base> object = nullptr, bool is_ref = false);
         ref<variable_base> evaluate_member_access_expression(ref<member_access_expression> node, ref<variable_base> object = nullptr, bool is_ref = false);
