@@ -25,7 +25,7 @@ namespace wio
         return m_open_mode;
     }
 
-    bool file_wrapper::operator==(const file_wrapper& right)
+    bool file_wrapper::operator==(const file_wrapper& right) const
     {
         return (m_file == right.m_file);
     }
