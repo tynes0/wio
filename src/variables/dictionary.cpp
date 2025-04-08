@@ -3,7 +3,7 @@
 
 namespace wio
 {
-    var_dictionary::var_dictionary(const map_t& data, packed_bool flags) : m_data(data), null_var(flags)
+    var_dictionary::var_dictionary(const map_t& data, packed_bool flags) : m_data(data), variable_base(flags)
     {
     }
 

@@ -56,7 +56,7 @@ namespace wio
             {
                 ref<var_array> array = get_var_array(base_array);
                 array->push(value);
-                return make_ref<null_var>();
+                return create_null_variable();
             }
 
             static ref<variable_base> b_array_pop(ref<variable_base> base_array, ref<variable_base> idx)
@@ -83,14 +83,14 @@ namespace wio
                 for (auto& item : rarray->get_data())
                     array->push(item);
 
-                return make_ref<null_var>();
+                return create_null_variable();
             }
 
             static ref<variable_base> b_array_clear(ref<variable_base> base_array)
             {
                 ref<var_array> array = get_var_array(base_array);
                 array->clear();
-                return make_ref<null_var>();
+                return create_null_variable();
             }
 
             static ref<variable_base> b_array_sub_array(ref<variable_base> base_array, ref<variable_base> base_offset, ref<variable_base> base_length)

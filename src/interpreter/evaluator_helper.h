@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../variables/variable_base.h"
+#include "../interpreter/ast.h"
 
 namespace wio
 {
@@ -26,13 +27,23 @@ namespace wio
 		ref<variable_base> eval_binary_exp_type_equal(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // =?
 		ref<variable_base> eval_binary_exp_logical_and(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // &&
 		ref<variable_base> eval_binary_exp_logical_or(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // ||
+		ref<variable_base> eval_binary_exp_logical_xor(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // ^^
 		ref<variable_base> eval_binary_exp_bitwise_and(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // &
 		ref<variable_base> eval_binary_exp_bitwise_or(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // |
+		ref<variable_base> eval_binary_exp_bitwise_xor(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // ^
 		ref<variable_base> eval_binary_exp_left_shift(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // <<
 		ref<variable_base> eval_binary_exp_right_shift(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // >>
 		ref<variable_base> eval_binary_exp_left_shift_assign(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // <<=
 		ref<variable_base> eval_binary_exp_right_shift_assign(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // >>=
 		ref<variable_base> eval_binary_exp_to_left(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // <-
 		ref<variable_base> eval_binary_exp_to_right(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // ->
+
+		ref<variable_base> eval_unary_exp_positive(ref<variable_base> v_ref, unary_operator_type op_type, const location& loc); // +
+		ref<variable_base> eval_unary_exp_negative(ref<variable_base> v_ref, unary_operator_type op_type, const location& loc); // -
+		ref<variable_base> eval_unary_exp_increment(ref<variable_base> v_ref, unary_operator_type op_type, const location& loc); // ++
+		ref<variable_base> eval_unary_exp_decrement(ref<variable_base> v_ref, unary_operator_type op_type, const location& loc); // --
+		ref<variable_base> eval_unary_exp_bitwise_not(ref<variable_base> v_ref, unary_operator_type op_type, const location& loc); // ~
+		ref<variable_base> eval_unary_exp_logical_not(ref<variable_base> v_ref, unary_operator_type op_type, const location& loc); // !
+		ref<variable_base> eval_unary_exp_is_not_null(ref<variable_base> v_ref, unary_operator_type op_type, const location& loc); // ?
 	}											   
 }

@@ -1,0 +1,100 @@
+import "wio.io"
+
+## basic math
+{
+	Println(1 + 2);
+	Println(3 - 4);
+	Println(7 * 2);
+	Println(6 / 3);
+	Println(7 % 2);
+}
+
+Println("");
+
+## asignment
+{
+	var v1 = null;
+	var v2 = 3;
+	var v3 = 4;
+	var v4 = 5;
+	var v5 = 6;
+	var v6 = 7;
+
+	Println(v1 = 3);
+	Println(v2 += 1);
+	Println(v3 -= 5);
+	Println(v4 *= 7);
+	Println(v5 /= 6);
+	Println(v6 %= 2);
+}
+Println("");
+
+## compare
+{
+	Println(4 < 2);
+	Println(5 > 3);
+	Println(6 <= 9);
+	Println(1 >= 1);
+	Println(5 == 7);
+	Println(7 != 6);
+	Println(4 =? 2.4);
+}
+
+Println("");
+## logical
+{
+	Println(true && false);
+	Println(true || false);
+	Println(true ^^ false);
+}
+
+Println("");
+## bitwise
+{
+	Println(5 & 1);
+	Println(6 | 8);
+	Println(7 ^ 2);
+}
+
+Println("");
+## shift
+{
+	Println(6 << 1);
+	Println(2 >> 7);
+
+	var v1 = 4;
+	var v2 = 3;
+
+	Println(v1 <<= 5);
+	Println(v2 >>= 9);
+}
+Println("");
+
+## to left - to right
+{
+	STDOUT <- "Hello, world!";
+	STDOUT <- 1;
+	STDOUT <- '\n';
+}
+
+Println("");
+
+## unary
+{
+	Println(+5);
+	Println(-4);
+
+	var v1 = 2;
+	var v2 = 2;
+	var v3 = 5;
+	var v4 = 5;
+
+	Println(++v1);
+	Println(v2++);
+	Println(--v3);
+	Println(v4--);
+
+	Println(~3);
+	Println(!false);
+	Println(?null);
+}

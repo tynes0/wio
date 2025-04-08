@@ -14,12 +14,19 @@ namespace wio
     {
         return m_file;
     }
+
     const std::string& file_wrapper::get_filename() const
     {
         return m_filename;
     }
+
     long long file_wrapper::get_open_mode() const
     {
         return m_open_mode;
+    }
+
+    bool file_wrapper::operator==(const file_wrapper& right)
+    {
+        return (m_file == right.m_file);
     }
 } // namespace wio

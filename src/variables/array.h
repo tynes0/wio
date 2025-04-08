@@ -7,7 +7,7 @@
 
 namespace wio
 {
-	class var_array : public null_var
+	class var_array : public variable_base
 	{
 	public:
 		var_array(const std::vector<ref<variable_base>>& data, packed_bool flags = {});

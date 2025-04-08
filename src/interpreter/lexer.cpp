@@ -41,21 +41,6 @@ namespace wio
             {
                 m_tokens.push_back(read_char());
             }
-            else if (current == '!')
-            {
-                std::string op(1, advance());
-                m_tokens.push_back({ token_map.at(op), op, m_loc });
-            }
-            else if (current == '?')
-            {
-                std::string op(1, advance());
-                m_tokens.push_back({ token_map.at(op), op, m_loc });
-            }
-            else if (current == '~')
-            {
-                std::string op(1, advance());
-                m_tokens.push_back({ token_map.at(op), op, m_loc });
-            }
             else if (is_operator(current))
             {
                 m_tokens.push_back(read_operator());
@@ -312,10 +297,44 @@ namespace wio
     token lexer::read_char()
     {
         advance();
-        std::string op(1, advance());
-        token result({ token_type::character, op, m_loc });
+
+        std::string result;
+
+        if (peek() == '\\')
+        {
+            advance();
+            char escape_char = peek();
+            switch (escape_char)
+            {
+            case '"':
+            case '\\':
+                result = advance();
+                break;
+            case 'n':
+                result = '\n';
+                advance();
+                break;
+            case 't':
+                result = '\t';
+                advance();
+                break;
+            case 'r':
+                result = '\r';
+                advance();
+                break;
+            default:
+                throw invalid_string_error("Invalid escape sequence: \\" + std::string(1, escape_char), m_loc);
+
+            }
+        }
+        else
+        {
+            result = advance();
+        }
+
+        token token_result({ token_type::character, result, m_loc });
         advance();
-        return result;
+        return token_result;
     }
 
     token lexer::read_operator()

@@ -1,10 +1,6 @@
 #pragma once
 
-#include "builtin_base.h"
-
-#include "../variables/function.h"
-#include "../variables/array.h"
-#include "../variables/dictionary.h"
+#include "../variables/variable_base.h"
 
 namespace wio
 {

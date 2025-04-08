@@ -7,7 +7,7 @@
 
 namespace wio
 {
-    class realm : public null_var
+    class realm : public variable_base
     {
     public:
         realm(packed_bool flags = {});

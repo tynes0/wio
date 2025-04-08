@@ -7,7 +7,7 @@
 
 namespace wio 
 {
-    class variable : public null_var 
+    class variable : public variable_base 
     {
     public:
         variable(const any& data, variable_type type, packed_bool flags = {});
@@ -29,5 +29,7 @@ namespace wio
         any m_data;
         variable_type m_type;
     };
+
+    inline ref<variable_base> create_null_variable() { return make_ref<variable>(any(), variable_type::vt_null); }
 
 } // namespace wio

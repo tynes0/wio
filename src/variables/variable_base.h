@@ -24,11 +24,13 @@ namespace wio
 
         bool is_constant() const { return m_flags.b1; }
         bool is_ref() const { return m_flags.b2; }
+        bool is_ptr_ref() const { return m_flags.b3; }
         // pf -> param flag
         bool is_pf_return_ref() const { return m_flags.b5; }
 
         void set_const(bool flag) { m_flags.b1 = flag; }
         void set_ref(bool flag) { m_flags.b2 = flag; }
+        void set_ptr_ref(bool flag) { m_flags.b3 = flag; }
         // pf -> param flag
         void set_pf_return_ref(bool flag) { m_flags.b5 = flag; }
 
@@ -41,21 +43,8 @@ namespace wio
         variable_base(packed_bool flags) : m_flags(flags) { }
     private:
         ref<scope> m_members;
-        packed_bool m_flags = {}; // b1 -> const --- b2 -> ref --- b3-> * --- b4-> * --- b5-> return ref --- b6-> * --- b7-> * --- b8-> *  (b1-b2-b3-b4 default flags  ---  b5-b6-b7-b8 func parameter flags)
+        packed_bool m_flags = {}; // b1 -> const --- b2 -> ref --- b3-> pointer ref --- b4-> * --- b5-> return ref --- b6-> * --- b7-> * --- b8-> *  (b1-b2-b3-b4 default flags  ---  b5-b6-b7-b8 func parameter flags)
     };
 
     using pair_t = pair<ref<variable_base>, ref<variable_base>>;
-
-    class null_var : public variable_base
-    {
-    public:
-        null_var(variable_base_type vt = variable_base_type::variable) :variable_base({}), m_vbt(vt) {}
-        null_var(packed_bool flags) : variable_base(flags) {}
-        variable_base_type get_base_type() const override { return m_vbt; }
-        variable_type get_type() const override { return variable_type::vt_null; }
-        ref<variable_base> clone() const override { return make_ref<null_var>(*this); }
-    private:
-        variable_base_type m_vbt = variable_base_type::variable;
-    };
-
 } // namespace wio

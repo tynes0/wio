@@ -12,6 +12,8 @@ namespace wio
         FILE* get_file() const;
         const std::string& get_filename() const;
         long long get_open_mode() const;
+
+        bool operator==(const file_wrapper& right);
     private:
         std::string m_filename;
         FILE* m_file;

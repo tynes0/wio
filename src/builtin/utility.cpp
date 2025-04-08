@@ -19,7 +19,7 @@ namespace wio
 		{
 			static ref<variable_base> b_swap(ref<variable_base> lhs, ref<variable_base> rhs)
 			{
-				return ref<null_var>();
+				return create_null_variable();
 			}
 
 			static ref<variable_base> b_to_string(ref<variable_base> base)

@@ -10,7 +10,7 @@ namespace wio
 
 	struct function_param;
 
-	class var_function : public null_var
+	class var_function : public variable_base
 	{
 	public:
 		using fun_type = std::function<ref<variable_base>(const std::vector<function_param>&, std::vector<ref<variable_base>>&)>;

@@ -72,3 +72,16 @@
 - __Update 1.7.2:__ The 'types' folder was created to track the implementations of variable types more easily.
 - __Update 1.7.3:__ Binary expressions have been updated and made more organized. New operator overloads have been added. Problems with assignment operators have been fixed. Prepared for new types. Unary expressions will also be updated in the next update.
 - __Update 1.7.4:__ Preparations have been made for the 1.8 update.
+- __Update 1.8.0:__ All issues with operators have been fixed.
+- __Update 1.8.1:__ Added logical xor (^^) operator.
+- __Update 1.8.2:__ Added bitwise xor (^) operator.
+- __Update 1.8.3:__ Added left shift (<<) operator.
+- __Update 1.8.4:__ Added right shift (>>) operator.
+- __Update 1.8.5:__ Added left shift assign (<<=) operator.
+- __Update 1.8.6:__ Added right shift assign (>>=) operator.
+- __Update 1.8.7:__ Added to left (<-) operator.
+- __Update 1.8.8:__ Added to right (->) operator.
+- __Update 1.8.9:__ Fixed the issue where member accesses were on the left but there was no change in the strings.
+- __Update 1.8.10:__ Problems with null usage solved.
+- __Update 1.8.11:__ Fixed an issue where character escape sequences were not working correctly.
+- __Update 1.8.12:__ Fixed an issue where the ReadFile function was not reading STDIN correctly.

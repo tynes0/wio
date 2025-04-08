@@ -2,7 +2,7 @@
 
 namespace wio
 {
-	realm::realm(packed_bool flags) : null_var(flags)
+	realm::realm(packed_bool flags) : variable_base(flags)
 	{
 		
 	}

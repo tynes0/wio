@@ -1,9 +1,8 @@
-import "wio.util"
 import "wio.io"
-import "wio.math" as math;
+## import "operators"
 
-var x = 3;
+var input;
 
-x = 2;
+STDIN -> input;
 
-Print(x);
+Println(input);

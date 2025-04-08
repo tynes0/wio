@@ -33,14 +33,14 @@ namespace wio
             static ref<variable_base> b_print(ref<variable_base> base)
             {
                 filesystem::write_stdout(helpers::var_to_string(base));
-                return make_ref<null_var>();
+                return create_null_variable();
             }
 
             static ref<variable_base> b_println(ref<variable_base> base)
             {
                 b_print(base);
                 filesystem::write_stdout("\n");
-                return make_ref<null_var>();
+                return create_null_variable();
             }
 
             static ref<variable_base> b_input()
@@ -120,7 +120,7 @@ namespace wio
                 file = fopen(filename.c_str(), mode_str.c_str());
 
                 if (!file) 
-                    return make_ref<null_var>();
+                    return create_null_variable();
 
                 if (is_ate)
                     fseek(file, 0, SEEK_END);
@@ -135,7 +135,7 @@ namespace wio
                     throw builtin_error("OpenFile(): File must be a file.");
 
                 fclose(file_var->get_data_as<file_wrapper>().get_file());
-                return make_ref<null_var>();
+                return create_null_variable();
             }
 
             static ref<variable_base> b_write(ref<variable_base> file, ref<variable_base> value)
@@ -153,7 +153,7 @@ namespace wio
                 else
                     filesystem::write_fp(file_var->get_data_as<std::string>(), value_var->get_data_as<std::string>());
 
-                return make_ref<null_var>();
+                return create_null_variable();
             }
 
             static ref<variable_base> b_read(ref<variable_base> file)
@@ -162,7 +162,14 @@ namespace wio
                 if (!file_var || file_var->get_type() != variable_type::vt_file && file_var->get_type() != variable_type::vt_string)
                     throw builtin_error("OpenFile(): File must be a file or filepath (string).");
 
-                raw_buffer buf = filesystem::read_file(file_var->get_data_as<file_wrapper>().get_file());
+                file_wrapper wrapped_file = file_var->get_data_as<file_wrapper>();
+                raw_buffer buf;
+
+                if(wrapped_file != wrapped_stdin)
+                    buf = filesystem::read_file(wrapped_file.get_file());
+                else
+                    buf = filesystem::read_stdout();
+
                 auto result = make_ref<variable>(any(std::string(buf.as<char>(), buf.size)), variable_type::vt_string);
                 return result;
             }

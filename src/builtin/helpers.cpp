@@ -1,5 +1,12 @@
 #include "helpers.h"
 
+#include "builtin_base.h"
+
+#include "../variables/function.h"
+#include "../variables/array.h"
+#include "../variables/dictionary.h"
+#include "../types/vec2.h"
+
 namespace wio
 {
     namespace builtin
@@ -30,6 +37,10 @@ namespace wio
                     {
                         return std::to_string(var->get_data_as<double>());
                     }
+                    else if (var->get_type() == variable_type::vt_float_ref)
+                    {
+                        return std::to_string(*var->get_data_as<double*>());
+                    }
                     else if (var->get_type() == variable_type::vt_bool)
                     {
                         return var->get_data_as<bool>() ? std::string("true") : std::string("false");
@@ -37,6 +48,10 @@ namespace wio
                     else if (var->get_type() == variable_type::vt_character)
                     {
                         return s_member_count ? ("'"s + var->get_data_as<char>() + '\'') : std::string(1, var->get_data_as<char>());
+                    }
+                    else if (var->get_type() == variable_type::vt_character_ref)
+                    {
+                        return s_member_count ? ("'"s + *var->get_data_as<char*>() + '\'') : std::string(1, *var->get_data_as<char*>());
                     }
                     else if (var->get_type() == variable_type::vt_type)
                     {
@@ -54,6 +69,20 @@ namespace wio
                         ss << var_to_string(p.first);
                         ss << (", ");
                         ss << var_to_string(p.second);
+                        s_member_count--;
+                        ss << ("]");
+                        return ss.str();
+                    }
+                    else if (var->get_type() == variable_type::vt_vec2)
+                    {
+                        ref<variable> var_ref = std::dynamic_pointer_cast<variable>(base);
+                        const vec2& v = var_ref->get_data_as<vec2>();
+                        std::stringstream ss;
+                        ss << ("[");
+                        s_member_count++;
+                        ss << std::to_string(v.x);
+                        ss << (", ");
+                        ss << std::to_string(v.y);
                         s_member_count--;
                         ss << ("]");
                         return ss.str();

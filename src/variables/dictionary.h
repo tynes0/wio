@@ -7,7 +7,7 @@
 
 namespace wio
 {
-	class var_dictionary : public null_var
+	class var_dictionary : public variable_base
 	{
 	public:
 		using map_t = std::map<std::string, ref<variable_base>>; // std::map could be change

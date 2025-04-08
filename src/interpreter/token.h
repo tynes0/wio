@@ -95,9 +95,11 @@ namespace wio
         {"=?", token_type::op}, // Exclusive to wio.(type equal)
         {"&&", token_type::op},
         {"||", token_type::op},
+        {"^^", token_type::op},
 
         {"&", token_type::op},
         {"|", token_type::op},
+        {"^", token_type::op},
 
         {"<<", token_type::op},
         {">>", token_type::op},
