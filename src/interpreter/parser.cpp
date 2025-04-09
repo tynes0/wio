@@ -872,18 +872,21 @@ namespace wio
 
     ref<statement> parser::parse_import_statement()
     {
-        token current = current_token();
+        location loc = current_token().loc;
         bool is_pure = match_token(token_type::kw_pure);
 
-        ref<expression> module_path_expr = parse_postfix_expression();
+        token result;
 
-        ref<string_literal> lit = std::dynamic_pointer_cast<string_literal>(module_path_expr);
+        while (current_token().type != token_type::semicolon && current_token().type != token_type::kw_as)
+            result.value += next_token().value;
 
-        if (!lit)
-        {
-            error("Expected a string literal for the module path in import statement.", module_path_expr->get_location());
-            return nullptr;
-        }
+        ref<string_literal> lit = make_ref<string_literal>(result);
+
+        // if (!lit)
+        // {
+        //     error("Expected a string literal for the module path in import statement.", module_path_expr->get_location());
+        //     return nullptr;
+        // }
 
         std::string module_path = lit->m_token.value;
 
@@ -891,16 +894,16 @@ namespace wio
         {
             match_token(token_type::kw_realm);
 
-            auto result = make_ref<import_statement>(module_path_expr->get_location(), module_path, is_pure, true, make_ref<identifier>(next_token(), false, false));
+            auto result = make_ref<import_statement>(loc, module_path, is_pure, true, make_ref<identifier>(next_token(), false, false));
 
             match_token(token_type::semicolon);
 
             return result;
         }
 
-        match_token(token_type::semicolon);
+        consume_token(token_type::semicolon);
 
-        return make_ref<import_statement>(module_path_expr->get_location(), module_path, is_pure);
+        return make_ref<import_statement>(loc, module_path, is_pure);
     }
 
     ref<block_statement> parser::parse_block_statement()

@@ -1,6 +1,7 @@
 #include "lexer.h"
 
 #include "../base/exception.h"
+#include "../utils/util.h"
 
 #include <cctype>
 #include <sstream>
@@ -225,8 +226,6 @@ namespace wio
         {
             is_float = true;
             result += advance();
-            if (!std::isdigit(peek()))
-                throw invalid_number_error("Invalid float number!", m_loc);
 
             while (std::isdigit(peek()))
                 result += advance();
@@ -259,29 +258,8 @@ namespace wio
             if (peek() == '\\')
             {
                 advance();
-                char escape_char = peek();
-                switch (escape_char)
-                {
-                case '"':
-                case '\\':
-                    result += advance();
-                    break;
-                case 'n':
-                    result += '\n';
-                    advance();
-                    break;
-                case 't':
-                    result += '\t';
-                    advance();
-                    break;
-                case 'r':
-                    result += '\r';
-                    advance();
-                    break;
-                default:
-                    throw invalid_string_error("Invalid escape sequence: \\" + std::string(1, escape_char), m_loc);
-
-                }
+                char escape_char = advance();
+                result += util::get_escape_seq(escape_char);
             }
             else
             {
@@ -303,29 +281,8 @@ namespace wio
         if (peek() == '\\')
         {
             advance();
-            char escape_char = peek();
-            switch (escape_char)
-            {
-            case '"':
-            case '\\':
-                result = advance();
-                break;
-            case 'n':
-                result = '\n';
-                advance();
-                break;
-            case 't':
-                result = '\t';
-                advance();
-                break;
-            case 'r':
-                result = '\r';
-                advance();
-                break;
-            default:
-                throw invalid_string_error("Invalid escape sequence: \\" + std::string(1, escape_char), m_loc);
-
-            }
+            char escape_char = advance();
+            result = std::string(1, util::get_escape_seq(escape_char));
         }
         else
         {

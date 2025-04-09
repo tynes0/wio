@@ -20,8 +20,8 @@ namespace wio
         long long m_open_mode;
     };
 
-    static const file_wrapper wrapped_stdin = file_wrapper(stdin, "", 0);
-    static const file_wrapper wrapped_stdout = file_wrapper(stdout, "", 0);
-    static const file_wrapper wrapped_stderr = file_wrapper(stderr, "", 0);
+    static const file_wrapper wrapped_stdin = file_wrapper(stdin, "STDIN", 0);
+    static const file_wrapper wrapped_stdout = file_wrapper(stdout, "STDOUT", 0);
+    static const file_wrapper wrapped_stderr = file_wrapper(stderr, "STDERR", 0);
 
 } // namespace wio

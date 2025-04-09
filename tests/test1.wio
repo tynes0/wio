@@ -1,8 +1,8 @@
-import "wio.io"
-## import "operators"
+import wio.util;
+import wio.io;
 
-var input;
+var vec = Vec2(41.2123,1.);
 
-STDIN -> input;
+vec += 12;
 
-Println(input);
+STDOUT <- '\v';

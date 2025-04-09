@@ -39,7 +39,7 @@ namespace wio
 
     struct token
     {
-        token_type type;
+        token_type type = token_type::end_of_file;
         std::string value;
         location loc;
     };

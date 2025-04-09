@@ -13,6 +13,7 @@
 #include "../variables/realm.h"
 
 #include "../utils/filesystem.h"
+#include "../utils/util.h"
 
 namespace wio
 {
@@ -48,7 +49,7 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_integer)
                     return make_ref<variable>(any(any_cast<double>(left_value) + any_cast<long long>(right_value)), variable_type::vt_float);
                 else if (rv_ref->get_type() == variable_type::vt_string)
-                    return make_ref<variable>(any(std::to_string(any_cast<double>(left_value)) + any_cast<std::string>(right_value)), variable_type::vt_string);
+                    return make_ref<variable>(any(util::double_to_string(any_cast<double>(left_value)) + any_cast<std::string>(right_value)), variable_type::vt_string);
             }
             else if (lv_ref->get_type() == variable_type::vt_float_ref)
             {
@@ -59,7 +60,7 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_integer)
                     return make_ref<variable>(any(*any_cast<double*>(left_value) + any_cast<long long>(right_value)), variable_type::vt_float);
                 else if (rv_ref->get_type() == variable_type::vt_string)
-                    return make_ref<variable>(any(std::to_string(*any_cast<double*>(left_value)) + any_cast<std::string>(right_value)), variable_type::vt_string);
+                    return make_ref<variable>(any(util::double_to_string(*any_cast<double*>(left_value)) + any_cast<std::string>(right_value)), variable_type::vt_string);
             }
             else if (lv_ref->get_type() == variable_type::vt_string)
             {
@@ -72,9 +73,9 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_integer)
                     return make_ref<variable>(any(any_cast<std::string>(left_value) + std::to_string(any_cast<long long>(right_value))), variable_type::vt_string);
                 else if (rv_ref->get_type() == variable_type::vt_float)
-                    return make_ref<variable>(any(any_cast<std::string>(left_value) + std::to_string(any_cast<double>(right_value))), variable_type::vt_string);
+                    return make_ref<variable>(any(any_cast<std::string>(left_value) + util::double_to_string(any_cast<double>(right_value))), variable_type::vt_string);
                 else if (rv_ref->get_type() == variable_type::vt_float_ref)
-                    return make_ref<variable>(any(any_cast<std::string>(left_value) + std::to_string(*any_cast<double*>(right_value))), variable_type::vt_string);
+                    return make_ref<variable>(any(any_cast<std::string>(left_value) + util::double_to_string(*any_cast<double*>(right_value))), variable_type::vt_string);
             }
             else if (lv_ref->get_type() == variable_type::vt_vec2)
             {

@@ -1,6 +1,9 @@
 #include "dictionary.h"
 #include "variable.h"
 
+#include "../utils/util.h"
+#include "../types/file_wrapper.h"
+
 namespace wio
 {
     var_dictionary::var_dictionary(const map_t& data, packed_bool flags) : m_data(data), variable_base(flags)
@@ -69,30 +72,23 @@ namespace wio
 
     std::string var_dictionary::as_key(ref<variable_base> value)
     {
-        if (value->get_base_type() != variable_base_type::variable)
-            throw invalid_key_error("Type '" + frenum::to_string(value->get_base_type()) + "' can not be used as key!");
-        
         ref<variable> var = std::dynamic_pointer_cast<variable>(value);
 
-        switch (var->get_type())
-        {
-        case wio::variable_type::vt_integer:
+        if(var->get_type() == variable_type::vt_integer)
             return std::to_string(var->get_data_as<long long>());
-        case wio::variable_type::vt_float:
-            return std::to_string(var->get_data_as<double>());
-        case wio::variable_type::vt_string:
+        else if(var->get_type() == variable_type::vt_string)
             return var->get_data_as<std::string>();
-        case wio::variable_type::vt_character:
-            return std::string(1, var->get_data_as<char>());
-        case wio::variable_type::vt_bool:
-        case wio::variable_type::vt_null:
-        case wio::variable_type::vt_dictionary:
-        case wio::variable_type::vt_array:
-        case wio::variable_type::vt_function:
-        case wio::variable_type::vt_var_param:
-        default:
-            throw invalid_key_error("Type '" + frenum::to_string(var->get_type()) + "' can not be used as key!");
-        }
-    }
+        else if(var->get_type() == variable_type::vt_float)
+            return std::to_string(var->get_data_as<double>());
+        else if(var->get_type() == variable_type::vt_float_ref)
+            return std::to_string(*var->get_data_as<double*>());
+        else if(var->get_type() == variable_type::vt_file)
+            return var->get_data_as<file_wrapper>().get_filename();
+        else if(var->get_type() == variable_type::vt_character)
+            return std::to_string(var->get_data_as<char>());
+        else if(var->get_type() == variable_type::vt_character_ref)
+            return std::to_string(*var->get_data_as<char*>());
 
+        throw invalid_key_error("Type '" + util::type_to_string(var->get_type()) + "' can not be used as key!");
+    }
 }

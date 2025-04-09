@@ -6,6 +6,9 @@
 #include "../variables/array.h"
 #include "../variables/dictionary.h"
 #include "../types/vec2.h"
+#include "../types/file_wrapper.h"
+
+#include "../utils/util.h"
 
 namespace wio
 {
@@ -35,11 +38,11 @@ namespace wio
                     }
                     else if (var->get_type() == variable_type::vt_float)
                     {
-                        return std::to_string(var->get_data_as<double>());
+                        return util::double_to_string(var->get_data_as<double>());
                     }
                     else if (var->get_type() == variable_type::vt_float_ref)
                     {
-                        return std::to_string(*var->get_data_as<double*>());
+                        return util::double_to_string(*var->get_data_as<double*>());
                     }
                     else if (var->get_type() == variable_type::vt_bool)
                     {
@@ -55,9 +58,11 @@ namespace wio
                     }
                     else if (var->get_type() == variable_type::vt_type)
                     {
-                        std::string_view view = frenum::to_string_view(var->get_data_as<variable_type>());
-                        view.remove_prefix(3); // vt_
-                        return std::string(view);
+                        return util::type_to_string(var->get_data_as<variable_type>());
+                    }
+                    else if (var->get_type() == variable_type::vt_file)
+                    {
+                        return var->get_data_as<file_wrapper>().get_filename();
                     }
                     else if (var->get_type() == variable_type::vt_pair)
                     {
@@ -78,17 +83,17 @@ namespace wio
                         ref<variable> var_ref = std::dynamic_pointer_cast<variable>(base);
                         const vec2& v = var_ref->get_data_as<vec2>();
                         std::stringstream ss;
-                        ss << ("[");
+                        ss << ("(");
                         s_member_count++;
-                        ss << std::to_string(v.x);
+                        ss << util::double_to_string(v.x);
                         ss << (", ");
-                        ss << std::to_string(v.y);
+                        ss << util::double_to_string(v.y);
                         s_member_count--;
-                        ss << ("]");
+                        ss << (")");
                         return ss.str();
                     }
                     else
-                        throw builtin_error("Invalid expression in print parameter!");
+                        throw builtin_error("Invalid expression!");
                 }
                 else if (base->get_base_type() == variable_base_type::array)
                 {
@@ -158,7 +163,41 @@ namespace wio
 
             ref<variable_base> create_vec2(ref<variable_base> xvb, ref<variable_base> yvb)
             {
-                return nullptr;
+                ref<variable> x_value = std::dynamic_pointer_cast<variable>(xvb);
+                ref<variable> y_value = std::dynamic_pointer_cast<variable>(yvb);
+
+                vec2 result_vec{ 0, 0 };
+
+                if (x_value->get_type() == variable_type::vt_float)
+                    result_vec.x = x_value->get_data_as<double>();
+                else if (x_value->get_type() == variable_type::vt_float_ref)
+                    result_vec.x = *x_value->get_data_as<double*>();
+                else if (x_value->get_type() == variable_type::vt_integer)
+                    result_vec.x = (double)x_value->get_data_as<long long>();
+
+                if (y_value->get_type() == variable_type::vt_float)
+                    result_vec.y = y_value->get_data_as<double>();
+                else if (y_value->get_type() == variable_type::vt_float_ref)
+                    result_vec.y = *y_value->get_data_as<double*>();
+                else if (y_value->get_type() == variable_type::vt_integer)
+                    result_vec.y = (double)y_value->get_data_as<long long>();
+                
+                ref<variable> result = make_ref<variable>(result_vec, variable_type::vt_vec2);
+                result->init_members();
+                ref<scope> members = result->get_members();
+                
+                symbol x_sym("X", make_ref<variable>(&result->get_data_as<vec2>().x, variable_type::vt_float_ref));
+                symbol y_sym("Y", make_ref<variable>(&result->get_data_as<vec2>().y, variable_type::vt_float_ref));
+
+                symbol r_sym("R", make_ref<variable>(&result->get_data_as<vec2>().r, variable_type::vt_float_ref));
+                symbol g_sym("G", make_ref<variable>(&result->get_data_as<vec2>().g, variable_type::vt_float_ref));
+
+                members->insert("X", x_sym);
+                members->insert("Y", y_sym);
+                members->insert("R", r_sym);
+                members->insert("G", g_sym);
+
+                return result;
             }
 
             ref<variable_base> string_as_array(ref<variable_base> base_str)

@@ -1,4 +1,4 @@
-import "wio.io"
+import "wio.io";
 
 ## basic math
 {

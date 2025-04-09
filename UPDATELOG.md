@@ -48,11 +48,11 @@
 - __Update 1.4.11:__ Added 'pure' keyword. This keyword ensures that function calls in imported files are ignored.
 - __Update 1.4.12:__ Although the entity and package keywords were not added yet, they were there as tokens. They were renamed. They will now be used as unit and realm.
 - __Update 1.5.0:__ Fixed the problem where chained member and array accesses gave errors.
-- __Update 1.5.1:__ 'pair' type added.
+- __Update 1.5.1:__ 'Pair' type added.
 - __Update 1.5.2:__ Fixed an issue where identifiers were rendered incorrectly in some cases.
 - __Update 1.5.3:__ Added support for modifiable member values.
 - __Update 1.5.4:__ Some built-in methods have been added for String. More will be added.
-- __Update 1.5.5:__ Member value have been added for the pair type. first and key hold the same value and second and value hold the same value.
+- __Update 1.5.5:__ Member value have been added for the Pair type. first and key hold the same value and second and value hold the same value.
 - __Update 1.5.6:__ ToString function added. Now all types can be converted to string.
 - __Update 1.5.7:__ Suppressed some msvc compiler warnings.
 - __Update 1.5.8:__ Fixed a bug where it was not possible to assign a value to a member, array  element or dictionary element even though access was the left-hand operand.
@@ -85,3 +85,8 @@
 - __Update 1.8.10:__ Problems with null usage solved.
 - __Update 1.8.11:__ Fixed an issue where character escape sequences were not working correctly.
 - __Update 1.8.12:__ Fixed an issue where the ReadFile function was not reading STDIN correctly.
+- __Update 1.9.0:__ 'Vec2' type added.
+- __Update 1.9.1:__ Extra zeros in the decimal part of the Double type have been removed.
+- __Update 1.9.2:__ Dictionary key errors have been fixed. File type can now be used as a key (program, hashing the file path).
+- __Update 1.9.3:__ The semicolon requirement after the import keyword has been reinstated. However, the import path no longer needs to be a string literal. "test.wio" and test.wio are now the same.
+- __Update 1.9.4:__ Updated character escape sequence supports. Now all of them works correctly.
