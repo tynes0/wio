@@ -155,7 +155,13 @@ namespace wio
         for (auto& item : node->m_pairs)
         {
             ref<variable_base> var = evaluate_expression(item.second)->clone();
-            elements[var_dictionary::as_key(evaluate_expression(item.first))] = var;
+
+            std::string key = var_dictionary::as_key(evaluate_expression(item.first));
+
+            if (elements.find(key) != elements.end())
+                throw invalid_key_error("Key '" + key + "' was used more than once.");
+
+            elements[key] = var;
         }
 
         return make_ref<var_dictionary>(elements);
@@ -216,6 +222,8 @@ namespace wio
                 return helper::eval_binary_exp_not_equal_to(lv_ref, rv_ref, node->get_location());
             else if (op.value == "=?")
                 return helper::eval_binary_exp_type_equal(lv_ref, rv_ref, node->get_location());
+            else if (op.value == "<=>")
+                return helper::eval_binary_exp_compare_all(lv_ref, rv_ref, node->get_location());
             else if (op.value == "&&")
                 return helper::eval_binary_exp_logical_and(lv_ref, rv_ref, node->get_location());
             else if (op.value == "||")
@@ -228,6 +236,12 @@ namespace wio
                 return helper::eval_binary_exp_bitwise_or(lv_ref, rv_ref, node->get_location());
             else if (op.value == "^")
                 return helper::eval_binary_exp_bitwise_xor(lv_ref, rv_ref, node->get_location());
+            else if (op.value == "&=")
+                return helper::eval_binary_exp_bitwise_and_assign(lv_ref, rv_ref, node->get_location());
+            else if (op.value == "|=")
+                return helper::eval_binary_exp_bitwise_or_assign(lv_ref, rv_ref, node->get_location());
+            else if (op.value == "^=")
+                return helper::eval_binary_exp_bitwise_xor_assign(lv_ref, rv_ref, node->get_location());
             else if (op.value == "<<")
                 return helper::eval_binary_exp_left_shift(lv_ref, rv_ref, node->get_location());
             else if (op.value == ">>")
@@ -658,7 +672,7 @@ namespace wio
             ref<var_dictionary> dict = std::dynamic_pointer_cast<var_dictionary>(col_base);
             for (auto& it : dict->get_data())
             {
-                sym->var_ref = builtin::helpers::create_pair(make_ref<variable>(it.first, variable_type::vt_string), it.second);
+                sym->var_ref = builtin::helper::create_pair(make_ref<variable>(it.first, variable_type::vt_string), it.second);
 
                 enter_statement_stack(&node->m_body->m_statements);
                 for (auto& stmt : node->m_body->m_statements)
@@ -679,7 +693,7 @@ namespace wio
         else if (col_base->get_type() == variable_type::vt_string)
         {
             ref<variable> str = std::dynamic_pointer_cast<variable>(col_base);
-            ref<var_array> array = std::dynamic_pointer_cast<var_array>(builtin::helpers::string_as_array(str));
+            ref<var_array> array = std::dynamic_pointer_cast<var_array>(builtin::helper::string_as_array(str));
             for (size_t i = 0; i < array->size(); ++i)
             {
                 sym->var_ref = array->get_element(i);
@@ -807,7 +821,7 @@ namespace wio
 
             if (target_scope)
             {
-                symbol realm_symbol(name, realm_var, { false, true });
+                symbol realm_symbol(realm_var, { false, true });
 
                 builtin_scope->insert(name, realm_symbol);
             }
@@ -834,7 +848,7 @@ namespace wio
         {
             realm_var->load_members(symbols);
 
-            symbol realm_symbol(node->m_realm_id->m_token.value, realm_var, { false, false, m_eval_flags.b5 });
+            symbol realm_symbol(realm_var, { false, false, m_eval_flags.b5 });
 
             m_current_scope->insert(node->m_realm_id->m_token.value, realm_symbol);
         }
@@ -911,7 +925,7 @@ namespace wio
             }
         }
 
-        symbol symbol(name, var, { node->m_flags.b2, node->m_flags.b3, m_eval_flags.b5 });
+        symbol symbol(var, { node->m_flags.b2, node->m_flags.b3, m_eval_flags.b5 });
         if (node->m_flags.b3)
             m_current_scope->insert_to_global(name, symbol);
         else
@@ -969,7 +983,7 @@ namespace wio
             }
         }
 
-        symbol array_symbol(name, var, { node->m_flags.b2, node->m_flags.b3, m_eval_flags.b5 });
+        symbol array_symbol(var, { node->m_flags.b2, node->m_flags.b3, m_eval_flags.b5 });
         if (node->m_flags.b3)
             m_current_scope->insert_to_global(name, array_symbol);
         else
@@ -1004,7 +1018,13 @@ namespace wio
             {
                 ref<variable_base> var = evaluate_expression(item.second)->clone();
                 var->set_const(node->m_flags.b1);
-                elements[var_dictionary::as_key(evaluate_expression(item.first))] = var;
+
+                std::string key = var_dictionary::as_key(evaluate_expression(item.first));
+
+                if (elements.find(key) != elements.end())
+                    throw invalid_key_error("Key '" + key + "' was used more than once.");
+
+                elements[key] = var;
             }
 
             var = make_ref<var_dictionary>(elements, packed_bool{ node->m_flags.b1, node->m_id->m_is_ref });
@@ -1026,7 +1046,7 @@ namespace wio
             }
         }
 
-        symbol dict_symbol(name, var, { node->m_flags.b2, node->m_flags.b3, m_eval_flags.b5 });
+        symbol dict_symbol(var, { node->m_flags.b2, node->m_flags.b3, m_eval_flags.b5 });
         if (node->m_flags.b3)
             m_current_scope->insert_to_global(name, dict_symbol);
         else
@@ -1136,7 +1156,7 @@ namespace wio
 
         if (flags.b1)
         {
-            symbol function_symbol(name, make_ref<var_function>(func_lambda, parameters, node->m_is_local), { node->m_is_local, node->m_is_global, m_eval_flags.b5 });
+            symbol function_symbol(make_ref<var_function>(func_lambda, parameters, node->m_is_local), { node->m_is_local, node->m_is_global, m_eval_flags.b5 });
 
             std::dynamic_pointer_cast<var_function>(sym->var_ref)->add_overload(function_symbol);
         }
@@ -1146,7 +1166,7 @@ namespace wio
         }
         else
         {
-            symbol function_symbol(name, make_ref<var_function>(func_lambda, parameters, node->m_is_local), { node->m_is_local, node->m_is_global, m_eval_flags.b5 });
+            symbol function_symbol(make_ref<var_function>(func_lambda, parameters, node->m_is_local), { node->m_is_local, node->m_is_global, m_eval_flags.b5 });
 
             if (node->m_is_global)
                 m_current_scope->insert_to_global(name, function_symbol);
@@ -1182,13 +1202,13 @@ namespace wio
             auto fun_v = make_ref<var_function>(parameters);
             fun_v->set_symbol_id(name);
 
-            func_ref->add_overload(symbol("", fun_v, { node->m_is_local, node->m_is_global }));
+            func_ref->add_overload(symbol(fun_v, { node->m_is_local, node->m_is_global }));
         }
         else
         {
             auto fun_v = make_ref<var_function>(parameters);
             std::dynamic_pointer_cast<var_function>(fun_v->get_overload(0)->var_ref)->set_symbol_id(name);
-            symbol function_symbol(node->m_id->m_token.value, fun_v, { node->m_is_local, node->m_is_global });
+            symbol function_symbol(fun_v, { node->m_is_local, node->m_is_global });
 
             if (node->m_is_global)
                 m_current_scope->insert_to_global(name, function_symbol);
@@ -1217,7 +1237,7 @@ namespace wio
 
         ref<realm> realm_var = make_ref<realm>();
         realm_var->load_members(evaluate_block_statement(node->m_body));
-        symbol realm_symbol(name, realm_var, { node->m_is_local, node->m_is_global, m_eval_flags.b5 });
+        symbol realm_symbol(realm_var, { node->m_is_local, node->m_is_global, m_eval_flags.b5 });
         if (node->m_is_global)
             m_current_scope->insert_to_global(name, realm_symbol);
         else

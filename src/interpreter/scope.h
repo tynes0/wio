@@ -28,14 +28,11 @@ namespace wio
     {
         friend class scope;
 
-        std::string name;
         ref<variable_base> var_ref;
         packed_bool flags = {}; // 1-> is_local --- 2-> is_global --- 3-> original position passed
 
-        symbol() {}
-
-        symbol(const std::string& name, ref<variable_base> var_ref = nullptr, packed_bool flags = {})
-            : name(name), var_ref(var_ref), flags(flags) {}
+        symbol(ref<variable_base> var_ref = nullptr, packed_bool flags = {})
+            : var_ref(var_ref), flags(flags) {}
     };
 
     using symbol_table_t = std::map<std::string, symbol>;

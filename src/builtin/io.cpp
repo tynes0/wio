@@ -8,6 +8,7 @@
 
 #include "../types/file_wrapper.h"
 #include "../utils/filesystem.h"
+#include "../utils/util.h"
 
 #include "../variables/function.h"
 #include "../variables/array.h"
@@ -32,7 +33,7 @@ namespace wio
         {
             static ref<variable_base> b_print(ref<variable_base> base)
             {
-                filesystem::write_stdout(helpers::var_to_string(base));
+                filesystem::write_stdout(util::var_to_string(base));
                 return create_null_variable();
             }
 

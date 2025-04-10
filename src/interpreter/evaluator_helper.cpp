@@ -4,6 +4,7 @@
 #include "../types/vec3.h"
 #include "../types/vec4.h"
 #include "../types/file_wrapper.h"
+#include "../types/comparator.h"
 
 #include "../builtin/helpers.h"
 
@@ -64,18 +65,7 @@ namespace wio
             }
             else if (lv_ref->get_type() == variable_type::vt_string)
             {
-                if (rv_ref->get_type() == variable_type::vt_string)
-                    return make_ref<variable>(any(any_cast<std::string>(left_value) + any_cast<std::string>(right_value)), variable_type::vt_string);
-                else if (rv_ref->get_type() == variable_type::vt_character)
-                    return make_ref<variable>(any(any_cast<std::string>(left_value) + any_cast<char>(right_value)), variable_type::vt_string);
-                else if (rv_ref->get_type() == variable_type::vt_character_ref)
-                    return make_ref<variable>(any(any_cast<std::string>(left_value) + *any_cast<char*>(right_value)), variable_type::vt_string);
-                else if (rv_ref->get_type() == variable_type::vt_integer)
-                    return make_ref<variable>(any(any_cast<std::string>(left_value) + std::to_string(any_cast<long long>(right_value))), variable_type::vt_string);
-                else if (rv_ref->get_type() == variable_type::vt_float)
-                    return make_ref<variable>(any(any_cast<std::string>(left_value) + util::double_to_string(any_cast<double>(right_value))), variable_type::vt_string);
-                else if (rv_ref->get_type() == variable_type::vt_float_ref)
-                    return make_ref<variable>(any(any_cast<std::string>(left_value) + util::double_to_string(*any_cast<double*>(right_value))), variable_type::vt_string);
+                return make_ref<variable>(any(any_cast<std::string>(left_value) + util::var_to_string(rv_ref)), variable_type::vt_string);
             }
             else if (lv_ref->get_type() == variable_type::vt_vec2)
             {
@@ -1096,11 +1086,53 @@ namespace wio
             }
             else if (lv_ref->get_type() == variable_type::vt_array)
             {
-                return nullptr; // TODOO
+                if (rv_ref->get_type() == variable_type::vt_array)
+                {
+                    ref<var_array> left_arr = std::dynamic_pointer_cast<var_array>(lv_ref);
+                    ref<var_array> right_arr = std::dynamic_pointer_cast<var_array>(rv_ref);
+
+                    if (left_arr->size() != right_arr->size())
+                        return make_ref<variable>(any(false), variable_type::vt_bool);
+
+                    for (size_t i = 0; i < left_arr->size(); ++i)
+                    {
+                        ref<variable_base> item_result_base = eval_binary_exp_equal_to(left_arr->get_element(i), right_arr->get_element(i), loc);
+                        ref<variable> item_result = std::dynamic_pointer_cast<variable>(item_result_base);
+
+                        if (!item_result->get_data_as<bool>())
+                            return make_ref<variable>(any(false), variable_type::vt_bool);
+                    }
+
+                    return make_ref<variable>(any(true), variable_type::vt_bool);
+                }
             }
             else if (lv_ref->get_type() == variable_type::vt_dictionary)
             {
-                return nullptr; // TODOO
+                if (rv_ref->get_type() == variable_type::vt_dictionary)
+                {
+                    ref<var_dictionary> left_dict = std::dynamic_pointer_cast<var_dictionary>(lv_ref);
+                    ref<var_dictionary> right_dict = std::dynamic_pointer_cast<var_dictionary>(rv_ref);
+
+                    if (left_dict->size() != right_dict->size())
+                        return make_ref<variable>(any(false), variable_type::vt_bool);
+
+                    auto& left_data = left_dict->get_data();
+                    auto& right_data = right_dict->get_data();
+
+                    for (auto& [left_key, left_value] : left_data)
+                    {
+                        if (right_data.find(left_key) == right_data.end())
+                            return make_ref<variable>(any(false), variable_type::vt_bool);
+
+                        ref<variable_base> item_result_base = eval_binary_exp_equal_to(left_value, right_data[left_key], loc);
+                        ref<variable> item_result = std::dynamic_pointer_cast<variable>(item_result_base);
+
+                        if (!item_result->get_data_as<bool>())
+                            return make_ref<variable>(any(false), variable_type::vt_bool);
+                    }
+
+                    return make_ref<variable>(any(true), variable_type::vt_bool);
+                }
             }
             else if (lv_ref->get_type() == variable_type::vt_pair)
             {
@@ -1145,6 +1177,89 @@ namespace wio
         ref<variable_base> eval_binary_exp_type_equal(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc)
         {
             return make_ref<variable>(any(lv_ref->get_type() == rv_ref->get_type()), variable_type::vt_bool);
+        }
+
+        ref<variable_base> eval_binary_exp_compare_all(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc)
+        {
+            comparator comp;
+
+            try
+            {
+                comp.equal = eval_binary_exp_equal_to(lv_ref, rv_ref, loc);
+            }
+            catch (const type_mismatch_error&)
+            {
+                comp.equal = create_null_variable();
+            }
+            comp.equal->set_const(true);
+
+            try
+            {
+                comp.not_equal = eval_binary_exp_not_equal_to(lv_ref, rv_ref, loc);
+            }
+            catch (const type_mismatch_error&)
+            {
+                comp.not_equal = create_null_variable();
+            }
+            comp.not_equal ->set_const(true);
+
+            try
+            {
+                comp.less = eval_binary_exp_less_than(lv_ref, rv_ref, loc);
+            }
+            catch (const type_mismatch_error&)
+            {
+                comp.less = create_null_variable();
+            }
+            comp.less->set_const(true);
+
+            try
+            {
+                comp.greater = eval_binary_exp_greater_than(lv_ref, rv_ref, loc);
+            }
+            catch (const type_mismatch_error&)
+            {
+                comp.greater = create_null_variable();
+            }
+            comp.greater->set_const(true);
+
+            try
+            {
+                comp.less_or_equal = eval_binary_exp_less_than_or_equal_to(lv_ref, rv_ref, loc);
+            }
+            catch (const type_mismatch_error&)
+            {
+                comp.less_or_equal = create_null_variable();
+            }
+            comp.less_or_equal->set_const(true);
+
+            try
+            {
+                comp.greater_or_equal = eval_binary_exp_greater_than_or_equal_to(lv_ref, rv_ref, loc);
+            }
+            catch (const type_mismatch_error&)
+            {
+                comp.greater_or_equal = create_null_variable();
+            }
+            comp.greater_or_equal->set_const(true);
+
+            comp.type_equal = eval_binary_exp_type_equal(lv_ref, rv_ref, loc);
+            comp.type_equal->set_const(true);
+
+            auto result = make_ref<variable>(any(comp), variable_type::vt_comparator);
+
+            result->init_members();
+            auto members = result->get_members();
+
+            members->insert("Less", symbol(comp.less));
+            members->insert("Greater", symbol(comp.greater));
+            members->insert("LessOrEqual", symbol(comp.less_or_equal));
+            members->insert("GreaterOrEqual", symbol(comp.greater_or_equal));
+            members->insert("Equal", symbol(comp.equal));
+            members->insert("NotEqual", symbol(comp.not_equal));
+            members->insert("TypeEqual", symbol(comp.type_equal));
+
+            return result;
         }
 
         ref<variable_base> eval_binary_exp_logical_and(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc)
@@ -1261,6 +1376,21 @@ namespace wio
             throw type_mismatch_error("Invalid operand types for '^' operator (bitwise XOR). Operands must be integers.", loc);
         }
 
+        ref<variable_base> eval_binary_exp_bitwise_and_assign(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc)
+        {
+            return eval_binary_exp_assignment(lv_ref, eval_binary_exp_bitwise_and(lv_ref, rv_ref, loc), loc);
+        }
+
+        ref<variable_base> eval_binary_exp_bitwise_or_assign(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc)
+        {
+            return eval_binary_exp_assignment(lv_ref, eval_binary_exp_bitwise_or(lv_ref, rv_ref, loc), loc);
+        }
+
+        ref<variable_base> eval_binary_exp_bitwise_xor_assign(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc)
+        {
+            return eval_binary_exp_assignment(lv_ref, eval_binary_exp_bitwise_xor(lv_ref, rv_ref, loc), loc);
+        }
+
         ref<variable_base> eval_binary_exp_left_shift(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc)
         {
             any left_value;
@@ -1324,7 +1454,7 @@ namespace wio
 
             if (lv_ref->get_type() == variable_type::vt_file)
             {
-                filesystem::write_file(any_cast<file_wrapper>(left_value).get_file(), builtin::helpers::var_to_string(rv_ref));
+                filesystem::write_file(any_cast<file_wrapper>(left_value).get_file(), util::var_to_string(rv_ref));
                 return lv_ref->clone();
             }
 

@@ -7,13 +7,13 @@ namespace wio
     var_function::var_function(const std::vector<function_param>& params, bool is_local, bool is_global) 
         : m_params(params), variable_base({ is_local, is_global }), m_declared(false), m_early_decl(false)
     {
-        symbol sym("", make_ref<var_function>(*this), { is_local, is_global, true });
+        symbol sym(make_ref<var_function>(*this), { is_local, is_global, true });
         m_overloads.push_back(sym);
     }
     var_function::var_function(const fun_type& data, const std::vector<function_param>& params, bool is_local, bool is_global)
         : m_data(data), m_params(params), variable_base({is_local, is_global}), m_declared(true), m_early_decl(false)
     {
-        symbol sym("", make_ref<var_function>(*this), { is_local, is_global, true });
+        symbol sym(make_ref<var_function>(*this), { is_local, is_global, true });
         m_overloads.push_back(sym);
     }
 

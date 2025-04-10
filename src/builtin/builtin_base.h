@@ -36,7 +36,7 @@ namespace wio
 
                 ref<var_function> fun = make_ref<var_function>(varFunc);
 
-                symbol sym(name, fun, { false, true });
+                symbol sym(fun, { false, true });
                 target_scope->insert(name, sym);
                 return fun;
             }
@@ -71,31 +71,31 @@ namespace wio
 
                     }, params, false);
 
-                fun->add_overload(symbol("", make_ref<var_function>(varFunc)));
+                fun->add_overload(symbol(make_ref<var_function>(varFunc)));
             }
 
             template <class T>
             void load_constant(ref<scope> target_scope, const std::string& name, variable_type type, T value)
             {
-                target_scope->insert(name, symbol(name, make_ref<variable>(any(value), type, packed_bool{ true, false }), {false, true}));
+                target_scope->insert(name, symbol(make_ref<variable>(any(value), type, packed_bool{ true, false }), {false, true}));
             }
 
             template <class T>
             void load_constant(const std::string& name, variable_type type, T value)
             {
-                builtin_scope->insert(name, symbol(name, make_ref<variable>(any(value), type, packed_bool{ true, false }), { false, true }));
+                builtin_scope->insert(name, symbol(make_ref<variable>(any(value), type, packed_bool{ true, false }), { false, true }));
             }
 
             template <class T>
             void load_variable(ref<scope> target_scope, const std::string& name, ref<variable_base> var)
             {
-                target_scope->insert(name, symbol(name, var), {false, true});
+                target_scope->insert(name, symbol(var), {false, true});
             }
 
             template <class T>
             void load_variable(const std::string& name, ref<variable_base> var)
             {
-                builtin_scope->insert(name, symbol(name, var), { false, true });
+                builtin_scope->insert(name, symbol(var), { false, true });
             }
 		}
 	}

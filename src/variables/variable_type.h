@@ -35,6 +35,7 @@ namespace wio
         vt_vec3,
         vt_vec4,
         vt_realm, // 
+        vt_comparator,
         vt_any,
 
         vt_character_ref, // for optimized access

@@ -25,12 +25,16 @@ namespace wio
 		ref<variable_base> eval_binary_exp_equal_to(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // ==
 		ref<variable_base> eval_binary_exp_not_equal_to(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // !=
 		ref<variable_base> eval_binary_exp_type_equal(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // =?
+		ref<variable_base> eval_binary_exp_compare_all(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // <=>
 		ref<variable_base> eval_binary_exp_logical_and(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // &&
 		ref<variable_base> eval_binary_exp_logical_or(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // ||
 		ref<variable_base> eval_binary_exp_logical_xor(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // ^^
 		ref<variable_base> eval_binary_exp_bitwise_and(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // &
 		ref<variable_base> eval_binary_exp_bitwise_or(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // |
 		ref<variable_base> eval_binary_exp_bitwise_xor(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // ^
+		ref<variable_base> eval_binary_exp_bitwise_and_assign(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // &=
+		ref<variable_base> eval_binary_exp_bitwise_or_assign(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // |=
+		ref<variable_base> eval_binary_exp_bitwise_xor_assign(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // ^=
 		ref<variable_base> eval_binary_exp_left_shift(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // <<
 		ref<variable_base> eval_binary_exp_right_shift(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // >>
 		ref<variable_base> eval_binary_exp_left_shift_assign(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc); // <<=

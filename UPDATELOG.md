@@ -90,3 +90,9 @@
 - __Update 1.9.2:__ Dictionary key errors have been fixed. File type can now be used as a key (program, hashing the file path).
 - __Update 1.9.3:__ The semicolon requirement after the import keyword has been reinstated. However, the import path no longer needs to be a string literal. "test.wio" and test.wio are now the same.
 - __Update 1.9.4:__ Updated character escape sequence supports. Now all of them works correctly.
+- __Update 1.10.0:__ Added bitwise and assign (&=) operator.
+- __Update 1.10.1:__ Added bitwise or assign (|=) operator.
+- __Update 1.10.2:__ Added bitwise xor assign (^=) operator.
+- __Update 1.10.3:__ The compare all (<=>) operator, which returns a null value instead of giving an error for non-comparable types and performs all comparisons at once, and the comparator type was added as the return value.
+- __Update 1.10.4:__ Added equal and not equal comparisons for array and dict types.
+- __Update 1.10.5:__ Minor code cleanup done.
