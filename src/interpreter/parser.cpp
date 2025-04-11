@@ -715,7 +715,7 @@ namespace wio
 
         variable_type type = variable_type::vt_null;
         if (type_token.value == "var")
-            type = variable_type::vt_var_param;
+            type = variable_type::vt_any;
         else if (type_token.value == "array")
             type = variable_type::vt_array;
         else if (type_token.value == "dict")

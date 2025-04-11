@@ -350,6 +350,10 @@ namespace wio
             {
                 return func->clone();
             }
+            else if (auto rlm = std::dynamic_pointer_cast<realm>(sym->var_ref))
+            {
+                return rlm->clone();
+            }
         }
         throw evaluation_error("Identifier '" + node->m_token.value + "' refers to an unsupported type.", node->get_location());
     }
@@ -470,11 +474,11 @@ namespace wio
 
             for (size_t i = 0; i < real_params.size(); ++i)
             {
-                if (parameters[i]->get_type() != real_params[i].type && real_params[i].type != variable_type::vt_any &&
-                    !(parameters[i]->get_base_type() == variable_base_type::variable && helper::is_var_t(real_params[i].type)))
+                if (parameters[i]->get_type() != real_params[i].type && real_params[i].type != variable_type::vt_any)
                 {
                     if (i == (func->overload_count() - 1))
                         throw type_mismatch_error("Parameter types not matching!");
+                    parameters.erase(parameters.begin() + padding, parameters.end());
                     continue;
                 }
             }
@@ -1122,7 +1126,7 @@ namespace wio
                 // Create parameters
                 for (auto& param : node->m_params)
                 {
-                    if (param->m_type == variable_type::vt_var_param)
+                    if (param->m_type == variable_type::vt_any)
                         evaluate_variable_declaration(param, true);
                 }
 

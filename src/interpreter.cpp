@@ -4,17 +4,23 @@
 #include <array>
 #include <vector>
 #include <filesystem>
+#include <algorithm>
 
 #include "base/exception.h"
 #include "base/argument_parser.h"
+
 #include "utils/filesystem.h"
+
 #include "interpreter/lexer.h"
 #include "interpreter/parser.h"
 #include "interpreter/evaluator.h"
 #include "interpreter/module_tracker.h"
+
 #include "builtin/io.h"
 #include "builtin/math.h"
 #include "builtin/utility.h"
+#include "builtin/types.h"
+
 #include "variables/function.h"
 
 namespace wio
@@ -115,6 +121,9 @@ namespace wio
 			{
 				if (flags.b4)
 					return raw_buffer(nullptr);
+
+				std::for_each(filepath.begin(), filepath.end(), [](char& ch) { ch = std::tolower(ch); });
+
 				std::string_view view(filepath);
 				view.remove_prefix(4);
 				
@@ -133,6 +142,11 @@ namespace wio
 				{
 					if (module_tracker::get().add_module(std::filesystem::path(filepath)))
 						builtin::utility::load(target_scope);
+				}
+				else if (view == "types")
+				{
+					if (module_tracker::get().add_module(std::filesystem::path(filepath)))
+						builtin::types::load(target_scope);
 				}
 				else
 				{

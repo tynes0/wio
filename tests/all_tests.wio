@@ -1,4 +1,4 @@
-import "wio.io"
+import "wio.io";
 
 ## recursive test
 func factorial(var v)
@@ -65,7 +65,7 @@ func factorial(var v)
 ## member test
 {
 	array arr = [2, [1,2,3], "String", 'C'];
-	arr.Append("Test");
+	arr.Push("Test");
 
 	var front = arr.Front();
 	front = "Merhaba";
@@ -87,4 +87,23 @@ func factorial(var v)
 	Println(v);
 }
 
-func testf();
+## Types
+{
+	import wio.types as Types;
+	Println(Types.NULL);
+	Println(Types.INTEGER);
+	Println(Types.FLOAT);
+	Println(Types.STRING);
+	Println(Types.CHARACTER);
+	Println(Types.BOOLEAN);
+	Println(Types.TYPE);
+	Println(Types.PAIR);
+	Println(Types.FILE);
+	Println(Types.ARRAY);
+	Println(Types.DICTIONARY);
+	Println(Types.FUNCTION);
+	Println(Types.VEC2);
+	Println(Types.VEC3);
+	Println(Types.VEC4);
+	Println(Types.COMPARATOR);
+}

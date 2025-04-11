@@ -6,10 +6,16 @@
 #include "../variables/array.h"
 #include "../variables/dictionary.h"
 #include "../variables/function.h"
+
 #include "../base/exception.h"
+#include "../types/vec2.h"
+#include "../types/vec3.h"
+#include "../types/vec4.h"
+
 #include "../utils/util.h"
 
 #include "builtin_base.h"
+#include "helpers.h"
 
 namespace wio 
 {
@@ -891,6 +897,49 @@ namespace wio
                 }
                 throw builtin_error("Invalid types for Max. Expected (float, float), (int, int), (float, int) or (int, float)");
             }
+
+            static ref<variable_base> b_vec2(ref<variable_base> x, ref<variable_base> y)
+            {
+                return helper::create_vec2(x, y);
+            }
+
+            static ref<variable_base> b_vec2_2(ref<variable_base> scalar)
+            {
+                return helper::create_vec2(scalar, scalar);
+            }
+
+            static ref<variable_base> b_vec2_3()
+            {
+                auto ref_0 = make_ref<variable>(any(0.0), variable_type::vt_float);
+                return helper::create_vec2(ref_0, ref_0);;
+            }
+
+            static ref<variable_base> b_vec3(ref<variable_base> x, ref<variable_base> y, ref<variable_base> z)
+            {
+                return helper::create_vec3(x, y, z);
+            }
+
+            static ref<variable_base> b_vec3_2(ref<variable_base> scalar)
+            {
+                return helper::create_vec3(scalar, scalar, scalar);
+            }
+
+            static ref<variable_base> b_vec3_3(ref<variable_base> vec2_xy, ref<variable_base> z)
+            {
+                auto var_vec2 = std::dynamic_pointer_cast<variable>(vec2_xy);
+                vec2 data = var_vec2->get_data_as<vec2>();
+
+                auto ref_x = make_ref<variable>(any(data.x), variable_type::vt_float);
+                auto ref_y = make_ref<variable>(any(data.y), variable_type::vt_float);
+
+                return helper::create_vec3(ref_x, ref_y, z);
+            }
+
+            static ref<variable_base> b_vec3_4()
+            {
+                auto ref_0 = make_ref<variable>(any(0.0), variable_type::vt_float);
+                return helper::create_vec3(ref_0, ref_0, ref_0);;
+            }
         } // namespace detail
 
         void math::load(ref<scope> target_scope)
@@ -898,33 +947,42 @@ namespace wio
             if (!target_scope)
                 target_scope = builtin_scope;
 
-            loader::load_function<1>(target_scope, "Abs",     detail::b_abs,      { variable_type::vt_var_param });
-            loader::load_function<1>(target_scope, "Sin",     detail::b_sin,      { variable_type::vt_float });
-            loader::load_function<1>(target_scope, "Cos",     detail::b_cos,      { variable_type::vt_float });
-            loader::load_function<1>(target_scope, "Tan",     detail::b_tan,      { variable_type::vt_float });
-            loader::load_function<1>(target_scope, "Sqrt",    detail::b_sqrt,     { variable_type::vt_var_param });
-            loader::load_function<2>(target_scope, "Pow",     detail::b_pow,      { variable_type::vt_var_param, variable_type::vt_var_param });
-            loader::load_function<1>(target_scope, "Log",     detail::b_log,      { variable_type::vt_var_param });
-            loader::load_function<1>(target_scope, "Log10",   detail::b_log10,    { variable_type::vt_var_param });
-            loader::load_function<1>(target_scope, "ArcSin",  detail::b_asin,     { variable_type::vt_float });
-            loader::load_function<1>(target_scope, "ArcCos",  detail::b_acos,     { variable_type::vt_float });
-            loader::load_function<1>(target_scope, "ArcTan",  detail::b_atan,     { variable_type::vt_float });
-            loader::load_function<1>(target_scope, "Ceil",    detail::b_ceil,     { variable_type::vt_var_param });
-            loader::load_function<1>(target_scope, "Floor",   detail::b_floor,    { variable_type::vt_var_param });
-            loader::load_function<1>(target_scope, "Round",   detail::b_round,    { variable_type::vt_var_param });
-            loader::load_function<1>(target_scope, "Exp",     detail::b_exp,      { variable_type::vt_var_param });
-            loader::load_function<2>(target_scope, "ArcTan2", detail::b_atan2,    { variable_type::vt_var_param, variable_type::vt_var_param });
-            loader::load_function<2>(target_scope, "Fmod",    detail::b_fmod,     { variable_type::vt_var_param, variable_type::vt_var_param });
-            loader::load_function<1>(target_scope, "Sinh",    detail::b_sinh,     { variable_type::vt_var_param });
-            loader::load_function<1>(target_scope, "Cosh",    detail::b_cosh,     { variable_type::vt_var_param });
-            loader::load_function<1>(target_scope, "Tanh",    detail::b_tanh,     { variable_type::vt_var_param });
-            loader::load_function<1>(target_scope, "ArcSinh", detail::b_asinh,    { variable_type::vt_var_param });
-            loader::load_function<1>(target_scope, "ArcCosh", detail::b_acosh,    { variable_type::vt_var_param });
-            loader::load_function<1>(target_scope, "ArcTanh", detail::b_atanh,    { variable_type::vt_var_param });
-            loader::load_function<2>(target_scope, "Root",    detail::b_root,     { variable_type::vt_var_param, variable_type::vt_var_param });
-            loader::load_function<2>(target_scope, "LogBase", detail::b_log_base, { variable_type::vt_var_param, variable_type::vt_var_param });
-            loader::load_function<2>(target_scope, "Min",     detail::b_min,      { variable_type::vt_var_param, variable_type::vt_var_param });
-            loader::load_function<2>(target_scope, "Max",     detail::b_max,      { variable_type::vt_var_param, variable_type::vt_var_param });
+            loader::load_function_old<1>(target_scope, "Abs",     detail::b_abs,      { variable_type::vt_any });
+            loader::load_function_old<1>(target_scope, "Sin",     detail::b_sin,      { variable_type::vt_float });
+            loader::load_function_old<1>(target_scope, "Cos",     detail::b_cos,      { variable_type::vt_float });
+            loader::load_function_old<1>(target_scope, "Tan",     detail::b_tan,      { variable_type::vt_float });
+            loader::load_function_old<1>(target_scope, "Sqrt",    detail::b_sqrt,     { variable_type::vt_any });
+            loader::load_function_old<2>(target_scope, "Pow",     detail::b_pow,      { variable_type::vt_any, variable_type::vt_any });
+            loader::load_function_old<1>(target_scope, "Log",     detail::b_log,      { variable_type::vt_any });
+            loader::load_function_old<1>(target_scope, "Log10",   detail::b_log10,    { variable_type::vt_any });
+            loader::load_function_old<1>(target_scope, "ArcSin",  detail::b_asin,     { variable_type::vt_float });
+            loader::load_function_old<1>(target_scope, "ArcCos",  detail::b_acos,     { variable_type::vt_float });
+            loader::load_function_old<1>(target_scope, "ArcTan",  detail::b_atan,     { variable_type::vt_float });
+            loader::load_function_old<1>(target_scope, "Ceil",    detail::b_ceil,     { variable_type::vt_any });
+            loader::load_function_old<1>(target_scope, "Floor",   detail::b_floor,    { variable_type::vt_any });
+            loader::load_function_old<1>(target_scope, "Round",   detail::b_round,    { variable_type::vt_any });
+            loader::load_function_old<1>(target_scope, "Exp",     detail::b_exp,      { variable_type::vt_any });
+            loader::load_function_old<2>(target_scope, "ArcTan2", detail::b_atan2,    { variable_type::vt_any, variable_type::vt_any });
+            loader::load_function_old<2>(target_scope, "Fmod",    detail::b_fmod,     { variable_type::vt_any, variable_type::vt_any });
+            loader::load_function_old<1>(target_scope, "Sinh",    detail::b_sinh,     { variable_type::vt_any });
+            loader::load_function_old<1>(target_scope, "Cosh",    detail::b_cosh,     { variable_type::vt_any });
+            loader::load_function_old<1>(target_scope, "Tanh",    detail::b_tanh,     { variable_type::vt_any });
+            loader::load_function_old<1>(target_scope, "ArcSinh", detail::b_asinh,    { variable_type::vt_any });
+            loader::load_function_old<1>(target_scope, "ArcCosh", detail::b_acosh,    { variable_type::vt_any });
+            loader::load_function_old<1>(target_scope, "ArcTanh", detail::b_atanh,    { variable_type::vt_any });
+            loader::load_function_old<2>(target_scope, "Root",    detail::b_root,     { variable_type::vt_any, variable_type::vt_any });
+            loader::load_function_old<2>(target_scope, "LogBase", detail::b_log_base, { variable_type::vt_any, variable_type::vt_any });
+            loader::load_function_old<2>(target_scope, "Min",     detail::b_min,      { variable_type::vt_any, variable_type::vt_any });
+            loader::load_function_old<2>(target_scope, "Max",     detail::b_max,      { variable_type::vt_any, variable_type::vt_any });
+
+            auto vec2_result = loader::load_function_old<2>(target_scope, "Vec2", detail::b_vec2, { variable_type::vt_any, variable_type::vt_any });
+            loader::load_overload<1>(vec2_result, detail::b_vec2_2, { variable_type::vt_any });
+            loader::load_overload<0>(vec2_result, detail::b_vec2_3, {});
+
+            auto vec3_result = loader::load_function_old<3>(target_scope, "Vec3", detail::b_vec3, { variable_type::vt_any, variable_type::vt_any, variable_type::vt_any });
+            loader::load_overload<1>(vec3_result, detail::b_vec3_2, { variable_type::vt_any });
+            loader::load_overload<2>(vec3_result, detail::b_vec3_3, { variable_type::vt_vec2, variable_type::vt_any });
+            loader::load_overload<0>(vec3_result, detail::b_vec3_4, {});
 
             // math
             loader::load_constant(target_scope, "NAN",    variable_type::vt_float, std::numeric_limits<double>::quiet_NaN());

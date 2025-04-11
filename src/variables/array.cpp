@@ -30,8 +30,7 @@ namespace wio
 
     ref<variable_base> var_array::get_element(long long index)
     {
-        check_index(index);
-        return m_data[index];
+        return m_data[normalize_index(index)];
     }
 
     size_t var_array::size() const
@@ -49,6 +48,11 @@ namespace wio
         ref<variable_base> result = m_data.back();
         m_data.pop_back();
         return result;
+    }
+
+    void var_array::insert(long long idx, ref<variable_base> data)
+    {
+        m_data.insert(m_data.begin() + idx, data);
     }
 
     ref<variable_base> var_array::erase(long long idx)
@@ -72,13 +76,17 @@ namespace wio
 
     void var_array::set_element(long long index, ref<variable_base> value)
     {
-        check_index(index);
-        m_data[index] = value->clone();
+        m_data[normalize_index(index)] = value->clone();
     }
 
-    void var_array::check_index(long long index) const
+    long long var_array::normalize_index(long long index) const
     {
+        if (index < 0)
+            index = (long long)m_data.size() + index;
+
         if (index >= (long long)m_data.size() || index < 0)
             throw out_of_bounds_error("Array index out of the bounds!");
+
+        return index;
     }
 }

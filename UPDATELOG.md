@@ -96,3 +96,15 @@
 - __Update 1.10.3:__ The compare all (<=>) operator, which returns a null value instead of giving an error for non-comparable types and performs all comparisons at once, and the comparator type was added as the return value.
 - __Update 1.10.4:__ Added equal and not equal comparisons for array and dict types.
 - __Update 1.10.5:__ Minor code cleanup done.
+- __Update 1.11.0:__ Now, using negative index in array accesses gives reverse access. In other words, ExampleArray[ExampleArray.Length() - 1] and ExamleArrray[-1] are equal to each other.
+- __Update 1.11.1:__ Added += operator overloading that allows appending to the end of arrays.
+- __Update 1.11.2:__ Swap function added.
+- __Update 1.11.3:__ Member functions were added to the array type.
+- __Update 1.11.4:__ 'Vec3' type added.
+- __Update 1.11.5:__ Types vec2 and vec3 are now in the math library.
+- __Update 1.11.6:__ Added built-in types library. Contains constants of types.
+- __Update 1.11.7:__ Fixed an issue where realms were giving errors when calling members.
+- __Update 1.11.8:__ Fixed a bug that caused function parameters to be processed incorrectly.
+- __Update 1.11.9:__ Added operator overloads for the vec3 type.
+- __Update 1.11.10:__ The source codes of vec2 and vec3 types have been cleaned.
+- __Update 1.11.11:__ Cleaning was done in built-in function implementations. It will be continued.

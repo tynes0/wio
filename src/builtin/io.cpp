@@ -181,13 +181,13 @@ namespace wio
             if (!target_scope)
                 target_scope = builtin_scope;
 
-            loader::load_function<1>(target_scope, "Print",       detail::b_print,        { variable_type::vt_any });
-            loader::load_function<1>(target_scope, "Println",     detail::b_println,      { variable_type::vt_any });
-            loader::load_function<0>(target_scope, "Input",       detail::b_input,        {});
-            loader::load_function<2>(target_scope, "OpenFile",    detail::b_open_file,    { variable_type::vt_string, variable_type::vt_integer });
-            loader::load_function<1>(target_scope, "CloseFile",   detail::b_close_file,   { variable_type::vt_file });
-            loader::load_function<2>(target_scope, "Write",       detail::b_write,        { variable_type::vt_any, variable_type::vt_string });
-            loader::load_function<1>(target_scope, "Read",        detail::b_read,         { variable_type::vt_file });
+            loader::load_function_old<1>(target_scope, "Print",       detail::b_print,        { variable_type::vt_any });
+            loader::load_function_old<1>(target_scope, "Println",     detail::b_println,      { variable_type::vt_any });
+            loader::load_function_old<0>(target_scope, "Input",       detail::b_input,        {});
+            loader::load_function_old<2>(target_scope, "OpenFile",    detail::b_open_file,    { variable_type::vt_string, variable_type::vt_integer });
+            loader::load_function_old<1>(target_scope, "CloseFile",   detail::b_close_file,   { variable_type::vt_file });
+            loader::load_function_old<2>(target_scope, "Write",       detail::b_write,        { variable_type::vt_any, variable_type::vt_string });
+            loader::load_function_old<1>(target_scope, "Read",        detail::b_read,         { variable_type::vt_file });
 
             loader::load_constant(target_scope, "OPEN_MODE_READ",     variable_type::vt_integer,  FILE_MODE_READ);
             loader::load_constant(target_scope, "OPEN_MODE_WRITE",    variable_type::vt_integer,  FILE_MODE_WRITE);

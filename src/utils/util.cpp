@@ -9,6 +9,9 @@
 
 #include "../types/file_wrapper.h"
 #include "../types/vec2.h"
+#include "../types/vec3.h"
+#include "../types/vec4.h"
+#include "../types/comparator.h"
 
 namespace wio
 {
@@ -118,12 +121,50 @@ namespace wio
                     const vec2& v = var_ref->get_data_as<vec2>();
                     std::stringstream ss;
                     ss << ("(");
-                    s_member_count++;
                     ss << util::double_to_string(v.x);
                     ss << (", ");
                     ss << util::double_to_string(v.y);
-                    s_member_count--;
                     ss << (")");
+                    return ss.str();
+                }
+                else if (var->get_type() == variable_type::vt_vec3)
+                {
+                    ref<variable> var_ref = std::dynamic_pointer_cast<variable>(base);
+                    const vec3& v = var_ref->get_data_as<vec3>();
+                    std::stringstream ss;
+                    ss << ("(");
+                    ss << util::double_to_string(v.x);
+                    ss << (", ");
+                    ss << util::double_to_string(v.y);
+                    ss << (", ");
+                    ss << util::double_to_string(v.z);
+                    ss << (")");
+                    return ss.str();
+                }
+                else if (var->get_type() == variable_type::vt_comparator)
+                {
+                    ref<variable> var_ref = std::dynamic_pointer_cast<variable>(base);
+                    const comparator& v = var_ref->get_data_as<comparator>();
+                    std::stringstream ss;
+
+                    static auto add_to_stream = [&ss](const std::string& id, ref<variable_base> item) 
+                        {
+                            ss << ("[");
+                            ss << id;
+                            ss << (" : ");
+                            ss << var_to_string(item);
+                            ss << ("]\n");
+                        };
+
+                    s_member_count++;
+                    add_to_stream("TypeEqual", v.type_equal);
+                    add_to_stream("Equal", v.equal);
+                    add_to_stream("NotEqual", v.not_equal);
+                    add_to_stream("Less", v.less);
+                    add_to_stream("LessOrEqual", v.less_or_equal);
+                    add_to_stream("Greater", v.greater);
+                    add_to_stream("GreaterOrEqual", v.greater_or_equal);
+                    s_member_count--;
                     return ss.str();
                 }
                 else

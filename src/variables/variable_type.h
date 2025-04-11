@@ -1,6 +1,9 @@
 #pragma once
 
 #include "../utils/frenum.h"
+#include "../base/base.h"
+
+#include <cstdint>
 
 namespace wio
 {
@@ -11,7 +14,7 @@ namespace wio
         array,
         dictionary,
         function,
-        realm // 
+        realm
     };
 
     MakeFrenumInNamespace(wio, variable_base_type, variable, array, dictionary, function)
@@ -24,25 +27,34 @@ namespace wio
         vt_string,
         vt_character,
         vt_bool,
+        vt_type,
+        vt_pair,
+        vt_file,
+
         vt_array,
         vt_dictionary,
         vt_function,
-        vt_var_param,
-        vt_file,
-        vt_type,
-        vt_pair,
+        vt_realm, 
+        
         vt_vec2,
         vt_vec3,
         vt_vec4,
-        vt_realm, // 
+        
         vt_comparator,
+        
         vt_any,
-
+        
         vt_character_ref, // for optimized access
         vt_float_ref      // for optimized access
     };
 
-    MakeFrenumInNamespace(wio, variable_type, vt_null, vt_integer, vt_float, vt_string, vt_character, vt_bool, vt_array, vt_dictionary, vt_function, vt_var_param, vt_var_param, vt_file, vt_type, vt_pair, vt_any)
+    MakeFrenumInNamespace(wio, variable_type, 
+        vt_null, vt_integer, vt_float, vt_string, vt_character, vt_bool, vt_type, vt_pair, vt_file, 
+        vt_array, vt_dictionary, vt_function, vt_realm, 
+        vt_vec2, vt_vec3, vt_vec4, 
+        vt_comparator, 
+        vt_any, 
+        vt_character_ref, vt_float_ref)
 
     namespace helper
     {

@@ -22,13 +22,14 @@ namespace wio
 
 		void push(ref<variable_base> data);
 		ref<variable_base> pop();
+		void insert(long long idx, ref<variable_base> data);
 		ref<variable_base> erase(long long idx);
 		void clear();
 
 		void set_data(const std::vector<ref<variable_base>>& data);
 		void set_element(long long index, ref<variable_base> value);
 	private:
-		void check_index(long long index) const;
+		long long normalize_index(long long index) const;
 
 		std::vector<ref<variable_base>> m_data; // std::vector could be change
 	};

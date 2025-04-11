@@ -46,7 +46,7 @@ namespace wio
         target_member_scope_map[variable_type::vt_character] = nullptr;
         target_member_scope_map[variable_type::vt_bool] = nullptr;
         target_member_scope_map[variable_type::vt_function] = nullptr;
-        target_member_scope_map[variable_type::vt_var_param] = nullptr;
+        target_member_scope_map[variable_type::vt_any] = nullptr;
         target_member_scope_map[variable_type::vt_type] = nullptr;
         target_member_scope_map[variable_type::vt_any] = nullptr;
     }

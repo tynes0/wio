@@ -71,10 +71,11 @@ namespace wio
         {
             auto result = make_ref<scope>(scope_type::builtin);
 
-            loader::load_function<1>(result, "Int",     detail::b_string_int,       { variable_type::vt_string });
-            loader::load_function<1>(result, "Float",   detail::b_string_float,     { variable_type::vt_string });
-            loader::load_function<1>(result, "Array",   detail::b_string_array,     { variable_type::vt_string });
-            loader::load_function<1>(result, "Length",  detail::b_string_length,    { variable_type::vt_string });
+            loader::load_function_old<1>(result, "Int",     detail::b_string_int,       { variable_type::vt_string });
+            loader::load_function_old<1>(result, "Float",   detail::b_string_float,     { variable_type::vt_string });
+            loader::load_function_old<1>(result, "Array",   detail::b_string_array,     { variable_type::vt_string });
+            loader::load_function_old<1>(result, "Length",  detail::b_string_length,    { variable_type::vt_string });
+            loader::load_function_old<1>(result, "Size",    detail::b_string_length,    { variable_type::vt_string });
 
             return result;
         }

@@ -49,5 +49,6 @@ namespace wio
         return std::make_shared<T, _Types...>(std::forward<_Types>(args)...);
     }
 
-#define BIT(x) (1 << x)
+#define BIT(x) (1ll << x##ll)
+#define UBIT(x) (1ull << x##ull)
 }

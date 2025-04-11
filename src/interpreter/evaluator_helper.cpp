@@ -80,7 +80,14 @@ namespace wio
             }
             else if (lv_ref->get_type() == variable_type::vt_vec3)
             {
-                return nullptr;
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(any_cast<vec3>(left_value) + (double)any_cast<long long>(right_value)), variable_type::vt_vec3);
+                else if (rv_ref->get_type() == variable_type::vt_float)
+                    return make_ref<variable>(any(any_cast<vec3>(left_value) + any_cast<double>(right_value)), variable_type::vt_vec3);
+                else if (rv_ref->get_type() == variable_type::vt_float_ref)
+                    return make_ref<variable>(any(any_cast<vec3>(left_value) + *any_cast<double*>(right_value)), variable_type::vt_vec3);
+                else if (rv_ref->get_type() == variable_type::vt_vec3)
+                    return make_ref<variable>(any(any_cast<vec3>(left_value) + any_cast<vec3>(right_value)), variable_type::vt_vec3);
             }
             else if (lv_ref->get_type() == variable_type::vt_vec4)
             {
@@ -154,7 +161,14 @@ namespace wio
             }
             else if (lv_ref->get_type() == variable_type::vt_vec3)
             {
-                return nullptr;
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(any_cast<vec3>(left_value) - (double)any_cast<long long>(right_value)), variable_type::vt_vec3);
+                else if (rv_ref->get_type() == variable_type::vt_float)
+                    return make_ref<variable>(any(any_cast<vec3>(left_value) - any_cast<double>(right_value)), variable_type::vt_vec3);
+                else if (rv_ref->get_type() == variable_type::vt_float_ref)
+                    return make_ref<variable>(any(any_cast<vec3>(left_value) - *any_cast<double*>(right_value)), variable_type::vt_vec3);
+                else if (rv_ref->get_type() == variable_type::vt_vec3)
+                    return make_ref<variable>(any(any_cast<vec3>(left_value) - any_cast<vec3>(right_value)), variable_type::vt_vec3);
             }
             else if (lv_ref->get_type() == variable_type::vt_vec4)
             {
@@ -240,7 +254,14 @@ namespace wio
             }
             else if (lv_ref->get_type() == variable_type::vt_vec3)
             {
-                return nullptr;
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(any_cast<vec3>(left_value) * (double)any_cast<long long>(right_value)), variable_type::vt_vec3);
+                else if (rv_ref->get_type() == variable_type::vt_float)
+                    return make_ref<variable>(any(any_cast<vec3>(left_value) * any_cast<double>(right_value)), variable_type::vt_vec3);
+                else if (rv_ref->get_type() == variable_type::vt_float_ref)
+                    return make_ref<variable>(any(any_cast<vec3>(left_value) * *any_cast<double*>(right_value)), variable_type::vt_vec3);
+                else if (rv_ref->get_type() == variable_type::vt_vec3)
+                    return make_ref<variable>(any(any_cast<vec3>(left_value) * any_cast<vec3>(right_value)), variable_type::vt_vec3);
             }
             else if (lv_ref->get_type() == variable_type::vt_vec4)
             {
@@ -356,7 +377,7 @@ namespace wio
                 }
                 else if (rv_ref->get_type() == variable_type::vt_vec2)
                 {
-                    if (any_cast<vec2>(right_value).one_of_zero())
+                    if (any_cast<vec2>(right_value).is_one_of_zero())
                         throw invalid_operation_error("Division by zero error.", loc);
 
                     return make_ref<variable>(any(any_cast<vec2>(left_value) / any_cast<vec2>(right_value)), variable_type::vt_vec2);
@@ -364,7 +385,34 @@ namespace wio
             }
             else if (lv_ref->get_type() == variable_type::vt_vec3)
             {
-                return nullptr;
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                {
+                    if (any_cast<long long>(right_value) == 0)
+                        throw invalid_operation_error("Division by zero error.", loc);
+
+                    return make_ref<variable>(any(any_cast<vec3>(left_value) / (double)any_cast<long long>(right_value)), variable_type::vt_vec3);
+                }
+                else if (rv_ref->get_type() == variable_type::vt_float)
+                {
+                    if (any_cast<double>(right_value) == 0.0)
+                        throw invalid_operation_error("Division by zero error.", loc);
+
+                    return make_ref<variable>(any(any_cast<vec3>(left_value) / any_cast<double>(right_value)), variable_type::vt_vec3);
+                }
+                else if (rv_ref->get_type() == variable_type::vt_float_ref)
+                {
+                    if (*any_cast<double*>(right_value) == 0.0)
+                        throw invalid_operation_error("Division by zero error.", loc);
+
+                    return make_ref<variable>(any(any_cast<vec3>(left_value) / *any_cast<double*>(right_value)), variable_type::vt_vec3);
+                }
+                else if (rv_ref->get_type() == variable_type::vt_vec3)
+                {
+                    if (any_cast<vec3>(right_value).is_one_of_zero())
+                        throw invalid_operation_error("Division by zero error.", loc);
+
+                    return make_ref<variable>(any(any_cast<vec3>(left_value) / any_cast<vec3>(right_value)), variable_type::vt_vec3);
+                }
             }
             else if (lv_ref->get_type() == variable_type::vt_vec4)
             {
@@ -506,6 +554,12 @@ namespace wio
         {
             if (lv_ref->is_constant())
                 throw constant_value_assignment_error("Constant values cannot be changed!", loc);
+
+            if (lv_ref->get_type() == variable_type::vt_array)
+            {
+                std::dynamic_pointer_cast<var_array>(lv_ref)->push(rv_ref);
+                return lv_ref->clone();
+            }
 
             return eval_binary_exp_assignment(lv_ref, eval_binary_exp_addition(lv_ref, rv_ref, loc), loc);
         }
@@ -1156,7 +1210,8 @@ namespace wio
             }
             else if (lv_ref->get_type() == variable_type::vt_vec3)
             {
-                return nullptr;
+                if (rv_ref->get_type() == variable_type::vt_vec3)
+                    return make_ref<variable>(any(any_cast<vec3>(left_value) == any_cast<vec3>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_vec4)
             {
@@ -1532,8 +1587,8 @@ namespace wio
                     return make_ref<variable>(any(-(*any_cast<double*>(value))), variable_type::vt_float);
                 else if (v_ref->get_type() == variable_type::vt_vec2)
                     return make_ref<variable>(any(-any_cast<vec2>(value)), variable_type::vt_vec2);
-                //else if (v_ref->get_type() == variable_type::vt_vec3)
-                //    return make_ref<variable>(any(-any_cast<vec3>(value)), variable_type::vt_vec3);
+                else if (v_ref->get_type() == variable_type::vt_vec3)
+                    return make_ref<variable>(any(-any_cast<vec3>(value)), variable_type::vt_vec3);
                 //else if (v_ref->get_type() == variable_type::vt_vec4)
                 //    return make_ref<variable>(any(-any_cast<vec4>(value)), variable_type::vt_vec4);
                 else if (v_ref->get_type() == variable_type::vt_character)
@@ -1613,7 +1668,12 @@ namespace wio
             }
             else if (v_ref->get_type() == variable_type::vt_vec3)
             {
-                return nullptr;
+                vec3& v3_value = any_cast<vec3&>(value);
+                vec3 old_value = v3_value;
+
+                v3_value++;
+
+                return make_ref<variable>(any(op_type == unary_operator_type::prefix ? v3_value : old_value), variable_type::vt_vec3);
             }
             else if (v_ref->get_type() == variable_type::vt_vec4)
             {
@@ -1687,7 +1747,12 @@ namespace wio
             }
             else if (v_ref->get_type() == variable_type::vt_vec3)
             {
-                return nullptr;
+                vec3& v3_value = any_cast<vec3&>(value);
+                vec3 old_value = v3_value;
+
+                v3_value--;
+
+                return make_ref<variable>(any(op_type == unary_operator_type::prefix ? v3_value : old_value), variable_type::vt_vec3); return nullptr;
             }
             else if (v_ref->get_type() == variable_type::vt_vec4)
             {
