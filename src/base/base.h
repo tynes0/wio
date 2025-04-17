@@ -3,6 +3,9 @@
 #include <type_traits>
 #include <memory>
 
+#define BIT(x) (1ll << x##ll)
+#define UBIT(x) (1ull << x##ull)
+
 namespace wio
 {
     struct packed_bool
@@ -49,6 +52,18 @@ namespace wio
         return std::make_shared<T, _Types...>(std::forward<_Types>(args)...);
     }
 
-#define BIT(x) (1ll << x##ll)
-#define UBIT(x) (1ull << x##ull)
+    using id_t = uint32_t;
+}
+
+namespace std
+{
+    template <>
+    struct hash<wio::id_t>
+    {
+        size_t operator()(const wio::id_t& id) const noexcept
+        {
+            return std::hash<uint32_t>{}(id);
+        }
+    };
+
 }

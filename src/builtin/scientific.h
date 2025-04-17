@@ -6,7 +6,7 @@ namespace wio
 {
 	namespace builtin
 	{
-		class math
+		class scientific
 		{
 		public:
 			static void load(ref<scope> target_scope = nullptr);

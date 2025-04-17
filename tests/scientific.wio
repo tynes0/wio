@@ -1,0 +1,26 @@
+import wio.scientific;
+
+Println("Scientific Constants:\n");
+
+## Println(PHI);              ## Expected: 1.618033988749895
+## Println(GAMMA);            ## Expected: 0.5772156649015329
+## Println(FEIGENBAUM_DELTA); ## Expected: 4.669201609102991
+## Println(FEIGENBAUM_ALPHA); ## Expected: 2.502907875095893
+## Println(CATALAN);          ## Expected: 0.915965594177219
+## Println(APERYS_CONSTANT);  ## Expected: 1.2020569031595942
+## Println(LIGHT_SPEED);      ## Expected: 299792458.0
+## Println(STANDARD_GRAVITY); ## Expected: 9.80665
+## Println(RYDBERG);          ## Expected: 10973731.56816
+## Println(GOLDEN_RATIO);     ## Expected: 1.618033988749895
+## Println(SPEED_OF_SOUND);   ## Expected: 340.29
+## Println(MU0);              ## Expected: 1.25663706212e-06
+## Println(AVOGADRO);         ## Expected: 6.02214076e23
+
+Println(BOHR_RADIUS);      ## Expected: 5.29177210903e-11
+Println(EPSILON0);         ## Expected: 8.8541878128e-12
+Println(ELECTRON_MASS);    ## Expected: 9.1093837015e-31
+Println(PROTON_MASS);      ## Expected: 1.67262192369e-27
+Println(NEUTRON_MASS);     ## Expected: 1.67492749804e-27
+Println(BOLTZMANN);        ## Expected: 1.380649e-23
+Println(PLANCK);           ## Expected: 6.62607015e-34
+Println(GRAVITY);          ## Expected: 6.6743e-11

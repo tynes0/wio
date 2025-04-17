@@ -29,9 +29,9 @@ namespace wio
 		void set_data(const map_t& data);
 		void set_element(ref<variable_base> key, ref<variable_base> value);
 		size_t size() const;
-	private:
-		bool check_existance(const std::string& key);
 
+		bool check_existance(const std::string& key);
+	private:
 		 map_t m_data;
 	};
 }

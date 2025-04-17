@@ -13,6 +13,8 @@
 #include "../types/vec4.h"
 #include "../types/comparator.h"
 
+#include <string>
+
 namespace wio
 {
 	namespace util

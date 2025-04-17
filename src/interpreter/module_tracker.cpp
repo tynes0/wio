@@ -7,15 +7,15 @@ namespace wio
 {
     static std::set<std::string> s_modules;
 
-    bool module_tracker::add_module(const std::filesystem::path& filepath)
+    id_t module_tracker::add_module(const std::filesystem::path& filepath)
     {
         auto abs_path = filesystem::get_abs_path(filepath).string();
         
         if(s_modules.contains(abs_path))
-            return false;
+            return 0;
 
         s_modules.insert(abs_path);
-        return true;
+        return hash_path_to_id(abs_path);
     }
 
     bool module_tracker::add_module(const std::string& module)
@@ -41,5 +41,16 @@ namespace wio
     {
         static module_tracker s_tracker;
         return s_tracker;
+    }
+
+    id_t module_tracker::hash_path_to_id(const std::string& path)
+    {
+        id_t hash = 2166136261u;
+        for (char c : path) 
+        {
+            hash ^= static_cast<uint8_t>(tolower(c));
+            hash *= 16777619u;
+        }
+        return hash;
     }
 }

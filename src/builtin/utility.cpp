@@ -20,8 +20,11 @@ namespace wio
 
 		namespace detail
 		{
-			static ref<variable_base> b_swap(ref<variable_base> lhs, ref<variable_base> rhs)
+			static ref<variable_base> b_swap(const std::vector<ref<variable_base>>& args)
 			{
+				ref<variable_base> lhs = args[0];
+				ref<variable_base> rhs = args[1];
+
 				if (lhs->is_constant() || rhs->is_constant())
 					throw constant_value_assignment_error("Constant values cannot be changed!");
 
@@ -72,31 +75,49 @@ namespace wio
 				return create_null_variable();
 			}
 
-			static ref<variable_base> b_to_string(ref<variable_base> base)
+			static ref<variable_base> b_to_string(const std::vector<ref<variable_base>>& args)
 			{
-                return make_ref<variable>(util::var_to_string(base), variable_type::vt_string);
+                return make_ref<variable>(util::var_to_string(args[0]), variable_type::vt_string);
             }
 
-            static ref<variable_base> b_pair(ref<variable_base> first, ref<variable_base> second)
+            static ref<variable_base> b_pair(const std::vector<ref<variable_base>>& args)
             {
-				return helper::create_pair(first, second);
+				return helper::create_pair(args[0], args[1]);
             }
 
-			static ref<variable_base> b_compare(ref<variable_base> lhs, ref<variable_base> rhs)
+			static ref<variable_base> b_compare(const std::vector<ref<variable_base>>& args)
 			{
-				return wio::helper::eval_binary_exp_compare_all(lhs, rhs, location());
+				return wio::helper::eval_binary_exp_compare_all(args[0], args[1], location());
 			}
+		}
+
+		static void load_all(symbol_map& table)
+		{
+			using namespace wio::builtin::detail;
+
+			loader::load_function(table, "Swap", detail::b_swap, pa<2>{ variable_type::vt_any, variable_type::vt_any }, std::bitset<2>("11"));
+			loader::load_function(table, "ToString", detail::b_to_string, pa<1>{ variable_type::vt_any });
+			loader::load_function(table, "Pair", detail::b_pair, pa<2>{ variable_type::vt_any, variable_type::vt_any });
+			loader::load_function(table, "Compare", detail::b_compare, pa<2>{ variable_type::vt_any, variable_type::vt_any });
 		}
 
 		void utility::load(ref<scope> target_scope)
 		{
 			if (!target_scope)
-				target_scope = builtin_scope;
+				target_scope = main_table::get().get_builtin_scope();
 
-			loader::load_function_old<2>(target_scope, "Swap",		detail::b_swap,			{ variable_type::vt_any, variable_type::vt_any }, std::bitset<2>("11"));
-			loader::load_function_old<1>(target_scope, "ToString",	detail::b_to_string,	{ variable_type::vt_any });
-			loader::load_function_old<2>(target_scope, "Pair",		detail::b_pair,			{ variable_type::vt_any, variable_type::vt_any });
-			loader::load_function_old<2>(target_scope, "Compare",	detail::b_compare,		{ variable_type::vt_any, variable_type::vt_any });
+			load_all(target_scope->get_symbols());
+		}
+
+		void utility::load_table(ref<symbol_table> target_table)
+		{
+			if (target_table)
+				load_all(target_table->get_symbols());
+		}
+
+		void utility::load_symbol_map(symbol_map& target_map)
+		{
+			load_all(target_map);
 		}
 	}
 }

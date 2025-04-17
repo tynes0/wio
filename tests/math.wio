@@ -1,3 +1,6 @@
+import wio.math;
+import wio.io;
+
 ## Abs tests
 {
     Println("=== Abs Tests ===");
@@ -6,7 +9,7 @@
     Println(Abs(-12.34));  ## Expected: 12.34
     Println(Abs(12.34));   ## Expected: 12.34
     #*
-    println(abs("abc")); ## Expected Error: Invalid parameter type for 'abs'. Expected: integer or float, but got: string
+    println(abs("abc"));
     *#
 }
 
@@ -16,7 +19,7 @@
     Println(Sin(0.0));       ## Expected: 0.0
     Println(Sin(3.14159/2)); ## Expected: ~1.0 (approximately)
     #*
-    Println(sin(1)); ## Expected Error: Invalid parameter type for 'sin'. Expected: float, but got: integer
+    Println(sin(1));
     *#
 }
 
@@ -26,7 +29,7 @@
     Println(Cos(0.0));       ## Expected: 1.0
     Println(Cos(3.14159));   ## Expected: ~-1.0 (approximately)
     #*
-    Println(Cos(1)); ## Expected Error: Invalid parameter type for 'Cos'. Expected: float, but got: integer
+    Println(Cos(1));
     *#
 }
 
@@ -35,7 +38,7 @@
     Println("=== Tan Tests ===");
     Println(Tan(0.0));       ## Expected: 0.0
     #*
-    Println(Tan(1)); ## Expected Error: Invalid parameter type for 'Tan'. Expected: float, but got: integer
+    Println(Tan(1));
     *#
 }
 
@@ -46,8 +49,8 @@
     Println(Sqrt(4));      ## Expected: 2.0 (will return as float)
     Println(Sqrt(0));    ## Expected: 0.0
     #*
-    Println(Sqrt(-4.0));  ## Expected Error: Cannot take square root of negative number
-    Println(Sqrt(-4));   ## Expected Error: Cannot take square root of negative number
+    Println(Sqrt(-4.0));
+    Println(Sqrt(-4));
     *#
 }
 
@@ -59,7 +62,7 @@
     Println(Pow(2.0, 3));   ## Expected: 8.0
     Println(Pow(2, 3.0));    ## Expected: 8.0
     #*
-    Println(Pow("a", 2));  ## Expected Error: Invalid types for pow.  Expected (float, float), (int, int), (float, int) or (int, float)
+    Println(Pow("a", 2));
     *#
 }
 
@@ -97,7 +100,7 @@
     Println(ArcSin(-1.0));    ## Expected: ~-1.57
     #*
     Println(ArcSin(2.0));     ## Expected Error: Arcsin input must be in the range [-1, 1]
-    Println(ArcSin(1));       ## Expected Error: Invalid parameter type for 'asin'. Expected: float, but got: integer
+    Println(ArcSin(1));
     *#
 
 }
@@ -110,7 +113,7 @@
   Println(ArcCos(-1.0));## Expected: ~3.14 (approximately pi)
   #*
   Println(ArcCos(2.0)); ## Expected Error: Arccos input must be in the range [-1, 1]
-  Println(ArcCos(1));   ## Expected Error: Invalid parameter type for 'acos'. Expected: float, but got: integer
+  Println(ArcCos(1));
   *#
 }
 
@@ -121,7 +124,7 @@
     Println(ArcTan(0.0)); ## Expected: 0.0
     Println(ArcTan(1.0)); ## Expected: ~0.785 (approximately pi/4)
     #*
-    Println(ArcTan(1)); ## Expected Error: Invalid parameter type for 'atan'. Expected: float, but got: integer
+    Println(ArcTan(1));
     *#
 }
 
@@ -172,7 +175,7 @@
   Println(Exp(1.0)); ## Expected: ~2.718 (approximately e)
   Println(Exp(1)); ## Expected: ~2.718
   #*
-  Println(Exp("test")); ## Expected Error: Invalid parameter type for 'exp'. Expected: float or integer, but got: string
+  Println(Exp("test")); 
   *#
 }
 
@@ -182,7 +185,7 @@
     Println(ArcTan2(1.0, 1.0));  ## Expected: ~0.785 (approximately pi/4)
     Println(ArcTan2(1, 1));      ## Expected: ~0.785
     #*
-    Println(ArcTan2(1, "a"));  ## Expected Error: Invalid types for atan2. Expected (float, float), (int, int), (float, int) or (int, float)
+    Println(ArcTan2(1, "a"));
     *#
 
 }
@@ -193,7 +196,7 @@
     Println(Fmod(5.3, 2.0));  ## Expected: 1.3
     Println(Fmod(5, 2));      ## Expected: 1.0
     #*
-    Println(Fmod(5, 0));   ## Expected Error: (Division by zero error in C++)
+    Println(Fmod(5, 0));
     *#
 }
 
@@ -204,7 +207,7 @@
   Println(Sinh(1.0)); ## Expected: ~1.175
   Println(Sinh(1)); ## Expected: ~1.175
   #*
-  Println(Sinh("test")); ## Expected Error: Invalid parameter type for 'sinh'. Expected: float or integer, but got: string
+  Println(Sinh("test"));
  *#
 }
 
@@ -215,7 +218,7 @@
   Println(Cosh(1.0)); ## Expected: ~1.543
   Println(Cosh(1));   ## Expected: ~1.543
   #*
-  Println(Cosh("test")); ## Expected Error: Invalid parameter type for 'cosh'. Expected: float or integer, but got: string
+  Println(Cosh("test"));
   *#
 }
 
@@ -226,7 +229,7 @@
   Println(Tanh(1.0)); ## Expected: ~0.761
   Println(Tanh(1));   ## Expected: ~0.761
    #*
-  Println(Tanh("test")); ## Expected Error: Invalid parameter type for 'tanh'. Expected: float or integer, but got: string
+  Println(Tanh("test"));
   *#
 }
 
@@ -237,7 +240,7 @@
   Println(ArcSinh(1.0)); ## Expected: ~0.881
   Println(ArcSinh(1)); ## Expected: ~0.881
   #*
-  Println(ArcSinh("test")); ## Expected Error: Invalid parameter type for 'asinh'. Expected: float or integer, but got: string
+  Println(ArcSinh("test"));
   *#
 }
 
@@ -285,7 +288,7 @@
     Println(LogBase(8.0, 1.0));   ## Expected Error: Logarithm base cannot be zero, one, or negative.
     Println(LogBase(8.0, 0.0));   ## Expected Error: Logarithm base cannot be zero, one, or negative.
     Println(LogBase(0.0, 2.0));   ## Expected Error: Logarithm of zero or negative number is undefined.
-    Println(LogBase(-1,2)); ##Expected Error: Logarithm of zero or negative number is undefined.
+    Println(LogBase(-1,2));
     *#
 }
 
@@ -294,10 +297,10 @@
     Println("=== Min Tests ===");
     Println(Min(5, 10));       ## Expected: 5
     Println(Min(5.0, 10.0));   ## Expected: 5.0
-    Println(Min(5, 10.0));     ## Expected: 5.0
+    Println(Min(5, 10.0));     ## Expected: 5
     Println(Min(5.0, 10));     ## Expected: 5.0
     #*
-    Println(Min(5, "a"));    ## Expected Error: Invalid types for min. Expected (float, float), (int, int), (float, int) or (int, float)
+    Println(Min(5, "a"));
     *#
 }
 
@@ -307,15 +310,17 @@
     Println(Max(5, 10));       ## Expected: 10
     Println(Max(5.0, 10.0));   ## Expected: 10.0
     Println(Max(5, 10.0));     ## Expected: 10.0
-    Println(Max(5.0, 10));     ## Expected: 10.0
+    Println(Max(5.0, 10));     ## Expected: 10
     #*
-    Println(Max(5, "a"));    ## Expected Error: Invalid types for max. Expected (float, float), (int, int), (float, int) or (int, float)
+    Println(Max(5, "a"));
     *#
 }
 
 {
     Println("=== Constant Tests ===");
 
+    Println(NAN);              ## Expected: NaN (Not a Number)
+    Println(INF);              ## Expected: Inf (Infinity)
     Println(PI);               ## Expected: 3.141592653589793
     Println(E);                ## Expected: 2.718281828459045
     Println(LOG2E);            ## Expected: 1.4426950408889634
@@ -324,27 +329,4 @@
     Println(LN10);             ## Expected: 2.302585092994046
     Println(SQRT2);            ## Expected: 1.4142135623730951
     Println(SQRT3);            ## Expected: 1.7320508075688772
-    Println(PHI);              ## Expected: 1.618033988749895
-    Println(GAMMA);            ## Expected: 0.5772156649015329
-    Println(FEIGENBAUM_DELTA); ## Expected: 4.669201609102991
-    Println(FEIGENBAUM_ALPHA); ## Expected: 2.502907875095893
-    Println(CATALAN);          ## Expected: 0.915965594177219
-    Println(APERYS_CONSTANT);  ## Expected: 1.2020569031595942
-    Println(PLANCK);           ## Expected: 6.62607015e-34
-    Println(GRAVITY);          ## Expected: 6.6743e-11
-    Println(LIGHT_SPEED);      ## Expected: 299792458.0
-    Println(BOLTZMANN);        ## Expected: 1.380649e-23
-    Println(AVOGADRO);         ## Expected: 6.02214076e23
-    Println(NAN);              ## Expected: NaN (Not a Number)
-    Println(INF);              ## Expected: Inf (Infinity)
-    Println(MU0);              ## Expected: 1.25663706212e-06
-    Println(EPSILON0);         ## Expected: 8.8541878128e-12
-    Println(STANDARD_GRAVITY); ## Expected: 9.80665
-    Println(RYDBERG);          ## Expected: 10973731.56816
-    Println(BOHR_RADIUS);      ## Expected: 5.29177210903e-11
-    Println(ELECTRON_MASS);    ## Expected: 9.1093837015e-31
-    Println(PROTON_MASS);      ## Expected: 1.67262192369e-27
-    Println(NEUTRON_MASS);     ## Expected: 1.67492749804e-27
-    Println(GOLDEN_RATIO);     ## Expected: 1.618033988749895
-    Println(SPEED_OF_SOUND);   ## Expected: 340.29
 }

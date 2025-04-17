@@ -101,21 +101,47 @@ namespace wio
     {
         if (tok.type == token_type::op)
         {
-            std::string op = tok.value;
-            if (op == "=") return 1;
-            if (op == "||") return 2;
-            if (op == "|") return 3;
+            const std::string& op = tok.value;
+
+            // Postfix / Unary
+            if (op == "++" || op == "--") return 15;
+            if (op == "~" || op == "!" || op == "?") return 14; // Unary ops
+
+            if (op == "->" || op == "<-") return 13;
+
+            // Multiplicative
+            if (op == "*" || op == "/" || op == "%") return 12;
+
+            // Additive
+            if (op == "+" || op == "-") return 11;
+
+            // Bitwise shift
+            if (op == "<<" || op == ">>") return 10;
+
+            // Relational
+            if (op == "<" || op == ">" || op == "<=" || op == ">=") return 9;
+
+            if (op == "==") return 8;
+            if (op == "!=") return 8;
+            if (op == "=?" || op == "<=>") return 8;
+
+            // Bitwise AND / XOR / OR
+            if (op == "&") return 7;
+            if (op == "^") return 6;
+            if (op == "|") return 5;
+
+            // Logical AND / OR / XOR
             if (op == "&&") return 4;
-            if (op == "&") return 6;
-            if (op == "==" || op == "!=" || "=?") return 7;
-            if (op == "<" || op == "<=" || op == ">" || op == ">=") return 8;
-            if (op == "+" || op == "-") return 10;
-            if (op == "*" || op == "/" || op == "%") return 11;
-            if (op == "!" || op == "?" || op == "~") return 12;
+            if (op == "||") return 3;
+            if (op == "^^") return 2;
+
+            // Assignment
+            if (op == "=" || op == "+=" || op == "-=" || op == "*=" || op == "/=" || op == "%=" ||
+                op == "&=" || op == "|=" || op == "^=" || op == "<<=" || op == ">>=")
+                return 1;
         }
         return -1;
     }
-
 
     location parser::get_array_elements(std::vector<ref<expression>>& elements)
     {
@@ -418,7 +444,10 @@ namespace wio
 
             ref<expression> right = parse_binary_expression(current_precedence + 1);
 
-            left = make_ref<binary_expression>(left, op, right);
+            auto result = make_ref<binary_expression>(left, op, right);
+            if (current_precedence == 1)
+                result->is_assignment = true;
+            left = result;
         }
 
         return left;

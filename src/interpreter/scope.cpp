@@ -4,6 +4,8 @@
 #include "../variables/variable_base.h"
 #include "../variables/function.h"
 
+#include "main_table.h"
+
 namespace wio
 {
     void scope::insert(const std::string& name, const symbol& symbol)
@@ -44,14 +46,16 @@ namespace wio
             if (m_type == scope_type::function_body)
             {
                 ref<scope> parent = m_parent;
-                while (parent->get_type() != scope_type::global)
+                while (parent && parent->get_type() != scope_type::global)
                     parent = parent->m_parent;
-                return parent->lookup(name);
+                if(parent)
+                    return parent->lookup(name);
+                return nullptr;
             }
             return m_parent->lookup(name);
         }
 
-        return lookup_builtin(name);
+        return main_table::get().lookup_builtin(name);
     }
 
     symbol* scope::lookup_only_global(const std::string& name)
@@ -60,12 +64,14 @@ namespace wio
 
         if (parent)
         {
-            while (parent->get_type() != scope_type::global)
+            while (parent && parent->get_type() != scope_type::global)
                 parent = parent->m_parent;
-            return parent->lookup(name);
+            if (parent)
+                return parent->lookup(name);
+            return nullptr;
         }
 
-        return lookup_builtin(name);
+        return main_table::get().lookup_builtin(name);
     }
 
     symbol* scope::lookup_current_and_global(const std::string& name)
@@ -78,19 +84,13 @@ namespace wio
 
         if (parent)
         {
-            while (parent->get_type() != scope_type::global)
+            while (parent && parent->get_type() != scope_type::global)
                 parent = parent->m_parent;
-            return parent->lookup(name);
+            if (parent)
+                return parent->lookup(name);
+            return nullptr;
         }
 
-        return lookup_builtin(name);
-    }
-
-    symbol* scope::lookup_builtin(const std::string& name)
-    {
-        auto it = builtin_scope->m_symbols.find(name);
-        if (it != builtin_scope->m_symbols.end())
-            return &(it->second);
-        return nullptr;
+        return main_table::get().lookup_builtin(name);
     }
 }

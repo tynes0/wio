@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <algorithm>
 
+#include "base/base.h"
 #include "base/exception.h"
 #include "base/argument_parser.h"
 
@@ -15,11 +16,14 @@
 #include "interpreter/parser.h"
 #include "interpreter/evaluator.h"
 #include "interpreter/module_tracker.h"
+#include "interpreter/eval_base.h"
+#include "interpreter/main_table.h"
 
 #include "builtin/io.h"
 #include "builtin/math.h"
 #include "builtin/utility.h"
 #include "builtin/types.h"
+#include "builtin/scientific.h"
 
 #include "variables/function.h"
 
@@ -28,10 +32,10 @@ namespace wio
 	struct app_data
 	{
 		std::filesystem::path base_path;
-		symbol_table_t temp_sym_table;
 		argument_parser arg_parser;
 		packed_bool flags{}; // 1- single file 2- show tokens 3- show ast 4- no run 5- no built-in
 		packed_bool buitin_imports{}; // 1-io 2-math 3-util
+		id_t last_module_id = 0;
 	};
 
 	static app_data s_app_data;
@@ -86,8 +90,12 @@ namespace wio
 		try
 		{
 			packed_bool flags = { s_app_data.flags.b1, false, false, s_app_data.flags.b5 };
+			eval_base::get().initialize(flags);
 			raw_buffer buf = run_f_p1(s_app_data.arg_parser.get_file().c_str(), flags);
+			main_table::get().add_imported_module(s_app_data.last_module_id);
 			run_f_p2(buf, flags);
+			auto& t = main_table::get();
+			int a = 1;
 		}
 		catch (const exception& e)
 		{
@@ -102,19 +110,23 @@ namespace wio
 		return main_interpreter;
 	}
 
-	raw_buffer interpreter::run_f(const char* fp, packed_bool flags, ref<scope> target_scope)
+	id_t interpreter::run_f(const char* fp, packed_bool flags, symbol_map* target_map)
 	{
-		raw_buffer content = run_f_p1(fp, flags, target_scope);
+		raw_buffer content = run_f_p1(fp, flags, target_map);
 		if (!content)
-			return raw_buffer(nullptr);
-		raw_buffer result = run_f_p2(content, flags);
+			return 0;
+
+		run_f_p2(content, flags, target_map);
 		run_f_p3();
-		return result;
+
+		return s_app_data.last_module_id;
 	}
 
-	raw_buffer interpreter::run_f_p1(const char* fp, packed_bool flags, ref<scope> target_scope)
+	raw_buffer interpreter::run_f_p1(const char* fp, packed_bool flags, symbol_map* target_map)
 	{
 		std::string filepath = fp;
+		std::for_each(filepath.begin(), filepath.end(), [](char& ch) { ch = std::tolower(ch); });
+
 		if (!filesystem::check_extension(filepath, ".wio"))
 		{
 			if (filesystem::has_prefix(filepath, "wio."))
@@ -122,31 +134,58 @@ namespace wio
 				if (flags.b4)
 					return raw_buffer(nullptr);
 
-				std::for_each(filepath.begin(), filepath.end(), [](char& ch) { ch = std::tolower(ch); });
-
 				std::string_view view(filepath);
 				view.remove_prefix(4);
 				
 				if (view == "io")
 				{
-					if (module_tracker::get().add_module(std::filesystem::path(filepath)))
-						builtin::io::load(target_scope);
+					if (module_tracker::get().add_module(filepath))
+					{
+						if(target_map)
+							builtin::io::load_symbol_map(*target_map);
+						else
+							builtin::io::load();
+					}
 				}
 				else if (view == "math")
 				{
-					if (module_tracker::get().add_module(std::filesystem::path(filepath)))
-						builtin::math::load(target_scope);
-
+					if (module_tracker::get().add_module(filepath))
+					{
+						if (target_map)
+							builtin::math::load_symbol_map(*target_map);
+						else
+							builtin::math::load();
+					}
 				}
 				else if (view == "util")
 				{
-					if (module_tracker::get().add_module(std::filesystem::path(filepath)))
-						builtin::utility::load(target_scope);
+					if (module_tracker::get().add_module(filepath))
+					{
+						if (target_map)
+							builtin::utility::load_symbol_map(*target_map);
+						else
+							builtin::utility::load();
+					}
 				}
 				else if (view == "types")
 				{
-					if (module_tracker::get().add_module(std::filesystem::path(filepath)))
-						builtin::types::load(target_scope);
+					if (module_tracker::get().add_module(filepath))
+					{
+						if (target_map)
+							builtin::types::load_symbol_map(*target_map);
+						else
+							builtin::types::load();
+					}
+				}
+				else if (view == "scientific")
+				{
+					if (module_tracker::get().add_module(filepath))
+					{
+						if (target_map)
+							builtin::scientific::load_symbol_map(*target_map);
+						else
+							builtin::scientific::load();
+					}
 				}
 				else
 				{
@@ -166,7 +205,9 @@ namespace wio
 		if (!filesystem::file_exists(filepath))
 			throw file_error("\'" + filepath + "\' not exists!");
 
-		if (!module_tracker::get().add_module(std::filesystem::path(filepath)))
+		s_app_data.last_module_id = module_tracker::get().add_module(std::filesystem::path(filepath));
+
+		if(s_app_data.last_module_id == 0)
 			return raw_buffer(nullptr);
 		
 		raw_buffer content = filesystem::read_file(filepath);
@@ -179,10 +220,10 @@ namespace wio
 		return content;
 	}
 
-	raw_buffer interpreter::run_f_p2(raw_buffer content, packed_bool flags)
+	void interpreter::run_f_p2(raw_buffer content, packed_bool flags, symbol_map* target_map)
 	{
 		if (!content)
-			return raw_buffer(nullptr);
+			return;
 
 		lexer l_lexer(content.as<const char>());
 		auto& tokens = l_lexer.get_tokens();
@@ -197,17 +238,12 @@ namespace wio
 			filesystem::write_stdout(tree->to_string());
 
 		if (s_app_data.flags.b4)
-			return raw_buffer(nullptr);
+			return;
 
-		evaluator eval(flags);
-		eval.evaluate_program(tree);
+		evaluator::evaluate_program(tree, s_app_data.last_module_id, flags);
 
-		s_app_data.temp_sym_table = eval.get_symbols();
-
-		raw_buffer result;
-		result.store(s_app_data.temp_sym_table);
-
-		return result;
+		if(target_map)
+			(*target_map) = main_table::get().get_scope(s_app_data.last_module_id)->get_symbols();
 	}
 
 	void interpreter::run_f_p3()

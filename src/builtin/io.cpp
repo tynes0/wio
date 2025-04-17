@@ -31,34 +31,34 @@ namespace wio
 
         namespace detail
         {
-            static ref<variable_base> b_print(ref<variable_base> base)
+            static ref<variable_base> b_print(const std::vector<ref<variable_base>>& args)
             {
-                filesystem::write_stdout(util::var_to_string(base));
+                filesystem::write_stdout(util::var_to_string(args[0]));
                 return create_null_variable();
             }
 
-            static ref<variable_base> b_println(ref<variable_base> base)
+            static ref<variable_base> b_println(const std::vector<ref<variable_base>>& args)
             {
-                b_print(base);
+                b_print(args);
                 filesystem::write_stdout("\n");
                 return create_null_variable();
             }
 
-            static ref<variable_base> b_input()
+            static ref<variable_base> b_input(const std::vector<ref<variable_base>>& args)
             {
                 raw_buffer buf = filesystem::read_stdout();
                 return make_ref<variable>(any(std::string(buf.as<char>())), variable_type::vt_string);
             }
 
-            static ref<variable_base> b_open_file(ref<variable_base> filepath, ref<variable_base> mode)
+            static ref<variable_base> b_open_file(const std::vector<ref<variable_base>>& args)
             {
-                auto filename_var = std::dynamic_pointer_cast<variable>(filepath);
+                auto filename_var = std::dynamic_pointer_cast<variable>(args[0]);
                 if (!filename_var || filename_var->get_type() != variable_type::vt_string) 
                     throw builtin_error("OpenFile(): Filename must be a string.");
 
                 std::string filename = filename_var->get_data_as<std::string>();
 
-                auto mode_var = std::dynamic_pointer_cast<variable>(mode);
+                auto mode_var = std::dynamic_pointer_cast<variable>(args[1]);
                 if (!mode_var || mode_var->get_type() != variable_type::vt_integer)
                     throw builtin_error("OpenFile(): Mode must be an integer.");
 
@@ -129,9 +129,9 @@ namespace wio
                 return make_ref<variable>(any(file_wrapper(file, filename, open_mode)), variable_type::vt_file);
             }
 
-            static ref<variable_base> b_close_file(ref<variable_base> file)
+            static ref<variable_base> b_close_file(const std::vector<ref<variable_base>>& args)
             {
-                auto file_var = std::dynamic_pointer_cast<variable>(file);
+                auto file_var = std::dynamic_pointer_cast<variable>(args[0]);
                 if (!file_var || file_var->get_type() != variable_type::vt_file)
                     throw builtin_error("OpenFile(): File must be a file.");
 
@@ -139,13 +139,13 @@ namespace wio
                 return create_null_variable();
             }
 
-            static ref<variable_base> b_write(ref<variable_base> file, ref<variable_base> value)
+            static ref<variable_base> b_write(const std::vector<ref<variable_base>>& args)
             {
-                auto file_var = std::dynamic_pointer_cast<variable>(file);
+                auto file_var = std::dynamic_pointer_cast<variable>(args[0]);
                 if (!file_var || file_var->get_type() != variable_type::vt_file && file_var->get_type() != variable_type::vt_string)
                     throw builtin_error("Write(): File must be a file or filepath (string).");
 
-                auto value_var = std::dynamic_pointer_cast<variable>(value);
+                auto value_var = std::dynamic_pointer_cast<variable>(args[1]);
                 if (!value_var || value_var->get_type() != variable_type::vt_string)
                     throw builtin_error("Write(): Value must be an string.");
 
@@ -157,9 +157,9 @@ namespace wio
                 return create_null_variable();
             }
 
-            static ref<variable_base> b_read(ref<variable_base> file)
+            static ref<variable_base> b_read(const std::vector<ref<variable_base>>& args)
             {
-                auto file_var = std::dynamic_pointer_cast<variable>(file);
+                auto file_var = std::dynamic_pointer_cast<variable>(args[0]);
                 if (!file_var || file_var->get_type() != variable_type::vt_file && file_var->get_type() != variable_type::vt_string)
                     throw builtin_error("OpenFile(): File must be a file or filepath (string).");
 
@@ -176,28 +176,47 @@ namespace wio
             }
         }
 
+        static void load_all(symbol_map& table)
+        {
+            using namespace wio::builtin::detail;
+
+            loader::load_function(table, "Print", detail::b_print, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "Println", detail::b_println, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "Input", detail::b_input, pa<0>{});
+            loader::load_function(table, "OpenFile", detail::b_open_file, pa<2>{ variable_type::vt_string, variable_type::vt_integer });
+            loader::load_function(table, "CloseFile", detail::b_close_file, pa<1>{ variable_type::vt_file });
+            loader::load_function(table, "Write", detail::b_write, pa<2>{ variable_type::vt_any, variable_type::vt_string });
+            loader::load_function(table, "Read", detail::b_read, pa<1>{ variable_type::vt_file });
+
+            loader::load_constant(table, "OPEN_MODE_READ", variable_type::vt_integer, FILE_MODE_READ);
+            loader::load_constant(table, "OPEN_MODE_WRITE", variable_type::vt_integer, FILE_MODE_WRITE);
+            loader::load_constant(table, "OPEN_MODE_APPEND", variable_type::vt_integer, FILE_MODE_APPEND);
+            loader::load_constant(table, "OPEN_MODE_BINARY", variable_type::vt_integer, FILE_MODE_BINARY);
+            loader::load_constant(table, "OPEN_MODE_TRUNC", variable_type::vt_integer, FILE_MODE_TRUNC);
+            loader::load_constant(table, "OPEN_MODE_ATE", variable_type::vt_integer, FILE_MODE_ATE);
+            loader::load_constant(table, "STDOUT", variable_type::vt_file, wrapped_stdout);
+            loader::load_constant(table, "STDERR", variable_type::vt_file, wrapped_stderr);
+            loader::load_constant(table, "STDIN", variable_type::vt_file, wrapped_stdin);
+        }
+
         void io::load(ref<scope> target_scope)
         {
+
             if (!target_scope)
-                target_scope = builtin_scope;
+                target_scope = main_table::get().get_builtin_scope();
 
-            loader::load_function_old<1>(target_scope, "Print",       detail::b_print,        { variable_type::vt_any });
-            loader::load_function_old<1>(target_scope, "Println",     detail::b_println,      { variable_type::vt_any });
-            loader::load_function_old<0>(target_scope, "Input",       detail::b_input,        {});
-            loader::load_function_old<2>(target_scope, "OpenFile",    detail::b_open_file,    { variable_type::vt_string, variable_type::vt_integer });
-            loader::load_function_old<1>(target_scope, "CloseFile",   detail::b_close_file,   { variable_type::vt_file });
-            loader::load_function_old<2>(target_scope, "Write",       detail::b_write,        { variable_type::vt_any, variable_type::vt_string });
-            loader::load_function_old<1>(target_scope, "Read",        detail::b_read,         { variable_type::vt_file });
+            load_all(target_scope->get_symbols());
+        }
 
-            loader::load_constant(target_scope, "OPEN_MODE_READ",     variable_type::vt_integer,  FILE_MODE_READ);
-            loader::load_constant(target_scope, "OPEN_MODE_WRITE",    variable_type::vt_integer,  FILE_MODE_WRITE);
-            loader::load_constant(target_scope, "OPEN_MODE_APPEND",   variable_type::vt_integer,  FILE_MODE_APPEND);
-            loader::load_constant(target_scope, "OPEN_MODE_BINARY",   variable_type::vt_integer,  FILE_MODE_BINARY);
-            loader::load_constant(target_scope, "OPEN_MODE_TRUNC",    variable_type::vt_integer,  FILE_MODE_TRUNC);
-            loader::load_constant(target_scope, "OPEN_MODE_ATE",      variable_type::vt_integer,  FILE_MODE_ATE);
-            loader::load_constant(target_scope, "STDOUT",             variable_type::vt_file,     wrapped_stdout);
-            loader::load_constant(target_scope, "STDERR",             variable_type::vt_file,     wrapped_stderr);
-            loader::load_constant(target_scope, "STDIN",              variable_type::vt_file,     wrapped_stdin);
+        void io::load_table(ref<symbol_table> target_table)
+        {
+            if (target_table)
+                load_all(target_table->get_symbols());
+        }
+
+        void io::load_symbol_map(symbol_map& target_map)
+        {
+            load_all(target_map);
         }
     }
 }

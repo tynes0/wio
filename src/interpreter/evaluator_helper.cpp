@@ -134,20 +134,6 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_integer)
                     return make_ref<variable>(any(*any_cast<double*>(left_value) - any_cast<long long>(right_value)), variable_type::vt_float);
             }
-            else if (lv_ref->get_type() == variable_type::vt_array)
-            {
-                if (rv_ref->get_type() == variable_type::vt_integer)
-                {
-                    ref<var_array> left_array = std::dynamic_pointer_cast<var_array>(lv_ref);
-                    long long ll_right = any_cast<long long>(right_value);
-
-                    if ((long long)left_array->size() < ll_right || ll_right < 0)
-                        throw invalid_operation_error("Invalid right value!", loc);
-
-                    while (ll_right--)
-                        left_array->pop();
-                }
-            }
             else if (lv_ref->get_type() == variable_type::vt_vec2)
             {
                 if (rv_ref->get_type() == variable_type::vt_integer)
@@ -540,7 +526,7 @@ namespace wio
                 }
                 else
                 {
-                    realm_lhs->load_members(nullptr);
+                    realm_lhs->load_members(ref<symbol_table>(nullptr));
                     realm_lhs->init_members();
                 }
 
@@ -555,13 +541,75 @@ namespace wio
             if (lv_ref->is_constant())
                 throw constant_value_assignment_error("Constant values cannot be changed!", loc);
 
+            any right_value;
+
+            if (rv_ref->get_base_type() == variable_base_type::variable)
+                right_value = std::dynamic_pointer_cast<variable>(rv_ref)->get_data();
+
             if (lv_ref->get_type() == variable_type::vt_array)
             {
                 std::dynamic_pointer_cast<var_array>(lv_ref)->push(rv_ref);
                 return lv_ref->clone();
             }
+            else if (lv_ref->get_type() == variable_type::vt_integer)
+            {
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(any_cast<long long&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) += any_cast<long long>(right_value)), variable_type::vt_integer);
+                else if (rv_ref->get_type() == variable_type::vt_float)
+                    return make_ref<variable>(any(any_cast<long long&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) += (long long)any_cast<double>(right_value)), variable_type::vt_integer);
+                else if (rv_ref->get_type() == variable_type::vt_float_ref)
+                    return make_ref<variable>(any(any_cast<long long&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) += (long long)*any_cast<double*>(right_value)), variable_type::vt_integer);
+            }
+            else if (lv_ref->get_type() == variable_type::vt_float)
+            {
+                if (rv_ref->get_type() == variable_type::vt_float)
+                    return make_ref<variable>(any(any_cast<double&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) += any_cast<double>(right_value)), variable_type::vt_float);
+                else if (rv_ref->get_type() == variable_type::vt_float_ref)
+                    return make_ref<variable>(any(any_cast<double&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) += *any_cast<double*>(right_value)), variable_type::vt_float);
+                else if (rv_ref->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(any_cast<double&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) += any_cast<long long>(right_value)), variable_type::vt_float);
+            }
+            else if (lv_ref->get_type() == variable_type::vt_float_ref)
+            {
+                if (rv_ref->get_type() == variable_type::vt_float)
+                    return make_ref<variable>(any(*any_cast<double*>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) += any_cast<double>(right_value)), variable_type::vt_float);
+                else if (rv_ref->get_type() == variable_type::vt_float_ref)
+                    return make_ref<variable>(any(*any_cast<double*>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) += *any_cast<double*>(right_value)), variable_type::vt_float);
+                else if (rv_ref->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(*any_cast<double*>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) += any_cast<long long>(right_value)), variable_type::vt_float);
+            }
+            else if (lv_ref->get_type() == variable_type::vt_string)
+            {
+                return make_ref<variable>(any(any_cast<std::string&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) += util::var_to_string(rv_ref)), variable_type::vt_string);
+            }
+            else if (lv_ref->get_type() == variable_type::vt_vec2)
+            {
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(any_cast<vec2&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) += (double)any_cast<long long>(right_value)), variable_type::vt_vec2);
+                else if (rv_ref->get_type() == variable_type::vt_float)
+                    return make_ref<variable>(any(any_cast<vec2&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) += any_cast<double>(right_value)), variable_type::vt_vec2);
+                else if (rv_ref->get_type() == variable_type::vt_float_ref)
+                    return make_ref<variable>(any(any_cast<vec2&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) += *any_cast<double*>(right_value)), variable_type::vt_vec2);
+                else if (rv_ref->get_type() == variable_type::vt_vec2)
+                    return make_ref<variable>(any(any_cast<vec2&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) += any_cast<vec2>(right_value)), variable_type::vt_vec2);
+            }
+            else if (lv_ref->get_type() == variable_type::vt_vec3)
+            {
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(any_cast<vec3&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) += (double)any_cast<long long>(right_value)), variable_type::vt_vec3);
+                else if (rv_ref->get_type() == variable_type::vt_float)
+                    return make_ref<variable>(any(any_cast<vec3&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) += any_cast<double>(right_value)), variable_type::vt_vec3);
+                else if (rv_ref->get_type() == variable_type::vt_float_ref)
+                    return make_ref<variable>(any(any_cast<vec3&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) += *any_cast<double*>(right_value)), variable_type::vt_vec3);
+                else if (rv_ref->get_type() == variable_type::vt_vec3)
+                    return make_ref<variable>(any(any_cast<vec3&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) += any_cast<vec3>(right_value)), variable_type::vt_vec3);
+            }
+            else if (lv_ref->get_type() == variable_type::vt_vec4)
+            {
+                return nullptr;
+            }
 
-            return eval_binary_exp_assignment(lv_ref, eval_binary_exp_addition(lv_ref, rv_ref, loc), loc);
+            throw type_mismatch_error("Invalid operand types for '+=' operator.", loc);
         }
 
         ref<variable_base> eval_binary_exp_subtract_assign(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc)
@@ -569,7 +617,81 @@ namespace wio
             if (lv_ref->is_constant())
                 throw constant_value_assignment_error("Constant values cannot be changed!", loc);
 
-            return eval_binary_exp_assignment(lv_ref, eval_binary_exp_subtraction(lv_ref, rv_ref, loc), loc);
+            any right_value;
+
+            if (rv_ref->get_base_type() == variable_base_type::variable)
+                right_value = std::dynamic_pointer_cast<variable>(rv_ref)->get_data();
+
+            if (lv_ref->get_type() == variable_type::vt_integer)
+            {
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(any_cast<long long&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) -= any_cast<long long>(right_value)), variable_type::vt_integer);
+                else if (rv_ref->get_type() == variable_type::vt_float)
+                    return make_ref<variable>(any(any_cast<long long&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) -= (long long)any_cast<double>(right_value)), variable_type::vt_integer);
+                else if (rv_ref->get_type() == variable_type::vt_float_ref)
+                    return make_ref<variable>(any(any_cast<long long&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) -= (long long)*any_cast<double*>(right_value)), variable_type::vt_integer);
+            }
+            else if (lv_ref->get_type() == variable_type::vt_float)
+            {
+                if (rv_ref->get_type() == variable_type::vt_float)
+                    return make_ref<variable>(any(any_cast<double&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) -= any_cast<double>(right_value)), variable_type::vt_float);
+                else if (rv_ref->get_type() == variable_type::vt_float_ref)
+                    return make_ref<variable>(any(any_cast<double&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) -= *any_cast<double*>(right_value)), variable_type::vt_float);
+                else if (rv_ref->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(any_cast<double&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) -= any_cast<long long>(right_value)), variable_type::vt_float);
+            }
+            else if (lv_ref->get_type() == variable_type::vt_float_ref)
+            {
+                if (rv_ref->get_type() == variable_type::vt_float)
+                    return make_ref<variable>(any(*any_cast<double*>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) -= any_cast<double>(right_value)), variable_type::vt_float);
+                else if (rv_ref->get_type() == variable_type::vt_float_ref)
+                    return make_ref<variable>(any(*any_cast<double*>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) -= *any_cast<double*>(right_value)), variable_type::vt_float);
+                else if (rv_ref->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(*any_cast<double*>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) -= any_cast<long long>(right_value)), variable_type::vt_float);
+            }
+            else if (lv_ref->get_type() == variable_type::vt_array)
+            {
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                {
+                    ref<var_array> left_array = std::dynamic_pointer_cast<var_array>(lv_ref);
+                    long long ll_right = any_cast<long long>(right_value);
+
+                    if ((long long)left_array->size() < ll_right || ll_right < 0)
+                        throw invalid_operation_error("Invalid right value!", loc);
+
+                    while (ll_right--)
+                        left_array->pop();
+                    return left_array->clone();
+                }
+            }
+            else if (lv_ref->get_type() == variable_type::vt_vec2)
+            {
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(any_cast<vec2&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) -= (double)any_cast<long long>(right_value)), variable_type::vt_vec2);
+                else if (rv_ref->get_type() == variable_type::vt_float)
+                    return make_ref<variable>(any(any_cast<vec2&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) -= any_cast<double>(right_value)), variable_type::vt_vec2);
+                else if (rv_ref->get_type() == variable_type::vt_float_ref)
+                    return make_ref<variable>(any(any_cast<vec2&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) -= *any_cast<double*>(right_value)), variable_type::vt_vec2);
+                else if (rv_ref->get_type() == variable_type::vt_vec2)
+                    return make_ref<variable>(any(any_cast<vec2&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) -= any_cast<vec2>(right_value)), variable_type::vt_vec2);
+            }
+            else if (lv_ref->get_type() == variable_type::vt_vec3)
+            {
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(any_cast<vec3&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) -= (double)any_cast<long long>(right_value)), variable_type::vt_vec3);
+                else if (rv_ref->get_type() == variable_type::vt_float)
+                    return make_ref<variable>(any(any_cast<vec3&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) -= any_cast<double>(right_value)), variable_type::vt_vec3);
+                else if (rv_ref->get_type() == variable_type::vt_float_ref)
+                    return make_ref<variable>(any(any_cast<vec3&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) -= *any_cast<double*>(right_value)), variable_type::vt_vec3);
+                else if (rv_ref->get_type() == variable_type::vt_vec3)
+                    return make_ref<variable>(any(any_cast<vec3&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) -= any_cast<vec3>(right_value)), variable_type::vt_vec3);
+            }
+            else if (lv_ref->get_type() == variable_type::vt_vec4)
+            {
+                return nullptr;
+            }
+
+            throw type_mismatch_error("Invalid operand types for '-=' operator.", loc);
         }
 
         ref<variable_base> eval_binary_exp_multiply_assign(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc)
@@ -577,7 +699,81 @@ namespace wio
             if (lv_ref->is_constant())
                 throw constant_value_assignment_error("Constant values cannot be changed!", loc);
 
-            return eval_binary_exp_assignment(lv_ref, eval_binary_exp_multiplication(lv_ref, rv_ref, loc), loc);
+            any right_value;
+
+            if (rv_ref->get_base_type() == variable_base_type::variable)
+                right_value = std::dynamic_pointer_cast<variable>(rv_ref)->get_data();
+
+            if (lv_ref->get_type() == variable_type::vt_integer)
+            {
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(any_cast<long long&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) *= any_cast<long long>(right_value)), variable_type::vt_integer);
+                else if (rv_ref->get_type() == variable_type::vt_float) 
+                    return make_ref<variable>(any(any_cast<long long&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) *= (long long)any_cast<double>(right_value)), variable_type::vt_integer);
+                else if (rv_ref->get_type() == variable_type::vt_float_ref)
+                    return make_ref<variable>(any(any_cast<long long&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) *= (long long)*any_cast<double*>(right_value)), variable_type::vt_integer);
+            }
+            else if (lv_ref->get_type() == variable_type::vt_float)
+            {
+                if (rv_ref->get_type() == variable_type::vt_float)
+                    return make_ref<variable>(any(any_cast<double&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) *= any_cast<double>(right_value)), variable_type::vt_float);
+                else if (rv_ref->get_type() == variable_type::vt_float_ref)
+                    return make_ref<variable>(any(any_cast<double&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) *= *any_cast<double*>(right_value)), variable_type::vt_float);
+                else if (rv_ref->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(any_cast<double&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) *= any_cast<long long>(right_value)), variable_type::vt_float);
+            }
+            else if (lv_ref->get_type() == variable_type::vt_float_ref)
+            {
+                if (rv_ref->get_type() == variable_type::vt_float)
+                    return make_ref<variable>(any(*any_cast<double*>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) *= any_cast<double>(right_value)), variable_type::vt_float);
+                else if (rv_ref->get_type() == variable_type::vt_float_ref)
+                    return make_ref<variable>(any(*any_cast<double*>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) *= *any_cast<double*>(right_value)), variable_type::vt_float);
+                else if (rv_ref->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(*any_cast<double*>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) *= any_cast<long long>(right_value)), variable_type::vt_float);
+            }
+            else if (lv_ref->get_type() == variable_type::vt_string)
+            {
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                {
+                    long long ll_right = any_cast<long long>(right_value);
+                    std::string str_left = any_cast<std::string&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data());
+
+                    if (ll_right < 0)
+                        throw invalid_operation_error("Invalid right value!", loc);
+
+                    while (ll_right--)
+                        str_left.append(str_left);
+
+                    return make_ref<variable>(any(str_left), variable_type::vt_string);
+                }
+            }
+            else if (lv_ref->get_type() == variable_type::vt_vec2)
+            {
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(any_cast<vec2&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) *= (double)any_cast<long long>(right_value)), variable_type::vt_vec2);
+                else if (rv_ref->get_type() == variable_type::vt_float)
+                    return make_ref<variable>(any(any_cast<vec2&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) *= any_cast<double>(right_value)), variable_type::vt_vec2);
+                else if (rv_ref->get_type() == variable_type::vt_float_ref)
+                    return make_ref<variable>(any(any_cast<vec2&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) *= *any_cast<double*>(right_value)), variable_type::vt_vec2);
+                else if (rv_ref->get_type() == variable_type::vt_vec2)
+                    return make_ref<variable>(any(any_cast<vec2&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) *= any_cast<vec2>(right_value)), variable_type::vt_vec2);
+            }
+            else if (lv_ref->get_type() == variable_type::vt_vec3)
+            {
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(any_cast<vec3&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) *= (double)any_cast<long long>(right_value)), variable_type::vt_vec3);
+                else if (rv_ref->get_type() == variable_type::vt_float)
+                    return make_ref<variable>(any(any_cast<vec3&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) *= any_cast<double>(right_value)), variable_type::vt_vec3);
+                else if (rv_ref->get_type() == variable_type::vt_float_ref)
+                    return make_ref<variable>(any(any_cast<vec3&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) *= *any_cast<double*>(right_value)), variable_type::vt_vec3);
+                else if (rv_ref->get_type() == variable_type::vt_vec3)
+                    return make_ref<variable>(any(any_cast<vec3&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) *= any_cast<vec3>(right_value)), variable_type::vt_vec3);
+            }
+            else if (lv_ref->get_type() == variable_type::vt_vec4)
+            {
+                return nullptr;
+            }
+            throw type_mismatch_error("Invalid operand types for '*=' operator.", loc);
         }
 
         ref<variable_base> eval_binary_exp_divide_assign(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc)
@@ -585,7 +781,150 @@ namespace wio
             if (lv_ref->is_constant())
                 throw constant_value_assignment_error("Constant values cannot be changed!", loc);
 
-            return eval_binary_exp_assignment(lv_ref, eval_binary_exp_division(lv_ref, rv_ref, loc), loc);
+            any right_value;
+
+            if (rv_ref->get_base_type() == variable_base_type::variable)
+                right_value = std::dynamic_pointer_cast<variable>(rv_ref)->get_data();
+
+            if (lv_ref->get_type() == variable_type::vt_integer)
+            {
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                {
+                    if (any_cast<long long>(right_value) == 0)
+                        throw invalid_operation_error("Division by zero error.", loc);
+
+                    return make_ref<variable>(any(any_cast<long long&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) /= any_cast<long long>(right_value)), variable_type::vt_integer);
+                }
+                if (rv_ref->get_type() == variable_type::vt_float)
+                {
+                    if (any_cast<double>(right_value) == 0.0)
+                        throw invalid_operation_error("Division by zero error.", loc);
+
+                    return make_ref<variable>(any(any_cast<long long&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) /= (long long)any_cast<double>(right_value)), variable_type::vt_integer);
+                }
+                if (rv_ref->get_type() == variable_type::vt_float_ref)
+                {
+                    if (*any_cast<double*>(right_value) == 0.0)
+                        throw invalid_operation_error("Division by zero error.", loc);
+
+                    return make_ref<variable>(any(any_cast<long long&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) /= (long long)*any_cast<double*>(right_value)), variable_type::vt_integer);
+                }
+            }
+            else if (lv_ref->get_type() == variable_type::vt_float)
+            {
+                if (rv_ref->get_type() == variable_type::vt_float)
+                {
+                    if (any_cast<double>(right_value) == 0.0)
+                        throw invalid_operation_error("Division by zero error.", loc);
+
+                    return make_ref<variable>(any(any_cast<double&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) /= any_cast<double>(right_value)), variable_type::vt_float);
+                }
+                else if (rv_ref->get_type() == variable_type::vt_float_ref)
+                {
+                    if (*any_cast<double*>(right_value) == 0.0)
+                        throw invalid_operation_error("Division by zero error.", loc);
+
+                    return make_ref<variable>(any(any_cast<double&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) /= *any_cast<double*>(right_value)), variable_type::vt_float);
+                }
+                else if (rv_ref->get_type() == variable_type::vt_integer)
+                {
+                    if (any_cast<long long>(right_value) == 0)
+                        throw invalid_operation_error("Division by zero error.", loc);
+
+                    return make_ref<variable>(any(any_cast<double&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) /= any_cast<long long>(right_value)), variable_type::vt_float);
+                }
+            }
+            else if (lv_ref->get_type() == variable_type::vt_float_ref)
+            {
+                if (rv_ref->get_type() == variable_type::vt_float)
+                {
+                    if (any_cast<double>(right_value) == 0.0)
+                        throw invalid_operation_error("Division by zero error.", loc);
+
+                    return make_ref<variable>(any(*any_cast<double*>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) /= any_cast<double>(right_value)), variable_type::vt_float);
+                }
+                else if (rv_ref->get_type() == variable_type::vt_float_ref)
+                {
+                    if (*any_cast<double*>(right_value) == 0.0)
+                        throw invalid_operation_error("Division by zero error.", loc);
+
+                    return make_ref<variable>(any(*any_cast<double*>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) /= *any_cast<double*>(right_value)), variable_type::vt_float);
+                }
+                else if (rv_ref->get_type() == variable_type::vt_integer)
+                {
+                    if (any_cast<long long>(right_value) == 0)
+                        throw invalid_operation_error("Division by zero error.", loc);
+
+                    return make_ref<variable>(any(*any_cast<double*>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) /= any_cast<long long>(right_value)), variable_type::vt_float);
+                }
+            }
+            else if (lv_ref->get_type() == variable_type::vt_vec2)
+            {
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                {
+                    if (any_cast<long long>(right_value) == 0)
+                        throw invalid_operation_error("Division by zero error.", loc);
+
+                    return make_ref<variable>(any(any_cast<vec2&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) /= (double)any_cast<long long>(right_value)), variable_type::vt_vec2);
+                }
+                else if (rv_ref->get_type() == variable_type::vt_float)
+                {
+                    if (any_cast<double>(right_value) == 0.0)
+                        throw invalid_operation_error("Division by zero error.", loc);
+
+                    return make_ref<variable>(any(any_cast<vec2&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) /= any_cast<double>(right_value)), variable_type::vt_vec2);
+                }
+                else if (rv_ref->get_type() == variable_type::vt_float_ref)
+                {
+                    if (*any_cast<double*>(right_value) == 0.0)
+                        throw invalid_operation_error("Division by zero error.", loc);
+
+                    return make_ref<variable>(any(any_cast<vec2&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) /= *any_cast<double*>(right_value)), variable_type::vt_vec2);
+                }
+                else if (rv_ref->get_type() == variable_type::vt_vec2)
+                {
+                    if (any_cast<vec2>(right_value).is_one_of_zero())
+                        throw invalid_operation_error("Division by zero error.", loc);
+
+                    return make_ref<variable>(any(any_cast<vec2&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) /= any_cast<vec2>(right_value)), variable_type::vt_vec2);
+                }
+            }
+            else if (lv_ref->get_type() == variable_type::vt_vec3)
+            {
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                {
+                    if (any_cast<long long>(right_value) == 0)
+                        throw invalid_operation_error("Division by zero error.", loc);
+
+                    return make_ref<variable>(any(any_cast<vec3&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) /= (double)any_cast<long long>(right_value)), variable_type::vt_vec3);
+                }
+                else if (rv_ref->get_type() == variable_type::vt_float)
+                {
+                    if (any_cast<double>(right_value) == 0.0)
+                        throw invalid_operation_error("Division by zero error.", loc);
+
+                    return make_ref<variable>(any(any_cast<vec3&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) /= any_cast<double>(right_value)), variable_type::vt_vec3);
+                }
+                else if (rv_ref->get_type() == variable_type::vt_float_ref)
+                {
+                    if (*any_cast<double*>(right_value) == 0.0)
+                        throw invalid_operation_error("Division by zero error.", loc);
+
+                    return make_ref<variable>(any(any_cast<vec3&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) /= *any_cast<double*>(right_value)), variable_type::vt_vec3);
+                }
+                else if (rv_ref->get_type() == variable_type::vt_vec3)
+                {
+                    if (any_cast<vec3>(right_value).is_one_of_zero())
+                        throw invalid_operation_error("Division by zero error.", loc);
+
+                    return make_ref<variable>(any(any_cast<vec3&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) /= any_cast<vec3>(right_value)), variable_type::vt_vec3);
+                }
+            }
+            else if (lv_ref->get_type() == variable_type::vt_vec4)
+            {
+                return nullptr;
+            }
+            throw type_mismatch_error("Invalid operand types for '/=' operator.", loc);
         }
 
         ref<variable_base> eval_binary_exp_modulo_assign(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc)
@@ -593,7 +932,22 @@ namespace wio
             if (lv_ref->is_constant())
                 throw constant_value_assignment_error("Constant values cannot be changed!", loc);
 
-            return eval_binary_exp_assignment(lv_ref, eval_binary_exp_modulo(lv_ref, rv_ref, loc), loc);
+            any right_value;
+
+            if (rv_ref->get_base_type() == variable_base_type::variable)
+                right_value = std::dynamic_pointer_cast<variable>(rv_ref)->get_data();
+
+            if (lv_ref->get_type() == variable_type::vt_integer)
+            {
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                {
+                    if (any_cast<long long>(right_value) == 0)
+                        throw invalid_operation_error("Division by zero error.", loc);
+
+                    return make_ref<variable>(any(any_cast<long long&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) %= any_cast<long long>(right_value)), variable_type::vt_integer);
+                }
+            }
+            throw type_mismatch_error("Invalid operand types for '%=' operator.", loc);
         }
 
         ref<variable_base> eval_binary_exp_less_than(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc)
@@ -1433,17 +1787,59 @@ namespace wio
 
         ref<variable_base> eval_binary_exp_bitwise_and_assign(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc)
         {
-            return eval_binary_exp_assignment(lv_ref, eval_binary_exp_bitwise_and(lv_ref, rv_ref, loc), loc);
+            if (lv_ref->is_constant())
+                throw constant_value_assignment_error("Constant values cannot be changed!", loc);
+
+            any right_value;
+
+            if (rv_ref->get_base_type() == variable_base_type::variable)
+                right_value = std::dynamic_pointer_cast<variable>(rv_ref)->get_data();
+
+            if (lv_ref->get_type() == variable_type::vt_integer)
+            {
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(any_cast<long long&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) &= any_cast<long long>(right_value)), variable_type::vt_integer);
+            }
+
+            throw type_mismatch_error("Invalid operand types for '&=' operator (bitwise AND assign). Operands must be integers.", loc);
         }
 
         ref<variable_base> eval_binary_exp_bitwise_or_assign(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc)
         {
-            return eval_binary_exp_assignment(lv_ref, eval_binary_exp_bitwise_or(lv_ref, rv_ref, loc), loc);
+            if (lv_ref->is_constant())
+                throw constant_value_assignment_error("Constant values cannot be changed!", loc);
+
+            any right_value;
+
+            if (rv_ref->get_base_type() == variable_base_type::variable)
+                right_value = std::dynamic_pointer_cast<variable>(rv_ref)->get_data();
+
+            if (lv_ref->get_type() == variable_type::vt_integer)
+            {
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(any_cast<long long&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) |= any_cast<long long>(right_value)), variable_type::vt_integer);
+            }
+
+            throw type_mismatch_error("Invalid operand types for '|=' operator (bitwise OR assign). Operands must be integers.", loc);
         }
 
         ref<variable_base> eval_binary_exp_bitwise_xor_assign(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc)
         {
-            return eval_binary_exp_assignment(lv_ref, eval_binary_exp_bitwise_xor(lv_ref, rv_ref, loc), loc);
+            if (lv_ref->is_constant())
+                throw constant_value_assignment_error("Constant values cannot be changed!", loc);
+
+            any right_value;
+
+            if (rv_ref->get_base_type() == variable_base_type::variable)
+                right_value = std::dynamic_pointer_cast<variable>(rv_ref)->get_data();
+
+            if (lv_ref->get_type() == variable_type::vt_integer)
+            {
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(any_cast<long long&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) ^= any_cast<long long>(right_value)), variable_type::vt_integer);
+            }
+
+            throw type_mismatch_error("Invalid operand types for '^=' operator (bitwise XOR assign). Operands must be integers.", loc);
         }
 
         ref<variable_base> eval_binary_exp_left_shift(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc)
@@ -1489,7 +1885,18 @@ namespace wio
             if (lv_ref->is_constant())
                 throw constant_value_assignment_error("Constant values cannot be changed!", loc);
 
-            return eval_binary_exp_assignment(lv_ref, eval_binary_exp_left_shift(lv_ref, rv_ref, loc), loc);
+            any right_value;
+
+            if (rv_ref->get_base_type() == variable_base_type::variable)
+                right_value = std::dynamic_pointer_cast<variable>(rv_ref)->get_data();
+
+            if (lv_ref->get_type() == variable_type::vt_integer)
+            {
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(any_cast<long long&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) <<= any_cast<long long>(right_value)), variable_type::vt_integer);
+            }
+
+            throw type_mismatch_error("Invalid operand types for '<<=' operator (left shift assign). Operands must be integers.", loc);
         }
 
         ref<variable_base> eval_binary_exp_right_shift_assign(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc)
@@ -1497,7 +1904,18 @@ namespace wio
             if (lv_ref->is_constant())
                 throw constant_value_assignment_error("Constant values cannot be changed!", loc);
 
-            return eval_binary_exp_assignment(lv_ref, eval_binary_exp_right_shift(lv_ref, rv_ref, loc), loc);
+            any right_value;
+
+            if (rv_ref->get_base_type() == variable_base_type::variable)
+                right_value = std::dynamic_pointer_cast<variable>(rv_ref)->get_data();
+
+            if (lv_ref->get_type() == variable_type::vt_integer)
+            {
+                if (rv_ref->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(any_cast<long long&>(std::dynamic_pointer_cast<variable>(lv_ref)->get_data()) >>= any_cast<long long>(right_value)), variable_type::vt_integer);
+            }
+
+            throw type_mismatch_error("Invalid operand types for '>>=' operator (right shift assign). Operands must be integers.", loc);
         }
 
         ref<variable_base> eval_binary_exp_to_left(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc)
@@ -1606,14 +2024,9 @@ namespace wio
 
         ref<variable_base> eval_unary_exp_increment(ref<variable_base> v_ref, unary_operator_type op_type, const location& loc)
         {
-            any value;
-
-            if (v_ref->get_base_type() == variable_base_type::variable)
-                value = std::dynamic_pointer_cast<variable>(v_ref)->get_data();
-
             if (v_ref->get_type() == variable_type::vt_integer)
             {
-                long long& ll_value = any_cast<long long&>(value);
+                long long& ll_value = any_cast<long long&>(std::dynamic_pointer_cast<variable>(v_ref)->get_data());
                 long long old_value = ll_value;
 
                 ll_value++;
@@ -1623,7 +2036,7 @@ namespace wio
             }
             else if (v_ref->get_type() == variable_type::vt_float)
             {
-                double& d_value = any_cast<double&>(value);
+                double& d_value = any_cast<double&>(std::dynamic_pointer_cast<variable>(v_ref)->get_data());
                 double old_value = d_value;
 
                 d_value++;
@@ -1632,7 +2045,7 @@ namespace wio
             }
             else if (v_ref->get_type() == variable_type::vt_float_ref)
             {
-                double& d_value = *any_cast<double*>(value);
+                double& d_value = *any_cast<double*>(std::dynamic_pointer_cast<variable>(v_ref)->get_data());
                 double old_value = d_value;
 
                 d_value++;
@@ -1641,7 +2054,7 @@ namespace wio
             }
             else if (v_ref->get_type() == variable_type::vt_character)
             {
-                char& c_value = any_cast<char&>(value);
+                char& c_value = any_cast<char&>(std::dynamic_pointer_cast<variable>(v_ref)->get_data());
                 char old_value = c_value;
 
                 c_value++;
@@ -1650,7 +2063,7 @@ namespace wio
             }
             else if (v_ref->get_type() == variable_type::vt_character_ref)
             {
-                char& c_value = *any_cast<char*>(value);
+                char& c_value = *any_cast<char*>(std::dynamic_pointer_cast<variable>(v_ref)->get_data());
                 char old_value = c_value;
 
                 c_value++;
@@ -1659,7 +2072,7 @@ namespace wio
             }
             else if (v_ref->get_type() == variable_type::vt_vec2)
             {
-                vec2& v2_value = any_cast<vec2&>(value);
+                vec2& v2_value = any_cast<vec2&>(std::dynamic_pointer_cast<variable>(v_ref)->get_data());
                 vec2 old_value = v2_value;
 
                 v2_value++;
@@ -1668,7 +2081,7 @@ namespace wio
             }
             else if (v_ref->get_type() == variable_type::vt_vec3)
             {
-                vec3& v3_value = any_cast<vec3&>(value);
+                vec3& v3_value = any_cast<vec3&>(std::dynamic_pointer_cast<variable>(v_ref)->get_data());
                 vec3 old_value = v3_value;
 
                 v3_value++;
@@ -1685,14 +2098,9 @@ namespace wio
 
         ref<variable_base> eval_unary_exp_decrement(ref<variable_base> v_ref, unary_operator_type op_type, const location& loc)
         {
-            any value;
-
-            if (v_ref->get_base_type() == variable_base_type::variable)
-                value = std::dynamic_pointer_cast<variable>(v_ref)->get_data();
-
             if (v_ref->get_type() == variable_type::vt_integer)
             {
-                long long& ll_value = any_cast<long long&>(value);
+                long long& ll_value = any_cast<long long&>(std::dynamic_pointer_cast<variable>(v_ref)->get_data());
                 long long old_value = ll_value;
 
                 ll_value--;
@@ -1702,7 +2110,7 @@ namespace wio
             }
             else if (v_ref->get_type() == variable_type::vt_float)
             {
-                double& d_value = any_cast<double&>(value);
+                double& d_value = any_cast<double&>(std::dynamic_pointer_cast<variable>(v_ref)->get_data());
                 double old_value = d_value;
 
                 d_value--;
@@ -1711,7 +2119,7 @@ namespace wio
             }
             else if (v_ref->get_type() == variable_type::vt_float_ref)
             {
-                double& d_value = *any_cast<double*>(value);
+                double& d_value = *any_cast<double*>(std::dynamic_pointer_cast<variable>(v_ref)->get_data());
                 double old_value = d_value;
 
                 d_value--;
@@ -1720,7 +2128,7 @@ namespace wio
             }
             else if (v_ref->get_type() == variable_type::vt_character)
             {
-                char& c_value = any_cast<char&>(value);
+                char& c_value = any_cast<char&>(std::dynamic_pointer_cast<variable>(v_ref)->get_data());
                 char old_value = c_value;
 
                 c_value--;
@@ -1729,7 +2137,7 @@ namespace wio
             }
             else if (v_ref->get_type() == variable_type::vt_character_ref)
             {
-                char& c_value = *any_cast<char*>(value);
+                char& c_value = *any_cast<char*>(std::dynamic_pointer_cast<variable>(v_ref)->get_data());
                 char old_value = c_value;
 
                 c_value--;
@@ -1738,7 +2146,7 @@ namespace wio
             }
             else if (v_ref->get_type() == variable_type::vt_vec2)
             {
-                vec2& v2_value = any_cast<vec2&>(value);
+                vec2& v2_value = any_cast<vec2&>(std::dynamic_pointer_cast<variable>(v_ref)->get_data());
                 vec2 old_value = v2_value;
 
                 v2_value--;
@@ -1747,7 +2155,7 @@ namespace wio
             }
             else if (v_ref->get_type() == variable_type::vt_vec3)
             {
-                vec3& v3_value = any_cast<vec3&>(value);
+                vec3& v3_value = any_cast<vec3&>(std::dynamic_pointer_cast<variable>(v_ref)->get_data());
                 vec3 old_value = v3_value;
 
                 v3_value--;

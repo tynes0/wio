@@ -108,3 +108,24 @@
 - __Update 1.11.9:__ Added operator overloads for the vec3 type.
 - __Update 1.11.10:__ The source codes of vec2 and vec3 types have been cleaned.
 - __Update 1.11.11:__ Cleaning was done in built-in function implementations. It will be continued.
+- __Update 2.0.0:__ Fixed errors that occurred when using return statement in loop.
+- __Update 2.0.1:__ Fixed a bug that caused the program to crash when trying to use the return values of functions that return empty returns. Using an empty return statement is now equivalent to returning null.
+- __Update 2.0.2:__ Fixed a situation where the return statement in the foreach loop would sometimes cause the program to crash.
+- __Update 2.0.3:__ Fixed the situation where the variable is already defined error is given when creating a variable in a loop.
+- __Update 2.0.4:__ Fixed an issue where operator priorities could be handled incorrectly.
+- __Update 2.0.5:__ Fixed an issue that caused the increment and decrement operators to not work correctly.
+- __Update 2.0.6:__ Fixed an issue where the 3rd region of the for loop would not work in some cases.
+- __Update 2.0.7:__ The symbol table was reduced to one. Additional copy operations were removed.
+- __Update 2.0.8:__ All evaluator data has been made static. They now use a single common data.
+- __Update 2.0.9:__ Added unknown statement error. Also if a null statement call is made it is passed directly.
+- __Update 2.0.10:__ Basic implementations of builtin functions have been restructured.
+- __Update 2.0.11:__ The core implementation of Realms has been restructured.
+- __Update 2.0.12:__ Removed scientific constants from math library. Added scientific library for scientific constants.
+- __Update 2.0.13:__ Preparations were made for new implantation of the functional system.
+- __Update 2.0.14:__ Removed unnecessary files from the project.
+- __Update 2.0.15:__ New builtin methods have been added for the string type.
+- __Update 2.0.16:__ Moved the - operator overload for array to -= for more logical reasoning.
+- __Update 2.0.17:__ The implementations of all assignment operators have been updated and made more logical, faster and trouble-free.
+- __Update 2.0.18:__ Fixed an issue where some binary operations were giving unnecessary errors.
+- __Update 2.0.19:__ Members folder added for organizing the builtin folder. Now the implementations of the builtin members of the types are in this folder.
+- __Update 2.0.20:__ Members have been added to the character type.

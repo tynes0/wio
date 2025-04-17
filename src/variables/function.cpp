@@ -5,13 +5,13 @@
 namespace wio
 {
     var_function::var_function(const std::vector<function_param>& params, bool is_local, bool is_global) 
-        : m_params(params), variable_base({ is_local, is_global }), m_declared(false), m_early_decl(false)
+        : m_params(params), variable_base({ is_local, is_global }), m_declared(false), m_early_decl(false), m_bounded_file_id(0)
     {
         symbol sym(make_ref<var_function>(*this), { is_local, is_global, true });
         m_overloads.push_back(sym);
     }
     var_function::var_function(const fun_type& data, const std::vector<function_param>& params, bool is_local, bool is_global)
-        : m_data(data), m_params(params), variable_base({is_local, is_global}), m_declared(true), m_early_decl(false)
+        : m_data(data), m_params(params), variable_base({is_local, is_global}), m_declared(true), m_early_decl(false), m_bounded_file_id(0)
     {
         symbol sym(make_ref<var_function>(*this), { is_local, is_global, true });
         m_overloads.push_back(sym);
@@ -80,6 +80,11 @@ namespace wio
         return m_symbol_id;
     }
 
+    id_t var_function::get_file_id() const
+    {
+        return m_bounded_file_id;
+    }
+
     void var_function::set_data(const fun_type& data)
     {
         m_declared = bool(data);
@@ -103,6 +108,11 @@ namespace wio
     void var_function::set_early_declared(bool decl)
     {
         m_early_decl = decl;
+    }
+
+    void var_function::set_bounded_file_id(id_t id)
+    {
+        m_bounded_file_id = id;
     }
 
     symbol* var_function::get_overload(size_t idx)

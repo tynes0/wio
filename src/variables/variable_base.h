@@ -8,6 +8,7 @@
 #include "../types/pair.h"
 #include "../base/base.h"
 
+#include "../interpreter/symbol.h"
 #include "../interpreter/scope.h"
 
 namespace wio 
@@ -34,14 +35,15 @@ namespace wio
         void set_pf_return_ref(bool flag) { m_flags.b5 = flag; }
 
         void set_flags(packed_bool flags) { m_flags = flags; }
-        ref<scope> get_members() const { return m_members; }
-        void init_members() { if (m_members) return; m_members = make_ref<scope>(scope_type::builtin); }
-        void load_members(ref<scope> members) { m_members = members; }
-        void load_members(const symbol_table_t& table) { if (!m_members) init_members(); m_members->set_symbols(table); }
+        ref<symbol_table> get_members() const { return m_members; }
+        void init_members() { if (m_members) return; m_members = make_ref<symbol_table>(); }
+        void load_members(ref<symbol_table> members) { m_members = members; }
+        void load_members(ref<scope> members) { init_members();  m_members->get_symbols() = members->get_symbols(); }
+        void load_members(const symbol_map& table) { if (!m_members) init_members(); m_members->set_symbols(table); }
     protected:
         variable_base(packed_bool flags) : m_flags(flags) { }
     private:
-        ref<scope> m_members;
+        ref<symbol_table> m_members;
         packed_bool m_flags = {}; // b1 -> const --- b2 -> ref --- b3-> pointer ref --- b4-> * --- b5-> return ref --- b6-> * --- b7-> * --- b8-> *  (b1-b2-b3-b4 default flags  ---  b5-b6-b7-b8 func parameter flags)
     };
 

@@ -8,11 +8,14 @@
 #include "../variables/function.h"
 
 #include "../base/exception.h"
+
 #include "../types/vec2.h"
 #include "../types/vec3.h"
 #include "../types/vec4.h"
 
 #include "../utils/util.h"
+
+#include "../interpreter/main_table.h"
 
 #include "builtin_base.h"
 #include "helpers.h"
@@ -23,1001 +26,309 @@ namespace wio
     {
         namespace detail 
         {
-
-            static std::string make_type_error_message(const std::string& func_name, const std::string& expected_types, const variable_type& actual_type)
+            static ref<variable_base> b_abs(const std::vector<ref<variable_base>>& args)
             {
-                std::stringstream ss;
-                std::string s = util::type_to_string(actual_type);
-                ss << "Invalid parameter type for '" << func_name << "'. Expected: " << expected_types << ", but got: " << s;
-                return ss.str();
+                return make_ref<variable>(any(std::abs(helper::var_as_double(args[0]))), variable_type::vt_float);
             }
 
-            static ref<variable> b_abs(const ref<variable_base>& value_base)
+            static ref<variable_base> b_sin(const std::vector<ref<variable_base>>& args)
             {
-                ref<variable> value = std::dynamic_pointer_cast<variable>(value_base);
-                auto type = value->get_type();
-                if (type == variable_type::vt_integer) 
-                    return make_ref<variable>(any(std::abs(value->get_data_as<long long>())), variable_type::vt_integer);
-                else if (type == variable_type::vt_float) 
-                    return make_ref<variable>(any(std::abs(value->get_data_as<double>())), variable_type::vt_float);
-                else if (type == variable_type::vt_float_ref)
-                    return make_ref<variable>(any(std::abs(*value->get_data_as<double*>())), variable_type::vt_float);
-                throw builtin_error(make_type_error_message("Abs", "integer or float", type));
+                return make_ref<variable>(any(std::sin(helper::var_as_double(args[0]))), variable_type::vt_float);
             }
 
-            static ref<variable> b_sin(const ref<variable_base>& value_base)
+            static ref<variable_base> b_cos(const std::vector<ref<variable_base>>& args)
             {
-                ref<variable> value = std::dynamic_pointer_cast<variable>(value_base);
-                auto type = value->get_type();
-                if (type == variable_type::vt_float) 
-                    return make_ref<variable>(any(std::sin(value->get_data_as<double>())), variable_type::vt_float);
-                else if (type == variable_type::vt_float_ref) 
-                    return make_ref<variable>(any(std::sin(*value->get_data_as<double*>())), variable_type::vt_float);
-                else if (type == variable_type::vt_integer) 
-                    return make_ref<variable>(any(std::sin(value->get_data_as<long long>())), variable_type::vt_float);
-                throw builtin_error(make_type_error_message("Sin", "float", type));
+                return make_ref<variable>(any(std::cos(helper::var_as_double(args[0]))), variable_type::vt_float);
             }
 
-            static ref<variable> b_cos(const ref<variable_base>& value_base)
+            static ref<variable_base> b_tan(const std::vector<ref<variable_base>>& args)
             {
-                ref<variable> value = std::dynamic_pointer_cast<variable>(value_base);
-                auto type = value->get_type();
-                if (type == variable_type::vt_float)
-                    return make_ref<variable>(any(std::cos(value->get_data_as<double>())), variable_type::vt_float);
-                else if (type == variable_type::vt_float_ref)
-                    return make_ref<variable>(any(std::cos(*value->get_data_as<double*>())), variable_type::vt_float);
-                else if (type == variable_type::vt_integer)
-                    return make_ref<variable>(any(std::cos(value->get_data_as<long long>())), variable_type::vt_float);
-                throw builtin_error(make_type_error_message("Cos", "float", type));
+                return make_ref<variable>(any(std::tan(helper::var_as_double(args[0]))), variable_type::vt_float);
             }
 
-            static ref<variable> b_tan(const ref<variable_base>& value_base)
+            static ref<variable_base> b_sqrt(const std::vector<ref<variable_base>>& args)
             {
-                ref<variable> value = std::dynamic_pointer_cast<variable>(value_base);
-                auto type = value->get_type();
-                if (type == variable_type::vt_float)
-                    return make_ref<variable>(any(std::tan(value->get_data_as<double>())), variable_type::vt_float);
-                else if (type == variable_type::vt_float_ref)
-                    return make_ref<variable>(any(std::tan(*value->get_data_as<double*>())), variable_type::vt_float);
-                else if (type == variable_type::vt_integer)
-                    return make_ref<variable>(any(std::tan(value->get_data_as<long long>())), variable_type::vt_float);
-                throw builtin_error(make_type_error_message("Tan", "float", type));
+                double val = helper::var_as_double(args[0]);
+
+                if (val < 0.0)
+                    throw builtin_error("Cannot take square root of negative number");
+
+                return make_ref<variable>(any(std::sqrt(val)), variable_type::vt_float);
             }
 
-            static ref<variable> b_sqrt(const ref<variable_base>& value_base)
+            static ref<variable_base> b_pow(const std::vector<ref<variable_base>>& args)
             {
-                ref<variable> value = std::dynamic_pointer_cast<variable>(value_base);
-                auto type = value->get_type();
-                if (type == variable_type::vt_float)
-                {
-                    double val = value->get_data_as<double>();
-                    if (val < 0.0)
-                        throw builtin_error("Cannot take square root of negative number");
-                    return make_ref<variable>(any(std::sqrt(val)), variable_type::vt_float);
-                }
-                else if (type == variable_type::vt_float_ref)
-                {
-                    double val = *value->get_data_as<double*>();
-                    if (val < 0)
-                        throw builtin_error("Cannot take square root of negative number");
-                    return make_ref<variable>(any(std::sqrt(val)), variable_type::vt_float);
-                }
-                else if (type == variable_type::vt_integer)
-                {
-                    long long val = value->get_data_as<long long>();
-                    if (val < 0)
-                        throw builtin_error("Cannot take square root of negative number");
-                    return make_ref<variable>(any(std::sqrt(val)), variable_type::vt_float);
-                }
-                throw builtin_error(make_type_error_message("Sqrt", "float or integer", type));
+                return make_ref<variable>(any(std::pow(helper::var_as_double(args[0]), helper::var_as_double(args[1]))), variable_type::vt_float);
             }
 
-            static ref<variable> b_pow(const ref<variable_base>& value_base, const ref<variable_base>& exponent_base)
+            static ref<variable_base> b_log(const std::vector<ref<variable_base>>& args)
             {
-                ref<variable> base = std::dynamic_pointer_cast<variable>(value_base);
-                ref<variable> exponent = std::dynamic_pointer_cast<variable>(exponent_base);
-                auto base_type = base->get_type();
-                auto exp_type = exponent->get_type();
+                double val = helper::var_as_double(args[0]);
 
-                if (base_type == variable_type::vt_float)
-                {
-                    if (exp_type == variable_type::vt_float)
-                        return make_ref<variable>(any(std::pow(base->get_data_as<double>(), exponent->get_data_as<double>())), variable_type::vt_float);
-                    else if(exp_type == variable_type::vt_float_ref)
-                        return make_ref<variable>(any(std::pow(base->get_data_as<double>(), *exponent->get_data_as<double*>())), variable_type::vt_float);
-                    else if(exp_type == variable_type::vt_integer)
-                        return make_ref<variable>(any(std::pow(base->get_data_as<double>(), exponent->get_data_as<long long>())), variable_type::vt_float);
-                }
-                else if (base_type == variable_type::vt_float_ref)
-                {
-                    if (exp_type == variable_type::vt_float)
-                        return make_ref<variable>(any(std::pow(*base->get_data_as<double*>(), exponent->get_data_as<double>())), variable_type::vt_float);
-                    else if (exp_type == variable_type::vt_float_ref)
-                        return make_ref<variable>(any(std::pow(*base->get_data_as<double*>(), *exponent->get_data_as<double*>())), variable_type::vt_float);
-                    else if (exp_type == variable_type::vt_integer)
-                        return make_ref<variable>(any(std::pow(*base->get_data_as<double*>(), exponent->get_data_as<long long>())), variable_type::vt_float);
-                }
-                else if (base_type == variable_type::vt_integer)
-                {
-                    if (exp_type == variable_type::vt_integer)
-                        return make_ref<variable>(any(std::pow(base->get_data_as<long long>(), exponent->get_data_as<long long>())), variable_type::vt_float);
-                    else if (exp_type == variable_type::vt_float)
-                        return make_ref<variable>(any(std::pow(base->get_data_as<long long>(), exponent->get_data_as<double>())), variable_type::vt_float);
-                    else if (exp_type == variable_type::vt_float_ref)
-                        return make_ref<variable>(any(std::pow(base->get_data_as<long long>(), *exponent->get_data_as<double*>())), variable_type::vt_float);
-                }
+                 if (val <= 0.0)
+                     throw builtin_error("Logarithm of zero or negative number is undefined.");
 
-                throw builtin_error("Invalid types for Pow.  Expected (float, float), (int, int), (float, int) or (int, float)");
+                 return make_ref<variable>(any(std::log(val)), variable_type::vt_float);
+                
             }
 
-            static ref<variable> b_log(const ref<variable_base>& value_base)
+            static ref<variable_base> b_log10(const std::vector<ref<variable_base>>& args)
             {
-                ref<variable> value = std::dynamic_pointer_cast<variable>(value_base);
-                auto type = value->get_type();
-                if (type == variable_type::vt_float) 
-                {
-                    double val = value->get_data_as<double>();
+                double val = helper::var_as_double(args[0]);
 
-                    if (val <= 0.0)
-                        throw builtin_error("Logarithm of zero or negative number is undefined.");
-
-                    return make_ref<variable>(any(std::log(val)), variable_type::vt_float);
-                }
-                else if (type == variable_type::vt_float_ref)
-                {
-                    double val = *value->get_data_as<double*>();
-
-                    if (val <= 0.0)
-                        throw builtin_error("Logarithm of zero or negative number is undefined.");
-
-                    return make_ref<variable>(any(std::log(val)), variable_type::vt_float);
-                }
-                else if (type == variable_type::vt_integer) 
-                {
-                    long long val = value->get_data_as<long long>();
-
-                    if (val <= 0)
-                        throw builtin_error("Logarithm of zero or negative number is undefined.");
-
-                    return make_ref<variable>(any(std::log(val)), variable_type::vt_float);
-                }
-                throw builtin_error(make_type_error_message("Log", "float or integer", type));
-            }
-
-            static ref<variable> b_log10(const ref<variable_base>& value_base)
-            {
-                ref<variable> value = std::dynamic_pointer_cast<variable>(value_base);
-                auto type = value->get_type();
-                if (type == variable_type::vt_float) 
-                {
-                    double val = value->get_data_as<double>();
-
-                    if (val <= 0.0)
-                        throw builtin_error("Logarithm of zero or negative number is undefined.");
-
-                    return make_ref<variable>(any(std::log10(val)), variable_type::vt_float);
-                }
-                else if (type == variable_type::vt_float_ref)
-                {
-                    double val = *value->get_data_as<double*>();
-
-                    if (val <= 0.0)
-                        throw builtin_error("Logarithm of zero or negative number is undefined.");
-
-                    return make_ref<variable>(any(std::log10(val)), variable_type::vt_float);
-                }
-                else if (type == variable_type::vt_integer)
-                {
-                    long long val = value->get_data_as<long long>();
-
-                    if (val <= 0)
-                        throw builtin_error("Logarithm of zero or negative number is undefined.");
-
-                    return make_ref<variable>(any(std::log10(val)), variable_type::vt_float);
-                }
-                throw builtin_error(make_type_error_message("Log10", "float or integer", type));
-            }
-
-            static ref<variable> b_asin(const ref<variable_base>& value_base)
-            {
-                ref<variable> value = std::dynamic_pointer_cast<variable>(value_base);
-                auto type = value->get_type();
-
-                if (type == variable_type::vt_float)
-                {
-                    double val = value->get_data_as<double>();
-
-                    if (val < -1.0 || val > 1.0) 
-                        throw builtin_error("ArcSin input must be in the range [-1, 1]");
-
-                    return make_ref<variable>(any(std::asin(val)), variable_type::vt_float);
-                }
-                else if (type == variable_type::vt_float_ref)
-                {
-                    double val = *value->get_data_as<double*>();
-
-                    if (val < -1.0 || val > 1.0)
-                        throw builtin_error("ArcSin input must be in the range [-1, 1]");
-
-                    return make_ref<variable>(any(std::asin(val)), variable_type::vt_float);
-                }
-                else if (type == variable_type::vt_integer)
-                {
-                    long long val = value->get_data_as<long long>();
-
-                    if (val < -1 || val > 1)
-                        throw builtin_error("ArcSin input must be in the range [-1, 1]");
-
-                    return make_ref<variable>(any(std::asin(val)), variable_type::vt_float);
-                }
-
-                throw builtin_error(make_type_error_message("ArcSin", "float or integer", type));
-            }
-
-            static ref<variable> b_acos(const ref<variable_base>& value_base)
-            {
-                ref<variable> value = std::dynamic_pointer_cast<variable>(value_base);
-                auto type = value->get_type();
-                if (type == variable_type::vt_float)
-                {
-                    double val = value->get_data_as<double>();
-
-                    if (val < -1.0 || val > 1.0)
-                        throw builtin_error("ArcCos input must be in the range [-1, 1]");
-
-                    return make_ref<variable>(any(std::acos(val)), variable_type::vt_float);
-                }
-                else if (type == variable_type::vt_float_ref)
-                {
-                    double val = *value->get_data_as<double*>();
-
-                    if (val < -1.0 || val > 1.0)
-                        throw builtin_error("ArcCos input must be in the range [-1, 1]");
-
-                    return make_ref<variable>(any(std::acos(val)), variable_type::vt_float);
-                }
-                else if (type == variable_type::vt_integer)
-                {
-                    long long val = value->get_data_as<long long>();
-
-                    if (val < -1 || val > 1)
-                        throw builtin_error("ArcCos input must be in the range [-1, 1]");
-
-                    return make_ref<variable>(any(std::acos(val)), variable_type::vt_float);
-                }
-                throw builtin_error(make_type_error_message("ArcCos", "float or integer", type));
-            }
-
-            static ref<variable> b_atan(const ref<variable_base>& value_base)
-            {
-                ref<variable> value = std::dynamic_pointer_cast<variable>(value_base);
-                auto type = value->get_type();
-
-                if (type == variable_type::vt_float)
-                    return make_ref<variable>(any(std::atan(value->get_data_as<double>())), variable_type::vt_float);
-                else if (type == variable_type::vt_float_ref)
-                    return make_ref<variable>(any(std::atan(*value->get_data_as<double*>())), variable_type::vt_float);
-                else if (type == variable_type::vt_integer)
-                    return make_ref<variable>(any(std::atan(value->get_data_as<long long>())), variable_type::vt_float);
-
-                throw builtin_error(make_type_error_message("ArcTan", "float or integer", type));
-            }
-
-            static ref<variable> b_ceil(const ref<variable_base>& value_base)
-            {
-                ref<variable> value = std::dynamic_pointer_cast<variable>(value_base);
-                auto type = value->get_type();
-
-                if (type == variable_type::vt_float)
-                    return make_ref<variable>(any(std::ceil(value->get_data_as<double>())), variable_type::vt_float);
-                else if (type == variable_type::vt_float_ref)
-                    return make_ref<variable>(any(std::ceil(*value->get_data_as<double*>())), variable_type::vt_float);
-                else if (type == variable_type::vt_integer)
-                    return make_ref<variable>(any(value->get_data_as<long long>()), variable_type::vt_integer);
-
-                throw builtin_error(make_type_error_message("Ceil", "float or integer", type));
-            }
-
-            static ref<variable> b_floor(const ref<variable_base>& value_base)
-            {
-                ref<variable> value = std::dynamic_pointer_cast<variable>(value_base);
-                auto type = value->get_type();
-
-                if (type == variable_type::vt_float)
-                    return make_ref<variable>(any(std::floor(value->get_data_as<double>())), variable_type::vt_float);
-                else if (type == variable_type::vt_float_ref)
-                    return make_ref<variable>(any(std::floor(*value->get_data_as<double*>())), variable_type::vt_float);
-                else if (type == variable_type::vt_integer)
-                    return make_ref<variable>(any(value->get_data_as<long long>()), variable_type::vt_integer);
-
-                throw builtin_error(make_type_error_message("Floor", "float or integer", type));
-            }
-
-            static ref<variable> b_round(const ref<variable_base>& value_base)
-            {
-                ref<variable> value = std::dynamic_pointer_cast<variable>(value_base);
-                auto type = value->get_type();
-
-                if (type == variable_type::vt_float) 
-                    return make_ref<variable>(any(std::round(value->get_data_as<double>())), variable_type::vt_float);
-                else if (type == variable_type::vt_float_ref)
-                    return make_ref<variable>(any(std::round(*value->get_data_as<double*>())), variable_type::vt_float);
-                else if (type == variable_type::vt_integer)
-                    return make_ref<variable>(any(value->get_data_as<long long>()), variable_type::vt_integer);
-
-                throw builtin_error(make_type_error_message("Round", "float or integer", type));
-            }
-
-
-            static ref<variable> b_exp(const ref<variable_base>& value_base)
-            {
-                ref<variable> value = std::dynamic_pointer_cast<variable>(value_base);
-                auto type = value->get_type();
-                if (type == variable_type::vt_float) 
-                    return make_ref<variable>(any(std::exp(value->get_data_as<double>())), variable_type::vt_float);
-                else if (type == variable_type::vt_float_ref)
-                    return make_ref<variable>(any(std::exp(*value->get_data_as<double*>())), variable_type::vt_float);
-                else if (type == variable_type::vt_integer)
-                    return make_ref<variable>(any(std::exp(value->get_data_as<long long>())), variable_type::vt_float);
-
-                throw builtin_error(make_type_error_message("Exp", "float or integer", type));
-            }
-
-            static ref<variable> b_atan2(const ref<variable_base>& y_base, const ref<variable_base>& x_base)
-            {
-                ref<variable> y = std::dynamic_pointer_cast<variable>(y_base);
-                ref<variable> x = std::dynamic_pointer_cast<variable>(x_base);
-                auto y_type = y->get_type();
-                auto x_type = x->get_type();
-
-                if (y_type == variable_type::vt_float)
-                {
-                    if(x_type == variable_type::vt_float)
-                        return make_ref<variable>(any(std::atan2(y->get_data_as<double>(), x->get_data_as<double>())), variable_type::vt_float);
-                    else if(x_type == variable_type::vt_float_ref)
-                        return make_ref<variable>(any(std::atan2(y->get_data_as<double>(), *x->get_data_as<double*>())), variable_type::vt_float);
-                    else if(x_type == variable_type::vt_integer)
-                        return make_ref<variable>(any(std::atan2(y->get_data_as<double>(), x->get_data_as<long long>())), variable_type::vt_float);
-                }
-                else if (y_type == variable_type::vt_float_ref)
-                {
-                    if (x_type == variable_type::vt_float)
-                        return make_ref<variable>(any(std::atan2(*y->get_data_as<double*>(), x->get_data_as<double>())), variable_type::vt_float);
-                    else if (x_type == variable_type::vt_float_ref)
-                        return make_ref<variable>(any(std::atan2(*y->get_data_as<double*>(), *x->get_data_as<double*>())), variable_type::vt_float);
-                    else if (x_type == variable_type::vt_integer)
-                        return make_ref<variable>(any(std::atan2(*y->get_data_as<double*>(), x->get_data_as<long long>())), variable_type::vt_float);
-                }
-                else if (y_type == variable_type::vt_integer)
-                {
-                    if (x_type == variable_type::vt_float)
-                        return make_ref<variable>(any(std::atan2(y->get_data_as<long long>(), x->get_data_as<double>())), variable_type::vt_float);
-                    else if (x_type == variable_type::vt_float_ref)
-                        return make_ref<variable>(any(std::atan2(y->get_data_as<long long>(), *x->get_data_as<double*>())), variable_type::vt_float);
-                    else if (x_type == variable_type::vt_integer)
-                        return make_ref<variable>(any(std::atan2(y->get_data_as<long long>(), x->get_data_as<long long>())), variable_type::vt_float);
-                }
-
-                throw builtin_error("Invalid types for ArcTan2. Expected (float, float), (int, int), (float, int) or (int, float)");
-            }
-
-            static ref<variable> b_fmod(const ref<variable_base>& value_base, const ref<variable_base>& divisor_base)
-            {
-                ref<variable> value = std::dynamic_pointer_cast<variable>(value_base);
-                ref<variable> divisor = std::dynamic_pointer_cast<variable>(divisor_base);
-
-                auto value_type = value->get_type();
-                auto divisor_type = divisor->get_type();
-
-                if (value_type == variable_type::vt_float)
-                {
-                    if (divisor_type == variable_type::vt_float)
-                        return make_ref<variable>(any(std::fmod(value->get_data_as<double>(), divisor->get_data_as<double>())), variable_type::vt_float);
-                    else if (divisor_type == variable_type::vt_float_ref)
-                        return make_ref<variable>(any(std::fmod(value->get_data_as<double>(), *divisor->get_data_as<double*>())), variable_type::vt_float);
-                    else if (divisor_type == variable_type::vt_integer)
-                        return make_ref<variable>(any(std::fmod(value->get_data_as<double>(), divisor->get_data_as<long long>())), variable_type::vt_float);
-                }
-                else if (value_type == variable_type::vt_float_ref)
-                {
-                    if (divisor_type == variable_type::vt_float)
-                        return make_ref<variable>(any(std::fmod(*value->get_data_as<double*>(), divisor->get_data_as<double>())), variable_type::vt_float);
-                    else if (divisor_type == variable_type::vt_float_ref)
-                        return make_ref<variable>(any(std::fmod(*value->get_data_as<double*>(), *divisor->get_data_as<double*>())), variable_type::vt_float);
-                    else if (divisor_type == variable_type::vt_integer)
-                        return make_ref<variable>(any(std::fmod(*value->get_data_as<double*>(), divisor->get_data_as<long long>())), variable_type::vt_float);
-                }
-                else if (value_type == variable_type::vt_integer)
-                {
-                    if (divisor_type == variable_type::vt_float)
-                        return make_ref<variable>(any(std::fmod(value->get_data_as<long long>(), divisor->get_data_as<double>())), variable_type::vt_float);
-                    else if (divisor_type == variable_type::vt_float_ref)
-                        return make_ref<variable>(any(std::fmod(value->get_data_as<long long>(), *divisor->get_data_as<double*>())), variable_type::vt_float);
-                    else if (divisor_type == variable_type::vt_integer)
-                        return make_ref<variable>(any(std::fmod(value->get_data_as<long long>(), divisor->get_data_as<long long>())), variable_type::vt_float);
-                }
-
-                throw builtin_error("Invalid types for Fmod. Expected (float, float), (int, int), (float, int), or (int, float)");
-            }
-
-            static ref<variable> b_sinh(const ref<variable_base>& value_base)
-            {
-                ref<variable> value = std::dynamic_pointer_cast<variable>(value_base);
-                auto type = value->get_type();
-                if (type == variable_type::vt_float) 
-                    return make_ref<variable>(any(std::sinh(value->get_data_as<double>())), variable_type::vt_float);
-                else if (type == variable_type::vt_float_ref)
-                    return make_ref<variable>(any(std::sinh(*value->get_data_as<double*>())), variable_type::vt_float);
-                else if (type == variable_type::vt_integer) 
-                    return make_ref<variable>(any(std::sinh(value->get_data_as<long long>())), variable_type::vt_float);
-
-                throw builtin_error(make_type_error_message("Sinh", "float or integer", type));
-            }
-
-            static ref<variable> b_cosh(const ref<variable_base>& value_base)
-            {
-                ref<variable> value = std::dynamic_pointer_cast<variable>(value_base);
-                auto type = value->get_type();
-                if (type == variable_type::vt_float) 
-                    return make_ref<variable>(any(std::cosh(value->get_data_as<double>())), variable_type::vt_float);
-                else if (type == variable_type::vt_float_ref)
-                    return make_ref<variable>(any(std::cosh(*value->get_data_as<double*>())), variable_type::vt_float);
-                else if (type == variable_type::vt_integer)
-                    return make_ref<variable>(any(std::cosh(value->get_data_as<long long>())), variable_type::vt_float);
-
-                throw builtin_error(make_type_error_message("Cosh", "float or integer", type));
-            }
-
-            static ref<variable> b_tanh(const ref<variable_base>& value_base)
-            {
-                ref<variable> value = std::dynamic_pointer_cast<variable>(value_base);
-                auto type = value->get_type();
-                if (type == variable_type::vt_float)
-                    return make_ref<variable>(any(std::tanh(value->get_data_as<double>())), variable_type::vt_float);
-                else if (type == variable_type::vt_float_ref)
-                    return make_ref<variable>(any(std::tanh(*value->get_data_as<double*>())), variable_type::vt_float);
-                else if (type == variable_type::vt_integer)
-                    return make_ref<variable>(any(std::tanh(value->get_data_as<long long>())), variable_type::vt_float);
-
-                throw builtin_error(make_type_error_message("Tanh", "float or integer", type));
-            }
-
-            static ref<variable> b_asinh(const ref<variable_base>& value_base)
-            {
-                ref<variable> value = std::dynamic_pointer_cast<variable>(value_base);
-                auto type = value->get_type();
-                if (type == variable_type::vt_float) 
-                    return make_ref<variable>(any(std::asinh(value->get_data_as<double>())), variable_type::vt_float);
-                else if (type == variable_type::vt_float_ref)
-                    return make_ref<variable>(any(std::asinh(*value->get_data_as<double*>())), variable_type::vt_float);
-                else if (type == variable_type::vt_integer)
-                    return make_ref<variable>(any(std::asinh(value->get_data_as<long long>())), variable_type::vt_float);
-
-                throw builtin_error(make_type_error_message("ArcSinh", "float or integer", type));
-            }
-
-            static ref<variable> b_acosh(const ref<variable_base>& value_base)
-            {
-                ref<variable> value = std::dynamic_pointer_cast<variable>(value_base);
-                auto type = value->get_type();
-                if (type == variable_type::vt_float) 
-                {
-                    double val = value->get_data_as<double>();
-
-                    if (val < 1.0)
-                        throw builtin_error("ArcCosh input must be greater than or equal to 1");
-
-                    return make_ref<variable>(any(std::acosh(val)), variable_type::vt_float);
-                }
-                else if (type == variable_type::vt_float_ref)
-                {
-                    double val = *value->get_data_as<double*>();
-
-                    if (val < 1.0)
-                        throw builtin_error("ArcCosh input must be greater than or equal to 1");
-
-                    return make_ref<variable>(any(std::acosh(val)), variable_type::vt_float);
-                }
-                else if (type == variable_type::vt_integer) 
-                {
-                    long long val = value->get_data_as<long long>();
-
-                    if (val < 1) 
-                        throw builtin_error("ArcCosh input must be greater than or equal to 1");
-
-                    return make_ref<variable>(any(std::acosh(val)), variable_type::vt_float);
-                }
-                throw builtin_error(make_type_error_message("ArcCosh", "float or integer", type));
-            }
-
-            static ref<variable> b_atanh(const ref<variable_base>& value_base)
-            {
-                ref<variable> value = std::dynamic_pointer_cast<variable>(value_base);
-                auto type = value->get_type();
-                if (type == variable_type::vt_float) 
-                {
-                    double val = value->get_data_as<double>();
-                    if (val <= -1.0 || val >= 1.0)
-                        throw builtin_error("ArcTanh input must be between -1 and 1 (exclusive)");
-
-                    return make_ref<variable>(any(std::atanh(val)), variable_type::vt_float);
-                }
-                else if (type == variable_type::vt_float_ref)
-                {
-                    double val = *value->get_data_as<double*>();
-
-                    if (val <= -1.0 || val >= 1.0)
-                        throw builtin_error("ArcTanh input must be between -1 and 1 (exclusive)");
-
-                    return make_ref<variable>(any(std::atanh(val)), variable_type::vt_float);
-                }
-                else if (type == variable_type::vt_integer)
-                { 
-                    long long val = value->get_data_as<long long>();
-
-                    if (val <= -1 || val >= 1) 
-                        throw builtin_error("ArcTanh input must be between -1 and 1 (exclusive)");
-
-                    return make_ref<variable>(any(std::atanh(val)), variable_type::vt_float);
-                }
-                throw builtin_error(make_type_error_message("ArcTanh", "float or integer", type));
-            }
-
-            static ref<variable> b_root(const ref<variable_base>& value_base, const ref<variable_base>& n_base) 
-            {
-                ref<variable> value = std::dynamic_pointer_cast<variable>(value_base);
-                ref<variable> n = std::dynamic_pointer_cast<variable>(n_base);
-
-                auto value_type = value->get_type();
-                auto n_type = n->get_type();
-
-                if ((n_type == variable_type::vt_integer && n->get_data_as<long long>() == 0) || 
-                    (n_type == variable_type::vt_float && n->get_data_as<double>() == 0.0) || 
-                    (n_type == variable_type::vt_float_ref && *n->get_data_as<double*>() == 0.0))
-                    throw builtin_error("Cannot take 0th root.");
-
-                if (value_type == variable_type::vt_float)
-                {
-                    if(n_type == variable_type::vt_float)
-                        return make_ref<variable>(any(std::pow(value->get_data_as<double>(), 1.0 / n->get_data_as<double>())), variable_type::vt_float);
-                    else if(n_type == variable_type::vt_float_ref)
-                        return make_ref<variable>(any(std::pow(value->get_data_as<double>(), 1.0 / *n->get_data_as<double*>())), variable_type::vt_float);
-                    else if(n_type == variable_type::vt_integer)
-                        return make_ref<variable>(any(std::pow(value->get_data_as<double>(), 1.0 / static_cast<double>(n->get_data_as<long long>()))), variable_type::vt_float);
-                }
-                else if (value_type == variable_type::vt_float_ref)
-                {
-                    if (n_type == variable_type::vt_float)
-                        return make_ref<variable>(any(std::pow(*value->get_data_as<double*>(), 1.0 / n->get_data_as<double>())), variable_type::vt_float);
-                    else if (n_type == variable_type::vt_float_ref)
-                        return make_ref<variable>(any(std::pow(*value->get_data_as<double*>(), 1.0 / *n->get_data_as<double*>())), variable_type::vt_float);
-                    else if (n_type == variable_type::vt_integer)
-                        return make_ref<variable>(any(std::pow(*value->get_data_as<double*>(), 1.0 / static_cast<double>(n->get_data_as<long long>()))), variable_type::vt_float);
-                }
-                else if (value_type == variable_type::vt_integer)
-                {
-                    if(n_type == variable_type::vt_float)
-                        return make_ref<variable>(any(std::pow(value->get_data_as<long long>(), 1.0 / n->get_data_as<double>())), variable_type::vt_float);
-                    else if(n_type == variable_type::vt_float_ref)
-                        return make_ref<variable>(any(std::pow(value->get_data_as<long long>(), 1.0 / *n->get_data_as<double*>())), variable_type::vt_float);
-                    else if(n_type == variable_type::vt_integer)
-                        return make_ref<variable>(any(std::pow(value->get_data_as<long long>(), 1.0 / static_cast<double>(n->get_data_as<long long>()))), variable_type::vt_float);
-                }
-
-                throw builtin_error("Invalid types for Root. Expected (float, float), (int, int), (float, int) or (int, float)");
-            }
-
-            static ref<variable> b_log_base(const ref<variable_base>& value_base, const ref<variable_base>& base_base)
-            {
-                ref<variable> value = std::dynamic_pointer_cast<variable>(value_base);
-                ref<variable> base = std::dynamic_pointer_cast<variable>(base_base);
-
-                auto value_type = value->get_type();
-                auto base_type = base->get_type();
-
-                if ((base_type == variable_type::vt_integer && (base->get_data_as<long long>() <= 0 || base->get_data_as<long long>() == 1)) ||
-                    (base_type == variable_type::vt_float && (base->get_data_as<double>() <= 0.0 || base->get_data_as<double>() == 1.0)) || 
-                    (base_type == variable_type::vt_float_ref && (*base->get_data_as<double*>() <= 0.0 || *base->get_data_as<double*>() == 1.0)))
-                    throw builtin_error("Logarithm base cannot be zero, one, or negative.");
-                if ((value_type == variable_type::vt_integer && value->get_data_as<long long>() <= 0) ||
-                    (value_type == variable_type::vt_float && value->get_data_as<double>() <= 0.0) ||  
-                    (value_type == variable_type::vt_float_ref && *value->get_data_as<double*>() <= 0.0)) 
+                if (val <= 0.0)
                     throw builtin_error("Logarithm of zero or negative number is undefined.");
 
-                if (value_type == variable_type::vt_float)
-                {
-                    if (base_type == variable_type::vt_float)
-                        return make_ref<variable>(any(std::log(value->get_data_as<double>()) / std::log(base->get_data_as<double>())), variable_type::vt_float);
-                    else if (base_type == variable_type::vt_float_ref)
-                        return make_ref<variable>(any(std::log(value->get_data_as<double>()) / std::log(*base->get_data_as<double*>())), variable_type::vt_float);
-                    else if (base_type == variable_type::vt_integer)
-                        return make_ref<variable>(any(std::log(value->get_data_as<double>()) / std::log(base->get_data_as<long long>())), variable_type::vt_float);
-                }
-                else if (value_type == variable_type::vt_float_ref)
-                {
-                    if (base_type == variable_type::vt_float)
-                        return make_ref<variable>(any(std::log(*value->get_data_as<double*>()) / std::log(base->get_data_as<double>())), variable_type::vt_float);
-                    else if (base_type == variable_type::vt_float_ref)
-                        return make_ref<variable>(any(std::log(*value->get_data_as<double*>()) / std::log(*base->get_data_as<double*>())), variable_type::vt_float);
-                    else if (base_type == variable_type::vt_integer)
-                        return make_ref<variable>(any(std::log(*value->get_data_as<double*>()) / std::log(base->get_data_as<long long>())), variable_type::vt_float);
-                }
-                else if (value_type == variable_type::vt_integer)
-                {
-                    if (base_type == variable_type::vt_float)
-                        return make_ref<variable>(any(std::log(value->get_data_as<long long>()) / std::log(base->get_data_as<double>())), variable_type::vt_float);
-                    else if (base_type == variable_type::vt_float_ref)
-                        return make_ref<variable>(any(std::log(value->get_data_as<long long>()) / std::log(*base->get_data_as<double*>())), variable_type::vt_float);
-                    else if (base_type == variable_type::vt_integer)
-                        return make_ref<variable>(any(std::log(value->get_data_as<long long>()) / std::log(base->get_data_as<long long>())), variable_type::vt_float);
-                }
-
-                throw builtin_error("Invalid types for LogBase. Expected (float, float), (int, int), (float, int) or (int, float)");
+                return make_ref<variable>(any(std::log10(val)), variable_type::vt_float);
             }
 
-            static ref<variable> b_min(const ref<variable_base>& a_base, const ref<variable_base>& b_base)
+            static ref<variable_base> b_asin(const std::vector<ref<variable_base>>& args)
             {
-                ref<variable> a = std::dynamic_pointer_cast<variable>(a_base);
-                ref<variable> b = std::dynamic_pointer_cast<variable>(b_base);
-                auto a_type = a->get_type();
-                auto b_type = b->get_type();
+                double val = helper::var_as_double(args[0]);
 
-                if (a_type == variable_type::vt_float)
-                {
-                    double d_a = a->get_data_as<double>();
-                    if (b_type == variable_type::vt_float)
-                    {
-                        double d_b = b->get_data_as<double>();
-                        return make_ref<variable>(any(d_a < d_b ? d_a : d_b), variable_type::vt_float);
-                    }
-                    else if (b_type == variable_type::vt_float_ref)
-                    {
-                        double d_b = *b->get_data_as<double*>();
-                        return make_ref<variable>(any(d_a < d_b ? d_a : d_b), variable_type::vt_float);
-                    }
-                    else if (b_type == variable_type::vt_integer)
-                    {
-                        long long ll_b = b->get_data_as<long long>();
-                        any result;
-                        variable_type type;
-                        if (d_a < double(ll_b))
-                        {
-                            result = d_a;
-                            type = variable_type::vt_float;
-                        }
-                        else
-                        {
-                            result = ll_b;
-                            type = variable_type::vt_float;
-                        }
-                        return make_ref<variable>(result, type);
-                    }
-                }
-                else if (a_type == variable_type::vt_float_ref)
-                {
-                    double d_a = *a->get_data_as<double*>();
+                if (val < -1.0 || val > 1.0) 
+                    throw builtin_error("ArcSin input must be in the range [-1, 1]");
 
-                    if (b_type == variable_type::vt_float)
-                    {
-                        double d_b = b->get_data_as<double>();
-                        return make_ref<variable>(any(d_a < d_b ? d_a : d_b), variable_type::vt_float);
-                    }
-                    else if (b_type == variable_type::vt_float_ref)
-                    {
-                        double d_b = *b->get_data_as<double*>();
-                        return make_ref<variable>(any(d_a < d_b ? d_a : d_b), variable_type::vt_float);
-                    }
-                    else if (b_type == variable_type::vt_integer)
-                    {
-                        long long ll_b = b->get_data_as<long long>();
-                        any result;
-                        variable_type type;
-                        if (d_a < double(ll_b))
-                        {
-                            result = d_a;
-                            type = variable_type::vt_float;
-                        }
-                        else
-                        {
-                            result = ll_b;
-                            type = variable_type::vt_integer;
-                        }
-                        return make_ref<variable>(result, type);
-                    }
-                }
-                else if (a_type == variable_type::vt_integer)
-                {
-                    long long ll_a = a->get_data_as<long long>();
-
-                    if (b_type == variable_type::vt_integer)
-                    {
-                        long long ll_b = b->get_data_as<long long>();
-                        return make_ref<variable>(any(ll_a < ll_b ? ll_a : ll_b), variable_type::vt_integer);
-                    }
-                    else if (b_type == variable_type::vt_float)
-                    {
-                        double d_b = b->get_data_as<double>();
-
-                        any result;
-                        variable_type type;
-
-                        if (ll_a < long long(d_b))
-                        {
-                            result = ll_a;
-                            type = variable_type::vt_integer;
-                        }
-                        else
-                        {
-                            result = d_b;
-                            type = variable_type::vt_float;
-                        }
-                        return make_ref<variable>(result, type);
-                    }
-                    else if (b_type == variable_type::vt_float_ref)
-                    {
-                        double d_b = *b->get_data_as<double*>();
-
-                        any result;
-                        variable_type type;
-
-                        if (ll_a < long long(d_b))
-                        {
-                            result = ll_a;
-                            type = variable_type::vt_integer;
-                        }
-                        else
-                        {
-                            result = d_b;
-                            type = variable_type::vt_float;
-                        }
-                        return make_ref<variable>(result, type);
-                    }
-                }
-
-                throw builtin_error("Invalid types for Min. Expected (float, float), (int, int), (float, int) or (int, float)");
+                return make_ref<variable>(any(std::asin(val)), variable_type::vt_float);             
             }
 
-            static ref<variable> b_max(const ref<variable_base>& a_base, const ref<variable_base>& b_base)
+            static ref<variable_base> b_acos(const std::vector<ref<variable_base>>& args)
             {
-                ref<variable> a = std::dynamic_pointer_cast<variable>(a_base);
-                ref<variable> b = std::dynamic_pointer_cast<variable>(b_base);
-                auto a_type = a->get_type();
-                auto b_type = b->get_type();
+                double val = helper::var_as_double(args[0]);
 
-                if (a_type == variable_type::vt_float)
-                {
-                    double d_a = a->get_data_as<double>();
-                    if (b_type == variable_type::vt_float)
-                    {
-                        double d_b = b->get_data_as<double>();
-                        return make_ref<variable>(any(d_a > d_b ? d_a : d_b), variable_type::vt_float);
-                    }
-                    else if (b_type == variable_type::vt_float_ref)
-                    {
-                        double d_b = *b->get_data_as<double*>();
-                        return make_ref<variable>(any(d_a > d_b ? d_a : d_b), variable_type::vt_float);
-                    }
-                    else if (b_type == variable_type::vt_integer)
-                    {
-                        long long ll_b = b->get_data_as<long long>();
-                        any result;
-                        variable_type type;
-                        if (d_a > double(ll_b))
-                        {
-                            result = d_a;
-                            type = variable_type::vt_float;
-                        }
-                        else
-                        {
-                            result = ll_b;
-                            type = variable_type::vt_float;
-                        }
-                        return make_ref<variable>(result, type);
-                    }
-                }
-                else if (a_type == variable_type::vt_float_ref)
-                {
-                    double d_a = *a->get_data_as<double*>();
+                if (val < -1.0 || val > 1.0)
+                    throw builtin_error("ArcCos input must be in the range [-1, 1]");
 
-                    if (b_type == variable_type::vt_float)
-                    {
-                        double d_b = b->get_data_as<double>();
-                        return make_ref<variable>(any(d_a > d_b ? d_a : d_b), variable_type::vt_float);
-                    }
-                    else if (b_type == variable_type::vt_float_ref)
-                    {
-                        double d_b = *b->get_data_as<double*>();
-                        return make_ref<variable>(any(d_a > d_b ? d_a : d_b), variable_type::vt_float);
-                    }
-                    else if (b_type == variable_type::vt_integer)
-                    {
-                        long long ll_b = b->get_data_as<long long>();
-                        any result;
-                        variable_type type;
-                        if (d_a > double(ll_b))
-                        {
-                            result = d_a;
-                            type = variable_type::vt_float;
-                        }
-                        else
-                        {
-                            result = ll_b;
-                            type = variable_type::vt_integer;
-                        }
-                        return make_ref<variable>(result, type);
-                    }
-                }
-                else if (a_type == variable_type::vt_integer)
-                {
-                    long long ll_a = a->get_data_as<long long>();
-
-                    if (b_type == variable_type::vt_integer)
-                    {
-                        long long ll_b = b->get_data_as<long long>();
-                        return make_ref<variable>(any(ll_a > ll_b ? ll_a : ll_b), variable_type::vt_integer);
-                    }
-                    else if (b_type == variable_type::vt_float)
-                    {
-                        double d_b = b->get_data_as<double>();
-
-                        any result;
-                        variable_type type;
-
-                        if (ll_a > long long(d_b))
-                        {
-                            result = ll_a;
-                            type = variable_type::vt_integer;
-                        }
-                        else
-                        {
-                            result = d_b;
-                            type = variable_type::vt_float;
-                        }
-                        return make_ref<variable>(result, type);
-                    }
-                    else if (b_type == variable_type::vt_float_ref)
-                    {
-                        double d_b = *b->get_data_as<double*>();
-
-                        any result;
-                        variable_type type;
-
-                        if (ll_a > long long(d_b))
-                        {
-                            result = ll_a;
-                            type = variable_type::vt_integer;
-                        }
-                        else
-                        {
-                            result = d_b;
-                            type = variable_type::vt_float;
-                        }
-                        return make_ref<variable>(result, type);
-                    }
-                }
-                throw builtin_error("Invalid types for Max. Expected (float, float), (int, int), (float, int) or (int, float)");
+                return make_ref<variable>(any(std::acos(val)), variable_type::vt_float);
             }
 
-            static ref<variable_base> b_vec2(ref<variable_base> x, ref<variable_base> y)
+            static ref<variable_base> b_atan(const std::vector<ref<variable_base>>& args)
             {
-                return helper::create_vec2(x, y);
+                return make_ref<variable>(any(std::atan(helper::var_as_double(args[0]))), variable_type::vt_float);
             }
 
-            static ref<variable_base> b_vec2_2(ref<variable_base> scalar)
+            static ref<variable_base> b_ceil(const std::vector<ref<variable_base>>& args)
             {
-                return helper::create_vec2(scalar, scalar);
+                return make_ref<variable>(any(std::ceil(helper::var_as_double(args[0]))), variable_type::vt_float);
             }
 
-            static ref<variable_base> b_vec2_3()
+            static ref<variable_base> b_floor(const std::vector<ref<variable_base>>& args)
+            {
+                return make_ref<variable>(any(std::floor(helper::var_as_double(args[0]))), variable_type::vt_float);
+            }
+
+            static ref<variable_base> b_round(const std::vector<ref<variable_base>>& args)
+            {
+                return make_ref<variable>(any(std::round(helper::var_as_double(args[0]))), variable_type::vt_float);
+            }
+
+            static ref<variable_base> b_exp(const std::vector<ref<variable_base>>& args)
+            {
+                return make_ref<variable>(any(std::exp(helper::var_as_double(args[0]))), variable_type::vt_float);
+            }
+
+            static ref<variable_base> b_atan2(const std::vector<ref<variable_base>>& args)
+            {
+                return make_ref<variable>(any(std::atan2(helper::var_as_double(args[0]), helper::var_as_double(args[1]))), variable_type::vt_float);
+            }
+
+            static ref<variable_base> b_fmod(const std::vector<ref<variable_base>>& args)
+            {
+                double divider = helper::var_as_double(args[1]);
+
+                if(divider == 0.0)
+                    throw invalid_operation_error("Division by zero error in fmod!");
+
+                return make_ref<variable>(any(std::fmod(helper::var_as_double(args[0]), divider)), variable_type::vt_float);
+            }
+
+            static ref<variable_base> b_sinh(const std::vector<ref<variable_base>>& args)
+            {
+                return make_ref<variable>(any(std::sinh(helper::var_as_double(args[0]))), variable_type::vt_float);
+            }
+
+            static ref<variable_base> b_cosh(const std::vector<ref<variable_base>>& args)
+            {
+                return make_ref<variable>(any(std::cosh(helper::var_as_double(args[0]))), variable_type::vt_float);
+            }
+
+            static ref<variable_base> b_tanh(const std::vector<ref<variable_base>>& args)
+            {
+                return make_ref<variable>(any(std::tanh(helper::var_as_double(args[0]))), variable_type::vt_float);
+            }
+
+            static ref<variable_base> b_asinh(const std::vector<ref<variable_base>>& args)
+            {
+                return make_ref<variable>(any(std::asinh(helper::var_as_double(args[0]))), variable_type::vt_float);
+            }
+
+            static ref<variable_base> b_acosh(const std::vector<ref<variable_base>>& args)
+            {
+                double val = helper::var_as_double(args[0]);
+
+                if (val < 1.0)
+                    throw builtin_error("ArcCosh input must be greater than or equal to 1");
+
+                return make_ref<variable>(any(std::acosh(val)), variable_type::vt_float);
+            }
+
+            static ref<variable_base> b_atanh(const std::vector<ref<variable_base>>& args)
+            {
+                double val = helper::var_as_double(args[0]);
+                if (val <= -1.0 || val >= 1.0)
+                    throw builtin_error("ArcTanh input must be between -1 and 1 (exclusive)");
+
+                return make_ref<variable>(any(std::atanh(val)), variable_type::vt_float);
+            }
+
+            static ref<variable_base> b_root(const std::vector<ref<variable_base>>& args)
+            {
+                double n_value = helper::var_as_double(args[1]);
+
+                if (n_value == 0.0)
+                    throw builtin_error("Cannot take 0th root.");
+
+                return make_ref<variable>(any(std::pow(helper::var_as_double(args[0]), 1.0 / n_value)), variable_type::vt_float);
+            }
+
+            static ref<variable_base> b_log_base(const std::vector<ref<variable_base>>& args)
+            {
+                double value = helper::var_as_double(args[0]);
+                double base_value = helper::var_as_double(args[1]);
+
+                if (base_value <= 0.0 || base_value == 1.0)
+                    throw builtin_error("Logarithm base cannot be zero, one, or negative.");
+                if (value <= 0.0) 
+                    throw builtin_error("Logarithm of zero or negative number is undefined.");
+
+                return make_ref<variable>(any(std::log(value) / std::log(base_value)), variable_type::vt_float);
+            }
+
+            static ref<variable_base> b_min(const std::vector<ref<variable_base>>& args)
+            {
+                return (helper::var_as_double(args[0]) < helper::var_as_double(args[1])) ? args[0] : args[1];
+            }
+
+            static ref<variable_base> b_max(const std::vector<ref<variable_base>>& args)
+            {
+                return (helper::var_as_double(args[0]) > helper::var_as_double(args[1])) ? args[0] : args[1];
+            }
+
+            static ref<variable_base> b_vec2(const std::vector<ref<variable_base>>& args)
+            {
+                return helper::create_vec2(args[0], args[1]);
+            }
+
+            static ref<variable_base> b_vec2_2(const std::vector<ref<variable_base>>& args)
+            {
+                return helper::create_vec2(args[0], args[0]);
+            }
+
+            static ref<variable_base> b_vec2_3(const std::vector<ref<variable_base>>& args)
             {
                 auto ref_0 = make_ref<variable>(any(0.0), variable_type::vt_float);
-                return helper::create_vec2(ref_0, ref_0);;
+                return helper::create_vec2(ref_0, ref_0);
             }
 
-            static ref<variable_base> b_vec3(ref<variable_base> x, ref<variable_base> y, ref<variable_base> z)
+            static ref<variable_base> b_vec3(const std::vector<ref<variable_base>>& args)
             {
-                return helper::create_vec3(x, y, z);
+                return helper::create_vec3(args[0], args[1], args[2]);
             }
 
-            static ref<variable_base> b_vec3_2(ref<variable_base> scalar)
+            static ref<variable_base> b_vec3_2(const std::vector<ref<variable_base>>& args)
             {
-                return helper::create_vec3(scalar, scalar, scalar);
+                return helper::create_vec3(args[0], args[0], args[0]);
             }
 
-            static ref<variable_base> b_vec3_3(ref<variable_base> vec2_xy, ref<variable_base> z)
+            static ref<variable_base> b_vec3_3(const std::vector<ref<variable_base>>& args)
             {
-                auto var_vec2 = std::dynamic_pointer_cast<variable>(vec2_xy);
+                auto var_vec2 = std::dynamic_pointer_cast<variable>(args[0]);
                 vec2 data = var_vec2->get_data_as<vec2>();
 
                 auto ref_x = make_ref<variable>(any(data.x), variable_type::vt_float);
                 auto ref_y = make_ref<variable>(any(data.y), variable_type::vt_float);
 
-                return helper::create_vec3(ref_x, ref_y, z);
+                return helper::create_vec3(ref_x, ref_y, args[1]);
             }
 
-            static ref<variable_base> b_vec3_4()
+            static ref<variable_base> b_vec3_4(const std::vector<ref<variable_base>>& args)
             {
                 auto ref_0 = make_ref<variable>(any(0.0), variable_type::vt_float);
                 return helper::create_vec3(ref_0, ref_0, ref_0);;
             }
         } // namespace detail
 
+        static void load_all(symbol_map& table)
+        {
+            using namespace wio::builtin::detail;
+
+            loader::load_function(table, "Abs", detail::b_abs, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "Sin", detail::b_sin, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "Cos", detail::b_cos, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "Tan", detail::b_tan, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "Sqrt", detail::b_sqrt, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "Pow", detail::b_pow, pa<2>{ variable_type::vt_any, variable_type::vt_any });
+            loader::load_function(table, "Log", detail::b_log, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "Log10", detail::b_log10, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "ArcSin", detail::b_asin, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "ArcCos", detail::b_acos, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "ArcTan", detail::b_atan, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "Ceil", detail::b_ceil, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "Floor", detail::b_floor, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "Round", detail::b_round, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "Exp", detail::b_exp, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "ArcTan2", detail::b_atan2, pa<2>{ variable_type::vt_any, variable_type::vt_any });
+            loader::load_function(table, "Fmod", detail::b_fmod, pa<2>{ variable_type::vt_any, variable_type::vt_any });
+            loader::load_function(table, "Sinh", detail::b_sinh, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "Cosh", detail::b_cosh, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "Tanh", detail::b_tanh, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "ArcSinh", detail::b_asinh, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "ArcCosh", detail::b_acosh, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "ArcTanh", detail::b_atanh, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "Root", detail::b_root, pa<2>{ variable_type::vt_any, variable_type::vt_any });
+            loader::load_function(table, "LogBase", detail::b_log_base, pa<2>{ variable_type::vt_any, variable_type::vt_any });
+            loader::load_function(table, "Min", detail::b_min, pa<2>{ variable_type::vt_any, variable_type::vt_any });
+            loader::load_function(table, "Max", detail::b_max, pa<2>{ variable_type::vt_any, variable_type::vt_any });
+
+            auto vec2_result = loader::load_function(table, "Vec2", detail::b_vec2, pa<2>{ variable_type::vt_any, variable_type::vt_any });
+            loader::load_overload(vec2_result, detail::b_vec2_2, pa<1>{ variable_type::vt_any });
+            loader::load_overload(vec2_result, detail::b_vec2_3, pa<0>{});
+
+            auto vec3_result = loader::load_function(table, "Vec3", detail::b_vec3, pa<3>{ variable_type::vt_any, variable_type::vt_any, variable_type::vt_any });
+            loader::load_overload(vec3_result, detail::b_vec3_2, pa<1>{ variable_type::vt_any });
+            loader::load_overload(vec3_result, detail::b_vec3_3, pa<2>{ variable_type::vt_vec2, variable_type::vt_any });
+            loader::load_overload(vec3_result, detail::b_vec3_4, pa<0>{});
+
+            // math
+            loader::load_constant(table, "NAN", variable_type::vt_float, std::numeric_limits<double>::quiet_NaN());
+            loader::load_constant(table, "INF", variable_type::vt_float, std::numeric_limits<double>::infinity());
+            loader::load_constant(table, "PI", variable_type::vt_float, 3.14159265358979323846);
+            loader::load_constant(table, "E", variable_type::vt_float, 2.71828182845904523536);
+            loader::load_constant(table, "LOG2E", variable_type::vt_float, 1.44269504088896340736);
+            loader::load_constant(table, "LOG10E", variable_type::vt_float, 0.434294481903251827651);
+            loader::load_constant(table, "LN2", variable_type::vt_float, 0.693147180559945309417);
+            loader::load_constant(table, "LN10", variable_type::vt_float, 2.30258509299404568402);
+            loader::load_constant(table, "SQRT2", variable_type::vt_float, 1.41421356237309504880);
+            loader::load_constant(table, "SQRT3", variable_type::vt_float, 1.73205080756887729352);
+        }
+
         void math::load(ref<scope> target_scope)
         {
             if (!target_scope)
-                target_scope = builtin_scope;
+                target_scope = main_table::get().get_builtin_scope();
 
-            loader::load_function_old<1>(target_scope, "Abs",     detail::b_abs,      { variable_type::vt_any });
-            loader::load_function_old<1>(target_scope, "Sin",     detail::b_sin,      { variable_type::vt_float });
-            loader::load_function_old<1>(target_scope, "Cos",     detail::b_cos,      { variable_type::vt_float });
-            loader::load_function_old<1>(target_scope, "Tan",     detail::b_tan,      { variable_type::vt_float });
-            loader::load_function_old<1>(target_scope, "Sqrt",    detail::b_sqrt,     { variable_type::vt_any });
-            loader::load_function_old<2>(target_scope, "Pow",     detail::b_pow,      { variable_type::vt_any, variable_type::vt_any });
-            loader::load_function_old<1>(target_scope, "Log",     detail::b_log,      { variable_type::vt_any });
-            loader::load_function_old<1>(target_scope, "Log10",   detail::b_log10,    { variable_type::vt_any });
-            loader::load_function_old<1>(target_scope, "ArcSin",  detail::b_asin,     { variable_type::vt_float });
-            loader::load_function_old<1>(target_scope, "ArcCos",  detail::b_acos,     { variable_type::vt_float });
-            loader::load_function_old<1>(target_scope, "ArcTan",  detail::b_atan,     { variable_type::vt_float });
-            loader::load_function_old<1>(target_scope, "Ceil",    detail::b_ceil,     { variable_type::vt_any });
-            loader::load_function_old<1>(target_scope, "Floor",   detail::b_floor,    { variable_type::vt_any });
-            loader::load_function_old<1>(target_scope, "Round",   detail::b_round,    { variable_type::vt_any });
-            loader::load_function_old<1>(target_scope, "Exp",     detail::b_exp,      { variable_type::vt_any });
-            loader::load_function_old<2>(target_scope, "ArcTan2", detail::b_atan2,    { variable_type::vt_any, variable_type::vt_any });
-            loader::load_function_old<2>(target_scope, "Fmod",    detail::b_fmod,     { variable_type::vt_any, variable_type::vt_any });
-            loader::load_function_old<1>(target_scope, "Sinh",    detail::b_sinh,     { variable_type::vt_any });
-            loader::load_function_old<1>(target_scope, "Cosh",    detail::b_cosh,     { variable_type::vt_any });
-            loader::load_function_old<1>(target_scope, "Tanh",    detail::b_tanh,     { variable_type::vt_any });
-            loader::load_function_old<1>(target_scope, "ArcSinh", detail::b_asinh,    { variable_type::vt_any });
-            loader::load_function_old<1>(target_scope, "ArcCosh", detail::b_acosh,    { variable_type::vt_any });
-            loader::load_function_old<1>(target_scope, "ArcTanh", detail::b_atanh,    { variable_type::vt_any });
-            loader::load_function_old<2>(target_scope, "Root",    detail::b_root,     { variable_type::vt_any, variable_type::vt_any });
-            loader::load_function_old<2>(target_scope, "LogBase", detail::b_log_base, { variable_type::vt_any, variable_type::vt_any });
-            loader::load_function_old<2>(target_scope, "Min",     detail::b_min,      { variable_type::vt_any, variable_type::vt_any });
-            loader::load_function_old<2>(target_scope, "Max",     detail::b_max,      { variable_type::vt_any, variable_type::vt_any });
+            load_all(target_scope->get_symbols());
+        }
 
-            auto vec2_result = loader::load_function_old<2>(target_scope, "Vec2", detail::b_vec2, { variable_type::vt_any, variable_type::vt_any });
-            loader::load_overload<1>(vec2_result, detail::b_vec2_2, { variable_type::vt_any });
-            loader::load_overload<0>(vec2_result, detail::b_vec2_3, {});
+        void math::load_table(ref<symbol_table> target_table)
+        {
+            if (target_table)
+                load_all(target_table->get_symbols());
+        }
 
-            auto vec3_result = loader::load_function_old<3>(target_scope, "Vec3", detail::b_vec3, { variable_type::vt_any, variable_type::vt_any, variable_type::vt_any });
-            loader::load_overload<1>(vec3_result, detail::b_vec3_2, { variable_type::vt_any });
-            loader::load_overload<2>(vec3_result, detail::b_vec3_3, { variable_type::vt_vec2, variable_type::vt_any });
-            loader::load_overload<0>(vec3_result, detail::b_vec3_4, {});
-
-            // math
-            loader::load_constant(target_scope, "NAN",    variable_type::vt_float, std::numeric_limits<double>::quiet_NaN());
-            loader::load_constant(target_scope, "INF",    variable_type::vt_float, std::numeric_limits<double>::infinity());
-            loader::load_constant(target_scope, "PI",     variable_type::vt_float, 3.14159265358979323846);
-            loader::load_constant(target_scope, "E",      variable_type::vt_float, 2.71828182845904523536);
-            loader::load_constant(target_scope, "LOG2E",  variable_type::vt_float, 1.44269504088896340736);
-            loader::load_constant(target_scope, "LOG10E", variable_type::vt_float, 0.434294481903251827651);
-            loader::load_constant(target_scope, "LN2",    variable_type::vt_float, 0.693147180559945309417);
-            loader::load_constant(target_scope, "LN10",   variable_type::vt_float, 2.30258509299404568402);
-            loader::load_constant(target_scope, "SQRT2",  variable_type::vt_float, 1.41421356237309504880);
-            loader::load_constant(target_scope, "SQRT3",  variable_type::vt_float, 1.73205080756887729352);
-
-            // science
-            loader::load_constant(target_scope, "GRAVITY",            variable_type::vt_float, 6.67430e-11);
-            loader::load_constant(target_scope, "STANDARD_GRAVITY",   variable_type::vt_float, 9.80665);
-            loader::load_constant(target_scope, "SPEED_OF_SOUND",     variable_type::vt_float, 340.29);
-            loader::load_constant(target_scope, "LIGHT_SPEED",        variable_type::vt_float, 299792458.0);
-            loader::load_constant(target_scope, "PHI",                variable_type::vt_float, 1.61803398874989484820);
-            loader::load_constant(target_scope, "GOLDEN_RATIO",       variable_type::vt_float, 1.61803398874989484820);
-            loader::load_constant(target_scope, "GAMMA",              variable_type::vt_float, 0.57721566490153286060);
-            loader::load_constant(target_scope, "FEIGENBAUM_DELTA",   variable_type::vt_float, 4.66920160910299067185);
-            loader::load_constant(target_scope, "FEIGENBAUM_ALPHA",   variable_type::vt_float, 2.50290787509589282228);
-            loader::load_constant(target_scope, "CATALAN",            variable_type::vt_float, 0.91596559417721901505);
-            loader::load_constant(target_scope, "APERYS_CONSTANT",    variable_type::vt_float, 1.20205690315959428540);
-            loader::load_constant(target_scope, "PLANCK",             variable_type::vt_float, 6.62607015e-34);
-            loader::load_constant(target_scope, "BOLTZMANN",          variable_type::vt_float, 1.380649e-23);
-            loader::load_constant(target_scope, "AVOGADRO",           variable_type::vt_float, 6.02214076e23);
-            loader::load_constant(target_scope, "MU0",                variable_type::vt_float, 1.25663706212e-6);
-            loader::load_constant(target_scope, "EPSILON0",           variable_type::vt_float, 8.8541878128e-12);
-            loader::load_constant(target_scope, "RYDBERG",            variable_type::vt_float, 10973731.568160);
-            loader::load_constant(target_scope, "BOHR_RADIUS",        variable_type::vt_float, 5.29177210903e-11);
-            loader::load_constant(target_scope, "ELECTRON_MASS",      variable_type::vt_float, 9.1093837015e-31);
-            loader::load_constant(target_scope, "PROTON_MASS",        variable_type::vt_float, 1.67262192369e-27);
-            loader::load_constant(target_scope, "NEUTRON_MASS",       variable_type::vt_float, 1.67492749804e-27);
+        void math::load_symbol_map(symbol_map& target_map)
+        {
+            load_all(target_map);
         }
     } // namespace builtin
 } // namespace wio

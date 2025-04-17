@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../interpreter/scope.h"
+#include "../../interpreter/scope.h"
 
 namespace wio
 {
@@ -9,7 +9,7 @@ namespace wio
         class b_array
         {
         public:
-            static ref<scope> load();
+            static ref<symbol_table> load();
         };
     }
 }

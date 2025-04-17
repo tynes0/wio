@@ -40,8 +40,8 @@ namespace wio
         std::string skey = as_key(key);
         if (check_existance(skey))
             return m_data[skey];
-        else
-            throw invalid_key_error("Key '" + skey + "' is not exists!");
+
+        return m_data[skey] = create_null_variable();
     }
 
     void var_dictionary::set_data(const map_t& data)
@@ -54,8 +54,8 @@ namespace wio
     void var_dictionary::set_element(ref<variable_base> key, ref<variable_base> value)
     {
         std::string skey = as_key(key);
-        if (check_existance(skey))
-            throw invalid_key_error("Key '" + skey + "'' is already exists!");
+        if (!check_existance(skey))
+            throw invalid_key_error("Key '" + skey + "'' is not exists!");
         else
             m_data[skey] = value->clone();
     }

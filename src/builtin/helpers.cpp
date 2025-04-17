@@ -18,18 +18,36 @@ namespace wio
     {
         namespace helper
         {
-            static double as_double(ref<variable_base> var)
+            double var_as_double(ref<variable_base> var, bool nothrow)
             {
                 ref<variable> value = std::dynamic_pointer_cast<variable>(var);
 
-                if (value->get_type() == variable_type::vt_float)
+                if (var->get_type() == variable_type::vt_float)
                     return value->get_data_as<double>();
-                else if (value->get_type() == variable_type::vt_float_ref)
+                else if (var->get_type() == variable_type::vt_float_ref)
                     return *value->get_data_as<double*>();
-                else if (value->get_type() == variable_type::vt_integer)
-                    return (double)value->get_data_as<long long>();
+                else if (var->get_type() == variable_type::vt_integer)
+                    return static_cast<double>(value->get_data_as<long long>());
 
-                return 0.0;
+                if(nothrow)
+                    return 0.0;
+
+                throw type_mismatch_error("Invalid type! Expected float or integer.");
+            }
+
+            char var_as_char(ref<variable_base> var, bool nothrow)
+            {
+                ref<variable> value = std::dynamic_pointer_cast<variable>(var);
+
+                if (var->get_type() == variable_type::vt_character)
+                    return value->get_data_as<char>();
+                else if (var->get_type() == variable_type::vt_character_ref)
+                    return *value->get_data_as<char*>();
+
+                if (nothrow)
+                    return char(0);
+
+                throw type_mismatch_error("Invalid type! Expected float or integer.");
             }
 
             ref<variable_base> create_pair(ref<variable_base> first, ref<variable_base> second)
@@ -37,7 +55,7 @@ namespace wio
                 pair_t p(first, second);
                 ref<variable> result = make_ref<variable>(p, variable_type::vt_pair);
                 result->init_members();
-                ref<scope> members = result->get_members();
+                ref<symbol_table> members = result->get_members();
 
                 symbol f_sym(first);
                 symbol s_sym(second);
@@ -54,12 +72,12 @@ namespace wio
             {
                 vec2 result_vec;
 
-                result_vec.x = as_double(xvb);
-                result_vec.y = as_double(yvb);
+                result_vec.x = var_as_double(xvb, true);
+                result_vec.y = var_as_double(yvb, true);
 
                 ref<variable> result = make_ref<variable>(result_vec, variable_type::vt_vec2);
                 result->init_members();
-                ref<scope> members = result->get_members();
+                ref<symbol_table> members = result->get_members();
                 
                 vec2& vec_data = result->get_data_as<vec2>();
 
@@ -78,13 +96,13 @@ namespace wio
             {
                 vec3 result_vec;
 
-                result_vec.x = as_double(xvb);
-                result_vec.y = as_double(yvb);
-                result_vec.z = as_double(zvb);
+                result_vec.x = var_as_double(xvb, true);
+                result_vec.y = var_as_double(yvb, true);
+                result_vec.z = var_as_double(zvb, true);
 
                 ref<variable> result = make_ref<variable>(result_vec, variable_type::vt_vec3);
                 result->init_members();
-                ref<scope> members = result->get_members();
+                ref<symbol_table> members = result->get_members();
 
                 vec3& vec_data = result->get_data_as<vec3>();
 

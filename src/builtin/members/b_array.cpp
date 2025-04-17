@@ -1,9 +1,9 @@
 #include "b_array.h"
-#include "builtin_base.h"
+
+#include "../builtin_base.h"
+#include "../../variables/array.h"
 
 #include <array>
-
-#include "../variables/array.h"
 
 namespace wio
 {
@@ -32,6 +32,10 @@ namespace wio
             static ref<variable_base> b_array_front(const std::vector<ref<variable_base>>& args)
             {
                 ref<var_array> array = get_var_array(args[0]);
+
+                if (array->size() == 0)
+                    throw builtin_error("Front() called on empty array!");
+
                 if(array->is_pf_return_ref())
                     return array->get_element(0);
                 return array->get_element(0)->clone();
@@ -40,7 +44,10 @@ namespace wio
             static ref<variable_base> b_array_back(const std::vector<ref<variable_base>>& args)
             {
                 ref<var_array> array = get_var_array(args[0]);
-                return array->get_element(array->size() - 1);
+
+                if (array->size() == 0)
+                    throw builtin_error("Back() called on empty array!");
+
                 if (array->is_pf_return_ref())
                     return array->get_element(array->size() - 1);
                 return array->get_element(array->size() - 1)->clone();
@@ -244,35 +251,34 @@ namespace wio
             }
         }
 
-        template <size_t Size>
-        using pa = std::array<variable_type, Size>;
-
-        ref<scope> b_array::load()
+        ref<symbol_table> b_array::load()
         {
+            using namespace wio::builtin::detail;
 
-            auto result = make_ref<scope>(scope_type::builtin);
+            auto result = make_ref<symbol_table>();
+            symbol_map& table = result->get_symbols();
 
-            loader::load_function(result, "Length",  detail::b_array_length,     pa<1>{ variable_type::vt_array });
-            loader::load_function(result, "Size",    detail::b_array_length,     pa<1>{ variable_type::vt_array });
-            loader::load_function(result, "Front",   detail::b_array_front,      pa<1>{ variable_type::vt_array });
-            loader::load_function(result, "Back",    detail::b_array_back,       pa<1>{ variable_type::vt_array });
-            loader::load_function(result, "At",      detail::b_array_at,         pa<2>{ variable_type::vt_array, variable_type::vt_integer });
-            loader::load_function(result, "Insert",  detail::b_array_insert,     pa<3>{ variable_type::vt_array, variable_type::vt_integer, variable_type::vt_any });
-            loader::load_function(result, "Erase",   detail::b_erase,            pa<2>{ variable_type::vt_array, variable_type::vt_integer });
-            loader::load_function(result, "Push",    detail::b_array_push_back,  pa<2>{ variable_type::vt_array, variable_type::vt_any });
-            loader::load_function(result, "Pop",     detail::b_array_pop_back,   pa<1>{ variable_type::vt_array });
-            loader::load_function(result, "Extend",  detail::b_array_extend,     pa<2>{ variable_type::vt_array, variable_type::vt_array });
-            loader::load_function(result, "Clear",   detail::b_array_clear,      pa<1>{ variable_type::vt_array });
-            loader::load_function(result, "Resize",   detail::b_array_resize,    pa<2>{ variable_type::vt_array, variable_type::vt_integer });
-            loader::load_function(result, "SubArray",detail::b_array_sub_array,  pa<3>{ variable_type::vt_array, variable_type::vt_integer, variable_type::vt_integer });
-            loader::load_function(result, "String",  detail::b_array_string,     pa<1>{ variable_type::vt_array });
-            loader::load_function(result, "Reverse", detail::b_array_reverse,    pa<1>{ variable_type::vt_array });
-            loader::load_function(result, "Reversed",detail::b_array_reversed,   pa<1>{ variable_type::vt_array });
-            loader::load_function(result, "Filter",  detail::b_array_filter,     pa<2>{ variable_type::vt_array, variable_type::vt_type });
-            auto fill_f = loader::load_function(result, "Fill", detail::b_array_fill, pa<2>{ variable_type::vt_array, variable_type::vt_any });
-            loader::load_overload_2(fill_f, detail::b_array_fill, pa<4>{ variable_type::vt_array, variable_type::vt_integer, variable_type::vt_integer, variable_type::vt_any });
-            loader::load_function(result, "Swap",     detail::b_array_swap,       pa<2>{ variable_type::vt_array, variable_type::vt_array }, std::bitset<2>("11"));
-            loader::load_function(result, "Empty",    detail::b_array_empty,      pa<1>{ variable_type::vt_array });
+            loader::load_function(table, "Length",  detail::b_array_length,     pa<1>{ variable_type::vt_array });
+            loader::load_function(table, "Size",    detail::b_array_length,     pa<1>{ variable_type::vt_array });
+            loader::load_function(table, "Front",   detail::b_array_front,      pa<1>{ variable_type::vt_array });
+            loader::load_function(table, "Back",    detail::b_array_back,       pa<1>{ variable_type::vt_array });
+            loader::load_function(table, "At",      detail::b_array_at,         pa<2>{ variable_type::vt_array, variable_type::vt_integer });
+            loader::load_function(table, "Insert",  detail::b_array_insert,     pa<3>{ variable_type::vt_array, variable_type::vt_integer, variable_type::vt_any });
+            loader::load_function(table, "Erase",   detail::b_erase,            pa<2>{ variable_type::vt_array, variable_type::vt_integer });
+            loader::load_function(table, "Push",    detail::b_array_push_back,  pa<2>{ variable_type::vt_array, variable_type::vt_any });
+            loader::load_function(table, "Pop",     detail::b_array_pop_back,   pa<1>{ variable_type::vt_array });
+            loader::load_function(table, "Extend",  detail::b_array_extend,     pa<2>{ variable_type::vt_array, variable_type::vt_array });
+            loader::load_function(table, "Clear",   detail::b_array_clear,      pa<1>{ variable_type::vt_array });
+            loader::load_function(table, "Resize",  detail::b_array_resize,     pa<2>{ variable_type::vt_array, variable_type::vt_integer });
+            loader::load_function(table, "SubArray",detail::b_array_sub_array,  pa<3>{ variable_type::vt_array, variable_type::vt_integer, variable_type::vt_integer });
+            loader::load_function(table, "String",  detail::b_array_string,     pa<1>{ variable_type::vt_array });
+            loader::load_function(table, "Reverse", detail::b_array_reverse,    pa<1>{ variable_type::vt_array });
+            loader::load_function(table, "Reversed",detail::b_array_reversed,   pa<1>{ variable_type::vt_array });
+            loader::load_function(table, "Filter",  detail::b_array_filter,     pa<2>{ variable_type::vt_array, variable_type::vt_type });
+            auto fill_f = loader::load_function(table, "Fill", detail::b_array_fill, pa<2>{ variable_type::vt_array, variable_type::vt_any });
+            loader::load_overload(fill_f, detail::b_array_fill, pa<4>{ variable_type::vt_array, variable_type::vt_integer, variable_type::vt_integer, variable_type::vt_any });
+            loader::load_function(table, "Swap",     detail::b_array_swap,       pa<2>{ variable_type::vt_array, variable_type::vt_array }, std::bitset<2>("11"));
+            loader::load_function(table, "Empty",    detail::b_array_empty,      pa<1>{ variable_type::vt_array });
 
             return result;
         }

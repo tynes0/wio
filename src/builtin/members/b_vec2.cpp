@@ -9,9 +9,10 @@ namespace wio
 
     namespace builtin
     {
-        ref<scope> b_vec2::load()
+        ref<symbol_table> b_vec2::load()
         {
-            auto result = make_ref<scope>(scope_type::builtin);
+            auto result = make_ref<symbol_table>();
+            symbol_map& table = result->get_symbols();
 
 
             return result;

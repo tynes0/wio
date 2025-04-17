@@ -1,5 +1,47 @@
+import wio.io;
+
+local dict PhoneNumbers {};
+
+local func AddNumber(var name, var number)
 {
-	global var PI2 = 3.14;
-	Print("tst");
+	if(PhoneNumbers.Exists(name))
+	{
+		Println(name + " already exists!");
+		return;
+	}
+	PhoneNumbers[name] = number;
 }
 
+local func AddMenu()
+{
+	Print("Name: ");
+	var name = Input();
+	Print("Number: ");
+	var number = Input();
+
+	AddNumber(name, number);
+}
+
+local func DisplayNumbers()
+{
+	Println(PhoneNumbers);
+}
+
+func Main()
+{
+	for(;;)
+	{
+		Println("1- Add Number");
+		Println("2- Display Numbers");
+		Println("3- Exit");
+		Print("Choice: ");
+		var choice = Input().Int();
+
+		if(choice == 1)
+			AddMenu();
+		else if(choice == 2)
+			DisplayNumbers();
+		else if(choice == 3)
+			return;
+	}
+}

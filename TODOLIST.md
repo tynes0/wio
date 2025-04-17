@@ -45,3 +45,6 @@ LIST
 20. [x] Add float ref support to math library ![highp]
 20. [x] Fix null ![highp]
 20. [ ] Update assignment operators implementations. ![highp]
+20. [ ] Fix scientific constants ![highp]
+20. [x] FIX MODULE FUNC CALLS ![highp]
+20. [x] Fix error while creating variable in loop ![highp]

@@ -167,6 +167,7 @@ namespace wio
         location get_location() const override { return m_operator.loc; }
         std::string to_string() const override;
 
+        bool is_assignment = false;
         ref<expression> m_left;
         token m_operator;
         ref<expression> m_right;

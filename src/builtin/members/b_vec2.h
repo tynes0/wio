@@ -1,15 +1,15 @@
 #pragma once
 
-#include "../interpreter/scope.h"
+#include "../../interpreter/scope.h"
 
 namespace wio
 {
     namespace builtin
     {
-        class b_dictionary
+        class b_vec2
         {
         public:
-            static ref<scope> load();
+            static ref<symbol_table> load();
         };
     }
 }

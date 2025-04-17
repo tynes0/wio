@@ -15,9 +15,9 @@ namespace wio
 
 		static interpreter& get();
 	private:
-		raw_buffer run_f(const char* fp, packed_bool flags, ref<scope> target_scope = nullptr);
-		raw_buffer run_f_p1(const char* fp, packed_bool flags, ref<scope> target_scope = nullptr);
-		raw_buffer run_f_p2(raw_buffer content, packed_bool flags);
+		id_t run_f(const char* fp, packed_bool flags, symbol_map* target_map = nullptr);
+		raw_buffer run_f_p1(const char* fp, packed_bool flags, symbol_map* target_map = nullptr);
+		void run_f_p2(raw_buffer content, packed_bool flags, symbol_map* target_map = nullptr);
 		void run_f_p3();
 
 		friend class evaluator;
