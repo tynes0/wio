@@ -1,5 +1,6 @@
 #include "ast.h"
 #include "../base/exception.h"
+#include "../utils/util.h"
 
 namespace wio
 {
@@ -16,7 +17,7 @@ namespace wio
                 m_type = lit_type::lt_float;
             else if(sv.starts_with("0b") || sv.starts_with("0B"))
                 m_type = lit_type::lt_binary;
-            else if(sv.starts_with("0o") || sv.starts_with("0o"))
+            else if(sv.starts_with("0o") || sv.starts_with("0O"))
                 m_type = lit_type::lt_octal;
             else if(sv.starts_with("0x") || sv.starts_with("0X"))
                 m_type = lit_type::lt_hexadeximal;
@@ -233,23 +234,6 @@ namespace wio
         return "import " + m_module_path + ";";
     }
 
-    token_type variable_declaration::get_type() const
-    {
-        switch (m_type)
-        {
-        case wio::variable_type::vt_array:
-            return token_type::kw_array;
-        case wio::variable_type::vt_dictionary:
-            return token_type::kw_dict;
-        case wio::variable_type::vt_function:
-            return token_type::kw_func;
-        default:
-            if (m_flags.b1)
-                return token_type::kw_const;
-            return token_type::kw_var;
-        }
-    }
-
     std::string variable_declaration::to_string() const
     {
         std::string result;
@@ -260,7 +244,7 @@ namespace wio
         if (m_flags.b1)
             result += "const ";
 
-        result += frenum::to_string(m_type) + " " + m_id->to_string();
+        result += util::type_to_string(m_type) + " " + m_id->to_string();
         if (m_initializer)
             result += " = " + m_initializer->to_string();
         result += ";";
@@ -332,5 +316,10 @@ namespace wio
         }
         result += ");";
         return result;
+    }
+
+    std::string function_variable_declaration::to_string() const
+    {
+        return "func " + m_id->to_string();
     }
 }

@@ -135,3 +135,7 @@
 - __Update 2.1.2:__ The function system has been completely updated. Many bugs have been fixed. Overloads now work properly even in different files. It has also been made more organized in the background. Functions now take up a little less space.
 - __Update 2.1.3:__ Several new built-in methods have been added.
 - __Update 2.1.4:__ Some built-in methods will now be included directly without requiring import.
+- __Update 2.2.0:__ Fixed an issue where the uppercase 0O prefix was not working properly.
+- __Update 2.2.1:__ Fixed an issue where very small numbers would be returned as 0 when converting float to string.
+- __Update 2.2.2:__ Fixed an issue where the exponent was always perceived as positive in scientific float numbers.
+- __Update 2.2.3:__ Minor code cleanup done.

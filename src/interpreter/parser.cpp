@@ -726,6 +726,7 @@ namespace wio
             ref<block_statement> body = parse_block_statement();
             return make_ref<function_declaration>(id, params, body, variable_type::vt_null, is_local, is_global);
         }
+
         return nullptr; // TODO
     }
 

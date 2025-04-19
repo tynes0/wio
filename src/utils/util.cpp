@@ -19,13 +19,53 @@ namespace wio
 {
 	namespace util
 	{
-		std::string double_to_string(double d)
-		{
-			std::string s = std::to_string(d);
-			while (s.back() == '0' && s.size() != 1 && std::isdigit(s[s.size() - 2]))
-				s.pop_back();
-			return s;
-		}
+
+        static std::string scientific_to_string(double d)
+        {
+            if (d == 0.0 || (std::signbit(d) && d == 0.0))
+                return "0.0e+00";
+
+            constexpr int precision = 15;
+            char buffer[64];
+            std::snprintf(buffer, sizeof(buffer), "%.*e", precision - 1, d);
+            return std::string(buffer);
+        }
+
+        std::string double_to_string(double d)
+        {
+            if (d == 0.0 || (std::signbit(d) && d == 0.0))
+                return "0.0";
+
+            double abs_val = std::fabs(d);
+
+            if (abs_val < 1e-6 || abs_val > 1e+9)
+                return scientific_to_string(d);
+
+            constexpr int max_significant_digits = 15;
+            constexpr int max_precision = 10;
+
+            int magnitude = (abs_val > 0.0) ? static_cast<int>(std::log10(abs_val)) : 0;
+            int precision = max_significant_digits - magnitude;
+            if (precision > max_precision) precision = max_precision;
+            if (precision < 1) precision = 1;
+
+            char buffer[64];
+            std::snprintf(buffer, sizeof(buffer), "%.*f", precision, d);
+
+            char* end = buffer + std::strlen(buffer) - 1;
+            while (*end == '0' && *(end - 1) != '.') 
+            {
+                *end = '\0';
+                --end;
+            }
+            if (*end == '.') 
+            {
+                *(end + 1) = '0';
+                *(end + 2) = '\0';
+            }
+
+            return std::string(buffer);
+        }
 
 		std::string type_to_string(variable_type vt)
 		{

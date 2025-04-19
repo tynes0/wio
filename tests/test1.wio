@@ -1,13 +1,3 @@
-import test4;
 
-func foo(var x)
-{
-	Print("test1 1 foo() called");
-}
 
-foo(1, 2);
-
-func foo(var x, var y)
-{
-	Print("test1 2 foo() called");
-}
+func foo;

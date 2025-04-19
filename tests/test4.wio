@@ -1,6 +1,0 @@
-func foo()
-{
-	Println("test foo() called");
-}
-
-func foo(var x, var y);

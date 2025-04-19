@@ -236,7 +236,7 @@ namespace wio
             is_scientific = true;
             result += advance();
             if (peek() == '+' || peek() == '-')
-                advance();
+                result += advance();
 
             if (!std::isdigit(peek()))
                 throw invalid_number_error("Invalid scientific notation!", m_loc);
