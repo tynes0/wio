@@ -1,6 +1,7 @@
 #include "eval_base.h"
 
 #include "../builtin/builtin_manager.h"
+#include "../builtin/internal.h"
 #include "main_table.h"
 
 #include <stack>
@@ -10,15 +11,13 @@ namespace wio
 	struct eval_data
 	{
 		std::map<variable_type, ref<symbol_table>> constant_object_members;
-
+		std::stack<id_t> func_eval_ids;
+		std::vector<function_param> last_parameters;
 		ref<variable_base> last_return_value;
 		ref<stmt_stack> statement_stack;
-
 		int loop_depth = 0;
 		uint16_t func_body_depth = 0;
-		std::stack<id_t> func_eval_ids;
-
-		packed_bool eval_flags{}; // 1- break, 2 - continue, 3 - return, 4 - only global decl, 5 - in func call
+		packed_bool eval_flags{}; // 1- break, 2 - continue, 3 - return, 4 - """""""", 5 - in func call 6- search only function
 		packed_bool program_flags{}; // 1- single file 2- no builtin
 	};
 
@@ -28,6 +27,7 @@ namespace wio
 	void eval_base::initialize(packed_bool flags)
 	{
 		builtin_manager::load(s_data.constant_object_members);
+		builtin::internal::load();
 
 		s_data.program_flags = flags;
 	}
@@ -42,7 +42,7 @@ namespace wio
 		if (type == scope_type::function_body)
 		{
 			++s_data.func_body_depth;
-			s_data.eval_flags.b5 = true;
+			set_func_call_state(true);
 			s_data.func_eval_ids.push(helper_id);
 		}
 
@@ -60,7 +60,7 @@ namespace wio
 				s_data.func_eval_ids.pop();
 				s_data.func_body_depth--;
 				if (!s_data.func_body_depth)
-					s_data.eval_flags.b5 = false;
+					set_func_call_state(false);
 			}
 			else
 			{
@@ -94,7 +94,32 @@ namespace wio
 		return exit_scope(id);
 	}
 
-	symbol* eval_base::lookup_member(id_t id, const std::string& name, ref<variable_base> object)
+	symbol* eval_base::search_member(id_t id, const std::string& name, ref<variable_base> object) const
+	{
+		if (should_search_only_func())
+			return search_member_function(id, name, object, get_last_parameters());
+		symbol* sym = nullptr;
+		if (object)
+		{
+			if (s_data.constant_object_members[object->get_type()])
+				sym = s_data.constant_object_members[object->get_type()]->lookup(name);
+
+			if (!sym)
+			{
+				ref<symbol_table> member_scope = object->get_members();
+
+				if (!member_scope)
+					return nullptr;
+
+				return member_scope->lookup(name);
+			}
+			else
+				return sym;
+		}
+		return search(id, name);
+	}
+
+	symbol* eval_base::search_member_function(id_t id, const std::string& name, ref<variable_base> object, const std::vector<function_param>& parameters) const
 	{
 		symbol* sym = nullptr;
 		if (object)
@@ -114,19 +139,38 @@ namespace wio
 			else
 				return sym;
 		}
-		return lookup(id, name);
+		return search_function(id, name, parameters);
 	}
 
-	symbol* eval_base::lookup(id_t id, const std::string& name)
+	symbol* eval_base::search(id_t id, const std::string& name) const
 	{
-		id_t pass_id = s_data.eval_flags.b5 ? s_data.func_eval_ids.top() : 0;
-		return main_table::get().lookup(id, name, pass_id);
+		if (should_search_only_func())
+			return search_function(id, name, get_last_parameters());
+		id_t pass_id = in_func_call() ? s_data.func_eval_ids.top() : 0;
+		return main_table::get().search(id, name, pass_id);
 	}
 
-	symbol* eval_base::lookup_current_and_global(id_t id, const std::string& name)
+	symbol* eval_base::search_current_and_global(id_t id, const std::string& name) const
 	{
-		id_t pass_id = s_data.eval_flags.b5 ? s_data.func_eval_ids.top() : 0;
-		return main_table::get().lookup_current_and_global(id, name, pass_id);
+		id_t pass_id = in_func_call() ? s_data.func_eval_ids.top() : 0;
+		return main_table::get().search_current_and_global(id, name, pass_id);
+	}
+
+	symbol* eval_base::search_current_function(id_t id, const std::string& name, const std::vector<function_param>& parameters) const
+	{
+		return main_table::get().search_current_function(id, name, parameters);
+	}
+
+	symbol* eval_base::search_function(id_t id, const std::string& name, const std::vector<function_param>& parameters) const
+	{
+		id_t pass_id = in_func_call() ? s_data.func_eval_ids.top() : 0;
+		return main_table::get().search_function(id, name, parameters, pass_id);
+	}
+
+	std::pair<bool, symbol*> eval_base::is_function_valid(id_t id, const std::string name, const std::vector<function_param>& parameters) const
+	{
+		id_t pass_id = in_func_call() ? s_data.func_eval_ids.top() : 0;
+		return main_table::get().is_function_valid(id, name, parameters, pass_id);
 	}
 
 	void eval_base::insert(id_t id, const std::string& name, const symbol& symbol)
@@ -168,6 +212,11 @@ namespace wio
 	std::map<variable_type, ref<symbol_table>>& eval_base::get_constant_object_members()
 	{
 		return s_data.constant_object_members;
+	}
+
+	const std::vector<function_param>& eval_base::get_last_parameters() const
+	{
+		return s_data.last_parameters;
 	}
 
 	ref<variable_base> eval_base::get_last_return_value() const
@@ -225,14 +274,14 @@ namespace wio
 		return s_data.eval_flags.b3;
 	}
 
-	bool eval_base::is_only_global() const
-	{
-		return s_data.eval_flags.b4;
-	}
-
 	bool eval_base::in_func_call() const
 	{
 		return s_data.eval_flags.b5;
+	}
+
+	bool eval_base::should_search_only_func() const
+	{
+		return s_data.eval_flags.b6;
 	}
 
 	bool eval_base::is_sf() const
@@ -251,6 +300,11 @@ namespace wio
 			s_data.last_return_value = create_null_variable();
 		else
 			s_data.last_return_value = value;
+	}
+
+	void eval_base::set_last_parameters(const std::vector<function_param>& parameters)
+	{
+		s_data.last_parameters = parameters;
 	}
 
 	void eval_base::set_loop_depth(int loop_depth)
@@ -278,13 +332,13 @@ namespace wio
 		s_data.eval_flags.b3 = flag;
 	}
 
-	void eval_base::set_only_global_state(bool flag)
-	{
-		s_data.eval_flags.b4 = flag;
-	}
-
 	void eval_base::set_func_call_state(bool flag)
 	{
 		s_data.eval_flags.b5 = flag;
+	}
+
+	void eval_base::set_search_only_func_state(bool flag)
+	{
+		s_data.eval_flags.b6 = flag;
 	}
 }

@@ -1,0 +1,134 @@
+import wio.io;
+import wio.util;
+
+local dict Notes {};
+local var FilePath = "notes.txt";
+
+local func AddNote()
+{
+    Print("Enter note title: ");
+    var title = Input();
+    if(Notes.Exists(title))
+    {
+        Println("Note with this title already exists.");
+        return;
+    }
+    Print("Enter note content: ");
+    var content = Input();
+    Notes[title] = content;
+    Println("Note added.");
+}
+
+local func ListNotes()
+{
+    if(Notes.Size() == 0)
+    {
+        Println("No notes available.");
+        return;
+    }
+    Println("Notes:");
+    foreach(note in Notes)
+    {
+        Println("- " + note.Key);
+    }
+}
+
+local func ViewNote()
+{
+    Print("Enter note title to view: ");
+    var title = Input();
+    if(!Notes.Exists(title))
+    {
+        Println("Note not found.");
+        return;
+    }
+    Println("Content:\n" + Notes[title]);
+}
+
+local func DeleteNote()
+{
+    Print("Enter note title to delete: ");
+    var title = Input();
+    if(!Notes.Exists(title))
+    {
+        Println("Note not found.");
+        return;
+    }
+    Notes.Remove(title);
+    Println("Note deleted.");
+}
+
+local func SaveNotes()
+{
+    var file = OpenFile(FilePath, OPEN_MODE_WRITE | OPEN_MODE_BINARY);
+    foreach(note in Notes)
+    {
+        file <- (note.Key + "\t" + note.Value + "\n");
+    }
+    CloseFile(file);
+    Println("Notes saved.");
+}
+
+local func LoadNotes()
+{
+    var file = OpenFile(FilePath, OPEN_MODE_READ | OPEN_MODE_BINARY);
+    if(!?file)
+    {
+        Println("No saved notes found.");
+        return;
+    }
+    var content = Read(file);
+    CloseFile(file);
+
+    array lines = content.Split('\n');
+    foreach(line in lines)
+    {
+        if(line == "")
+            continue;
+        array parts = line.Split('\t');
+        if(parts.Size() == 2)
+        {
+            Notes[parts[0]] = parts[1];
+        }
+    }
+    Println("Notes loaded.");
+}
+
+func Main()
+{
+    LoadNotes();
+
+    for(;;)
+    {
+        Println("\nNote Manager");
+        Println("1- Add Note");
+        Println("2- List Notes");
+        Println("3- View Note");
+        Println("4- Delete Note");
+        Println("5- Save Notes");
+        Println("6- Exit");
+        Print("Choice: ");
+        var choice = Input().Int();
+
+        if(choice == 1)
+            AddNote();
+        else if(choice == 2)
+            ListNotes();
+        else if(choice == 3)
+            ViewNote();
+        else if(choice == 4)
+            DeleteNote();
+        else if(choice == 5)
+            SaveNotes();
+        else if(choice == 6)
+        {
+            SaveNotes();
+            Println("Goodbye!");
+            return;
+        }
+        else
+            Println("Invalid choice. Please try again.");
+    }
+}
+
+Main();

@@ -19,7 +19,7 @@ namespace wio
 
     void main_table::add(id_t id)
     {
-        if (search(id))
+        if (find_scope(id))
             throw exception("Undefined behavior: This scope already exists!");
         m_table[id] = make_ref<scope>(scope_type::global);
     }
@@ -31,19 +31,19 @@ namespace wio
 
     void main_table::insert(id_t cur_id, const std::string& name, const symbol& symbol)
     {
-        ref<scope> current = search(cur_id);
+        ref<scope> current = find_scope(cur_id);
         current->insert(name, symbol);
     }
 
     void main_table::insert_to_global(id_t cur_id, const std::string& name, const symbol& symbol)
     {
-        ref<scope> current = search(cur_id);
+        ref<scope> current = find_scope(cur_id);
         current->insert_to_global(name, symbol);
     }
 
-    symbol* main_table::lookup(id_t cur_id, const std::string& name, id_t pass_id)
+    symbol* main_table::search(id_t cur_id, const std::string& name, id_t pass_id)
     {
-        ref<scope> current = search(cur_id);
+        ref<scope> current = find_scope(cur_id);
         symbol* sym = current->lookup(name);
 
         if (sym)
@@ -66,34 +66,9 @@ namespace wio
         return nullptr;
     }
 
-    symbol* main_table::lookup_only_global(id_t cur_id, const std::string& name, id_t pass_id)
+    symbol* main_table::search_current_and_global(id_t cur_id, const std::string& name, id_t pass_id)
     {
-        ref<scope> current = search(cur_id);
-        symbol* sym = current->lookup_only_global(name);
-
-        if (sym)
-            return sym;
-
-        for (auto& scp : m_table)
-        {
-            if (scp.first == cur_id)
-                continue;
-
-            symbol* item = scp.second->lookup_only_global(name);
-
-            if (item)
-            {
-                if ((!item->flags.b1 && is_imported(scp.first)) || scp.first == pass_id)
-                    return item;
-            }
-        }
-
-        return nullptr;
-    }
-
-    symbol* main_table::lookup_current_and_global(id_t cur_id, const std::string& name, id_t pass_id)
-    {
-        ref<scope> current = search(cur_id);
+        ref<scope> current = find_scope(cur_id);
         symbol* sym = current->lookup_current_and_global(name);
 
         if (sym)
@@ -116,7 +91,7 @@ namespace wio
         return nullptr;
     }
 
-    symbol* main_table::lookup_builtin(const std::string& name)
+    symbol* main_table::search_builtin(const std::string& name)
     {
         auto& symbols = m_table[s_builtin_scope_id]->get_symbols();
 
@@ -125,6 +100,129 @@ namespace wio
             return &(it->second);
 
         return nullptr;
+    }
+
+    symbol* main_table::search_function(id_t cur_id, const std::string& name, const std::vector<function_param>& parameters, id_t pass_id)
+    {
+        ref<scope> current = find_scope(cur_id);
+        symbol* sym = current->lookup_function(name, parameters);
+
+        if (sym)
+            return sym;
+
+        for (auto& scp : m_table)
+        {
+            if (scp.first == cur_id)
+                continue;
+
+            symbol* item = scp.second->lookup_function(name, parameters);
+
+            if (item)
+            {
+                if ((!item->flags.b1 && is_imported(scp.first)) || scp.first == pass_id)
+                    return item;
+            }
+        }
+
+        return nullptr;
+    }
+
+    symbol* main_table::search_current_function(id_t cur_id, const std::string& name, const std::vector<function_param>& parameters)
+    {
+        ref<scope> current = find_scope(cur_id);
+        return current->lookup_function(name, parameters);
+    }
+
+    symbol* main_table::search_builtin_function(const std::string& name, const std::vector<function_param>& parameters)
+    {
+        auto& symbols = m_table[s_builtin_scope_id]->get_symbols();
+
+        auto it = symbols.find(name);
+        if (it != symbols.end() && it->second.var_ref->get_base_type() == variable_base_type::function)
+        {
+            if (auto f = std::dynamic_pointer_cast<var_function>(it->second.var_ref))
+            {
+                if (f->compare_parameters(parameters))
+                    return &(it->second);
+            }
+            else if (auto ol = std::dynamic_pointer_cast<overload_list>(it->second.var_ref))
+            {
+                for (size_t i = 0; i < ol->count(); ++i)
+                {
+                    if (auto fun = std::dynamic_pointer_cast<var_function>(ol->get(i)->var_ref))
+                    {
+                        if (fun->compare_parameters(parameters))
+                            return &(it->second);
+                    }
+                }
+            }
+        }
+        return nullptr;
+    }
+
+    std::pair<bool, symbol*> main_table::is_function_valid(id_t cur_id, const std::string name, const std::vector<function_param>& parameters, id_t pass_id)
+    {
+        std::pair<bool, symbol*> result_pair = std::make_pair<bool, symbol*>(false, nullptr);
+
+        ref<scope> current = find_scope(cur_id);
+        symbol* sym = current->lookup(name);
+
+        symbol* result = nullptr;
+
+        if (sym)
+        {
+            if (auto ol = std::dynamic_pointer_cast<overload_list>(sym->var_ref))
+            {
+                if (auto* ol_sym = ol->find(parameters))
+                {
+                    ref<var_function> fref = std::dynamic_pointer_cast<var_function>(ol_sym->var_ref);
+                    if(fref->declared() && !fref->early_declared())
+                        return result_pair;
+                }
+
+                result = sym;
+            }
+            else
+            {
+                return result_pair;
+            }
+        }
+
+        for (auto& scp : m_table)
+        {
+            if (scp.first == cur_id)
+                continue;
+
+            symbol* item = scp.second->lookup(name);
+
+            if (item)
+            {
+                if ((!item->flags.b1 && is_imported(scp.first)) || scp.first == pass_id)
+                {
+                    if (auto ol = std::dynamic_pointer_cast<overload_list>(item->var_ref))
+                    {
+                        if (auto* ol_sym = ol->find(parameters))
+                        {
+                            ref<var_function> fref = std::dynamic_pointer_cast<var_function>(ol_sym->var_ref);
+                            if (fref->declared() && !fref->early_declared())
+                                return result_pair;
+
+                            if (!fref->declared())
+                                result = item;
+                        }
+                    }
+                    else
+                    {
+                        return result_pair;
+                    }
+                }
+            }
+        }
+
+        result_pair.first = true;
+        result_pair.second = result;
+
+        return result_pair;
     }
 
     ref<scope>& main_table::get_builtin_scope()
@@ -145,7 +243,7 @@ namespace wio
         return child;
     }
 
-    ref<scope> main_table::search(id_t id)
+    ref<scope> main_table::find_scope(id_t id)
     {
         auto it = m_table.find(id);
         if (it != m_table.end())
@@ -153,9 +251,9 @@ namespace wio
         return nullptr;
     }
 
-    ref<scope> main_table::search_checked(id_t id)
+    ref<scope> main_table::find_scope_checked(id_t id)
     {
-        ref<scope> cur = search(id);
+        ref<scope> cur = find_scope(id);
         if(!cur)
             throw exception("Undefined behavior: This scope is NOT exists!");
         return cur;

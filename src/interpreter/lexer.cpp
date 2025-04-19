@@ -106,7 +106,7 @@ namespace wio
 
     bool lexer::is_seperator(char ch)
     {
-        return (ch == '(' || ch == ')' || ch == '[' || ch == ']' || ch == '{' || ch == '}' || ch == '.' || ch == ',' || ch == ';');
+        return (ch == '(' || ch == ')' || ch == '[' || ch == ']' || ch == '{' || ch == '}' || ch == '.' || ch == ',' || ch == ':' || ch == ';');
     }
 
     bool lexer::skip_whitespace()

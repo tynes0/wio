@@ -60,6 +60,8 @@ namespace wio
 
         eval_base::get().exit_statement_stack();
 
+        auto& tbl = main_table::get();
+
         s_data_stack.pop();
     }
 
@@ -117,12 +119,21 @@ namespace wio
     {
         if (node->m_token.type == token_type::number) 
         {
-            if (node->get_expression_type() == variable_type::vt_integer)
+            if (node->get_literal_type() == lit_type::lt_decimal)
                 return make_ref<variable>(any(std::stoll(node->m_token.value)), variable_type::vt_integer);
-            else if (node->get_expression_type() == variable_type::vt_float)
+            else if (node->get_literal_type() == lit_type::lt_float)
                 return make_ref<variable>(any(std::stod(node->m_token.value)), variable_type::vt_float);
-            else 
+            else if (node->get_literal_type() == lit_type::lt_binary)
+                return make_ref<variable>(any(std::stoll(node->m_token.value.substr(2), nullptr, 2)), variable_type::vt_integer);
+            else if (node->get_literal_type() == lit_type::lt_octal)
+                return make_ref<variable>(any(std::stoll(node->m_token.value.substr(2), nullptr, 8)), variable_type::vt_integer);
+            else if (node->get_literal_type() == lit_type::lt_hexadeximal)
+                return make_ref<variable>(any(std::stoll(node->m_token.value.substr(2), nullptr, 16)), variable_type::vt_integer);
+
+            else
+            {
                 throw evaluation_error("Invalid number literal type.", node->get_location());
+            }
         }
         else if (node->m_token.type == token_type::kw_true) 
         {
@@ -334,7 +345,7 @@ namespace wio
 
     ref<variable_base> evaluator::evaluate_identifier(ref<identifier> node, ref<variable_base> object, bool is_ref)
     {
-        symbol* sym = eval_base::get().lookup_member(s_data_stack.top().id, node->m_token.value, object);
+        symbol* sym = eval_base::get().search_member(s_data_stack.top().id, node->m_token.value, object);
 
         if (!sym)
         {
@@ -370,6 +381,10 @@ namespace wio
             else if (auto func = std::dynamic_pointer_cast<var_function>(sym->var_ref))
             {
                 return func->clone();
+            }
+            else if (auto olist = std::dynamic_pointer_cast<overload_list>(sym->var_ref))
+            {
+                return olist->clone();
             }
             else if (auto rlm = std::dynamic_pointer_cast<realm>(sym->var_ref))
             {
@@ -454,51 +469,61 @@ namespace wio
         if (s_data_stack.top().flags.b1)
             return create_null_variable();
 
-        ref<variable_base> caller_value = get_value(node->m_caller, object);
-
-        if (!caller_value)
-           throw undefined_identifier_error("Invalid function!", node->m_caller->get_location());
-        else if (caller_value->get_type() != variable_type::vt_function)
-           throw invalid_type_error("Type should be function!", node->m_caller->get_location());
-
-        ref<var_function> func = std::dynamic_pointer_cast<var_function>(caller_value);
-        ref<var_function> func_res;
-
-        if(!func)
-           throw undefined_identifier_error("Invalid function!", node->m_caller->get_location());
-
         std::vector<ref<variable_base>> parameters;
-        
+        std::vector<function_param> type_parameters;
+
         int padding = 0;
         if (object && object->get_type() != variable_type::vt_realm)
         {
             object->set_pf_return_ref(is_ref);
             padding = 1;
             parameters.push_back(object);
+            type_parameters.push_back(function_param("", object->get_type(), false));
         }
 
-        for (size_t i = 0; i < func->overload_count(); ++i)
+        for (size_t i = 0; i < node->m_arguments.size(); ++i)
         {
-            func_res = std::dynamic_pointer_cast<var_function>(func->get_overload(i)->var_ref);
+            auto value = get_value(node->m_arguments[i], nullptr);
+            parameters.push_back(value);
+            type_parameters.push_back(function_param("", value->get_type(), false));
+        }
+
+        eval_base::get().set_search_only_func_state(true);
+        eval_base::get().set_last_parameters(type_parameters);
+
+        ref<variable_base> caller_value = get_value(node->m_caller, object);
+
+        eval_base::get().set_search_only_func_state(false);
+
+        if (!caller_value)
+           throw undefined_identifier_error("Invalid function!", node->m_caller->get_location());
+        else if (caller_value->get_type() != variable_type::vt_function)
+           throw invalid_type_error("Type should be function!", node->m_caller->get_location());
+
+        ref<overload_list> olist = std::dynamic_pointer_cast<overload_list>(caller_value);
+        ref<var_function> func_res;
+
+        if(!olist)
+           throw undefined_identifier_error("Invalid function!", node->m_caller->get_location());
+
+        for (size_t i = 0; i < olist->count(); ++i)
+        {
+            func_res = std::dynamic_pointer_cast<var_function>(olist->get(i)->var_ref);
             const auto& real_params = func_res->get_parameters();
 
             if ((node->m_arguments.size() + padding) != real_params.size())
             {
-                if (i == (func->overload_count() - 1))
+                if (i == (olist->count() - 1))
                     throw invalid_argument_count_error("Invalid parameter count!", node->m_caller->get_location());
                 continue;
             }
-
-            for (size_t i = 0; i < node->m_arguments.size(); ++i)
-                parameters.push_back(get_value(node->m_arguments[i], nullptr, real_params[padding + i].is_ref));
 
             for (size_t i = 0; i < real_params.size(); ++i)
             {
                 if (parameters[i]->get_type() != real_params[i].type && real_params[i].type != variable_type::vt_any)
                 {
-                    if (i == (func->overload_count() - 1))
+                    if (i == (olist->count() - 1))
                         throw type_mismatch_error("Parameter types not matching!");
-                    parameters.erase(parameters.begin() + padding, parameters.end());
                     continue;
                 }
             }
@@ -507,9 +532,9 @@ namespace wio
 
         if (!func_res->declared())
         {
-            auto decl = eval_base::get().get_func_decl(func_res->get_symbol_id(), func_res->get_parameters());
+            auto decl = eval_base::get().get_func_decl(olist->get_symbol_id(), func_res->get_parameters());
             if(!decl)
-                throw local_exception("Function '" + func_res->get_symbol_id() + "' defined but not declared!", node->m_caller->get_location());
+                throw local_exception("Function '" + olist->get_symbol_id() + "' defined but not declared!", node->m_caller->get_location());
 
             evaluate_function_declaration(decl);
             func_res->set_early_declared(true);
@@ -533,20 +558,11 @@ namespace wio
 
     void evaluator::evaluate_expression_statement(ref<expression_statement> node)
     {
-        if (eval_base::get().is_only_global())
-            return;
         evaluate_expression(node->m_expression);
     }
 
     void evaluator::evaluate_if_statement(ref<if_statement> node)
     {
-        if (eval_base::get().is_only_global())
-        {
-            evaluate_statement(node->m_then_branch);
-            evaluate_statement(node->m_else_branch);
-            return;
-        }
-
         ref<variable_base> cond = get_value(node->m_condition);
         
         if (cond->get_base_type() != variable_base_type::variable)
@@ -584,17 +600,6 @@ namespace wio
 
     void evaluator::evaluate_for_statement(ref<for_statement> node)
     {
-        if (eval_base::get().is_only_global())
-        {
-            eval_base::get().enter_statement_stack_and_scope(s_data_stack.top().id, &node->m_body->m_statements);
-
-            for (auto& stmt : node->m_body->m_statements)
-                evaluate_statement(stmt);
-
-            eval_base::get().exit_statement_stack_and_scope(s_data_stack.top().id);
-            return;
-        }
-
         eval_base::get().enter_scope(s_data_stack.top().id, scope_type::block);
         evaluate_statement(node->m_initialization);
 
@@ -649,17 +654,6 @@ namespace wio
 
     void evaluator::evaluate_foreach_statement(ref<foreach_statement> node)
     {
-        if (eval_base::get().is_only_global())
-        {
-            eval_base::get().enter_statement_stack_and_scope(s_data_stack.top().id, &node->m_body->m_statements);
-
-            for (auto& stmt : node->m_body->m_statements)
-                evaluate_statement(stmt);
-
-            eval_base::get().exit_statement_stack_and_scope(s_data_stack.top().id);
-            return;
-        }
-
         static auto foreach_body = [](std::vector<ref<statement>>* list)
             {
                 eval_base::get().enter_statement_stack_and_scope(s_data_stack.top().id, list);
@@ -689,7 +683,7 @@ namespace wio
         evaluate_variable_declaration(make_ref<variable_declaration>(node->m_item, nullptr, false, false, false, false));
         ref<variable_base> col_base = evaluate_expression(node->m_collection);
 
-        symbol* sym = eval_base::get().lookup(s_data_stack.top().id, node->m_item->m_token.value);
+        symbol* sym = eval_base::get().search(s_data_stack.top().id, node->m_item->m_token.value);
 
         if (col_base->get_base_type() == variable_base_type::array)
         {
@@ -739,17 +733,6 @@ namespace wio
 
     void evaluator::evaluate_while_statement(ref<while_statement> node)
     {
-        if (eval_base::get().is_only_global())
-        {
-            eval_base::get().enter_statement_stack_and_scope(s_data_stack.top().id, &node->m_body->m_statements);
-
-            for (auto& stmt : node->m_body->m_statements)
-                evaluate_statement(stmt);
-
-            eval_base::get().exit_statement_stack_and_scope(s_data_stack.top().id);
-            return;
-        }
-
         eval_base::get().enter_scope(s_data_stack.top().id, scope_type::block);
         eval_base::get().inc_loop_depth();
         while (true)
@@ -795,8 +778,6 @@ namespace wio
 
     void evaluator::evaluate_break_statement(ref<break_statement> node)
     {
-        if (eval_base::get().is_only_global())
-            return;
         if (!eval_base::get().get_loop_depth())
             throw invalid_break_statement("Break statement called out of the loop!", node->m_loc);
         eval_base::get().call_break(true);
@@ -804,8 +785,6 @@ namespace wio
 
     void evaluator::evaluate_continue_statement(ref<continue_statement> node)
     {
-        if (eval_base::get().is_only_global())
-            return;
         if (!eval_base::get().get_loop_depth())
             throw invalid_continue_statement("Continue statement called out of the loop!", node->m_loc);
         eval_base::get().call_continue(true);
@@ -813,9 +792,6 @@ namespace wio
 
     void evaluator::evaluate_import_statement(ref<import_statement> node)
     {
-        if (eval_base::get().is_only_global())
-            return;
-
         symbol_map* target_map = nullptr;
         ref<realm> realm_var = nullptr;
 
@@ -826,7 +802,7 @@ namespace wio
 
             std::string name = node->m_realm_id->m_token.value;
 
-             if (eval_base::get().lookup(s_data_stack.top().id, name))
+             if (eval_base::get().search(s_data_stack.top().id, name))
                  throw local_exception("Duplicate variable declaration: " + name, node->m_realm_id->get_location());
             
             realm_var = make_ref<realm>();
@@ -850,9 +826,6 @@ namespace wio
 
     void evaluator::evaluate_return_statement(ref<return_statement> node)
     {
-        if (eval_base::get().is_only_global())
-            return;
-
         ref<scope> temp = eval_base::get().get_scope(s_data_stack.top().id);
         while (temp && temp->get_type() != scope_type::function_body)
             temp = temp->get_parent();
@@ -866,15 +839,12 @@ namespace wio
 
     void evaluator::evaluate_variable_declaration(ref<variable_declaration> node, bool is_parameter)
     {
-        if (eval_base::get().is_only_global() && !node->m_flags.b3)
-            return;
-
         std::string name = node->m_id->m_token.value;
         variable_type type = node->m_type;
 
         if (is_parameter)
         {
-            if (eval_base::get().lookup_current_and_global(s_data_stack.top().id, name) != nullptr)
+            if (eval_base::get().search_current_and_global(s_data_stack.top().id, name) != nullptr)
                 throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
             if (node->m_type == variable_type::vt_array)
                 evaluate_array_declaration(make_ref<array_declaration>(node->m_id, nullptr, std::vector<ref<expression>>{}, false, false, false, true));
@@ -883,16 +853,8 @@ namespace wio
         }
         else
         {
-            symbol* sym = eval_base::get().lookup(s_data_stack.top().id, name);
-            if (sym != nullptr)
-            {
-                if (node->m_flags.b3 && !sym->flags.b3 && eval_base::get().in_func_call())
-                {
-                    sym->flags.b3 = true;
-                    return;
-                }
+            if (eval_base::get().search(s_data_stack.top().id, name))
                 throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
-            }
         }
 
         ref<variable_base> var = create_null_variable();
@@ -921,7 +883,7 @@ namespace wio
             }
         }
 
-        symbol symbol(var, { node->m_flags.b2, node->m_flags.b3, eval_base::get().in_func_call() });
+        symbol symbol(var, { node->m_flags.b2, node->m_flags.b3 });
         if (node->m_flags.b3)
             eval_base::get().insert_to_global(s_data_stack.top().id, name, symbol);
         else
@@ -930,21 +892,10 @@ namespace wio
 
     void evaluator::evaluate_array_declaration(ref<array_declaration> node)
     {
-        if (eval_base::get().is_only_global() && !node->m_flags.b3)
-            return;
-
         std::string name = node->m_id->m_token.value;
 
-        symbol* sym = eval_base::get().lookup(s_data_stack.top().id, name);
-        if (sym != nullptr)
-        {
-            if (node->m_flags.b3 && !sym->flags.b3 && eval_base::get().in_func_call())
-            {
-                sym->flags.b3 = true;
-                return;
-            }
+        if (eval_base::get().search(s_data_stack.top().id, name))
             throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
-        }
 
         ref<variable_base> var = make_ref<var_array>(std::vector<ref<variable_base>>{}, packed_bool{ node->m_flags.b1, node->m_id->m_is_ref });
 
@@ -979,7 +930,7 @@ namespace wio
             }
         }
 
-        symbol array_symbol(var, { node->m_flags.b2, node->m_flags.b3, eval_base::get().in_func_call()});
+        symbol array_symbol(var, { node->m_flags.b2, node->m_flags.b3 });
         if (node->m_flags.b3)
             eval_base::get().insert_to_global(s_data_stack.top().id, name, array_symbol);
         else
@@ -988,21 +939,10 @@ namespace wio
 
     void evaluator::evaluate_dictionary_declaration(ref<dictionary_declaration> node)
     {
-        if (eval_base::get().is_only_global() && !node->m_flags.b3)
-            return;
-
         std::string name = node->m_id->m_token.value;
 
-        symbol* sym = eval_base::get().lookup(s_data_stack.top().id, name);
-        if (sym != nullptr)
-        {
-            if (node->m_flags.b3 && !sym->flags.b3 && eval_base::get().in_func_call())
-            {
-                sym->flags.b3 = true;
-                return;
-            }
+        if (eval_base::get().search(s_data_stack.top().id, name))
             throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
-        }
 
         ref<variable_base> var = make_ref<var_dictionary>(var_dictionary::map_t{}, packed_bool{ node->m_flags.b1, node->m_id->m_is_ref });
 
@@ -1042,7 +982,7 @@ namespace wio
             }
         }
 
-        symbol dict_symbol(var, { node->m_flags.b2, node->m_flags.b3, eval_base::get().in_func_call()});
+        symbol dict_symbol(var, { node->m_flags.b2, node->m_flags.b3 });
         if (node->m_flags.b3)
             eval_base::get().insert_to_global(s_data_stack.top().id, name, dict_symbol);
         else
@@ -1051,9 +991,6 @@ namespace wio
 
     void evaluator::evaluate_function_declaration(ref<function_declaration> node)
     {
-        if (eval_base::get().is_only_global() && !node->m_is_global)
-            return;
-
         std::string name = node->m_id->m_token.value;
 
         // parameter types and ids
@@ -1061,36 +998,35 @@ namespace wio
         for (auto& param : node->m_params)
             parameters.emplace_back(param->m_id->m_token.value, param->m_type, (bool)param->m_flags.b4);
 
-        packed_bool flags = {}; // 1- add overload 2- declare
+        bool add_overload = false;
+        bool declare = false;
 
-        symbol* sym = eval_base::get().lookup(s_data_stack.top().id, name);
+        auto is_valid_result = eval_base::get().is_function_valid(s_data_stack.top().id, name, parameters);
         symbol* overload = nullptr;
 
-        if (sym != nullptr)
+        if (!is_valid_result.first)
+            throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
+
+        if (is_valid_result.second)
         {
-            ref<var_function> func_ref = std::dynamic_pointer_cast<var_function>(sym->var_ref);
-            if (!func_ref)
+            ref<overload_list> ol_ref = std::dynamic_pointer_cast<overload_list>(is_valid_result.second->var_ref);
+
+            if (!ol_ref)
                 throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
 
-            overload = func_ref->find_overload(parameters);
+            overload = ol_ref->find(parameters);
 
             if (overload)
             {
-                if (node->m_is_global && !overload->flags.b3 && eval_base::get().in_func_call())
-                {
-                    overload->flags.b3 = true;
-                    return;
-                }
+                ref<var_function> func_ref = std::dynamic_pointer_cast<var_function>(overload->var_ref);
 
-                auto fref = std::dynamic_pointer_cast<var_function>(overload->var_ref);
-
-                if (!fref->declared())
+                if (!func_ref->declared())
                 {
-                    flags.b2 = true;
+                    declare = true;
                 }
-                else if (fref->early_declared())
+                else if (func_ref->early_declared())
                 {
-                    fref->set_early_declared(false);
+                    func_ref->set_early_declared(false);
                     return;
                 }
                 else
@@ -1100,18 +1036,14 @@ namespace wio
             }
             else
             {
-                flags.b1 = true;
+                add_overload = true;
             }
         }
         ref<var_function> result_fun_v;
-        if (flags.b2)
+        if (declare)
             result_fun_v = std::dynamic_pointer_cast<var_function>(overload->var_ref);
         else 
             result_fun_v = make_ref<var_function>(parameters, node->m_is_local);
-
-        eval_base::get().enter_statement_stack_and_scope(s_data_stack.top().id, &node->m_body->m_statements, scope_type::function);
-        evaluate_only_global_declarations();
-        eval_base::get().exit_statement_stack_and_scope(s_data_stack.top().id);
 
         // Generate func body
         auto func_lambda = [node, result_fun_v](const std::vector<function_param>& param_ids, std::vector<ref<variable_base>>& parameters)->ref<variable_base>
@@ -1128,7 +1060,7 @@ namespace wio
                 // use variable ref's
                 for (size_t i = 0; i < parameters.size(); ++i)
                 {
-                    symbol* s = eval_base::get().lookup(s_data_stack.top().id, param_ids[i].id);
+                    symbol* s = eval_base::get().search(s_data_stack.top().id, param_ids[i].id);
                     s->var_ref = parameters[i];
                 }
 
@@ -1152,113 +1084,98 @@ namespace wio
                 return create_null_variable();
             };
 
-        if (flags.b1)
+        if (add_overload)
         {
             result_fun_v->set_bounded_file_id(s_data_stack.top().id);
-            std::dynamic_pointer_cast<var_function>(result_fun_v->get_overload(0)->var_ref)->set_data(func_lambda);
+            result_fun_v->set_data(func_lambda);
 
-            symbol function_symbol(result_fun_v, { node->m_is_local, node->m_is_global, eval_base::get().in_func_call() });
-
-            std::dynamic_pointer_cast<var_function>(sym->var_ref)->add_overload(function_symbol);
+            symbol function_symbol(result_fun_v, { node->m_is_local, node->m_is_global });
+         
+            std::dynamic_pointer_cast<overload_list>(is_valid_result.second->var_ref)->add(function_symbol);
         }
-        else if (flags.b2)
+        else if (declare)
         {
             result_fun_v->set_data(func_lambda);
         }
         else
         {
             result_fun_v->set_bounded_file_id(s_data_stack.top().id);
-            std::dynamic_pointer_cast<var_function>(result_fun_v->get_overload(0)->var_ref)->set_data(func_lambda);
+            result_fun_v->set_data(func_lambda);
 
-            symbol function_symbol(result_fun_v, { node->m_is_local, node->m_is_global, eval_base::get().in_func_call()});
+            ref<overload_list> result_olist = make_ref<overload_list>();
+            result_olist->set_symbol_id(name);
+            result_olist->add(symbol(result_fun_v, { node->m_is_local, node->m_is_global }));
+
+            symbol olist_symbol(result_olist);
 
             if (node->m_is_global)
-                eval_base::get().insert_to_global(s_data_stack.top().id, name, function_symbol);
+                eval_base::get().insert_to_global(s_data_stack.top().id, name, olist_symbol);
             else
-                eval_base::get().insert(s_data_stack.top().id, name, function_symbol);
+                eval_base::get().insert(s_data_stack.top().id, name, olist_symbol);
         }
     }
 
-    void evaluator::evaluate_function_definition(ref<function_definition> node)
-    {
-        if (eval_base::get().is_only_global() && !node->m_is_global)
-            return;
-
-        // Check
+     void evaluator::evaluate_function_definition(ref<function_definition> node)
+     {
         std::string name = node->m_id->m_token.value;
-
+        
         // Parameter types and id's
         std::vector<function_param> parameters;
         for (auto& param : node->m_params)
             parameters.emplace_back(param->m_id->m_token.value, param->m_type, (bool)param->m_flags.b4);
+        
 
-        symbol* sym = eval_base::get().lookup(s_data_stack.top().id, name);
-        if (sym != nullptr)
+        auto is_valid_result = eval_base::get().is_function_valid(s_data_stack.top().id, name, parameters);
+
+        if(!is_valid_result.first)
+            throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
+
+        if (is_valid_result.second)
         {
-            auto func_ref = std::dynamic_pointer_cast<var_function>(sym->var_ref);
-            if (!func_ref)
+            auto olist = std::dynamic_pointer_cast<overload_list>(is_valid_result.second->var_ref);
+            if (!olist)
                 throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
-
-            auto overload_ref = func_ref->find_overload(parameters);
-            if (overload_ref)
-                throw local_exception("Duplicate function definition: " + name, node->m_id->get_location());
-
+        
             auto fun_v = make_ref<var_function>(parameters);
             fun_v->set_bounded_file_id(s_data_stack.top().id);
-            fun_v->set_symbol_id(name);
-
-            func_ref->add_overload(symbol(fun_v, { node->m_is_local, node->m_is_global }));
+        
+            olist->add(symbol(fun_v, { node->m_is_local, node->m_is_global }));
         }
         else
         {
             auto fun_v = make_ref<var_function>(parameters);
             fun_v->set_bounded_file_id(s_data_stack.top().id);
+        
+            ref<overload_list> result_olist = make_ref<overload_list>();
+            result_olist->set_symbol_id(name);
+            result_olist->add(symbol(fun_v, { node->m_is_local, node->m_is_global }));
 
-            std::dynamic_pointer_cast<var_function>(fun_v->get_overload(0)->var_ref)->set_symbol_id(name);
-            symbol function_symbol(fun_v, { node->m_is_local, node->m_is_global });
-
+            symbol result_symbol(result_olist, { node->m_is_local, node->m_is_global });
+        
             if (node->m_is_global)
-                eval_base::get().insert_to_global(s_data_stack.top().id, name, function_symbol);
+                eval_base::get().insert_to_global(s_data_stack.top().id, name, result_symbol);
             else
-                eval_base::get().insert(s_data_stack.top().id, name, function_symbol);
+                eval_base::get().insert(s_data_stack.top().id, name, result_symbol);
         }
-    }
+     }
 
     void evaluator::evaluate_realm_declaration(ref<realm_declaration> node)
     {
-        if (eval_base::get().is_only_global() && !node->m_is_global)
-            return;
-
         std::string name = node->m_id->m_token.value;
 
-        symbol* sym = eval_base::get().lookup(s_data_stack.top().id, name);
-        if (sym != nullptr)
-        {
-            if (node->m_is_global && !sym->flags.b3 && eval_base::get().in_func_call())
-            {
-                sym->flags.b3 = true;
-                return;
-            }
+        if (eval_base::get().search(s_data_stack.top().id, name))
             throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
-        }
 
         ref<realm> realm_var = make_ref<realm>();
-        realm_var->load_members(evaluate_block_statement(node->m_body));
-        symbol realm_symbol(realm_var, { node->m_is_local, node->m_is_global, eval_base::get().is_only_global()});
+
+        auto result = evaluate_block_statement(node->m_body);
+
+        realm_var->load_members(result);
+        symbol realm_symbol(realm_var, { node->m_is_local, node->m_is_global });
         if (node->m_is_global)
             eval_base::get().insert_to_global(s_data_stack.top().id, name, realm_symbol);
         else
             eval_base::get().insert(s_data_stack.top().id, name, realm_symbol);
-    }
-
-    void evaluator::evaluate_only_global_declarations()
-    {
-        eval_base::get().set_only_global_state(true);
-
-        for (auto& stmt : *eval_base::get().get_statement_stack()->list)
-            evaluate_statement(stmt);
-
-        eval_base::get().set_only_global_state(false);
     }
 
     ref<variable_base> evaluator::get_value(ref<expression> node, ref<variable_base> object, bool is_ref)

@@ -3,6 +3,7 @@
 #include "../interpreter/scope.h"
 #include "../interpreter/main_table.h"
 #include "../variables/function.h"
+#include "../variables/overload_list.h"
 
 #include <bitset>
 #include <array>
@@ -19,7 +20,7 @@ namespace wio
 		namespace loader
 		{
             template<size_t ArgCount, typename Func>
-            ref<var_function> load_function(symbol_map& target_table, const std::string& name, Func func, const std::array<variable_type, ArgCount>& param_types, const std::bitset<ArgCount>& is_ref = {})
+            ref<overload_list> load_function(symbol_map& target_table, const std::string& name, Func func, const std::array<variable_type, ArgCount>& param_types, const std::bitset<ArgCount>& is_ref = {})
             {
                 std::vector<function_param> params;
                 for (size_t i = 0; i < param_types.size(); ++i)
@@ -30,15 +31,17 @@ namespace wio
                         return func(parameters);
                     }, params, false);
 
-                ref<var_function> fun = make_ref<var_function>(varFunc);
+                ref<overload_list> olist = make_ref<overload_list>();
+                olist->set_symbol_id(name);
+                olist->add(symbol(make_ref<var_function>(varFunc), { false, true }));
 
-                symbol sym(fun, { false, true });
-                target_table[name] = sym;
-                return fun;
+                target_table[name] = symbol(olist, { false, true });
+
+                return olist;
             }
 
             template<int ArgCount, typename Func>
-            void load_overload(ref<var_function> fun, Func func, const std::array<variable_type, ArgCount>& param_types, const std::bitset<ArgCount>& is_ref = {})
+            void load_overload(ref<overload_list> olist, Func func, const std::array<variable_type, ArgCount>& param_types, const std::bitset<ArgCount>& is_ref = {})
             {
                 std::vector<function_param> params;
                 for (size_t i = 0; i < param_types.size(); ++i)
@@ -49,7 +52,7 @@ namespace wio
                         return func(parameters);
                     }, params, false);
 
-                fun->add_overload(symbol(make_ref<var_function>(varFunc)));
+                olist->add(symbol(make_ref<var_function>(varFunc)));
             }
 
             template <class T>

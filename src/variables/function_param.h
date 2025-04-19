@@ -16,7 +16,7 @@ namespace wio
 
 		bool operator==(const function_param& other) const
 		{
-			return (id == other.id && type == other.type && is_ref == other.is_ref);
+			return (type == other.type) || type == variable_type::vt_any;
 		}
 	};
 

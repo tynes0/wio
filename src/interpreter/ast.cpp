@@ -9,20 +9,41 @@ namespace wio
         switch (tok.type)
         {
         case token_type::number:
-            m_type = tok.value.find('.') != std::string::npos ? variable_type::vt_float : variable_type::vt_integer;
+        {
+            std::string_view sv(tok.value);
+
+            if (sv.find('.') != std::string_view::npos)
+                m_type = lit_type::lt_float;
+            else if(sv.starts_with("0b") || sv.starts_with("0B"))
+                m_type = lit_type::lt_binary;
+            else if(sv.starts_with("0o") || sv.starts_with("0o"))
+                m_type = lit_type::lt_octal;
+            else if(sv.starts_with("0x") || sv.starts_with("0X"))
+                m_type = lit_type::lt_hexadeximal;
+            else
+                m_type = lit_type::lt_decimal;
             break;
+        }
         case token_type::string:
-            m_type = variable_type::vt_string;
+        {
+            m_type = lit_type::lt_string;
             break;
+        }
         case token_type::character:
-            m_type = variable_type::vt_character;
+        {
+            m_type = lit_type::lt_character;
             break;
+        }
         case token_type::kw_true:
         case token_type::kw_false:
-            m_type = variable_type::vt_bool;
+        {
+            m_type = lit_type::lt_bool;
             break;
+        }
         default:
-            m_type = variable_type::vt_null;
+        {
+            m_type = lit_type::lt_null;
+        }
         }
     }
 

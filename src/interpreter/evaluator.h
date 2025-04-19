@@ -49,8 +49,6 @@ namespace wio
         static void evaluate_function_definition(ref<function_definition> node);
         static void evaluate_realm_declaration(ref<realm_declaration> node);
 
-        static void evaluate_only_global_declarations();
-
         static ref<variable_base> get_value(ref<expression> node, ref<variable_base> object = nullptr, bool is_ref = false);
     };
 

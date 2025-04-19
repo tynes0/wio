@@ -8,6 +8,9 @@
 namespace wio
 {
     enum class unary_operator_type { prefix, postfix };
+    enum class lit_type { lt_null, lt_string, lt_character, lt_bool, lt_binary, lt_octal, lt_decimal, lt_hexadeximal, lt_float };
+
+    MakeFrenumInNamespace(wio, lit_type, lt_null, lt_string, lt_character, lt_bool, lt_binary, lt_octal, lt_decimal, lt_hexadeximal, lt_float)
 
     class ast_node;
     class expression;
@@ -70,11 +73,11 @@ namespace wio
 
         token_type get_type() const override { return m_token.type; }
         location get_location() const override { return m_token.loc; }
-        variable_type get_expression_type() const { return m_type; }
+        lit_type get_literal_type() const { return m_type; }
         std::string to_string() const override;
 
         token m_token;
-        variable_type m_type;
+        lit_type m_type;
     };
 
     class string_literal : public literal
@@ -83,7 +86,7 @@ namespace wio
         string_literal(token tok) 
             : literal(tok)
         {
-            m_type = variable_type::vt_string;
+            m_type = lit_type::lt_string;
         }
 
         token_type get_type() const override { return token_type::string; }

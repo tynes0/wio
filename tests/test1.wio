@@ -1,3 +1,13 @@
-import test2 as NumberFile;
+import test4;
 
-NumberFile.Main();
+func foo(var x)
+{
+	Print("test1 1 foo() called");
+}
+
+foo(1, 2);
+
+func foo(var x, var y)
+{
+	Print("test1 2 foo() called");
+}

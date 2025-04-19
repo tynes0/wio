@@ -1,6 +1,18 @@
 import wio.io;
+import wio.util;
 
 local dict PhoneNumbers {};
+local var Filepath = "save.txt";
+
+local func AddNumber(var pair)
+{
+	if(PhoneNumbers.Exists(pair.Key))
+	{
+		Println(pair.Key + " already exists!");
+		return;
+	}
+	PhoneNumbers[pair.Key] = pair.Value;
+}
 
 local func AddNumber(var name, var number)
 {
@@ -10,6 +22,39 @@ local func AddNumber(var name, var number)
 		return;
 	}
 	PhoneNumbers[name] = number;
+}
+
+local func LoadNumbers()
+{
+	var file = OpenFile(Filepath, OPEN_MODE_READ | OPEN_MODE_BINARY);
+	if(!?file)
+		return;
+	var content = Read(file);
+	CloseFile(file);
+
+	array numbers = content.Split('\n');
+	
+	foreach(item in numbers)
+	{
+		array NameNumber = item.Split('\t');
+		var pair = Pair(NameNumber[0], NameNumber[1]);
+		AddNumber(pair);
+	}
+}
+
+local func SaveNumbers()
+{
+	var file = OpenFile(Filepath, OPEN_MODE_WRITE | OPEN_MODE_BINARY);
+
+	foreach(item in PhoneNumbers)
+	{
+		file <- item.Key;
+		file <- '\t';
+		file <- item.Value;
+		file <- '\n';
+	}
+
+	CloseFile(file);
 }
 
 local func AddMenu()
@@ -29,6 +74,8 @@ local func DisplayNumbers()
 
 func Main()
 {
+	LoadNumbers();
+
 	for(;;)
 	{
 		Println("1- Add Number");
@@ -42,6 +89,11 @@ func Main()
 		else if(choice == 2)
 			DisplayNumbers();
 		else if(choice == 3)
+		{
+			SaveNumbers();
 			return;
+		}
 	}
 }
+
+Main();

@@ -21,7 +21,7 @@ namespace wio
         left_curly_bracket, right_curly_bracket,
         left_parenthesis, right_parenthesis,
         
-        dot, comma, semicolon,
+        dot, comma, colon, semicolon,
         
         end_of_file
     };
@@ -34,7 +34,7 @@ namespace wio
         left_bracket, right_bracket,
         left_curly_bracket, right_curly_bracket,
         left_parenthesis, right_parenthesis,
-        dot, comma, semicolon,
+        dot, comma, colon, semicolon,
         end_of_file)
 
     struct token
@@ -121,6 +121,7 @@ namespace wio
 
         {".", token_type::dot},
         {",", token_type::comma},
+        {":", token_type::colon},
         {";", token_type::semicolon},
 
         {"{", token_type::left_curly_bracket},

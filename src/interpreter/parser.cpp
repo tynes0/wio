@@ -168,7 +168,7 @@ namespace wio
             do {
                 consume_token(token_type::left_bracket);
                 ref<expression> key = parse_expression();
-                consume_token(token_type::comma);
+                consume_token(token_type::colon);
                 ref<expression> value = parse_expression();
                 consume_token(token_type::right_bracket);
 
@@ -910,12 +910,6 @@ namespace wio
             result.value += next_token().value;
 
         ref<string_literal> lit = make_ref<string_literal>(result);
-
-        // if (!lit)
-        // {
-        //     error("Expected a string literal for the module path in import statement.", module_path_expr->get_location());
-        //     return nullptr;
-        // }
 
         std::string module_path = lit->m_token.value;
 

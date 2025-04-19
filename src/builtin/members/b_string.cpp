@@ -173,6 +173,70 @@ namespace wio
 
                 return make_ref<variable>(any(ch), variable_type::vt_character);
             }
+
+            static ref<variable_base> b_string_split(const std::vector<ref<variable_base>>& args)
+            {
+                ref<variable> str = get_var_str(args[0]);
+                std::string data = str->get_data_as<std::string>();
+
+                std::vector<ref<variable_base>> result;
+                size_t pos = 0;
+                size_t last_location = 0;
+
+                while (true)
+                {
+                    pos = data.find(' ', last_location);
+                    if (pos == std::string::npos)
+                        pos = data.size();
+
+                    std::string temp = data.substr(last_location, pos - last_location);
+                    if(!temp.empty())
+                        result.push_back(make_ref<variable>(temp, variable_type::vt_string));
+
+                    last_location = pos + 1;
+
+                    if (pos == data.size())
+                        break;
+                }
+                return make_ref<var_array>(result);
+            }
+
+            static ref<variable_base> b_string_split_2(const std::vector<ref<variable_base>>& args)
+            {
+                ref<variable> str = get_var_str(args[0]);
+                std::string data = str->get_data_as<std::string>();
+                std::string token;
+
+                if (args[1]->get_type() == variable_type::vt_string)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<std::string>();
+                else if (args[1]->get_type() == variable_type::vt_character)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<char>();
+                else if (args[1]->get_type() == variable_type::vt_character_ref)
+                    token = *std::dynamic_pointer_cast<variable>(args[1])->get_data_as<char*>();
+                else 
+                    token = data; // DOT'T SPLIT
+
+                std::vector<ref<variable_base>> result;
+                size_t pos = 0;
+                size_t last_location = 0;
+
+                while (true)
+                {
+                    pos = data.find(token, last_location);
+                    if (pos == std::string::npos)
+                        pos = data.size();
+
+                    std::string temp = data.substr(last_location, pos - last_location);
+                    if (!temp.empty())
+                        result.push_back(make_ref<variable>(temp, variable_type::vt_string));
+
+                    last_location = pos + token.size();
+
+                    if (pos == data.size())
+                        break;
+                }
+                return make_ref<var_array>(result);
+            }
         }
 
         ref<symbol_table> b_string::load()
@@ -182,19 +246,22 @@ namespace wio
             auto result = make_ref<symbol_table>();
             symbol_map& table = result->get_symbols();
 
-            loader::load_function(table, "Front",   detail::b_string_front,     pa<1>{ variable_type::vt_string });
-            loader::load_function(table, "Back",    detail::b_string_back,      pa<1>{ variable_type::vt_string });
-            loader::load_function(table, "At",      detail::b_string_at,        pa<2>{ variable_type::vt_string, variable_type::vt_integer });
-            loader::load_function(table, "Compare", detail::b_string_compare,   pa<2>{ variable_type::vt_string, variable_type::vt_string });
-            loader::load_function(table, "Int",     detail::b_string_int,       pa<1>{ variable_type::vt_string });
-            loader::load_function(table, "Float",   detail::b_string_float,     pa<1>{ variable_type::vt_string });
-            loader::load_function(table, "Array",   detail::b_string_array,     pa<1>{ variable_type::vt_string });
-            loader::load_function(table, "Length",  detail::b_string_length,    pa<1>{ variable_type::vt_string });
-            loader::load_function(table, "Size",    detail::b_string_length,    pa<1>{ variable_type::vt_string });
-            loader::load_function(table, "Empty",   detail::b_string_empty,     pa<1>{ variable_type::vt_string });
-            loader::load_function(table, "Clear",   detail::b_string_clear,     pa<1>{ variable_type::vt_string });
-            loader::load_function(table, "Push",    detail::b_string_push,      pa<2>{ variable_type::vt_string, variable_type::vt_any });
-            loader::load_function(table, "Pop",     detail::b_string_pop,       pa<1>{ variable_type::vt_string });
+            loader::load_function(table, "Front", detail::b_string_front, pa<1>{ variable_type::vt_string });
+            loader::load_function(table, "Back", detail::b_string_back, pa<1>{ variable_type::vt_string });
+            loader::load_function(table, "At", detail::b_string_at, pa<2>{ variable_type::vt_string, variable_type::vt_integer });
+            loader::load_function(table, "Compare", detail::b_string_compare, pa<2>{ variable_type::vt_string, variable_type::vt_string });
+            loader::load_function(table, "Int", detail::b_string_int, pa<1>{ variable_type::vt_string });
+            loader::load_function(table, "Float", detail::b_string_float, pa<1>{ variable_type::vt_string });
+            loader::load_function(table, "Array", detail::b_string_array, pa<1>{ variable_type::vt_string });
+            loader::load_function(table, "Length", detail::b_string_length, pa<1>{ variable_type::vt_string });
+            loader::load_function(table, "Size", detail::b_string_length, pa<1>{ variable_type::vt_string });
+            loader::load_function(table, "Empty", detail::b_string_empty, pa<1>{ variable_type::vt_string });
+            loader::load_function(table, "Clear", detail::b_string_clear, pa<1>{ variable_type::vt_string });
+            loader::load_function(table, "Push", detail::b_string_push, pa<2>{ variable_type::vt_string, variable_type::vt_any });
+            loader::load_function(table, "Pop", detail::b_string_pop, pa<1>{ variable_type::vt_string });
+
+            auto split_func = loader::load_function(table, "Split", detail::b_string_split, pa<1>{ variable_type::vt_string });
+            loader::load_overload(split_func, detail::b_string_split_2, pa<2>{ variable_type::vt_string, variable_type::vt_any });
 
             loader::load_constant(table, "End", variable_type::vt_integer, s_end_position);
 

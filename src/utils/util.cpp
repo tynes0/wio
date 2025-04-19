@@ -202,7 +202,7 @@ namespace wio
                 {
                     ss << ("[");
                     ss << ('\"' + key + '\"');
-                    ss << (", ");
+                    ss << (" : ");
                     ss << var_to_string(value);
                     ss << ("]");
                     if (i != dict->size() - 1)

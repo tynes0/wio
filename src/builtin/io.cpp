@@ -31,25 +31,6 @@ namespace wio
 
         namespace detail
         {
-            static ref<variable_base> b_print(const std::vector<ref<variable_base>>& args)
-            {
-                filesystem::write_stdout(util::var_to_string(args[0]));
-                return create_null_variable();
-            }
-
-            static ref<variable_base> b_println(const std::vector<ref<variable_base>>& args)
-            {
-                b_print(args);
-                filesystem::write_stdout("\n");
-                return create_null_variable();
-            }
-
-            static ref<variable_base> b_input(const std::vector<ref<variable_base>>& args)
-            {
-                raw_buffer buf = filesystem::read_stdout();
-                return make_ref<variable>(any(std::string(buf.as<char>())), variable_type::vt_string);
-            }
-
             static ref<variable_base> b_open_file(const std::vector<ref<variable_base>>& args)
             {
                 auto filename_var = std::dynamic_pointer_cast<variable>(args[0]);
@@ -180,9 +161,6 @@ namespace wio
         {
             using namespace wio::builtin::detail;
 
-            loader::load_function(table, "Print", detail::b_print, pa<1>{ variable_type::vt_any });
-            loader::load_function(table, "Println", detail::b_println, pa<1>{ variable_type::vt_any });
-            loader::load_function(table, "Input", detail::b_input, pa<0>{});
             loader::load_function(table, "OpenFile", detail::b_open_file, pa<2>{ variable_type::vt_string, variable_type::vt_integer });
             loader::load_function(table, "CloseFile", detail::b_close_file, pa<1>{ variable_type::vt_file });
             loader::load_function(table, "Write", detail::b_write, pa<2>{ variable_type::vt_any, variable_type::vt_string });

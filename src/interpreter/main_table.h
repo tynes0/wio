@@ -2,6 +2,7 @@
 
 #include "../base/base.h"
 #include "scope.h"
+#include "../variables/overload_list.h"
 
 #include <map>
 #include <set>
@@ -21,10 +22,15 @@ namespace wio
         void insert(id_t cur_id, const std::string& name, const symbol& symbol);
         void insert_to_global(id_t cur_id, const std::string& name, const symbol& symbol);
 
-        symbol* lookup(id_t cur_id, const std::string& name, id_t pass_id = 0);
-        symbol* lookup_only_global(id_t cur_id, const std::string& name, id_t pass_id = 0);
-        symbol* lookup_current_and_global(id_t cur_id, const std::string& name, id_t pass_id = 0);
-        symbol* lookup_builtin(const std::string& name);
+        symbol* search(id_t cur_id, const std::string& name, id_t pass_id = 0);
+        symbol* search_current_and_global(id_t cur_id, const std::string& name, id_t pass_id = 0);
+        symbol* search_builtin(const std::string& name);
+
+        symbol* search_function(id_t cur_id, const std::string& name, const std::vector<function_param>& parameters, id_t pass_id = 0);
+        symbol* search_current_function(id_t cur_id, const std::string& name, const std::vector<function_param>& parameters);
+        symbol* search_builtin_function(const std::string& name, const std::vector<function_param>& parameters);
+
+        std::pair<bool, symbol*> is_function_valid(id_t cur_id, const std::string name, const std::vector<function_param>& parameters, id_t pass_id = 0);
 
         void set_scope(id_t cur_id, ref<scope> scpe) { m_table[cur_id] = scpe; }
 
@@ -37,8 +43,8 @@ namespace wio
         void enter_scope(id_t cur_id, scope_type type);
         ref<scope> exit_scope(id_t cur_id);
 	private:
-        ref<scope> search(id_t id);
-        ref<scope> search_checked(id_t id);
+        ref<scope> find_scope(id_t id);
+        ref<scope> find_scope_checked(id_t id);
         bool is_imported(id_t id);
 
 		std::map<id_t, ref<scope>> m_table;

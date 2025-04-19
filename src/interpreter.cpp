@@ -94,8 +94,6 @@ namespace wio
 			raw_buffer buf = run_f_p1(s_app_data.arg_parser.get_file().c_str(), flags);
 			main_table::get().add_imported_module(s_app_data.last_module_id);
 			run_f_p2(buf, flags);
-			auto& t = main_table::get();
-			int a = 1;
 		}
 		catch (const exception& e)
 		{

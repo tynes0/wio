@@ -68,7 +68,7 @@
 - __Update 1.6.3:__ Fixed an issue where loops could not run a single action without curly braces.
 - __Update 1.6.4:__ 'as' keyword has been added. Allows import as realm.
 - __Update 1.7.0:__ The requirement for the realm keyword after the as keyword has been removed. It has been made optional.
-- __Update 1.7.1:__ Fixed the issue where the builtin library was being imported with the as keyword as if it were being imported normally.
+- __Update 1.7.1:__ Fixed the issue where the built-in library was being imported with the as keyword as if it were being imported normally.
 - __Update 1.7.2:__ The 'types' folder was created to track the implementations of variable types more easily.
 - __Update 1.7.3:__ Binary expressions have been updated and made more organized. New operator overloads have been added. Problems with assignment operators have been fixed. Prepared for new types. Unary expressions will also be updated in the next update.
 - __Update 1.7.4:__ Preparations have been made for the 1.8 update.
@@ -118,14 +118,20 @@
 - __Update 2.0.7:__ The symbol table was reduced to one. Additional copy operations were removed.
 - __Update 2.0.8:__ All evaluator data has been made static. They now use a single common data.
 - __Update 2.0.9:__ Added unknown statement error. Also if a null statement call is made it is passed directly.
-- __Update 2.0.10:__ Basic implementations of builtin functions have been restructured.
+- __Update 2.0.10:__ Basic implementations of built-in functions have been restructured.
 - __Update 2.0.11:__ The core implementation of Realms has been restructured.
 - __Update 2.0.12:__ Removed scientific constants from math library. Added scientific library for scientific constants.
 - __Update 2.0.13:__ Preparations were made for new implantation of the functional system.
 - __Update 2.0.14:__ Removed unnecessary files from the project.
-- __Update 2.0.15:__ New builtin methods have been added for the string type.
+- __Update 2.0.15:__ New built-in methods have been added for the string type.
 - __Update 2.0.16:__ Moved the - operator overload for array to -= for more logical reasoning.
 - __Update 2.0.17:__ The implementations of all assignment operators have been updated and made more logical, faster and trouble-free.
 - __Update 2.0.18:__ Fixed an issue where some binary operations were giving unnecessary errors.
-- __Update 2.0.19:__ Members folder added for organizing the builtin folder. Now the implementations of the builtin members of the types are in this folder.
+- __Update 2.0.19:__ Members folder added for organizing the built-in folder. Now the implementations of the built-in members of the types are in this folder.
 - __Update 2.0.20:__ Members have been added to the character type.
+- __Update 2.1.0:__ Now when defining a dict we use a colon instead of a comma between key and value.
+- __Update 2.1.0:__ Preparation of documentation has begun.
+- __Update 2.1.1:__ Binary, octal, and hexadecimal numbers with prefixes 0b, 0o, 0x are now supported.
+- __Update 2.1.2:__ The function system has been completely updated. Many bugs have been fixed. Overloads now work properly even in different files. It has also been made more organized in the background. Functions now take up a little less space.
+- __Update 2.1.3:__ Several new built-in methods have been added.
+- __Update 2.1.4:__ Some built-in methods will now be included directly without requiring import.

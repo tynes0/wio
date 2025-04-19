@@ -55,23 +55,7 @@ namespace wio
             return m_parent->lookup(name);
         }
 
-        return main_table::get().lookup_builtin(name);
-    }
-
-    symbol* scope::lookup_only_global(const std::string& name)
-    {
-        ref<scope> parent = m_parent;
-
-        if (parent)
-        {
-            while (parent && parent->get_type() != scope_type::global)
-                parent = parent->m_parent;
-            if (parent)
-                return parent->lookup(name);
-            return nullptr;
-        }
-
-        return main_table::get().lookup_builtin(name);
+        return main_table::get().search_builtin(name);
     }
 
     symbol* scope::lookup_current_and_global(const std::string& name)
@@ -91,6 +75,46 @@ namespace wio
             return nullptr;
         }
 
-        return main_table::get().lookup_builtin(name);
+        return main_table::get().search_builtin(name);
+    }
+
+    symbol* scope::lookup_function(const std::string& name, const std::vector<function_param>& parameters)
+    {
+        auto it = m_symbols.find(name);
+        if (it != m_symbols.end() && it->second.var_ref->get_base_type() == variable_base_type::function)
+        {
+            if (auto f = std::dynamic_pointer_cast<var_function>(it->second.var_ref))
+            {
+                if(f->compare_parameters(parameters))
+                    return &(it->second);
+            }
+            else if (auto ol = std::dynamic_pointer_cast<overload_list>(it->second.var_ref))
+            {
+                for (size_t i = 0; i < ol->count(); ++i)
+                {
+                    if (auto fun = std::dynamic_pointer_cast<var_function>(ol->get(i)->var_ref))
+                    {
+                        if (fun->compare_parameters(parameters))
+                            return &(it->second);
+                    }
+                }
+            }
+        }
+
+        if (m_parent)
+        {
+            if (m_type == scope_type::function_body)
+            {
+                ref<scope> parent = m_parent;
+                while (parent && parent->get_type() != scope_type::global)
+                    parent = parent->m_parent;
+                if (parent)
+                    return parent->lookup_function(name, parameters);
+                return nullptr;
+            }
+            return m_parent->lookup_function(name, parameters);
+        }
+
+        return main_table::get().search_builtin_function(name, parameters);
     }
 }
