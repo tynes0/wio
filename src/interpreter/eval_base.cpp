@@ -17,7 +17,7 @@ namespace wio
 		ref<stmt_stack> statement_stack;
 		int loop_depth = 0;
 		uint16_t func_body_depth = 0;
-		packed_bool eval_flags{}; // 1- break, 2 - continue, 3 - return, 4 - """""""", 5 - in func call 6- search only function
+		packed_bool eval_flags{}; // 1- break, 2 - continue, 3 - return, 4 - ref error active, 5 - in func call 6- search only function
 		packed_bool program_flags{}; // 1- single file 2- no builtin
 	};
 
@@ -30,6 +30,7 @@ namespace wio
 		builtin::internal::load();
 
 		s_data.program_flags = flags;
+		s_data.eval_flags.b4 = true;
 	}
 
 	eval_base& eval_base::get()
@@ -150,10 +151,10 @@ namespace wio
 		return main_table::get().search(id, name, pass_id);
 	}
 
-	symbol* eval_base::search_current_and_global(id_t id, const std::string& name) const
+	symbol* eval_base::search_current(id_t id, const std::string& name) const
 	{
 		id_t pass_id = in_func_call() ? s_data.func_eval_ids.top() : 0;
-		return main_table::get().search_current_and_global(id, name, pass_id);
+		return main_table::get().search_current(id, name, pass_id);
 	}
 
 	symbol* eval_base::search_current_function(id_t id, const std::string& name, const std::vector<function_param>& parameters) const
@@ -274,6 +275,11 @@ namespace wio
 		return s_data.eval_flags.b3;
 	}
 
+	bool eval_base::is_ref_error_active() const
+	{
+		return s_data.eval_flags.b4;
+	}
+
 	bool eval_base::in_func_call() const
 	{
 		return s_data.eval_flags.b5;
@@ -330,6 +336,11 @@ namespace wio
 	void eval_base::call_return(bool flag)
 	{
 		s_data.eval_flags.b3 = flag;
+	}
+
+	void eval_base::set_ref_error_activity(bool flag)
+	{
+		s_data.eval_flags.b4 = flag;
 	}
 
 	void eval_base::set_func_call_state(bool flag)

@@ -66,10 +66,10 @@ namespace wio
         return nullptr;
     }
 
-    symbol* main_table::search_current_and_global(id_t cur_id, const std::string& name, id_t pass_id)
+    symbol* main_table::search_current(id_t cur_id, const std::string& name, id_t pass_id)
     {
         ref<scope> current = find_scope(cur_id);
-        symbol* sym = current->lookup_current_and_global(name);
+        symbol* sym = current->lookup_current(name);
 
         if (sym)
             return sym;
@@ -79,7 +79,7 @@ namespace wio
             if (scp.first == cur_id)
                 continue;
 
-            symbol* item = scp.second->lookup_current_and_global(name);
+            symbol* item = scp.second->lookup_current(name);
 
             if (item)
             {

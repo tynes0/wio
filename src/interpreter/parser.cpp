@@ -2,6 +2,8 @@
 
 namespace wio
 {
+    static constexpr int ASSIGNMENT_PRECEDENCE = 1;
+
     ref<program> parser::parse()
     {
         std::vector<ref<statement>> statements;
@@ -138,7 +140,7 @@ namespace wio
             // Assignment
             if (op == "=" || op == "+=" || op == "-=" || op == "*=" || op == "/=" || op == "%=" ||
                 op == "&=" || op == "|=" || op == "^=" || op == "<<=" || op == ">>=")
-                return 1;
+                return ASSIGNMENT_PRECEDENCE;
         }
         return -1;
     }
@@ -445,7 +447,7 @@ namespace wio
             ref<expression> right = parse_binary_expression(current_precedence + 1);
 
             auto result = make_ref<binary_expression>(left, op, right);
-            if (current_precedence == 1)
+            if (current_precedence == ASSIGNMENT_PRECEDENCE)
                 result->is_assignment = true;
             left = result;
         }
@@ -558,7 +560,10 @@ namespace wio
         {
             token tok = next_token();
             ref<expression> value = parse_binary_expression();
-            return make_ref<binary_expression>(exp, tok, value);
+            auto result = make_ref<binary_expression>(exp, tok, value);
+            if (get_operator_precedence(tok) == ASSIGNMENT_PRECEDENCE)
+                result->is_assignment = true;
+            return result;
         }
         return exp;
     }
@@ -727,11 +732,13 @@ namespace wio
             return make_ref<function_declaration>(id, params, body, variable_type::vt_null, is_local, is_global);
         }
 
-        return nullptr; // TODO
+        return nullptr;
     }
 
     ref<statement> parser::parse_parameter_declaration()
     {
+        bool is_ref = match_ref();
+
         token type_token = next_token();
         if (type_token.type != token_type::kw_var && type_token.type != token_type::kw_array && type_token.type != token_type::kw_dict)
         {
@@ -739,7 +746,9 @@ namespace wio
             return nullptr;
         }
 
-        bool is_ref = match_ref();
+        if (match_ref())
+            is_ref = true;
+
         token id_token = consume_token(token_type::identifier);
         ref<identifier> id = make_ref<identifier>(id_token);
 

@@ -139,3 +139,8 @@
 - __Update 2.2.1:__ Fixed an issue where very small numbers would be returned as 0 when converting float to string.
 - __Update 2.2.2:__ Fixed an issue where the exponent was always perceived as positive in scientific float numbers.
 - __Update 2.2.3:__ Minor code cleanup done.
+- __Update 2.3.0:__ (char + char) and (char + string) are now supported.
+- __Update 2.3.1:__ Fixed the problem of ref parameters not working in functions that occurred after the last update.
+- __Update 2.3.2:__ foreach loops will now set the value to reference if the container is not const.
+- __Update 2.3.3:__ Fixed an issue where assignment operators were not working in some cases.
+- __Update 2.3.4:__ The ref keyword in parameters can now be written in either way: 'ref var' or 'var ref'. The same thing happens.

@@ -23,7 +23,7 @@ namespace wio
         void insert_to_global(id_t cur_id, const std::string& name, const symbol& symbol);
 
         symbol* search(id_t cur_id, const std::string& name, id_t pass_id = 0);
-        symbol* search_current_and_global(id_t cur_id, const std::string& name, id_t pass_id = 0);
+        symbol* search_current(id_t cur_id, const std::string& name, id_t pass_id = 0);
         symbol* search_builtin(const std::string& name);
 
         symbol* search_function(id_t cur_id, const std::string& name, const std::vector<function_param>& parameters, id_t pass_id = 0);

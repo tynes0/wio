@@ -58,24 +58,13 @@ namespace wio
         return main_table::get().search_builtin(name);
     }
 
-    symbol* scope::lookup_current_and_global(const std::string& name)
+    symbol* scope::lookup_current(const std::string& name)
     {
         auto it = m_symbols.find(name);
         if (it != m_symbols.end())
             return &(it->second);
 
-        ref<scope> parent = m_parent;
-
-        if (parent)
-        {
-            while (parent && parent->get_type() != scope_type::global)
-                parent = parent->m_parent;
-            if (parent)
-                return parent->lookup(name);
-            return nullptr;
-        }
-
-        return main_table::get().search_builtin(name);
+        return nullptr;
     }
 
     symbol* scope::lookup_function(const std::string& name, const std::vector<function_param>& parameters)

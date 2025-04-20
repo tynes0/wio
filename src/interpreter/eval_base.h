@@ -35,7 +35,7 @@ namespace wio
 		symbol* search_member(id_t id, const std::string& name, ref<variable_base> object) const;
 		symbol* search_member_function(id_t id, const std::string& name, ref<variable_base> object, const std::vector<function_param>& parameters) const;
 		symbol* search(id_t id, const std::string& name) const;
-		symbol* search_current_and_global(id_t id, const std::string& name) const;
+		symbol* search_current(id_t id, const std::string& name) const;
 		symbol* search_current_function(id_t id, const std::string& name, const std::vector<function_param>& parameters) const;
 		symbol* search_function(id_t id, const std::string& name, const std::vector<function_param>& parameters) const;
 
@@ -63,6 +63,7 @@ namespace wio
 		bool break_called() const;
 		bool continue_called() const;
 		bool return_called() const;
+		bool is_ref_error_active() const;
 		bool in_func_call() const;
 		bool should_search_only_func() const;
 
@@ -76,6 +77,7 @@ namespace wio
 		void call_break(bool flag);
 		void call_continue(bool flag);
 		void call_return(bool flag);
+		void set_ref_error_activity(bool flag);
 		void set_func_call_state(bool flag);
 		void set_search_only_func_state(bool flag);
 	};

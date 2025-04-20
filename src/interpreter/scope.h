@@ -35,7 +35,7 @@ namespace wio
         void insert_to_global(const std::string& name, const symbol& symbol);
 
         symbol* lookup(const std::string& name);
-        symbol* lookup_current_and_global(const std::string& name);
+        symbol* lookup_current(const std::string& name);
         symbol* lookup_function(const std::string& name, const std::vector<function_param>& parameters);
 
         scope_type get_type() const { return m_type; }

@@ -67,6 +67,25 @@ namespace wio
             {
                 return make_ref<variable>(any(any_cast<std::string>(left_value) + util::var_to_string(rv_ref)), variable_type::vt_string);
             }
+            else if (lv_ref->get_type() == variable_type::vt_character)
+            {
+                if (rv_ref->get_type() == variable_type::vt_string)
+                    return make_ref<variable>(any(any_cast<char>(left_value) + any_cast<std::string>(right_value)), variable_type::vt_string);
+                else if(rv_ref->get_type() == variable_type::vt_character)
+                    return make_ref<variable>(any(any_cast<char>(left_value) + std::string(1, any_cast<char>(right_value))), variable_type::vt_string);
+                else if (rv_ref->get_type() == variable_type::vt_character_ref)
+                    return make_ref<variable>(any(any_cast<char>(left_value) + std::string(1, *any_cast<char*>(right_value))), variable_type::vt_string);
+            }
+            else if (lv_ref->get_type() == variable_type::vt_character_ref)
+            {
+                if (rv_ref->get_type() == variable_type::vt_string)
+                    return make_ref<variable>(any(*any_cast<char*>(left_value) + any_cast<std::string>(right_value)), variable_type::vt_string);
+                else if (rv_ref->get_type() == variable_type::vt_character)
+                    return make_ref<variable>(any(*any_cast<char*>(left_value) + std::string(1, any_cast<char>(right_value))), variable_type::vt_string);
+                else if (rv_ref->get_type() == variable_type::vt_character_ref)
+                    return make_ref<variable>(any(*any_cast<char*>(left_value) + std::string(1, *any_cast<char*>(right_value))), variable_type::vt_string);
+
+            }
             else if (lv_ref->get_type() == variable_type::vt_vec2)
             {
                 if (rv_ref->get_type() == variable_type::vt_integer)

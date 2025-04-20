@@ -360,8 +360,7 @@ namespace wio
     {
     public:
         import_statement(location loc, std::string module_path, bool is_pure = false, bool is_realm = false, ref<identifier> realm_id = nullptr)
-            : m_location(loc), m_module_path(module_path), m_flags({ is_pure, is_realm }), m_realm_id(realm_id) {
-        }
+            : m_location(loc), m_module_path(module_path), m_flags({ is_pure, is_realm }), m_realm_id(realm_id) {}
 
         location get_location() const override { return m_location; }
         std::string to_string() const override;
@@ -376,8 +375,7 @@ namespace wio
     {
     public:
         variable_declaration(ref<identifier> id, ref<expression> initializer, bool is_const, bool is_local, bool is_global, bool is_ref, variable_type type = variable_type::vt_null)
-            : m_id(id), m_initializer(initializer), m_flags({is_const, is_local, is_global, is_ref}),
-            m_type(type) {} // TODO
+            : m_id(id), m_initializer(initializer), m_flags({is_const, is_local, is_global, is_ref}), m_type(type) {}
 
         location get_location() const override { return m_id->get_location(); }
         std::string to_string() const override;
@@ -392,7 +390,7 @@ namespace wio
     {
     public:
         array_declaration(ref<identifier> id, ref<expression> initializer, const std::vector<ref<expression>>& elements, bool is_const, bool is_local, bool is_global, bool is_element_initializer)
-            : m_id(id), m_initializer(initializer), m_elements(elements), m_flags({is_const, is_local, is_global, is_element_initializer}) { }
+            : m_id(id), m_initializer(initializer), m_elements(elements), m_flags({is_const, is_local, is_global, is_element_initializer}) {}
 
         location get_location() const override { return m_id->get_location(); }
         std::string to_string() const override;
@@ -407,7 +405,7 @@ namespace wio
     {
     public:
         dictionary_declaration(ref<identifier> id, ref<expression> initializer, const std::vector<std::pair<ref<expression>, ref<expression>>>& pairs, bool is_const, bool is_local, bool is_global, bool is_element_initializer)
-            : m_id(id), m_initializer(initializer), m_pairs(pairs), m_flags({is_const, is_local, is_global, is_element_initializer}) { }
+            : m_id(id), m_initializer(initializer), m_pairs(pairs), m_flags({is_const, is_local, is_global, is_element_initializer}) {}
 
         location get_location() const override { return m_id->get_location(); }
         std::string to_string() const override;
@@ -438,8 +436,7 @@ namespace wio
     {
     public:
         function_definition(ref<identifier> id, std::vector<ref<variable_declaration>> params, bool is_local, bool is_global)
-            : m_id(id), m_params(params), m_is_local(is_local), m_is_global(is_global) {
-        }
+            : m_id(id), m_params(params), m_is_local(is_local), m_is_global(is_global) {}
 
         location get_location() const override { return m_id->get_location(); }
         std::string to_string() const override;
@@ -448,6 +445,20 @@ namespace wio
         std::vector<ref<variable_declaration>> m_params;
         bool m_is_local;
         bool m_is_global;
+    };
+
+    class function_variable_declaration : public statement
+    {
+    public:
+        function_variable_declaration(ref<identifier> id, ref<expression> initializer, bool is_const, bool is_local, bool is_global, bool is_ref, variable_type type = variable_type::vt_null)
+            : m_id(id), m_initializer(initializer), m_flags({ is_const, is_local, is_global, is_ref }) {}
+
+        location get_location() const override { return m_id->get_location(); }
+        std::string to_string() const override;
+
+        ref<identifier> m_id;
+        ref<expression> m_initializer;
+        packed_bool m_flags; // 1- const 2-local 3- global 4-ref
     };
 
     class realm_declaration : public statement
