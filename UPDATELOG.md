@@ -130,11 +130,11 @@
 - __Update 2.0.19:__ Members folder added for organizing the built-in folder. Now the implementations of the built-in members of the types are in this folder.
 - __Update 2.0.20:__ Members have been added to the character type.
 - __Update 2.1.0:__ Now when defining a dict we use a colon instead of a comma between key and value.
-- __Update 2.1.0:__ Preparation of documentation has begun.
-- __Update 2.1.1:__ Binary, octal, and hexadecimal numbers with prefixes 0b, 0o, 0x are now supported.
-- __Update 2.1.2:__ The function system has been completely updated. Many bugs have been fixed. Overloads now work properly even in different files. It has also been made more organized in the background. Functions now take up a little less space.
-- __Update 2.1.3:__ Several new built-in methods have been added.
-- __Update 2.1.4:__ Some built-in methods will now be included directly without requiring import.
+- __Update 2.1.1:__ Preparation of documentation has begun.
+- __Update 2.1.2:__ Binary, octal, and hexadecimal numbers with prefixes 0b, 0o, 0x are now supported.
+- __Update 2.1.3:__ The function system has been completely updated. Many bugs have been fixed. Overloads now work properly even in different files. It has also been made more organized in the background. Functions now take up a little less space.
+- __Update 2.1.4:__ Several new built-in methods have been added.
+- __Update 2.1.5:__ Some built-in methods will now be included directly without requiring import.
 - __Update 2.2.0:__ Fixed an issue where the uppercase 0O prefix was not working properly.
 - __Update 2.2.1:__ Fixed an issue where very small numbers would be returned as 0 when converting float to string.
 - __Update 2.2.2:__ Fixed an issue where the exponent was always perceived as positive in scientific float numbers.
