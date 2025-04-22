@@ -10,6 +10,7 @@ namespace wio
     class variable : public variable_base 
     {
     public:
+        variable(packed_bool flags = {});
         variable(const any& data, variable_type type, packed_bool flags = {});
         virtual variable_base_type get_base_type() const override;
         virtual variable_type get_type() const override;
@@ -24,6 +25,7 @@ namespace wio
         const T& get_data_as() const { return any_cast<const T&>(m_data); }
 
         void set_data(const any& new_data);
+        void assign_data(any& new_data);
         void set_type(variable_type type);
     private:
         any m_data;

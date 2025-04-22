@@ -606,31 +606,28 @@ namespace wio
         token id_token = consume_token(token_type::identifier);
         ref<identifier> id = make_ref<identifier>(id_token);
 
-        bool is_element_initializer = true;
         ref<expression> exp;
-        std::vector<ref<expression>> elements;
 
         if (match_token(token_type::op, "="))
         {
             if (current_token().type == (token_type::left_bracket))
             {
-                get_array_elements(elements);
+                std::vector<ref<expression>> elements;
+                location loc = get_array_elements(elements);
+                exp = make_ref<array_literal>(elements, loc);
             }
             else if (current_token().type == (token_type::kw_null))
             {
                 next_token();
-                is_element_initializer = false;
                 exp = nullptr;
             }
             else if (current_token().type == (token_type::kw_ref))
             {
                 exp = parse_ref_expression();
-                is_element_initializer = false;
             }
             else if (current_token().type == (token_type::identifier))
             {
                 ref<expression> result = parse_identifier();
-                is_element_initializer = false;
                 exp = result;
             }
             else
@@ -642,11 +639,13 @@ namespace wio
         }
         else if (current_token().type == (token_type::left_bracket))
         {
-            get_array_elements(elements);
+            std::vector<ref<expression>> elements;
+            location loc = get_array_elements(elements);
+            exp = make_ref<array_literal>(elements, loc);
         }
 
         consume_token(token_type::semicolon);
-        return make_ref<array_declaration>(id, exp, elements, is_const, is_local, is_global, is_element_initializer);
+        return make_ref<array_declaration>(id, exp, is_const, is_local, is_global);
     }
 
     ref<statement> parser::parse_dictionary_declaration(bool is_const, bool is_local, bool is_global)
@@ -655,31 +654,28 @@ namespace wio
         token id_token = consume_token(token_type::identifier);
         ref<identifier> id = make_ref<identifier>(id_token);
 
-        bool is_element_initializer = true;
         ref<expression> exp;
-        std::vector<std::pair<ref<expression>, ref<expression>>> pairs;
 
         if (match_token(token_type::op, "="))
         {
             if (current_token().type == (token_type::left_curly_bracket))
             {
-                get_dict_element(pairs);
+                std::vector<std::pair<ref<expression>, ref<expression>>> elements;
+                location loc = get_dict_element(elements);
+                exp = make_ref<dictionary_literal>(elements, loc);
             }
             else if (current_token().type == (token_type::kw_null))
             {
                 next_token();
-                is_element_initializer = false;
                 exp = nullptr;
             }
             else if (current_token().type == (token_type::kw_ref))
             {
                 exp = parse_ref_expression();
-                is_element_initializer = false;
             }
             else if (current_token().type == (token_type::identifier))
             {
                 ref<identifier> result = make_ref<identifier>(current_token());
-                is_element_initializer = false;
                 next_token();
                 exp = result;
             }
@@ -691,11 +687,13 @@ namespace wio
         }
         else if (current_token().type == (token_type::left_curly_bracket))
         {
-            get_dict_element(pairs);
+            std::vector<std::pair<ref<expression>, ref<expression>>> elements;
+            location loc = get_dict_element(elements);
+            exp = make_ref<dictionary_literal>(elements, loc);
         }
 
         consume_token(token_type::semicolon);
-        return make_ref<dictionary_declaration>(id, exp, pairs, is_const, is_local, is_global, is_element_initializer);
+        return make_ref<dictionary_declaration>(id, exp, is_const, is_local, is_global);
     }
 
     ref<statement> parser::parse_function_declaration(bool is_local, bool is_global)

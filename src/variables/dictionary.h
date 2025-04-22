@@ -12,6 +12,7 @@ namespace wio
 	public:
 		using map_t = std::map<std::string, ref<variable_base>>; // std::map could be change
 
+		var_dictionary(packed_bool flags = {});
 		var_dictionary(const map_t& data, packed_bool flags = {});
 
 		virtual variable_base_type get_base_type() const override;

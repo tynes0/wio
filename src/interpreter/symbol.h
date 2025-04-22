@@ -16,11 +16,21 @@ namespace wio
         friend class scope;
 
         ref<variable_base> var_ref;
-        packed_bool flags = {}; // 1-> is_local --- 2-> is_global --- 3-> original position passed
 
-        symbol(ref<variable_base> var_ref = nullptr, packed_bool flags = {})
-            : var_ref(var_ref), flags(flags) {
+        bool is_local() const;
+        bool is_global() const;
+        bool is_ref() const;
+
+        void set_local(bool flag);
+        void set_global(bool flag);
+        void set_ref(bool flag);
+
+        symbol(ref<variable_base> var_ref = nullptr, bool is_local = false, bool is_global = false, bool is_ref = false)
+            : var_ref(var_ref), flags({ is_local, is_global, is_ref }) {
         }
+
+    private:
+        packed_bool flags = {}; // 1-> is_local --- 2-> is_global --- 3-> original position passed
     };
 
     using symbol_map = std::map<std::string, symbol>;

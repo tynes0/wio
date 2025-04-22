@@ -130,6 +130,7 @@ namespace wio
 
 			auto range_func = loader::load_function(table, "Range", detail::b_range, pa<2>{ variable_type::vt_any, variable_type::vt_any });
 			loader::load_overload(range_func, detail::b_range_2, pa<1>{ variable_type::vt_any });
+
 		}
 
 		void internal::load(ref<scope> target_scope)

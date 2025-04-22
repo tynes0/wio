@@ -1,0 +1,74 @@
+import Wio.Math;
+import Wio.System as System;
+
+local const WIDTH = 120;
+local const HEIGHT = 29;
+local const STAR_COUNT = 100;
+
+local array stars;
+
+local array emptyLine;
+
+local func RandomStar()
+{
+    return Vec3(
+        RandomInRange(-1.0, 1.0),
+        RandomInRange(-1.0, 1.0),
+        RandomInRange(1.0, 3.0)
+    );
+}
+
+local func Init()
+{
+    stars.Resize(STAR_COUNT);
+    for (var i = 0; i < STAR_COUNT; ++i)
+        stars[i] = RandomStar();
+    emptyLine.Resize(WIDTH);
+    emptyLine.Fill(' ');
+}
+
+local func Update()
+{
+    for (var i = 0; i < STAR_COUNT; ++i)
+    {
+        stars[i].Z -= 0.05;
+        if (stars[i].Z <= 0.1)
+            stars[i] = RandomStar();
+    }
+}
+
+local func Draw()
+{
+    array screen;
+    screen.Resize(HEIGHT);
+    screen.Fill(emptyLine);
+
+    foreach (star in stars)
+    {
+   
+        var sx = ((star.X / star.Z) * WIDTH / 2 + WIDTH / 2);
+        var sy = ((star.Y / star.Z) * HEIGHT / 2 + HEIGHT / 2);
+    
+        if (sx >= 0 && sx < WIDTH && sy >= 0 && sy < HEIGHT)
+            screen[sy][sx] = '*';
+    }
+
+
+    System.ClearScreen();
+    foreach (row in screen)
+    {
+        foreach (ch in row)
+            Print(ch);
+        Println();
+    }
+}
+
+func Run()
+{
+    Init();
+    while (true)
+    {
+        Update();
+        Draw();
+    }
+}

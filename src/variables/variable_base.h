@@ -23,18 +23,13 @@ namespace wio
         virtual ref<variable_base> clone() const = 0;
 
         bool is_constant() const { return m_flags.b1; }
-        bool is_ref() const { return m_flags.b2; }
-        bool is_ptr_ref() const { return m_flags.b3; }
         // pf -> param flag
         bool is_pf_return_ref() const { return m_flags.b5; }
 
         void set_const(bool flag) { m_flags.b1 = flag; }
-        void set_ref(bool flag) { m_flags.b2 = flag; }
-        void set_ptr_ref(bool flag) { m_flags.b3 = flag; }
         // pf -> param flag
         void set_pf_return_ref(bool flag) { m_flags.b5 = flag; }
 
-        void set_flags(packed_bool flags) { m_flags = flags; }
         ref<symbol_table> get_members() const { return m_members; }
         void init_members() { if (m_members) return; m_members = make_ref<symbol_table>(); }
         void load_members(ref<symbol_table> members) { m_members = members; }
@@ -44,7 +39,7 @@ namespace wio
         variable_base(packed_bool flags) : m_flags(flags) { }
     private:
         ref<symbol_table> m_members;
-        packed_bool m_flags = {}; // b1 -> const --- b2 -> ref --- b3-> pointer ref --- b4-> * --- b5-> return ref --- b6-> * --- b7-> * --- b8-> *  (b1-b2-b3-b4 default flags  ---  b5-b6-b7-b8 func parameter flags)
+        packed_bool m_flags = {}; // b1 -> const --- b5-> return ref --- b6-> * --- b7-> * --- b8-> *  (b1-b2-b3-b4 default flags  ---  b5-b6-b7-b8 func parameter flags)
     };
 
     using pair_t = pair<ref<variable_base>, ref<variable_base>>;

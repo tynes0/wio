@@ -21,7 +21,7 @@ namespace wio
                     throw exception("String is null!");
                 ref<variable> str = std::dynamic_pointer_cast<variable>(base_str);
                 if (!str)
-                    throw exception("String is null!");
+                    throw type_mismatch_error("Mismatch parameter type!");
 
                 return str;
             }
@@ -118,14 +118,7 @@ namespace wio
 
             static ref<variable_base> b_string_array(const std::vector<ref<variable_base>>& args)
             {
-                ref<variable> str = get_var_str(args[0]);
-                
-                std::vector<ref<variable_base>> data;
-                std::string s = str->get_data_as<std::string>();
-                for (char ch : s)
-                    data.push_back(make_ref<variable>(ch, variable_type::vt_character));
-
-                return make_ref<var_array>(data);
+                return helper::string_as_array(args[0]);
             }
 
             static ref<variable_base> b_string_length(const std::vector<ref<variable_base>>& args)
@@ -168,7 +161,7 @@ namespace wio
                 if (data.size() == 0)
                     throw builtin_error("Pop() called on empty string!");
 
-                char ch = data[data.size() - 1];
+                char ch = data.back();
                 data.pop_back();
 
                 return make_ref<variable>(any(ch), variable_type::vt_character);
@@ -214,7 +207,7 @@ namespace wio
                 else if (args[1]->get_type() == variable_type::vt_character_ref)
                     token = *std::dynamic_pointer_cast<variable>(args[1])->get_data_as<char*>();
                 else 
-                    token = data; // DOT'T SPLIT
+                    token = data;
 
                 std::vector<ref<variable_base>> result;
                 size_t pos = 0;

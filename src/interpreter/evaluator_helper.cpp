@@ -462,7 +462,6 @@ namespace wio
                 ref<variable> variable_lhs = std::dynamic_pointer_cast<variable>(lv_ref);
                 ref<variable> variable_rhs = std::dynamic_pointer_cast<variable>(rv_ref);
 
-
                 if (variable_lhs->get_type() == variable_type::vt_character_ref)
                 {
                     if (variable_rhs->get_type() == variable_type::vt_character)
@@ -485,8 +484,61 @@ namespace wio
                 }
                 else
                 {
-                    variable_lhs->set_data(variable_rhs->get_data());
-                    variable_lhs->set_type(variable_rhs->get_type());
+                    if (variable_rhs->get_type() == variable_type::vt_vec2)
+                    {
+                        auto members = variable_rhs->get_members();
+                        auto& symbols = members->get_symbols();
+                        auto result_vec = builtin::helper::create_vec2(symbols["X"].var_ref, symbols["Y"].var_ref);
+                        variable_lhs->assign_data(result_vec->get_data());
+                        variable_lhs->set_type(variable_type::vt_vec2);
+                        variable_lhs->load_members(result_vec->get_members());
+                    }
+                    else if (variable_rhs->get_type() == variable_type::vt_vec3)
+                    {
+                        auto members = variable_rhs->get_members();
+                        auto& symbols = members->get_symbols();
+                        auto result_vec = builtin::helper::create_vec3(symbols["X"].var_ref, symbols["Y"].var_ref, symbols["Z"].var_ref);
+                        variable_lhs->assign_data(result_vec->get_data());
+                        variable_lhs->set_type(variable_type::vt_vec3);
+                        variable_lhs->load_members(result_vec->get_members());
+                    }
+                    else if (variable_rhs->get_type() == variable_type::vt_vec4)
+                    {
+                        auto members = variable_rhs->get_members();
+                        auto& symbols = members->get_symbols();
+                        auto result_vec = builtin::helper::create_vec4(symbols["X"].var_ref, symbols["Y"].var_ref, symbols["Z"].var_ref, symbols["W"].var_ref);
+                        variable_lhs->assign_data(result_vec->get_data());
+                        variable_lhs->set_type(variable_type::vt_vec4);
+                        variable_lhs->load_members(result_vec->get_members());
+                    }
+                    else
+                    {
+                        if (auto members = variable_rhs->get_members())
+                        {
+                            auto& symbols = members->get_symbols();
+                            variable_lhs->init_members();
+                            auto& lhs_symbols = variable_lhs->get_members()->get_symbols();
+
+                            for (auto& item : symbols)
+                                lhs_symbols[item.first] = symbol(item.second.var_ref->clone(), item.second.is_local(), item.second.is_global(), item.second.is_ref());
+                        }
+
+                        if (variable_rhs->get_type() == variable_type::vt_float_ref)
+                        {
+                            variable_lhs->set_data(any(*variable_rhs->get_data_as<double*>()));
+                            variable_lhs->set_type(variable_type::vt_float);
+                        }
+                        else if (variable_rhs->get_type() == variable_type::vt_character_ref)
+                        {
+                            variable_lhs->set_data(any(*variable_rhs->get_data_as<char*>()));
+                            variable_lhs->set_type(variable_type::vt_character);
+                        }
+                        else
+                        {
+                            variable_lhs->set_data(variable_rhs->get_data());
+                            variable_lhs->set_type(variable_rhs->get_type());
+                        }
+                    }
                 }
                 return variable_lhs->clone();
             }
@@ -498,9 +550,22 @@ namespace wio
                 ref<var_array> array_rhs = std::dynamic_pointer_cast<var_array>(rv_ref);
 
                 if (array_rhs)
+                {
+                    if (auto members = array_rhs->get_members())
+                    {
+                        auto& symbols = members->get_symbols();
+                        array_lhs->init_members();
+                        auto& lhs_symbols = array_lhs->get_members()->get_symbols();
+
+                        for (auto& item : symbols)
+                            lhs_symbols[item.first] = symbol(item.second.var_ref->clone(), item.second.is_local(), item.second.is_global(), item.second.is_ref());
+                    }
                     array_lhs->set_data(array_rhs->get_data());
+                }
                 else
+                {
                     array_lhs->set_data({});
+                }
 
                 return array_lhs->clone();
             }
@@ -512,9 +577,21 @@ namespace wio
                 ref<var_dictionary> dict_rhs = std::dynamic_pointer_cast<var_dictionary>(rv_ref);
 
                 if (dict_rhs)
-                    dict_lhs->set_data(dict_rhs->get_data());
+                {
+                    if (auto members = dict_rhs->get_members())
+                    {
+                        auto& symbols = members->get_symbols();
+                        dict_lhs->init_members();
+                        auto& lhs_symbols = dict_lhs->get_members()->get_symbols();
+
+                        for (auto& item : symbols)
+                            lhs_symbols[item.first] = symbol(item.second.var_ref->clone(), item.second.is_local(), item.second.is_global(), item.second.is_ref());
+                    }
+                }
                 else
+                {
                     dict_lhs->set_data({});
+                }
 
                 return dict_lhs->clone();
             }
@@ -525,11 +602,15 @@ namespace wio
                 ref<var_function> func_lhs = std::dynamic_pointer_cast<var_function>(lv_ref);
                 ref<var_function> func_rhs = std::dynamic_pointer_cast<var_function>(rv_ref);
 
-                if (func_rhs)
-                    func_lhs->set_data(func_rhs->get_data());
-                else
-                    func_lhs->set_data({});
+                if (auto members = func_rhs->get_members())
+                {
+                    auto& symbols = members->get_symbols();
+                    func_lhs->init_members();
+                    auto& lhs_symbols = func_lhs->get_members()->get_symbols();
 
+                    for (auto& item : symbols)
+                        lhs_symbols[item.first] = symbol(item.second.var_ref->clone(), item.second.is_local(), item.second.is_global(), item.second.is_ref());
+                }
                 return func_lhs->clone();
             }
             else if (lv_ref->get_base_type() == variable_base_type::realm)
@@ -541,13 +622,28 @@ namespace wio
 
                 if (realm_rhs)
                 {
-                    realm_lhs->load_members(realm_rhs->get_members());
+                    auto members = realm_rhs->get_members();
+
+                    auto& symbols = members->get_symbols();
+                    realm_lhs->init_members();
+                    auto& lhs_symbols = realm_lhs->get_members()->get_symbols();
+
+                    for (auto& item : symbols)
+                    {
+                        if (item.second.var_ref->get_type() == variable_type::vt_float_ref)
+                            lhs_symbols[item.first] = symbol(make_ref<variable>(any(*std::dynamic_pointer_cast<variable>(item.second.var_ref)->get_data_as<double*>()), variable_type::vt_float), item.second.is_local(), item.second.is_global(), item.second.is_ref());
+                        else if (item.second.var_ref->get_type() == variable_type::vt_character_ref)
+                            lhs_symbols[item.first] = symbol(make_ref<variable>(any(*std::dynamic_pointer_cast<variable>(item.second.var_ref)->get_data_as<char*>()), variable_type::vt_character), item.second.is_local(), item.second.is_global(), item.second.is_ref());
+                        else
+                            lhs_symbols[item.first] = symbol(item.second.var_ref->clone(), item.second.is_local(), item.second.is_global(), item.second.is_ref());
+                    }
                 }
                 else
                 {
-                    realm_lhs->load_members(ref<symbol_table>(nullptr));
                     realm_lhs->init_members();
                 }
+
+
 
                 return realm_lhs->clone();
             }
@@ -2250,6 +2346,179 @@ namespace wio
                 any value = std::dynamic_pointer_cast<variable>(v_ref)->get_data();
                 return make_ref<variable>(any(!value.empty()), variable_type::vt_bool);
             }
+        }
+
+        ref<variable_base> container_element_assignment(ref<variable_base>& cont_item_ref, ref<variable_base> rv_ref)
+        {
+            if (cont_item_ref->is_constant())
+                throw constant_value_assignment_error("Constant values cannot be changed!");
+
+            if (rv_ref->get_base_type() == variable_base_type::variable)
+            {
+                ref<variable> variable_rhs = std::dynamic_pointer_cast<variable>(rv_ref);
+                ref<variable> result = make_ref<variable>();
+                
+                if (variable_rhs->get_type() == variable_type::vt_vec2)
+                {
+                    auto members = variable_rhs->get_members();
+                    auto& symbols = members->get_symbols();
+                    auto result_vec = builtin::helper::create_vec2(symbols["X"].var_ref, symbols["Y"].var_ref);
+                    result->assign_data(result_vec->get_data());
+                    result->set_type(variable_type::vt_vec2);
+                    result->load_members(result_vec->get_members());
+                }
+                else if (variable_rhs->get_type() == variable_type::vt_vec3)
+                {
+                    auto members = variable_rhs->get_members();
+                    auto& symbols = members->get_symbols();
+                    auto result_vec = builtin::helper::create_vec3(symbols["X"].var_ref, symbols["Y"].var_ref, symbols["Z"].var_ref);
+                    result->assign_data(result_vec->get_data());
+                    result->set_type(variable_type::vt_vec3);
+                    result->load_members(result_vec->get_members());
+                }
+                else if (variable_rhs->get_type() == variable_type::vt_vec4)
+                {
+                    auto members = variable_rhs->get_members();
+                    auto& symbols = members->get_symbols();
+                    auto result_vec = builtin::helper::create_vec4(symbols["X"].var_ref, symbols["Y"].var_ref, symbols["Z"].var_ref, symbols["W"].var_ref);
+                    result->assign_data(result_vec->get_data());
+                    result->set_type(variable_type::vt_vec4);
+                    result->load_members(result_vec->get_members());
+                }
+                else
+                {
+                    if (auto members = variable_rhs->get_members())
+                    {
+                        auto& symbols = members->get_symbols();
+                        result->init_members();
+                        auto& lhs_symbols = result->get_members()->get_symbols();
+
+                        for (auto& item : symbols)
+                            lhs_symbols[item.first] = symbol(item.second.var_ref->clone(), item.second.is_local(), item.second.is_global(), item.second.is_ref());
+                    }
+
+                    if (variable_rhs->get_type() == variable_type::vt_float_ref)
+                    {
+                        result->set_data(any(*variable_rhs->get_data_as<double*>()));
+                        result->set_type(variable_type::vt_float);
+                    }
+                    else if (variable_rhs->get_type() == variable_type::vt_character_ref)
+                    {
+                        result->set_data(any(*variable_rhs->get_data_as<char*>()));
+                        result->set_type(variable_type::vt_character);
+                    }
+                    else
+                    {
+                        result->set_data(variable_rhs->get_data());
+                        result->set_type(variable_rhs->get_type());
+                    }
+                }
+
+                cont_item_ref = result;
+                return cont_item_ref->clone();
+            }
+            else if (rv_ref->get_base_type() == variable_base_type::array)
+            {
+                ref<var_array> array_rhs = std::dynamic_pointer_cast<var_array>(rv_ref);
+                ref<var_array> result = make_ref<var_array>();
+
+                if (array_rhs)
+                {
+                    if (auto members = array_rhs->get_members())
+                    {
+                        auto& symbols = members->get_symbols();
+                        result->init_members();
+                        auto& lhs_symbols = result->get_members()->get_symbols();
+
+                        for (auto& item : symbols)
+                            lhs_symbols[item.first] = symbol(item.second.var_ref->clone(), item.second.is_local(), item.second.is_global(), item.second.is_ref());
+                    }
+                    result->set_data(array_rhs->get_data());
+                }
+                else
+                {
+                    result->set_data({});
+                }
+
+                cont_item_ref = result;
+                return cont_item_ref->clone();
+            }
+            else if (rv_ref->get_base_type() == variable_base_type::dictionary)
+            {
+                ref<var_dictionary> dict_rhs = std::dynamic_pointer_cast<var_dictionary>(rv_ref);
+                ref<var_dictionary> result = make_ref<var_dictionary>();
+
+                if (dict_rhs)
+                {
+                    if (auto members = dict_rhs->get_members())
+                    {
+                        auto& symbols = members->get_symbols();
+                        result->init_members();
+                        auto& lhs_symbols = result->get_members()->get_symbols();
+
+                        for (auto& item : symbols)
+                            lhs_symbols[item.first] = symbol(item.second.var_ref->clone(), item.second.is_local(), item.second.is_global(), item.second.is_ref());
+                    }
+                }
+                else
+                {
+                    result->set_data({});
+                }
+
+                cont_item_ref = result;
+                return cont_item_ref->clone();
+            }
+            else if (rv_ref->get_base_type() == variable_base_type::function)
+            {
+                ref<var_function> func_rhs = std::dynamic_pointer_cast<var_function>(rv_ref);
+                ref<var_function> result = make_ref<var_function>(func_rhs->get_parameters());
+
+                if (auto members = func_rhs->get_members())
+                {
+                    auto& symbols = members->get_symbols();
+                    result->init_members();
+                    auto& lhs_symbols = result->get_members()->get_symbols();
+
+                    for (auto& item : symbols)
+                        lhs_symbols[item.first] = symbol(item.second.var_ref->clone(), item.second.is_local(), item.second.is_global(), item.second.is_ref());
+                }
+
+                cont_item_ref = result;
+                return cont_item_ref->clone();
+            }
+            else if (rv_ref->get_base_type() == variable_base_type::realm)
+            {
+                ref<realm> realm_rhs = std::dynamic_pointer_cast<realm>(rv_ref);
+                ref<realm> result = make_ref<realm>();
+
+                if (realm_rhs)
+                {
+                    auto members = realm_rhs->get_members();
+
+                    auto& symbols = members->get_symbols();
+                    result->init_members();
+                    auto& lhs_symbols = result->get_members()->get_symbols();
+
+                    for (auto& item : symbols)
+                    {
+                        if (item.second.var_ref->get_type() == variable_type::vt_float_ref)
+                            lhs_symbols[item.first] = symbol(make_ref<variable>(any(*std::dynamic_pointer_cast<variable>(item.second.var_ref)->get_data_as<double*>()), variable_type::vt_float), item.second.is_local(), item.second.is_global(), item.second.is_ref());
+                        else if (item.second.var_ref->get_type() == variable_type::vt_character_ref)
+                            lhs_symbols[item.first] = symbol(make_ref<variable>(any(*std::dynamic_pointer_cast<variable>(item.second.var_ref)->get_data_as<char*>()), variable_type::vt_character), item.second.is_local(), item.second.is_global(), item.second.is_ref());
+                        else
+                            lhs_symbols[item.first] = symbol(item.second.var_ref->clone(), item.second.is_local(), item.second.is_global(), item.second.is_ref());
+                    }
+                }
+                else
+                {
+                    result->init_members();
+                }
+
+                cont_item_ref = result;
+                return cont_item_ref->clone();
+            }
+
+            throw invalid_operator_error("Invalid assignment error!");
         }
     }
 

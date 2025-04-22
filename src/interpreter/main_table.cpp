@@ -5,6 +5,7 @@
 namespace wio
 {
     static constexpr id_t s_builtin_scope_id = static_cast<id_t>(0);
+    static main_table s_main_table;
 
     main_table::main_table()
     {
@@ -13,7 +14,6 @@ namespace wio
 
     main_table& main_table::get()
     {
-        static main_table s_main_table;
         return s_main_table;
     }
 
@@ -58,7 +58,7 @@ namespace wio
 
             if (item)
             {
-                if ((!item->flags.b1 && is_imported(scp.first)) || scp.first == pass_id)
+                if ((!item->is_local() && is_imported(scp.first)) || scp.first == pass_id)
                     return item;
             }
         }
@@ -83,7 +83,7 @@ namespace wio
 
             if (item)
             {
-                if ((!item->flags.b1 && is_imported(scp.first)) || scp.first == pass_id)
+                if ((!item->is_local() && is_imported(scp.first)) || scp.first == pass_id)
                     return item;
             }
         }
@@ -119,7 +119,7 @@ namespace wio
 
             if (item)
             {
-                if ((!item->flags.b1 && is_imported(scp.first)) || scp.first == pass_id)
+                if ((!item->is_local() && is_imported(scp.first)) || scp.first == pass_id)
                     return item;
             }
         }
@@ -197,7 +197,7 @@ namespace wio
 
             if (item)
             {
-                if ((!item->flags.b1 && is_imported(scp.first)) || scp.first == pass_id)
+                if ((!item->is_local() && is_imported(scp.first)) || scp.first == pass_id)
                 {
                     if (auto ol = std::dynamic_pointer_cast<overload_list>(item->var_ref))
                     {

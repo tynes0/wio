@@ -32,7 +32,28 @@ namespace wio
                 if(nothrow)
                     return 0.0;
 
-                throw type_mismatch_error("Invalid type! Expected float or integer.");
+                throw type_mismatch_error("Invalid type! Expected float.");
+            }
+
+            long long var_as_ll(ref<variable_base> var, bool nothrow)
+            {
+                ref<variable> value = std::dynamic_pointer_cast<variable>(var);
+
+                if (var->get_type() == variable_type::vt_integer)
+                    return value->get_data_as<long long>();
+                else if (var->get_type() == variable_type::vt_float)
+                    return static_cast<long long>(value->get_data_as<double>());
+                else if (var->get_type() == variable_type::vt_float_ref)
+                    return static_cast<long long>(*value->get_data_as<double*>());
+                else if (var->get_type() == variable_type::vt_character)
+                    return static_cast<long long>(value->get_data_as<char>());
+                else if (var->get_type() == variable_type::vt_character_ref)
+                    return static_cast<long long>(*value->get_data_as<char*>());
+
+                if (nothrow)
+                    return 0;
+
+                throw type_mismatch_error("Invalid type! Expected integer.");
             }
 
             char var_as_char(ref<variable_base> var, bool nothrow)
@@ -47,10 +68,10 @@ namespace wio
                 if (nothrow)
                     return char(0);
 
-                throw type_mismatch_error("Invalid type! Expected float or integer.");
+                throw type_mismatch_error("Invalid type! Expected char.");
             }
 
-            ref<variable_base> create_pair(ref<variable_base> first, ref<variable_base> second)
+            ref<variable> create_pair(ref<variable_base> first, ref<variable_base> second)
             {
                 pair_t p(first, second);
                 ref<variable> result = make_ref<variable>(p, variable_type::vt_pair);
@@ -68,7 +89,7 @@ namespace wio
                 return result;
             }
 
-            ref<variable_base> create_vec2(ref<variable_base> xvb, ref<variable_base> yvb)
+            ref<variable> create_vec2(ref<variable_base> xvb, ref<variable_base> yvb)
             {
                 vec2 result_vec;
 
@@ -92,7 +113,7 @@ namespace wio
                 return result;
             }
 
-            ref<variable_base> create_vec3(ref<variable_base> xvb, ref<variable_base> yvb, ref<variable_base> zvb)
+            ref<variable> create_vec3(ref<variable_base> xvb, ref<variable_base> yvb, ref<variable_base> zvb)
             {
                 vec3 result_vec;
 
@@ -120,9 +141,9 @@ namespace wio
                 return result;
             }
 
-            ref<variable_base> create_vec4(ref<variable_base> xvb, ref<variable_base> yvb, ref<variable_base> zvb, ref<variable_base> wvb)
+            ref<variable> create_vec4(ref<variable_base> xvb, ref<variable_base> yvb, ref<variable_base> zvb, ref<variable_base> wvb)
             {
-                return ref<variable_base>();
+                return ref<variable>();
             }
 
             ref<variable_base> string_as_array(ref<variable_base> base_str)

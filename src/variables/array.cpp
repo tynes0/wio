@@ -1,8 +1,14 @@
 #include "array.h"
 #include "variable.h"
+#include "../interpreter/evaluator_helper.h"
 
 namespace wio
 {
+    var_array::var_array(packed_bool flags) : m_data(), variable_base(flags)
+    {
+        this->init_members();
+    }
+
     var_array::var_array(const std::vector<ref<variable_base>>& data, packed_bool flags) : m_data(data), variable_base(flags)
     {
         this->init_members();
@@ -40,7 +46,9 @@ namespace wio
 
     void var_array::push(ref<variable_base> data)
     {
-        m_data.push_back(data->clone());
+        m_data.push_back(create_null_variable());
+        if(data->get_type() != variable_type::vt_null)
+            helper::container_element_assignment(m_data.back(), data->clone());
     }
 
     ref<variable_base> var_array::pop()
@@ -52,7 +60,9 @@ namespace wio
 
     void var_array::insert(long long idx, ref<variable_base> data)
     {
-        m_data.insert(m_data.begin() + idx, data);
+        m_data.insert(m_data.begin() + idx, create_null_variable());
+        if (data->get_type() != variable_type::vt_null)
+            helper::container_element_assignment(m_data[idx], data->clone());
     }
 
     ref<variable_base> var_array::erase(long long idx)
@@ -76,7 +86,7 @@ namespace wio
 
     void var_array::set_element(long long index, ref<variable_base> value)
     {
-        m_data[normalize_index(index)] = value->clone();
+        helper::container_element_assignment(m_data[normalize_index(index)], value->clone());
     }
 
     long long var_array::normalize_index(long long index) const

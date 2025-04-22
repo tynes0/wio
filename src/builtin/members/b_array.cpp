@@ -19,7 +19,7 @@ namespace wio
                 ref<var_array> array = std::dynamic_pointer_cast<var_array>(base_array);
 
                 if (!array)
-                    throw exception("Array is null!");
+                    throw type_mismatch_error("Mismatch parameter type!");
                 return array;
             }
 
@@ -145,10 +145,12 @@ namespace wio
                 if (offset + length > (long long)array->size())
                     length = (long long)array->size() - offset;
 
-                auto& array_data = array->get_data();
-                std::vector<ref<variable_base>> new_data(array_data.begin() + offset, array_data.begin() + offset + length);
-                
-                return make_ref<var_array>(new_data);
+                auto result = make_ref<var_array>();
+
+                for (long long i = offset; i < length + offset; ++i)
+                    result->push(array->get_element(i));
+
+                return result;
             }
 
             static ref<variable_base> b_array_string(const std::vector<ref<variable_base>>& args)
@@ -197,13 +199,13 @@ namespace wio
                 ref<variable> type = std::dynamic_pointer_cast<variable>(args[1]);
                 variable_type type_data = type->get_data_as<variable_type>();
                 
-                std::vector<ref<variable_base>> filtered_data;
+                auto filtered_result = make_ref<var_array>();
 
                 for (size_t i = 0; i < array->size(); ++i)
                     if (array->get_element(i)->get_type() == type_data)
-                        filtered_data.push_back(array->get_element(i));
+                        filtered_result->push(array->get_element(i));
 
-                return make_ref<var_array>(filtered_data);
+                return filtered_result;
             }
 
             static ref<variable_base> b_array_fill(std::vector<ref<variable_base>>& args)

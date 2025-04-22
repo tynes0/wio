@@ -14,6 +14,7 @@
 #include "../types/vec4.h"
 
 #include "../utils/util.h"
+#include "../utils/rand_manager.h"
 
 #include "../interpreter/main_table.h"
 
@@ -26,6 +27,12 @@ namespace wio
     {
         namespace detail 
         {
+            static rand_manager& get_rman()
+            {
+                static rand_manager s_rand_manager;
+                return s_rand_manager;
+            }
+
             static ref<variable_base> b_abs(const std::vector<ref<variable_base>>& args)
             {
                 return make_ref<variable>(any(std::abs(helper::var_as_double(args[0]))), variable_type::vt_float);
@@ -214,6 +221,26 @@ namespace wio
                 return (helper::var_as_double(args[0]) > helper::var_as_double(args[1])) ? args[0] : args[1];
             }
 
+            static ref<variable_base> b_random(const std::vector<ref<variable_base>>& args)
+            {
+                return make_ref<variable>(get_rman().random(), variable_type::vt_integer);
+            }
+
+            static ref<variable_base> b_frandom(const std::vector<ref<variable_base>>& args)
+            {
+                return make_ref<variable>(get_rman().drandom(), variable_type::vt_float);
+            }
+
+            static ref<variable_base> b_random_in_range(const std::vector<ref<variable_base>>& args)
+            {
+                if(args[0]->get_type() == variable_type::vt_integer || args[1]->get_type() == variable_type::vt_integer)
+                    return make_ref<variable>(any(get_rman().int_range(std::dynamic_pointer_cast<variable>(args[0])->get_data_as<long long>(), std::dynamic_pointer_cast<variable>(args[1])->get_data_as<long long>())), variable_type::vt_integer);
+                else if (args[0]->get_type() == variable_type::vt_float || args[0]->get_type() == variable_type::vt_float_ref ||
+                    args[1]->get_type() == variable_type::vt_float || args[1]->get_type() == variable_type::vt_float_ref)
+                    return make_ref<variable>(any(get_rman().double_range(helper::var_as_double(args[0]), helper::var_as_double(args[1]))), variable_type::vt_float);
+                return create_null_variable();
+            }
+
             static ref<variable_base> b_vec2(const std::vector<ref<variable_base>>& args)
             {
                 return helper::create_vec2(args[0], args[1]);
@@ -254,7 +281,7 @@ namespace wio
             static ref<variable_base> b_vec3_4(const std::vector<ref<variable_base>>& args)
             {
                 auto ref_0 = make_ref<variable>(any(0.0), variable_type::vt_float);
-                return helper::create_vec3(ref_0, ref_0, ref_0);;
+                return helper::create_vec3(ref_0, ref_0, ref_0);
             }
         } // namespace detail
 
@@ -289,6 +316,9 @@ namespace wio
             loader::load_function(table, "LogBase", detail::b_log_base, pa<2>{ variable_type::vt_any, variable_type::vt_any });
             loader::load_function(table, "Min", detail::b_min, pa<2>{ variable_type::vt_any, variable_type::vt_any });
             loader::load_function(table, "Max", detail::b_max, pa<2>{ variable_type::vt_any, variable_type::vt_any });
+            loader::load_function(table, "Random", detail::b_random, pa<0>{ });
+            loader::load_function(table, "FRandom", detail::b_frandom, pa<0>{ });
+            loader::load_function(table, "RandomInRange", detail::b_random_in_range, pa<2>{ variable_type::vt_any, variable_type::vt_any });
 
             auto vec2_result = loader::load_function(table, "Vec2", detail::b_vec2, pa<2>{ variable_type::vt_any, variable_type::vt_any });
             loader::load_overload(vec2_result, detail::b_vec2_2, pa<1>{ variable_type::vt_any });

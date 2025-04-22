@@ -10,6 +10,7 @@ namespace wio
 	class var_array : public variable_base
 	{
 	public:
+		var_array(packed_bool flags = {});
 		var_array(const std::vector<ref<variable_base>>& data, packed_bool flags = {});
 
 		virtual variable_base_type get_base_type() const override;

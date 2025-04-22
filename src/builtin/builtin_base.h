@@ -29,13 +29,13 @@ namespace wio
                 var_function varFunc([=](const std::vector<function_param>& real_parameters, std::vector<ref<variable_base>>& parameters) -> ref<variable_base>
                     {
                         return func(parameters);
-                    }, params, false);
+                    }, params);
 
                 ref<overload_list> olist = make_ref<overload_list>();
                 olist->set_symbol_id(name);
-                olist->add(symbol(make_ref<var_function>(varFunc), { false, true }));
+                olist->add(symbol(make_ref<var_function>(varFunc), false, true));
 
-                target_table[name] = symbol(olist, { false, true });
+                target_table[name] = symbol(olist, false, true);
 
                 return olist;
             }
@@ -50,21 +50,21 @@ namespace wio
                 var_function varFunc([=](const std::vector<function_param>& real_parameters, std::vector<ref<variable_base>>& parameters) -> ref<variable_base>
                     {
                         return func(parameters);
-                    }, params, false);
+                    }, params);
 
-                olist->add(symbol(make_ref<var_function>(varFunc)));
+                olist->add(symbol(make_ref<var_function>(varFunc), false, true));
             }
 
             template <class T>
             void load_constant(symbol_map& target_table, const std::string& name, variable_type type, T value)
             {
-                target_table[name] = symbol(make_ref<variable>(any(value), type, packed_bool{ true, false }), {false, true});
+                target_table[name] = symbol(make_ref<variable>(any(value), type, packed_bool{ true, false }), false, true);
             }
 
             template <class T>
             void load_variable(symbol_map& target_table, const std::string& name, ref<variable_base> var)
             {
-                target_table[name] = symbol(var, { false, true });
+                target_table[name] = symbol(var, false, true);
             }
 		}
 	}

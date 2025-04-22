@@ -144,3 +144,8 @@
 - __Update 2.3.2:__ foreach loops will now set the value to reference if the container is not const.
 - __Update 2.3.3:__ Fixed an issue where assignment operators were not working in some cases.
 - __Update 2.3.4:__ The ref keyword in parameters can now be written in either way: 'ref var' or 'var ref'. The same thing happens.
+- __Update 2.4.0:__ Fixed ref usage in all types.
+- __Update 2.4.1:__ Fixed assignment operator.
+- __Update 2.4.2:__ Fixed variable declaration.
+- __Update 2.4.3:__ Some code cleanup done.
+- __Update 2.4.4:__ Several new built-in methods have been added.

@@ -3,9 +3,14 @@
 
 #include "../utils/util.h"
 #include "../types/file_wrapper.h"
+#include "../interpreter/evaluator_helper.h"
 
 namespace wio
 {
+    var_dictionary::var_dictionary(packed_bool flags) : m_data(), variable_base(flags)
+    {
+    }
+
     var_dictionary::var_dictionary(const map_t& data, packed_bool flags) : m_data(data), variable_base(flags)
     {
     }
@@ -56,8 +61,8 @@ namespace wio
         std::string skey = as_key(key);
         if (!check_existance(skey))
             throw invalid_key_error("Key '" + skey + "'' is not exists!");
-        else
-            m_data[skey] = value->clone();
+        
+        helper::container_element_assignment(m_data[skey], value->clone());
     }
 
     size_t var_dictionary::size() const

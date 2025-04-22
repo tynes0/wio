@@ -1,0 +1,53 @@
+import Wio.Math;
+import Wio.System as System;
+
+local const WIDTH = 120;
+local const HEIGHT = 29;
+local const DENSITY = 10;
+
+local array screen;
+local array emptyRow;
+local array symbols = ['.', '\'', '|'];
+
+local func Init()
+{
+	emptyRow.Resize(WIDTH);
+	emptyRow.Fill(' ');
+	screen.Resize(HEIGHT);
+	screen.Fill(emptyRow);
+}
+
+local func Update()
+{
+    for (var i = HEIGHT - 1; i > 0; --i)
+        screen[i] = screen[i - 1];
+
+    screen[0] = emptyRow;
+
+    for (var i = 0; i < DENSITY; ++i) 
+    {
+        var col = RandomInRange(0, WIDTH);
+        
+        screen[0][col] = symbols[RandomInRange(0, symbols.Length())];
+    }
+}
+
+local func Draw() 
+{
+    System.ClearScreen();
+    foreach (row in screen) 
+    {
+        foreach (ch in row) 
+            Print(ch);
+        Println();
+    }
+}
+
+func Run()
+{
+    Init();
+    while (true) {
+        Update();
+        Draw();
+    }
+}

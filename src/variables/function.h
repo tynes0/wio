@@ -13,8 +13,8 @@ namespace wio
 		friend class overload_list;
 		using fun_type = std::function<ref<variable_base>(const std::vector<function_param>&, std::vector<ref<variable_base>>&)>;
 
-		var_function(const std::vector<function_param>& params, bool is_local = false, bool is_global = false);
-		var_function(const fun_type& data, const std::vector<function_param>& params, bool is_local = false, bool is_global = false);
+		var_function(const std::vector<function_param>& params);
+		var_function(const fun_type& data, const std::vector<function_param>& params);
 
 		virtual variable_base_type get_base_type() const override;
 		virtual variable_type get_type() const override;

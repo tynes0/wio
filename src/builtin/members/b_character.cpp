@@ -15,7 +15,7 @@ namespace wio
                 ref<variable> var = std::dynamic_pointer_cast<variable>(base);
 
                 if (!var)
-                    throw exception("Variable is null!");
+                    throw type_mismatch_error("Mismatch parameter type!");
                 return var;
             }
 

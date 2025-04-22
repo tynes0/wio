@@ -50,7 +50,10 @@ namespace wio
 
         ~any()
         {
+            if(m_content)
+                delete m_content;
         }
+
 
         any& swap(any& right) noexcept
         {
@@ -61,13 +64,6 @@ namespace wio
                 right.m_content = temp;
                 
             }
-            return *this;
-        }
-
-        any& assign(any& right)
-        {
-            if (std::addressof(right) != this)
-                m_content = right.m_content;
             return *this;
         }
 

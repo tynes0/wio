@@ -4,12 +4,12 @@
 
 namespace wio
 {
-    var_function::var_function(const std::vector<function_param>& params, bool is_local, bool is_global) 
-        : m_params(params), variable_base({ is_local, is_global }), m_declared(false), m_early_decl(false), m_bounded_file_id(0)
+    var_function::var_function(const std::vector<function_param>& params) 
+        : m_params(params), variable_base({ true }), m_declared(false), m_early_decl(false), m_bounded_file_id(0)
     {
     }
-    var_function::var_function(const fun_type& data, const std::vector<function_param>& params, bool is_local, bool is_global)
-        : m_data(data), m_params(params), variable_base({is_local, is_global}), m_declared(true), m_early_decl(false), m_bounded_file_id(0)
+    var_function::var_function(const fun_type& data, const std::vector<function_param>& params)
+        : m_data(data), m_params(params), variable_base({ true }), m_declared(true), m_early_decl(false), m_bounded_file_id(0)
     {
     }
 

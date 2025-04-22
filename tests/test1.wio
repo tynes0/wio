@@ -1,3 +1,11 @@
+if(true)
+{
+    global var x = 10;
+}
+else
+{
+    global var y = 5;
+}
 
-
-func foo;
+Println(x);
+Println(y);

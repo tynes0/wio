@@ -15,7 +15,7 @@ namespace wio
                     throw exception("Dictionary is null!");
                 ref<var_dictionary> dict = std::dynamic_pointer_cast<var_dictionary>(base_dictionary);
                 if (!dict)
-                    throw exception("Dictionary is null!");
+                    throw type_mismatch_error("Mismatch parameter type!");
 
                 return dict;
             }

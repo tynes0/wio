@@ -253,28 +253,13 @@ namespace wio
 
     std::string array_declaration::to_string() const
     {
-        std::string result = (m_flags.b1 ? "const " : "") + std::string("array ") + m_id->to_string() + " = [";
-        for (size_t i = 0; i < m_elements.size(); ++i)
-        {
-            result += m_elements[i]->to_string();
-            if (i < m_elements.size() - 1)
-                result += ", ";
-        }
-        result += "];";
+        std::string result = (m_flags.b1 ? "const " : "") + std::string("array ") + m_id->to_string() + " = " + m_initializer->to_string();
         return result;
     }
 
     std::string dictionary_declaration::to_string() const
     {
-        std::string result = (m_flags.b1 ? "const " : "") + std::string("dict ") + m_id->to_string() + " = {";
-        for (size_t i = 0; i < m_pairs.size(); ++i)
-        {
-            result += "[" + m_pairs[i].first->to_string() + ", ";
-            result += m_pairs[i].second->to_string() + "]";
-            if (i < m_pairs.size() - 1)
-                result += ", ";
-        }
-        result += "};";
+        std::string result = (m_flags.b1 ? "const " : "") + std::string("dict ") + m_id->to_string() + " = " + m_initializer->to_string();
         return result;
     }
 

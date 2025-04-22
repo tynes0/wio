@@ -2,7 +2,12 @@
 
 namespace wio
 {
-    variable::variable( const any& data, variable_type type, packed_bool flags) :
+    variable::variable(packed_bool flags) :
+        m_data(), m_type(variable_type::vt_null), variable_base(flags)
+    {
+    }
+
+    variable::variable(const any& data, variable_type type, packed_bool flags) :
         m_data(data), m_type(type), variable_base(flags)
     {
     }
@@ -34,6 +39,11 @@ namespace wio
     void variable::set_data(const any& new_data)
     {
         m_data = new_data;
+    }
+
+    void variable::assign_data(any& new_data)
+    {
+        m_data.swap(new_data);
     }
 
     void variable::set_type(variable_type type)

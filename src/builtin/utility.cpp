@@ -38,12 +38,16 @@ namespace wio
 
 					any temp_v = left_v->get_data();
 					variable_type temp_vt = left_v->get_type();
+					auto temp_members = left_v->get_members();
 
 					left_v->set_data(right_v->get_data());
 					left_v->set_type(right_v->get_type());
+					left_v->load_members(right_v->get_members());
 
 					right_v->set_data(temp_v);
 					right_v->set_type(temp_vt);
+					right_v->load_members(temp_members);
+
 				}
 				else if (lhs->get_base_type() == variable_base_type::array)
 				{

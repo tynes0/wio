@@ -24,6 +24,7 @@
 #include "builtin/utility.h"
 #include "builtin/types.h"
 #include "builtin/scientific.h"
+#include "builtin/system.h"
 
 #include "variables/function.h"
 
@@ -183,6 +184,16 @@ namespace wio
 							builtin::scientific::load_symbol_map(*target_map);
 						else
 							builtin::scientific::load();
+					}
+				}
+				else if (view == "system")
+				{
+					if (module_tracker::get().add_module(filepath))
+					{
+						if (target_map)
+							builtin::system::load_symbol_map(*target_map);
+						else
+							builtin::system::load();
 					}
 				}
 				else
