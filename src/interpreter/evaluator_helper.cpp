@@ -12,6 +12,7 @@
 #include "../variables/function.h"
 #include "../variables/dictionary.h"
 #include "../variables/realm.h"
+#include "../variables/overload_list.h"
 
 #include "../utils/filesystem.h"
 #include "../utils/util.h"
@@ -587,6 +588,7 @@ namespace wio
                         for (auto& item : symbols)
                             lhs_symbols[item.first] = symbol(item.second.var_ref->clone(), item.second.is_local(), item.second.is_global(), item.second.is_ref());
                     }
+                    dict_lhs->set_data(dict_rhs->get_data());
                 }
                 else
                 {
@@ -599,8 +601,8 @@ namespace wio
             {
                 if (rv_ref->get_base_type() != variable_base_type::function && rv_ref->get_type() != variable_type::vt_null)
                     throw type_mismatch_error("Target type is 'func' but source type is not!", loc);
-                ref<var_function> func_lhs = std::dynamic_pointer_cast<var_function>(lv_ref);
-                ref<var_function> func_rhs = std::dynamic_pointer_cast<var_function>(rv_ref);
+                ref<overload_list> func_lhs = std::dynamic_pointer_cast<overload_list>(lv_ref);
+                ref<overload_list> func_rhs = std::dynamic_pointer_cast<overload_list>(rv_ref);
 
                 if (auto members = func_rhs->get_members())
                 {
@@ -611,6 +613,9 @@ namespace wio
                     for (auto& item : symbols)
                         lhs_symbols[item.first] = symbol(item.second.var_ref->clone(), item.second.is_local(), item.second.is_global(), item.second.is_ref());
                 }
+
+                func_lhs->set_all(func_rhs->get_all());
+
                 return func_lhs->clone();
             }
             else if (lv_ref->get_base_type() == variable_base_type::realm)
@@ -642,8 +647,6 @@ namespace wio
                 {
                     realm_lhs->init_members();
                 }
-
-
 
                 return realm_lhs->clone();
             }
@@ -2459,6 +2462,7 @@ namespace wio
                         for (auto& item : symbols)
                             lhs_symbols[item.first] = symbol(item.second.var_ref->clone(), item.second.is_local(), item.second.is_global(), item.second.is_ref());
                     }
+                    result->set_data(dict_rhs->get_data());
                 }
                 else
                 {
@@ -2470,8 +2474,8 @@ namespace wio
             }
             else if (rv_ref->get_base_type() == variable_base_type::function)
             {
-                ref<var_function> func_rhs = std::dynamic_pointer_cast<var_function>(rv_ref);
-                ref<var_function> result = make_ref<var_function>(func_rhs->get_parameters());
+                ref<overload_list> func_rhs = std::dynamic_pointer_cast<overload_list>(rv_ref);
+                ref<overload_list> result = make_ref<overload_list>();
 
                 if (auto members = func_rhs->get_members())
                 {
@@ -2483,6 +2487,7 @@ namespace wio
                         lhs_symbols[item.first] = symbol(item.second.var_ref->clone(), item.second.is_local(), item.second.is_global(), item.second.is_ref());
                 }
 
+                result->set_all(func_rhs->get_all());
                 cont_item_ref = result;
                 return cont_item_ref->clone();
             }

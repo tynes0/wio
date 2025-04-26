@@ -37,12 +37,17 @@ namespace wio
 			uint64_t size = end - stream.tellg();
 
 			if (size == 0)
+			{
+				if (stream)
+					stream.close();
 				return {};
+			}
 
 			raw_buffer buffer(size);
 			stream.read(buffer.as<char>(), size);
 			buffer.data[size] = '\0';
-			stream.close();
+			if(stream)
+				stream.close();
 			return buffer;
 		}
 

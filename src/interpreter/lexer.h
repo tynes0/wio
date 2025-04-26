@@ -19,7 +19,6 @@ namespace wio
         char peek(int offset) const;
         char advance();
         bool is_operator(char ch);
-        bool is_seperator(char ch);
         bool skip_whitespace();
         bool skip_comments();
         token read_identifier();

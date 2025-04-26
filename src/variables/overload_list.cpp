@@ -55,5 +55,15 @@ namespace wio
 	{
 		return m_symbol_id;
 	}
+
+	void overload_list::set_all(const std::vector<symbol>& overloads)
+	{
+		m_overloads = overloads;
+	}
+
+	const std::vector<symbol>& overload_list::get_all()
+	{
+		return m_overloads;
+	}
 }
 

@@ -149,3 +149,7 @@
 - __Update 2.4.2:__ Fixed variable declaration.
 - __Update 2.4.3:__ Some code cleanup done.
 - __Update 2.4.4:__ Several new built-in methods have been added.
+- __Update 2.5.0:__ Some assignment issues have been resolved.
+- __Update 2.5.1:__ func now behaves like a real type. It can be assigned to and used as a parameter.
+- __Update 2.5.2:__ Added lambda support.
+- __Update 2.5.3:__ Added member functions for vec2.

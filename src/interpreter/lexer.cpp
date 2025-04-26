@@ -46,11 +46,6 @@ namespace wio
             {
                 m_tokens.push_back(read_operator());
             }
-            else if (is_seperator(current))
-            {
-                std::string op(1, advance());
-                m_tokens.push_back({ token_map.at(op), op, m_loc });
-            }
             else if (current == '\0')
             {
                 m_tokens.push_back({ token_map.at("eof"), "eof", m_loc });
@@ -101,12 +96,7 @@ namespace wio
     {
         std::string tok(1, ch);
         auto it = token_map.find(tok);
-        return (it != token_map.end() && it->second == token_type::op);
-    }
-
-    bool lexer::is_seperator(char ch)
-    {
-        return (ch == '(' || ch == ')' || ch == '[' || ch == ']' || ch == '{' || ch == '}' || ch == '.' || ch == ',' || ch == ':' || ch == ';');
+        return (it != token_map.end());
     }
 
     bool lexer::skip_whitespace()

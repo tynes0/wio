@@ -7,7 +7,7 @@ local const DENSITY = 10;
 
 local array screen;
 local array emptyRow;
-local array symbols = ['.', '\'', '|'];
+local const array symbols = ['.', '\'', '|'];
 
 local func Init()
 {

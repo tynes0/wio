@@ -4,6 +4,21 @@
 
 namespace wio
 {
+    location program::get_location() const
+    {
+        if (m_statements.size() > 0)
+            return m_statements[0]->get_location();
+
+        return location{ 0, 0 };
+    }
+
+    std::string program::to_string() const
+    {
+        std::string result;
+        for (const auto& stmt : m_statements)
+            result += stmt->to_string() + "\n";
+        return result;
+    }
 
     literal::literal(token tok)  : m_token(tok)
     {
@@ -86,6 +101,11 @@ namespace wio
         return result;
     }
 
+    std::string lambda_literal::to_string() const
+    {
+        return std::string();
+    }
+
     null_expression::null_expression(token tok) : m_token(tok)
     {
     }
@@ -104,22 +124,6 @@ namespace wio
     std::string identifier::to_string() const
     {
         return "Identifier(" + m_token.value + ")";
-    }
-
-    location program::get_location() const
-    {
-        if (m_statements.size() > 0)
-            return m_statements[0]->get_location();
-
-        return location{ 0, 0 };
-    }
-
-    std::string program::to_string() const
-    {
-        std::string result;
-        for (const auto& stmt : m_statements)
-            result += stmt->to_string() + "\n";
-        return result;
     }
 
     std::string binary_expression::to_string() const
@@ -263,7 +267,7 @@ namespace wio
         return result;
     }
 
-    std::string function_declaration::to_string() const
+    std::string function_definition::to_string() const
     {
         std::string result = "func " + m_id->to_string() + "(";
         for (size_t i = 0; i < m_params.size(); ++i)
@@ -289,7 +293,8 @@ namespace wio
         result += ")";
         return result;
     }
-    std::string function_definition::to_string() const
+
+    std::string function_declaration::to_string() const
     {
         std::string result = "func " + m_id->to_string() + "(";
         for (size_t i = 0; i < m_params.size(); ++i)
@@ -303,7 +308,7 @@ namespace wio
         return result;
     }
 
-    std::string function_variable_declaration::to_string() const
+    std::string lambda_declaration::to_string() const
     {
         return "func " + m_id->to_string();
     }

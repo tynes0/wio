@@ -221,6 +221,16 @@ namespace wio
                 return (helper::var_as_double(args[0]) > helper::var_as_double(args[1])) ? args[0] : args[1];
             }
 
+            static ref<variable_base> b_to_radians(const std::vector<ref<variable_base>>& args)
+            {
+                return make_ref<variable>(any(helper::var_as_double(args[0]) * (3.14159265358979323846 / 180.0)), variable_type::vt_float);
+            }
+
+            static ref<variable_base> b_to_degrees(const std::vector<ref<variable_base>>& args)
+            {
+                return make_ref<variable>(any(helper::var_as_double(args[0]) * (180.0 / 3.14159265358979323846)), variable_type::vt_float);
+            }
+
             static ref<variable_base> b_random(const std::vector<ref<variable_base>>& args)
             {
                 return make_ref<variable>(get_rman().random(), variable_type::vt_integer);
@@ -316,6 +326,8 @@ namespace wio
             loader::load_function(table, "LogBase", detail::b_log_base, pa<2>{ variable_type::vt_any, variable_type::vt_any });
             loader::load_function(table, "Min", detail::b_min, pa<2>{ variable_type::vt_any, variable_type::vt_any });
             loader::load_function(table, "Max", detail::b_max, pa<2>{ variable_type::vt_any, variable_type::vt_any });
+            loader::load_function(table, "ToRadians", detail::b_to_radians, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "ToDegrees", detail::b_to_degrees, pa<1>{ variable_type::vt_any });
             loader::load_function(table, "Random", detail::b_random, pa<0>{ });
             loader::load_function(table, "FRandom", detail::b_frandom, pa<0>{ });
             loader::load_function(table, "RandomInRange", detail::b_random_in_range, pa<2>{ variable_type::vt_any, variable_type::vt_any });

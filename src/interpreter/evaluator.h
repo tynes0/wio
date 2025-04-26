@@ -22,6 +22,7 @@ namespace wio
         static ref<variable_base> evaluate_string_literal(ref<string_literal> node);
         static ref<variable_base> evaluate_array_literal(ref<array_literal> node);
         static ref<variable_base> evaluate_dictionary_literal(ref<dictionary_literal> node);
+        static ref<variable_base> evaluate_lambda_literal(ref<lambda_literal> node);
         static ref<variable_base> evaluate_typeof_expression(ref<typeof_expression> node);
         static ref<variable_base> evaluate_binary_expression(ref<binary_expression> node, ref<variable_base> object = nullptr, bool is_ref = false);
         static ref<variable_base> evaluate_unary_expression(ref<unary_expression> node, ref<variable_base> object = nullptr, bool is_ref = false);
@@ -45,8 +46,9 @@ namespace wio
         static void evaluate_variable_declaration(ref<variable_declaration> node, bool is_parameter = false);
         static void evaluate_array_declaration(ref<array_declaration> node);
         static void evaluate_dictionary_declaration(ref<dictionary_declaration> node);
-        static void evaluate_function_declaration(ref<function_declaration> node);
         static void evaluate_function_definition(ref<function_definition> node);
+        static void evaluate_function_declaration(ref<function_declaration> node);
+        static void evaluate_lambda_declaration(ref<lambda_declaration> node);
         static void evaluate_realm_declaration(ref<realm_declaration> node);
 
         static ref<variable_base> as_value(ref<expression> node, ref<variable_base> object = nullptr, bool is_ref = false);

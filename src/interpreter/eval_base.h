@@ -44,7 +44,7 @@ namespace wio
 		void insert(id_t id, const std::string& name, const symbol& symbol);
 		void insert_to_global(id_t id, const std::string& name, const symbol& symbol);
 
-		ref<function_declaration> get_func_decl(const std::string& name, std::vector<function_param> real_parameters);
+		ref<function_definition> get_func_definition(const std::string& name, std::vector<function_param> real_parameters);
 
 		ref<scope>& get_scope(id_t id) const;
 		std::map<variable_type, ref<symbol_table>>& get_constant_object_members();

@@ -182,6 +182,53 @@ namespace wio
         return loc;
     }
 
+    location parser::get_function_parameters_and_body(std::vector<ref<variable_declaration>>& params, ref<block_statement>& body, bool is_lambda)
+    {
+        location loc = current_token().loc;
+        if(is_lambda)
+            consume_token(token_type::at_sign);
+        consume_token(token_type::left_parenthesis);
+        body = nullptr;
+        
+        if (!match_token(token_type::right_parenthesis))
+        {
+            do {
+                ref<statement> param_decl = parse_parameter_declaration();
+                if (auto var_decl = std::dynamic_pointer_cast<variable_declaration>(param_decl))
+                {
+                    params.push_back(var_decl);
+                }
+                else
+                {
+                    error("Invalid parameter declaration.", current_token().loc);
+                    return location(0, 0);
+                }
+
+            } while (match_token(token_type::comma));
+
+            consume_token(token_type::right_parenthesis);
+        }
+
+        if (!is_lambda && match_token(token_type::semicolon))
+            return loc;
+
+        if (is_lambda && peek_token().type != token_type::left_curly_bracket)
+        {
+            std::vector<ref<statement>> statements;
+            ref<statement> stmt = parse_statement();
+            if (stmt)
+                statements.push_back(stmt);
+            body = make_ref<block_statement>(statements);
+        }
+        else
+        {
+            body = parse_block_statement();
+        }
+
+        return loc;
+        
+    }
+
     ref<statement> parser::parse_statement()
     {
         token current = current_token();
@@ -226,6 +273,11 @@ namespace wio
                         next_token();
                         return parse_dictionary_declaration(true, is_local, is_global);
                     }
+                    else if (current.type == token_type::kw_func)
+                    {
+                        next_token();
+                        return parse_function_declaration(true, is_local, is_global);
+                    }
                 }
                 else
                 {
@@ -247,6 +299,16 @@ namespace wio
             {
                 next_token();
                 return parse_dictionary_declaration(false, is_local, is_global);
+            }
+            else if (current.type == token_type::kw_func)
+            {
+                next_token();
+                return parse_function_declaration(false, is_local, is_global);
+            }
+            else if (current.type == token_type::kw_realm)
+            {
+                next_token();
+                return parse_realm_declaration(is_local, is_global);
             }
             else if (current.type == token_type::kw_if)
             {
@@ -290,16 +352,6 @@ namespace wio
             {
                 next_token();
                 return parse_import_statement();
-            }
-            else if (current.type == token_type::kw_func)
-            {
-                next_token();
-                return parse_function_declaration(is_local, is_global);
-            }
-            else if (current.type == token_type::kw_realm)
-            {
-                next_token();
-                return parse_realm_declaration(is_local, is_global);
             }
         }
         else if (current.type == token_type::identifier)
@@ -413,6 +465,13 @@ namespace wio
             std::vector<std::pair<ref<expression>, ref<expression>>> elements;
             location loc = get_dict_element(elements);
             return make_ref<dictionary_literal>(elements, loc);
+        }
+        else if (current.type == token_type::at_sign)
+        {
+            std::vector<ref<variable_declaration>> params;
+            ref<block_statement> body;
+            location loc = get_function_parameters_and_body(params, body, true);
+            return make_ref<lambda_literal>(params, body, loc);
         }
         else if (current.type == token_type::kw_null)
         {
@@ -696,41 +755,67 @@ namespace wio
         return make_ref<dictionary_declaration>(id, exp, is_const, is_local, is_global);
     }
 
-    ref<statement> parser::parse_function_declaration(bool is_local, bool is_global)
+    ref<statement> parser::parse_function_declaration(bool is_const, bool is_local, bool is_global)
     {
         token id_token = consume_token(token_type::identifier);
         ref<identifier> id = make_ref<identifier>(id_token);
 
-        if(match_token(token_type::left_parenthesis))
+        if (match_token(token_type::op, "="))
+        {
+            if (current_token().type == (token_type::at_sign))
+            {
+                std::vector<ref<variable_declaration>> params;
+                ref<block_statement> body;
+
+                location loc = get_function_parameters_and_body(params, body, true);
+                if (!body)
+                    throw invalid_declaration_error("Lambdas must have bodies");
+
+                ref<expression> exp = make_ref<lambda_literal>(params, body, loc);
+
+                return make_ref<lambda_declaration>(id, exp, is_const, is_local, is_global);
+            }
+            else if (current_token().type == (token_type::kw_null))
+            {
+                consume_token(token_type::kw_null);
+                consume_token(token_type::semicolon);
+
+                return make_ref<lambda_declaration>(id, nullptr, is_const, is_local, is_global);
+            }
+            else if (current_token().type == (token_type::identifier))
+            {
+                ref<identifier> result = make_ref<identifier>(next_token());
+                consume_token(token_type::semicolon);
+
+                return make_ref<lambda_declaration>(id, result, is_const, is_local, is_global);
+            }
+            else
+            {
+                error("Expected '@' or identifier after '=' in func declaration.", current_token().loc);
+                return nullptr;
+            }
+        }
+        else if (current_token().type == token_type::left_parenthesis)
         {
             std::vector<ref<variable_declaration>> params;
-            if (!match_token(token_type::right_parenthesis))
-            {
-                do {
-                    ref<statement> param_decl = parse_parameter_declaration();
-                    if (auto var_decl = std::dynamic_pointer_cast<variable_declaration>(param_decl))
-                    {
-                        params.push_back(var_decl);
-                    }
-                    else
-                    {
-                        error("Invalid parameter declaration.", current_token().loc);
-                        return nullptr;
-                    }
+            ref<block_statement> body;
 
-                } while (match_token(token_type::comma));
+            location loc = get_function_parameters_and_body(params, body, false);
 
-                consume_token(token_type::right_parenthesis);
-            }
-
-            if (match_token(token_type::semicolon))
-                return make_ref<function_definition>(id, params, is_local, is_global);
-
-            ref<block_statement> body = parse_block_statement();
-            return make_ref<function_declaration>(id, params, body, variable_type::vt_null, is_local, is_global);
+            if (body)
+                return make_ref<function_definition>(id, params, body, is_local, is_global);
+            return make_ref<function_declaration>(id, params, is_local, is_global);
         }
+        consume_token(token_type::semicolon);
+        return make_ref<lambda_declaration>(id, nullptr, is_const, is_local, is_global);
+    }
 
-        return nullptr;
+    ref<statement> parser::parse_realm_declaration(bool is_local, bool is_global)
+    {
+        ref<identifier> id = make_ref<identifier>(current_token(), false, false);
+        next_token();
+        ref<statement> block = parse_block_statement();
+        return make_ref<realm_declaration>(id, std::dynamic_pointer_cast<block_statement>(block), is_local, is_global);
     }
 
     ref<statement> parser::parse_parameter_declaration()
@@ -738,9 +823,9 @@ namespace wio
         bool is_ref = match_ref();
 
         token type_token = next_token();
-        if (type_token.type != token_type::kw_var && type_token.type != token_type::kw_array && type_token.type != token_type::kw_dict)
+        if (type_token.type != token_type::kw_var && type_token.type != token_type::kw_array && type_token.type != token_type::kw_dict && type_token.type != token_type::kw_func)
         {
-            error("Expected 'var', 'array' or 'dict' in parameter declaration.", type_token.loc);
+            error("Expected 'var', 'array', 'dict' or 'func' in parameter declaration.", type_token.loc);
             return nullptr;
         }
 
@@ -751,12 +836,14 @@ namespace wio
         ref<identifier> id = make_ref<identifier>(id_token);
 
         variable_type type = variable_type::vt_null;
-        if (type_token.value == "var")
+        if (type_token.type == token_type::kw_var)
             type = variable_type::vt_any;
-        else if (type_token.value == "array")
+        else if (type_token.type == token_type::kw_array)
             type = variable_type::vt_array;
-        else if (type_token.value == "dict")
+        else if (type_token.type == token_type::kw_dict)
             type = variable_type::vt_dictionary;
+        else if (type_token.type == token_type::kw_func)
+            type = variable_type::vt_function;
 
         return make_ref<variable_declaration>(id, nullptr, false, true, false, is_ref, type);
     }
@@ -875,14 +962,6 @@ namespace wio
         }
 
         return make_ref<while_statement>(condition, body);
-    }
-
-    ref<statement> parser::parse_realm_declaration(bool is_local, bool is_global)
-    {
-        ref<identifier> id = make_ref<identifier>(current_token(), false, false);
-        next_token();
-        ref<statement> block = parse_block_statement();
-        return make_ref<realm_declaration>(id, std::dynamic_pointer_cast<block_statement>(block), is_local, is_global);
     }
 
     ref<statement> parser::parse_break_statement(location loc)

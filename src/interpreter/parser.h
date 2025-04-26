@@ -35,6 +35,7 @@ namespace wio
         int get_operator_precedence(token tok);
         location get_array_elements(std::vector<ref<expression>>& elements);
         location get_dict_element(std::vector<std::pair<ref<expression>, ref<expression>>>& elements);
+        location get_function_parameters_and_body(std::vector<ref<variable_declaration>>& params, ref<block_statement>& body, bool is_lambda);
 
         ref<statement> parse_statement();
         ref<expression> parse_expression();
@@ -53,7 +54,7 @@ namespace wio
         ref<statement> parse_variable_declaration(bool is_const, bool is_local, bool is_global);
         ref<statement> parse_array_declaration(bool is_const, bool is_local, bool is_global);
         ref<statement> parse_dictionary_declaration(bool is_const, bool is_local, bool is_global);
-        ref<statement> parse_function_declaration(bool is_local, bool is_global);
+        ref<statement> parse_function_declaration(bool is_const, bool is_local, bool is_global);
         ref<statement> parse_realm_declaration(bool is_local, bool is_global);
         ref<statement> parse_parameter_declaration();
         ref<statement> parse_if_statement();

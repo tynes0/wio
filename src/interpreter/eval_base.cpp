@@ -184,11 +184,11 @@ namespace wio
 		main_table::get().insert_to_global(id, name, symbol);
 	}
 
-	ref<function_declaration> eval_base::get_func_decl(const std::string& name, std::vector<function_param> real_parameters)
+	ref<function_definition> eval_base::get_func_definition(const std::string& name, std::vector<function_param> real_parameters)
 	{
 		for (auto& stmt : *s_data.statement_stack->list)
 		{
-			if (auto func_decl = std::dynamic_pointer_cast<function_declaration>(stmt))
+			if (auto func_decl = std::dynamic_pointer_cast<function_definition>(stmt))
 			{
 				if (func_decl->m_id->m_token.value == name)
 				{

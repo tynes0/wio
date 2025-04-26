@@ -25,6 +25,9 @@ namespace wio
 
 		void set_symbol_id(const std::string& id);
 		const std::string& get_symbol_id();
+
+		void set_all(const std::vector<symbol>& overloads);
+		const std::vector<symbol>& get_all();
 	private:
 		std::vector<symbol> m_overloads;
 		std::string m_symbol_id;

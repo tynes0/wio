@@ -1,11 +1,15 @@
-if(true)
+func f = @(var a, var b) { return a + b; };
+func f()
 {
-    global var x = 10;
-}
-else
-{
-    global var y = 5;
+	return (12);
 }
 
-Println(x);
-Println(y);
+func x(func z)
+{
+	Print(z(1,2));
+}
+
+func g;
+g = f;
+
+x(g);
