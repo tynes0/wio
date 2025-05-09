@@ -162,3 +162,5 @@
 - __Update 2.6.6:__ Added member functions for vec3.
 - __Update 2.6.7:__ Writing dictionary items in [] has been removed.
 - __Update 2.7.0:__ Problems with unary operators of vec2-vec3 types have been resolved.
+- __Update 2.8.0:__ Fixed an issue when converting anonymous lambda to string.
+- __Update 2.8.1:__ Stop tracking TODOLIST.md

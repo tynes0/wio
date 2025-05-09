@@ -262,7 +262,7 @@ namespace wio
 
                 const auto& id = func->get_symbol_id();
 
-                ss << '@' << !id.empty() ? id : "\'unnamed\'"s;
+                ss << '@' << (!id.empty() ? id : "\'anonymous\'"s);
 
                 return ss.str();
             }
