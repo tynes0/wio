@@ -1110,7 +1110,7 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_character_ref)
                     return make_ref<variable>(any(any_cast<integer_t>(left_value) < *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(any_cast<integer_t>(left_value) < (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(any_cast<integer_t>(left_value) < (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_float)
             {
@@ -1125,7 +1125,7 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_character_ref)
                     return make_ref<variable>(any(any_cast<float_t>(left_value) < *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(any_cast<float_t>(left_value) < (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(any_cast<float_t>(left_value) < (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_float_ref)
             {
@@ -1140,7 +1140,7 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_character_ref)
                     return make_ref<variable>(any(*any_cast<float_ref_t>(left_value) < *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(*any_cast<float_ref_t>(left_value) < (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(*any_cast<float_ref_t>(left_value) < (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_character)
             {
@@ -1155,7 +1155,7 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_float_ref)
                     return make_ref<variable>(any(any_cast<character_t>(left_value) < *any_cast<float_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(any_cast<character_t>(left_value) < (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(any_cast<character_t>(left_value) < (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_character_ref)
             {
@@ -1170,22 +1170,22 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_float_ref)
                     return make_ref<variable>(any(*any_cast<character_ref_t>(left_value) < *any_cast<float_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(*any_cast<character_ref_t>(left_value) < (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(*any_cast<character_ref_t>(left_value) < (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_bool)
             {
                 if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) < (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) < (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_integer)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) < any_cast<integer_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) < any_cast<integer_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_character)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) < any_cast<character_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) < any_cast<character_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_character_ref)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) < *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) < *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_float)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) < any_cast<float_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) < any_cast<float_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_float_ref)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) < *any_cast<float_ref_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) < *any_cast<float_ref_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_string)
             {
@@ -1218,7 +1218,7 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_character_ref)
                     return make_ref<variable>(any(any_cast<integer_t>(left_value) > *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(any_cast<integer_t>(left_value) > (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(any_cast<integer_t>(left_value) > (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_float)
             {
@@ -1233,7 +1233,7 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_character_ref)
                     return make_ref<variable>(any(any_cast<float_t>(left_value) > *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(any_cast<float_t>(left_value) > (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(any_cast<float_t>(left_value) > (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_float_ref)
             {
@@ -1248,7 +1248,7 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_character_ref)
                     return make_ref<variable>(any(*any_cast<float_ref_t>(left_value) > *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(*any_cast<float_ref_t>(left_value) > (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(*any_cast<float_ref_t>(left_value) > (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_character)
             {
@@ -1263,7 +1263,7 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_float_ref)
                     return make_ref<variable>(any(any_cast<character_t>(left_value) > *any_cast<float_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(any_cast<character_t>(left_value) > (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(any_cast<character_t>(left_value) > (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_character_ref)
             {
@@ -1278,22 +1278,22 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_float_ref)
                     return make_ref<variable>(any(*any_cast<character_ref_t>(left_value) > *any_cast<float_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(*any_cast<character_ref_t>(left_value) > (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(*any_cast<character_ref_t>(left_value) > (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_bool)
             {
                 if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) > (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) > (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_integer)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) > any_cast<integer_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) > any_cast<integer_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_character)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) > any_cast<character_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) > any_cast<character_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_character_ref)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) > *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) > *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_float)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) > any_cast<float_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) > any_cast<float_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_float_ref)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) > *any_cast<float_ref_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) > *any_cast<float_ref_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_string)
             {
@@ -1326,7 +1326,7 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_character_ref)
                     return make_ref<variable>(any(any_cast<integer_t>(left_value) <= *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(any_cast<integer_t>(left_value) <= (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(any_cast<integer_t>(left_value) <= (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_float)
             {
@@ -1341,7 +1341,7 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_character_ref)
                     return make_ref<variable>(any(any_cast<float_t>(left_value) <= *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(any_cast<float_t>(left_value) <= (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(any_cast<float_t>(left_value) <= (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_float_ref)
             {
@@ -1356,7 +1356,7 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_character_ref)
                     return make_ref<variable>(any(*any_cast<float_ref_t>(left_value) <= *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(*any_cast<float_ref_t>(left_value) <= (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(*any_cast<float_ref_t>(left_value) <= (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_character)
             {
@@ -1371,7 +1371,7 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_float_ref)
                     return make_ref<variable>(any(any_cast<character_t>(left_value) <= *any_cast<float_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(any_cast<character_t>(left_value) <= (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(any_cast<character_t>(left_value) <= (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_character_ref)
             {
@@ -1386,22 +1386,22 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_float_ref)
                     return make_ref<variable>(any(*any_cast<character_ref_t>(left_value) <= *any_cast<float_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(*any_cast<character_ref_t>(left_value) <= (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(*any_cast<character_ref_t>(left_value) <= (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_bool)
             {
                 if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) <= (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) <= (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_integer)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) <= any_cast<integer_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) <= any_cast<integer_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_character)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) <= any_cast<character_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) <= any_cast<character_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_character_ref)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) <= *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) <= *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_float)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) <= any_cast<float_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) <= any_cast<float_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_float_ref)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) <= *any_cast<float_ref_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) <= *any_cast<float_ref_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_string)
             {
@@ -1434,7 +1434,7 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_character_ref)
                     return make_ref<variable>(any(any_cast<integer_t>(left_value) >= *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(any_cast<integer_t>(left_value) >= (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(any_cast<integer_t>(left_value) >= (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_float)
             {
@@ -1449,7 +1449,7 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_character_ref)
                     return make_ref<variable>(any(any_cast<float_t>(left_value) >= *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(any_cast<float_t>(left_value) >= (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(any_cast<float_t>(left_value) >= (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_float_ref)
             {
@@ -1464,7 +1464,7 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_character_ref)
                     return make_ref<variable>(any(*any_cast<float_ref_t>(left_value) >= *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(*any_cast<float_ref_t>(left_value) >= (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(*any_cast<float_ref_t>(left_value) >= (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_character)
             {
@@ -1479,7 +1479,7 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_float_ref)
                     return make_ref<variable>(any(any_cast<character_t>(left_value) >= *any_cast<float_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(any_cast<character_t>(left_value) >= (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(any_cast<character_t>(left_value) >= (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_character_ref)
             {
@@ -1494,22 +1494,22 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_float_ref)
                     return make_ref<variable>(any(*any_cast<character_ref_t>(left_value) >= *any_cast<float_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(*any_cast<character_ref_t>(left_value) >= (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(*any_cast<character_ref_t>(left_value) >= (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_bool)
             {
                 if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) >= (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) >= (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_integer)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) >= any_cast<integer_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) >= any_cast<integer_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_character)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) >= any_cast<character_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) >= any_cast<character_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_character_ref)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) >= *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) >= *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_float)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) >= any_cast<float_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) >= any_cast<float_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_float_ref)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) >= *any_cast<float_ref_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) >= *any_cast<float_ref_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_string)
             {
@@ -1542,7 +1542,7 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_character_ref)
                     return make_ref<variable>(any(any_cast<integer_t>(left_value) == *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(any_cast<integer_t>(left_value) == (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(any_cast<integer_t>(left_value) == (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_float)
             {
@@ -1557,7 +1557,7 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_character_ref)
                     return make_ref<variable>(any(any_cast<float_t>(left_value) == *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(any_cast<float_t>(left_value) == (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(any_cast<float_t>(left_value) == (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_float_ref)
             {
@@ -1572,7 +1572,7 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_character_ref)
                     return make_ref<variable>(any(*any_cast<float_ref_t>(left_value) == *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(*any_cast<float_ref_t>(left_value) == (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(*any_cast<float_ref_t>(left_value) == (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_character)
             {
@@ -1587,7 +1587,7 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_float_ref)
                     return make_ref<variable>(any(any_cast<character_t>(left_value) == *any_cast<float_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(any_cast<character_t>(left_value) == (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(any_cast<character_t>(left_value) == (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_character_ref)
             {
@@ -1602,22 +1602,22 @@ namespace wio
                 else if (rv_ref->get_type() == variable_type::vt_float_ref)
                     return make_ref<variable>(any(*any_cast<character_ref_t>(left_value) == *any_cast<float_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(*any_cast<character_ref_t>(left_value) == (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(*any_cast<character_ref_t>(left_value) == (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_bool)
             {
                 if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) == (integer_t)any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) == (integer_t)any_cast<boolean_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_integer)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) == any_cast<integer_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) == any_cast<integer_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_character)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) == any_cast<character_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) == any_cast<character_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_character_ref)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) == *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) == *any_cast<character_ref_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_float)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) == any_cast<float_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) == any_cast<float_t>(right_value)), variable_type::vt_bool);
                 else if (rv_ref->get_type() == variable_type::vt_float_ref)
-                    return make_ref<variable>(any((integer_t)any_cast<bool>(left_value) == *any_cast<float_ref_t>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any((integer_t)any_cast<boolean_t>(left_value) == *any_cast<float_ref_t>(right_value)), variable_type::vt_bool);
             }
             else if (lv_ref->get_type() == variable_type::vt_string)
             {
@@ -1644,7 +1644,7 @@ namespace wio
                         ref<variable_base> item_result_base = eval_binary_exp_equal_to(left_arr->get_element(i), right_arr->get_element(i), loc);
                         ref<variable> item_result = std::dynamic_pointer_cast<variable>(item_result_base);
 
-                        if (!item_result->get_data_as<bool>())
+                        if (!item_result->get_data_as<boolean_t>())
                             return make_ref<variable>(any(false), variable_type::vt_bool);
                     }
 
@@ -1672,7 +1672,7 @@ namespace wio
                         ref<variable_base> item_result_base = eval_binary_exp_equal_to(left_value, right_data[left_key], loc);
                         ref<variable> item_result = std::dynamic_pointer_cast<variable>(item_result_base);
 
-                        if (!item_result->get_data_as<bool>())
+                        if (!item_result->get_data_as<boolean_t>())
                             return make_ref<variable>(any(false), variable_type::vt_bool);
                     }
 
@@ -1688,7 +1688,7 @@ namespace wio
 
                     ref<variable_base> first_result = eval_binary_exp_equal_to(left_pair.first, right_pair.first, loc);
 
-                    if (std::dynamic_pointer_cast<variable>(first_result)->get_data_as<bool>())
+                    if (std::dynamic_pointer_cast<variable>(first_result)->get_data_as<boolean_t>())
                         return eval_binary_exp_equal_to(left_pair.second, right_pair.second, loc);
 
                     return make_ref<variable>(any(false), variable_type::vt_bool);
@@ -1717,7 +1717,7 @@ namespace wio
 
         ref<variable_base> eval_binary_exp_not_equal_to(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc)
         {
-            return make_ref<variable>(any(!std::dynamic_pointer_cast<variable>(eval_binary_exp_equal_to(lv_ref, rv_ref, loc))->get_data_as<bool>()), variable_type::vt_bool);
+            return make_ref<variable>(any(!std::dynamic_pointer_cast<variable>(eval_binary_exp_equal_to(lv_ref, rv_ref, loc))->get_data_as<boolean_t>()), variable_type::vt_bool);
         }
 
         ref<variable_base> eval_binary_exp_type_equal(ref<variable_base> lv_ref, ref<variable_base> rv_ref, const location& loc)
@@ -1821,7 +1821,7 @@ namespace wio
             if (lv_ref->get_type() == variable_type::vt_bool)
             {
                 if(rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(any_cast<bool>(left_value) && any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(any_cast<boolean_t>(left_value) && any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
 
             throw type_mismatch_error("Invalid operand types for '&&' operator (logical AND). Operands must be booleans.", loc);
@@ -1840,7 +1840,7 @@ namespace wio
             if (lv_ref->get_type() == variable_type::vt_bool)
             {
                 if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(any_cast<bool>(left_value) || any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(any_cast<boolean_t>(left_value) || any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
 
             throw type_mismatch_error("Invalid operand types for '||' operator (logical OR). Operands must be booleans.", loc);
@@ -1859,7 +1859,7 @@ namespace wio
             if (lv_ref->get_type() == variable_type::vt_bool)
             {
                 if (rv_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(any_cast<bool>(left_value) != any_cast<bool>(right_value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(any_cast<boolean_t>(left_value) != any_cast<boolean_t>(right_value)), variable_type::vt_bool);
             }
 
             throw type_mismatch_error("Invalid operand types for '^^' operator (logical XOR). Operands must be booleans.", loc);
@@ -2105,22 +2105,7 @@ namespace wio
         ref<variable_base> eval_unary_exp_positive(ref<variable_base> v_ref, unary_operator_type op_type, const location& loc)
         {
             if (op_type == unary_operator_type::prefix)
-            {
-                if (v_ref->get_type() == variable_type::vt_integer ||
-                    v_ref->get_type() == variable_type::vt_float ||
-                    v_ref->get_type() == variable_type::vt_vec2 ||
-                    v_ref->get_type() == variable_type::vt_vec3 ||
-                    v_ref->get_type() == variable_type::vt_vec4 ||
-                    v_ref->get_type() == variable_type::vt_character ||
-                    v_ref->get_type() == variable_type::vt_bool)
-                    return std::dynamic_pointer_cast<variable>(v_ref)->clone();
-                else if (v_ref->get_type() == variable_type::vt_character_ref)
-                    return make_ref<variable>(*std::dynamic_pointer_cast<variable>(v_ref)->get_data_as<character_ref_t>(), variable_type::vt_character);
-                else if (v_ref->get_type() == variable_type::vt_float_ref)
-                    return make_ref<variable>(*std::dynamic_pointer_cast<variable>(v_ref)->get_data_as<float_ref_t>(), variable_type::vt_float);
-
-                throw invalid_type_error("Unary '+' operator requires a numeric operand or vec!", loc);
-            }
+                return std::dynamic_pointer_cast<variable>(v_ref)->clone();
 
             throw invalid_operation_error("Unary '+' operator should be prefix!", loc);
         }
@@ -2141,9 +2126,9 @@ namespace wio
                 else if (v_ref->get_type() == variable_type::vt_float_ref)
                     return make_ref<variable>(any(-(*any_cast<float_ref_t>(value))), variable_type::vt_float);
                 else if (v_ref->get_type() == variable_type::vt_vec2)
-                    return make_ref<variable>(any(-any_cast<vec2>(value)), variable_type::vt_vec2);
+                    return builtin::helper::make_variable(-any_cast<vec2>(value));
                 else if (v_ref->get_type() == variable_type::vt_vec3)
-                    return make_ref<variable>(any(-any_cast<vec3>(value)), variable_type::vt_vec3);
+                    return builtin::helper::make_variable(-any_cast<vec3>(value));
                 //else if (v_ref->get_type() == variable_type::vt_vec4)
                 //    return make_ref<variable>(any(-any_cast<vec4>(value)), variable_type::vt_vec4);
                 else if (v_ref->get_type() == variable_type::vt_character)
@@ -2151,7 +2136,7 @@ namespace wio
                 else if (v_ref->get_type() == variable_type::vt_character_ref)
                     return make_ref<variable>(any(-(*any_cast<character_ref_t>(value))), variable_type::vt_character);
                 else if (v_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(any_cast<bool>(value) ? false : true), variable_type::vt_bool);
+                    return make_ref<variable>(any(any_cast<boolean_t>(value) ? false : true), variable_type::vt_bool);
 
                 throw invalid_type_error("Unary '-' operator requires a numeric operand.", loc);
             }
@@ -2214,7 +2199,7 @@ namespace wio
 
                 v2_value++;
 
-                return make_ref<variable>(any(op_type == unary_operator_type::prefix ? v2_value : old_value), variable_type::vt_vec2);
+                return builtin::helper::make_variable(op_type == unary_operator_type::prefix ? v2_value : old_value);
             }
             else if (v_ref->get_type() == variable_type::vt_vec3)
             {
@@ -2223,7 +2208,7 @@ namespace wio
 
                 v3_value++;
 
-                return make_ref<variable>(any(op_type == unary_operator_type::prefix ? v3_value : old_value), variable_type::vt_vec3);
+                return builtin::helper::make_variable(op_type == unary_operator_type::prefix ? v3_value : old_value);
             }
             else if (v_ref->get_type() == variable_type::vt_vec4)
             {
@@ -2288,7 +2273,7 @@ namespace wio
 
                 v2_value--;
 
-                return make_ref<variable>(any(op_type == unary_operator_type::prefix ? v2_value : old_value), variable_type::vt_vec2);
+                return builtin::helper::make_variable(op_type == unary_operator_type::prefix ? v2_value : old_value);
             }
             else if (v_ref->get_type() == variable_type::vt_vec3)
             {
@@ -2297,7 +2282,7 @@ namespace wio
 
                 v3_value--;
 
-                return make_ref<variable>(any(op_type == unary_operator_type::prefix ? v3_value : old_value), variable_type::vt_vec3); return nullptr;
+                return builtin::helper::make_variable(op_type == unary_operator_type::prefix ? v3_value : old_value);
             }
             else if (v_ref->get_type() == variable_type::vt_vec4)
             {
@@ -2335,7 +2320,7 @@ namespace wio
             if (op_type == unary_operator_type::prefix)
             {
                 if (v_ref->get_type() == variable_type::vt_bool)
-                    return make_ref<variable>(any(!any_cast<bool>(value)), variable_type::vt_bool);
+                    return make_ref<variable>(any(!any_cast<boolean_t>(value)), variable_type::vt_bool);
 
                 throw invalid_type_error("Unary '!' operator requires a boolean operand.", loc);
             }
@@ -2361,7 +2346,7 @@ namespace wio
             else if (v_ref->get_type() == variable_type::vt_function)
             {
                 ref<var_function> func = std::dynamic_pointer_cast<var_function>(v_ref);
-                return make_ref<variable>(any(((bool)func->get_data())), variable_type::vt_bool);
+                return make_ref<variable>(any(((boolean_t)func->get_data())), variable_type::vt_bool);
             }
             else
             {

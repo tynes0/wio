@@ -161,3 +161,4 @@
 - __Update 2.6.5:__ A lot of code cleanup has been done.
 - __Update 2.6.6:__ Added member functions for vec3.
 - __Update 2.6.7:__ Writing dictionary items in [] has been removed.
+- __Update 2.7.0:__ Problems with unary operators of vec2-vec3 types have been resolved.
