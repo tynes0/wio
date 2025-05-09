@@ -6,6 +6,8 @@
 #include "../variables/array.h"
 #include "../variables/dictionary.h"
 #include "../variables/function.h"
+#include "../variables/overload_list.h"
+#include "../variables/realm.h"
 
 #include "../types/file_wrapper.h"
 #include "../types/vec2.h"
@@ -19,8 +21,7 @@ namespace wio
 {
 	namespace util
 	{
-
-        static std::string scientific_to_string(double d)
+        static string_t scientific_to_string(double d)
         {
             if (d == 0.0 || (std::signbit(d) && d == 0.0))
                 return "0.0e+00";
@@ -28,10 +29,10 @@ namespace wio
             constexpr int precision = 15;
             char buffer[64];
             std::snprintf(buffer, sizeof(buffer), "%.*e", precision - 1, d);
-            return std::string(buffer);
+            return string_t(buffer);
         }
 
-        std::string double_to_string(double d)
+        string_t float_t_to_string(float_t d)
         {
             if (d == 0.0 || (std::signbit(d) && d == 0.0))
                 return "0.0";
@@ -64,14 +65,14 @@ namespace wio
                 *(end + 2) = '\0';
             }
 
-            return std::string(buffer);
+            return string_t(buffer);
         }
 
-		std::string type_to_string(variable_type vt)
+        string_t type_to_string(variable_type vt)
 		{
 			std::string_view view = frenum::to_string_view(vt);
 			view.remove_prefix(3);
-			return std::string(view);
+			return string_t(view);
 		}
 
 		char get_escape_seq(char ch)
@@ -93,47 +94,47 @@ namespace wio
 			else if (ch == 'v') // vertical tab
 				return '\v';
 
-			throw invalid_string_error("Invalid escape sequence: \\" + std::string(1, ch));
+			throw invalid_string_error("Invalid escape sequence: \\" + string_t(1, ch));
 		}
 
-        using namespace std::string_literals;
-
-        std::string var_to_string(ref<variable_base> base)
+        string_t var_to_string(ref<variable_base> base)
         {
+            using namespace std::string_literals;
+
             static int s_member_count = 0;
 
             if (base->get_type() == variable_type::vt_null)
-                return std::string("null");
+                return string_t("null");
             else if (base->get_base_type() == variable_base_type::variable)
             {
                 ref<variable> var = std::dynamic_pointer_cast<variable>(base);
                 if (var->get_type() == variable_type::vt_string)
                 {
-                    return s_member_count ? ('\"' + var->get_data_as<std::string>() + '\"') : var->get_data_as<std::string>();
+                    return s_member_count ? ('\"' + var->get_data_as<string_t>() + '\"') : var->get_data_as<string_t>();
                 }
                 else if (var->get_type() == variable_type::vt_integer)
                 {
-                    return std::to_string(var->get_data_as<long long>());
+                    return std::to_string(var->get_data_as<integer_t>());
                 }
                 else if (var->get_type() == variable_type::vt_float)
                 {
-                    return util::double_to_string(var->get_data_as<double>());
+                    return util::float_t_to_string(var->get_data_as<double>());
                 }
                 else if (var->get_type() == variable_type::vt_float_ref)
                 {
-                    return util::double_to_string(*var->get_data_as<double*>());
+                    return util::float_t_to_string(*var->get_data_as<double*>());
                 }
                 else if (var->get_type() == variable_type::vt_bool)
                 {
-                    return var->get_data_as<bool>() ? std::string("true") : std::string("false");
+                    return var->get_data_as<bool>() ? string_t("true") : string_t("false");
                 }
                 else if (var->get_type() == variable_type::vt_character)
                 {
-                    return s_member_count ? ("'"s + var->get_data_as<char>() + '\'') : std::string(1, var->get_data_as<char>());
+                    return s_member_count ? ("'"s + var->get_data_as<char>() + '\'') : string_t(1, var->get_data_as<char>());
                 }
                 else if (var->get_type() == variable_type::vt_character_ref)
                 {
-                    return s_member_count ? ("'"s + *var->get_data_as<char*>() + '\'') : std::string(1, *var->get_data_as<char*>());
+                    return s_member_count ? ("'"s + *var->get_data_as<char*>() + '\'') : string_t(1, *var->get_data_as<char*>());
                 }
                 else if (var->get_type() == variable_type::vt_type)
                 {
@@ -163,9 +164,9 @@ namespace wio
                     const vec2& v = var_ref->get_data_as<vec2>();
                     std::stringstream ss;
                     ss << ("(");
-                    ss << util::double_to_string(v.x);
+                    ss << util::float_t_to_string(v.x);
                     ss << (", ");
-                    ss << util::double_to_string(v.y);
+                    ss << util::float_t_to_string(v.y);
                     ss << (")");
                     return ss.str();
                 }
@@ -175,11 +176,11 @@ namespace wio
                     const vec3& v = var_ref->get_data_as<vec3>();
                     std::stringstream ss;
                     ss << ("(");
-                    ss << util::double_to_string(v.x);
+                    ss << util::float_t_to_string(v.x);
                     ss << (", ");
-                    ss << util::double_to_string(v.y);
+                    ss << util::float_t_to_string(v.y);
                     ss << (", ");
-                    ss << util::double_to_string(v.z);
+                    ss << util::float_t_to_string(v.z);
                     ss << (")");
                     return ss.str();
                 }
@@ -189,7 +190,7 @@ namespace wio
                     const comparator& v = var_ref->get_data_as<comparator>();
                     std::stringstream ss;
 
-                    static auto add_to_stream = [&ss](const std::string& id, ref<variable_base> item) 
+                    static auto add_to_stream = [&ss](const string_t& id, ref<variable_base> item) 
                         {
                             ss << ("[");
                             ss << id;
@@ -210,7 +211,9 @@ namespace wio
                     return ss.str();
                 }
                 else
+                {
                     throw builtin_error("Invalid expression!");
+                }
             }
             else if (base->get_base_type() == variable_base_type::array)
             {
@@ -240,11 +243,9 @@ namespace wio
                 s_member_count++;
                 for (const auto& [key, value] : dict_map)
                 {
-                    ss << ("[");
                     ss << ('\"' + key + '\"');
                     ss << (" : ");
                     ss << var_to_string(value);
-                    ss << ("]");
                     if (i != dict->size() - 1)
                         ss << (", ");
                     i++;
@@ -254,8 +255,19 @@ namespace wio
                 ss << ("}");
                 return ss.str();
             }
+            else if (base->get_base_type() == variable_base_type::function)
+            {
+                ref<overload_list> func = std::dynamic_pointer_cast<overload_list>(base);
+                std::stringstream ss;
 
-            return std::string();
+                const auto& id = func->get_symbol_id();
+
+                ss << '@' << !id.empty() ? id : "\'unnamed\'"s;
+
+                return ss.str();
+            }
+
+            return string_t();
         }
 	}
 }

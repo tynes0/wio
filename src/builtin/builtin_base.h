@@ -15,12 +15,12 @@ namespace wio
         namespace detail
         {
             template <size_t Size>
-            using pa = std::array<variable_type, Size>;
+            using pa = std::array<variable_base_type, Size>;
         }
 		namespace loader
 		{
             template<size_t ArgCount, typename Func>
-            ref<overload_list> load_function(symbol_map& target_table, const std::string& name, Func func, const std::array<variable_type, ArgCount>& param_types, const std::bitset<ArgCount>& is_ref = {})
+            ref<overload_list> load_function(symbol_map& target_table, const std::string& name, Func func, const std::array<variable_base_type, ArgCount>& param_types, const std::bitset<ArgCount>& is_ref = {})
             {
                 std::vector<function_param> params;
                 for (size_t i = 0; i < param_types.size(); ++i)
@@ -41,7 +41,7 @@ namespace wio
             }
 
             template<int ArgCount, typename Func>
-            void load_overload(ref<overload_list> olist, Func func, const std::array<variable_type, ArgCount>& param_types, const std::bitset<ArgCount>& is_ref = {})
+            void load_overload(ref<overload_list> olist, Func func, const std::array<variable_base_type, ArgCount>& param_types, const std::bitset<ArgCount>& is_ref = {})
             {
                 std::vector<function_param> params;
                 for (size_t i = 0; i < param_types.size(); ++i)

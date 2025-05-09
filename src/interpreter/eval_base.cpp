@@ -14,6 +14,7 @@ namespace wio
 		std::stack<id_t> func_eval_ids;
 		std::vector<function_param> last_parameters;
 		ref<variable_base> last_return_value;
+		ref<variable_base>* last_left_value = nullptr;
 		ref<stmt_stack> statement_stack;
 		int loop_depth = 0;
 		uint16_t func_body_depth = 0;
@@ -194,7 +195,7 @@ namespace wio
 				{
 					std::vector<function_param> parameters;
 					for (auto& param : func_decl->m_params)
-						parameters.emplace_back(param->m_id->m_token.value, param->m_type, (bool)param->m_flags.b4);
+						parameters.emplace_back(param->m_id->m_token.value, param->m_type, (bool)param->m_is_ref);
 
 					if (std::equal(parameters.begin(), parameters.end(), real_parameters.begin(), real_parameters.end()))
 						return func_decl;
@@ -223,6 +224,11 @@ namespace wio
 	ref<variable_base> eval_base::get_last_return_value() const
 	{
 		return s_data.last_return_value;
+	}
+
+	ref<variable_base>* eval_base::get_last_left_value() const
+	{
+		return s_data.last_left_value;
 	}
 
 	ref<stmt_stack> eval_base::get_statement_stack() const
@@ -306,6 +312,11 @@ namespace wio
 			s_data.last_return_value = create_null_variable();
 		else
 			s_data.last_return_value = value;
+	}
+
+	void eval_base::set_last_left_value(ref<variable_base>* value)
+	{
+		s_data.last_left_value = value;
 	}
 
 	void eval_base::set_last_parameters(const std::vector<function_param>& parameters)

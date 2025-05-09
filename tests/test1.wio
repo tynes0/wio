@@ -1,15 +1,1 @@
-func f = @(var a, var b) { return a + b; };
-func f()
-{
-	return (12);
-}
-
-func x(func z)
-{
-	Print(z(1,2));
-}
-
-func g;
-g = f;
-
-x(g);
+Print(@(){});

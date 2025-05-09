@@ -18,7 +18,7 @@ namespace wio
 		virtual ref<variable_base> clone() const override;
 
 		const std::vector<ref<variable_base>>& get_data() const;
-		ref<variable_base> get_element(long long index);
+		ref<variable_base>& get_element(long long index);
 		size_t size() const;
 
 		void push(ref<variable_base> data);
@@ -31,6 +31,7 @@ namespace wio
 		void set_element(long long index, ref<variable_base> value);
 	private:
 		long long normalize_index(long long index) const;
+		void convert_omni();
 
 		std::vector<ref<variable_base>> m_data; // std::vector could be change
 	};

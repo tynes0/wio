@@ -43,13 +43,15 @@ namespace wio
         static void evaluate_import_statement(ref<import_statement> node);
         static void evaluate_return_statement(ref<return_statement> node);
 
-        static void evaluate_variable_declaration(ref<variable_declaration> node, bool is_parameter = false);
+        static void evaluate_variable_declaration(ref<variable_declaration> node);
         static void evaluate_array_declaration(ref<array_declaration> node);
         static void evaluate_dictionary_declaration(ref<dictionary_declaration> node);
         static void evaluate_function_definition(ref<function_definition> node);
         static void evaluate_function_declaration(ref<function_declaration> node);
         static void evaluate_lambda_declaration(ref<lambda_declaration> node);
         static void evaluate_realm_declaration(ref<realm_declaration> node);
+        static void evaluate_omni_declaration(ref<omni_declaration> node);
+        static void evaluate_parameter_declaration(ref<parameter_declaration> node);
 
         static ref<variable_base> as_value(ref<expression> node, ref<variable_base> object = nullptr, bool is_ref = false);
     };

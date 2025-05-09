@@ -20,12 +20,12 @@ namespace wio
 {
     namespace builtin
     {
-        constexpr long long FILE_MODE_READ      = BIT(0);
-        constexpr long long FILE_MODE_WRITE     = BIT(1);
-        constexpr long long FILE_MODE_APPEND    = BIT(2);
-        constexpr long long FILE_MODE_BINARY    = BIT(3);
-        constexpr long long FILE_MODE_TRUNC     = BIT(4);
-        constexpr long long FILE_MODE_ATE       = BIT(5);
+        constexpr integer_t FILE_MODE_READ      = BIT(0);
+        constexpr integer_t FILE_MODE_WRITE     = BIT(1);
+        constexpr integer_t FILE_MODE_APPEND    = BIT(2);
+        constexpr integer_t FILE_MODE_BINARY    = BIT(3);
+        constexpr integer_t FILE_MODE_TRUNC     = BIT(4);
+        constexpr integer_t FILE_MODE_ATE       = BIT(5);
 
         using namespace std::string_literals;
 
@@ -43,7 +43,7 @@ namespace wio
                 if (!mode_var || mode_var->get_type() != variable_type::vt_integer)
                     throw builtin_error("OpenFile(): Mode must be an integer.");
 
-                long long open_mode = mode_var->get_data_as<long long>();
+                integer_t open_mode = mode_var->get_data_as<integer_t>();
 
                 FILE* file = nullptr;
 
@@ -131,9 +131,9 @@ namespace wio
                     throw builtin_error("Write(): Value must be an string.");
 
                 if(file_var->get_type() == variable_type::vt_file)
-                    filesystem::write_file(file_var->get_data_as<file_wrapper>().get_file(), value_var->get_data_as<std::string>());
+                    filesystem::write_file(file_var->get_data_as<file_wrapper>().get_file(), value_var->get_data_as<string_t>());
                 else
-                    filesystem::write_fp(file_var->get_data_as<std::string>(), value_var->get_data_as<std::string>());
+                    filesystem::write_fp(file_var->get_data_as<string_t>(), value_var->get_data_as<string_t>());
 
                 return create_null_variable();
             }
@@ -152,7 +152,7 @@ namespace wio
                 else
                     buf = filesystem::read_stdout();
 
-                auto result = make_ref<variable>(any(std::string(buf.as<char>(), buf.size)), variable_type::vt_string);
+                auto result = make_ref<variable>(any(string_t(buf.as<character_t>(), buf.size)), variable_type::vt_string);
                 return result;
             }
         }
@@ -161,10 +161,10 @@ namespace wio
         {
             using namespace wio::builtin::detail;
 
-            loader::load_function(table, "OpenFile", detail::b_open_file, pa<2>{ variable_type::vt_string, variable_type::vt_integer });
-            loader::load_function(table, "CloseFile", detail::b_close_file, pa<1>{ variable_type::vt_file });
-            loader::load_function(table, "Write", detail::b_write, pa<2>{ variable_type::vt_any, variable_type::vt_string });
-            loader::load_function(table, "Read", detail::b_read, pa<1>{ variable_type::vt_file });
+            loader::load_function(table, "OpenFile", detail::b_open_file, pa<2>{ variable_base_type::variable, variable_base_type::variable });
+            loader::load_function(table, "CloseFile", detail::b_close_file, pa<1>{ variable_base_type::variable });
+            loader::load_function(table, "Write", detail::b_write, pa<2>{ variable_base_type::variable, variable_base_type::variable });
+            loader::load_function(table, "Read", detail::b_read, pa<1>{ variable_base_type::variable });
 
             loader::load_constant(table, "OPEN_MODE_READ", variable_type::vt_integer, FILE_MODE_READ);
             loader::load_constant(table, "OPEN_MODE_WRITE", variable_type::vt_integer, FILE_MODE_WRITE);

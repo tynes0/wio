@@ -6,6 +6,7 @@
 #include "members/b_string.h"
 #include "members/b_dictionary.h"
 #include "members/b_vec2.h"
+#include "members/b_vec3.h"
 #include "members/b_character.h"
 #include "members/b_float.h"
 
@@ -28,6 +29,9 @@ namespace wio
         
         builtin::b_vec2 vec2_member_loader;
         target_member_scope_map[variable_type::vt_vec2] = vec2_member_loader.load();
+
+        builtin::b_vec3 vec3_member_loader;
+        target_member_scope_map[variable_type::vt_vec3] = vec3_member_loader.load();
         
         builtin::b_float float_member_loader;
         target_member_scope_map[variable_type::vt_float] = float_member_loader.load();
@@ -35,7 +39,6 @@ namespace wio
 
         target_member_scope_map[variable_type::vt_file] = nullptr;
         target_member_scope_map[variable_type::vt_pair] = nullptr;
-        target_member_scope_map[variable_type::vt_vec3] = nullptr;
         target_member_scope_map[variable_type::vt_vec4] = nullptr;
         target_member_scope_map[variable_type::vt_null] = nullptr;
         target_member_scope_map[variable_type::vt_integer] = nullptr;

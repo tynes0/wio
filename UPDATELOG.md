@@ -153,3 +153,11 @@
 - __Update 2.5.1:__ func now behaves like a real type. It can be assigned to and used as a parameter.
 - __Update 2.5.2:__ Added lambda support.
 - __Update 2.5.3:__ Added member functions for vec2.
+- __Update 2.6.0:__ Minor errors and omissions have been corrected.
+- __Update 2.6.1:__ Added 'omni' keyword.
+- __Update 2.6.2:__ Updated parameter types of builtin functions.
+- __Update 2.6.3:__ Fixed operational errors of vec2 and vec3 types.
+- __Update 2.6.4:__ Implementations of assignment operators has been updated.
+- __Update 2.6.5:__ A lot of code cleanup has been done.
+- __Update 2.6.6:__ Added member functions for vec3.
+- __Update 2.6.7:__ Writing dictionary items in [] has been removed.

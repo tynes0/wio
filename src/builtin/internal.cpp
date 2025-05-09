@@ -39,7 +39,7 @@ namespace wio
 			static ref<variable_base> b_input(const std::vector<ref<variable_base>>& args)
 			{
 				raw_buffer buf = filesystem::read_stdout();
-				return make_ref<variable>(any(std::string(buf.as<char>())), variable_type::vt_string);
+				return make_ref<variable>(any(string_t(buf.as<character_t>())), variable_type::vt_string);
 			}
 
 			static ref<variable_base> b_range(const std::vector<ref<variable_base>>& args)
@@ -52,26 +52,26 @@ namespace wio
 
 				if (args[0]->get_type() == variable_type::vt_integer)
 				{
-					long long ll_left = any_cast<long long>(left_value);
-					long long ll_right = 0;
+					integer_t ll_left = any_cast<integer_t>(left_value);
+					integer_t ll_right = 0;
 
 					if (args[1]->get_type() == variable_type::vt_integer)
-						ll_right = any_cast<long long>(right_value);
+						ll_right = any_cast<integer_t>(right_value);
 					else if (args[1]->get_type() == variable_type::vt_float)
-						ll_right = static_cast<long long>(any_cast<double>(right_value));
+						ll_right = static_cast<integer_t>(any_cast<float_t>(right_value));
 					else if (args[1]->get_type() == variable_type::vt_float_ref)
-						ll_right = static_cast<long long>(*any_cast<double*>(right_value));
+						ll_right = static_cast<integer_t>(*any_cast<float_ref_t>(right_value));
 
 					std::vector<ref<variable_base>> result_vec;
 
 					if (ll_left < ll_right)
 					{
-						for (long long i = ll_left; i < ll_right; ++i)
+						for (integer_t i = ll_left; i < ll_right; ++i)
 							result_vec.push_back(make_ref<variable>(any(i), variable_type::vt_integer));
 					}
 					else
 					{
-						for (long long i = ll_left - 1; i > ll_right - 1; --i)
+						for (integer_t i = ll_left - 1; i > ll_right - 1; --i)
 							result_vec.push_back(make_ref<variable>(any(i), variable_type::vt_integer));
 					}
 
@@ -79,26 +79,26 @@ namespace wio
 				}
 				else if (args[0]->get_type() == variable_type::vt_float)
 				{
-					double d_left = any_cast<double>(left_value);
-					double d_right = 0.0;
+					float_t d_left = any_cast<float_t>(left_value);
+					float_t d_right = 0.0;
 
 					if (args[1]->get_type() == variable_type::vt_float)
-						d_right = any_cast<double>(right_value);
+						d_right = any_cast<float_t>(right_value);
 					else if (args[1]->get_type() == variable_type::vt_float_ref)
-						d_right = *any_cast<double*>(right_value);
+						d_right = *any_cast<float_ref_t>(right_value);
 					else if (args[1]->get_type() == variable_type::vt_integer)
-						d_right = (double)any_cast<long long>(right_value);
+						d_right = (float_t)any_cast<integer_t>(right_value);
 
 					std::vector<ref<variable_base>> result_vec;
 
 					if (d_left < d_right)
 					{
-						for (double i = d_left; i < d_right; ++i)
+						for (float_t i = d_left; i < d_right; ++i)
 							result_vec.push_back(make_ref<variable>(any(i), variable_type::vt_float));
 					}
 					else
 					{
-						for (double i = d_left - 1; i > d_right - 1; --i)
+						for (float_t i = d_left - 1; i > d_right - 1; --i)
 							result_vec.push_back(make_ref<variable>(any(i), variable_type::vt_float));
 					}
 
@@ -111,7 +111,7 @@ namespace wio
 			static ref<variable_base> b_range_2(const std::vector<ref<variable_base>>& args)
 			{
 				std::vector<ref<variable_base>> new_args;
-				new_args.push_back(make_ref<variable>(any(long long(0)), variable_type::vt_integer));
+				new_args.push_back(make_ref<variable>(any(integer_t(0)), variable_type::vt_integer));
 				new_args.push_back(args[0]);
 				return b_range(new_args);
 			}
@@ -121,15 +121,15 @@ namespace wio
 		{
 			using namespace wio::builtin::detail;
 
-			loader::load_function(table, "Print", detail::b_print, pa<1>{ variable_type::vt_any });
+			loader::load_function(table, "Print", detail::b_print, pa<1>{ variable_base_type::omni });
 
-			auto println_func = loader::load_function(table, "Println", detail::b_println, pa<1>{ variable_type::vt_any });
+			auto println_func = loader::load_function(table, "Println", detail::b_println, pa<1>{ variable_base_type::omni });
 			loader::load_overload(println_func, detail::b_println_2, pa<0>{});
 
 			loader::load_function(table, "Input", detail::b_input, pa<0>{});
 
-			auto range_func = loader::load_function(table, "Range", detail::b_range, pa<2>{ variable_type::vt_any, variable_type::vt_any });
-			loader::load_overload(range_func, detail::b_range_2, pa<1>{ variable_type::vt_any });
+			auto range_func = loader::load_function(table, "Range", detail::b_range, pa<2>{ variable_base_type::omni, variable_base_type::omni });
+			loader::load_overload(range_func, detail::b_range_2, pa<1>{ variable_base_type::omni });
 
 		}
 

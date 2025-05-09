@@ -40,7 +40,7 @@ namespace wio
         return m_data;
     }
 
-    ref<variable_base> var_dictionary::get_element(ref<variable_base> key)
+    ref<variable_base>& var_dictionary::get_element(ref<variable_base> key)
     {
         std::string skey = as_key(key);
         if (check_existance(skey))
@@ -62,7 +62,7 @@ namespace wio
         if (!check_existance(skey))
             throw invalid_key_error("Key '" + skey + "'' is not exists!");
         
-        helper::container_element_assignment(m_data[skey], value->clone());
+        helper::eval_omni_assignment(m_data[skey], value->clone());
     }
 
     size_t var_dictionary::size() const
@@ -75,7 +75,7 @@ namespace wio
         return (m_data.find(key) != m_data.end());
     }
 
-    std::string var_dictionary::as_key(ref<variable_base> value)
+    string_t var_dictionary::as_key(ref<variable_base> value)
     {
         ref<variable> var = std::dynamic_pointer_cast<variable>(value);
 

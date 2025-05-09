@@ -248,7 +248,7 @@ namespace wio
         if (m_flags.b1)
             result += "const ";
 
-        result += util::type_to_string(m_type) + " " + m_id->to_string();
+        result += "var " + m_id->to_string();
         if (m_initializer)
             result += " = " + m_initializer->to_string();
         result += ";";
@@ -257,19 +257,49 @@ namespace wio
 
     std::string array_declaration::to_string() const
     {
-        std::string result = (m_flags.b1 ? "const " : "") + std::string("array ") + m_id->to_string() + " = " + m_initializer->to_string();
+        std::string result;
+        if (m_flags.b3)
+            result += "global ";
+        if (m_flags.b2)
+            result += "local ";
+        if (m_flags.b1)
+            result += "const ";
+
+        result += std::string("array ") + m_id->to_string();
+
+        if (m_initializer)
+            result += " = " + m_initializer->to_string();
+        result += ";";
         return result;
     }
 
     std::string dictionary_declaration::to_string() const
     {
-        std::string result = (m_flags.b1 ? "const " : "") + std::string("dict ") + m_id->to_string() + " = " + m_initializer->to_string();
+        std::string result;
+        if (m_flags.b3)
+            result += "global ";
+        if (m_flags.b2)
+            result += "local ";
+        if (m_flags.b1)
+            result += "const ";
+
+        result += std::string("dict ") + m_id->to_string();
+
+        if (m_initializer)
+            result += " = " + m_initializer->to_string();
+        result += ";";
         return result;
     }
 
     std::string function_definition::to_string() const
     {
-        std::string result = "func " + m_id->to_string() + "(";
+        std::string result;
+        if (m_is_global)
+            result += "global ";
+        if (m_is_local)
+            result += "local ";
+
+        result += "func " + m_id->to_string() + "(";
         for (size_t i = 0; i < m_params.size(); ++i)
         {
             result += m_params[i]->to_string();
@@ -296,7 +326,13 @@ namespace wio
 
     std::string function_declaration::to_string() const
     {
-        std::string result = "func " + m_id->to_string() + "(";
+        std::string result;
+        if (m_is_global)
+            result += "global ";
+        if (m_is_local)
+            result += "local ";
+
+        result += "func " + m_id->to_string() + "(";
         for (size_t i = 0; i < m_params.size(); ++i)
         {
             result += m_params[i]->to_string();
@@ -310,6 +346,44 @@ namespace wio
 
     std::string lambda_declaration::to_string() const
     {
-        return "func " + m_id->to_string();
+        std::string result;
+        if (m_flags.b3)
+            result += "global ";
+        if (m_flags.b2)
+            result += "local ";
+        if (m_flags.b1)
+            result += "const ";
+
+        result += "func " + m_id->to_string();
+        if (m_initializer)
+            result += " = " + m_initializer->to_string();
+        result += ';';
+        return result;
+    }
+
+    std::string omni_declaration::to_string() const
+    {
+        std::string result;
+        if (m_flags.b3)
+            result += "global ";
+        if (m_flags.b2)
+            result += "local ";
+        if (m_flags.b1)
+            result += "const ";
+
+        result += "omni " + m_id->to_string();
+        if (m_initializer)
+            result += " = " + m_initializer->to_string();
+        result += ';';
+        return result;
+    }
+
+    std::string parameter_declaration::to_string() const
+    {
+        std::string result;
+        if (m_is_ref)
+            result += "ref";
+        result += frenum::to_string(m_type) + m_id->to_string();
+        return result;
     }
 }

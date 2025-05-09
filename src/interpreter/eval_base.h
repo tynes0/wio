@@ -50,6 +50,7 @@ namespace wio
 		std::map<variable_type, ref<symbol_table>>& get_constant_object_members();
 		const std::vector<function_param>& get_last_parameters() const;
 		ref<variable_base> get_last_return_value() const;
+		ref<variable_base>* get_last_left_value() const;
 		ref<stmt_stack> get_statement_stack() const;
 
 		void inc_loop_depth();
@@ -71,6 +72,7 @@ namespace wio
 		bool is_nb() const;
 
 		void set_last_return_value(ref<variable_base> value);
+		void set_last_left_value(ref<variable_base>* value);
 		void set_last_parameters(const std::vector<function_param>& parameters);
 		void set_loop_depth(int loop_depth);
 		void set_func_body_depth(int fb_depth);

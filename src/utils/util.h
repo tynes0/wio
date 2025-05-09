@@ -8,9 +8,9 @@ namespace wio
 {
 	namespace util
 	{
-		std::string double_to_string(double d);
-		std::string type_to_string(variable_type vt);
+		string_t float_t_to_string(float_t d);
+		string_t type_to_string(variable_type vt);
 		char get_escape_seq(char ch);
-		std::string var_to_string(ref<variable_base> base);
+		string_t var_to_string(ref<variable_base> base);
 	}
 }

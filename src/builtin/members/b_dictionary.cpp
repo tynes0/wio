@@ -24,7 +24,7 @@ namespace wio
             {
                 ref<var_dictionary> dict = get_dict(args[0]);
 
-                std::string key = var_dictionary::as_key(args[1]);
+                string_t key = var_dictionary::as_key(args[1]);
 
                 return make_ref<variable>(any(dict->check_existance(key)), variable_type::vt_bool);
             }
@@ -33,7 +33,7 @@ namespace wio
             {
                 ref<var_dictionary> dict = get_dict(args[0]);
 
-                return make_ref<variable>(any((long long)dict->size()), variable_type::vt_integer);
+                return make_ref<variable>(any((integer_t)dict->size()), variable_type::vt_integer);
             }
         }
 
@@ -44,8 +44,8 @@ namespace wio
             auto result = make_ref<symbol_table>();
             symbol_map& table = result->get_symbols();
 
-            loader::load_function(table, "Exists", detail::b_dict_exists, pa<2>{ variable_type::vt_dictionary, variable_type::vt_any });
-            loader::load_function(table, "Size", detail::b_dict_size, pa<1>{ variable_type::vt_dictionary });
+            loader::load_function(table, "Exists", detail::b_dict_exists, pa<2>{ variable_base_type::dictionary, variable_base_type::omni });
+            loader::load_function(table, "Size", detail::b_dict_size, pa<1>{ variable_base_type::dictionary });
 
             return result;
         }

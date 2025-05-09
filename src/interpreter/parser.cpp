@@ -168,11 +168,9 @@ namespace wio
         if (!match_token(token_type::right_curly_bracket))
         {
             do {
-                consume_token(token_type::left_bracket);
                 ref<expression> key = parse_expression();
                 consume_token(token_type::colon);
                 ref<expression> value = parse_expression();
-                consume_token(token_type::right_bracket);
 
                 elements.push_back(std::make_pair(key, value));
             } while (match_token(token_type::comma));
@@ -182,7 +180,7 @@ namespace wio
         return loc;
     }
 
-    location parser::get_function_parameters_and_body(std::vector<ref<variable_declaration>>& params, ref<block_statement>& body, bool is_lambda)
+    location parser::get_function_parameters_and_body(std::vector<ref<parameter_declaration>>& params, ref<block_statement>& body, bool is_lambda)
     {
         location loc = current_token().loc;
         if(is_lambda)
@@ -194,7 +192,7 @@ namespace wio
         {
             do {
                 ref<statement> param_decl = parse_parameter_declaration();
-                if (auto var_decl = std::dynamic_pointer_cast<variable_declaration>(param_decl))
+                if (auto var_decl = std::dynamic_pointer_cast<parameter_declaration>(param_decl))
                 {
                     params.push_back(var_decl);
                 }
@@ -256,7 +254,10 @@ namespace wio
             if (current.type == token_type::kw_const)
             {
                 next_token();
-                if (current_token().type == token_type::kw_var || current_token().type == token_type::kw_array || current_token().type == token_type::kw_dict)
+                if (current_token().type == token_type::kw_var || 
+                    current_token().type == token_type::kw_array || 
+                    current_token().type == token_type::kw_dict || 
+                    current_token().type == token_type::kw_omni)
                 {
                     if (current_token().type == token_type::kw_var)
                     {
@@ -277,6 +278,11 @@ namespace wio
                     {
                         next_token();
                         return parse_function_declaration(true, is_local, is_global);
+                    }
+                    else if (current.type == token_type::kw_omni)
+                    {
+                        next_token();
+                        return parse_omni_declaration(true, is_local, is_global);
                     }
                 }
                 else
@@ -304,6 +310,11 @@ namespace wio
             {
                 next_token();
                 return parse_function_declaration(false, is_local, is_global);
+            }
+            else if (current.type == token_type::kw_omni)
+            {
+                next_token();
+                return parse_omni_declaration(false, is_local, is_global);
             }
             else if (current.type == token_type::kw_realm)
             {
@@ -420,6 +431,10 @@ namespace wio
             next_token();
             return make_ref<literal>(current);
         }
+        else if (current.type == token_type::op)
+        {
+            return parse_unary_expression();
+        }
         else if (current.type == token_type::identifier)
         {
             ref<expression> primary = make_ref<identifier>(current, false, is_lhs);
@@ -436,6 +451,10 @@ namespace wio
         {
             next_token();
             return make_ref<string_literal>(current);
+        }
+        else if (current.type == token_type::kw_typeof)
+        {
+            return parse_typeof_expression();
         }
         else if (current.type == token_type::character)
         {
@@ -468,7 +487,7 @@ namespace wio
         }
         else if (current.type == token_type::at_sign)
         {
-            std::vector<ref<variable_declaration>> params;
+            std::vector<ref<parameter_declaration>> params;
             ref<block_statement> body;
             location loc = get_function_parameters_and_body(params, body, true);
             return make_ref<lambda_literal>(params, body, loc);
@@ -518,8 +537,15 @@ namespace wio
     {
         token current = current_token();
         if (current.type == token_type::op && 
-            (current.value == "+" || current.value == "-" || current.value == "!" || current.value == "~" || current.value == "++" || current.value == "--") ||
-            (current.value == "!") || (current.value == "?") || (current.value == "~"))
+            current.value == "+" || current.value == "-" || current.value == "!" || current.value == "~" ||
+            current.value == "!" || current.value == "?" || current.value == "~")
+        {
+            next_token();
+            ref<expression> operand = parse_unary_expression();
+            return std::make_shared<unary_expression>(current, operand, unary_operator_type::prefix);
+        }
+        else if (current.type == token_type::op &&
+            current.value == "++" || current.value == "--")
         {
             next_token();
             ref<expression> operand = parse_unary_expression();
@@ -657,7 +683,7 @@ namespace wio
 
         consume_token(token_type::semicolon);
 
-        return make_ref<variable_declaration>(id, initializer, is_const, is_local, is_global, false);
+        return make_ref<variable_declaration>(id, initializer, is_const, is_local, is_global);
     }
 
     ref<statement> parser::parse_array_declaration(bool is_const, bool is_local, bool is_global)
@@ -764,7 +790,7 @@ namespace wio
         {
             if (current_token().type == (token_type::at_sign))
             {
-                std::vector<ref<variable_declaration>> params;
+                std::vector<ref<parameter_declaration>> params;
                 ref<block_statement> body;
 
                 location loc = get_function_parameters_and_body(params, body, true);
@@ -797,7 +823,7 @@ namespace wio
         }
         else if (current_token().type == token_type::left_parenthesis)
         {
-            std::vector<ref<variable_declaration>> params;
+            std::vector<ref<parameter_declaration>> params;
             ref<block_statement> body;
 
             location loc = get_function_parameters_and_body(params, body, false);
@@ -808,6 +834,20 @@ namespace wio
         }
         consume_token(token_type::semicolon);
         return make_ref<lambda_declaration>(id, nullptr, is_const, is_local, is_global);
+    }
+
+    ref<statement> parser::parse_omni_declaration(bool is_const, bool is_local, bool is_global)
+    {
+        token id_token = consume_token(token_type::identifier);
+        ref<identifier> id = make_ref<identifier>(id_token);
+
+        ref<expression> initializer = nullptr;
+        if (match_token(token_type::op, "="))
+            initializer = parse_expression();
+
+        consume_token(token_type::semicolon);
+
+        return make_ref<omni_declaration>(id, initializer, is_const, is_local, is_global);
     }
 
     ref<statement> parser::parse_realm_declaration(bool is_local, bool is_global)
@@ -823,9 +863,13 @@ namespace wio
         bool is_ref = match_ref();
 
         token type_token = next_token();
-        if (type_token.type != token_type::kw_var && type_token.type != token_type::kw_array && type_token.type != token_type::kw_dict && type_token.type != token_type::kw_func)
+        if (type_token.type != token_type::kw_var && 
+            type_token.type != token_type::kw_array && 
+            type_token.type != token_type::kw_dict && 
+            type_token.type != token_type::kw_func && 
+            type_token.type != token_type::kw_omni)
         {
-            error("Expected 'var', 'array', 'dict' or 'func' in parameter declaration.", type_token.loc);
+            error("Expected 'var', 'array', 'dict', 'func' or 'omni' in parameter declaration.", type_token.loc);
             return nullptr;
         }
 
@@ -835,17 +879,19 @@ namespace wio
         token id_token = consume_token(token_type::identifier);
         ref<identifier> id = make_ref<identifier>(id_token);
 
-        variable_type type = variable_type::vt_null;
+        variable_base_type type = variable_base_type::none;
         if (type_token.type == token_type::kw_var)
-            type = variable_type::vt_any;
+            type = variable_base_type::variable;
         else if (type_token.type == token_type::kw_array)
-            type = variable_type::vt_array;
+            type = variable_base_type::array;
         else if (type_token.type == token_type::kw_dict)
-            type = variable_type::vt_dictionary;
+            type = variable_base_type::dictionary;
         else if (type_token.type == token_type::kw_func)
-            type = variable_type::vt_function;
+            type = variable_base_type::function;
+        else if (type_token.type == token_type::kw_omni)
+            type = variable_base_type::omni;
 
-        return make_ref<variable_declaration>(id, nullptr, false, true, false, is_ref, type);
+        return make_ref<parameter_declaration>(id, is_ref, type);
     }
 
     ref<statement> parser::parse_if_statement()

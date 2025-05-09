@@ -61,8 +61,6 @@ namespace wio
 
         eval_base::get().exit_statement_stack();
 
-        auto& tbl = main_table::get();
-
         s_data_stack.pop();
     }
 
@@ -94,6 +92,8 @@ namespace wio
             evaluate_dictionary_declaration(ddecl);
         else if (auto rdecl = std::dynamic_pointer_cast<realm_declaration>(node))
             evaluate_realm_declaration(rdecl);
+        else if (auto odecl = std::dynamic_pointer_cast<omni_declaration>(node))
+            evaluate_omni_declaration(odecl);
         else if (auto import_s = std::dynamic_pointer_cast<import_statement>(node))
             evaluate_import_statement(import_s);
         else if (auto block_s = std::dynamic_pointer_cast<block_statement>(node))
@@ -201,7 +201,7 @@ namespace wio
     {
         std::vector<function_param> parameters;
         for (auto& param : node->m_params)
-            parameters.emplace_back(param->m_id->m_token.value, param->m_type, (bool)param->m_flags.b4);
+            parameters.emplace_back(param->m_id->m_token.value, param->m_type, param->m_is_ref);
 
         auto result_fun_v = make_ref<var_function>(parameters);
 
@@ -211,7 +211,7 @@ namespace wio
 
                 // Create parameters
                 for (auto& param : node->m_params)
-                    evaluate_variable_declaration(param, true);
+                    evaluate_parameter_declaration(param);
 
                 // use variable ref's
                 for (size_t i = 0; i < parameters.size(); ++i)
@@ -278,6 +278,8 @@ namespace wio
                 return helper::eval_binary_exp_division(lv_ref, rv_ref, node->get_location());
             else if (op.value == "%") 
                 return helper::eval_binary_exp_modulo(lv_ref, rv_ref, node->get_location());
+            else if (op.value == "=" && lv_ref->is_omni())
+                return helper::eval_omni_assignment(*eval_base::get().get_last_left_value(), rv_ref);
             else if (op.value == "=")
                 return helper::eval_binary_exp_assignment(lv_ref, rv_ref, node->get_location());
             else if (op.value == "+=")
@@ -409,15 +411,26 @@ namespace wio
 
         if (sym->var_ref)
         {
-            if (sym->is_ref() || node->m_is_lhs || is_ref)
+            if (node->m_is_lhs || is_ref)
+            {
+                eval_base::get().set_last_left_value(&sym->var_ref);
                 return sym->var_ref;
+            }
+            else if (sym->is_ref())
+            {
+                return sym->var_ref;
+            }
             return sym->var_ref->clone();
         }
+
+        // It must be unattainable, because all symbols have a value. (We assume null as a value.)
+        throw evaluation_error("Identifier '" + node->m_token.value + "' has no value.", node->get_location());
     }
 
     ref<variable_base> evaluator::evaluate_array_access_expression(ref<array_access_expression> node, ref<variable_base> object, bool is_ref)
     {
         ref<variable_base> item = as_value(node->m_array, object, is_ref);
+        auto& tbl = main_table::get();
 
         variable_base_type base_t = item->get_base_type();
 
@@ -427,14 +440,22 @@ namespace wio
 
             ref<var_array> array_var = std::dynamic_pointer_cast<var_array>(item);
 
-            if (node->m_is_ref || node->m_is_lhs || is_ref)
-                return array_var->get_element(builtin::helper::var_as_ll(index_base));
-            return array_var->get_element(builtin::helper::var_as_ll(index_base))->clone();
+            if (node->m_is_lhs || is_ref)
+            {
+                auto& result = array_var->get_element(builtin::helper::var_as_integer(index_base));
+                eval_base::get().set_last_left_value(&result);
+                return result;
+            }
+            else if (node->m_is_ref)
+            {
+                return array_var->get_element(builtin::helper::var_as_integer(index_base));
+            }
+            return array_var->get_element(builtin::helper::var_as_integer(index_base))->clone();
         }
         else if (base_t == variable_base_type::variable)
         {
             if(item->get_type() != variable_type::vt_string)
-            throw invalid_type_error("Type should be array or string or dictionary!", node->m_array->get_location());
+                throw invalid_type_error("Type should be array or string or dictionary!", node->m_array->get_location());
 
             ref<variable_base> index_base = evaluate_expression(node->m_key_or_index);
             if (index_base->get_base_type() != variable_base_type::variable)
@@ -446,8 +467,8 @@ namespace wio
 
             ref<variable> str_var = std::dynamic_pointer_cast<variable>(item);
             std::string& value = str_var->get_data_as<std::string>();
-            long long index = index_var->get_data_as<long long>();
-            if (index < 0 || index >= long long(value.size()))
+            integer_t index = index_var->get_data_as<integer_t>();
+            if (index < 0 || index >= integer_t(value.size()))
                 throw out_of_bounds_error("String index out of the bounds!");
 
             return (node->m_is_ref || node->m_is_lhs || is_ref) ?
@@ -462,8 +483,16 @@ namespace wio
 
             ref<var_dictionary> dict_var = std::dynamic_pointer_cast<var_dictionary>(item);
 
-            if (node->m_is_ref || node->m_is_lhs || is_ref)
+            if (node->m_is_lhs || is_ref)
+            {
+                auto& result = dict_var->get_element(key_base);
+                eval_base::get().set_last_left_value(&result);
+                return result;
+            }
+            else if (node->m_is_ref)
+            {
                 return dict_var->get_element(key_base);
+            }
             return dict_var->get_element(key_base)->clone();
         }
         else
@@ -493,24 +522,21 @@ namespace wio
             object->set_pf_return_ref(is_ref);
             padding = 1;
             parameters.push_back(object);
-            type_parameters.push_back(function_param("", object->get_type(), false));
+            type_parameters.push_back(function_param("", object->get_base_type(), false));
         }
 
         eval_base::get().set_ref_error_activity(false);
         for (size_t i = 0; i < node->m_arguments.size(); ++i)
         {
-            auto value = as_value(node->m_arguments[i], nullptr, true);
+            auto value = as_value(node->m_arguments[i], nullptr, node->m_arguments[i]->is_ref());
             parameters.push_back(value);
-            type_parameters.push_back(function_param("", value->get_type(), false));
+            type_parameters.push_back(function_param("", value->get_base_type(), false));
         }
         eval_base::get().set_ref_error_activity(true);
 
-        eval_base::get().set_search_only_func_state(true);
         eval_base::get().set_last_parameters(type_parameters);
 
         ref<variable_base> caller_value = as_value(node->m_caller, object);
-
-        eval_base::get().set_search_only_func_state(false);
 
         if (!caller_value)
            throw undefined_identifier_error("Invalid function!", node->m_caller->get_location());
@@ -529,7 +555,7 @@ namespace wio
             symbol* fref = olist->find(type_parameters);
 
             if (!fref)
-                throw type_mismatch_error("Parameter types not matching!");
+                throw type_mismatch_error("Parameter types not matching!", node->get_location());
 
             func_res = std::dynamic_pointer_cast<var_function>(fref->var_ref);
         }
@@ -548,12 +574,6 @@ namespace wio
         }
         
         const auto& real_parameters = func_res->get_parameters();
-
-        for (size_t i = padding; i < parameters.size(); ++i)
-        {
-            if (!real_parameters[i].is_ref)
-                parameters[i] = parameters[i]->clone();
-        }
 
         ref<variable_base> result = func_res->call(parameters);
         if (object)
@@ -587,7 +607,7 @@ namespace wio
 
         if (cond->get_type() == variable_type::vt_bool)
         {
-            bool value = var->get_data_as<bool>();
+            boolean_t value = var->get_data_as<boolean_t>();
             if (value)
                 evaluate_statement(node->m_then_branch);
             else
@@ -595,7 +615,7 @@ namespace wio
         }
         else if (cond->get_type() == variable_type::vt_integer)
         {
-            long long value = var->get_data_as<long long>();
+            integer_t value = var->get_data_as<integer_t>();
             if (value)
                 evaluate_statement(node->m_then_branch);
             else
@@ -603,7 +623,7 @@ namespace wio
         }
         else if (cond->get_type() == variable_type::vt_float)
         {
-            double value = var->get_data_as<double>();
+            float_t value = var->get_data_as<float_t>();
             if (value)
                 evaluate_statement(node->m_then_branch);
             else
@@ -695,7 +715,7 @@ namespace wio
         eval_base::get().enter_scope(s_data_stack.top().id, scope_type::block);
         eval_base::get().inc_loop_depth();
 
-        evaluate_variable_declaration(make_ref<variable_declaration>(node->m_item, nullptr, false, false, false, false));
+        evaluate_variable_declaration(make_ref<variable_declaration>(node->m_item, nullptr, false, false, false));
         ref<variable_base> col_base = as_value(node->m_collection, nullptr, true);
 
         symbol* sym = eval_base::get().search(s_data_stack.top().id, node->m_item->m_token.value);
@@ -873,7 +893,7 @@ namespace wio
             }
         }
         
-        id_t id = interpreter::get().run_f(node->m_module_path.c_str(), { node->m_flags.b1, false }, target_map);
+        id_t id = interpreter::get().run_file(node->m_module_path.c_str(), { node->m_flags.b1, false }, target_map);
 
         if(!target_map)
             main_table::get().add_imported_module(id);
@@ -888,42 +908,21 @@ namespace wio
         if(!temp)
             throw invalid_return_statement("Return statement out of the function", node->get_location());
 
-        eval_base::get().set_last_return_value(evaluate_expression(node->m_value));
+        eval_base::get().set_last_return_value(as_value(node->m_value, nullptr, node->m_value ? node->m_value->is_ref() : false));
         eval_base::get().call_return(true);
     }
 
-    void evaluator::evaluate_variable_declaration(ref<variable_declaration> node, bool is_parameter)
+    void evaluator::evaluate_variable_declaration(ref<variable_declaration> node)
     {
         std::string name = node->m_id->m_token.value;
-        variable_type type = node->m_type;
 
-        if (is_parameter)
-        {
-            if (eval_base::get().search_current(s_data_stack.top().id, name))
-                throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
-
-            if (node->m_type == variable_type::vt_array)
-                evaluate_array_declaration(make_ref<array_declaration>(node->m_id, nullptr, false, false, false));
-            if (node->m_type == variable_type::vt_dictionary)
-                evaluate_dictionary_declaration(make_ref<dictionary_declaration>(node->m_id, nullptr, false, false, false));
-            if (node->m_type == variable_type::vt_function)
-                evaluate_lambda_declaration(make_ref<lambda_declaration>(node->m_id, nullptr, false, false, false));
-            if (node->m_type != variable_type::vt_any)
-                return;
-        }
-        else
-        {
-            if (eval_base::get().search(s_data_stack.top().id, name))
-                throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
-        }
+        if (eval_base::get().search(s_data_stack.top().id, name))
+            throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
 
         ref<variable_base> var = create_null_variable();
 
         if (node->m_initializer)
         {
-            if (node->m_flags.b4 && node->m_flags.b1)
-                throw local_exception("Constant values cannot be reference!", node->m_initializer->get_location());
-
             auto value = as_value(node->m_initializer, nullptr, node->m_initializer->is_ref());
             
             if (value->get_base_type() == variable_base_type::variable)
@@ -951,7 +950,6 @@ namespace wio
             eval_base::get().insert_to_global(s_data_stack.top().id, name, symbol);
         else
             eval_base::get().insert(s_data_stack.top().id, name, symbol);
-        auto& b = main_table::get();
     }
 
     void evaluator::evaluate_array_declaration(ref<array_declaration> node)
@@ -965,9 +963,6 @@ namespace wio
 
         if (node->m_initializer)
         {
-            if (node->m_flags.b4 && node->m_flags.b1)
-                throw local_exception("Constant values cannot be reference!", node->m_initializer->get_location());
-
             auto value = as_value(node->m_initializer, nullptr, node->m_initializer->is_ref());
 
             if (value->get_base_type() == variable_base_type::array || value->get_type() == variable_type::vt_null)
@@ -1001,16 +996,10 @@ namespace wio
     {
         std::string name = node->m_id->m_token.value;
 
-        if (eval_base::get().search(s_data_stack.top().id, name))
-            throw invalid_declaration_error("Duplicate variable declaration: " + name, node->m_id->get_location());
-
         ref<variable_base> var = make_ref<var_dictionary>(var_dictionary::map_t{}, packed_bool{ false });
 
         if (node->m_initializer)
         {
-            if (node->m_flags.b4 && node->m_flags.b1)
-                throw invalid_declaration_error("Constant values cannot be reference!", node->m_initializer->get_location());
-
             auto value = as_value(node->m_initializer, nullptr, node->m_initializer->is_ref());
 
             if (value->get_base_type() == variable_base_type::dictionary || value->get_type() == variable_type::vt_null)
@@ -1047,7 +1036,7 @@ namespace wio
         // parameter types and ids
         std::vector<function_param> parameters;
         for (auto& param : node->m_params)
-            parameters.emplace_back(param->m_id->m_token.value, param->m_type, (bool)param->m_flags.b4);
+            parameters.emplace_back(param->m_id->m_token.value, param->m_type, param->m_is_ref);
 
         bool add_overload = false;
         bool declare = false;
@@ -1103,7 +1092,7 @@ namespace wio
 
                 // Create parameters
                 for (auto& param : node->m_params)
-                    evaluate_variable_declaration(param, true);
+                    evaluate_parameter_declaration(param);
 
                 // use variable ref's
                 for (size_t i = 0; i < parameters.size(); ++i)
@@ -1170,9 +1159,8 @@ namespace wio
         // Parameter types and id's
         std::vector<function_param> parameters;
         for (auto& param : node->m_params)
-            parameters.emplace_back(param->m_id->m_token.value, param->m_type, (bool)param->m_flags.b4);
+            parameters.emplace_back(param->m_id->m_token.value, param->m_type, param->m_is_ref);
         
-
         auto is_valid_result = eval_base::get().is_function_valid(s_data_stack.top().id, name, parameters);
 
         if(!is_valid_result.first)
@@ -1260,6 +1248,80 @@ namespace wio
             eval_base::get().insert(s_data_stack.top().id, name, realm_symbol);
     }
 
+    void evaluator::evaluate_omni_declaration(ref<omni_declaration> node)
+    {
+        std::string name = node->m_id->m_token.value;
+
+        if (eval_base::get().search(s_data_stack.top().id, name))
+            throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
+
+        ref<variable_base> result = create_null_variable();
+
+        if (node->m_initializer)
+        {
+            auto value = as_value(node->m_initializer, nullptr, node->m_initializer->is_ref());
+
+            switch (value->get_base_type())
+            {
+            case wio::variable_base_type::variable:
+            case wio::variable_base_type::array:
+            case wio::variable_base_type::dictionary:
+            {
+                if (node->m_initializer->is_ref())
+                {
+                    result = value;
+                }
+                else
+                {
+                    helper::eval_omni_assignment(result, value);
+
+                    if (node->m_flags.b1)
+                        result->set_const(true);
+                }
+                break;
+            }
+            case wio::variable_base_type::function:
+            {
+                auto olist = std::dynamic_pointer_cast<overload_list>(value);
+
+                olist->set_symbol_id(name);
+                result = olist;
+                
+                break;
+            }
+            case wio::variable_base_type::realm:
+            case wio::variable_base_type::omni:
+            case wio::variable_base_type::none:
+            default:
+                throw invalid_type_error("Invalid type for omni!");
+                break;
+            }
+        }
+
+        result->set_omni(true);
+        symbol symbol(result, node->m_flags.b2, node->m_flags.b3, node->m_initializer ? node->m_initializer->is_ref() : false);
+        if (node->m_flags.b3)
+            eval_base::get().insert_to_global(s_data_stack.top().id, name, symbol);
+        else
+            eval_base::get().insert(s_data_stack.top().id, name, symbol);
+    }
+
+    void evaluator::evaluate_parameter_declaration(ref<parameter_declaration> node)
+    {
+        if (node->m_type == variable_base_type::variable)
+            evaluate_variable_declaration(make_ref<variable_declaration>(node->m_id, nullptr, false, false, false));
+        else if (node->m_type == variable_base_type::array)
+            evaluate_array_declaration(make_ref<array_declaration>(node->m_id, nullptr, false, false, false));
+        else if (node->m_type == variable_base_type::dictionary)
+            evaluate_dictionary_declaration(make_ref<dictionary_declaration>(node->m_id, nullptr, false, false, false));
+        else if (node->m_type == variable_base_type::function)
+            evaluate_lambda_declaration(make_ref<lambda_declaration>(node->m_id, nullptr, false, false, false));
+        else if (node->m_type == variable_base_type::omni)
+            evaluate_omni_declaration(make_ref<omni_declaration>(node->m_id, nullptr, false, false, false));
+        else
+            throw invalid_type_error("Undefined parameter type!", node->get_location());
+    }
+
     ref<variable_base> evaluator::as_value(ref<expression> node, ref<variable_base> object, bool is_ref)
     {
         if (is_ref && eval_base::get().is_ref_error_active())
@@ -1308,7 +1370,7 @@ namespace wio
             else if (auto func_call = std::dynamic_pointer_cast<function_call>(node))
                 return evaluate_function_call(func_call, object, is_ref);
             else
-                throw invalid_type_error("Invalid ast node!");
+                return nullptr;
         }
     }
 } // namespace wio

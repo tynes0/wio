@@ -2,6 +2,7 @@
 
 #include <type_traits>
 #include <memory>
+#include <string>
 
 #define BIT(x) (1ll << x##ll)
 #define UBIT(x) (1ull << x##ull)
@@ -53,6 +54,13 @@ namespace wio
     }
 
     using id_t = uint32_t;
+    using boolean_t = bool;
+    using integer_t = long long;
+    using float_t = double;
+    using float_ref_t = double*;
+    using character_t = char;
+    using character_ref_t = char*;
+    using string_t = std::string;
 }
 
 namespace std

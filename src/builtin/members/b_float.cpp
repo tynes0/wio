@@ -23,12 +23,12 @@ namespace wio
             {
                 ref<variable> character = get_float(args[0]);
 
-                long long result = 0;
+                integer_t result = 0;
 
                 if (character->get_type() == variable_type::vt_character)
-                    result = static_cast<long long>(character->get_data_as<double>());
+                    result = static_cast<integer_t>(character->get_data_as<float_t>());
                 else if (character->get_type() == variable_type::vt_character_ref)
-                    result = static_cast<long long>(*character->get_data_as<double*>());
+                    result = static_cast<integer_t>(*character->get_data_as<float_ref_t>());
 
                 return make_ref<variable>(any(result), variable_type::vt_integer);
             }
@@ -42,7 +42,7 @@ namespace wio
             auto result = make_ref<symbol_table>();
             symbol_map& table = result->get_symbols();
 
-            loader::load_function(table, "Int", detail::b_float_int, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "Int", detail::b_float_int, pa<1>{ variable_base_type::variable });
 
             return result;
         }

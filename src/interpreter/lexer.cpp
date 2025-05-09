@@ -157,7 +157,6 @@ namespace wio
     token lexer::read_number()
     {
         std::string result;
-        bool is_float = false, is_scientific = false;
 
         if (peek() == '-')
         {
@@ -214,7 +213,6 @@ namespace wio
 
         if (peek() == '.')
         {
-            is_float = true;
             result += advance();
 
             while (std::isdigit(peek()))
@@ -223,7 +221,6 @@ namespace wio
 
         if (peek() == 'e' || peek() == 'E')
         {
-            is_scientific = true;
             result += advance();
             if (peek() == '+' || peek() == '-')
                 result += advance();

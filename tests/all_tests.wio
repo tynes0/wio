@@ -1,4 +1,4 @@
-import "wio.io";
+import wio.io;
 
 ## recursive test
 func factorial(var v)
@@ -8,31 +8,13 @@ func factorial(var v)
 	return v * factorial(v - 1);
 }
 
-## global decl test
-{
-	func foo(var v)
-	{
-		if(false)
-		{
-			while(true)
-			{
-				for(;;)
-				{
-					global var x = 1.52;
-				}
-			}
-		}
-	}
-	Println(x); ## works fine 
-}
-
 ## ref keyword test
 {
 	dict kvp
 	{
-		[1, 2],
-		["x", 4],
-		['c', 6.21]
+		1 : 2,
+		"x" : 4,
+		'c': 6.21
 	};
 
 	dict ref_dict = ref kvp;
@@ -58,7 +40,7 @@ func factorial(var v)
 
 ## nested array - dict
 {
-	array arr = [[1, [156, 12, 'c'], { [1, ["test", 'y']], ['x', 6.2] }], 3];
+	array arr = [[1, [156, 12, 'c'], { 1: ["test", 'y'], 'x': 6.2 }], 3];
 	Println(arr);
 }
 

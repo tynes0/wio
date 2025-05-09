@@ -99,10 +99,10 @@ namespace wio
 		{
 			using namespace wio::builtin::detail;
 
-			loader::load_function(table, "Swap", detail::b_swap, pa<2>{ variable_type::vt_any, variable_type::vt_any }, std::bitset<2>("11"));
-			loader::load_function(table, "ToString", detail::b_to_string, pa<1>{ variable_type::vt_any });
-			loader::load_function(table, "Pair", detail::b_pair, pa<2>{ variable_type::vt_any, variable_type::vt_any });
-			loader::load_function(table, "Compare", detail::b_compare, pa<2>{ variable_type::vt_any, variable_type::vt_any });
+			loader::load_function(table, "Swap", detail::b_swap, pa<2>{ variable_base_type::omni, variable_base_type::omni }, std::bitset<2>("11"));
+			loader::load_function(table, "ToString", detail::b_to_string, pa<1>{ variable_base_type::omni });
+			loader::load_function(table, "Pair", detail::b_pair, pa<2>{ variable_base_type::omni, variable_base_type::omni });
+			loader::load_function(table, "Compare", detail::b_compare, pa<2>{ variable_base_type::omni, variable_base_type::omni });
 		}
 
 		void utility::load(ref<scope> target_scope)

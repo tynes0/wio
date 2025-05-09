@@ -2,6 +2,7 @@
 #include <random>
 #include <cstdint>
 #include <limits>
+#include "../base/base.h"
 
 namespace wio
 {
@@ -10,11 +11,11 @@ namespace wio
     public:
         rand_manager();
 
-        long long random();
-        double drandom();
+        integer_t random();
+        float_t frandom();
 
-        long long int_range(long long min, long long max);
-        double double_range(double min, double max);
+        integer_t int_range(integer_t min, integer_t max);
+        float_t float_range(float_t min, float_t max);
 
     private:
         std::mt19937_64 rng;

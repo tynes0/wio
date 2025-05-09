@@ -92,9 +92,9 @@ namespace wio
 		{
 			packed_bool flags = { s_app_data.flags.b1, false, false, s_app_data.flags.b5 };
 			eval_base::get().initialize(flags);
-			raw_buffer buf = run_f_p1(s_app_data.arg_parser.get_file().c_str(), flags);
+			raw_buffer buf = run_file_part_1(s_app_data.arg_parser.get_file().c_str(), flags);
 			main_table::get().add_imported_module(s_app_data.last_module_id);
-			run_f_p2(buf, flags);
+			run_file_part_2(buf, flags);
 		}
 		catch (const exception& e)
 		{
@@ -109,19 +109,19 @@ namespace wio
 		return main_interpreter;
 	}
 
-	id_t interpreter::run_f(const char* fp, packed_bool flags, symbol_map* target_map)
+	id_t interpreter::run_file(const char* fp, packed_bool flags, symbol_map* target_map)
 	{
-		raw_buffer content = run_f_p1(fp, flags, target_map);
+		raw_buffer content = run_file_part_1(fp, flags, target_map);
 		if (!content)
 			return 0;
 
-		run_f_p2(content, flags, target_map);
-		run_f_p3();
+		run_file_part_2(content, flags, target_map);
+		run_file_part_3();
 
 		return s_app_data.last_module_id;
 	}
 
-	raw_buffer interpreter::run_f_p1(const char* fp, packed_bool flags, symbol_map* target_map)
+	raw_buffer interpreter::run_file_part_1(const char* fp, packed_bool flags, symbol_map* target_map)
 	{
 		std::string filepath = fp;
 		std::for_each(filepath.begin(), filepath.end(), [](char& ch) { ch = std::tolower(ch); });
@@ -229,7 +229,7 @@ namespace wio
 		return content;
 	}
 
-	void interpreter::run_f_p2(raw_buffer content, packed_bool flags, symbol_map* target_map)
+	void interpreter::run_file_part_2(raw_buffer content, packed_bool flags, symbol_map* target_map)
 	{
 		if (!content)
 			return;
@@ -255,7 +255,7 @@ namespace wio
 			(*target_map) = main_table::get().get_scope(s_app_data.last_module_id)->get_symbols();
 	}
 
-	void interpreter::run_f_p3()
+	void interpreter::run_file_part_3()
 	{
 		std::filesystem::current_path(s_app_data.base_path);
 	}

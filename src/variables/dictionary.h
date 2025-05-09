@@ -19,13 +19,13 @@ namespace wio
 		virtual variable_type get_type() const override;
 		virtual ref<variable_base> clone() const override;
 
-		static std::string as_key(ref<variable_base> value);
+		static string_t as_key(ref<variable_base> value);
 
 		// TODO: Member functions
 
 		map_t& get_data();
 		const map_t& get_data() const;
-		ref<variable_base> get_element(ref<variable_base> key);
+		ref<variable_base>& get_element(ref<variable_base> key);
 
 		void set_data(const map_t& data);
 		void set_element(ref<variable_base> key, ref<variable_base> value);

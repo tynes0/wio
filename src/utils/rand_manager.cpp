@@ -1,5 +1,5 @@
 #include "rand_manager.h"
-#include <algorithm>  // std::swap
+#include <utility>
 
 namespace wio
 {
@@ -7,37 +7,37 @@ namespace wio
         : rng(std::random_device{}()) {
     }
 
-    long long rand_manager::random()
+    integer_t rand_manager::random()
     {
-        std::uniform_int_distribution<long long> dist(
-            std::numeric_limits<long long>::min(),
-            std::numeric_limits<long long>::max() - 1
+        std::uniform_int_distribution<integer_t> dist(
+            std::numeric_limits<integer_t>::min(),
+            std::numeric_limits<integer_t>::max() - 1
         );
         return dist(rng);
     }
 
-    double rand_manager::drandom()
+    float_t rand_manager::frandom()
     {
-        std::uniform_real_distribution<double> dist(
-            std::numeric_limits<double>::min(),
-            std::numeric_limits<double>::max()
+        std::uniform_real_distribution<float_t> dist(
+            std::numeric_limits<float_t>::min(),
+            std::numeric_limits<float_t>::max()
         );
         return dist(rng);
     }
 
-    long long rand_manager::int_range(long long min, long long max)
+    integer_t rand_manager::int_range(integer_t min, integer_t max)
     {
         if (min > max) std::swap(min, max);
 
-        std::uniform_int_distribution<long long> dist(min, max - 1);
+        std::uniform_int_distribution<integer_t> dist(min, max - 1);
         return dist(rng);
     }
 
-    double rand_manager::double_range(double min, double max)
+    float_t rand_manager::float_range(float_t min, float_t max)
     {
         if (min > max) std::swap(min, max);
 
-        std::uniform_real_distribution<double> dist(min, max);
+        std::uniform_real_distribution<float_t> dist(min, max);
         return dist(rng);
     }
 

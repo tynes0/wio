@@ -23,10 +23,12 @@ namespace wio
         virtual ref<variable_base> clone() const = 0;
 
         bool is_constant() const { return m_flags.b1; }
+        bool is_omni() const { return m_flags.b2; }
         // pf -> param flag
         bool is_pf_return_ref() const { return m_flags.b5; }
 
         void set_const(bool flag) { m_flags.b1 = flag; }
+        void set_omni(bool flag) { m_flags.b2 = flag; }
         // pf -> param flag
         void set_pf_return_ref(bool flag) { m_flags.b5 = flag; }
 
@@ -39,7 +41,7 @@ namespace wio
         variable_base(packed_bool flags) : m_flags(flags) { }
     private:
         ref<symbol_table> m_members;
-        packed_bool m_flags = {}; // b1 -> const --- b5-> return ref --- b6-> * --- b7-> * --- b8-> *  (b1-b2-b3-b4 default flags  ---  b5-b6-b7-b8 func parameter flags)
+        packed_bool m_flags = {}; // b1 -> const --- b2 -> omni type --- b5-> return ref 
     };
 
     using pair_t = pair<ref<variable_base>, ref<variable_base>>;

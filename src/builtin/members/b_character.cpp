@@ -23,12 +23,12 @@ namespace wio
             {
                 ref<variable> character = get_character(args[0]);
 
-                long long result = 0;
+                integer_t result = 0;
 
                 if (character->get_type() == variable_type::vt_character)
-                    result = static_cast<long long>(character->get_data_as<char>());
+                    result = static_cast<integer_t>(character->get_data_as<character_t>());
                 else if (character->get_type() == variable_type::vt_character_ref)
-                    result = static_cast<long long>(*character->get_data_as<char*>());
+                    result = static_cast<integer_t>(*character->get_data_as<character_ref_t>());
 
                 return make_ref<variable>(any(result), variable_type::vt_integer);
             }
@@ -37,12 +37,12 @@ namespace wio
             {
                 ref<variable> character = get_character(args[0]);
 
-                std::string result;
+                string_t result;
 
                 if (character->get_type() == variable_type::vt_character)
-                    result = character->get_data_as<char>();
+                    result = character->get_data_as<character_t>();
                 else if (character->get_type() == variable_type::vt_character_ref)
-                    result = *character->get_data_as<char*>();
+                    result = *character->get_data_as<character_ref_t>();
 
                 return make_ref<variable>(any(result), variable_type::vt_string);
             }
@@ -55,8 +55,8 @@ namespace wio
             auto result = make_ref<symbol_table>();
             symbol_map& table = result->get_symbols();
 
-            loader::load_function(table, "Int", detail::b_character_int, pa<1>{ variable_type::vt_any });
-            loader::load_function(table, "String", detail::b_character_string, pa<1>{ variable_type::vt_any });
+            loader::load_function(table, "Int", detail::b_character_int, pa<1>{ variable_base_type::variable });
+            loader::load_function(table, "String", detail::b_character_string, pa<1>{ variable_base_type::variable });
 
             return result;
         }

@@ -10,14 +10,16 @@ namespace wio
 
     enum class variable_base_type
     {
+        none, 
         variable,
         array,
         dictionary,
         function,
-        realm
+        realm,
+        omni
     };
 
-    MakeFrenumInNamespace(wio, variable_base_type, variable, array, dictionary, function)
+    MakeFrenumInNamespace(wio, variable_base_type, none, variable, array, dictionary, function, realm, omni)
 
     enum class variable_type
     {

@@ -1,10 +1,10 @@
 import wio.io;
 import wio.util;
 
-local dict PhoneNumbers {};
-local var Filepath = "save.txt";
+local omni PhoneNumbers = {};
+local omni Filepath = "save.txt";
 
-local func AddNumber(var pair)
+local func AddNumber(omni pair)
 {
 	if(PhoneNumbers.Exists(pair.Key))
 	{
@@ -14,7 +14,7 @@ local func AddNumber(var pair)
 	PhoneNumbers[pair.Key] = pair.Value;
 }
 
-local func AddNumber(var name, var number)
+local func AddNumber(omni name, omni number)
 {
 	if(PhoneNumbers.Exists(name))
 	{
@@ -26,25 +26,25 @@ local func AddNumber(var name, var number)
 
 local func LoadNumbers()
 {
-	var file = OpenFile(Filepath, OPEN_MODE_READ | OPEN_MODE_BINARY);
+	omni file = OpenFile(Filepath, OPEN_MODE_READ | OPEN_MODE_BINARY);
 	if(!?file)
 		return;
-	var content = Read(file);
+	omni content = Read(file);
 	CloseFile(file);
 
-	array numbers = content.Split('\n');
+	omni numbers = content.Split('\n');
 	
 	foreach(item in numbers)
 	{
-		array NameNumber = item.Split('\t');
-		var pair = Pair(NameNumber[0], NameNumber[1]);
+		omni NameNumber = item.Split('\t');
+		omni pair = Pair(NameNumber[0], NameNumber[1]);
 		AddNumber(pair);
 	}
 }
 
 local func SaveNumbers()
 {
-	var file = OpenFile(Filepath, OPEN_MODE_WRITE | OPEN_MODE_BINARY);
+	omni file = OpenFile(Filepath, OPEN_MODE_WRITE | OPEN_MODE_BINARY);
 
 	foreach(item in PhoneNumbers)
 	{
@@ -60,9 +60,9 @@ local func SaveNumbers()
 local func AddMenu()
 {
 	Print("Name: ");
-	var name = Input();
+	omni name = Input();
 	Print("Number: ");
-	var number = Input();
+	omni number = Input();
 
 	AddNumber(name, number);
 }
@@ -82,7 +82,7 @@ func Main()
 		Println("2- Display Numbers");
 		Println("3- Exit");
 		Print("Choice: ");
-		var choice = Input().Int();
+		omni choice = Input().Int();
 
 		if(choice == 1)
 			AddMenu();

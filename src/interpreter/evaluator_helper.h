@@ -50,6 +50,6 @@ namespace wio
 		ref<variable_base> eval_unary_exp_logical_not(ref<variable_base> v_ref, unary_operator_type op_type, const location& loc); // !
 		ref<variable_base> eval_unary_exp_is_not_null(ref<variable_base> v_ref, unary_operator_type op_type, const location& loc); // ?
 
-		ref<variable_base> container_element_assignment(ref<variable_base>& cont_item_ref, ref<variable_base> rv_ref);
-	}											   
+		ref<variable_base> eval_omni_assignment(ref<variable_base>& omni_ref, ref<variable_base> rv_ref);
+	}
 }

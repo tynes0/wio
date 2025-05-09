@@ -1,5 +1,10 @@
 #include "variable.h"
 
+#include "../types/vec2.h"
+#include "../types/vec3.h"
+#include "../types/vec4.h"
+#include "../builtin/helpers.h"
+
 namespace wio
 {
     variable::variable(packed_bool flags) :
@@ -24,6 +29,33 @@ namespace wio
 
     ref<variable_base> variable::clone() const
     {
+        if (m_type == variable_type::vt_float_ref)
+        {
+            auto result = make_ref<variable>(*this);
+            result->m_data = (*any_cast<float_ref_t>(result->m_data));
+            result->m_type = variable_type::vt_float;
+            return result;
+        }
+        else if (m_type == variable_type::vt_character_ref)
+        {
+            auto result = make_ref<variable>(*this);
+            result->m_data = (*any_cast<character_ref_t>(result->m_data));
+            result->m_type = variable_type::vt_character;
+            return result;
+        }
+        else if (m_type == variable_type::vt_vec2)
+        {
+            return builtin::helper::make_variable(get_data_as<vec2>());
+        }
+        else if (m_type == variable_type::vt_vec3)
+        {
+            return builtin::helper::make_variable(get_data_as<vec3>());
+        }
+        else if (m_type == variable_type::vt_vec4)
+        {
+            return builtin::helper::make_variable(get_data_as<vec4>());
+        }
+
         return make_ref<variable>(*this);
     }
 
