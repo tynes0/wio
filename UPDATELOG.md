@@ -164,3 +164,8 @@
 - __Update 2.7.0:__ Problems with unary operators of vec2-vec3 types have been resolved.
 - __Update 2.8.0:__ Fixed an issue when converting anonymous lambda to string.
 - __Update 2.8.1:__ Stop tracking TODOLIST.md
+- __Update 2.9.0:__ Added enum support.
+- __Update 2.9.1:__ Preparations for unit support have been made.
+- __Update 2.9.2:__ Some preparations have been made for the new keywords to be added.
+- __Update 2.9.3:__ Minor code cleanup was done.
+- __Update 2.9.4:__ Members added to the enum type.

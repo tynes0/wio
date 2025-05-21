@@ -13,6 +13,7 @@
 #include "../variables/dictionary.h"
 #include "../variables/function.h"
 #include "../variables/realm.h"
+#include "../variables/enum.h"
 
 #include "../builtin/builtin_base.h"
 #include "../builtin/helpers.h"
@@ -51,8 +52,6 @@ namespace wio
         };
 
         s_data_stack.push(data);
-
-        s_data_stack.top().flags = flags;
 
         eval_base::get().enter_statement_stack(&program_node->m_statements);
 
@@ -94,6 +93,10 @@ namespace wio
             evaluate_realm_declaration(rdecl);
         else if (auto odecl = std::dynamic_pointer_cast<omni_declaration>(node))
             evaluate_omni_declaration(odecl);
+        else if (auto edecl = std::dynamic_pointer_cast<enum_declaration>(node))
+            evaluate_enum_declaration(edecl);
+        else if (auto udecl = std::dynamic_pointer_cast<unit_declaration>(node))
+            evaluate_unit_declaration(udecl);
         else if (auto import_s = std::dynamic_pointer_cast<import_statement>(node))
             evaluate_import_statement(import_s);
         else if (auto block_s = std::dynamic_pointer_cast<block_statement>(node))
@@ -1152,82 +1155,127 @@ namespace wio
         }
     }
 
-     void evaluator::evaluate_function_declaration(ref<function_declaration> node)
-     {
-        std::string name = node->m_id->m_token.value;
-        
-        // Parameter types and id's
-        std::vector<function_param> parameters;
-        for (auto& param : node->m_params)
-            parameters.emplace_back(param->m_id->m_token.value, param->m_type, param->m_is_ref);
-        
-        auto is_valid_result = eval_base::get().is_function_valid(s_data_stack.top().id, name, parameters);
+    void evaluator::evaluate_function_declaration(ref<function_declaration> node)
+    {
+       std::string name = node->m_id->m_token.value;
+       
+       // Parameter types and id's
+       std::vector<function_param> parameters;
+       for (auto& param : node->m_params)
+           parameters.emplace_back(param->m_id->m_token.value, param->m_type, param->m_is_ref);
+       
+       auto is_valid_result = eval_base::get().is_function_valid(s_data_stack.top().id, name, parameters);
 
-        if(!is_valid_result.first)
+       if(!is_valid_result.first)
+           throw invalid_declaration_error("Duplicate variable declaration: " + name, node->m_id->get_location());
+
+       if (is_valid_result.second)
+       {
+           auto olist = std::dynamic_pointer_cast<overload_list>(is_valid_result.second->var_ref);
+           if (!olist)
+               throw invalid_declaration_error("Duplicate variable declaration: " + name, node->m_id->get_location());
+       
+           auto fun_v = make_ref<var_function>(parameters);
+           fun_v->set_bounded_file_id(s_data_stack.top().id);
+       
+           olist->add(symbol(fun_v, node->m_is_local, node->m_is_global));
+       }
+       else
+       {
+           auto fun_v = make_ref<var_function>(parameters);
+           fun_v->set_bounded_file_id(s_data_stack.top().id);
+       
+           ref<overload_list> result_olist = make_ref<overload_list>();
+           result_olist->set_symbol_id(name);
+           result_olist->add(symbol(fun_v, node->m_is_local, node->m_is_global));
+
+           symbol result_symbol(result_olist, node->m_is_local, node->m_is_global);
+       
+           if (node->m_is_global)
+               eval_base::get().insert_to_global(s_data_stack.top().id, name, result_symbol);
+           else
+               eval_base::get().insert(s_data_stack.top().id, name, result_symbol);
+       }
+    }
+
+    void evaluator::evaluate_lambda_declaration(ref<lambda_declaration> node)
+    {
+        std::string name = node->m_id->m_token.value;
+
+        ref<overload_list> result = nullptr;
+
+        if (eval_base::get().search_current(s_data_stack.top().id, name))
             throw invalid_declaration_error("Duplicate variable declaration: " + name, node->m_id->get_location());
 
-        if (is_valid_result.second)
+        if (node->m_initializer)
         {
-            auto olist = std::dynamic_pointer_cast<overload_list>(is_valid_result.second->var_ref);
-            if (!olist)
-                throw invalid_declaration_error("Duplicate variable declaration: " + name, node->m_id->get_location());
-        
-            auto fun_v = make_ref<var_function>(parameters);
-            fun_v->set_bounded_file_id(s_data_stack.top().id);
-        
-            olist->add(symbol(fun_v, node->m_is_local, node->m_is_global));
+            auto value = as_value(node->m_initializer);
+            auto olist = std::dynamic_pointer_cast<overload_list>(value);
+
+            if(!olist)
+                throw invalid_declaration_error("Wrong initializer type!", node->m_id->get_location());
+
+            olist->set_symbol_id(name);
+            result = olist;
         }
         else
         {
-            auto fun_v = make_ref<var_function>(parameters);
-            fun_v->set_bounded_file_id(s_data_stack.top().id);
-        
-            ref<overload_list> result_olist = make_ref<overload_list>();
-            result_olist->set_symbol_id(name);
-            result_olist->add(symbol(fun_v, node->m_is_local, node->m_is_global));
-
-            symbol result_symbol(result_olist, node->m_is_local, node->m_is_global);
-        
-            if (node->m_is_global)
-                eval_base::get().insert_to_global(s_data_stack.top().id, name, result_symbol);
-            else
-                eval_base::get().insert(s_data_stack.top().id, name, result_symbol);
+            result = make_ref<overload_list>();
+            result->set_symbol_id(name);
         }
-     }
 
-     void evaluator::evaluate_lambda_declaration(ref<lambda_declaration> node)
-     {
-         std::string name = node->m_id->m_token.value;
+        symbol result_symbol(result, node->m_flags.b2, node->m_flags.b3);
 
-         ref<overload_list> result = nullptr;
+        if (node->m_flags.b3)
+            eval_base::get().insert_to_global(s_data_stack.top().id, name, result_symbol);
+        else
+            eval_base::get().insert(s_data_stack.top().id, name, result_symbol);
+    }
 
-         if (eval_base::get().search_current(s_data_stack.top().id, name))
-             throw invalid_declaration_error("Duplicate variable declaration: " + name, node->m_id->get_location());
+    void evaluator::evaluate_enum_declaration(ref<enum_declaration> node)
+    {
+        std::string name = node->m_id->m_token.value;
 
-         if (node->m_initializer)
-         {
-             auto value = as_value(node->m_initializer);
-             auto olist = std::dynamic_pointer_cast<overload_list>(value);
+        if (eval_base::get().search(s_data_stack.top().id, name))
+            throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
 
-             if(!olist)
-                 throw invalid_declaration_error("Wrong initializer type!", node->m_id->get_location());
+        ref<symbol_table> items = make_ref<symbol_table>();
+        std::vector<string_t> id_list;
+        id_list.reserve(node->m_items.size());
 
-             olist->set_symbol_id(name);
-             result = olist;
-         }
-         else
-         {
-             result = make_ref<overload_list>();
-             result->set_symbol_id(name);
-         }
+        integer_t last_integer_v = 0;
 
-         symbol result_symbol(result, node->m_flags.b2, node->m_flags.b3);
+        for (auto& item : node->m_items)
+        {
+            string_t id = item.first->m_token.value;
+            id_list.push_back(id);
 
-         if (node->m_flags.b3)
-             eval_base::get().insert_to_global(s_data_stack.top().id, name, result_symbol);
-         else
-             eval_base::get().insert(s_data_stack.top().id, name, result_symbol);
-     }
+            ref<variable> value = nullptr;
+
+            if (item.second)
+            {
+                ref<variable_base> value_base = as_value(item.second);
+                last_integer_v = builtin::helper::var_as_integer(value_base);
+                value = make_ref<variable>(any(last_integer_v), variable_type::vt_integer);
+            }
+            else
+            {
+                value = make_ref<variable>(any(last_integer_v), variable_type::vt_integer);
+            }
+
+            items->insert(id, symbol(value));
+            last_integer_v++;
+        }
+
+        ref<var_enum> enum_var = make_ref<var_enum>(id_list);
+        enum_var->load_members(items);
+
+        symbol enum_symbol(enum_var, node->m_is_local, node->m_is_global);
+        if (node->m_is_global)
+            eval_base::get().insert_to_global(s_data_stack.top().id, name, enum_symbol);
+        else
+            eval_base::get().insert(s_data_stack.top().id, name, enum_symbol);
+    }
 
     void evaluator::evaluate_realm_declaration(ref<realm_declaration> node)
     {
@@ -1320,6 +1368,14 @@ namespace wio
             evaluate_omni_declaration(make_ref<omni_declaration>(node->m_id, nullptr, false, false, false));
         else
             throw invalid_type_error("Undefined parameter type!", node->get_location());
+    }
+
+    void evaluator::evaluate_unit_declaration(ref<unit_declaration> node)
+    {
+    }
+
+    void evaluator::evaluate_unit_member_declaration(ref<unit_member_declaration> node)
+    {
     }
 
     ref<variable_base> evaluator::as_value(ref<expression> node, ref<variable_base> object, bool is_ref)

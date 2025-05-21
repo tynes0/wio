@@ -9,6 +9,7 @@
 #include "members/b_vec3.h"
 #include "members/b_character.h"
 #include "members/b_float.h"
+#include "members/b_enum.h"
 
 namespace wio
 {
@@ -36,6 +37,9 @@ namespace wio
         builtin::b_float float_member_loader;
         target_member_scope_map[variable_type::vt_float] = float_member_loader.load();
         target_member_scope_map[variable_type::vt_float_ref] = target_member_scope_map[variable_type::vt_float];
+
+        builtin::b_enum enum_member_loader;
+        target_member_scope_map[variable_type::vt_enumeration] = enum_member_loader.load();
 
         target_member_scope_map[variable_type::vt_file] = nullptr;
         target_member_scope_map[variable_type::vt_pair] = nullptr;

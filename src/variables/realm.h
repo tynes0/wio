@@ -2,7 +2,6 @@
 
 #include "../utils/any.h"
 #include "../base/base.h"
-#include <string>
 #include "variable_base.h"
 
 namespace wio

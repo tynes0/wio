@@ -9,6 +9,7 @@ namespace wio
 {
     enum class unary_operator_type { prefix, postfix };
     enum class lit_type { lt_null, lt_string, lt_character, lt_bool, lt_binary, lt_octal, lt_decimal, lt_hexadeximal, lt_float };
+    enum class unit_declaration_type { none, exposed, hidden, shared };
 
     MakeFrenumInNamespace(wio, lit_type, lt_null, lt_string, lt_character, lt_bool, lt_binary, lt_octal, lt_decimal, lt_hexadeximal, lt_float)
 
@@ -46,7 +47,10 @@ namespace wio
     class lambda_declaration;
     class realm_declaration;
     class omni_declaration;
+    class enum_declaration;
     class parameter_declaration;
+    class unit_declaration;
+    class unit_member_declaration;
 
     class ast_node
     {
@@ -67,6 +71,8 @@ namespace wio
     class statement : public ast_node
     {
     public:
+        static constexpr bool is_declaration = false;
+
         virtual ~statement() = default;
     };
 
@@ -272,6 +278,8 @@ namespace wio
     class block_statement : public statement
     {
     public:
+        static constexpr bool is_declaration = false;
+
         block_statement(std::vector<ref<statement>> statements) 
             : m_statements(statements) {}
 
@@ -296,6 +304,8 @@ namespace wio
     class if_statement : public statement
     {
     public:
+        static constexpr bool is_declaration = false;
+
         if_statement(ref<expression> condition, ref<statement> then_branch, ref<statement> else_branch)
             : m_condition(condition), m_then_branch(then_branch), m_else_branch(else_branch) {}
 
@@ -310,6 +320,8 @@ namespace wio
     class for_statement : public statement
     {
     public:
+        static constexpr bool is_declaration = false;
+
         for_statement(ref<statement> initialization, ref<expression> condition, ref<expression> increment, ref<block_statement> body)
             : m_initialization(initialization), m_condition(condition), m_increment(increment), m_body(body) {}
 
@@ -325,6 +337,8 @@ namespace wio
     class foreach_statement : public statement
     {
     public:
+        static constexpr bool is_declaration = false;
+
         foreach_statement(ref<identifier> item, ref<expression> collection, ref<block_statement> body)
             :m_item(item), m_collection(collection), m_body(body) {}
 
@@ -339,6 +353,8 @@ namespace wio
     class while_statement : public statement
     {
     public:
+        static constexpr bool is_declaration = false;
+
         while_statement(ref<expression> condition, ref<block_statement> body)
             : m_condition(condition), m_body(body) {}
 
@@ -352,6 +368,8 @@ namespace wio
     class break_statement : public statement
     {
     public:
+        static constexpr bool is_declaration = false;
+
         break_statement(location loc) 
             : m_loc(loc) {}
 
@@ -364,6 +382,8 @@ namespace wio
     class continue_statement : public statement
     {
     public:
+        static constexpr bool is_declaration = false;
+
         continue_statement(location loc) 
             : m_loc(loc) {}
 
@@ -389,6 +409,8 @@ namespace wio
     class import_statement : public statement
     {
     public:
+        static constexpr bool is_declaration = false;
+
         import_statement(location loc, std::string module_path, bool is_pure = false, bool is_realm = false, ref<identifier> realm_id = nullptr)
             : m_location(loc), m_module_path(module_path), m_flags({ is_pure, is_realm }), m_realm_id(realm_id) {}
 
@@ -404,6 +426,8 @@ namespace wio
     class variable_declaration : public statement
     {
     public:
+        static constexpr bool is_declaration = true;
+
         variable_declaration(ref<identifier> id, ref<expression> initializer, bool is_const, bool is_local, bool is_global)
             : m_id(id), m_initializer(initializer), m_flags({is_const, is_local, is_global}) {}
 
@@ -418,6 +442,8 @@ namespace wio
     class array_declaration : public statement
     {
     public:
+        static constexpr bool is_declaration = true;
+
         array_declaration(ref<identifier> id, ref<expression> initializer, bool is_const, bool is_local, bool is_global)
             : m_id(id), m_initializer(initializer), m_flags({is_const, is_local, is_global}) {}
 
@@ -432,6 +458,8 @@ namespace wio
     class dictionary_declaration : public statement
     {
     public:
+        static constexpr bool is_declaration = true;
+
         dictionary_declaration(ref<identifier> id, ref<expression> initializer, bool is_const, bool is_local, bool is_global)
             : m_id(id), m_initializer(initializer), m_flags({is_const, is_local, is_global}) {}
 
@@ -446,6 +474,8 @@ namespace wio
     class function_definition : public statement
     {
     public:
+        static constexpr bool is_declaration = true;
+
         function_definition(ref<identifier> id, std::vector<ref<parameter_declaration>> params, ref<block_statement> body, bool is_local, bool is_global)
             : m_id(id), m_params(params), m_body(body), m_is_local(is_local), m_is_global(is_global) {}
 
@@ -462,6 +492,8 @@ namespace wio
     class function_declaration : public statement
     {
     public:
+        static constexpr bool is_declaration = true;
+
         function_declaration(ref<identifier> id, std::vector<ref<parameter_declaration>> params, bool is_local, bool is_global)
             : m_id(id), m_params(params), m_is_local(is_local), m_is_global(is_global) {}
 
@@ -477,6 +509,8 @@ namespace wio
     class lambda_declaration : public statement
     {
     public:
+        static constexpr bool is_declaration = true;
+
         lambda_declaration(ref<identifier> id, ref<expression> initializer, bool is_const, bool is_local, bool is_global, variable_type type = variable_type::vt_null)
             : m_id(id), m_initializer(initializer), m_flags({ is_const, is_local, is_global }) {}
 
@@ -491,6 +525,8 @@ namespace wio
     class realm_declaration : public statement
     {
     public:
+        static constexpr bool is_declaration = true;
+
         realm_declaration(ref<identifier> id, ref<block_statement> body, bool is_local, bool is_global)
             :m_id(id), m_body(body), m_is_local(is_local), m_is_global(is_global) {
         }
@@ -507,6 +543,8 @@ namespace wio
     class omni_declaration : public statement
     {
     public:
+        static constexpr bool is_declaration = true;
+
         omni_declaration(ref<identifier> id, ref<expression> initializer, bool is_const, bool is_local, bool is_global)
             : m_id(id), m_initializer(initializer), m_flags({ is_const, is_local, is_global }) {
         }
@@ -519,9 +557,28 @@ namespace wio
         packed_bool m_flags; // 1- const 2-local 3- global
     };
 
+    class enum_declaration : public statement
+    {
+    public:
+        static constexpr bool is_declaration = true;
+
+        enum_declaration(ref<identifier> id, const std::vector<std::pair<ref<identifier>, ref<expression>>>& items, bool is_local, bool is_global)
+            : m_id(id), m_items(items), m_is_local(is_local), m_is_global(is_global) {}
+
+        location get_location() const override { return m_id->get_location(); }
+        std::string to_string() const override;
+
+        ref<identifier> m_id;
+        std::vector<std::pair<ref<identifier>, ref<expression>>> m_items;
+        bool m_is_local;
+        bool m_is_global;
+    };
+
     class parameter_declaration : public statement
     {
     public:
+        static constexpr bool is_declaration = false; // why am i calling parameter_declaration then?
+
         parameter_declaration(ref<identifier> id, bool is_ref, variable_base_type type)
             : m_id(id), m_is_ref(is_ref), m_type(type) {
         }
@@ -532,6 +589,44 @@ namespace wio
         ref<identifier> m_id;
         variable_base_type m_type;
         bool m_is_ref;
+    };
+
+    class unit_declaration : public statement
+    {
+    public:
+        static constexpr bool is_declaration = true;
+
+        unit_declaration(ref<identifier> id, ref<block_statement> body, bool is_local, bool is_global, const std::vector<ref<identifier>>& parent_list,
+            const std::vector<ref<identifier>>& trust_list, bool is_final = false, unit_declaration_type default_decl = unit_declaration_type::hidden)
+            : m_id(id), m_body(body), m_parent_list(parent_list), m_trust_list(trust_list), m_default_decl(default_decl), m_flags({ is_final, is_local, is_global }) {
+        }
+
+        location get_location() const override { return m_id->get_location(); }
+        std::string to_string() const override;
+
+        ref<identifier> m_id;
+        ref<block_statement> m_body;
+        std::vector<ref<identifier>> m_parent_list;
+        std::vector<ref<identifier>> m_trust_list;
+        unit_declaration_type m_default_decl;
+        packed_bool m_flags; // 1- final 2- local 3- global
+    };
+
+    class unit_member_declaration : public statement
+    {
+    public:
+        static constexpr bool is_declaration = false; // bcs m_decl_statement could be decl not unit_member_declaration!
+
+        unit_member_declaration(ref<statement> decl_statement, unit_declaration_type decl_type, bool is_outer)
+            : m_decl_statement(decl_statement), m_decl_type(decl_type), m_is_outer(is_outer) {
+        }
+
+        location get_location() const override { return m_decl_statement->get_location(); }
+        std::string to_string() const override;
+
+        ref<statement> m_decl_statement;
+        unit_declaration_type m_decl_type;
+        bool m_is_outer;
     };
 
 } // namespace wio

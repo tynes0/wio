@@ -15,11 +15,23 @@ namespace wio
         array,
         dictionary,
         function,
+        enumeration,
         realm,
+        unit,
+        unit_instance,
         omni
     };
 
-    MakeFrenumInNamespace(wio, variable_base_type, none, variable, array, dictionary, function, realm, omni)
+    MakeFrenumInNamespace(wio, variable_base_type, none,
+        variable,
+        array,
+        dictionary,
+        function,
+        enumeration,
+        realm,
+        unit,
+        unit_instance,
+        omni)
 
     enum class variable_type
     {
@@ -36,6 +48,7 @@ namespace wio
         vt_array,
         vt_dictionary,
         vt_function,
+        vt_enumeration,
         vt_realm, 
         
         vt_vec2,
@@ -44,25 +57,19 @@ namespace wio
         
         vt_comparator,
         
+        vt_unit,
+        vt_unit_instance,
         vt_any,
         
-        vt_character_ref, // for optimized access
-        vt_float_ref      // for optimized access
+        vt_character_ref,
+        vt_float_ref
     };
 
     MakeFrenumInNamespace(wio, variable_type, 
         vt_null, vt_integer, vt_float, vt_string, vt_character, vt_bool, vt_type, vt_pair, vt_file, 
-        vt_array, vt_dictionary, vt_function, vt_realm, 
+        vt_array, vt_dictionary, vt_function, vt_enumeration, vt_realm, 
         vt_vec2, vt_vec3, vt_vec4, 
         vt_comparator, 
-        vt_any, 
+        vt_unit, vt_unit_instance, vt_any,
         vt_character_ref, vt_float_ref)
-
-    namespace helper
-    {
-        inline bool is_var_t(variable_type vt)
-        {
-            return (vt != variable_type::vt_array && vt != variable_type::vt_dictionary && vt != variable_type::vt_function && vt != variable_type::vt_realm);
-        }
-    }
 }

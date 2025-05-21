@@ -378,12 +378,96 @@ namespace wio
         return result;
     }
 
+    std::string enum_declaration::to_string() const
+    {
+        std::string result;
+        if (m_is_global)
+            result += "global ";
+        if (m_is_local)
+            result += "local ";
+
+        result += "enum " + m_id->to_string();
+        result += '{';
+        for (size_t i = 0; i < m_items.size(); ++i)
+        {
+            result += m_items[i].first->to_string();
+            if (m_items[i].second)
+                result += " = " + m_items[i].second->to_string();
+            if (i != m_items.size() - 1)
+                result += ", ";
+        }
+        result += '}';
+        return result;
+    }
+
     std::string parameter_declaration::to_string() const
     {
         std::string result;
         if (m_is_ref)
             result += "ref";
         result += frenum::to_string(m_type) + m_id->to_string();
+        return result;
+    }
+
+    std::string unit_declaration::to_string() const
+    {
+        std::string result;
+        if (m_flags.b3)
+            result += "global ";
+        if (m_flags.b2)
+            result += "local ";
+
+        result += "unit " + m_id->to_string();
+
+        if (m_flags.b1)
+            result += " final ";
+        result += "access ";
+
+        //if (m_default_decl == unit_declaration_type::hidden)
+        //    result += "hidden ";
+        //else if (m_default_decl == unit_declaration_type::exposed)
+        //    result += "exposed ";
+        //else if (m_default_decl == unit_declaration_type::shared)
+        //    result += "shared ";
+
+        if (!m_parent_list.empty())
+            result += "from ";
+
+        for (size_t i = 0; i < m_parent_list.size(); ++i)
+        {
+            result += m_parent_list[i]->to_string();
+            if (i != m_parent_list.size() - 1)
+                result += ", ";
+        }
+
+        if (!m_trust_list.empty())
+            result += "trust ";
+
+        for (size_t i = 0; i < m_trust_list.size(); ++i)
+        {
+            result += m_trust_list[i]->to_string();
+            if (i != m_trust_list.size() - 1)
+                result += ", ";
+        }
+
+
+        return std::string();
+    }
+
+    std::string unit_member_declaration::to_string() const
+    {
+        std::string result;
+
+        //if (m_default_decl == unit_declaration_type::hidden)
+        //    result += "hidden ";
+        //else if (m_default_decl == unit_declaration_type::exposed)
+        //    result += "exposed ";
+        //else if (m_default_decl == unit_declaration_type::shared)
+        //    result += "shared ";
+        //else if (m_flags.b4)
+        //    result += "outer ";
+
+        result += m_decl_statement->to_string();
         return result;
     }
 }

@@ -39,7 +39,6 @@ namespace wio
         void load_members(const symbol_map& table) { if (!m_members) init_members(); m_members->set_symbols(table); }
     protected:
         variable_base(packed_bool flags) : m_flags(flags) { }
-    private:
         ref<symbol_table> m_members;
         packed_bool m_flags = {}; // b1 -> const --- b2 -> omni type --- b5-> return ref 
     };

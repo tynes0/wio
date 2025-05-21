@@ -37,7 +37,7 @@ namespace wio
         location get_dict_element(std::vector<std::pair<ref<expression>, ref<expression>>>& elements);
         location get_function_parameters_and_body(std::vector<ref<parameter_declaration>>& params, ref<block_statement>& body, bool is_lambda);
 
-        ref<statement> parse_statement();
+        ref<statement> parse_statement(bool no_local_global = false);
         ref<expression> parse_expression();
         ref<expression> parse_primary_expression(bool is_lhs = false);
         ref<expression> parse_null_expression();
@@ -51,12 +51,15 @@ namespace wio
         ref<expression> parse_identifier(bool is_lhs = false);
         ref<expression> parse_postfix_expression(bool is_lhs = false);
 
+        ref<statement> parse_forward_declaration(bool is_const, bool is_local, bool is_global);
         ref<statement> parse_variable_declaration(bool is_const, bool is_local, bool is_global);
         ref<statement> parse_array_declaration(bool is_const, bool is_local, bool is_global);
         ref<statement> parse_dictionary_declaration(bool is_const, bool is_local, bool is_global);
         ref<statement> parse_function_declaration(bool is_const, bool is_local, bool is_global);
         ref<statement> parse_omni_declaration(bool is_const, bool is_local, bool is_global);
+        ref<statement> parse_enum_declaration(bool is_local, bool is_global);
         ref<statement> parse_realm_declaration(bool is_local, bool is_global);
+        ref<statement> parse_unit_declaration(bool is_local, bool is_globak);
         ref<statement> parse_parameter_declaration();
         ref<statement> parse_if_statement();
         ref<statement> parse_for_statement();
@@ -67,6 +70,7 @@ namespace wio
         ref<statement> parse_return_statement(location loc);
         ref<statement> parse_import_statement();
         ref<block_statement> parse_block_statement();
+        ref<block_statement> parse_unit_body_statement();
     };
 
 } // namespace wio

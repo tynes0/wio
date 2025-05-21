@@ -5,7 +5,7 @@
 #include "../variables/function_param.h"
 
 #include <string>
-#include <map>
+#include <unordered_map>
 
 namespace wio
 {
@@ -33,7 +33,7 @@ namespace wio
         packed_bool flags = {}; // 1-> is_local --- 2-> is_global --- 3-> original position passed
     };
 
-    using symbol_map = std::map<std::string, symbol>;
+    using symbol_map = std::unordered_map<std::string, symbol>;
 
     class symbol_table
     {
@@ -44,6 +44,6 @@ namespace wio
         symbol_map& get_symbols() { return m_symbols; }
         void set_symbols(const symbol_map& table) { m_symbols = table; }
     private:
-        std::map<std::string, symbol> m_symbols;
+        symbol_map m_symbols;
     };
 }

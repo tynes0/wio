@@ -8,10 +8,15 @@
 
 namespace wio
 {
-    enum class token_type
+    enum class token_type : uint32_t
     {
-        kw_if, kw_else, kw_for, kw_foreach, kw_in, kw_while, kw_break, kw_continue, kw_return, kw_func, kw_null, kw_ref, kw_pure, kw_unit,
-        kw_realm, kw_as, kw_var, kw_const, kw_array, kw_dict, kw_omni, kw_local, kw_global, kw_import, kw_typeof, kw_true, kw_false, 
+        kw_var, kw_const, kw_array, kw_dict, kw_func, kw_realm, kw_omni, kw_local, kw_global, kw_enum,
+        kw_if, kw_else, kw_while, kw_for, kw_foreach, 
+        kw_break, kw_continue, kw_return, kw_import,
+        kw_null, kw_true, kw_false,
+        kw_unit, kw_exposed, kw_shared, kw_hidden, kw_trust, kw_final, kw_from, kw_override, kw_super, kw_outer, kw_access,
+        kw_typeof, kw_ref, kw_pure, kw_as, kw_in, kw_forward,
+        kw_try, kw_catch, kw_throw, kw_rethrow, kw_finally,
         
         KW_COUNT /* JUST A COUNTER! NOT A KW*/,
         
@@ -27,8 +32,13 @@ namespace wio
     };
 
     MakeFrenumInNamespace(wio, token_type,
-        kw_if, kw_else, kw_for, kw_foreach, kw_in, kw_while, kw_break, kw_continue, kw_return, kw_func, kw_null, kw_ref, kw_pure, kw_unit,
-        kw_realm, kw_as, kw_var, kw_const, kw_array, kw_dict, kw_omni, kw_local, kw_global, kw_import, kw_typeof, kw_true, kw_false,
+        kw_var, kw_const, kw_array, kw_dict, kw_func, kw_realm, kw_omni, kw_local, kw_global, kw_enum,
+        kw_if, kw_else, kw_while, kw_for, kw_foreach,
+        kw_break, kw_continue, kw_return, kw_import,
+        kw_null, kw_true, kw_false,
+        kw_unit, kw_exposed, kw_shared, kw_hidden, kw_trust, kw_final, kw_from, kw_override, kw_super, kw_outer, kw_access,
+        kw_typeof, kw_ref, kw_pure, kw_as, kw_in, kw_forward,
+        kw_try, kw_catch, kw_throw, kw_rethrow, kw_finally,
         KW_COUNT,
         identifier, number, string, character, op,
         left_bracket, right_bracket,
@@ -44,35 +54,53 @@ namespace wio
         location loc;
     };
 
+    // TODO: maybe constexpr std::array<std::pair<std::string or const char*, token_type>>
     static const std::unordered_map<std::string, token_type> token_map =
     {
-        {"if", token_type::kw_if},
-        {"else", token_type::kw_else},
-        {"for", token_type::kw_for},
-        {"foreach", token_type::kw_foreach},
-        {"in", token_type::kw_in},
-        {"while", token_type::kw_while},
-        {"break", token_type::kw_break},
-        {"continue", token_type::kw_continue},
-        {"return", token_type::kw_return},
-        {"func", token_type::kw_func},
-        {"null", token_type::kw_null},
         {"var", token_type::kw_var},
         {"const", token_type::kw_const},
         {"array", token_type::kw_array},
         {"dict", token_type::kw_dict},
+        {"func", token_type::kw_func},
+        {"realm", token_type::kw_realm},
         {"omni", token_type::kw_omni},
         {"local", token_type::kw_local},
         {"global", token_type::kw_global},
+        {"enum", token_type::kw_enum},
+        {"if", token_type::kw_if},
+        {"else", token_type::kw_else},
+        {"while", token_type::kw_while},
+        {"for", token_type::kw_for},
+        {"foreach", token_type::kw_foreach},
+        {"break", token_type::kw_break},
+        {"continue", token_type::kw_continue},
+        {"return", token_type::kw_return},
         {"import", token_type::kw_import},
-        {"typeof", token_type::kw_typeof},
+        {"null", token_type::kw_null},
         {"true", token_type::kw_true},
         {"false", token_type::kw_false},
+        {"unit", token_type::kw_unit},
+        {"exposed", token_type::kw_exposed},
+        {"shared", token_type::kw_shared},
+        {"hidden", token_type::kw_hidden},
+        {"trust", token_type::kw_trust},
+        {"final", token_type::kw_final},
+        {"from", token_type::kw_from},
+        {"override", token_type::kw_override},
+        {"super", token_type::kw_super},
+        {"outer", token_type::kw_outer},
+        {"access", token_type::kw_access},
+        {"typeof", token_type::kw_typeof},
         {"ref", token_type::kw_ref},
         {"pure", token_type::kw_pure},
-        {"unit", token_type::kw_unit},
-        {"realm", token_type::kw_realm},
         {"as", token_type::kw_as},
+        {"in", token_type::kw_in},
+        {"forward", token_type::kw_forward},
+        {"try", token_type::kw_try},
+        {"catch", token_type::kw_catch},
+        {"throw", token_type::kw_throw},
+        {"rethrow", token_type::kw_rethrow},
+        {"finally", token_type::kw_finally},
 
         {"+", token_type::op},
         {"-", token_type::op},

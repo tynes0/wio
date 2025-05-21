@@ -49,9 +49,12 @@ namespace wio
         static void evaluate_function_definition(ref<function_definition> node);
         static void evaluate_function_declaration(ref<function_declaration> node);
         static void evaluate_lambda_declaration(ref<lambda_declaration> node);
+        static void evaluate_enum_declaration(ref<enum_declaration> node);
         static void evaluate_realm_declaration(ref<realm_declaration> node);
         static void evaluate_omni_declaration(ref<omni_declaration> node);
         static void evaluate_parameter_declaration(ref<parameter_declaration> node);
+        static void evaluate_unit_declaration(ref<unit_declaration> node);
+        static void evaluate_unit_member_declaration(ref<unit_member_declaration> node);
 
         static ref<variable_base> as_value(ref<expression> node, ref<variable_base> object = nullptr, bool is_ref = false);
     };

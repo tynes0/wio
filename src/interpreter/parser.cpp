@@ -227,7 +227,7 @@ namespace wio
         
     }
 
-    ref<statement> parser::parse_statement()
+    ref<statement> parser::parse_statement(bool no_local_global)
     {
         token current = current_token();
         bool is_local = false;
@@ -246,6 +246,12 @@ namespace wio
             current = current_token();
         }
 
+        auto verify = [is_local, is_global, current, no_local_global](bool is_decl)
+            { 
+                if (is_local || is_global && (!is_decl || no_local_global))
+                    throw invalid_declaration_error("invalid 'local' - 'global' usage.", current.loc); 
+            };
+
         if (match_token(token_type::semicolon))
             return nullptr;
 
@@ -259,6 +265,8 @@ namespace wio
                     current_token().type == token_type::kw_dict || 
                     current_token().type == token_type::kw_omni)
                 {
+                    verify(true);
+
                     if (current_token().type == token_type::kw_var)
                     {
                         next_token();
@@ -293,90 +301,119 @@ namespace wio
             }
             else if (current.type == token_type::kw_var)
             {
+                verify(true);
                 next_token();
                 return parse_variable_declaration(false, is_local, is_global);
             }
             else if (current.type == token_type::kw_array)
             {
+                verify(true);
                 next_token();
                 return parse_array_declaration(false, is_local, is_global);
             }
             else if (current.type == token_type::kw_dict)
             {
+                verify(true);
                 next_token();
                 return parse_dictionary_declaration(false, is_local, is_global);
             }
             else if (current.type == token_type::kw_func)
             {
+                verify(true);
                 next_token();
                 return parse_function_declaration(false, is_local, is_global);
             }
             else if (current.type == token_type::kw_omni)
             {
+                verify(true);
                 next_token();
                 return parse_omni_declaration(false, is_local, is_global);
             }
+            else if (current.type == token_type::kw_enum)
+            {
+                verify(true);
+                next_token();
+                return parse_enum_declaration(is_local, is_global);
+            }
             else if (current.type == token_type::kw_realm)
             {
+                verify(true);
                 next_token();
                 return parse_realm_declaration(is_local, is_global);
             }
+            else if (current.type == token_type::kw_unit)
+            {
+                verify(true);
+                next_token();
+                return parse_unit_declaration(is_local, is_global);
+            }
             else if (current.type == token_type::kw_if)
             {
+                verify(false);
                 next_token();
                 return parse_if_statement();
             }
             else if (current.type == token_type::kw_for)
             {
+                verify(false);
                 next_token();
                 return parse_for_statement();
             }
             else if (current.type == token_type::kw_while)
             {
+                verify(false);
                 next_token();
                 return parse_while_statement();
             }
             else if (current.type == token_type::kw_foreach)
             {
+                verify(false);
                 next_token();
                 return parse_foreach_statement();
             }
             else if (current.type == token_type::kw_break)
             {
+                verify(false);
                 location loc = current_token().loc;
                 next_token();
                 return parse_break_statement(loc);
             }
             else if (current.type == token_type::kw_continue)
             {
+                verify(false);
                 location loc = current_token().loc;
                 next_token();
                 return parse_continue_statement(loc);
             }
             else if (current.type == token_type::kw_return)
             {
+                verify(false);
                 location loc = current_token().loc;
                 next_token();
                 return parse_return_statement(loc);
             }
             else if (current.type == token_type::kw_import)
             {
+                verify(false);
                 next_token();
                 return parse_import_statement();
             }
         }
         else if (current.type == token_type::identifier)
         {
+            verify(false);
             ref<expression_statement> result = make_ref<expression_statement>(parse_identifier(true));
             consume_token(token_type::semicolon);
             return result;
         }
         else if (current.type == token_type::left_curly_bracket)
         {
+            verify(false);
             return parse_block_statement();
         }
         else if (current.type == token_type::op)
         {
+            verify(false);
             auto stmt = make_ref<expression_statement>(parse_unary_expression());
             consume_token(token_type::semicolon);
             return stmt;
@@ -672,6 +709,17 @@ namespace wio
         return left;
     }
 
+    ref<statement> parser::parse_forward_declaration(bool is_const, bool is_local, bool is_global)
+    {
+        if (match_token(token_type::kw_func))
+            return parse_function_declaration(is_const, is_local, is_global); // parse_function_declaration already supports forward decl
+        else if (match_token(token_type::kw_unit))
+        {
+
+        }
+        return nullptr;
+    }
+
     ref<statement> parser::parse_variable_declaration(bool is_const, bool is_local, bool is_global)
     {
         token id_token = consume_token(token_type::identifier);
@@ -850,12 +898,88 @@ namespace wio
         return make_ref<omni_declaration>(id, initializer, is_const, is_local, is_global);
     }
 
+    ref<statement> parser::parse_enum_declaration(bool is_local, bool is_global)
+    {
+        token id_token = consume_token(token_type::identifier);
+        ref<identifier> id = make_ref<identifier>(id_token);
+
+        consume_token(token_type::left_curly_bracket);
+
+        std::vector<std::pair<ref<identifier>, ref<expression>>> item_list;
+
+        while (!match_token(token_type::right_curly_bracket))
+        {
+            ref<identifier> elem_id = make_ref<identifier>(consume_token(token_type::identifier));
+            ref<expression> initializer = match_token(token_type::op, "=") ? parse_expression() : nullptr;
+            item_list.emplace_back(elem_id, initializer);
+
+            match_token(token_type::comma);
+        }
+
+        return make_ref<enum_declaration>(id, item_list, is_local, is_global);
+    }
+
     ref<statement> parser::parse_realm_declaration(bool is_local, bool is_global)
     {
-        ref<identifier> id = make_ref<identifier>(current_token(), false, false);
-        next_token();
+        token id_token = consume_token(token_type::identifier);
+        ref<identifier> id = make_ref<identifier>(id_token);
+
         ref<statement> block = parse_block_statement();
         return make_ref<realm_declaration>(id, std::dynamic_pointer_cast<block_statement>(block), is_local, is_global);
+    }
+
+    ref<statement> parser::parse_unit_declaration(bool is_local, bool is_global)
+    {
+        token id_token = consume_token(token_type::identifier);
+        ref<identifier> id = make_ref<identifier>(id_token);
+
+        bool is_final = false;
+        std::vector<ref<identifier>> parent_list;
+        std::vector<ref<identifier>> trust_list;
+        using default_declaration = unit_declaration_type;
+        default_declaration default_decl = default_declaration::hidden;
+
+        while (match_token(token_type::op, "-"))
+        {
+            if (match_token(token_type::kw_final))
+            {
+                is_final = true;
+            }
+            else if (match_token(token_type::kw_access))
+            {
+                if (match_token(token_type::kw_hidden))
+                    default_decl = default_declaration::hidden;
+                else if (match_token(token_type::kw_exposed))
+                    default_decl = default_declaration::exposed;
+                else if (match_token(token_type::kw_shared))
+                    default_decl = default_declaration::shared;
+                else
+                    error("Expected 'hidden', 'exposed' or 'shared'.", current_token().loc);
+            }
+            else if (match_token(token_type::kw_from))
+            {
+                parent_list.push_back(make_ref<identifier>(consume_token(token_type::identifier)));
+
+                while (match_token(token_type::comma))
+                    parent_list.push_back(make_ref<identifier>(consume_token(token_type::identifier)));
+            }
+            else if (match_token(token_type::kw_trust))
+            {
+                consume_token(token_type::kw_unit); // - trust 'unit' foo;
+                trust_list.push_back(make_ref<identifier>(consume_token(token_type::identifier)));
+
+                while (match_token(token_type::comma))
+                    trust_list.push_back(make_ref<identifier>(consume_token(token_type::identifier)));
+            }
+            else
+            {
+                    error("Expected 'final', 'access', 'from' or 'hidden'.", current_token().loc);
+            }
+        }
+
+        ref<block_statement> body = parse_unit_body_statement();
+
+        return make_ref<unit_declaration>(id, body, is_local, is_global, parent_list, trust_list, is_final, default_decl);
     }
 
     ref<statement> parser::parse_parameter_declaration()
@@ -1072,6 +1196,45 @@ namespace wio
             ref<statement> stmt = parse_statement();
             if (stmt)
                 statements.push_back(stmt);
+        }
+
+        return make_ref<block_statement>(statements);
+    }
+
+    ref<block_statement> parser::parse_unit_body_statement()
+    {
+        consume_token(token_type::left_curly_bracket);
+
+        std::vector<ref<statement>> statements;
+        unit_declaration_type decl_type = unit_declaration_type::none;
+        bool is_outer = false;
+
+        while (!match_token(token_type::right_curly_bracket))
+        {
+            if (match_token(token_type::kw_outer))
+                is_outer = true;
+            else
+                is_outer = false;
+
+            if (match_token(token_type::kw_hidden))
+                decl_type = unit_declaration_type::hidden;
+            else if (match_token(token_type::kw_exposed))
+                decl_type = unit_declaration_type::exposed;
+            else if (match_token(token_type::kw_shared))
+                decl_type = unit_declaration_type::shared;
+            else
+                decl_type = unit_declaration_type::none;
+
+            if (match_token(token_type::kw_outer))
+                is_outer = true;
+
+            ref<statement> stmt = parse_statement(true);
+            if (stmt)
+            {
+                if (stmt->is_declaration)
+                    printf("1");
+                statements.push_back(make_ref<unit_member_declaration>(stmt, decl_type, is_outer));
+            }
         }
 
         return make_ref<block_statement>(statements);

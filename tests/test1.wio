@@ -1,1 +1,12 @@
-import test2;
+unit parent {}
+unit x {}
+unit y {}
+
+unit object
+	- final
+	- from parent
+	- trust unit x
+	- access hidden
+{
+	exposed var z = 123;
+}

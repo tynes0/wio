@@ -31,19 +31,19 @@ namespace wio
 
     void main_table::insert(id_t cur_id, const std::string& name, const symbol& symbol)
     {
-        ref<scope> current = find_scope(cur_id);
+        ref<scope> current = find_scope_checked(cur_id);
         current->insert(name, symbol);
     }
 
     void main_table::insert_to_global(id_t cur_id, const std::string& name, const symbol& symbol)
     {
-        ref<scope> current = find_scope(cur_id);
+        ref<scope> current = find_scope_checked(cur_id);
         current->insert_to_global(name, symbol);
     }
 
     symbol* main_table::search(id_t cur_id, const std::string& name, id_t pass_id)
     {
-        ref<scope> current = find_scope(cur_id);
+        ref<scope> current = find_scope_checked(cur_id);
         symbol* sym = current->lookup(name);
 
         if (sym)
@@ -68,7 +68,7 @@ namespace wio
 
     symbol* main_table::search_current(id_t cur_id, const std::string& name, id_t pass_id)
     {
-        ref<scope> current = find_scope(cur_id);
+        ref<scope> current = find_scope_checked(cur_id);
         symbol* sym = current->lookup_current(name);
 
         if (sym)
@@ -104,7 +104,7 @@ namespace wio
 
     symbol* main_table::search_function(id_t cur_id, const std::string& name, const std::vector<function_param>& parameters, id_t pass_id)
     {
-        ref<scope> current = find_scope(cur_id);
+        ref<scope> current = find_scope_checked(cur_id);
         symbol* sym = current->lookup_function(name, parameters);
 
         if (sym)
@@ -129,7 +129,7 @@ namespace wio
 
     symbol* main_table::search_current_function(id_t cur_id, const std::string& name, const std::vector<function_param>& parameters)
     {
-        ref<scope> current = find_scope(cur_id);
+        ref<scope> current = find_scope_checked(cur_id);
         return current->lookup_function(name, parameters);
     }
 
@@ -164,7 +164,7 @@ namespace wio
     {
         std::pair<bool, symbol*> result_pair = std::make_pair<bool, symbol*>(false, nullptr);
 
-        ref<scope> current = find_scope(cur_id);
+        ref<scope> current = find_scope_checked(cur_id);
         symbol* sym = current->lookup(name);
 
         symbol* result = nullptr;
