@@ -3,6 +3,7 @@
 #include <string>
 #include "../variables/variable_type.h"
 #include "../variables/variable_base.h"
+#include "OS.h"
 
 namespace wio
 {
@@ -12,5 +13,6 @@ namespace wio
 		string_t type_to_string(variable_type vt);
 		char get_escape_seq(char ch);
 		string_t var_to_string(ref<variable_base> base);
+		constexpr OS get_OS();
 	}
 }

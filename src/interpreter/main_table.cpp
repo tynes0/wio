@@ -102,64 +102,6 @@ namespace wio
         return nullptr;
     }
 
-    symbol* main_table::search_function(id_t cur_id, const std::string& name, const std::vector<function_param>& parameters, id_t pass_id)
-    {
-        ref<scope> current = find_scope_checked(cur_id);
-        symbol* sym = current->lookup_function(name, parameters);
-
-        if (sym)
-            return sym;
-
-        for (auto& scp : m_table)
-        {
-            if (scp.first == cur_id)
-                continue;
-
-            symbol* item = scp.second->lookup_function(name, parameters);
-
-            if (item)
-            {
-                if ((!item->is_local() && is_imported(scp.first)) || scp.first == pass_id)
-                    return item;
-            }
-        }
-
-        return nullptr;
-    }
-
-    symbol* main_table::search_current_function(id_t cur_id, const std::string& name, const std::vector<function_param>& parameters)
-    {
-        ref<scope> current = find_scope_checked(cur_id);
-        return current->lookup_function(name, parameters);
-    }
-
-    symbol* main_table::search_builtin_function(const std::string& name, const std::vector<function_param>& parameters)
-    {
-        auto& symbols = m_table[s_builtin_scope_id]->get_symbols();
-
-        auto it = symbols.find(name);
-        if (it != symbols.end() && it->second.var_ref->get_base_type() == variable_base_type::function)
-        {
-            if (auto f = std::dynamic_pointer_cast<var_function>(it->second.var_ref))
-            {
-                if (f->compare_parameters(parameters))
-                    return &(it->second);
-            }
-            else if (auto ol = std::dynamic_pointer_cast<overload_list>(it->second.var_ref))
-            {
-                for (size_t i = 0; i < ol->count(); ++i)
-                {
-                    if (auto fun = std::dynamic_pointer_cast<var_function>(ol->get(i)->var_ref))
-                    {
-                        if (fun->compare_parameters(parameters))
-                            return &(it->second);
-                    }
-                }
-            }
-        }
-        return nullptr;
-    }
-
     std::pair<bool, symbol*> main_table::is_function_valid(id_t cur_id, const std::string name, const std::vector<function_param>& parameters, id_t pass_id)
     {
         std::pair<bool, symbol*> result_pair = std::make_pair<bool, symbol*>(false, nullptr);
@@ -235,11 +177,19 @@ namespace wio
         m_table[cur_id] = make_ref<scope>(type, m_table[cur_id]);
     }
 
+    void main_table::enter_this_scope(id_t cur_id, ref<scope> this_scope)
+    {
+        this_scope->m_parent = m_table[cur_id];
+        m_table[cur_id] = this_scope;
+    }
+
     ref<scope> main_table::exit_scope(id_t cur_id)
     {
         ref<scope> child = m_table[cur_id];
 
         m_table[cur_id] = m_table[cur_id]->get_parent();
+        child->m_parent = nullptr;
+
         return child;
     }
 

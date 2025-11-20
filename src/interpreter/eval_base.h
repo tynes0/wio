@@ -5,6 +5,7 @@
 
 #include "scope.h"
 #include "../variables/function_param.h"
+#include "../variables/unit.h"
 #include "ast.h"
 #include "../base/base.h"
 
@@ -24,6 +25,7 @@ namespace wio
 		static eval_base& get();
 
 		void enter_scope(id_t id, scope_type type, id_t helper_id = 0);
+		void enter_this_scope(id_t id, ref<scope> this_scope);
 		ref<scope> exit_scope(id_t id);
 
 		void enter_statement_stack(std::vector<ref<statement>>* list);
@@ -33,11 +35,8 @@ namespace wio
 		ref<scope> exit_statement_stack_and_scope(id_t id);
 
 		symbol* search_member(id_t id, const std::string& name, ref<variable_base> object) const;
-		symbol* search_member_function(id_t id, const std::string& name, ref<variable_base> object, const std::vector<function_param>& parameters) const;
 		symbol* search(id_t id, const std::string& name) const;
 		symbol* search_current(id_t id, const std::string& name) const;
-		symbol* search_current_function(id_t id, const std::string& name, const std::vector<function_param>& parameters) const;
-		symbol* search_function(id_t id, const std::string& name, const std::vector<function_param>& parameters) const;
 
 		std::pair<bool, symbol*> is_function_valid(id_t id, const std::string name, const std::vector<function_param>& parameters) const;
 
@@ -53,6 +52,14 @@ namespace wio
 		ref<variable_base>* get_last_left_value() const;
 		ref<stmt_stack> get_statement_stack() const;
 
+		ref<unit> active_unit();
+		void push_unit(ref<unit> p_unit);
+		ref<unit> pop_unit();
+
+		ref<unit_instance> last_unit_whose_member_function_is_called();
+		void push_unit_whose_member_function_is_called(ref<unit_instance> p_unit_instance);
+		ref<unit_instance> pop_unit_whose_member_function_is_called();
+
 		void inc_loop_depth();
 		void dec_loop_depth();
 		int get_loop_depth() const;
@@ -66,10 +73,13 @@ namespace wio
 		bool return_called() const;
 		bool is_ref_error_active() const;
 		bool in_func_call() const;
-		bool should_search_only_func() const;
+		bool in_object() const;
+		bool is_table_blocked() const;
 
 		bool is_sf() const;
 		bool is_nb() const;
+
+		bool is_in_unit_decl() const;
 
 		void set_last_return_value(ref<variable_base> value);
 		void set_last_left_value(ref<variable_base>* value);
@@ -81,6 +91,7 @@ namespace wio
 		void call_return(bool flag);
 		void set_ref_error_activity(bool flag);
 		void set_func_call_state(bool flag);
-		void set_search_only_func_state(bool flag);
+		void set_object_state(bool flag);
+		void block_table(bool flag);
 	};
 }

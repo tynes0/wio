@@ -18,6 +18,8 @@ namespace wio
         char peek() const;
         char peek(int offset) const;
         char advance();
+        void advance(int count);
+        bool check_specific();
         bool is_operator(char ch);
         bool skip_whitespace();
         bool skip_comments();
@@ -26,6 +28,7 @@ namespace wio
         token read_string();
         token read_char();
         token read_operator();
+        token read_specific();
 
         std::vector<token> m_tokens;
         std::string m_source;

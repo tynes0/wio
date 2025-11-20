@@ -18,7 +18,7 @@ namespace wio
         arg.id = id;
         arg.aliases = aliases;
         arg.description = description;
-        arg.action = action;
+        arg.action = std::move(action);
         arg.value = "";
         arg.takes_value = takes_value;
         arg.is_set = false;

@@ -42,6 +42,13 @@ namespace wio
 				return make_ref<variable>(any(string_t(buf.as<character_t>())), variable_type::vt_string);
 			}
 
+			static ref<variable_base> b_input_2(const std::vector<ref<variable_base>>& args)
+			{
+				filesystem::write_stdout(util::var_to_string(args[0]));
+				raw_buffer buf = filesystem::read_stdout();
+				return make_ref<variable>(any(string_t(buf.as<character_t>())), variable_type::vt_string);
+			}
+
 			static ref<variable_base> b_range(const std::vector<ref<variable_base>>& args)
 			{
 				if (args[0]->get_base_type() != variable_base_type::variable || args[1]->get_base_type() != variable_base_type::variable)
@@ -126,7 +133,8 @@ namespace wio
 			auto println_func = loader::load_function(table, "Println", detail::b_println, pa<1>{ variable_base_type::omni });
 			loader::load_overload(println_func, detail::b_println_2, pa<0>{});
 
-			loader::load_function(table, "Input", detail::b_input, pa<0>{});
+			auto input_func = loader::load_function(table, "Input", detail::b_input, pa<0>{});
+			loader::load_overload(input_func, detail::b_input_2, pa<1>{ variable_base_type::omni });
 
 			auto range_func = loader::load_function(table, "Range", detail::b_range, pa<2>{ variable_base_type::omni, variable_base_type::omni });
 			loader::load_overload(range_func, detail::b_range_2, pa<1>{ variable_base_type::omni });

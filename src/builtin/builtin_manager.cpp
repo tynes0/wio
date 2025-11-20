@@ -15,32 +15,16 @@ namespace wio
 {
     void builtin_manager::load(std::map<variable_type, ref<symbol_table>>& target_member_scope_map)
     {
-        builtin::b_array array_member_loader;
-        target_member_scope_map[variable_type::vt_array] = array_member_loader.load();
-        
-        builtin::b_string string_member_loader;
-        target_member_scope_map[variable_type::vt_string] = string_member_loader.load();
-        
-        builtin::b_dictionary dictionary_member_loader;
-        target_member_scope_map[variable_type::vt_dictionary] = dictionary_member_loader.load();
-        
-        builtin::b_character character_member_loader;
-        target_member_scope_map[variable_type::vt_character] = character_member_loader.load();
+        target_member_scope_map[variable_type::vt_array] = builtin::b_array::load();
+        target_member_scope_map[variable_type::vt_string] = builtin::b_string::load();
+        target_member_scope_map[variable_type::vt_dictionary] = builtin::b_dictionary::load();
+        target_member_scope_map[variable_type::vt_character] = builtin::b_character::load();
         target_member_scope_map[variable_type::vt_character_ref] = target_member_scope_map[variable_type::vt_character];
-        
-        builtin::b_vec2 vec2_member_loader;
-        target_member_scope_map[variable_type::vt_vec2] = vec2_member_loader.load();
-
-        builtin::b_vec3 vec3_member_loader;
-        target_member_scope_map[variable_type::vt_vec3] = vec3_member_loader.load();
-        
-        builtin::b_float float_member_loader;
-        target_member_scope_map[variable_type::vt_float] = float_member_loader.load();
+        target_member_scope_map[variable_type::vt_vec2] = builtin::b_vec2::load();
+        target_member_scope_map[variable_type::vt_vec3] = builtin::b_vec3::load();
+        target_member_scope_map[variable_type::vt_float] = builtin::b_float::load();
         target_member_scope_map[variable_type::vt_float_ref] = target_member_scope_map[variable_type::vt_float];
-
-        builtin::b_enum enum_member_loader;
-        target_member_scope_map[variable_type::vt_enumeration] = enum_member_loader.load();
-
+        target_member_scope_map[variable_type::vt_enumeration] = builtin::b_enum::load();
         target_member_scope_map[variable_type::vt_file] = nullptr;
         target_member_scope_map[variable_type::vt_pair] = nullptr;
         target_member_scope_map[variable_type::vt_vec4] = nullptr;

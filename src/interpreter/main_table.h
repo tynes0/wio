@@ -26,10 +26,6 @@ namespace wio
         symbol* search_current(id_t cur_id, const std::string& name, id_t pass_id = 0);
         symbol* search_builtin(const std::string& name);
 
-        symbol* search_function(id_t cur_id, const std::string& name, const std::vector<function_param>& parameters, id_t pass_id = 0);
-        symbol* search_current_function(id_t cur_id, const std::string& name, const std::vector<function_param>& parameters);
-        symbol* search_builtin_function(const std::string& name, const std::vector<function_param>& parameters);
-
         std::pair<bool, symbol*> is_function_valid(id_t cur_id, const std::string name, const std::vector<function_param>& parameters, id_t pass_id = 0);
 
         void set_scope(id_t cur_id, ref<scope> scpe) { m_table[cur_id] = scpe; }
@@ -41,6 +37,7 @@ namespace wio
         ref<scope>& get_builtin_scope();
 
         void enter_scope(id_t cur_id, scope_type type);
+        void enter_this_scope(id_t cur_id, ref<scope> this_scope);
         ref<scope> exit_scope(id_t cur_id);
 	private:
         ref<scope> find_scope(id_t id);

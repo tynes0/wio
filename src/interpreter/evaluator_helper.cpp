@@ -13,6 +13,7 @@
 #include "../variables/dictionary.h"
 #include "../variables/realm.h"
 #include "../variables/overload_list.h"
+#include "../variables/unit.h"
 
 #include "../utils/filesystem.h"
 #include "../utils/util.h"
@@ -1712,6 +1713,11 @@ namespace wio
             {
                 return make_ref<variable>(any(rv_ref->get_type() == variable_type::vt_null), variable_type::vt_bool);
             }
+            else if (lv_ref->get_type() == variable_type::vt_type)
+            {
+                if (rv_ref->get_type() == variable_type::vt_type)
+                    return make_ref<variable>(any(any_cast<variable_type>(left_value) == any_cast<variable_type>(right_value)), variable_type::vt_bool);
+            }
             throw type_mismatch_error("Invalid operand types for '==' operator.", loc);
         }
 
@@ -2495,6 +2501,40 @@ namespace wio
                 }
 
                 result->set_all(func_rhs->get_all());
+                omni_ref = result;
+                omni_ref->set_omni(true);
+                return omni_ref->clone();
+            }
+            else if (rv_ref->get_base_type() == variable_base_type::unit_instance)
+            {
+                ref<unit_instance> unit_instance_rhs = std::dynamic_pointer_cast<unit_instance>(rv_ref);
+                ref<unit_instance> result = make_ref<unit_instance>();
+
+                if (unit_instance_rhs)
+                {
+                    auto members = unit_instance_rhs->get_members();
+
+                    auto& symbols = members->get_symbols();
+                    result->init_members();
+                    auto& lhs_symbols = result->get_members()->get_symbols();
+
+                    result->set_source(unit_instance_rhs->get_source());
+
+                    for (auto& item : symbols)
+                    {
+                        if (item.second.var_ref->get_type() == variable_type::vt_float_ref)
+                            lhs_symbols[item.first] = symbol(make_ref<variable>(any(*std::dynamic_pointer_cast<variable>(item.second.var_ref)->get_data_as<float_ref_t>()), variable_type::vt_float), item.second.is_local(), item.second.is_global(), item.second.is_ref());
+                        else if (item.second.var_ref->get_type() == variable_type::vt_character_ref)
+                            lhs_symbols[item.first] = symbol(make_ref<variable>(any(*std::dynamic_pointer_cast<variable>(item.second.var_ref)->get_data_as<character_ref_t>()), variable_type::vt_character), item.second.is_local(), item.second.is_global(), item.second.is_ref());
+                        else
+                            lhs_symbols[item.first] = symbol(item.second.var_ref->clone(), item.second.is_local(), item.second.is_global(), item.second.is_ref());
+                    }
+                }
+                else
+                {
+                    result->init_members();
+                }
+
                 omni_ref = result;
                 omni_ref->set_omni(true);
                 return omni_ref->clone();

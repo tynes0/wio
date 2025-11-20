@@ -13,8 +13,6 @@ namespace wio
     {
         namespace detail
         {
-            static constexpr integer_t s_end_position = (integer_t)(std::numeric_limits<integer_t>().max)();
-
             static ref<variable> get_var_str(ref<variable_base> base_str)
             {
                 if (!base_str)
@@ -230,6 +228,293 @@ namespace wio
                 }
                 return make_ref<var_array>(result);
             }
+
+            static ref<variable_base> b_string_find(const std::vector<ref<variable_base>>& args)
+            {
+                ref<variable> str = get_var_str(args[0]);
+                string_t data = str->get_data_as<string_t>();
+                string_t token;
+
+                if (args[1]->get_type() == variable_type::vt_string)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<string_t>();
+                else if (args[1]->get_type() == variable_type::vt_character)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t>();
+                else if (args[1]->get_type() == variable_type::vt_character_ref)
+                    token = *std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t*>();
+                else
+                    throw builtin_error("Invalid parameter at String.Find()");
+
+                size_t pos = data.find(token);
+                if (pos == std::string::npos)
+                    return make_ref<variable>(any(INTEGER_T_MAX), variable_type::vt_integer);
+                return make_ref<variable>(any(integer_t(pos)), variable_type::vt_integer);
+            }
+
+            static ref<variable_base> b_string_find_2(const std::vector<ref<variable_base>>& args)
+            {
+                ref<variable> str = get_var_str(args[0]);
+                string_t data = str->get_data_as<string_t>();
+                string_t token;
+
+                if (args[1]->get_type() == variable_type::vt_string)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<string_t>();
+                else if (args[1]->get_type() == variable_type::vt_character)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t>();
+                else if (args[1]->get_type() == variable_type::vt_character_ref)
+                    token = *std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t*>();
+                else
+                    throw builtin_error("Invalid parameter at String.Find()");
+
+                integer_t offset = helper::var_as_integer(args[2]);
+
+                size_t pos = data.find(token, offset);
+                if (pos == std::string::npos)
+                    return make_ref<variable>(any(INTEGER_T_MAX), variable_type::vt_integer);
+                return make_ref<variable>(any(integer_t(pos)), variable_type::vt_integer);
+            }
+
+            static ref<variable_base> b_string_rfind(const std::vector<ref<variable_base>>& args)
+            {
+                ref<variable> str = get_var_str(args[0]);
+                string_t data = str->get_data_as<string_t>();
+                string_t token;
+
+                if (args[1]->get_type() == variable_type::vt_string)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<string_t>();
+                else if (args[1]->get_type() == variable_type::vt_character)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t>();
+                else if (args[1]->get_type() == variable_type::vt_character_ref)
+                    token = *std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t*>();
+                else
+                    throw builtin_error("Invalid parameter at String.Find()");
+
+                size_t pos = data.rfind(token);
+                if (pos == std::string::npos)
+                    return make_ref<variable>(any(INTEGER_T_MAX), variable_type::vt_integer);
+                return make_ref<variable>(any(integer_t(pos)), variable_type::vt_integer);
+            }
+
+            static ref<variable_base> b_string_rfind_2(const std::vector<ref<variable_base>>& args)
+            {
+                ref<variable> str = get_var_str(args[0]);
+                string_t data = str->get_data_as<string_t>();
+                string_t token;
+
+                if (args[1]->get_type() == variable_type::vt_string)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<string_t>();
+                else if (args[1]->get_type() == variable_type::vt_character)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t>();
+                else if (args[1]->get_type() == variable_type::vt_character_ref)
+                    token = *std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t*>();
+                else
+                    throw builtin_error("Invalid parameter at String.Find()");
+
+                integer_t offset = helper::var_as_integer(args[2]);
+
+                size_t pos = data.rfind(token, offset);
+                if (pos == std::string::npos)
+                    return make_ref<variable>(any(INTEGER_T_MAX), variable_type::vt_integer);
+                return make_ref<variable>(any(integer_t(pos)), variable_type::vt_integer);
+            }
+
+            static ref<variable_base> b_string_find_any(const std::vector<ref<variable_base>>& args)
+            {
+                ref<variable> str = get_var_str(args[0]);
+                string_t data = str->get_data_as<string_t>();
+                string_t token;
+
+                if (args[1]->get_type() == variable_type::vt_string)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<string_t>();
+                else if (args[1]->get_type() == variable_type::vt_character)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t>();
+                else if (args[1]->get_type() == variable_type::vt_character_ref)
+                    token = *std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t*>();
+                else
+                    throw builtin_error("Invalid parameter at String.Find()");
+
+                size_t pos = data.find_first_of(token);
+                if (pos == std::string::npos)
+                    return make_ref<variable>(any(INTEGER_T_MAX), variable_type::vt_integer);
+                return make_ref<variable>(any(integer_t(pos)), variable_type::vt_integer);
+            }
+
+            static ref<variable_base> b_string_find_any_2(const std::vector<ref<variable_base>>& args)
+            {
+                ref<variable> str = get_var_str(args[0]);
+                string_t data = str->get_data_as<string_t>();
+                string_t token;
+
+                if (args[1]->get_type() == variable_type::vt_string)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<string_t>();
+                else if (args[1]->get_type() == variable_type::vt_character)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t>();
+                else if (args[1]->get_type() == variable_type::vt_character_ref)
+                    token = *std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t*>();
+                else
+                    throw builtin_error("Invalid parameter at String.Find()");
+
+                integer_t offset = helper::var_as_integer(args[2]);
+
+                size_t pos = data.find_first_of(token, offset);
+                if (pos == std::string::npos)
+                    return make_ref<variable>(any(INTEGER_T_MAX), variable_type::vt_integer);
+                return make_ref<variable>(any(integer_t(pos)), variable_type::vt_integer);
+            }
+
+            static ref<variable_base> b_string_rfind_any(const std::vector<ref<variable_base>>& args)
+            {
+                ref<variable> str = get_var_str(args[0]);
+                string_t data = str->get_data_as<string_t>();
+                string_t token;
+
+                if (args[1]->get_type() == variable_type::vt_string)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<string_t>();
+                else if (args[1]->get_type() == variable_type::vt_character)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t>();
+                else if (args[1]->get_type() == variable_type::vt_character_ref)
+                    token = *std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t*>();
+                else
+                    throw builtin_error("Invalid parameter at String.Find()");
+
+                size_t pos = data.find_last_of(token);
+                if (pos == std::string::npos)
+                    return make_ref<variable>(any(INTEGER_T_MAX), variable_type::vt_integer);
+                return make_ref<variable>(any(integer_t(pos)), variable_type::vt_integer);
+            }
+
+            static ref<variable_base> b_string_rfind_any_2(const std::vector<ref<variable_base>>& args)
+            {
+                ref<variable> str = get_var_str(args[0]);
+                string_t data = str->get_data_as<string_t>();
+                string_t token;
+
+                if (args[1]->get_type() == variable_type::vt_string)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<string_t>();
+                else if (args[1]->get_type() == variable_type::vt_character)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t>();
+                else if (args[1]->get_type() == variable_type::vt_character_ref)
+                    token = *std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t*>();
+                else
+                    throw builtin_error("Invalid parameter at String.Find()");
+
+                integer_t offset = helper::var_as_integer(args[2]);
+
+                size_t pos = data.find_last_of(token, offset);
+                if (pos == std::string::npos)
+                    return make_ref<variable>(any(INTEGER_T_MAX), variable_type::vt_integer);
+                return make_ref<variable>(any(integer_t(pos)), variable_type::vt_integer);
+            }
+
+            static ref<variable_base> b_string_find_none(const std::vector<ref<variable_base>>& args)
+            {
+                ref<variable> str = get_var_str(args[0]);
+                string_t data = str->get_data_as<string_t>();
+                string_t token;
+
+                if (args[1]->get_type() == variable_type::vt_string)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<string_t>();
+                else if (args[1]->get_type() == variable_type::vt_character)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t>();
+                else if (args[1]->get_type() == variable_type::vt_character_ref)
+                    token = *std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t*>();
+                else
+                    throw builtin_error("Invalid parameter at String.Find()");
+
+                size_t pos = data.find_first_not_of(token);
+                if (pos == std::string::npos)
+                    return make_ref<variable>(any(INTEGER_T_MAX), variable_type::vt_integer);
+                return make_ref<variable>(any(integer_t(pos)), variable_type::vt_integer);
+            }
+
+            static ref<variable_base> b_string_find_none_2(const std::vector<ref<variable_base>>& args)
+            {
+                ref<variable> str = get_var_str(args[0]);
+                string_t data = str->get_data_as<string_t>();
+                string_t token;
+
+                if (args[1]->get_type() == variable_type::vt_string)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<string_t>();
+                else if (args[1]->get_type() == variable_type::vt_character)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t>();
+                else if (args[1]->get_type() == variable_type::vt_character_ref)
+                    token = *std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t*>();
+                else
+                    throw builtin_error("Invalid parameter at String.Find()");
+
+                integer_t offset = helper::var_as_integer(args[2]);
+
+                size_t pos = data.find_first_not_of(token, offset);
+                if (pos == std::string::npos)
+                    return make_ref<variable>(any(INTEGER_T_MAX), variable_type::vt_integer);
+                return make_ref<variable>(any(integer_t(pos)), variable_type::vt_integer);
+            }
+
+            static ref<variable_base> b_string_rfind_none(const std::vector<ref<variable_base>>& args)
+            {
+                ref<variable> str = get_var_str(args[0]);
+                string_t data = str->get_data_as<string_t>();
+                string_t token;
+
+                if (args[1]->get_type() == variable_type::vt_string)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<string_t>();
+                else if (args[1]->get_type() == variable_type::vt_character)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t>();
+                else if (args[1]->get_type() == variable_type::vt_character_ref)
+                    token = *std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t*>();
+                else
+                    throw builtin_error("Invalid parameter at String.Find()");
+
+                size_t pos = data.find_last_not_of(token);
+                if (pos == std::string::npos)
+                    return make_ref<variable>(any(INTEGER_T_MAX), variable_type::vt_integer);
+                return make_ref<variable>(any(integer_t(pos)), variable_type::vt_integer);
+            }
+
+            static ref<variable_base> b_string_rfind_none_2(const std::vector<ref<variable_base>>& args)
+            {
+                ref<variable> str = get_var_str(args[0]);
+                string_t data = str->get_data_as<string_t>();
+                string_t token;
+
+                if (args[1]->get_type() == variable_type::vt_string)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<string_t>();
+                else if (args[1]->get_type() == variable_type::vt_character)
+                    token = std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t>();
+                else if (args[1]->get_type() == variable_type::vt_character_ref)
+                    token = *std::dynamic_pointer_cast<variable>(args[1])->get_data_as<character_t*>();
+                else
+                    throw builtin_error("Invalid parameter at String.Find()");
+
+                integer_t offset = helper::var_as_integer(args[2]);
+
+                size_t pos = data.find_last_not_of(token, offset);
+                if (pos == std::string::npos)
+                    return make_ref<variable>(any(INTEGER_T_MAX), variable_type::vt_integer);
+                return make_ref<variable>(any(integer_t(pos)), variable_type::vt_integer);
+            }
+
+            static ref<variable_base> b_string_substring(const std::vector<ref<variable_base>>& args)
+            {
+                ref<variable> str = get_var_str(args[0]);
+                string_t data = str->get_data_as<string_t>();
+                integer_t offset = helper::var_as_integer(args[1]);
+
+                string_t substring = data.substr(offset);
+
+                return make_ref<variable>(any(substring), variable_type::vt_string);
+            }
+
+            static ref<variable_base> b_string_substring_2(const std::vector<ref<variable_base>>& args)
+            {
+                ref<variable> str = get_var_str(args[0]);
+                string_t data = str->get_data_as<string_t>();
+                integer_t offset = helper::var_as_integer(args[1]);
+                integer_t count = helper::var_as_integer(args[2]);
+
+                string_t substring = data.substr(offset, count);
+
+                return make_ref<variable>(any(substring), variable_type::vt_string);
+            }
         }
 
         ref<symbol_table> b_string::load()
@@ -256,7 +541,28 @@ namespace wio
             auto split_func = loader::load_function(table, "Split", detail::b_string_split, pa<1>{ variable_base_type::variable });
             loader::load_overload(split_func, detail::b_string_split_2, pa<2>{ variable_base_type::variable, variable_base_type::variable });
 
-            loader::load_constant(table, "End", variable_type::vt_integer, s_end_position);
+            auto find_func = loader::load_function(table, "Find", detail::b_string_find, pa<2>{ variable_base_type::variable, variable_base_type::variable });
+            loader::load_overload(find_func, detail::b_string_find_2, pa<3>{ variable_base_type::variable, variable_base_type::variable, variable_base_type::variable });
+
+            auto rfind_func = loader::load_function(table, "RFind", detail::b_string_rfind, pa<2>{ variable_base_type::variable, variable_base_type::variable });
+            loader::load_overload(rfind_func, detail::b_string_rfind_2, pa<3>{ variable_base_type::variable, variable_base_type::variable, variable_base_type::variable });
+
+            auto findany_func = loader::load_function(table, "FindAny", detail::b_string_find_any, pa<2>{ variable_base_type::variable, variable_base_type::variable });
+            loader::load_overload(findany_func, detail::b_string_find_any_2, pa<3>{ variable_base_type::variable, variable_base_type::variable, variable_base_type::variable });
+
+            auto rfindany_func = loader::load_function(table, "RFindAny", detail::b_string_rfind_any, pa<2>{ variable_base_type::variable, variable_base_type::variable });
+            loader::load_overload(rfindany_func, detail::b_string_rfind_any_2, pa<3>{ variable_base_type::variable, variable_base_type::variable, variable_base_type::variable });
+
+            auto findnone_func = loader::load_function(table, "FindNone", detail::b_string_find_none, pa<2>{ variable_base_type::variable, variable_base_type::variable });
+            loader::load_overload(findnone_func, detail::b_string_find_none_2, pa<3>{ variable_base_type::variable, variable_base_type::variable, variable_base_type::variable });
+
+            auto rfindnone_func = loader::load_function(table, "RFindNone", detail::b_string_rfind_none, pa<2>{ variable_base_type::variable, variable_base_type::variable });
+            loader::load_overload(rfindnone_func, detail::b_string_rfind_none_2, pa<3>{ variable_base_type::variable, variable_base_type::variable, variable_base_type::variable });
+
+            auto substring_func = loader::load_function(table, "Substr", detail::b_string_substring, pa<2>{ variable_base_type::variable, variable_base_type::variable });
+            loader::load_overload(substring_func, detail::b_string_substring_2, pa<3>{ variable_base_type::variable, variable_base_type::variable, variable_base_type::variable });
+
+            loader::load_constant(table, "End", variable_type::vt_integer, INTEGER_T_MAX);
 
             return result;
         }

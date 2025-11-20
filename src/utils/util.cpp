@@ -269,5 +269,42 @@ namespace wio
 
             return string_t();
         }
+
+        constexpr OS get_OS()
+        {
+#if defined(_WIN32)
+            return OS::Windows;
+#elif defined(__ANDROID__)
+            return OS::Android;
+
+#elif defined(__APPLE__) && defined(__MACH__)
+#   include <TargetConditionals.h>
+#   if TARGET_OS_IPHONE || TARGET_IPHONE_SIMULATOR
+            return OS::iOS;
+#   else
+            return OS::MacOS;
+#   endif
+#elif defined(__linux__)
+            return OS::Linux;
+#elif defined(__FreeBSD__)
+            return OS::FreeBSD;
+#elif defined(__OpenBSD__)
+            return OS::OpenBSD;
+#elif defined(__NetBSD__)
+            return OS::NetBSD;
+#elif defined(__DragonFly__)
+            return OS::DragonFlyBSD;
+#elif defined(__sun) && defined(__SVR4)
+            return OS::Solaris;
+#elif defined(_AIX)
+            return OS::AIX;
+#elif defined(__hpux)
+            return OS::HP_UX;
+#elif defined(__EMSCRIPTEN__)
+            return OS::Emscripten;
+#else
+            return OS::Unknown;
+#endif
+        }
 	}
 }

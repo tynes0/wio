@@ -12,13 +12,15 @@ namespace wio
 	{
 		std::map<variable_type, ref<symbol_table>> constant_object_members;
 		std::stack<id_t> func_eval_ids;
+		std::stack<ref<unit>> active_units;
+		std::stack<ref<unit_instance>> units_whose_member_function_is_called;
 		std::vector<function_param> last_parameters;
 		ref<variable_base> last_return_value;
 		ref<variable_base>* last_left_value = nullptr;
 		ref<stmt_stack> statement_stack;
 		int loop_depth = 0;
 		uint16_t func_body_depth = 0;
-		packed_bool eval_flags{}; // 1- break, 2 - continue, 3 - return, 4 - ref error active, 5 - in func call 6- search only function
+		packed_bool eval_flags{}; // 1- break, 2 - continue, 3 - return, 4 - ref error active, 5 - in func call 6- search only function, 7- block table
 		packed_bool program_flags{}; // 1- single file 2- no builtin
 	};
 
@@ -49,6 +51,11 @@ namespace wio
 		}
 
 		main_table::get().enter_scope(id, type);
+	}
+
+	void eval_base::enter_this_scope(id_t id, ref<scope> this_scope)
+	{
+		main_table::get().enter_this_scope(id, this_scope);
 	}
 
 	ref<scope> eval_base::exit_scope(id_t id)
@@ -98,8 +105,6 @@ namespace wio
 
 	symbol* eval_base::search_member(id_t id, const std::string& name, ref<variable_base> object) const
 	{
-		if (should_search_only_func())
-			return search_member_function(id, name, object, get_last_parameters());
 		symbol* sym = nullptr;
 		if (object)
 		{
@@ -121,33 +126,8 @@ namespace wio
 		return search(id, name);
 	}
 
-	symbol* eval_base::search_member_function(id_t id, const std::string& name, ref<variable_base> object, const std::vector<function_param>& parameters) const
-	{
-		symbol* sym = nullptr;
-		if (object)
-		{
-			if (s_data.constant_object_members[object->get_type()])
-				sym = s_data.constant_object_members[object->get_type()]->lookup(name);
-
-			if (!sym)
-			{
-				ref<symbol_table> member_scope = object->get_members();
-
-				if (!member_scope)
-					return nullptr;
-
-				return member_scope->lookup(name);
-			}
-			else
-				return sym;
-		}
-		return search_function(id, name, parameters);
-	}
-
 	symbol* eval_base::search(id_t id, const std::string& name) const
 	{
-		if (should_search_only_func())
-			return search_function(id, name, get_last_parameters());
 		id_t pass_id = in_func_call() ? s_data.func_eval_ids.top() : 0;
 		return main_table::get().search(id, name, pass_id);
 	}
@@ -158,17 +138,6 @@ namespace wio
 		return main_table::get().search_current(id, name, pass_id);
 	}
 
-	symbol* eval_base::search_current_function(id_t id, const std::string& name, const std::vector<function_param>& parameters) const
-	{
-		return main_table::get().search_current_function(id, name, parameters);
-	}
-
-	symbol* eval_base::search_function(id_t id, const std::string& name, const std::vector<function_param>& parameters) const
-	{
-		id_t pass_id = in_func_call() ? s_data.func_eval_ids.top() : 0;
-		return main_table::get().search_function(id, name, parameters, pass_id);
-	}
-
 	std::pair<bool, symbol*> eval_base::is_function_valid(id_t id, const std::string name, const std::vector<function_param>& parameters) const
 	{
 		id_t pass_id = in_func_call() ? s_data.func_eval_ids.top() : 0;
@@ -177,11 +146,15 @@ namespace wio
 
 	void eval_base::insert(id_t id, const std::string& name, const symbol& symbol)
 	{
+		if (this->is_table_blocked()) 
+			return;
 		main_table::get().insert(id, name, symbol);
 	}
 
 	void eval_base::insert_to_global(id_t id, const std::string& name, const symbol& symbol)
 	{
+		if (this->is_table_blocked()) 
+			return;
 		main_table::get().insert_to_global(id, name, symbol);
 	}
 
@@ -234,6 +207,44 @@ namespace wio
 	ref<stmt_stack> eval_base::get_statement_stack() const
 	{
 		return s_data.statement_stack;
+	}
+
+	ref<unit> eval_base::active_unit()
+	{
+		if (s_data.active_units.empty())
+			return nullptr;
+		return s_data.active_units.top();
+	}
+
+	void eval_base::push_unit(ref<unit> p_unit)
+	{
+		s_data.active_units.push(p_unit);
+	}
+
+	ref<unit> eval_base::pop_unit()
+	{
+		ref<unit> top = s_data.active_units.top();
+		s_data.active_units.pop();
+		return top;
+	}
+
+	ref<unit_instance> eval_base::last_unit_whose_member_function_is_called()
+	{
+		if (s_data.units_whose_member_function_is_called.empty())
+			return nullptr;
+		return s_data.units_whose_member_function_is_called.top();
+	}
+
+	void eval_base::push_unit_whose_member_function_is_called(ref<unit_instance> p_unit)
+	{
+		s_data.units_whose_member_function_is_called.push(p_unit);
+	}
+
+	ref<unit_instance> eval_base::pop_unit_whose_member_function_is_called()
+	{
+		ref<unit_instance> top = s_data.units_whose_member_function_is_called.top();
+		s_data.units_whose_member_function_is_called.pop();
+		return top;
 	}
 
 	void eval_base::inc_loop_depth()
@@ -291,9 +302,14 @@ namespace wio
 		return s_data.eval_flags.b5;
 	}
 
-	bool eval_base::should_search_only_func() const
+	bool eval_base::in_object() const
 	{
 		return s_data.eval_flags.b6;
+	}
+
+	bool eval_base::is_table_blocked() const
+	{
+		return s_data.eval_flags.b7;
 	}
 
 	bool eval_base::is_sf() const
@@ -304,6 +320,11 @@ namespace wio
 	bool eval_base::is_nb() const
 	{
 		return s_data.program_flags.b2;
+	}
+
+	bool eval_base::is_in_unit_decl() const
+	{
+		return !s_data.active_units.empty();
 	}
 
 	void eval_base::set_last_return_value(ref<variable_base> value)
@@ -359,8 +380,13 @@ namespace wio
 		s_data.eval_flags.b5 = flag;
 	}
 
-	void eval_base::set_search_only_func_state(bool flag)
+	void eval_base::set_object_state(bool flag)
 	{
 		s_data.eval_flags.b6 = flag;
+	}
+
+	void eval_base::block_table(bool flag)
+	{
+		s_data.eval_flags.b7 = flag;
 	}
 }

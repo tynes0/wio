@@ -248,7 +248,7 @@ namespace wio
 
         auto verify = [is_local, is_global, current, no_local_global](bool is_decl)
             { 
-                if (is_local || is_global && (!is_decl || no_local_global))
+                if ((is_local || is_global) && (!is_decl || no_local_global))
                     throw invalid_declaration_error("invalid 'local' - 'global' usage.", current.loc); 
             };
 
@@ -398,6 +398,13 @@ namespace wio
                 next_token();
                 return parse_import_statement();
             }
+            else if (current.type == token_type::kw_typeof)
+            {
+                verify(false);
+                ref<expression_statement> result = make_ref<expression_statement>(parse_binary_expression());
+                consume_token(token_type::semicolon);
+                return result;
+                }
         }
         else if (current.type == token_type::identifier)
         {
@@ -451,6 +458,8 @@ namespace wio
 
         if (current.type == token_type::left_parenthesis)
             return parse_function_call(left);
+        else if (current.type == token_type::left_curly_bracket)
+            return parse_new_unit_instance_call(left);
         else if (current.type == token_type::dot)
             return parse_member_access(left);
         else if (current.type == token_type::left_bracket)
@@ -609,6 +618,10 @@ namespace wio
             { 
                 return parse_function_call(primary);
             }
+            else if (current.type == token_type::left_curly_bracket)
+            {
+                return parse_new_unit_instance_call(primary);
+            }
             return primary;
         }
     }
@@ -652,6 +665,26 @@ namespace wio
         return make_ref<function_call>(caller, arguments);
     }
 
+    ref<expression> parser::parse_new_unit_instance_call(ref<expression> caller)
+    {
+        std::vector<ref<expression>> arguments;
+
+        consume_token(token_type::left_curly_bracket);
+
+        if (!match_token(token_type::right_curly_bracket))
+        {
+            do
+            {
+                ref<expression> arg = parse_expression();
+                arguments.push_back(arg);
+            } while (match_token(token_type::comma));
+
+            consume_token(token_type::right_curly_bracket);
+        }
+
+        return make_ref<new_unit_instance_call>(caller, arguments);
+    }
+
     ref<expression> parser::parse_array_access(ref<expression> array, bool is_ref, bool is_lhs)
     {
         consume_token(token_type::left_bracket);
@@ -670,8 +703,7 @@ namespace wio
     ref<expression> parser::parse_typeof_expression()
     {
         consume_token(token_type::kw_typeof);
-        ref<expression> expr = parse_expression();
-        return make_ref<typeof_expression>(expr);
+        return make_ref<typeof_expression>(parse_primary_expression());
     }
 
     ref<expression> parser::parse_identifier(bool is_lhs)
@@ -681,7 +713,7 @@ namespace wio
         if (match_token_no_consume(token_type::op))
         {
             token tok = next_token();
-            ref<expression> value = parse_binary_expression();
+            ref<expression> value = parse_primary_expression();
             auto result = make_ref<binary_expression>(exp, tok, value);
             if (get_operator_precedence(tok) == ASSIGNMENT_PRECEDENCE)
                 result->is_assignment = true;
@@ -699,6 +731,8 @@ namespace wio
             token current = current_token();
             if (current.type == token_type::left_parenthesis)
                 left = parse_function_call(left);
+            else if (current.type == token_type::left_curly_bracket)
+                left = parse_new_unit_instance_call(left);
             else if (current.type == token_type::left_bracket)
                 left = parse_array_access(left, false, is_lhs);
             else if (current.type == token_type::dot) 
@@ -831,6 +865,8 @@ namespace wio
 
     ref<statement> parser::parse_function_declaration(bool is_const, bool is_local, bool is_global)
     {
+        bool is_override = match_token(token_type::kw_override);
+
         token id_token = consume_token(token_type::identifier);
         ref<identifier> id = make_ref<identifier>(id_token);
 
@@ -936,7 +972,7 @@ namespace wio
         bool is_final = false;
         std::vector<ref<identifier>> parent_list;
         std::vector<ref<identifier>> trust_list;
-        using default_declaration = unit_declaration_type;
+        using default_declaration = unit_access_type;
         default_declaration default_decl = default_declaration::hidden;
 
         while (match_token(token_type::op, "-"))
@@ -1206,34 +1242,57 @@ namespace wio
         consume_token(token_type::left_curly_bracket);
 
         std::vector<ref<statement>> statements;
-        unit_declaration_type decl_type = unit_declaration_type::none;
+        unit_access_type decl_type = unit_access_type::none;
         bool is_outer = false;
 
         while (!match_token(token_type::right_curly_bracket))
         {
-            if (match_token(token_type::kw_outer))
-                is_outer = true;
+            ref<statement> stmt;
+
+            token_type current_tok_type = current_token().type;
+            if (current_tok_type == token_type::s_ctor || current_tok_type == token_type::s_dtor)
+            {
+                token id_token = consume_token(current_tok_type);
+                ref<identifier> id = make_ref<identifier>(id_token);
+                std::vector<ref<parameter_declaration>> params;
+                ref<block_statement> body;
+
+                location loc = get_function_parameters_and_body(params, body, false);
+
+                bool ctor_or_dtor = (current_tok_type == token_type::s_ctor); // true - ctor ___ false - dtor
+
+                if (body)
+                    stmt = make_ref<function_definition>(id, params, body, false, false, ctor_or_dtor, (!ctor_or_dtor));
+                else 
+                    stmt = make_ref<function_declaration>(id, params, false, false, ctor_or_dtor, (!ctor_or_dtor));
+            }
             else
-                is_outer = false;
+            {
+                if (match_token(token_type::kw_outer))
+                    is_outer = true;
+                else
+                    is_outer = false;
 
-            if (match_token(token_type::kw_hidden))
-                decl_type = unit_declaration_type::hidden;
-            else if (match_token(token_type::kw_exposed))
-                decl_type = unit_declaration_type::exposed;
-            else if (match_token(token_type::kw_shared))
-                decl_type = unit_declaration_type::shared;
-            else
-                decl_type = unit_declaration_type::none;
+                if (match_token(token_type::kw_hidden))
+                    decl_type = unit_access_type::hidden;
+                else if (match_token(token_type::kw_exposed))
+                    decl_type = unit_access_type::exposed;
+                else if (match_token(token_type::kw_shared))
+                    decl_type = unit_access_type::shared;
+                else
+                    decl_type = unit_access_type::none;
 
-            if (match_token(token_type::kw_outer))
-                is_outer = true;
+                if (match_token(token_type::kw_outer))
+                    is_outer = true;
+                stmt = parse_statement(true);
+            }
 
-            ref<statement> stmt = parse_statement(true);
             if (stmt)
             {
-                if (stmt->is_declaration)
-                    printf("1");
-                statements.push_back(make_ref<unit_member_declaration>(stmt, decl_type, is_outer));
+                if (stmt->is_declaration())
+                    statements.push_back(make_ref<unit_member_declaration>(stmt, decl_type, is_outer));
+                else
+                    error("Invalid unit statement!", stmt->get_location());
             }
         }
 

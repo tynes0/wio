@@ -7,7 +7,7 @@
 int main(int argc, char* argv[])
 {
     const char* args[] = { "", /*"-h", "-nr", "-st",*/ "tests/test1.wio" };
-    wio::interpreter::get().load_args(sizeof(args) / sizeof(const char*), (char**)args);
+    wio::interpreter::get().load_args(sizeof(args) / sizeof(const char*), const_cast<char**>(args));
     wio::interpreter::get().run();
 }
 

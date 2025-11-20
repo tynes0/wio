@@ -25,8 +25,11 @@ namespace wio
 
             char current = peek();
 
-
-            if (std::isalpha(current) || current == '_')
+            if (check_specific())
+            {
+                m_tokens.push_back(read_specific());
+            }
+            else if (std::isalpha(current) || current == '_')
             {
                 m_tokens.push_back(read_identifier());
             }
@@ -90,6 +93,27 @@ namespace wio
     {
         m_loc.row++;
         return m_pos < m_source.size() ? m_source[m_pos++] : '\0';
+    }
+
+    void lexer::advance(int count)
+    {
+        m_loc.row += count;
+
+        if ((m_pos + count) < m_source.size())
+            m_pos += count;
+    }
+
+    bool lexer::check_specific()
+    {
+        if (peek() != '.' || (!std::isalpha(peek(1)) && peek(1) != '_'))
+            return false;
+        
+        int i = 2;
+
+        while (std::isalnum(peek(i)) || peek(i) == '_')
+            i++;
+
+        return is_specific(m_source.substr(m_pos, i));
     }
 
     bool lexer::is_operator(char ch)
@@ -296,5 +320,15 @@ namespace wio
         }
 
         return { token_map.at(op), op, m_loc };
+    }
+
+    token lexer::read_specific()
+    {
+        std::string result(1, advance()); // .
+
+        while (std::isalnum(peek()) || peek() == '_')
+            result += advance();
+
+        return { token_map.at(result), result, m_loc }; // we checked with check_spesific
     }
 }

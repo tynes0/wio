@@ -7,24 +7,18 @@
 
 namespace wio
 {
+	// Todo: Wouldn't it be better to inherit from std::exception?
 	class exception
 	{
 	public:
-		exception() noexcept : m_data() {}
-
 		explicit exception(const char* message) noexcept : m_data(message) {}
-
-		exception(const exception& other) noexcept : m_data(other.m_data) {}
-
-		exception& operator=(const exception& other) noexcept
-		{
-			m_data = other.m_data;
-		}
-
-		[[nodiscard]] virtual char const* what() const
-		{
-			return !m_data.empty() ? m_data.c_str() : "Unknown exception";
-		}
+		
+		exception() noexcept = default;
+		exception(const exception& other) noexcept = default;
+		exception& operator=(const exception& other) noexcept = default;
+		virtual ~exception() noexcept = default;
+		
+		[[nodiscard]] virtual char const* what() const { return !m_data.empty() ? m_data.c_str() : "Unknown exception!"; }
 	protected:
 		std::string m_data;
 	};
@@ -101,14 +95,14 @@ namespace wio
 	{
 	public:
 		explicit unexpected_character_error(const std::string& message, const location& loc) noexcept : parse_error(message, loc) {}
-		explicit unexpected_character_error(const std::string& message) noexcept : parse_error(message.c_str()) {}
+		explicit unexpected_character_error(const std::string& message) noexcept : parse_error(message) {}
 	};
 
 	class unexpected_token_error : public parse_error
 	{
 	public:
 		explicit unexpected_token_error(const std::string& message, const location& loc) noexcept : parse_error(message, loc) {}
-		explicit unexpected_token_error(const std::string& message) noexcept : parse_error(message.c_str()) {}
+		explicit unexpected_token_error(const std::string& message) noexcept : parse_error(message) {}
 	};
 
 	class no_argument_error : public exception
@@ -173,6 +167,12 @@ namespace wio
 	{
 	public:
 		explicit invalid_assignment_error(const std::string& message, const location& loc) noexcept : local_exception(message, loc) {}
+	};
+
+	class invalid_access_error : public local_exception
+	{
+	public:
+		explicit invalid_access_error(const std::string& message, const location& loc) noexcept : local_exception(message, loc) {}
 	};
 
 	class invalid_member_error : public local_exception

@@ -14,6 +14,7 @@
 #include "../variables/function.h"
 #include "../variables/realm.h"
 #include "../variables/enum.h"
+#include "../variables/unit.h"
 
 #include "../builtin/builtin_base.h"
 #include "../builtin/helpers.h"
@@ -44,7 +45,7 @@ namespace wio
     void evaluator::evaluate_program(ref<program> program_node, uint32_t id, packed_bool flags)
     {
         main_table::get().add(id);
-
+        
         evaluator_data data
         {
             .id = id,
@@ -61,6 +62,11 @@ namespace wio
         eval_base::get().exit_statement_stack();
 
         s_data_stack.pop();
+    }
+
+    ref<variable_base> evaluator::evaluate_single_expr(ref<expression> node)
+    {
+        return evaluate_expression(node);
     }
 
     ref<variable_base> evaluator::evaluate_expression(ref<expression> node)
@@ -97,6 +103,8 @@ namespace wio
             evaluate_enum_declaration(edecl);
         else if (auto udecl = std::dynamic_pointer_cast<unit_declaration>(node))
             evaluate_unit_declaration(udecl);
+        else if (auto umdecl = std::dynamic_pointer_cast<unit_member_declaration>(node))
+            evaluate_unit_member_declaration(umdecl);
         else if (auto import_s = std::dynamic_pointer_cast<import_statement>(node))
             evaluate_import_statement(import_s);
         else if (auto block_s = std::dynamic_pointer_cast<block_statement>(node))
@@ -119,6 +127,41 @@ namespace wio
             evaluate_return_statement(return_s);
         else
             throw local_exception("Unknown statement!", node->get_location());
+    }
+
+    ref<variable_base> evaluator::evaluate_declaration_statement(ref<statement> node)
+    {
+        // Should evaluate statement be made or not? Check the flags
+        if (eval_base::get().break_called() || eval_base::get().continue_called() || eval_base::get().return_called())
+            return nullptr;
+
+        if (!node)
+            return nullptr;
+
+        if (auto decl = std::dynamic_pointer_cast<variable_declaration>(node))
+            return evaluate_variable_declaration(decl);
+        else if (auto def = std::dynamic_pointer_cast<function_definition>(node))
+            return evaluate_function_definition(def);
+        else if (auto fdecl = std::dynamic_pointer_cast<function_declaration>(node))
+            return evaluate_function_declaration(fdecl);
+        else if (auto ldecl = std::dynamic_pointer_cast<lambda_declaration>(node))
+            return evaluate_lambda_declaration(ldecl);
+        else if (auto adecl = std::dynamic_pointer_cast<array_declaration>(node))
+            return evaluate_array_declaration(adecl);
+        else if (auto ddecl = std::dynamic_pointer_cast<dictionary_declaration>(node))
+            return evaluate_dictionary_declaration(ddecl);
+        else if (auto rdecl = std::dynamic_pointer_cast<realm_declaration>(node))
+            return evaluate_realm_declaration(rdecl);
+        else if (auto odecl = std::dynamic_pointer_cast<omni_declaration>(node))
+            return evaluate_omni_declaration(odecl);
+        else if (auto edecl = std::dynamic_pointer_cast<enum_declaration>(node))
+            return evaluate_enum_declaration(edecl);
+        else if (auto udecl = std::dynamic_pointer_cast<unit_declaration>(node))
+            return evaluate_unit_declaration(udecl);
+        else if (auto umdecl = std::dynamic_pointer_cast<unit_member_declaration>(node))
+            return evaluate_unit_member_declaration(umdecl);
+
+        return nullptr;
     }
 
     ref<variable_base> evaluator::evaluate_literal(ref<literal> node)
@@ -258,7 +301,7 @@ namespace wio
         return make_ref<variable>(value_base->get_type(), variable_type::vt_type);
     }
 
-    ref<variable_base> evaluator::evaluate_binary_expression(ref<binary_expression> node, ref<variable_base> object, bool is_ref)
+    ref<variable_base> evaluator::evaluate_binary_expression(ref<binary_expression> node, ref<variable_base> object, bool is_ref, uint32_t access_level)
     {
         token op = node->m_operator;
 
@@ -268,7 +311,7 @@ namespace wio
             if (op.value == "->")
                 right_is_ref = true;
 
-            ref<variable_base> lv_ref = as_value(node->m_left, object, is_ref || node->is_assignment);
+            ref<variable_base> lv_ref = as_value(node->m_left, object, is_ref || node->is_assignment, access_level);
             ref<variable_base> rv_ref = as_value(node->m_right, nullptr, right_is_ref);
 
             if (op.value == "+") 
@@ -346,9 +389,9 @@ namespace wio
         throw invalid_operator_error("Invalid binary operator: " + node->m_operator.value, node->get_location());
     }
 
-    ref<variable_base> evaluator::evaluate_unary_expression(ref<unary_expression> node, ref<variable_base> object, bool is_ref)
+    ref<variable_base> evaluator::evaluate_unary_expression(ref<unary_expression> node, ref<variable_base> object, bool is_ref, uint32_t access_level)
     {
-        ref<variable_base> operand_ref = as_value(node->m_operand, object, node->m_is_ref);
+        ref<variable_base> operand_ref = as_value(node->m_operand, object, node->m_is_ref || is_ref, access_level);
         token op = node->m_operator;
 
         auto& t = main_table::get();
@@ -400,7 +443,7 @@ namespace wio
         throw invalid_operator_error("Invalid unary operator: " + op.value, node->get_location());
     }
 
-    ref<variable_base> evaluator::evaluate_identifier(ref<identifier> node, ref<variable_base> object, bool is_ref)
+    ref<variable_base> evaluator::evaluate_identifier(ref<identifier> node, ref<variable_base> object, bool is_ref, uint32_t access_level)
     {
         symbol* sym = eval_base::get().search_member(s_data_stack.top().id, node->m_token.value, object);
 
@@ -409,11 +452,16 @@ namespace wio
             if(object)
                 throw undefined_identifier_error("Undefined member of type '" + util::type_to_string(object->get_type()) + "': " + node->m_token.value, node->get_location());
             throw undefined_identifier_error("Undefined identifier: " + node->m_token.value, node->get_location());
-
         }
 
         if (sym->var_ref)
         {
+            if (object && object->get_base_type() == variable_base_type::unit_instance)
+            {
+                auto obj_access_level = access_level_of(std::dynamic_pointer_cast<unit_instance>(object)->access_type_of(node->m_token.value));
+                if (obj_access_level > access_level)
+                    throw invalid_access_error("Invalid access!", node->get_location());
+            }
             if (node->m_is_lhs || is_ref)
             {
                 eval_base::get().set_last_left_value(&sym->var_ref);
@@ -430,9 +478,9 @@ namespace wio
         throw evaluation_error("Identifier '" + node->m_token.value + "' has no value.", node->get_location());
     }
 
-    ref<variable_base> evaluator::evaluate_array_access_expression(ref<array_access_expression> node, ref<variable_base> object, bool is_ref)
+    ref<variable_base> evaluator::evaluate_array_access_expression(ref<array_access_expression> node, ref<variable_base> object, bool is_ref, uint32_t access_level)
     {
-        ref<variable_base> item = as_value(node->m_array, object, is_ref);
+        ref<variable_base> item = as_value(node->m_array, object, is_ref, access_level);
         auto& tbl = main_table::get();
 
         variable_base_type base_t = item->get_base_type();
@@ -504,28 +552,98 @@ namespace wio
         }
     }
 
-    ref<variable_base> evaluator::evaluate_member_access_expression(ref<member_access_expression> node, ref<variable_base> object, bool is_ref)
+    ref<variable_base> evaluator::evaluate_member_access_expression(ref<member_access_expression> node, ref<variable_base> object, bool is_ref, uint32_t access_level)
     {
-        ref<variable_base> object_value = as_value(node->m_object, object, is_ref);
-        ref<variable_base> member = as_value(node->m_member, object_value, node->m_is_lhs || node->m_is_ref);
+        ref<variable_base> object_value = as_value(node->m_object, object, is_ref, access_level);
+        auto unit_v = std::dynamic_pointer_cast<unit_instance>(object_value);
+        ref<variable_base> member;
+
+        if (unit_v)
+        {
+            if (eval_base::get().is_in_unit_decl())
+            {
+                if (*unit_v->get_source() == *eval_base::get().active_unit())
+                {
+                    member = as_value(node->m_member, object_value, node->m_is_lhs || node->m_is_ref, access_level_of(unit_access_type::hidden));
+                }
+                else
+                {
+                    auto& trust_list = eval_base::get().active_unit()->get_trust_list();
+                    for (auto& trusted_unit : trust_list)
+                    {
+                        if (unit_v->get_source() == trusted_unit)
+                        {
+                            member = as_value(node->m_member, object_value, node->m_is_lhs || node->m_is_ref, access_level_of(unit_access_type::hidden));
+                            break;
+                        }
+                    }
+
+                    if(!member)
+                        member = as_value(node->m_member, object_value, node->m_is_lhs || node->m_is_ref, access_level_of(unit_access_type::exposed));
+                }
+            }
+            else
+            {
+                auto luwmfic = eval_base::get().last_unit_whose_member_function_is_called(); // last_unit_whose_member_function_is_called
+
+                if (!luwmfic)
+                {
+                    member = as_value(node->m_member, object_value, node->m_is_lhs || node->m_is_ref, access_level_of(unit_access_type::exposed));
+                }
+                else if (*unit_v->get_source() == *luwmfic->get_source())
+                {
+                    member = as_value(node->m_member, object_value, node->m_is_lhs || node->m_is_ref, access_level_of(unit_access_type::hidden));
+                }
+                else
+                {
+                    auto& trust_list = luwmfic->get_source()->get_trust_list();
+                    for (auto& trusted_unit : trust_list)
+                    {
+                        if (unit_v->get_source() == trusted_unit)
+                        {
+                            member = as_value(node->m_member, object_value, node->m_is_lhs || node->m_is_ref, access_level_of(unit_access_type::hidden));
+                            break;
+                        }
+                    }
+
+                    if (!member)
+                        member = as_value(node->m_member, object_value, node->m_is_lhs || node->m_is_ref, access_level_of(unit_access_type::exposed));
+                }
+            }
+        }
+        else
+        {
+            member = as_value(node->m_member, object_value, node->m_is_lhs || node->m_is_ref, access_level_of(unit_access_type::exposed));
+        }
         return member;
     }
 
-    ref<variable_base> evaluator::evaluate_function_call(ref<function_call> node, ref<variable_base> object, bool is_ref)
+    ref<variable_base> evaluator::evaluate_function_call(ref<function_call> node, ref<variable_base> object, bool is_ref, uint32_t access_level)
     {
         if (s_data_stack.top().flags.b1)
             return create_null_variable();
 
         std::vector<ref<variable_base>> parameters;
         std::vector<function_param> type_parameters;
+        bool pop_unit = false;
 
         int padding = 0;
-        if (object && object->get_type() != variable_type::vt_realm)
+
+
+        if (object)
         {
-            object->set_pf_return_ref(is_ref);
-            padding = 1;
-            parameters.push_back(object);
-            type_parameters.push_back(function_param("", object->get_base_type(), false));
+            if ((object->get_type() != variable_type::vt_realm && object->get_type() != variable_type::vt_unit_instance))
+            {
+                object->set_pf_return_ref(is_ref);
+                padding = 1;
+                parameters.push_back(object);
+                type_parameters.push_back(function_param("", object->get_base_type(), false));
+            }
+            else if (object->get_base_type() == variable_base_type::unit_instance)
+            {
+                eval_base::get().push_unit_whose_member_function_is_called(std::dynamic_pointer_cast<unit_instance>(object));
+                pop_unit = true;
+            }
         }
 
         eval_base::get().set_ref_error_activity(false);
@@ -539,7 +657,7 @@ namespace wio
 
         eval_base::get().set_last_parameters(type_parameters);
 
-        ref<variable_base> caller_value = as_value(node->m_caller, object);
+        ref<variable_base> caller_value = as_value(node->m_caller, object, false, access_level);
 
         if (!caller_value)
            throw undefined_identifier_error("Invalid function!", node->m_caller->get_location());
@@ -575,12 +693,127 @@ namespace wio
             evaluate_function_definition(decl);
             func_res->set_early_declared(true);
         }
-        
-        const auto& real_parameters = func_res->get_parameters();
 
-        ref<variable_base> result = func_res->call(parameters);
+        if (object)
+        {
+            eval_base::get().set_object_state(true);
+
+            if (object->get_members())
+            {
+                ref<scope> scp = make_ref<scope>(scope_type::object);
+                scp->set_symbols(object->get_members()->get_symbols());
+
+                eval_base::get().enter_this_scope(s_data_stack.top().id, scp);
+            }
+
+            ref<variable_base> result = func_res->call(parameters);
+            
+            object->set_pf_return_ref(false);
+
+            if (object->get_members())
+            {
+                eval_base::get().exit_scope(s_data_stack.top().id);
+            }
+
+            if(pop_unit)
+                eval_base::get().pop_unit_whose_member_function_is_called();
+
+            eval_base::get().set_object_state(false);
+
+            return result;
+        }
+        else
+        {
+            ref<variable_base> result = func_res->call(parameters);
+            return result;
+        }
+    }
+
+    ref<variable_base> evaluator::evaluate_new_unit_instance_call(ref<new_unit_instance_call> node, ref<variable_base> object, bool is_ref, uint32_t access_level)
+    {
+        std::vector<ref<variable_base>> parameters;
+        std::vector<function_param> type_parameters;
+
+        int padding = 0;
+
+        if (object)
+        {
+            if ((object->get_type() != variable_type::vt_realm && object->get_type() != variable_type::vt_unit_instance))
+            {
+                object->set_pf_return_ref(is_ref);
+                padding = 1;
+                parameters.push_back(object);
+                type_parameters.push_back(function_param("", object->get_base_type(), false));
+            }
+        }
+
+        eval_base::get().set_ref_error_activity(false);
+        for (size_t i = 0; i < node->m_arguments.size(); ++i)
+        {
+            auto value = as_value(node->m_arguments[i], nullptr, node->m_arguments[i]->is_ref());
+            parameters.push_back(value);
+            type_parameters.push_back(function_param("", value->get_base_type(), false));
+        }
+        eval_base::get().set_ref_error_activity(true);
+
+        eval_base::get().set_last_parameters(type_parameters);
+
+        ref<variable_base> caller_value = as_value(node->m_caller, object, false, access_level);
+
+        if (!caller_value)
+            throw undefined_identifier_error("Invalid unit!", node->m_caller->get_location());
+        else if (caller_value->get_type() != variable_type::vt_unit)
+            throw invalid_type_error("Type should be unit!", node->m_caller->get_location());
+
+        ref<unit> unit_v = std::dynamic_pointer_cast<unit>(caller_value);
+
+        eval_base::get().push_unit_whose_member_function_is_called(make_ref<unit_instance>(unit_v));
+
+        ref<overload_list> olist = unit_v->get_ctor();
+        ref<var_function> func_res;
+        symbol* fref = olist->find(type_parameters);
+
+        if (!fref)
+            throw type_mismatch_error("Parameter types not matching!", node->get_location());
+
+        func_res = std::dynamic_pointer_cast<var_function>(fref->var_ref);
+
+        if (!func_res)
+            throw undefined_identifier_error("Invalid function!", node->m_caller->get_location());
+
+        if (!func_res->declared())
+        {
+            auto decl = eval_base::get().get_func_definition(olist->get_symbol_id(), func_res->get_parameters());
+            if (!decl)
+                throw local_exception("Function '" + olist->get_symbol_id() + "' defined but not declared!", node->m_caller->get_location());
+
+            evaluate_function_definition(decl);
+            func_res->set_early_declared(true);
+        }
+
+        ref<unit_instance> result = make_ref<unit_instance>(unit_v);
+
+        eval_base::get().set_object_state(true);
+
+        if (object->get_members())
+        {
+            ref<scope> scp = make_ref<scope>(scope_type::object);
+            scp->set_symbols(result->get_members()->get_symbols());
+            eval_base::get().enter_this_scope(s_data_stack.top().id, scp);
+        }
+
+        func_res->call(parameters);
         if (object)
             object->set_pf_return_ref(false);
+
+        eval_base::get().pop_unit_whose_member_function_is_called();
+        if (object->get_members())
+        {
+            eval_base::get().exit_scope(s_data_stack.top().id);
+        }
+
+        eval_base::get().set_object_state(false);
+
         return result;
     }
 
@@ -892,9 +1125,12 @@ namespace wio
             {
                 symbol realm_symbol(realm_var, false, true);
             
-                main_table::get().get_builtin_scope()->insert(name, realm_symbol);
+                main_table::get().get_scope(s_data_stack.top().id)->insert(name, realm_symbol);
             }
         }
+
+        if (!target_map)
+            target_map = &main_table::get().get_scope(s_data_stack.top().id)->get_symbols();
         
         id_t id = interpreter::get().run_file(node->m_module_path.c_str(), { node->m_flags.b1, false }, target_map);
 
@@ -915,7 +1151,7 @@ namespace wio
         eval_base::get().call_return(true);
     }
 
-    void evaluator::evaluate_variable_declaration(ref<variable_declaration> node)
+    ref<variable_base> evaluator::evaluate_variable_declaration(ref<variable_declaration> node)
     {
         std::string name = node->m_id->m_token.value;
 
@@ -953,9 +1189,11 @@ namespace wio
             eval_base::get().insert_to_global(s_data_stack.top().id, name, symbol);
         else
             eval_base::get().insert(s_data_stack.top().id, name, symbol);
+
+        return var;
     }
 
-    void evaluator::evaluate_array_declaration(ref<array_declaration> node)
+    ref<variable_base> evaluator::evaluate_array_declaration(ref<array_declaration> node)
     {
         std::string name = node->m_id->m_token.value;
 
@@ -993,9 +1231,11 @@ namespace wio
             eval_base::get().insert_to_global(s_data_stack.top().id, name, array_symbol);
         else
             eval_base::get().insert(s_data_stack.top().id, name, array_symbol);
+
+        return var;
     }
 
-    void evaluator::evaluate_dictionary_declaration(ref<dictionary_declaration> node)
+    ref<variable_base> evaluator::evaluate_dictionary_declaration(ref<dictionary_declaration> node)
     {
         std::string name = node->m_id->m_token.value;
 
@@ -1030,14 +1270,17 @@ namespace wio
             eval_base::get().insert_to_global(s_data_stack.top().id, name, dict_symbol);
         else
             eval_base::get().insert(s_data_stack.top().id, name, dict_symbol);
+
+        return var;
     }
 
-    void evaluator::evaluate_function_definition(ref<function_definition> node)
+    ref<variable_base> evaluator::evaluate_function_definition(ref<function_definition> node)
     {
         std::string name = node->m_id->m_token.value;
 
         // parameter types and ids
         std::vector<function_param> parameters;
+
         for (auto& param : node->m_params)
             parameters.emplace_back(param->m_id->m_token.value, param->m_type, param->m_is_ref);
 
@@ -1070,7 +1313,7 @@ namespace wio
                 else if (func_ref->early_declared())
                 {
                     func_ref->set_early_declared(false);
-                    return;
+                    return ol_ref;
                 }
                 else
                 {
@@ -1129,13 +1372,15 @@ namespace wio
             result_fun_v->set_bounded_file_id(s_data_stack.top().id);
             result_fun_v->set_data(func_lambda);
 
-            symbol function_symbol(result_fun_v, node->m_is_local, node->m_is_global);
+            symbol function_symbol(result_fun_v, node->is_local(), node->is_global());
          
             std::dynamic_pointer_cast<overload_list>(is_valid_result.second->var_ref)->add(function_symbol);
+            return is_valid_result.second->var_ref;
         }
         else if (declare)
         {
             result_fun_v->set_data(func_lambda);
+            return overload->var_ref;
         }
         else
         {
@@ -1144,23 +1389,26 @@ namespace wio
 
             ref<overload_list> result_olist = make_ref<overload_list>();
             result_olist->set_symbol_id(name);
-            result_olist->add(symbol(result_fun_v, node->m_is_local, node->m_is_global));
+            result_olist->add(symbol(result_fun_v, node->is_local(), node->is_global()));
 
             symbol olist_symbol(result_olist);
 
-            if (node->m_is_global)
+            if (node->is_global())
                 eval_base::get().insert_to_global(s_data_stack.top().id, name, olist_symbol);
             else
                 eval_base::get().insert(s_data_stack.top().id, name, olist_symbol);
+
+            return result_olist;
         }
     }
 
-    void evaluator::evaluate_function_declaration(ref<function_declaration> node)
+    ref<variable_base> evaluator::evaluate_function_declaration(ref<function_declaration> node)
     {
        std::string name = node->m_id->m_token.value;
        
        // Parameter types and id's
        std::vector<function_param> parameters;
+
        for (auto& param : node->m_params)
            parameters.emplace_back(param->m_id->m_token.value, param->m_type, param->m_is_ref);
        
@@ -1178,7 +1426,8 @@ namespace wio
            auto fun_v = make_ref<var_function>(parameters);
            fun_v->set_bounded_file_id(s_data_stack.top().id);
        
-           olist->add(symbol(fun_v, node->m_is_local, node->m_is_global));
+           olist->add(symbol(fun_v, node->is_local(), node->is_global()));
+           return olist;
        }
        else
        {
@@ -1187,18 +1436,19 @@ namespace wio
        
            ref<overload_list> result_olist = make_ref<overload_list>();
            result_olist->set_symbol_id(name);
-           result_olist->add(symbol(fun_v, node->m_is_local, node->m_is_global));
+           result_olist->add(symbol(fun_v, node->is_local(), node->is_global()));
 
-           symbol result_symbol(result_olist, node->m_is_local, node->m_is_global);
+           symbol result_symbol(result_olist, node->is_local(), node->is_global());
        
-           if (node->m_is_global)
+           if (node->is_global())
                eval_base::get().insert_to_global(s_data_stack.top().id, name, result_symbol);
            else
                eval_base::get().insert(s_data_stack.top().id, name, result_symbol);
+           return result_olist;
        }
     }
 
-    void evaluator::evaluate_lambda_declaration(ref<lambda_declaration> node)
+    ref<variable_base> evaluator::evaluate_lambda_declaration(ref<lambda_declaration> node)
     {
         std::string name = node->m_id->m_token.value;
 
@@ -1230,9 +1480,10 @@ namespace wio
             eval_base::get().insert_to_global(s_data_stack.top().id, name, result_symbol);
         else
             eval_base::get().insert(s_data_stack.top().id, name, result_symbol);
+        return result;
     }
 
-    void evaluator::evaluate_enum_declaration(ref<enum_declaration> node)
+    ref<variable_base> evaluator::evaluate_enum_declaration(ref<enum_declaration> node)
     {
         std::string name = node->m_id->m_token.value;
 
@@ -1275,9 +1526,10 @@ namespace wio
             eval_base::get().insert_to_global(s_data_stack.top().id, name, enum_symbol);
         else
             eval_base::get().insert(s_data_stack.top().id, name, enum_symbol);
+        return enum_var;
     }
 
-    void evaluator::evaluate_realm_declaration(ref<realm_declaration> node)
+    ref<variable_base> evaluator::evaluate_realm_declaration(ref<realm_declaration> node)
     {
         std::string name = node->m_id->m_token.value;
 
@@ -1294,13 +1546,14 @@ namespace wio
             eval_base::get().insert_to_global(s_data_stack.top().id, name, realm_symbol);
         else
             eval_base::get().insert(s_data_stack.top().id, name, realm_symbol);
+        return realm_var;
     }
 
-    void evaluator::evaluate_omni_declaration(ref<omni_declaration> node)
+    ref<variable_base> evaluator::evaluate_omni_declaration(ref<omni_declaration> node)
     {
         std::string name = node->m_id->m_token.value;
 
-        if (eval_base::get().search(s_data_stack.top().id, name))
+        if (eval_base::get().search_current(s_data_stack.top().id, name))
             throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
 
         ref<variable_base> result = create_null_variable();
@@ -1314,6 +1567,7 @@ namespace wio
             case wio::variable_base_type::variable:
             case wio::variable_base_type::array:
             case wio::variable_base_type::dictionary:
+            case wio::variable_base_type::unit_instance:
             {
                 if (node->m_initializer->is_ref())
                 {
@@ -1339,6 +1593,8 @@ namespace wio
             }
             case wio::variable_base_type::realm:
             case wio::variable_base_type::omni:
+            case wio::variable_base_type::enumeration:
+            case wio::variable_base_type::unit:
             case wio::variable_base_type::none:
             default:
                 throw invalid_type_error("Invalid type for omni!");
@@ -1352,48 +1608,186 @@ namespace wio
             eval_base::get().insert_to_global(s_data_stack.top().id, name, symbol);
         else
             eval_base::get().insert(s_data_stack.top().id, name, symbol);
+        return result;
     }
 
-    void evaluator::evaluate_parameter_declaration(ref<parameter_declaration> node)
+    ref<variable_base> evaluator::evaluate_parameter_declaration(ref<parameter_declaration> node)
     {
         if (node->m_type == variable_base_type::variable)
-            evaluate_variable_declaration(make_ref<variable_declaration>(node->m_id, nullptr, false, false, false));
+            return evaluate_variable_declaration(make_ref<variable_declaration>(node->m_id, nullptr, false, false, false));
         else if (node->m_type == variable_base_type::array)
-            evaluate_array_declaration(make_ref<array_declaration>(node->m_id, nullptr, false, false, false));
+            return evaluate_array_declaration(make_ref<array_declaration>(node->m_id, nullptr, false, false, false));
         else if (node->m_type == variable_base_type::dictionary)
-            evaluate_dictionary_declaration(make_ref<dictionary_declaration>(node->m_id, nullptr, false, false, false));
+            return evaluate_dictionary_declaration(make_ref<dictionary_declaration>(node->m_id, nullptr, false, false, false));
         else if (node->m_type == variable_base_type::function)
-            evaluate_lambda_declaration(make_ref<lambda_declaration>(node->m_id, nullptr, false, false, false));
+            return evaluate_lambda_declaration(make_ref<lambda_declaration>(node->m_id, nullptr, false, false, false));
         else if (node->m_type == variable_base_type::omni)
-            evaluate_omni_declaration(make_ref<omni_declaration>(node->m_id, nullptr, false, false, false));
+            return evaluate_omni_declaration(make_ref<omni_declaration>(node->m_id, nullptr, false, false, false));
         else
             throw invalid_type_error("Undefined parameter type!", node->get_location());
     }
 
-    void evaluator::evaluate_unit_declaration(ref<unit_declaration> node)
+    ref<variable_base> evaluator::evaluate_unit_declaration(ref<unit_declaration> node)
     {
+        std::string name = node->m_id->m_token.value;
+
+        if (eval_base::get().search_current(s_data_stack.top().id, name))
+            throw local_exception("Duplicate variable declaration: " + name, node->m_id->get_location());
+
+        std::vector<ref<unit>> parents;
+
+        for (auto& item : node->m_parent_list)
+        {
+            auto value = as_value(item);
+
+            if (value->get_base_type() != variable_base_type::unit)
+                throw type_mismatch_error("Parent type should be unit!");
+
+            ref<unit> parent = std::dynamic_pointer_cast<unit>(value);
+
+            if(parent->is_final())
+                throw invalid_declaration_error("Parent '" + parent->get_identifier() + "' marked as final!");
+
+            parents.push_back(parent);
+        }
+
+        std::vector<ref<unit>> trust_list;
+
+        for (auto& item : node->m_trust_list)
+        {
+            auto value = as_value(item);
+
+            if (value->get_base_type() != variable_base_type::unit)
+                throw type_mismatch_error("Trusted type should be unit!");
+
+            trust_list.push_back(std::dynamic_pointer_cast<unit>(value));
+        }
+
+        ref<unit> unit_v = make_ref<unit>(name, parents, trust_list, (bool)node->m_flags.b1);
+
+        switch (node->m_default_decl)
+        {
+        case wio::unit_access_type::exposed:
+            unit_v->set_exposed(true);
+            break;
+        case wio::unit_access_type::hidden:
+            unit_v->set_hidden(true);
+            break;
+        case wio::unit_access_type::shared:
+            unit_v->set_shared(true);
+            break;
+        case wio::unit_access_type::none:
+        default:
+            throw exception("Unexpected error in unit!"); // Unreachable (should be)
+            break;
+        }
+
+        eval_base::get().push_unit(unit_v);
+        auto body_scope = evaluate_block_statement(node->m_body);
+        eval_base::get().pop_unit();
+
+        auto& symbols = body_scope->get_symbols();
+
+        bool has_ctor = false;
+        bool members_loaded = false;
+
+        ref<symbol_table> members;
+
+        for (auto& item : symbols)
+        {
+            if (token_constants::ctor_str == item.first)
+                has_ctor = true;
+
+            if (item.second.var_ref->is_outer())
+            {
+                if (!members_loaded)
+                {
+                    members = make_ref<symbol_table>();
+                    unit_v->load_members(members);
+                    members_loaded = true;
+                }
+
+                members->insert(item.first, symbol(item.second.var_ref));
+            }
+            else
+            {
+                unit_v->add_data(item.first, item.second.var_ref);
+            }
+
+        }
+
+        if (!has_ctor)
+        {
+            unit_v->add_data(token_constants::ctor_str, builtin::loader::create_function(token_constants::ctor_str, 
+                [](const std::vector<ref<variable_base>>&)->ref<variable_base> { return create_null_variable(); }, 
+                builtin::detail::pa<0>{ }));
+        }
+
+        symbol unit_symbol(unit_v, node->m_flags.b2, node->m_flags.b3);
+
+        if (node->m_flags.b3)
+            eval_base::get().insert_to_global(s_data_stack.top().id, name, unit_symbol);
+        else
+            eval_base::get().insert(s_data_stack.top().id, name, unit_symbol);
+        return unit_v;
     }
 
-    void evaluator::evaluate_unit_member_declaration(ref<unit_member_declaration> node)
+    ref<variable_base> evaluator::evaluate_unit_member_declaration(ref<unit_member_declaration> node)
     {
+        auto value = evaluate_declaration_statement(node->m_decl_statement);
+
+        value->set_outer(node->m_is_outer);
+
+        switch (node->m_decl_type)
+        {
+        case wio::unit_access_type::exposed:
+        {
+            value->set_exposed(true);
+            break;
+        }
+        case wio::unit_access_type::shared:
+        {
+            value->set_shared(true);
+            break;
+        }
+        case wio::unit_access_type::hidden:
+        {
+            value->set_hidden(true);
+            break;
+        }
+        case wio::unit_access_type::none:
+        default:
+        {
+            if (eval_base::get().active_unit()->is_exposed())
+                value->set_exposed(true);
+            else if(eval_base::get().active_unit()->is_shared())
+                value->set_shared(true);
+            else 
+                value->set_hidden(true);
+        }
+        } 
+
+        return value;
     }
 
-    ref<variable_base> evaluator::as_value(ref<expression> node, ref<variable_base> object, bool is_ref)
+    ref<variable_base> evaluator::as_value(ref<expression> node, ref<variable_base> object, bool is_ref, uint32_t access_level)
     {
         if (is_ref && eval_base::get().is_ref_error_active())
         {
             if (auto bin_expr = std::dynamic_pointer_cast<binary_expression>(node))
-                return evaluate_binary_expression(bin_expr, object, is_ref);
+                return evaluate_binary_expression(bin_expr, object, is_ref, access_level);
             else if (auto unary_expr = std::dynamic_pointer_cast<unary_expression>(node))
-                return evaluate_unary_expression(unary_expr, object, is_ref);
+                return evaluate_unary_expression(unary_expr, object, is_ref, access_level);
             else if (auto id = std::dynamic_pointer_cast<identifier>(node))
-                return evaluate_identifier(id, object, is_ref);
+                return evaluate_identifier(id, object, is_ref, access_level);
             else if (auto arr_access = std::dynamic_pointer_cast<array_access_expression>(node))
-                return evaluate_array_access_expression(arr_access, object, is_ref);
+                return evaluate_array_access_expression(arr_access, object, is_ref, access_level);
             else if (auto member_access = std::dynamic_pointer_cast<member_access_expression>(node))
-                return evaluate_member_access_expression(member_access, object, is_ref);
+                return evaluate_member_access_expression(member_access, object, is_ref, access_level);
             else if (auto func_call = std::dynamic_pointer_cast<function_call>(node))
-                return evaluate_function_call(func_call, object, is_ref);
+                return evaluate_function_call(func_call, object, is_ref, access_level);
+            else if (auto nui_call = std::dynamic_pointer_cast<new_unit_instance_call>(node))
+                return evaluate_new_unit_instance_call(nui_call, object, is_ref, access_level);
             else
                 throw invalid_type_error("Invalid ref call!");
         }
@@ -1414,17 +1808,19 @@ namespace wio
             else if (auto typeof_expr = std::dynamic_pointer_cast<typeof_expression>(node))
                 return evaluate_typeof_expression(typeof_expr);
             else if (auto bin_expr = std::dynamic_pointer_cast<binary_expression>(node))
-                return evaluate_binary_expression(bin_expr, object, is_ref);
+                return evaluate_binary_expression(bin_expr, object, is_ref, access_level);
             else if (auto unary_expr = std::dynamic_pointer_cast<unary_expression>(node))
-                return evaluate_unary_expression(unary_expr, object, is_ref);
+                return evaluate_unary_expression(unary_expr, object, is_ref, access_level);
             else if (auto id = std::dynamic_pointer_cast<identifier>(node))
-                return evaluate_identifier(id, object, is_ref);
+                return evaluate_identifier(id, object, is_ref, access_level);
             else if (auto arr_access = std::dynamic_pointer_cast<array_access_expression>(node))
-                return evaluate_array_access_expression(arr_access, object, is_ref);
+                return evaluate_array_access_expression(arr_access, object, is_ref, access_level);
             else if (auto member_access = std::dynamic_pointer_cast<member_access_expression>(node))
-                return evaluate_member_access_expression(member_access, object, is_ref);
+                return evaluate_member_access_expression(member_access, object, is_ref, access_level);
             else if (auto func_call = std::dynamic_pointer_cast<function_call>(node))
-                return evaluate_function_call(func_call, object, is_ref);
+                return evaluate_function_call(func_call, object, is_ref, access_level);
+            else if (auto nui_call = std::dynamic_pointer_cast<new_unit_instance_call>(node))
+                return evaluate_new_unit_instance_call(nui_call, object, is_ref, access_level);
             else
                 return nullptr;
         }

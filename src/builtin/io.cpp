@@ -128,7 +128,7 @@ namespace wio
 
                 auto value_var = std::dynamic_pointer_cast<variable>(args[1]);
                 if (!value_var || value_var->get_type() != variable_type::vt_string)
-                    throw builtin_error("Write(): Value must be an string.");
+                    throw builtin_error("Write(): Value must be a string.");
 
                 if(file_var->get_type() == variable_type::vt_file)
                     filesystem::write_file(file_var->get_data_as<file_wrapper>().get_file(), value_var->get_data_as<string_t>());
@@ -179,7 +179,6 @@ namespace wio
 
         void io::load(ref<scope> target_scope)
         {
-
             if (!target_scope)
                 target_scope = main_table::get().get_builtin_scope();
 

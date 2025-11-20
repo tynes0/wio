@@ -103,6 +103,7 @@ namespace wio
 			loader::load_function(table, "ToString", detail::b_to_string, pa<1>{ variable_base_type::omni });
 			loader::load_function(table, "Pair", detail::b_pair, pa<2>{ variable_base_type::omni, variable_base_type::omni });
 			loader::load_function(table, "Compare", detail::b_compare, pa<2>{ variable_base_type::omni, variable_base_type::omni });
+			
 		}
 
 		void utility::load(ref<scope> target_scope)

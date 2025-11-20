@@ -1,7 +1,5 @@
 #pragma once
 #include <random>
-#include <cstdint>
-#include <limits>
 #include "../base/base.h"
 
 namespace wio

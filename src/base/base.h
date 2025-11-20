@@ -61,6 +61,16 @@ namespace wio
     using character_t = char;
     using character_ref_t = char*;
     using string_t = std::string;
+
+    static constexpr id_t ID_T_MAX = (std::numeric_limits<id_t>::max)();
+    static constexpr integer_t INTEGER_T_MAX = (std::numeric_limits<integer_t>::max)();
+    static constexpr float_t FLOAT_T_MAX = (std::numeric_limits<float_t>::max)();
+    static constexpr character_t CHAR_T_MAX = (std::numeric_limits<character_t>::max)();
+
+    static constexpr id_t ID_T_MIN = (std::numeric_limits<id_t>::min)();
+    static constexpr integer_t INTEGER_T_MIN = (std::numeric_limits<integer_t>::min)();
+    static constexpr float_t FLOAT_T_MIN = (std::numeric_limits<float_t>::min)();
+    static constexpr character_t CHAR_T_MIN = (std::numeric_limits<character_t>::min)();
 }
 
 namespace std

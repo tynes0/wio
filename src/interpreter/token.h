@@ -27,6 +27,12 @@ namespace wio
         left_parenthesis, right_parenthesis,
         
         dot, comma, colon, semicolon, at_sign,
+
+        SPESIFICS_START/* JUST LOC! NOT A KW*/,
+
+        s_ctor, s_dtor,
+
+        SPESIFICS_END/* JUST LOC! NOT A KW*/,
         
         end_of_file
     };
@@ -45,6 +51,9 @@ namespace wio
         left_curly_bracket, right_curly_bracket,
         left_parenthesis, right_parenthesis,
         dot, comma, colon, semicolon, at_sign,
+        SPESIFICS_START,
+        s_ctor, s_dtor,
+        SPESIFICS_END,
         end_of_file)
 
     struct token
@@ -53,6 +62,12 @@ namespace wio
         std::string value;
         location loc;
     };
+
+    namespace token_constants
+    {
+        static constexpr const char* ctor_str = ".ctor";
+        static constexpr const char* dtor_str = ".dtor";
+    }
 
     // TODO: maybe constexpr std::array<std::pair<std::string or const char*, token_type>>
     static const std::unordered_map<std::string, token_type> token_map =
@@ -161,6 +176,37 @@ namespace wio
         {"(", token_type::left_parenthesis},
         {")", token_type::right_parenthesis},
 
+        {token_constants::ctor_str, token_type::s_ctor},
+        {token_constants::dtor_str, token_type::s_dtor},
+
         {"eof", token_type::end_of_file } // \0
     };
+
+    inline bool is_specific(token_type tt)
+    {
+        auto idx = frenum::index(tt);
+
+        if (!idx.has_value())
+            return false;
+
+        constexpr size_t ssi = frenum::index(token_type::SPESIFICS_START).value();
+        constexpr size_t sei = frenum::index(token_type::SPESIFICS_END).value();
+        size_t tti = idx.value();
+
+        return (tti > ssi && tti < sei);
+    }
+
+    inline bool is_specific(const std::string& str)
+    {
+        if (token_map.count(str) == 0)
+            return false;
+
+        auto idx = frenum::index(token_map.at(str));
+
+        constexpr size_t ssi = frenum::index(token_type::SPESIFICS_START).value();
+        constexpr size_t sei = frenum::index(token_type::SPESIFICS_END).value();
+        size_t tti = idx.value();
+
+        return (tti > ssi && tti < sei);
+    }
 }

@@ -26,8 +26,6 @@
 #include "builtin/scientific.h"
 #include "builtin/system.h"
 
-#include "variables/function.h"
-
 namespace wio
 {
 	struct app_data
@@ -35,12 +33,12 @@ namespace wio
 		std::filesystem::path base_path;
 		argument_parser arg_parser;
 		packed_bool flags{}; // 1- single file 2- show tokens 3- show ast 4- no run 5- no built-in
-		packed_bool buitin_imports{}; // 1-io 2-math 3-util
+		packed_bool builtin_imports{}; // 1-io 2-math 3-util
 		id_t last_module_id = 0;
 	};
 
-	static app_data s_app_data;
-
+	namespace { app_data s_app_data; }
+	
 	interpreter::interpreter() 
 	{
 		s_app_data.arg_parser.set_program_name("wio");
@@ -91,7 +89,7 @@ namespace wio
 		try
 		{
 			packed_bool flags = { s_app_data.flags.b1, false, false, s_app_data.flags.b5 };
-			eval_base::get().initialize(flags);
+			eval_base::initialize(flags);
 			raw_buffer buf = run_file_part_1(s_app_data.arg_parser.get_file().c_str(), flags);
 			main_table::get().add_imported_module(s_app_data.last_module_id);
 			run_file_part_2(buf, flags);
@@ -99,7 +97,7 @@ namespace wio
 		catch (const exception& e)
 		{
 			filesystem::write_file(stderr, e.what());
-			exit(EXIT_FAILURE);
+			std::exit(EXIT_FAILURE);
 		}
 	}
 
@@ -124,7 +122,7 @@ namespace wio
 	raw_buffer interpreter::run_file_part_1(const char* fp, packed_bool flags, symbol_map* target_map)
 	{
 		std::string filepath = fp;
-		std::for_each(filepath.begin(), filepath.end(), [](char& ch) { ch = std::tolower(ch); });
+		std::for_each(filepath.begin(), filepath.end(), [](char& ch) { ch = static_cast<char>(std::tolower(ch)); });
 
 		if (!filesystem::check_extension(filepath, ".wio"))
 		{

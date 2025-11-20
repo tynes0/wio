@@ -117,8 +117,6 @@ namespace wio
 
     identifier::identifier(token tok, bool is_ref, bool is_lhs) : m_token(tok), m_is_ref(is_ref), m_is_lhs(is_lhs)
     {
-        if (tok.type != token_type::identifier)
-            throw unexpected_token_error("When creating identifier, the token type must be identifier!");
     }
 
     std::string identifier::to_string() const
@@ -294,9 +292,9 @@ namespace wio
     std::string function_definition::to_string() const
     {
         std::string result;
-        if (m_is_global)
+        if (is_global())
             result += "global ";
-        if (m_is_local)
+        if (is_local())
             result += "local ";
 
         result += "func " + m_id->to_string() + "(";
@@ -324,12 +322,25 @@ namespace wio
         return result;
     }
 
+    std::string new_unit_instance_call::to_string() const
+    {
+        std::string result = m_caller->to_string() + "{";
+        for (size_t i = 0; i < m_arguments.size(); ++i)
+        {
+            result += m_arguments[i]->to_string();
+            if (i < m_arguments.size() - 1)
+                result += ", ";
+        }
+        result += "}";
+        return result;
+    }
+
     std::string function_declaration::to_string() const
     {
         std::string result;
-        if (m_is_global)
+        if (is_global())
             result += "global ";
-        if (m_is_local)
+        if (is_local())
             result += "local ";
 
         result += "func " + m_id->to_string() + "(";

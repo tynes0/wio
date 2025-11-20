@@ -1,10 +1,10 @@
 #define _CRT_SECURE_NO_WARNINGS
+
 #include "filesystem.h"
+#include "../base/exception.h"
 
 #include <fstream>
 #include <filesystem>
-
-#include "../base/exception.h"
 
 static constexpr size_t WIO_BUFSIZ = 2048; // 2 Kib
 
@@ -14,7 +14,7 @@ namespace wio
 	{
 		std::filesystem::path get_abs_path(const std::filesystem::path& filepath)
 		{
-			auto cur = std::filesystem::current_path();
+			const auto cur = std::filesystem::current_path();
 			if (filepath.is_relative())
 				return cur / filepath;
 			return filepath;
@@ -22,7 +22,7 @@ namespace wio
 
 		bool check_extension(const std::string& filepath, const std::string& expected_extension)
 		{
-			size_t pos = filepath.rfind(expected_extension);
+			const size_t pos = filepath.rfind(expected_extension);
 			return (pos == (filepath.size() - expected_extension.size()));
 		}
 
@@ -32,15 +32,15 @@ namespace wio
 			if (!stream)
 				return {};
 
-			std::streampos end = stream.tellg();
+			const std::streampos end = stream.tellg();
 			stream.seekg(0, std::ios::beg);
-			uint64_t size = end - stream.tellg();
+			const uint64_t size = end - stream.tellg();
 
 			if (size == 0)
 				return {};
 
 			raw_buffer buffer(size);
-			stream.read(buffer.as<char>(), size);
+			stream.read(buffer.as<char>(), static_cast<std::streamsize>(size));
 			buffer.data[size] = '\0';
 			return buffer;
 		}
@@ -50,10 +50,10 @@ namespace wio
 			if (!file)
 				return {};
 
-			fseek(file, 0, SEEK_END);
-			long end = ftell(file);
-			fseek(file, 0, SEEK_SET);
-			long size = end - ftell(file);
+			(void)fseek(file, 0, SEEK_END);
+			const long end = ftell(file);
+			(void)fseek(file, 0, SEEK_SET);
+			const long size = end - ftell(file);
 			
 			if (size == 0)
 				return {};
@@ -71,7 +71,7 @@ namespace wio
 
 			while (fgets(temp.as<char>(), temp.size, stdin))
 			{
-				size_t len = strlen(temp.as<char>());
+				const size_t len = strlen(temp.as<char>());
 
 				if (len > 0 && temp.data[len - 1] == '\n')
 				{
@@ -98,13 +98,13 @@ namespace wio
 		{
 			if (str.size() < prefix.size())
 				return false;
-			return (str.substr(0, prefix.size()) == prefix);
+			return str.starts_with(prefix);
 		}
 
 		void write_file(FILE* file, const std::string& str)
 		{
 			if (!str.empty())
-				 fwrite(&str[0], 1, str.size(), file);
+				 fwrite(str.data(), 1, str.size(), file);
 		}
 
 		void write_stdout(const std::string& str)

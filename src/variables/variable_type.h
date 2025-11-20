@@ -8,7 +8,7 @@
 namespace wio
 {
 
-    enum class variable_base_type
+    enum class variable_base_type 
     {
         none, 
         variable,
@@ -33,7 +33,7 @@ namespace wio
         unit_instance,
         omni)
 
-    enum class variable_type
+    enum class variable_type : integer_t
     {
         vt_null,
         vt_integer,

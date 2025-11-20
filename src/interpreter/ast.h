@@ -9,9 +9,10 @@ namespace wio
 {
     enum class unary_operator_type { prefix, postfix };
     enum class lit_type { lt_null, lt_string, lt_character, lt_bool, lt_binary, lt_octal, lt_decimal, lt_hexadeximal, lt_float };
-    enum class unit_declaration_type { none, exposed, hidden, shared };
+    enum class unit_access_type : uint32_t { exposed = 1, shared = 2, hidden = 3, none = 4 };
 
     MakeFrenumInNamespace(wio, lit_type, lt_null, lt_string, lt_character, lt_bool, lt_binary, lt_octal, lt_decimal, lt_hexadeximal, lt_float)
+    MakeFrenumInNamespace(wio, unit_access_type, exposed, shared, hidden, none)
 
     class ast_node;
     class expression;
@@ -29,6 +30,7 @@ namespace wio
     class array_access_expression;
     class member_access_expression;
     class function_call;
+    class new_unit_instance_call;
     class block_statement;
     class if_statement;
     class for_statement;
@@ -66,13 +68,16 @@ namespace wio
     public:
         virtual ~expression() = default;
         virtual bool is_ref() const = 0;
+        virtual std::string get_id() const = 0;
     };
 
     class statement : public ast_node
     {
     public:
-        static constexpr bool is_declaration = false;
-
+        virtual bool is_declaration() const = 0;
+        virtual bool is_local() const = 0;
+        virtual bool is_global() const = 0;
+        virtual std::string get_id() const = 0;
         virtual ~statement() = default;
     };
 
@@ -97,6 +102,7 @@ namespace wio
         location get_location() const override { return m_token.loc; }
         lit_type get_literal_type() const { return m_type; }
         bool is_ref() const override { return false; }
+        std::string get_id() const override { return std::string(); }
         std::string to_string() const override;
 
         token m_token;
@@ -123,6 +129,7 @@ namespace wio
         std::string to_string() const override;
         location get_location() const override { return m_loc; }
         bool is_ref() const override { return false; }
+        std::string get_id() const override { return std::string(); }
 
         std::vector<ref<expression>> m_elements;
         location m_loc;
@@ -136,6 +143,7 @@ namespace wio
         std::string to_string() const override;
         location get_location() const override { return m_loc; }
         bool is_ref() const override { return false; }
+        std::string get_id() const override { return std::string(); }
 
         std::vector<std::pair<ref<expression>, ref<expression>>> m_pairs;
         location m_loc;
@@ -150,6 +158,7 @@ namespace wio
         std::string to_string() const override;
         location get_location() const override { return m_loc; }
         bool is_ref() const override { return false; }
+        std::string get_id() const override { return std::string(); }
 
         std::vector<ref<parameter_declaration>> m_params;
         ref<block_statement> m_body;
@@ -164,6 +173,7 @@ namespace wio
         virtual location get_location() const override { return m_token.loc; }
         virtual std::string to_string() const override;
         bool is_ref() const override { return false; }
+        std::string get_id() const override { return std::string(); }
 
         token m_token;
     };
@@ -176,6 +186,7 @@ namespace wio
         location get_location() const override { return m_token.loc; }
         std::string to_string() const override;
         bool is_ref() const override { return m_is_ref; }
+        std::string get_id() const override { return m_token.value; }
 
         token m_token;
         variable_type m_type = variable_type::vt_null;
@@ -192,6 +203,7 @@ namespace wio
         location get_location() const override { return m_operator.loc; }
         std::string to_string() const override;
         bool is_ref() const override { return m_left->is_ref(); }
+        std::string get_id() const override { return m_left->get_id(); }
 
         bool is_assignment = false;
         ref<expression> m_left;
@@ -208,6 +220,7 @@ namespace wio
         location get_location() const override { return m_operator.loc; }
         std::string to_string() const override;
         bool is_ref() const override { return m_is_ref; }
+        std::string get_id() const override { return m_operand->get_id(); }
 
         token m_operator;
         ref<expression> m_operand;
@@ -224,6 +237,7 @@ namespace wio
         location get_location() const override { return m_expr->get_location(); }
         std::string to_string() const override;
         bool is_ref() const override { return false; }
+        std::string get_id() const override { return std::string(); }
 
         ref<expression> m_expr;
     };
@@ -237,6 +251,7 @@ namespace wio
         location get_location() const override { return m_array->get_location(); }
         std::string to_string() const override;
         bool is_ref() const override { return m_is_ref; }
+        std::string get_id() const override { return m_array->get_id(); }
 
         ref<expression> m_array;
         ref<expression> m_key_or_index;
@@ -253,6 +268,7 @@ namespace wio
         location get_location() const override { return m_object->get_location(); }
         std::string to_string() const override;
         bool is_ref() const override { return m_is_ref; }
+        std::string get_id() const override { return m_object->get_id(); }
 
         ref<expression> m_object;
         ref<expression> m_member;
@@ -270,6 +286,23 @@ namespace wio
         location get_location() const override { return m_caller->get_location(); }
         std::string to_string() const override;
         bool is_ref() const override { return false; }
+        std::string get_id() const override { return m_caller->get_id(); }
+
+        ref<expression> m_caller;
+        std::vector<ref<expression>> m_arguments;
+    };
+
+    class new_unit_instance_call : public expression
+    {
+    public:
+        new_unit_instance_call(ref<expression> caller, std::vector<ref<expression>> args)
+            : m_caller(caller), m_arguments(args) {
+        }
+
+        location get_location() const override { return m_caller->get_location(); }
+        std::string to_string() const override;
+        bool is_ref() const override { return false; }
+        std::string get_id() const override { return m_caller->get_id(); }
 
         ref<expression> m_caller;
         std::vector<ref<expression>> m_arguments;
@@ -278,13 +311,15 @@ namespace wio
     class block_statement : public statement
     {
     public:
-        static constexpr bool is_declaration = false;
-
         block_statement(std::vector<ref<statement>> statements) 
             : m_statements(statements) {}
 
         location get_location() const override { return m_statements.empty() ? location{ 0, 0 } : m_statements.front()->get_location(); }
         std::string to_string() const override;
+        bool is_declaration() const override { return false; }
+        bool is_local() const override { return false; }
+        bool is_global() const override { return false; }
+        std::string get_id() const override { return std::string(); }
 
         std::vector<ref<statement>> m_statements;
     };
@@ -297,6 +332,10 @@ namespace wio
 
         location get_location() const override { return m_expression->get_location(); }
         std::string to_string() const override;
+        bool is_declaration() const override { return false; }
+        bool is_local() const override { return false; }
+        bool is_global() const override { return false; }
+        std::string get_id() const override { return std::string(); }
 
         ref<expression> m_expression;
     };
@@ -304,13 +343,15 @@ namespace wio
     class if_statement : public statement
     {
     public:
-        static constexpr bool is_declaration = false;
-
         if_statement(ref<expression> condition, ref<statement> then_branch, ref<statement> else_branch)
             : m_condition(condition), m_then_branch(then_branch), m_else_branch(else_branch) {}
 
         location get_location() const override { return m_condition->get_location(); }
         std::string to_string() const override;
+        bool is_declaration() const override { return false; }
+        bool is_local() const override { return false; }
+        bool is_global() const override { return false; }
+        std::string get_id() const override { return std::string(); }
 
         ref<expression> m_condition;
         ref<statement> m_then_branch;
@@ -320,13 +361,15 @@ namespace wio
     class for_statement : public statement
     {
     public:
-        static constexpr bool is_declaration = false;
-
         for_statement(ref<statement> initialization, ref<expression> condition, ref<expression> increment, ref<block_statement> body)
             : m_initialization(initialization), m_condition(condition), m_increment(increment), m_body(body) {}
 
         location get_location() const override;
         std::string to_string() const override;
+        bool is_declaration() const override { return false; }
+        bool is_local() const override { return false; }
+        bool is_global() const override { return false; }
+        std::string get_id() const override { return std::string(); }
 
         ref<statement> m_initialization;
         ref<expression> m_condition;
@@ -337,13 +380,15 @@ namespace wio
     class foreach_statement : public statement
     {
     public:
-        static constexpr bool is_declaration = false;
-
         foreach_statement(ref<identifier> item, ref<expression> collection, ref<block_statement> body)
             :m_item(item), m_collection(collection), m_body(body) {}
 
         location get_location() const override { return m_item->get_location(); }
         std::string to_string() const override;
+        bool is_declaration() const override { return false; }
+        bool is_local() const override { return false; }
+        bool is_global() const override { return false; }
+        std::string get_id() const override { return std::string(); }
 
         ref<identifier> m_item;
         ref<expression> m_collection;
@@ -353,13 +398,15 @@ namespace wio
     class while_statement : public statement
     {
     public:
-        static constexpr bool is_declaration = false;
-
         while_statement(ref<expression> condition, ref<block_statement> body)
             : m_condition(condition), m_body(body) {}
 
         location get_location() const override { return m_condition->get_location(); }
         std::string to_string() const override;
+        bool is_declaration() const override { return false; }
+        bool is_local() const override { return false; }
+        bool is_global() const override { return false; }
+        std::string get_id() const override { return std::string(); }
 
         ref<expression> m_condition;
         ref<block_statement> m_body;
@@ -368,13 +415,15 @@ namespace wio
     class break_statement : public statement
     {
     public:
-        static constexpr bool is_declaration = false;
-
         break_statement(location loc) 
             : m_loc(loc) {}
 
         location get_location() const override { return m_loc; }
         std::string to_string() const override;
+        bool is_declaration() const override { return false; }
+        bool is_local() const override { return false; }
+        bool is_global() const override { return false; }
+        std::string get_id() const override { return std::string(); }
 
         location m_loc;
     };
@@ -382,13 +431,15 @@ namespace wio
     class continue_statement : public statement
     {
     public:
-        static constexpr bool is_declaration = false;
-
         continue_statement(location loc) 
             : m_loc(loc) {}
 
         location get_location() const override { return m_loc; }
         std::string to_string() const override;
+        bool is_declaration() const override { return false; }
+        bool is_local() const override { return false; }
+        bool is_global() const override { return false; }
+        std::string get_id() const override { return std::string(); }
 
         location m_loc;
     };
@@ -401,6 +452,10 @@ namespace wio
 
         location get_location() const override { return m_location; }
         std::string to_string() const override;
+        bool is_declaration() const override { return false; }
+        bool is_local() const override { return false; }
+        bool is_global() const override { return false; }
+        std::string get_id() const override { return std::string(); }
 
         ref<expression> m_value;
         location m_location;
@@ -409,13 +464,15 @@ namespace wio
     class import_statement : public statement
     {
     public:
-        static constexpr bool is_declaration = false;
-
         import_statement(location loc, std::string module_path, bool is_pure = false, bool is_realm = false, ref<identifier> realm_id = nullptr)
             : m_location(loc), m_module_path(module_path), m_flags({ is_pure, is_realm }), m_realm_id(realm_id) {}
 
         location get_location() const override { return m_location; }
         std::string to_string() const override;
+        bool is_declaration() const override { return false; }
+        bool is_local() const override { return false; }
+        bool is_global() const override { return false; }
+        std::string get_id() const override { return std::string(); }
 
         std::string m_module_path;
         location m_location;
@@ -426,13 +483,15 @@ namespace wio
     class variable_declaration : public statement
     {
     public:
-        static constexpr bool is_declaration = true;
-
         variable_declaration(ref<identifier> id, ref<expression> initializer, bool is_const, bool is_local, bool is_global)
             : m_id(id), m_initializer(initializer), m_flags({is_const, is_local, is_global}) {}
 
         location get_location() const override { return m_id->get_location(); }
         std::string to_string() const override;
+        bool is_declaration() const override { return true; }
+        bool is_local() const override { return m_flags.b2; }
+        bool is_global() const override { return m_flags.b3; }
+        std::string get_id() const override { return m_id->m_token.value; }
 
         ref<identifier> m_id;
         ref<expression> m_initializer;
@@ -442,13 +501,15 @@ namespace wio
     class array_declaration : public statement
     {
     public:
-        static constexpr bool is_declaration = true;
-
         array_declaration(ref<identifier> id, ref<expression> initializer, bool is_const, bool is_local, bool is_global)
             : m_id(id), m_initializer(initializer), m_flags({is_const, is_local, is_global}) {}
 
         location get_location() const override { return m_id->get_location(); }
         std::string to_string() const override;
+        bool is_declaration() const override { return true; }
+        bool is_local() const override { return m_flags.b2; }
+        bool is_global() const override { return m_flags.b3; }
+        std::string get_id() const override { return m_id->m_token.value; }
 
         ref<identifier> m_id;
         ref<expression> m_initializer;
@@ -458,13 +519,15 @@ namespace wio
     class dictionary_declaration : public statement
     {
     public:
-        static constexpr bool is_declaration = true;
-
         dictionary_declaration(ref<identifier> id, ref<expression> initializer, bool is_const, bool is_local, bool is_global)
             : m_id(id), m_initializer(initializer), m_flags({is_const, is_local, is_global}) {}
 
         location get_location() const override { return m_id->get_location(); }
         std::string to_string() const override;
+        bool is_declaration() const override { return true; }
+        bool is_local() const override { return m_flags.b2; }
+        bool is_global() const override { return m_flags.b3; }
+        std::string get_id() const override { return m_id->m_token.value; }
 
         ref<identifier> m_id;
         ref<expression> m_initializer;
@@ -474,48 +537,57 @@ namespace wio
     class function_definition : public statement
     {
     public:
-        static constexpr bool is_declaration = true;
-
-        function_definition(ref<identifier> id, std::vector<ref<parameter_declaration>> params, ref<block_statement> body, bool is_local, bool is_global)
-            : m_id(id), m_params(params), m_body(body), m_is_local(is_local), m_is_global(is_global) {}
+        function_definition(ref<identifier> id, std::vector<ref<parameter_declaration>> params, ref<block_statement> body, bool is_local, bool is_global, bool is_ctor = false, bool is_dtor = false)
+            : m_id(id), m_params(params), m_body(body), m_flags({ is_local, is_global, is_ctor, is_dtor }) {
+        }
 
         location get_location() const override { return m_id->get_location(); }
         std::string to_string() const override;
+        bool is_declaration() const override { return true; }
+        bool is_local() const override { return m_flags.b1; }
+        bool is_global() const override { return m_flags.b2; }
+        std::string get_id() const override { return m_id->m_token.value; }
+        bool is_ctor() const { return m_flags.b3; }
+        bool is_dtor() const { return m_flags.b4; }
 
         ref<identifier> m_id;
         std::vector<ref<parameter_declaration>> m_params;
         ref<block_statement> m_body;
-        bool m_is_local;
-        bool m_is_global;
+        packed_bool m_flags; // 1- local 2- global 3- is ctor 4- is dtor
     };
 
     class function_declaration : public statement
     {
     public:
-        static constexpr bool is_declaration = true;
-
-        function_declaration(ref<identifier> id, std::vector<ref<parameter_declaration>> params, bool is_local, bool is_global)
-            : m_id(id), m_params(params), m_is_local(is_local), m_is_global(is_global) {}
+        function_declaration(ref<identifier> id, std::vector<ref<parameter_declaration>> params, bool is_local, bool is_global, bool is_ctor = false, bool is_dtor = false)
+            : m_id(id), m_params(params), m_flags({ is_local, is_global, is_ctor, is_dtor }) {}
 
         location get_location() const override { return m_id->get_location(); }
         std::string to_string() const override;
+        bool is_declaration() const override { return true; }
+        bool is_local() const override { return m_flags.b1; }
+        bool is_global() const override { return m_flags.b2; }
+        std::string get_id() const override { return m_id->m_token.value; }
+        bool is_ctor() const { return m_flags.b3; }
+        bool is_dtor() const { return m_flags.b4; }
 
         ref<identifier> m_id;
         std::vector<ref<parameter_declaration>> m_params;
-        bool m_is_local;
-        bool m_is_global;
+        packed_bool m_flags; // 1- local 2- global 3- is ctor 4- is dtor
     };
 
     class lambda_declaration : public statement
     {
     public:
-        static constexpr bool is_declaration = true;
-
         lambda_declaration(ref<identifier> id, ref<expression> initializer, bool is_const, bool is_local, bool is_global, variable_type type = variable_type::vt_null)
             : m_id(id), m_initializer(initializer), m_flags({ is_const, is_local, is_global }) {}
 
         location get_location() const override { return m_id->get_location(); }
         std::string to_string() const override;
+        bool is_declaration() const override { return true; }
+        bool is_local() const override { return m_flags.b2; }
+        bool is_global() const override { return m_flags.b3; }
+        std::string get_id() const override { return m_id->m_token.value; }
 
         ref<identifier> m_id;
         ref<expression> m_initializer;
@@ -525,14 +597,16 @@ namespace wio
     class realm_declaration : public statement
     {
     public:
-        static constexpr bool is_declaration = true;
-
         realm_declaration(ref<identifier> id, ref<block_statement> body, bool is_local, bool is_global)
             :m_id(id), m_body(body), m_is_local(is_local), m_is_global(is_global) {
         }
 
         location get_location() const override { return m_id->get_location(); }
         std::string to_string() const override;
+        bool is_declaration() const override { return true; }
+        bool is_local() const override { return m_is_local; }
+        bool is_global() const override { return m_is_global; }
+        std::string get_id() const override { return m_id->m_token.value; }
 
         ref<identifier> m_id;
         ref<block_statement> m_body;
@@ -543,14 +617,16 @@ namespace wio
     class omni_declaration : public statement
     {
     public:
-        static constexpr bool is_declaration = true;
-
         omni_declaration(ref<identifier> id, ref<expression> initializer, bool is_const, bool is_local, bool is_global)
             : m_id(id), m_initializer(initializer), m_flags({ is_const, is_local, is_global }) {
         }
 
         location get_location() const override { return m_id->get_location(); }
         std::string to_string() const override;
+        bool is_declaration() const override { return true; }
+        bool is_local() const override { return m_flags.b2; }
+        bool is_global() const override { return m_flags.b3; }
+        std::string get_id() const override { return m_id->m_token.value; }
 
         ref<identifier> m_id;
         ref<expression> m_initializer;
@@ -560,13 +636,15 @@ namespace wio
     class enum_declaration : public statement
     {
     public:
-        static constexpr bool is_declaration = true;
-
         enum_declaration(ref<identifier> id, const std::vector<std::pair<ref<identifier>, ref<expression>>>& items, bool is_local, bool is_global)
             : m_id(id), m_items(items), m_is_local(is_local), m_is_global(is_global) {}
 
         location get_location() const override { return m_id->get_location(); }
         std::string to_string() const override;
+        bool is_declaration() const override { return true; }
+        bool is_local() const override { return m_is_local; }
+        bool is_global() const override { return m_is_global; }
+        std::string get_id() const override { return m_id->m_token.value; }
 
         ref<identifier> m_id;
         std::vector<std::pair<ref<identifier>, ref<expression>>> m_items;
@@ -577,14 +655,16 @@ namespace wio
     class parameter_declaration : public statement
     {
     public:
-        static constexpr bool is_declaration = false; // why am i calling parameter_declaration then?
-
         parameter_declaration(ref<identifier> id, bool is_ref, variable_base_type type)
             : m_id(id), m_is_ref(is_ref), m_type(type) {
         }
 
         location get_location() const override { return m_id->get_location(); }
         std::string to_string() const override;
+        bool is_declaration() const override { return false; }
+        bool is_local() const override { return false; }
+        bool is_global() const override { return false; }
+        std::string get_id() const override { return m_id->m_token.value; }
 
         ref<identifier> m_id;
         variable_base_type m_type;
@@ -594,38 +674,42 @@ namespace wio
     class unit_declaration : public statement
     {
     public:
-        static constexpr bool is_declaration = true;
-
         unit_declaration(ref<identifier> id, ref<block_statement> body, bool is_local, bool is_global, const std::vector<ref<identifier>>& parent_list,
-            const std::vector<ref<identifier>>& trust_list, bool is_final = false, unit_declaration_type default_decl = unit_declaration_type::hidden)
+            const std::vector<ref<identifier>>& trust_list, bool is_final = false, unit_access_type default_decl = unit_access_type::hidden)
             : m_id(id), m_body(body), m_parent_list(parent_list), m_trust_list(trust_list), m_default_decl(default_decl), m_flags({ is_final, is_local, is_global }) {
         }
 
         location get_location() const override { return m_id->get_location(); }
         std::string to_string() const override;
+        bool is_declaration() const override { return true; }
+        bool is_local() const override { return m_flags.b2; }
+        bool is_global() const override { return m_flags.b3; }
+        std::string get_id() const override { return m_id->m_token.value; }
 
         ref<identifier> m_id;
         ref<block_statement> m_body;
         std::vector<ref<identifier>> m_parent_list;
         std::vector<ref<identifier>> m_trust_list;
-        unit_declaration_type m_default_decl;
+        unit_access_type m_default_decl;
         packed_bool m_flags; // 1- final 2- local 3- global
     };
 
     class unit_member_declaration : public statement
     {
     public:
-        static constexpr bool is_declaration = false; // bcs m_decl_statement could be decl not unit_member_declaration!
-
-        unit_member_declaration(ref<statement> decl_statement, unit_declaration_type decl_type, bool is_outer)
+        unit_member_declaration(ref<statement> decl_statement, unit_access_type decl_type, bool is_outer)
             : m_decl_statement(decl_statement), m_decl_type(decl_type), m_is_outer(is_outer) {
         }
 
         location get_location() const override { return m_decl_statement->get_location(); }
         std::string to_string() const override;
+        bool is_declaration() const override { return false; }
+        bool is_local() const override { return m_decl_statement->is_local(); }
+        bool is_global() const override { return m_decl_statement->is_global(); }
+        std::string get_id() const override { return m_decl_statement->get_id(); }
 
         ref<statement> m_decl_statement;
-        unit_declaration_type m_decl_type;
+        unit_access_type m_decl_type;
         bool m_is_outer;
     };
 

@@ -45,6 +45,7 @@ namespace wio
         ref<expression> parse_unary_expression();
         ref<expression> parse_ref_expression();
         ref<expression> parse_function_call(ref<expression> caller);
+        ref<expression> parse_new_unit_instance_call(ref<expression> caller);
         ref<expression> parse_array_access(ref<expression> array, bool is_ref = false, bool is_lhs = false);
         ref<expression> parse_member_access(ref<expression> object, bool is_ref = false, bool is_lhs = false);
         ref<expression> parse_typeof_expression();
@@ -59,7 +60,7 @@ namespace wio
         ref<statement> parse_omni_declaration(bool is_const, bool is_local, bool is_global);
         ref<statement> parse_enum_declaration(bool is_local, bool is_global);
         ref<statement> parse_realm_declaration(bool is_local, bool is_global);
-        ref<statement> parse_unit_declaration(bool is_local, bool is_globak);
+        ref<statement> parse_unit_declaration(bool is_local, bool is_global);
         ref<statement> parse_parameter_declaration();
         ref<statement> parse_if_statement();
         ref<statement> parse_for_statement();
