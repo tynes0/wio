@@ -1,2 +1,37 @@
-var newvar = Input(">>> ");
-Print(newvar);
+﻿use std::io
+
+fn calculate_score(base: i32, multiplier: i32) -> i32 {
+    let bonus: i32 = 50;
+    
+    return (base * multiplier) + bonus;
+}
+
+fn Entry() -> i32 {
+    let hex_val: i32 = null;      // 255
+    mut bin_val: i32 = 0b1010;    // 10
+
+    bin_val = 23;
+    
+    mut total: i32 = hex_val + bin_val;
+    
+    total = calculate_score(total, 2);
+
+    let numbers: [i32] = [10, 20, 30, 40];
+    let first: i32 = numbers[0];
+
+    let is_valid: bool = true;
+    
+    let test = 16298027;
+    
+    if !is_valid {
+        return 0; // Hata kodu
+    } else {
+        total = total + 5;
+    }
+
+    while total < 1000 {
+        total = total * 2;
+    }
+    
+    test::io::Print(total);
+}
