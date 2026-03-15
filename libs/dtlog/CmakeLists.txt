@@ -1,0 +1,8 @@
+add_library(dtlog STATIC
+    src/dtlog.cpp
+    include/dtlog.h
+)
+
+target_include_directories(dtlog PUBLIC ${CMAKE_SOURCE_DIR}/libs/dtlog/include)
+
+set_target_properties(dtlog PROPERTIES FOLDER "libs")

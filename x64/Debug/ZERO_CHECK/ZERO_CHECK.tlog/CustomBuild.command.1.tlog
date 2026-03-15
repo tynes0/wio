@@ -1,0 +1,10 @@
+^C:\USERS\CIHAN\RIDERPROJECTS\WIO\CMAKEFILES\8577E759A576F3B534F028FAE1443E18\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/cihan/RiderProjects/wio -BC:/Users/cihan/RiderProjects/wio --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file C:/Users/cihan/RiderProjects/wio/wio_lang.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

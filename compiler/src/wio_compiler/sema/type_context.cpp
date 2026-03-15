@@ -1,0 +1,57 @@
+﻿#include "wio/sema/type_context.h"
+
+namespace wio::sema
+{
+    TypeContext::TypeContext()
+    {
+        t_void   = makeType<PrimitiveType>("void");
+        t_bool   = makeType<PrimitiveType>("bool");
+        t_char   = makeType<PrimitiveType>("char");
+        t_string = makeType<PrimitiveType>("string");
+
+        t_i8  = makeType<PrimitiveType>("i8");
+        t_i16 = makeType<PrimitiveType>("i16");
+        t_i32 = makeType<PrimitiveType>("i32");
+        t_i64 = makeType<PrimitiveType>("i64");
+            
+        t_u8  = makeType<PrimitiveType>("u8");
+        t_u16 = makeType<PrimitiveType>("u16");
+        t_u32 = makeType<PrimitiveType>("u32");
+        t_u64 = makeType<PrimitiveType>("u64");
+
+        t_isize = makeType<PrimitiveType>("size");
+        t_usize = makeType<PrimitiveType>("usize");
+        
+        t_f32 = makeType<PrimitiveType>("f32");
+        t_f64 = makeType<PrimitiveType>("f64");
+
+        t_unknown = makeType<PrimitiveType>("<unknown>");
+        
+        t_null = makeType<NullType>(t_void);
+    }
+
+    Ref<Type> TypeContext::getReferenceType(Ref<Type> referredType, bool isMutable)
+    {
+        return makeType<ReferenceType>(std::move(referredType), isMutable);
+    }
+
+    Ref<Type> TypeContext::getArrayType(Ref<Type> elementType, ArrayType::ArrayKind arrayKind, size_t size)
+    {
+        return makeType<ArrayType>(std::move(elementType), arrayKind, size);
+    }
+
+    Ref<Type> TypeContext::getFunctionType(Ref<Type> returnType, std::vector<Ref<Type>> paramTypes)
+    {
+        return makeType<FunctionType>(std::move(paramTypes), std::move(returnType));
+    }
+
+    Ref<Type> TypeContext::createStructType(const std::string& name, Ref<Scope> structScope)
+    {
+        return makeType<StructType>(name, std::move(structScope));
+    }
+
+    Ref<Type> TypeContext::createAliasType(const std::string& name, Ref<Type> aliasedType)
+    {
+        return makeType<AliasType>(name, std::move(aliasedType));
+    }
+}

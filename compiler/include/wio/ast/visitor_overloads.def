@@ -1,0 +1,3 @@
+﻿#define X(item) void visit(item& node) override;
+#include "ast_nodes.def"
+#undef X

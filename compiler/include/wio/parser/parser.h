@@ -1,0 +1,53 @@
+#pragma once
+
+#include "wio/ast/ast.h"
+
+namespace wio
+{
+    class Parser
+    {
+    public:
+        explicit Parser(std::vector<Token> tokens)
+            : tokens_(std::move(tokens)), currentTokenIndex_(0)
+        {
+        }
+        
+        NodePtr<Program> parseProgram();
+    private:
+        std::vector<Token> tokens_;
+        size_t currentTokenIndex_;
+
+        Token peek(int offset = 0) const;
+        Token advance();
+        void multiAdvance(int count);
+        bool match(TokenType type, bool consume = false);
+        bool match(TokenType type, std::string_view value, bool consume = false);
+        bool multiMatch(const std::initializer_list<TokenType>& types, bool consume = false);
+        bool matchOneOf(const std::initializer_list<TokenType>& types, bool consume = false);
+        Token consume(TokenType type, std::string_view value = "");
+        void finishLine();
+
+        NodePtr<Expression> parseExpression(int minPrecedence = 0);
+        NodePtr<Expression> parsePrimary();
+        NodePtr<Expression> parseStringLiteral();
+        NodePtr<Expression> parseArrayLiteral();
+        NodePtr<Expression> parseDictionaryLiteral();
+        
+        NodePtr<TypeSpecifier> parseType();
+        
+        NodePtr<Statement> parseStatement();
+        NodePtr<Statement> parseBlockStatement();
+        NodePtr<Statement> parseVariableDeclaration();
+        NodePtr<Statement> parseFunctionDeclaration();
+        NodePtr<Statement> parseIfStatement();
+        NodePtr<Statement> parseWhileStatement();
+        NodePtr<Statement> parseReturnStatement();
+        NodePtr<Statement> parseUseStatement();
+        NodePtr<Statement> parseAttributeStatement();
+
+        [[nodiscard]] static int getPrecedence(TokenType type);
+        
+        [[noreturn]] static void utError(const std::string& message, common::Location location);
+        [[noreturn]] static void ucError(common::Location location);
+    };
+}

@@ -1,0 +1,23 @@
+#pragma once
+#include "location.h"
+#include "general/result_values.h"
+
+#include <dtlog.h>
+
+namespace wio
+{
+    namespace common
+    {
+        [[nodiscard]] bool isNewline(char c);
+        [[nodiscard]] char getEscapeSeq(char ch, Location loc = Location());
+        [[nodiscard]] IntegerResult getInteger(const std::string& data);
+        [[nodiscard]] FloatResult getFloat(const std::string& data);
+        [[nodiscard]] std::string wioPrimitiveTypeToCppType(const std::string& wioTypeStr);
+
+        template <typename ...Args>
+        [[nodiscard]] std::string formatString(const std::string_view& fmt, Args&&... args)
+        {
+            return dtlog::formatter::format(fmt, std::forward<Args>(args)...);
+        }
+    }
+}
