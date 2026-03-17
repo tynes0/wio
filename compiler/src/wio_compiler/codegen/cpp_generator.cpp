@@ -28,6 +28,7 @@ namespace wio::codegen
         header_ << "#include <string>\n";
         header_ << "#include <vector>\n";
         header_ << "#include <array>\n";
+        header_ << "#include <format>\n";
         header_ << "#include <iostream>\n"; // todo: remove
         header_ << "#include <exception.h>\n";
         header_ << '\n';
@@ -226,6 +227,21 @@ namespace wio::codegen
 
     void CppGenerator::visit(Identifier& node)
     {
+        if (auto sym = node.referencedSymbol.Lock())
+        {
+            if (sym->kind == sema::SymbolKind::Namespace && node.token.value == "std")
+            {
+                emit("wio::runtime");
+                return;
+            }
+            
+            if (sym->flags.get_isStd() && sym->kind == sema::SymbolKind::Function)
+            {
+                emit("b" + node.token.value);
+                return;
+            }
+        }
+
         emit(node.token.value);
     }
 
@@ -311,26 +327,65 @@ namespace wio::codegen
     
     void CppGenerator::visit(InterpolatedStringLiteral& node)
     {
+        if (node.parts.empty())
+        {
+            emit("\"\"");
+            return;
+        }
+
+        std::string formatString;
+        std::vector<Ref<Expression>> arguments;
+
         for (auto& part : node.parts)
         {
-            // Todo: use to string in here 
-            part->accept(*this);
+            if (auto strLiteral = part.As<StringLiteral>(); strLiteral) 
+            {
+                formatString += strLiteral->token.value;
+            }
+            else 
+            {
+                formatString += "{}";
+                arguments.push_back(part);
+            }
         }
+
+        emit("std::format(\"" + formatString + "\"");
+
+        for (auto& arg : arguments)
+        {
+            emit(", ");
+            arg->accept(*this);
+        }
+    
+        emit(")");
     }
+    
     void CppGenerator::visit(CharLiteral& node)
     {
         emit("\'" + node.token.value + "\'");
     }
+    
     void CppGenerator::visit(ByteLiteral& node)
     {
-        // TODO: Impl
-        WIO_UNUSED(node);
+        emit("static_cast<uint8_t>(" + node.token.value + ")");
     }
     
     void CppGenerator::visit(DurationLiteral& node)
     {
-        // TODO: Impl
-        WIO_UNUSED(node);
+        std::string valStr = node.token.value; 
+        double multiplier = 1.0;
+        std::string numPart;
+    
+        if (valStr.ends_with("ms"))      { multiplier = 0.001;       numPart = valStr.substr(0, valStr.size() - 2); }
+        else if (valStr.ends_with("us")) { multiplier = 0.000001;    numPart = valStr.substr(0, valStr.size() - 2); }
+        else if (valStr.ends_with("ns")) { multiplier = 0.000000001; numPart = valStr.substr(0, valStr.size() - 2); }
+        else if (valStr.ends_with("s"))  { multiplier = 1.0;         numPart = valStr.substr(0, valStr.size() - 1); }
+        else if (valStr.ends_with("m"))  { multiplier = 60.0;        numPart = valStr.substr(0, valStr.size() - 1); }
+        else if (valStr.ends_with("h"))  { multiplier = 3600.0;      numPart = valStr.substr(0, valStr.size() - 1); }
+        else { numPart = valStr; }
+
+        double value = std::stod(numPart) * multiplier;
+        emit(std::to_string(value) + "f");
     }
     
     void CppGenerator::visit(ArrayLiteral& node)
@@ -390,7 +445,30 @@ namespace wio::codegen
     void CppGenerator::visit(MemberAccessExpression& node)
     {
         node.object->accept(*this);
-        emit("."); // Todo: sometimes we need to use ::
+    
+        std::string op = ".";
+    
+        if (auto objSym = node.object->referencedSymbol.Lock())
+        {
+            if (objSym->kind == sema::SymbolKind::Namespace)
+                op = "::";
+        }
+    
+        if (op == ".") 
+        {
+            if (auto objType = node.object->refType.Lock())
+            {
+                auto baseType = objType;
+                while (baseType && baseType->kind() == sema::TypeKind::Alias)
+                    baseType = baseType.AsFast<sema::AliasType>()->aliasedType;
+            
+                if (baseType && baseType->kind() == sema::TypeKind::Reference)
+                    op = "->";
+            }
+        }
+
+        emit(op);
+    
         node.member->accept(*this);
     }
     
@@ -402,7 +480,20 @@ namespace wio::codegen
 
     void CppGenerator::visit(UseStatement& node)
     {
-        WIO_UNUSED(node);
+        if (node.isStdLib)
+        {
+            if (node.modulePath == "io")
+            {
+                header_ << "#include \"io.h\"\n";
+            }
+        }
+        else
+        {
+            // Kullanıcı tanımlı bir modül ise (Örn: use "my_lib";)
+            // İleride Wio'nun çoklu dosya derleme (multi-file compilation) sistemini 
+            // nasıl kurduğuna bağlı olarak uzantıyı ayarlayabilirsin (.h, .hpp veya .wio.h)
+            header_ << "#include \"" << node.modulePath << ".h\"\n";
+        }
     }
 
     void CppGenerator::visit(AttributeStatement& node)

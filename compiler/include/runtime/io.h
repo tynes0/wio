@@ -12,7 +12,7 @@
 // h -> helper
 // b -> built-in
 
-namespace wio::runtime
+namespace wio::runtime::io
 {
     inline bool hWriteFileBase(FILE* file, const std::string& output)
     {

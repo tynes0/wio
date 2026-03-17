@@ -1,5 +1,6 @@
 ﻿#include "wio/ast/ast.h"
 #include "wio/sema/type.h"
+#include "wio/sema/symbol.h"
 
 namespace wio
 {

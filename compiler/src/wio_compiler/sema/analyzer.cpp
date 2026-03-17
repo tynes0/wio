@@ -290,8 +290,7 @@ namespace wio::sema
     
     void SemanticAnalyzer::visit(DurationLiteral& node)
     {
-        WIO_UNUSED(node);
-        // Todo: implement
+        node.refType = Compiler::get().getTypeContext().getF32();
     }
     
     void SemanticAnalyzer::visit(ArrayLiteral& node)
@@ -387,67 +386,108 @@ namespace wio::sema
         node.refType = arrType->elementType;
     }
     
-    void SemanticAnalyzer::visit(MemberAccessExpression& node)
-    {
+void SemanticAnalyzer::visit(MemberAccessExpression& node)
+{
         node.object->accept(*this);
-    
+
         Ref<Symbol> leftSymbol = node.object->referencedSymbol.Lock();
         Ref<Type> leftType = nullptr;
         Ref<Symbol> foundMember = nullptr;
-            
+        
         if (auto lockedType = node.object->refType.Lock(); lockedType)
         {
-            if (!lockedType || lockedType->isUnknown())
+            bool isNamespace = (leftSymbol && leftSymbol->kind == SymbolKind::Namespace);
+
+            if (!isNamespace && (!lockedType || lockedType->isUnknown()))
             {
                 node.refType = Compiler::get().getTypeContext().getUnknown();
                 return;
             }
             leftType = lockedType;
         }
-            
-    
-        if (leftSymbol && leftSymbol->kind == SymbolKind::Namespace)
+
+    // 1. Durum: Namespace  (Örn: std::io)
+    if (leftSymbol && leftSymbol->kind == SymbolKind::Namespace)
+    {
+        if (!leftSymbol->innerScope)
         {
-            if (!leftSymbol->innerScope)
-            {
-                WIO_LOG_ADD_ERROR(node.location(), "The namespace contents are inaccessible. (No Scope): {}", leftSymbol->name);
-                return;
-            }
-    
-            foundMember = leftSymbol->innerScope->resolve(node.member->token.value);
+            WIO_LOG_ADD_ERROR(node.location(), "The namespace contents are inaccessible. (No Scope): {}", leftSymbol->name);
+            return;
         }
-        
-        else if (leftType->kind() == TypeKind::Struct)
+        foundMember = leftSymbol->innerScope->resolve(node.member->token.value);
+    }
+    else 
+    {
+        // YARDIMCI ADIM: Tipimiz bir Alias (Takma ad) ise asıl tipe inelim.
+        // Örn: type MyStruct = RealStruct; yapılmış olabilir.
+        Ref<Type> baseType = leftType;
+        while (baseType && baseType->kind() == TypeKind::Alias)
         {
-            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast)
-            auto structType = leftType.AsFast<StructType>();
-            
+            baseType = baseType.AsFast<AliasType>()->aliasedType;
+        }
+
+        // 2. Durum: Doğrudan Struct Erişimi (Örn: obj.val)
+        if (baseType->kind() == TypeKind::Struct)
+        {
+            // NOT: İstersen dil kurallarına göre burada operatör kontrolü yapabilirsin.
+            // if (node.opType != TokenType::opDot) { Hata: "Struct'lar için '.' kullanmalısın" }
+
+            auto structType = baseType.AsFast<StructType>();
             if (structType->structScope)
                  foundMember = structType->structScope->resolve(node.member->token.value);
         }
-        // --- DURUM C: Pointer/Referans Erişimi (ptr->val veya ref.val) ---
-        else if (leftType->kind() == TypeKind::Reference)
+        // 3. Durum: Pointer/Referans Erişimi (Örn: ptr->val veya ref.val)
+        else if (baseType->kind() == TypeKind::Reference)
         {
-            // TODO:
-            // Önce referansın gösterdiği tipi bul, sonra onun içindekilere bak...
-            // (Burası ileriki aşama)
-        }
-        if (!foundMember)
-        {
-            WIO_LOG_ADD_ERROR(node.member->location(), "Member not found: '{}'", node.member->token.value);
-            node.refType = Compiler::get().getTypeContext().getUnknown();
-            return;
-        }
-    
-        node.referencedSymbol = foundMember;
-        node.refType = foundMember->type;
-        
-        if (auto memberId = node.member.Get(); memberId)
-        {
-            memberId->referencedSymbol = foundMember;
-            memberId->refType = foundMember->type;
+            // NOT: Yine diline özel operatör kuralı koyabilirsin. 
+            // C++ gibi yapacaksan: if (node.opType != TokenType::opArrow) { Hata ver }
+
+            // Referansın tuttuğu asıl tipe (referredType) iniyoruz.
+            Ref<Type> referredType = baseType.AsFast<ReferenceType>()->referredType;
+
+            // Referans edilen tip de bir Alias olabilir, asıl tipe inene kadar onu da soyalım
+            while (referredType && referredType->kind() == TypeKind::Alias)
+            {
+                referredType = referredType.AsFast<AliasType>()->aliasedType;
+            }
+
+            // Nihayet referansın ucundaki tip bir struct ise:
+            if (referredType && referredType->kind() == TypeKind::Struct)
+            {
+                auto structType = referredType.AsFast<StructType>();
+                if (structType->structScope)
+                     foundMember = structType->structScope->resolve(node.member->token.value);
+            }
+            else
+            {
+                WIO_LOG_ADD_ERROR(node.member->location(), 
+                    "Cannot access member '{}'. Reference points to '{}', which is not a struct.", 
+                    node.member->token.value, 
+                    referredType ? referredType->toString() : "Unknown");
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
         }
     }
+
+    // Üye bulunamadıysa hata ver ve bitir
+    if (!foundMember)
+    {
+        WIO_LOG_ADD_ERROR(node.member->location(), "Member not found: '{}' in type '{}'", node.member->token.value, leftType->toString());
+        node.refType = Compiler::get().getTypeContext().getUnknown();
+        return;
+    }
+
+    // Bulunan üyeyi ve tipini AST düğümlerine (node) kaydet
+    node.referencedSymbol = foundMember;
+    node.refType = foundMember->type;
+    
+    if (auto memberId = node.member.Get(); memberId)
+    {
+        memberId->referencedSymbol = foundMember;
+        memberId->refType = foundMember->type;
+    }
+}
 
     void SemanticAnalyzer::visit(FunctionCallExpression& node)
     {
@@ -690,13 +730,55 @@ namespace wio::sema
     }
 
     void SemanticAnalyzer::visit(UseStatement& node)
+{
+    auto getOrCreateNamespace = [&](Ref<Scope> targetScope, const std::string& name) -> Ref<Symbol>
     {
-        if (node.isStdLib)
+        if (auto existing = targetScope->resolve(name)) {
+            if (existing->kind == SymbolKind::Namespace)
+                return existing;
+            
+            WIO_LOG_ADD_ERROR(node.location(), "Symbol '{}' already exists and is not a namespace.", name);
+            return nullptr;
+        }
+        
+        auto nsScope = Ref<Scope>::Create(targetScope, ScopeKind::Global); 
+        
+        auto nsSymbol = createSymbol(name, Compiler::get().getTypeContext().getUnknown(), SymbolKind::Namespace, node.location());
+        nsSymbol->innerScope = nsScope;
+        
+        targetScope->define(name, nsSymbol);
+        return nsSymbol;
+    };
+
+    if (node.isStdLib) // use std::io;
+    {
+        Ref<Symbol> stdNs = getOrCreateNamespace(currentScope_, "std");
+        if (!stdNs) return;
+
+        if (node.modulePath == "io")
         {
-            if (node.modulePath == "io")
-                runtime::Loader<runtime::IOLoader>::Load(currentScope_, symbols_);
+            Ref<Symbol> ioNs = getOrCreateNamespace(stdNs->innerScope, "io");
+            if (!ioNs) return;
+
+            runtime::Loader<runtime::IOLoader>::Load(ioNs->innerScope, symbols_);
+            
+            // OPSİYONEL KISAYOL: Wio dilinde kullanıcılar "std::io::print()" yazmak yerine
+            // "io::print()" de yazabilsin diye, 'io' namespace'inin bir referansını (alias) 
+            // bulunduğumuz scope'a da ekleyebiliriz:
+            currentScope_->define(node.moduleName, ioNs); 
+        }
+        else
+        {
+            WIO_LOG_ADD_ERROR(node.location(), "Unknown standard library module: 'std::{}'", node.modulePath);
         }
     }
+    else
+    {
+        // Todo: Kullanıcı modüllerini (Örn: use "math.wio";) dosyadan okuyup AST'ye çevirme 
+        // ve Semantic Analyzer'dan geçirme işlemleri burada olacak.
+        WIO_LOG_ADD_ERROR(node.location(), "User-defined module loading is not implemented yet.");
+    }
+}
 
     void SemanticAnalyzer::visit(AttributeStatement& node)
     {

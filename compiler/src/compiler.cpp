@@ -74,6 +74,13 @@ namespace wio
                     .Flag()
                     .SetDescription("Treat all warnings as errors.")
             )
+            .Add(
+                Argonaut::Argument("RUN")
+                    .AddAlias("-r")
+                    .AddAlias("--run")
+                    .Flag()
+                    .SetDescription("Compiles and then runs the output executable.")
+            )
             .AutoHelp()
             .AutoVersion()
             .SetVersion("0.0.1-alpha");
@@ -138,6 +145,7 @@ namespace wio
             DEFINE_FLAG_VALUE("DRY-RUN", DryRun);
             DEFINE_FLAG_VALUE("NO-BUILTIN", NoBuiltin);
             DEFINE_FLAG_VALUE("WARN-AS-ERROR", WarnAsError);
+            DEFINE_FLAG_VALUE("RUN", Run);
             
 #undef DEFINE_FLAG_VALUE
         }
@@ -217,7 +225,28 @@ namespace wio
             int exitCode = std::system(cmd.str().c_str());
             
             if (exitCode != 0)
+            {
                 WIO_LOG_FATAL("Backend compilation failed with code: {}", exitCode);
+                return;
+            }
+
+            if (gAppData.flags.get_Run())
+            {
+                WIO_LOG_INFO("Running {} ...", exePath.filename().string());
+                
+                std::stringstream runCmd;
+                
+                std::filesystem::path finalExePath = std::filesystem::absolute(exePath).make_preferred();
+                
+                runCmd << "\"" << finalExePath.string() << "\"";
+                
+                // NOLINTNEXTLINE(concurrency-mt-unsafe)
+                int runExitCode = std::system(runCmd.str().c_str());
+                if (runExitCode != 0)
+                {
+                    WIO_LOG_WARN("Program exited with code: {}", runExitCode);
+                }
+            }
 #endif
         }
         catch (const std::exception& e)

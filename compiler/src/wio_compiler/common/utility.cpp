@@ -289,8 +289,8 @@ namespace wio::common
         if (wioTypeStr == "isize") return "ptrdiff_t";
         if (wioTypeStr == "byte") return "unsigned char";
         if (wioTypeStr == "bool") return "bool";
-        if (wioTypeStr == "string") return "wio::stringT";
-        if (wioTypeStr == "duration") return "wio::durationT";
+        if (wioTypeStr == "string") return "wio::String";
+        if (wioTypeStr == "duration") return "wio::Duration";
         return {};
     }
 }

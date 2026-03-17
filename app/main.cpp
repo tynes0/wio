@@ -20,7 +20,7 @@ int main(int argc, char* argv[])
     WIO_UNUSED(argc);
     WIO_UNUSED(argv);
 
-    const char* args[] = { "", "Debug/tests/test1.wio" };
+    const char* args[] = { "", "-r", "Debug/tests/test1.wio" };
 
     wio::Compiler::get().loadArgs(sizeof(args) / sizeof(const char*), const_cast<char**>(args));
     wio::Compiler::get().compile();

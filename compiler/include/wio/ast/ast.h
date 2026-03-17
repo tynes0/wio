@@ -297,6 +297,17 @@ namespace wio
         ~ByteLiteral() override;
     };
 
+    struct DurationLiteral : Expression
+    {
+        WIO_EXP_NODE_BODY(DurationLiteral)
+        
+        Token token;
+        
+        explicit DurationLiteral(Token _token, common::Location _loc = common::Location::invalid());
+        ~DurationLiteral() override;
+        
+    };
+
     struct ArrayLiteral : Expression
     {
         WIO_EXP_NODE_BODY(ArrayLiteral)

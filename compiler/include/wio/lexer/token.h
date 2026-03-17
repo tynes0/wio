@@ -28,6 +28,7 @@ namespace wio
       stringLiteral,
       interpolatedStringLiteral,
       charLiteral,
+      durationLiteral,
    
       /* ===============================
          Keywords – core

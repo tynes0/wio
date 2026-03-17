@@ -94,7 +94,7 @@ namespace wio::sema
             }
             else if (other->kind() == TypeKind::Alias)
             {
-                t2 = other.AsFast<const AliasType>()->aliasedType.Get();
+                t2 = other.AsFast<AliasType>()->aliasedType.Get();
             }
             else if (other->kind() == TypeKind::Null)
             {

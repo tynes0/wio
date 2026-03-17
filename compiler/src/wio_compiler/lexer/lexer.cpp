@@ -284,45 +284,29 @@ namespace wio
             if (matchOneOf("bB"))
             {
                 result += advance();
-                
                 if (!matchOneOf("01"))
                     throw InvalidNumberError("Invalid binary number!", location_);
 
                 while (matchOneOf("01"))
                     result += advance();
-
-                if (std::isalnum((upeek())))
-                    throw InvalidNumberError("Invalid character in binary number!", location_);
             }
             else if (matchOneOf("xX"))
             {
                 result += advance();
-                
                 if (!std::isxdigit(upeek()))
                     throw InvalidNumberError("Invalid hexadecimal number!", location_);
 
                 while (std::isxdigit(upeek()))
                     result += advance();
-
-                if (std::isalnum(peek()))
-                    throw InvalidNumberError("Invalid character in hexadecimal number!", location_);
             }
             else if (matchOneOf("oO"))
             {
                 result += advance();
-                
                 if (!matchOneOf("01234567"))
                     throw InvalidNumberError("Invalid octal number!", location_);
 
                 while (matchOneOf("01234567"))
                     result += advance();
-
-                if (std::isalnum(upeek()))
-                    throw InvalidNumberError("Invalid character in octal number!", location_);
-            }
-            else if (std::isalpha(upeek()))
-            {
-                throw InvalidNumberError("Invalid character in number!", location_);
             }
         }
 
@@ -354,12 +338,30 @@ namespace wio
                 result += advance();
         }
 
-        if (std::isalpha(upeek()))
-            throw InvalidNumberError("Invalid character in number!", location_);
-            
+        std::string suffix;
+        while (std::isalnum(upeek()) || match('_'))
+        {
+            suffix += advance();
+        }
+        
+        result += suffix;
+
+        TokenType type = isFloat ? TokenType::floatLiteral : TokenType::integerLiteral;
+
+        if (!suffix.empty())
+        {
+            if (suffix == "s" || suffix == "ms" || suffix == "us" || suffix == "ns" || suffix == "m" || suffix == "h")
+            {
+                type = TokenType::durationLiteral;
+            }
+            else if (suffix == "f32" || suffix == "f64")
+            {
+                type = TokenType::floatLiteral;
+            }
+        }
 
         return {
-            .type = isFloat ? TokenType::floatLiteral : TokenType::integerLiteral,
+            .type = type,
             .value = result,
             .loc = start
         };

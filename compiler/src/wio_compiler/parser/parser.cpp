@@ -353,7 +353,7 @@ namespace wio
         return makeNodePtr<DictionaryLiteral>(std::move(pairs), startLoc);
     }
 
-NodePtr<TypeSpecifier> Parser::parseType()
+    NodePtr<TypeSpecifier> Parser::parseType()
     {
         if (match(TokenType::leftBracket, true))
         {
