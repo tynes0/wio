@@ -10,6 +10,7 @@ namespace wio
     {
         [[nodiscard]] bool isNewline(char c);
         [[nodiscard]] char getEscapeSeq(char ch, Location loc = Location());
+        [[nodiscard]] std::string wioStringToEscapedCppString(const std::string& str);
         [[nodiscard]] IntegerResult getInteger(const std::string& data);
         [[nodiscard]] FloatResult getFloat(const std::string& data);
         [[nodiscard]] std::string wioPrimitiveTypeToCppType(const std::string& wioTypeStr);

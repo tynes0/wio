@@ -12,6 +12,7 @@
 #include "ast_visitor.h"
 
 #include <concepts>
+#include <frenum.h>
 
 #define WIO_NODE_BODY_1(K)                                      \
     static constexpr NodeKind KIND = NodeKind::K;               \
@@ -185,7 +186,10 @@ namespace wio
         std::vector<NodePtrUnchecked<TypeSpecifier>> generics; // Generic parameters (Ex: <Texture>)
         size_t size = 0;
 
-        TypeSpecifier(Token _name, std::vector<NodePtrUnchecked<TypeSpecifier>> _generics, size_t size, common::Location _loc);
+        bool isMut = false;
+        bool isRef = false;
+
+        TypeSpecifier(Token _name, std::vector<NodePtrUnchecked<TypeSpecifier>> _generics, size_t size, bool _isMut, bool _isRef, common::Location _loc);
         ~TypeSpecifier() override;
     };
 

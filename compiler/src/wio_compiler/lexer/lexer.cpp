@@ -116,7 +116,7 @@ namespace wio
 
         for (const auto& token : tokens_)
         {
-            const std::string typeStr = frenum::to_string(token.type);
+            const std::string typeStr{tokenTypeToString(token.type)};
 
             ss << "Token: " << typeStr;
             if (typeStr.size() < 9)

@@ -287,9 +287,12 @@ namespace wio::sema
 
     std::string ReferenceType::toCppString() const
     {
+        std::string baseTypeStr = referredType->toCppString();
+    
         if (isMutable)
-            return referredType->toCppString() + "*";
-        return "const " + referredType->toCppString() + "*";
+            return baseTypeStr + "*";
+        else
+            return "const " + baseTypeStr + "*";
     }
 
     ArrayType::ArrayType(Ref<Type> elementType, ArrayKind arrayKind, size_t size)

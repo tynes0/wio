@@ -28,8 +28,8 @@ namespace wio
 
     Program::~Program() = default;
 
-    TypeSpecifier::TypeSpecifier(Token _name, std::vector<NodePtrUnchecked<TypeSpecifier>> _generics, size_t size, common::Location _loc)
-        : ASTNode(_loc), name(std::move(_name)), generics(std::move(_generics)), size(size)
+    TypeSpecifier::TypeSpecifier(Token _name, std::vector<NodePtrUnchecked<TypeSpecifier>> _generics, size_t size, bool _isMut, bool _isRef, common::Location _loc)
+        : ASTNode(_loc), name(std::move(_name)), generics(std::move(_generics)), size(size), isMut(_isMut), isRef(_isRef)
     {
     }
 
@@ -104,6 +104,13 @@ namespace wio
     }
 
     ByteLiteral::~ByteLiteral() = default;
+
+    DurationLiteral::DurationLiteral(Token _token, common::Location _loc)
+        : Expression(_loc.isValid() ? _loc : _token.loc), token(std::move(_token))
+    {
+    }
+
+    DurationLiteral::~DurationLiteral() = default;
 
     ArrayLiteral::ArrayLiteral(std::vector<NodePtr<Expression>> _elements, common::Location _loc)
         : Expression(_loc), elements(std::move(_elements))

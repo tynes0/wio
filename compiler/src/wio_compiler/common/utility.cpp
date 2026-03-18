@@ -36,6 +36,29 @@ namespace wio::common
         throw InvalidStringError(("Invalid escape sequence: \\" + std::string(1, ch)).c_str());
     }
 
+    std::string wioStringToEscapedCppString(const std::string& str)
+    {
+        std::string result;
+        for (char c : str)
+        {
+            switch (c)
+            {
+            case '\n': result += "\\n"; break;
+            case '\r': result += "\\r"; break;
+            case '\a': result += "\\a"; break;
+            case '\b': result += "\\b"; break;
+            case '\f': result += "\\f"; break;
+            case '\v': result += "\\v"; break;
+            case '\t': result += "\\t"; break;
+            case '\'': result += "\\\'"; break;
+            case '\"': result += "\\\""; break;
+            case '\\': result += "\\\\"; break;
+            default:   result += c; break;
+            }
+        }
+        return result;
+    }
+
     IntegerResult getInteger(const std::string& data)
     {
         IntegerResult result;

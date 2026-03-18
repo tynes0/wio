@@ -108,7 +108,6 @@ namespace wio::sema
     {
         Ref<Type> type = resolvePrimitiveType(node.name.value);
 
-        // Todo: If it's not primitive (it might become a struct or enum later), search for it in the symbol table.
         if (!type)
         {
             if (node.name.type == TokenType::StaticArray)
@@ -120,6 +119,12 @@ namespace wio::sema
             {
                 node.generics[0]->accept(*this);
                 type = Compiler::get().getTypeContext().getArrayType(node.generics[0]->refType.Lock(), ArrayType::ArrayKind::Dynamic);
+            }
+            else if (node.name.type == TokenType::kwRef || node.name.type == TokenType::kwView)
+            {
+                node.generics[0]->accept(*this);
+                bool isMut = (node.name.type == TokenType::kwRef); 
+                type = Compiler::get().getTypeContext().getReferenceType(node.generics[0]->refType.Lock(), isMut);
             }
         }
 
@@ -212,7 +217,44 @@ namespace wio::sema
         Ref<Type> lhsType = node.left->refType.Lock();
         Ref<Type> rhsType = node.right->refType.Lock();
 
-        if (lhsType && rhsType && !lhsType->isCompatibleWith(rhsType))
+        bool isCompatible = false;
+        bool isAutoDeref = false;
+
+        if (lhsType && rhsType)
+        {
+            isCompatible = lhsType->isCompatibleWith(rhsType);
+
+            if (!isCompatible && lhsType->kind() == TypeKind::Reference)
+            {
+                Ref<Type> currentRef = lhsType;
+                bool canMutate = true;
+
+                while (currentRef && currentRef->kind() == TypeKind::Reference)
+                {
+                    auto rType = currentRef.AsFast<ReferenceType>();
+                    
+                    if (!rType->isMutable) canMutate = false;
+                    
+                    if (rType->referredType->isCompatibleWith(rhsType))
+                    {
+                        isAutoDeref = true;
+                        
+                        if (!canMutate)
+                        {
+                            WIO_LOG_ADD_ERROR(node.op.loc, "Cannot modify data through a read-only reference (view).");
+                        }
+                        else
+                        {
+                            isCompatible = true;
+                        }
+                        break;
+                    }
+                    currentRef = rType->referredType;
+                }
+            }
+        }
+
+        if (lhsType && rhsType && !isCompatible)
         {
             WIO_LOG_ADD_ERROR(node.op.loc,
                 "Type mismatch in assignment: Cannot assign '{}' to '{}'.",
@@ -221,27 +263,21 @@ namespace wio::sema
             );
         }
 
-        if (auto referSym = node.left->referencedSymbol.Lock(); referSym)
+        if (!isAutoDeref)
         {
-            if (!referSym->flags.get_isMutable())
+            if (auto referSym = node.left->referencedSymbol.Lock(); referSym)
             {
-                WIO_LOG_ADD_ERROR(
-                    node.op.loc,
-                    "Cannot assign to immutable variable '{0}'. Hint: Declare it as 'mut {0}'.",
-                    referSym->name
-                );
+                if (!referSym->flags.get_isMutable())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.op.loc,
+                        "Cannot assign to immutable variable '{0}'. Hint: Declare it as 'mut {0}'.",
+                        referSym->name
+                    );
+                }
             }
         }
-        else
-        {
-            // If the left side is not a variable (e.g., 5 = x;)
-            // Parser usually catches this, but it's good to be sure.
-            // (This will be expanded on later for array access or member access cases)
-        }
 
-        // The result of an assignment expression is usually void or the assigned value.
-        // Todo: If we want to support C-style (x = y = 5) (Yes we want.), we should return rhsType.
-        // Let's say void for now; we'll change it if we want to make it expression-based.
         node.refType = Compiler::get().getTypeContext().getVoid(); 
     }
     
@@ -533,23 +569,15 @@ void SemanticAnalyzer::visit(MemberAccessExpression& node)
     void SemanticAnalyzer::visit(RefExpression& node)
     {
         node.operand->accept(*this);
-        bool isMut = node.isMut;
         
-        if (isMut)
-        {
-            if (auto lockedSym = node.operand->referencedSymbol.Lock(); lockedSym)
-            {
-                if (!lockedSym->flags.get_isMutable())
-                {
-                    WIO_LOG_ADD_ERROR(node.location(), "Cannot take mutable reference of immutable variable.");
-                }
-            }
-            else
-            {
-                WIO_LOG_ADD_ERROR(node.location(), "Cannot take mutable reference of a temporary value.");
-            }
-        }
-        
+        bool isMut; 
+
+        if (auto lockedSym = node.operand->referencedSymbol.Lock(); lockedSym)
+            isMut = lockedSym->flags.get_isMutable();
+        else
+            isMut = false; 
+
+        node.isMut = isMut;
         node.refType = Compiler::get().getTypeContext().getReferenceType(node.operand->refType.Lock(), isMut);
     }
     

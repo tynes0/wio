@@ -119,8 +119,8 @@ namespace wio
         {
             std::string formattedErrMsg = formatString(
              "Unexpected token: expected {0}, but got {1}!",
-                 frenum::to_string_view(type),
-                 frenum::to_string_view(current.type)
+                 tokenTypeToString(type),
+                 tokenTypeToString(current.type)
              );
          
             utError(formattedErrMsg, current.loc);
@@ -128,9 +128,9 @@ namespace wio
 
         std::string formattedErrMsg = formatString(
             "Unexpected token: expected {} with value of {}, but got {} with value of {}.",
-                frenum::to_string_view(type),
+                tokenTypeToString(type),
                 value,
-                frenum::to_string_view(current.type),
+                tokenTypeToString(current.type),
                 current.value
             );
         
@@ -152,9 +152,8 @@ namespace wio
             
             if (op.type == TokenType::kwRef)
             {
-                bool isMut = match(TokenType::kwMut, true);
-                NodePtr<Expression> operand = parseExpression(getPrecedence(TokenType::kwRef)); 
-                left = makeNodePtr<RefExpression>(isMut, std::move(operand), op.loc);
+                NodePtr<Expression> operand = parseExpression(getPrecedence(TokenType::kwRef));
+                left = makeNodePtr<RefExpression>(false, std::move(operand), op.loc);
             }
             else
             {
@@ -251,6 +250,12 @@ namespace wio
         if (match(TokenType::kwNull, true))
             return makeNodePtr<NullExpression>(peek(-1).loc);
 
+        if (match(TokenType::durationLiteral))
+            return makeNodePtr<DurationLiteral>(peek(-1));
+        
+        if (match(TokenType::byteLiteral))
+            return makeNodePtr<ByteLiteral>(peek(-1));
+
         if (match(TokenType::leftParen, true))
         {
             NodePtr<Expression> expr = parseExpression();
@@ -316,7 +321,7 @@ namespace wio
         consume(TokenType::leftBracket); // [
 
         std::vector<NodePtr<Expression>> elements;
-
+    
         if (!match(TokenType::rightBracket))
         {
             do
@@ -355,6 +360,29 @@ namespace wio
 
     NodePtr<TypeSpecifier> Parser::parseType()
     {
+        if (match(TokenType::kwRef, true))
+        {
+            Location startLoc = peek(-1).loc;
+            auto innerType = parseType();
+            
+            Token token { .type = TokenType::kwRef, .value = "ref", .loc = startLoc };
+            std::vector<NodePtr<TypeSpecifier>> generics;
+            generics.push_back(std::move(innerType));
+            
+            return makeNodePtr<TypeSpecifier>(std::move(token), std::move(generics), 0, true, true, startLoc);
+        }
+        if (match(TokenType::kwView, true))
+        {
+            Location startLoc = peek(-1).loc;
+            auto innerType = parseType();
+            
+            Token token { .type = TokenType::kwView, .value = "view", .loc = startLoc };
+            std::vector<NodePtr<TypeSpecifier>> generics;
+            generics.push_back(std::move(innerType));
+            
+            return makeNodePtr<TypeSpecifier>(std::move(token), std::move(generics), 0, true, false, startLoc);
+        }
+
         if (match(TokenType::leftBracket, true))
         {
             Location startLoc = peek(-1).loc;
@@ -374,7 +402,7 @@ namespace wio
                 }
             }
             
-            consume(TokenType::rightBracket); // ']'
+            consume(TokenType::rightBracket);
 
             Token arrayToken {
                 .type = TokenType::StaticArray,
@@ -384,12 +412,9 @@ namespace wio
             std::vector<NodePtr<TypeSpecifier>> generics;
             generics.push_back(std::move(innerType));
 
-            return makeNodePtr<TypeSpecifier>(arrayToken, std::move(generics), size, startLoc);
+            return makeNodePtr<TypeSpecifier>(arrayToken, std::move(generics), size, false, false, startLoc);
         }
 
-        // Todo: Case 2: 'const' qualifier
-        // To support cases like "const i32".
-        // We are not saving to AST right now, but we are preventing the parser from giving an error.
         match(TokenType::kwConst, true);
 
         Token typeName = Token::invalid();
@@ -412,7 +437,7 @@ namespace wio
             consume(TokenType::opGreater);
         }
 
-        auto result = makeNodePtr<TypeSpecifier>(std::move(typeName), std::move(generics), 0, startLoc);
+        auto result = makeNodePtr<TypeSpecifier>(std::move(typeName), std::move(generics), 0, false, false, startLoc);
 
         while (match(TokenType::leftBracket, true))
         {
@@ -426,7 +451,7 @@ namespace wio
             std::vector<NodePtr<TypeSpecifier>> args;
             args.push_back(std::move(result));
 
-            result = makeNodePtr<TypeSpecifier>(std::move(DynArrayToken), std::move(args), 0, startLoc);
+            result = makeNodePtr<TypeSpecifier>(std::move(DynArrayToken), std::move(args), 0, false, false, startLoc);
         }
 
         return result;
@@ -695,6 +720,8 @@ namespace wio
         {
             modulePath.append(part);
         });
+
+        consume(TokenType::semicolon);
         
         return makeNodePtr<UseStatement>(std::move(moduleName), std::move(modulePath), isStdLib, startLoc);
     }

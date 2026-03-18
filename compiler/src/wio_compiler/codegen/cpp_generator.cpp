@@ -256,8 +256,35 @@ namespace wio::codegen
     
     void CppGenerator::visit(AssignmentExpression& node)
     {
+        int derefCount = 0;
+
+        auto lhsType = node.left->refType.Lock();
+        auto rhsType = node.right->refType.Lock();
+
+        if (lhsType && rhsType && !lhsType->isCompatibleWith(rhsType))
+        {
+            Ref<sema::Type> current = lhsType;
+        
+            while (current && current->kind() == sema::TypeKind::Reference)
+            {
+                auto rType = current.AsFast<sema::ReferenceType>();
+                derefCount++;
+            
+                if (rType->referredType->isCompatibleWith(rhsType)) {
+                    break;
+                }
+                current = rType->referredType;
+            }
+        }
+
+        for (int i = 0; i < derefCount; ++i) emit("*(");
+    
         node.left->accept(*this);
+    
+        for (int i = 0; i < derefCount; ++i) emit(")");
+
         emit(" " + node.op.value + " "); // =, +=, -= ...
+    
         node.right->accept(*this);
     }
 
@@ -322,7 +349,7 @@ namespace wio::codegen
     
     void CppGenerator::visit(StringLiteral& node)
     {
-        emit("\"" + node.token.value + "\"");
+        emit("\"" + common::wioStringToEscapedCppString(node.token.value) + "\"");
     }
     
     void CppGenerator::visit(InterpolatedStringLiteral& node)
@@ -338,9 +365,9 @@ namespace wio::codegen
 
         for (auto& part : node.parts)
         {
-            if (auto strLiteral = part.As<StringLiteral>(); strLiteral) 
+            if (auto strLiteral = part.As<StringLiteral>()) 
             {
-                formatString += strLiteral->token.value;
+                formatString += common::wioStringToEscapedCppString(strLiteral->token.value);
             }
             else 
             {
@@ -354,7 +381,21 @@ namespace wio::codegen
         for (auto& arg : arguments)
         {
             emit(", ");
+        
+            int derefCount = 0;
+            Ref<sema::Type> currentType = arg->refType.Lock();
+        
+            while (currentType && currentType->kind() == sema::TypeKind::Reference)
+            {
+                derefCount++;
+                currentType = currentType.AsFast<sema::ReferenceType>()->referredType;
+            }
+
+            for (int i = 0; i < derefCount; ++i) emit("*(");
+        
             arg->accept(*this);
+        
+            for (int i = 0; i < derefCount; ++i) emit(")");
         }
     
         emit(")");
@@ -362,7 +403,7 @@ namespace wio::codegen
     
     void CppGenerator::visit(CharLiteral& node)
     {
-        emit("\'" + node.token.value + "\'");
+        emit("\'" + common::wioStringToEscapedCppString(node.token.value) + "\'");
     }
     
     void CppGenerator::visit(ByteLiteral& node)
@@ -489,9 +530,6 @@ namespace wio::codegen
         }
         else
         {
-            // Kullanıcı tanımlı bir modül ise (Örn: use "my_lib";)
-            // İleride Wio'nun çoklu dosya derleme (multi-file compilation) sistemini 
-            // nasıl kurduğuna bağlı olarak uzantıyı ayarlayabilirsin (.h, .hpp veya .wio.h)
             header_ << "#include \"" << node.modulePath << ".h\"\n";
         }
     }

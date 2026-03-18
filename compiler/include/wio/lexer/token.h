@@ -3,15 +3,12 @@
 #include <string_view>
 #include <unordered_map>
 
-#include <frenum.h>
-#include <ranges>
-
 #include "../common/location.h"
 
 namespace wio
 {
-   FrenumClassInNamespace(wio, TokenType, uint8_t,
-      
+   enum class TokenType :  uint8_t
+   {
       /* ===============================
          Special
          =============================== */
@@ -29,6 +26,7 @@ namespace wio
       interpolatedStringLiteral,
       charLiteral,
       durationLiteral,
+      byteLiteral,
    
       /* ===============================
          Keywords – core
@@ -39,6 +37,7 @@ namespace wio
       kwConst,
       kwType,
       kwRef,
+      kwView,
       kwEnum,
       kwFlagset,
 
@@ -226,7 +225,7 @@ namespace wio
       dot,               // .
       semicolon,         // ;
       newline            // statement boundary
-   );
+   };
 
    /* ===============================
    Keywords
@@ -237,6 +236,7 @@ namespace wio
       { "mut",       TokenType::kwMut },
       { "const",     TokenType::kwConst },
       { "ref",       TokenType::kwRef },
+      { "view",      TokenType::kwView },
       { "enum",      TokenType::kwEnum },
       { "flagset",   TokenType::kwFlagset },
       
@@ -375,6 +375,8 @@ namespace wio
        { '@', TokenType::atSign },
        { '$', TokenType::dollar },
    };
+
+   std::string_view tokenTypeToString(TokenType type);
 
    struct Token
    {
