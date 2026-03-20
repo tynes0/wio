@@ -358,6 +358,16 @@ namespace wio
             {
                 type = TokenType::floatLiteral;
             }
+            else if (suffix == "i8" || suffix == "u8" || suffix == "i16" || suffix == "u16" || 
+                     suffix == "i32" || suffix == "u32" || suffix == "i64" || suffix == "u64" || 
+                     suffix == "isz" || suffix == "usz")
+            {
+                if (isFloat)
+                {
+                    throw InvalidNumberError("Float literal cannot have an integer suffix!", location_);
+                }
+                type = TokenType::integerLiteral;
+            }
             else
             {
                 throw InvalidNumberError(("Unknown literal suffix: '" + suffix + "'").c_str(), location_);

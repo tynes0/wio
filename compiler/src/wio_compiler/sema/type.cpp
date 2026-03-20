@@ -1,6 +1,7 @@
 ﻿#include "wio/sema/type.h"
 
 #include "compiler.h"
+#include "wio/codegen/mangler.h"
 #include "wio/sema/symbol.h"
 #include "wio/sema/scope.h"
 
@@ -366,7 +367,7 @@ namespace wio::sema
 
     std::string StructType::toCppString() const
     {
-        return name;
+        return codegen::Mangler::mangleStruct(name);
     }
 
     AliasType::AliasType(std::string name, Ref<Type> aliasedType)

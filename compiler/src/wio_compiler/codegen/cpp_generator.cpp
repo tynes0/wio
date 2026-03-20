@@ -116,14 +116,12 @@ namespace wio::codegen
 
     void CppGenerator::visit(FunctionDeclaration& node)
     {
-        std::string returnType = node.name->refType.Lock()
-        ? toCppType(node.name->refType.Lock().AsFast<sema::FunctionType>()->returnType)
-        : "void";
-        
+        auto sym = node.name->referencedSymbol.Lock();
+        auto funcType = sym->type.AsFast<sema::FunctionType>();
+
+        std::string returnType = funcType->returnType ? toCppType(funcType->returnType) : "void";
         std::string funcName = node.name->token.value;
 
-        // Todo: Mangling will be added here later: Mangler::mangle(...)mangle
-        
         if (funcName == "Entry")
         { 
             emitMain(node);
@@ -131,7 +129,10 @@ namespace wio::codegen
         }
 
         emitLine();
-        emit(returnType + " " + funcName + "(");
+        emit(returnType + " ");
+
+        std::string mangledName = Mangler::mangleFunction(funcName, funcType->paramTypes);
+        emit(mangledName + "(");
 
         for (size_t i = 0; i < node.parameters.size(); ++i)
         {
@@ -166,15 +167,29 @@ namespace wio::codegen
 
     void CppGenerator::visit(VariableDeclaration& node)
     {
+        auto sym = node.name->referencedSymbol.Lock();
+
         std::string typeStr = toCppType(node.name->refType.Lock());
         std::string prefix;
 
         if (node.mutability == Mutability::Const)
+            prefix = "constexpr ";
+        else if (node.mutability == Mutability::Immutable)
             prefix = "const ";
 
         for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
 
-        buffer_ << prefix << typeStr << " " << node.name->token.value;
+        buffer_ << prefix << typeStr << " ";
+
+        std::string varName = node.name->token.value;
+        if (sym && sym->innerScope && sym->innerScope->getKind() == sema::ScopeKind::Global)
+        {
+            buffer_ << Mangler::mangleGlobalVar(varName);
+        }
+        else
+        {
+            buffer_ << varName;
+        }
 
         if (node.initializer)
         {
@@ -270,6 +285,19 @@ namespace wio::codegen
             if (sym->flags.get_isStd() && (sym->kind == sema::SymbolKind::Function || sym->kind == sema::SymbolKind::FunctionGroup))
             {
                 emit("b" + node.token.value);
+                return;
+            }
+
+            if (sym->kind == sema::SymbolKind::Function)
+            {
+                auto funcType = sym->type.AsFast<sema::FunctionType>();
+                emit(Mangler::mangleFunction(sym->name, funcType->paramTypes));
+                return;
+            }
+            
+            if (sym->kind == sema::SymbolKind::Variable && sym->innerScope && sym->innerScope->getKind() == sema::ScopeKind::Global)
+            {
+                emit(Mangler::mangleGlobalVar(sym->name));
                 return;
             }
         }

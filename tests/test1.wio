@@ -1,5 +1,88 @@
 ﻿use std::io;
 
-fn main() -> i32 {
+// ==========================================
+// 1. GLOBAL DEĞİŞKENLER VE SABİTLER (Mangler Testi)
+// ==========================================
+const PI: f32 = 3.14159f32; // Derleme zamanı sabiti (constexpr)
+mut globalCounter: i32 = 0; // Global değişken (Mangler ile korunacak)
+
+fn Calculate(a: i32, b: i32) -> i32 {
+    return a + b;
+}
+
+fn Calculate(a: f64, b: f64) -> f64 {
+    return a * b;
+}
+
+fn Calculate(a: u8, b: u8) -> u8 {
+    return a - b;
+}
+
+fn Entry() -> i32 {
+    std::io::Print("=== WIO DERLEYICI TESTI BASLIYOR ===");
+
+    // ==========================================
+    // 4. DEĞİŞEBİLİRLİK (Mutability: mut vs let)
+    // ==========================================
+    let maxHealth: i32 = 100;     // C++ karşılığı: const int32_t
+    mut currentHealth: i32 = 50;  // C++ karşılığı: int32_t
+
+    // ==========================================
+    // 5. OYUN MOTORU OPERATÖRÜ: 'fit' (Saturating Cast)
+    // ==========================================
+    mut devasaHasar: i64 = 9999;
     
+    // 9999 değeri, u8'in maksimum sınırı olan 255'e otomatik olarak kırpılacak (clamp)
+    mut alinanHasar: u8 = devasaHasar fit u8; 
+    
+    std::io::Print($"Gelen Hasar (i64): ${devasaHasar}");
+    std::io::Print($"Gerceklesen Hasar (u8): ${alinanHasar}"); // Beklenen: 255
+
+    // ==========================================
+    // 6. ZEKİ OVERLOAD SEÇİLİMİ (Implicit Casting)
+    // ==========================================
+    let res1: i32 = Calculate(10, 5);             // i32 Overload'u tam eşleşme (Exact Match)
+    let res2: f64 = Calculate(10.5f32, 2.0f32);   // Puanlama ile f64 Overload'una yönlendirilecek
+    let res3: u8  = Calculate(alinanHasar, 10u8); // u8 Overload'u tam eşleşme
+    
+    std::io::Print($"i32 Hesap Sonuclari : ${res1}");
+    std::io::Print($"f64 Hesap Sonuclari : ${res2}"); // Beklenen: 21.0
+    std::io::Print($"u8 Hesap Sonuclari  : ${res3}"); // Beklenen: 245
+
+    // ==========================================
+    // 7. İÇ İÇE REFERANSLAR VE AUTO-DEREF (Multi-level Pointers)
+    // ==========================================
+    mut veri: i32 = 42;
+    mut ptr1: ref i32 = ref veri;
+    mut ptr2: ref ref i32 = ref ptr1;
+
+    // Derleyici bunun bir ** (çift pointer) olduğunu anlayıp dibine kadar inerek veriyi değiştirecek
+    ptr2 = 100; 
+    std::io::Print($"'veri'nin cift referans uzerinden degisen hali: ${veri}"); // Beklenen: 100
+
+    // Salt-okunur (Read-only) referans testi
+    let okunabilirPtr: view i32 = ref veri;
+    std::io::Print($"Okunabilir (view) deger: ${okunabilirPtr}");
+
+    // ==========================================
+    // 8. KONTROL AKIŞI VE SÜRE (Duration Literals)
+    // ==========================================
+    mut i: i32 = 0;
+    while (i < 5) {
+        globalCounter += 1;
+        i += 1;
+    }
+
+    if (globalCounter == 5) {
+        std::io::Print("Dongu ve Global Degiskenler sorunsuz calisiyor!");
+    } else {
+        std::io::Print("HATA: Dongu beklendigi gibi calismadi!");
+    }
+
+    // ms, us, s gibi süre suffix'lerinin f32/f64 dönüştürücüsü testi (Generator 500ms -> 0.5f yapacak)
+    let beklemeSuresi: f32 = 500ms;
+    std::io::Print($"500ms'nin float karsiligi: ${beklemeSuresi}");
+
+    std::io::Print("=== TUM TESTLER BASARIYLA TAMAMLANDI ===");
+    return 0;
 }
