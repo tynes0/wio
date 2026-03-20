@@ -7,13 +7,24 @@ namespace wio::runtime
         auto& typeContext = Compiler::get().getTypeContext();
         
         sema::SymbolFlags flags = sema::SymbolFlags::createAllFalse();
-        flags.set_isStd(true); 
+        flags.set_isStd(true);
 
-        auto symbol = Ref<sema::Symbol>::Create("Print", typeContext.getFunctionType(typeContext.getI32(), {typeContext.getString()}), sema::SymbolKind::Function, flags, common::Location::invalid());
-        symbols.push_back(symbol);
+        auto addPrintOverload = [&](const Ref<sema::Type>& paramType) 
+        {
+            auto funcType = typeContext.getFunctionType(typeContext.getI32(), {paramType});
+            auto symbol = Ref<sema::Symbol>::Create("Print", funcType, sema::SymbolKind::Function, flags, common::Location::invalid());
+            
+            symbols.push_back(symbol);
+            
+            scope->define("Print", symbol); 
+        };
 
-        scope->define("Print", symbol);
-
+        addPrintOverload(typeContext.getString()); // Print(string)
+        addPrintOverload(typeContext.getI64());    // Print(i32)
+        addPrintOverload(typeContext.getF64());    // Print(f32)
+        addPrintOverload(typeContext.getBool());   // Print(bool)
+        addPrintOverload(typeContext.getU32());    // Print(u32)/
+        
         return true;
     }
 }

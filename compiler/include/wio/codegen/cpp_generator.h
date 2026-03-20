@@ -13,7 +13,7 @@ namespace wio::codegen
     public:
         CppGenerator();
         
-        std::string generate(Ref<Program> program);
+        std::string generate(const Ref<Program>& program);
 
 #include "../ast/visitor_overloads.def"
 

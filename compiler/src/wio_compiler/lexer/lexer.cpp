@@ -358,6 +358,10 @@ namespace wio
             {
                 type = TokenType::floatLiteral;
             }
+            else
+            {
+                throw InvalidNumberError(("Unknown literal suffix: '" + suffix + "'").c_str(), location_);
+            }
         }
 
         return {

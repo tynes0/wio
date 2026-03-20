@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include <string>
+#include <vector>
 
 #include "type.h"
 #include "wio/ast/ast.h"
@@ -12,7 +13,7 @@ namespace wio::sema
     DEFINE_FLAGS(SymbolFlags, SYMBOL_FLAGS);
 #undef SYMBOL_FLAGS
     
-    enum class SymbolKind : uint8_t { Variable, Function, Struct, Parameter, Namespace };
+    enum class SymbolKind : uint8_t { Variable, Function, Struct, Parameter, Namespace, FunctionGroup };
     enum class ScopeKind : uint8_t { Global, Function, Block, Class };
 
     class Scope;
@@ -26,6 +27,8 @@ namespace wio::sema
         common::Location definitionLoc;
         Ref<Scope> innerScope;
 
+        std::vector<Ref<Symbol>> overloads;
+
         Symbol() = default;
         Symbol(std::string name, Ref<Type> type, SymbolKind kind, SymbolFlags flags, common::Location loc, Ref<Scope> innerScope = nullptr)
             : name(std::move(name)), type(std::move(type)), kind(kind), flags(flags), definitionLoc(loc), innerScope(std::move(innerScope))
@@ -34,5 +37,5 @@ namespace wio::sema
     };
 }
 
-MakeFrenumWithNamespace(wio::sema, SymbolKind, Variable, Function, Struct, Parameter, Namespace)
+MakeFrenumWithNamespace(wio::sema, SymbolKind, Variable, Function, Struct, Parameter, Namespace, FunctionGroup)
 MakeFrenumWithNamespace(wio::sema, ScopeKind, Global, Function, Block, Class)

@@ -2,32 +2,4 @@
 
 fn main() -> i32 {
     
-    mut a: i32 = 10;
-    let b: i32 = 99; // Sabit (Immutable) veri
-
-    mut p1: ref i32 = ref a;
-    
-    p1 = 20;
-    std::io::Print($"a'nin yeni degeri: ${a}\n"); // Beklenen Çıktı: 20
-
-    let p2: view i32 = ref b;
-    
-    std::io::Print($"b'nin degeri: ${p2}\n"); // Beklenen Çıktı: 99
-    
-    // p2 = 100; // EĞER BUNU AÇARSAN SEMA HATA VERMELİ!
-    
-    mut c: i32 = 50;
-    
-    p1 = ref c;
-    p1 = 30;
-    std::io::Print($"c'nin yeni degeri: ${c}\n"); // Beklenen Çıktı: 30
-
-    p1 = ref b; // EĞER BUNU AÇARSAN SEMA HATA VERMELİ! (let değişken ref içine atılamaz)
-
-    mut p3: ref ref i32 = ref p1;
-    
-    p3 = 77;
-    std::io::Print($"c'nin p3 uzerinden degisen degeri: ${c}");
-
-    return 0;
 }

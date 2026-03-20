@@ -14,6 +14,24 @@ namespace wio::sema
     {
         if (auto it = symbols_.find(name); it != symbols_.end())
         {
+            if (symbol->kind == SymbolKind::Function)
+            {
+                if (it->second->kind == SymbolKind::Function)
+                {
+                    auto group = Ref<Symbol>::Create(name, nullptr, SymbolKind::FunctionGroup, it->second->flags, symbol->definitionLoc);
+                    group->overloads.push_back(it->second);
+                    group->overloads.push_back(symbol);
+                    symbols_[name] = group;
+                    return;
+                }
+                
+                if (it->second->kind == SymbolKind::FunctionGroup)
+                {
+                    it->second->overloads.push_back(symbol);
+                    return;
+                }
+            }
+
             if (symbol)
                 throw RedefinitionError(
                     ("Symbol already defined here: " + it->second->definitionLoc.toString()).c_str(),

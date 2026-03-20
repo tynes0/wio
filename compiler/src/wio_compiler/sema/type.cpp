@@ -110,11 +110,40 @@ namespace wio::sema
         switch (kind())
         {
         case TypeKind::Primitive:
-        {
-            auto* p1 = static_cast<const PrimitiveType*>(t1);
-            auto* p2 = static_cast<const PrimitiveType*>(t2);
-            return p1->name == p2->name;
-        }
+            {
+                auto* p1 = static_cast<const PrimitiveType*>(t1);
+                auto* p2 = static_cast<const PrimitiveType*>(t2);
+                if (p1->name == p2->name) return true;
+
+                if (t1->isNumeric() && t2->isNumeric())
+                {
+                    bool destIsFloat = (p1->name == "f32" || p1->name == "f64");
+                    bool srcIsFloat = (p2->name == "f32" || p2->name == "f64");
+
+                    if (destIsFloat && srcIsFloat) {
+                        return p1->name == "f64" && p2->name == "f32";
+                    }
+
+                    if (destIsFloat && !srcIsFloat)
+                        {
+                        return true;
+                    }
+
+                    if (!destIsFloat && !srcIsFloat)
+                    {
+                        auto getSize = [](const std::string& s) -> int {
+                            if (s.ends_with("8")) return 1;
+                            if (s.ends_with("16")) return 2;
+                            if (s.ends_with("32")) return 4;
+                            if (s.ends_with("64") || s == "isize" || s == "usize") return 8;
+                            return 0;
+                        };
+                        
+                        return getSize(p1->name) >= getSize(p2->name);
+                    }
+                }
+                return false;
+            }
 
         case TypeKind::Null:
         {

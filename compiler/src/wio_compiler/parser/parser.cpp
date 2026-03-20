@@ -218,6 +218,14 @@ namespace wio
                 left = makeNodePtr<AssignmentExpression>(std::move(left), std::move(op), std::move(rhs));
                 continue;
             }
+            if (match(TokenType::kwFit, true))
+            {
+                Location fitLoc = peek(-1).loc;
+                auto targetType = parseType(); 
+            
+                left = makeNodePtr<FitExpression>(std::move(left), std::move(targetType), fitLoc);
+                continue;
+            }
             
             Token op = advance();
             NodePtr<Expression> right = parseExpression(precedence + 1);
@@ -746,6 +754,12 @@ namespace wio
         // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
         switch (type)
         {
+        // ---------------------------------
+        // fit
+        // ---------------------------------
+        case TokenType::kwFit:
+            return 12;
+            
         // ---------------------------------
         // Postfix / access / call
         // ---------------------------------

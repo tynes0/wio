@@ -284,6 +284,10 @@ namespace wio::sema
     void SemanticAnalyzer::visit(IntegerLiteral& node)
     {
         IntegerResult result = common::getInteger(node.token.value);
+        
+        if (!result.isValid)
+            WIO_LOG_ADD_ERROR(node.location(), "Invalid integer literal or value out of bounds: '{}'", node.token.value);
+        
         Ref<Type> type = Type::getTypeFromIntegerResult(result);
         node.refType = type;
     }
@@ -291,6 +295,10 @@ namespace wio::sema
     void SemanticAnalyzer::visit(FloatLiteral& node)
     {
         FloatResult result = common::getFloat(node.token.value);
+
+        if (!result.isValid)
+            WIO_LOG_ADD_ERROR(node.location(), "Invalid float literal or value out of bounds: '{}'", node.token.value);
+        
         Ref<Type> type = Type::getTypeFromFloatResult(result);
         node.refType = type;
     }
@@ -528,8 +536,122 @@ void SemanticAnalyzer::visit(MemberAccessExpression& node)
     void SemanticAnalyzer::visit(FunctionCallExpression& node)
     {
         node.callee->accept(*this);
-        Ref<Type> calleeType = node.callee->refType.Lock();
+        Ref<Symbol> calleeSym = node.callee->referencedSymbol.Lock();
 
+        if (calleeSym && calleeSym->kind == SymbolKind::FunctionGroup)
+        {
+            std::vector<Ref<Type>> argTypes;
+            for (auto& arg : node.arguments)
+            {
+                arg->accept(*this);
+                argTypes.push_back(arg->refType.Lock());
+            }
+
+            Ref<Symbol> bestMatch = nullptr;
+            int bestScore = -1;
+            bool isAmbiguous = false;
+
+            for (auto& overload : calleeSym->overloads)
+            {
+                auto funcType = overload->type.AsFast<FunctionType>();
+                if (funcType->paramTypes.size() != argTypes.size()) continue;
+
+                bool isMatch = true;
+                int currentScore = 0;
+
+                for (size_t i = 0; i < argTypes.size(); ++i)
+                {
+                    auto dest = funcType->paramTypes[i];
+                    auto src = argTypes[i];
+
+                    if (dest->isCompatibleWith(src))
+                    {
+                        if (dest->kind() == TypeKind::Primitive && src->kind() == TypeKind::Primitive && 
+                            dest.AsFast<PrimitiveType>()->name == src.AsFast<PrimitiveType>()->name)
+                        {
+                            currentScore += 1000; 
+                        }
+                        else if (dest->kind() == TypeKind::Primitive && src->kind() == TypeKind::Primitive)
+                        {
+                            currentScore += 100;
+
+                            auto destName = dest.AsFast<PrimitiveType>()->name;
+                            auto srcName = src.AsFast<PrimitiveType>()->name;
+
+                            bool destIsUn = destName.starts_with('u');
+                            bool srcIsUn = srcName.starts_with('u');
+                            bool destIsInt = destName.starts_with('i');
+                            bool srcIsInt = srcName.starts_with('i');
+                            bool destIsFlt = destName.starts_with('f');
+                            bool srcIsFlt = srcName.starts_with('f');
+
+                            if ((destIsUn && srcIsUn) || (destIsInt && srcIsInt) || (destIsFlt && srcIsFlt))
+                            {
+                                currentScore += 50;
+                            }
+
+                            auto getSize = [](const std::string& s) -> int {
+                                if (s.ends_with("8")) return 1;
+                                if (s.ends_with("16")) return 2;
+                                if (s.ends_with("32")) return 4;
+                                if (s.ends_with("64") || s == "isize" || s == "usize") return 8;
+                                return 4;
+                            };
+
+                            int sizeDiff = getSize(destName) - getSize(srcName);
+                            if (sizeDiff >= 0)
+                            {
+                                currentScore += (10 - sizeDiff); 
+                            }
+                        }
+                        else
+                        {
+                            // Primitive olmayan tipler (örn Struct, Reference vs) dönüşümü
+                            currentScore += 10;
+                        }
+                    }
+                    else
+                    {
+                        isMatch = false;
+                        break;
+                    }
+                }
+
+                if (isMatch)
+                {
+                    if (currentScore > bestScore)
+                    {
+                        bestMatch = overload;
+                        bestScore = currentScore;
+                        isAmbiguous = false;
+                    }
+                    else if (currentScore == bestScore)
+                    {
+                        isAmbiguous = true;
+                    }
+                }
+            }
+
+            if (isAmbiguous)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Ambiguous function call to '{}'. Multiple overloads equally match the arguments.", calleeSym->name);
+            }
+            else if (!bestMatch)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "No matching function overload found for '{}'.", calleeSym->name);
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+
+            // Callee'yi spesifik ve en iyi puana sahip fonksiyona bağla
+            node.callee->referencedSymbol = bestMatch;
+            node.callee->refType = bestMatch->type;
+            node.refType = bestMatch->type.AsFast<FunctionType>()->returnType;
+            return; 
+        }
+
+        Ref<Type> calleeType = node.callee->refType.Lock();
+        
         if (!calleeType || calleeType->kind() != TypeKind::Function)
         {
             WIO_LOG_ADD_ERROR(node.location(), "Called expression is not a function.");
@@ -579,6 +701,27 @@ void SemanticAnalyzer::visit(MemberAccessExpression& node)
 
         node.isMut = isMut;
         node.refType = Compiler::get().getTypeContext().getReferenceType(node.operand->refType.Lock(), isMut);
+    }
+
+    void SemanticAnalyzer::visit(FitExpression& node)
+    {
+        node.operand->accept(*this);
+        node.targetType->accept(*this);
+
+        auto srcType = node.operand->refType.Lock();
+        auto destType = node.targetType->refType.Lock();
+
+        if (srcType && destType)
+        {
+            if (!srcType->isNumeric() || !destType->isNumeric())
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "The 'fit' operator can only be used with numeric types.");
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+        }
+
+        node.refType = destType;
     }
     
     void SemanticAnalyzer::visit(ExpressionStatement& node) 

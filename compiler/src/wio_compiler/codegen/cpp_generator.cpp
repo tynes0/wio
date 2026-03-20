@@ -1,15 +1,14 @@
 ﻿#include "wio/codegen/cpp_generator.h"
 
-#include <Windows.h>
-
 #include "wio/common/filesystem/filesystem.h"
 #include "compiler.h"
+#include "wio/sema/symbol.h"
 
 namespace wio::codegen
 {
     CppGenerator::CppGenerator() = default;
 
-    std::string CppGenerator::generate(Ref<Program> program)
+    std::string CppGenerator::generate(const Ref<Program>& program)
     {
         buffer_.str("");
         indentationLevel_ = 0;
@@ -212,12 +211,45 @@ namespace wio::codegen
 
     void CppGenerator::visit(IntegerLiteral& node)
     {
-        emit(node.token.value);
+        std::string valStr = node.token.value;
+    
+        const char* suffixes[] = { "i8", "u8", "i16", "u16", "i32", "u32", "i64", "u64", "isz", "usz" };
+        for (const auto& suf : suffixes)
+        {
+            if (valStr.ends_with(suf))
+            {
+                valStr.erase(valStr.length() - strlen(suf));
+                break;
+            }
+        }
+
+        auto type = node.refType.Lock();
+        std::string tName = type ? type->toString() : "i32";
+
+        if (tName == "u32")
+            emit(valStr + "u");
+        else if (tName == "i64")
+            emit(valStr + "ll");
+        else if (tName == "u64" || tName == "usize")
+            emit(valStr + "ull");
+        else if (tName == "i8" || tName == "u8" || tName == "i16" || tName == "u16")
+            emit("static_cast<" + type->toCppString() + ">(" + valStr + ")");
+        else
+            emit(valStr);
     }
 
     void CppGenerator::visit(FloatLiteral& node)
     {
-        emit(node.token.value);
+        std::string valStr = node.token.value;
+    
+        if (valStr.ends_with("f32") || valStr.ends_with("f64"))
+            valStr.erase(valStr.length() - 3);
+
+        auto type = node.refType.Lock();
+        if (type && type->toString() == "f64")
+            emit(valStr); 
+        else
+            emit(valStr + "f"); 
     }
     
     void CppGenerator::visit(BoolLiteral& node)
@@ -235,7 +267,7 @@ namespace wio::codegen
                 return;
             }
             
-            if (sym->flags.get_isStd() && sym->kind == sema::SymbolKind::Function)
+            if (sym->flags.get_isStd() && (sym->kind == sema::SymbolKind::Function || sym->kind == sema::SymbolKind::FunctionGroup))
             {
                 emit("b" + node.token.value);
                 return;
@@ -452,7 +484,7 @@ namespace wio::codegen
     
     void CppGenerator::visit(DictionaryLiteral& node)
     {
-        // MAP OR U MAP?
+        //
     }
     
     void CppGenerator::visit(LambdaLiteral& node)
@@ -517,6 +549,24 @@ namespace wio::codegen
     {
         emit("&");
         node.operand->accept(*this);
+    }
+    
+    void CppGenerator::visit(FitExpression& node)
+    {
+        auto srcType = node.operand->refType.Lock();
+        auto destType = node.targetType->refType.Lock();
+
+        std::string cppDestType = destType->toCppString();
+        std::string cppSrcType = srcType->toCppString();
+
+        std::string minLimit = "static_cast<" + cppSrcType + ">(std::numeric_limits<" + cppDestType + ">::lowest())";
+        std::string maxLimit = "static_cast<" + cppSrcType + ">(std::numeric_limits<" + cppDestType + ">::max())";
+
+        emit("static_cast<" + cppDestType + ">(std::clamp<" + cppSrcType + ">(");
+    
+        node.operand->accept(*this);
+    
+        emit(", " + minLimit + ", " + maxLimit + "))");
     }
 
     void CppGenerator::visit(UseStatement& node)

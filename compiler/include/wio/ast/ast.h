@@ -400,6 +400,17 @@ namespace wio
         ~RefExpression() override;
     };
 
+    struct FitExpression : Expression
+    {
+        WIO_EXP_NODE_BODY(FitExpression)
+
+        NodePtr<Expression> operand;
+        NodePtrUnchecked<TypeSpecifier> targetType;
+
+        FitExpression(NodePtr<Expression> _operand, NodePtrUnchecked<TypeSpecifier> _targetType, common::Location _loc);
+        ~FitExpression() override;
+    };
+
     struct ExpressionStatement : Statement
     {
         WIO_STMT_NODE_BODY(ExpressionStatement)

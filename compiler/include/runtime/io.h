@@ -3,6 +3,8 @@
 #include <cstdio>
 #include <string>
 #include <system_error>
+#include <typeinfo>
+#include <cstring>
 
 #include "exception.h"
 #include "../general/traits/integer_traits.h"

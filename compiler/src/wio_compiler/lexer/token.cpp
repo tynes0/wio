@@ -5,140 +5,165 @@
 namespace wio
 {
     std::string_view tokenTypeToString(TokenType type)
+{
+    switch (type)
     {
-        switch (type)
-        {
-        case TokenType::invalid: return "invalid";
-        case TokenType::endOfFile: return "eof";
-        case TokenType::identifier: return "identifier";
-        case TokenType::integerLiteral: return "integerLiteral";
-        case TokenType::floatLiteral:
-        case TokenType::stringLiteral:
-        case TokenType::interpolatedStringLiteral:
-        case TokenType::charLiteral:
-        case TokenType::durationLiteral:
-        case TokenType::byteLiteral:
-        case TokenType::kwFn:
-        case TokenType::kwLet:
-        case TokenType::kwMut:
-        case TokenType::kwConst:
-        case TokenType::kwType:
-        case TokenType::kwRef:
-        case TokenType::kwView:
-        case TokenType::kwEnum:
-        case TokenType::kwFlagset:
-        case TokenType::kwI8:
-        case TokenType::kwI16:
-        case TokenType::kwI32:
-        case TokenType::kwI64:
-        case TokenType::kwU8:
-        case TokenType::kwU16:
-        case TokenType::kwU32:
-        case TokenType::kwU64:
-        case TokenType::kwF32:
-        case TokenType::kwF64:
-        case TokenType::kwIsize:
-        case TokenType::kwUsize:
-        case TokenType::kwByte:
-        case TokenType::kwBool:
-        case TokenType::kwChar:
-        case TokenType::kwUchar:
-        case TokenType::kwString:
-        case TokenType::kwVoid:
-        case TokenType::kwComponent:
-        case TokenType::kwSystem:
-        case TokenType::kwProgram:
-        case TokenType::kwObject:
-        case TokenType::kwTrue:
-        case TokenType::kwFalse:
-        case TokenType::kwIf:
-        case TokenType::kwElse:
-        case TokenType::kwMatch:
-        case TokenType::kwFor:
-        case TokenType::kwIn:
-        case TokenType::kwWhile:
-        case TokenType::kwBreak:
-        case TokenType::kwContinue:
-        case TokenType::kwReturn:
-        case TokenType::kwWhen:
-        case TokenType::kwAnd:
-        case TokenType::kwOr:
-        case TokenType::kwNot:
-        case TokenType::kwEvery:
-        case TokenType::kwAfter:
-        case TokenType::kwDuring:
-        case TokenType::kwWait:
-        case TokenType::kwResult:
-        case TokenType::kwNull:
-        case TokenType::kwUse:
-        case TokenType::kwAs:
-        case TokenType::kwSuper:
-        case TokenType::kwSelf:
-        case TokenType::kwExtern:
-        case TokenType::kwEngine:
-        case TokenType::kwAsync:
-        case TokenType::kwAwait:
-        case TokenType::kwCoroutine:
-        case TokenType::kwYield:
-        case TokenType::kwThread:
-        case TokenType::kwLoop:
-        case TokenType::StaticArray:
-        case TokenType::DynamicArray:
-        case TokenType::opPlus:
-        case TokenType::opMinus:
-        case TokenType::opStar:
-        case TokenType::opSlash:
-        case TokenType::opPercent:
-        case TokenType::opAssign:
-        case TokenType::opPlusAssign:
-        case TokenType::opMinusAssign:
-        case TokenType::opStarAssign:
-        case TokenType::opSlashAssign:
-        case TokenType::opPercentAssign:
-        case TokenType::opEqual:
-        case TokenType::opNotEqual:
-        case TokenType::opLess:
-        case TokenType::opLessEqual:
-        case TokenType::opGreater:
-        case TokenType::opGreaterEqual:
-        case TokenType::opBitAnd:
-        case TokenType::opBitOr:
-        case TokenType::opBitXor:
-        case TokenType::opBitNot:
-        case TokenType::opShiftLeft:
-        case TokenType::opShiftRight:
-        case TokenType::opBitAndAssign:
-        case TokenType::opBitOrAssign:
-        case TokenType::opBitXorAssign:
-        case TokenType::opBitNotAssign:
-        case TokenType::opShiftLeftAssign:
-        case TokenType::opShiftRightAssign:
-        case TokenType::opLogicalNot:
-        case TokenType::opLogicalAnd:
-        case TokenType::opLogicalOr:
-        case TokenType::opFlowRight:
-        case TokenType::opFlowLeft:
-        case TokenType::opArrow:
-        case TokenType::opQuestion:
-        case TokenType::opColon:
-        case TokenType::opScope:
-        case TokenType::atSign:
-        case TokenType::dollar:
-        case TokenType::leftParen:
-        case TokenType::rightParen:
-        case TokenType::leftBrace:
-        case TokenType::rightBrace:
-        case TokenType::leftBracket:
-        case TokenType::rightBracket:
-        case TokenType::comma:
-        case TokenType::dot:
-        case TokenType::semicolon:
-        case TokenType::newline:
-            return "newline";
-        }
-        
-        return "invalid";
+    case TokenType::invalid: return "invalid";
+    case TokenType::endOfFile: return "eof";
+    case TokenType::identifier: return "identifier";
+    case TokenType::integerLiteral: return "integerLiteral";
+    case TokenType::floatLiteral: return "floatLiteral";
+    case TokenType::stringLiteral: return "stringLiteral";
+    case TokenType::interpolatedStringLiteral: return "interpolatedStringLiteral";
+    case TokenType::charLiteral: return "charLiteral";
+    case TokenType::durationLiteral: return "durationLiteral";
+    case TokenType::byteLiteral: return "byteLiteral";
+
+    // keywords
+    case TokenType::kwFn: return "fn";
+    case TokenType::kwLet: return "let";
+    case TokenType::kwMut: return "mut";
+    case TokenType::kwConst: return "const";
+    case TokenType::kwType: return "type";
+    case TokenType::kwRef: return "ref";
+    case TokenType::kwFit: return "fit";
+    case TokenType::kwView: return "view";
+    case TokenType::kwEnum: return "enum";
+    case TokenType::kwFlagset: return "flagset";
+
+    case TokenType::kwI8: return "i8";
+    case TokenType::kwI16: return "i16";
+    case TokenType::kwI32: return "i32";
+    case TokenType::kwI64: return "i64";
+    case TokenType::kwU8: return "u8";
+    case TokenType::kwU16: return "u16";
+    case TokenType::kwU32: return "u32";
+    case TokenType::kwU64: return "u64";
+    case TokenType::kwF32: return "f32";
+    case TokenType::kwF64: return "f64";
+    case TokenType::kwIsize: return "isize";
+    case TokenType::kwUsize: return "usize";
+    case TokenType::kwByte: return "byte";
+    case TokenType::kwBool: return "bool";
+    case TokenType::kwChar: return "char";
+    case TokenType::kwUchar: return "uchar";
+    case TokenType::kwString: return "string";
+    case TokenType::kwVoid: return "void";
+
+    case TokenType::kwComponent: return "component";
+    case TokenType::kwSystem: return "system";
+    case TokenType::kwProgram: return "program";
+    case TokenType::kwObject: return "object";
+
+    case TokenType::kwTrue: return "true";
+    case TokenType::kwFalse: return "false";
+
+    case TokenType::kwIf: return "if";
+    case TokenType::kwElse: return "else";
+    case TokenType::kwMatch: return "match";
+    case TokenType::kwFor: return "for";
+    case TokenType::kwIn: return "in";
+    case TokenType::kwWhile: return "while";
+    case TokenType::kwBreak: return "break";
+    case TokenType::kwContinue: return "continue";
+    case TokenType::kwReturn: return "return";
+
+    case TokenType::kwWhen: return "when";
+    case TokenType::kwAnd: return "and";
+    case TokenType::kwOr: return "or";
+    case TokenType::kwNot: return "not";
+
+    case TokenType::kwEvery: return "every";
+    case TokenType::kwAfter: return "after";
+    case TokenType::kwDuring: return "during";
+    case TokenType::kwWait: return "wait";
+
+    case TokenType::kwResult: return "result";
+    case TokenType::kwNull: return "null";
+
+    case TokenType::kwUse: return "use";
+    case TokenType::kwAs: return "as";
+    case TokenType::kwSuper: return "super";
+    case TokenType::kwSelf: return "self";
+    case TokenType::kwExtern: return "extern";
+    case TokenType::kwEngine: return "engine";
+
+    case TokenType::kwAsync: return "async";
+    case TokenType::kwAwait: return "await";
+    case TokenType::kwCoroutine: return "coroutine";
+    case TokenType::kwYield: return "yield";
+    case TokenType::kwThread: return "thread";
+    case TokenType::kwLoop: return "loop";
+
+    case TokenType::StaticArray: return "StaticArray";
+    case TokenType::DynamicArray: return "DynamicArray";
+
+    // operators
+    case TokenType::opPlus: return "opPlus";
+    case TokenType::opMinus: return "opMinus";
+    case TokenType::opStar: return "opStar";
+    case TokenType::opSlash: return "opSlash";
+    case TokenType::opPercent: return "opPercent";
+
+    case TokenType::opAssign: return "opAssign";
+    case TokenType::opPlusAssign: return "opPlusAssign";
+    case TokenType::opMinusAssign: return "opMinusAssign";
+    case TokenType::opStarAssign: return "opStarAssign";
+    case TokenType::opSlashAssign: return "opSlashAssign";
+    case TokenType::opPercentAssign: return "opPercentAssign";
+
+    case TokenType::opEqual: return "opEqual";
+    case TokenType::opNotEqual: return "opNotEqual";
+    case TokenType::opLess: return "opLess";
+    case TokenType::opLessEqual: return "opLessEqual";
+    case TokenType::opGreater: return "opGreater";
+    case TokenType::opGreaterEqual: return "opGreaterEqual";
+
+    case TokenType::opBitAnd: return "opBitAnd";
+    case TokenType::opBitOr: return "opBitOr";
+    case TokenType::opBitXor: return "opBitXor";
+    case TokenType::opBitNot: return "opBitNot";
+
+    case TokenType::opShiftLeft: return "opShiftLeft";
+    case TokenType::opShiftRight: return "opShiftRight";
+
+    case TokenType::opBitAndAssign: return "opBitAndAssign";
+    case TokenType::opBitOrAssign: return "opBitOrAssign";
+    case TokenType::opBitXorAssign: return "opBitXorAssign";
+    case TokenType::opBitNotAssign: return "opBitNotAssign";
+    case TokenType::opShiftLeftAssign: return "opShiftLeftAssign";
+    case TokenType::opShiftRightAssign: return "opShiftRightAssign";
+
+    case TokenType::opLogicalNot: return "opLogicalNot";
+    case TokenType::opLogicalAnd: return "opLogicalAnd";
+    case TokenType::opLogicalOr: return "opLogicalOr";
+
+    case TokenType::opFlowRight: return "opFlowRight";
+    case TokenType::opFlowLeft: return "opFlowLeft";
+    case TokenType::opArrow: return "opArrow";
+
+    case TokenType::opQuestion: return "opQuestion";
+    case TokenType::opColon: return "opColon";
+    case TokenType::opScope: return "opScope";
+
+    case TokenType::atSign: return "atSign";
+    case TokenType::dollar: return "dollar";
+
+    case TokenType::leftParen: return "leftParen";
+    case TokenType::rightParen: return "rightParen";
+    case TokenType::leftBrace: return "leftBrace";
+    case TokenType::rightBrace: return "rightBrace";
+    case TokenType::leftBracket: return "leftBracket";
+    case TokenType::rightBracket: return "rightBracket";
+
+    case TokenType::comma: return "comma";
+    case TokenType::dot: return "dot";
+    case TokenType::semicolon: return "semicolon";
+    case TokenType::newline: return "newline";
     }
+
+    return "invalid";
+}
 
     Token Token::invalid()
     {

@@ -162,12 +162,19 @@ namespace wio
     FunctionCallExpression::~FunctionCallExpression() = default;
 
     RefExpression::RefExpression(bool _isMut, NodePtr<Expression> _operand, common::Location _loc)
-        : Expression(_loc), isMut(_isMut), operand(std::move(_operand))
+        : Expression(_loc.isValid() ? _loc : _operand->location()), isMut(_isMut), operand(std::move(_operand))
     {
     }
 
     RefExpression::~RefExpression() = default;
 
+    FitExpression::FitExpression(NodePtr<Expression> _operand, NodePtrUnchecked<TypeSpecifier> _targetType, common::Location _loc)
+        : Expression(_loc.isValid() ? _loc : _operand->location()), operand(std::move(_operand)), targetType(std::move(_targetType))
+    {
+    }
+
+    FitExpression::~FitExpression() = default;
+    
     ExpressionStatement::ExpressionStatement(NodePtr<Expression> _expression, common::Location _loc)
         : Statement(_loc.isValid() ? _loc : _expression->location()), expression(std::move(_expression))
     {
