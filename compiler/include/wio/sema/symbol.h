@@ -9,12 +9,12 @@
 
 namespace wio::sema
 {
-#define SYMBOL_FLAGS(X) X(isMutable) X(isShadowed) X(isStd)
+#define SYMBOL_FLAGS(X) X(isMutable) X(isShadowed) X(isStd) X(isGlobal) X(isPublic) X(isPrivate) X(isProtected) X(isReadOnly)
     DEFINE_FLAGS(SymbolFlags, SYMBOL_FLAGS);
 #undef SYMBOL_FLAGS
     
     enum class SymbolKind : uint8_t { Variable, Function, Struct, Parameter, Namespace, FunctionGroup };
-    enum class ScopeKind : uint8_t { Global, Function, Block, Class };
+    enum class ScopeKind : uint8_t { Global, Function, Block, Struct };
 
     class Scope;
 
@@ -38,4 +38,4 @@ namespace wio::sema
 }
 
 MakeFrenumWithNamespace(wio::sema, SymbolKind, Variable, Function, Struct, Parameter, Namespace, FunctionGroup)
-MakeFrenumWithNamespace(wio::sema, ScopeKind, Global, Function, Block, Class)
+MakeFrenumWithNamespace(wio::sema, ScopeKind, Global, Function, Block, Struct)

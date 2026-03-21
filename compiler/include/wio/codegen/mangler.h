@@ -16,5 +16,7 @@ namespace wio::codegen
         static std::string mangleGlobalVar(const std::string& name, const std::string& scopePath = "");
         
         static std::string mangleType(const Ref<sema::Type>& type);
+
+        static std::string mangleInterface(const std::string& scopePath, const std::string& name);
     };
 }

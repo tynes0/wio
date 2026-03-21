@@ -121,14 +121,11 @@ namespace wio::sema
                     bool destIsFloat = (p1->name == "f32" || p1->name == "f64");
                     bool srcIsFloat = (p2->name == "f32" || p2->name == "f64");
 
-                    if (destIsFloat && srcIsFloat) {
+                    if (destIsFloat && srcIsFloat)
                         return p1->name == "f64" && p2->name == "f32";
-                    }
 
                     if (destIsFloat && !srcIsFloat)
-                        {
                         return true;
-                    }
 
                     if (!destIsFloat && !srcIsFloat)
                     {
@@ -153,12 +150,17 @@ namespace wio::sema
         
         case TypeKind::Reference:
         {
-            auto* r1 = static_cast<const ReferenceType*>(t1);
-            auto* r2 = static_cast<const ReferenceType*>(t2);
-            // The referenced types must be compatible and adhere to mutability rules.
-            // (Can a mutable object be assigned to an immutable reference? It depends.)
-            // Strict equality for now:
-            return r1->isMutable == r2->isMutable && r1->referredType->isCompatibleWith(r2->referredType);
+            if (other->kind() != TypeKind::Reference) return false;
+
+            auto* r1 = static_cast<const ReferenceType*>(this);
+            auto* r2 = static_cast<const ReferenceType*>(other.Get());
+
+            if (r1->isMutable && !r2->isMutable)
+            {
+                return false;
+            }
+
+            return r1->referredType->isCompatibleWith(r2->referredType);
         }
 
         case TypeKind::Array:

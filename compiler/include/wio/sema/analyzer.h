@@ -21,12 +21,14 @@ namespace wio::sema
         std::vector<Ref<Scope>> scopes_;
         std::vector<Ref<Symbol>> symbols_;
         Ref<Type> currentFunctionReturnType_ = nullptr;
+        bool isDeclarationPass_ = true;
+        bool isStructResolutionPass_ = false;
         
         void enterScope(ScopeKind kind);
         void exitScope();
 
         Ref<Symbol> createSymbol(std::string name, Ref<Type> type, SymbolKind kind, common::Location loc, SymbolFlags flags = SymbolFlags::createAllFalse());
-
-        static std::string mangleName(const std::string& original, SymbolKind kind);
+        static bool hasAttribute(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr);
+        static std::vector<Token> getAttributeArgs(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr);
     };
 }

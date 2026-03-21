@@ -182,24 +182,51 @@ namespace wio
 
     ExpressionStatement::~ExpressionStatement() = default;
 
-    VariableDeclaration::VariableDeclaration(Mutability _mutability, NodePtr<Identifier> _name,
-        NodePtr<TypeSpecifier> _type, NodePtr<Expression> _init, common::Location _loc)
-        : Statement(_loc), mutability(_mutability), name(std::move(_name)),
+    VariableDeclaration::VariableDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, Mutability _mutability,
+        NodePtr<Identifier> _name, NodePtr<TypeSpecifier> _type, NodePtr<Expression> _init, common::Location _loc)
+        : Statement(_loc), attributes(std::move(_attributes)), mutability(_mutability), name(std::move(_name)),
         type(std::move(_type)), initializer(std::move(_init))
     {
     }
 
     VariableDeclaration::~VariableDeclaration() = default;
 
-    FunctionDeclaration::FunctionDeclaration(NodePtr<Identifier> _name, std::vector<Parameter> _params,
-        NodePtr<TypeSpecifier> _retType, std::vector<NodePtr<Expression>> _guards, NodePtr<Statement> _body,
-        common::Location _loc)
-        : Statement(_loc), name(std::move(_name)), parameters(std::move(_params)),
+    FunctionDeclaration::FunctionDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
+        NodePtr<Identifier> _name, std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType,
+        std::vector<NodePtr<Expression>> _guards, NodePtr<Statement> _body, common::Location _loc)
+        : Statement(_loc.isValid() ? _loc : _name->location()), attributes(std::move(_attributes)), name(std::move(_name)), parameters(std::move(_params)),
         returnType(std::move(_retType)), guards(std::move(_guards)),  body(std::move(_body))
     {
     }
 
     FunctionDeclaration::~FunctionDeclaration() = default;
+
+    InterfaceDeclaration::InterfaceDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
+        NodePtr<Identifier> _name, std::vector<NodePtr<FunctionDeclaration>> _methods, common::Location _loc)
+            : Statement(_loc.isValid() ? _loc : _name->location()), attributes(std::move(_attributes)),
+            name(std::move(_name)), methods(std::move(_methods))
+    {
+    }
+
+    InterfaceDeclaration::~InterfaceDeclaration() = default;
+
+    ComponentDeclaration::ComponentDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
+                                               NodePtr<Identifier> _name, std::vector<ComponentMember> _members, common::Location _loc)
+            : Statement(_loc.isValid() ? _loc : _name->location()), attributes(std::move(_attributes)),
+            name(std::move(_name)), members(std::move(_members))
+    {
+    }
+
+    ComponentDeclaration::~ComponentDeclaration() = default;
+
+    ObjectDeclaration::ObjectDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
+        NodePtr<Identifier> _name, std::vector<ObjectMember> _members, common::Location _loc)
+            : Statement(_loc.isValid() ? _loc : _name->location()), attributes(std::move(_attributes)),
+            name(std::move(_name)), members(std::move(_members))
+    {
+    }
+
+    ObjectDeclaration::~ObjectDeclaration() = default;
 
     BlockStatement::BlockStatement(std::vector<NodePtr<Statement>> _statements, common::Location _loc)
         : Statement(_loc), statements(std::move(_statements))
@@ -236,8 +263,8 @@ namespace wio
 
     UseStatement::~UseStatement() = default;
 
-    AttributeStatement::AttributeStatement(Attribute _attribute, common::Location _loc)
-        : Statement(_loc), attribute(_attribute)
+    AttributeStatement::AttributeStatement(Attribute _attribute, std::vector<Token> _args, common::Location _loc)
+        : Statement(_loc), attribute(_attribute), args(std::move(_args))
     {
     }
 

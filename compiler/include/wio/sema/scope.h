@@ -16,6 +16,7 @@ namespace wio::sema
 
         void define(const std::string& name, const Ref<Symbol>& symbol);
         Ref<Symbol> resolve(const std::string& name);
+        Ref<Symbol> resolveLocally(const std::string& name);
         
         WeakRef<Scope> getParent() const;
         ScopeKind getKind() const;

@@ -80,7 +80,20 @@ namespace wio
     FrenumClassInNamespace(wio, Attribute ,uint8_t,
         Unknown,
         CppNamespaceStart,
-        CppNamespaceEnd
+        CppNamespaceEnd,
+        ReadOnly,
+        Default,
+        NoDefaultCtor,
+        From,
+        Trust,
+        Final
+    );
+
+    FrenumClassInNamespace(wio, AccessModifier, uint8_t,
+        Public,
+        Private,
+        Protected,
+        None
     );
 
     struct ASTNode;
@@ -421,16 +434,29 @@ namespace wio
         ~ExpressionStatement() override;
     };
 
+    struct AttributeStatement : Statement
+    {
+        WIO_STMT_NODE_BODY(AttributeStatement)
+
+        Attribute attribute;
+        std::vector<Token> args;
+
+        AttributeStatement(Attribute _attribute, std::vector<Token> _args, common::Location _loc = common::Location::invalid());
+        ~AttributeStatement() override;
+    };
+
     struct VariableDeclaration : Statement
     {
         WIO_STMT_NODE_BODY(VariableDeclaration)
-        
+
+        std::vector<NodePtr<AttributeStatement>> attributes;
         Mutability mutability; // let, mut, const
         NodePtr<Identifier> name;
         NodePtr<TypeSpecifier> type;
         NodePtr<Expression> initializer;
         
-        VariableDeclaration(Mutability _mutability, NodePtr<Identifier> _name, NodePtr<TypeSpecifier> _type, NodePtr<Expression> _init, common::Location _loc);
+        VariableDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, Mutability _mutability,
+            NodePtr<Identifier> _name, NodePtr<TypeSpecifier> _type, NodePtr<Expression> _init, common::Location _loc);
         ~VariableDeclaration() override;
     };
 
@@ -444,17 +470,69 @@ namespace wio
     {
         WIO_STMT_NODE_BODY(FunctionDeclaration)
 
+        std::vector<NodePtr<AttributeStatement>> attributes;
         NodePtr<Identifier> name;
         std::vector<Parameter> parameters;
         NodePtr<TypeSpecifier> returnType;       // -> ReturnType
         std::vector<NodePtr<Expression>> guards; // when condition
         NodePtr<Statement> body;                 // { ... }
 
-        FunctionDeclaration(NodePtr<Identifier> _name, std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType,
-            std::vector<NodePtr<Expression>> _guards, NodePtr<Statement> _body, common::Location _loc);
+        FunctionDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
+            std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType, std::vector<NodePtr<Expression>> _guards,
+            NodePtr<Statement> _body, common::Location _loc);
         ~FunctionDeclaration() override;
     };
 
+    struct InterfaceDeclaration : Statement
+    {
+        WIO_STMT_NODE_BODY(InterfaceDeclaration)
+
+        std::vector<NodePtr<AttributeStatement>> attributes;
+        NodePtr<Identifier> name;
+        std::vector<NodePtr<FunctionDeclaration>> methods;
+
+        InterfaceDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name, std::vector<NodePtr<FunctionDeclaration>> _methods, common::Location _loc);
+        ~InterfaceDeclaration() override;
+    };
+
+    struct ComponentMember
+    {
+        std::vector<NodePtr<AttributeStatement>> attributes;
+        AccessModifier access;
+        NodePtr<Statement> declaration; 
+    };
+
+    struct ComponentDeclaration : Statement
+    {
+        WIO_STMT_NODE_BODY(ComponentDeclaration)
+
+        std::vector<NodePtr<AttributeStatement>> attributes;
+        NodePtr<Identifier> name;
+        std::vector<ComponentMember> members;
+
+        ComponentDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name, std::vector<ComponentMember> _members, common::Location _loc);
+        ~ComponentDeclaration() override;
+    };
+
+    struct ObjectMember
+    {
+        std::vector<NodePtr<AttributeStatement>> attributes;
+        AccessModifier access; 
+        NodePtr<Statement> declaration; 
+    };
+
+    struct ObjectDeclaration : Statement
+    {
+        WIO_STMT_NODE_BODY(ObjectDeclaration)
+
+        std::vector<NodePtr<AttributeStatement>> attributes;
+        NodePtr<Identifier> name;
+        std::vector<ObjectMember> members;
+
+        ObjectDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name, std::vector<ObjectMember> _members, common::Location _loc);
+        ~ObjectDeclaration() override;
+    };
+    
     struct BlockStatement : Statement
     {
         WIO_STMT_NODE_BODY(BlockStatement)
@@ -508,16 +586,6 @@ namespace wio
         
         explicit UseStatement(std::string _moduleName, std::string _modulePath, bool _isStdLib, common::Location _loc = common::Location::invalid());
         ~UseStatement() override;
-    };
-
-    struct AttributeStatement : Statement
-    {
-        WIO_STMT_NODE_BODY(AttributeStatement)
-
-        Attribute attribute;
-
-        explicit AttributeStatement(Attribute _attribute, common::Location _loc = common::Location::invalid());
-        ~AttributeStatement() override;
     };
     
     // NOLINTEND(cppcoreguidelines-special-member-functions)

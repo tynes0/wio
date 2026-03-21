@@ -20,6 +20,14 @@ namespace wio::codegen
         return typeStr;
     }
 
+    std::string Mangler::mangleInterface(const std::string& scopePath, const std::string& name)
+    {
+        std::string mangled = "_WI_"; // Wio Interface
+        if (!scopePath.empty()) mangled += scopePath + "_";
+        mangled += name;
+        return mangled;
+    }
+
     std::string Mangler::mangleFunction(const std::string& name, const std::vector<Ref<sema::Type>>& paramTypes, const std::string& scopePath)
     {
         if (name == "main" && scopePath.empty()) return "main";

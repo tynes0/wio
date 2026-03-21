@@ -6,6 +6,26 @@
 
 namespace wio::codegen
 {
+    namespace 
+    {
+        std::string toCppType(const Ref<sema::Type>& type)
+        {
+            if (!type) return "void"; // Fallback
+            return type->toCppString();
+        }
+
+        std::vector<std::string> getBaseInterfaces(const std::vector<NodePtr<AttributeStatement>>& attributes)
+        {
+            std::vector<std::string> bases;
+            for (const auto& attr : attributes)
+                if (attr->attribute == Attribute::From)
+                    for (const auto& arg : attr->args)
+                        if (arg.type == TokenType::identifier)
+                            bases.push_back(arg.value);
+            return bases;
+        }
+    }
+    
     CppGenerator::CppGenerator() = default;
 
     std::string CppGenerator::generate(const Ref<Program>& program)
@@ -19,20 +39,38 @@ namespace wio::codegen
         return header_.str() + buffer_.str();
     }
 
-    // TODO: Refactor
     void CppGenerator::generateHeader()
     {
         header_.str("");
-        header_ << "#include <cstdint>\n";
-        header_ << "#include <string>\n";
-        header_ << "#include <vector>\n";
-        header_ << "#include <array>\n";
-        header_ << "#include <format>\n";
-        header_ << "#include <iostream>\n"; // todo: remove
-        header_ << "#include <exception.h>\n";
-        header_ << '\n';
-        header_ << "namespace wio\n{\n\tusing String = std::string;\n\tusing WString = std::wstring;\n}\n\n";
-        header_ << "namespace wio\n{\n\ttemplate <typename T>\n\tusing DArray = std::vector<T>;\n\n\ttemplate <typename T, size_t N>\n\tusing SArray = std::array<T, N>;\n}\n";
+        emitHeaderLine("#include <cstdint>");
+        emitHeaderLine("#include <string>");
+        emitHeaderLine("#include <vector>");
+        emitHeaderLine("#include <array>");
+        emitHeaderLine("#include <format>");
+        emitHeaderLine("#include <iostream>"); 
+        emitHeaderLine("#include <exception.h>");
+        emitHeaderLine("");
+
+        emitHeaderLine("namespace wio");
+        emitHeaderLine("{");
+        indent();
+        emitHeaderLine("using String = std::string;");
+        emitHeaderLine("using WString = std::wstring;");
+        dedent();
+        emitHeaderLine("}");
+        emitHeaderLine("");
+
+        emitHeaderLine("namespace wio");
+        emitHeaderLine("{");
+        indent();
+        emitHeaderLine("template <typename T>");
+        emitHeaderLine("using DArray = std::vector<T>;");
+        emitHeaderLine("");
+        emitHeaderLine("template <typename T, size_t N>");
+        emitHeaderLine("using SArray = std::array<T, N>;");
+        dedent();
+        emitHeaderLine("}");
+        emitHeaderLine("");
     }
 
     void CppGenerator::emit(const std::string& str)
@@ -44,6 +82,17 @@ namespace wio::codegen
     {
         for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
         buffer_ << str << "\n";
+    }
+
+    void CppGenerator::emitHeader(const std::string& str)
+    {
+        header_ << str << "\n";
+    }
+
+    void CppGenerator::emitHeaderLine(const std::string& str)
+    {
+        for (int i = 0; i < indentationLevel_; ++i) header_ << "    ";
+        header_ << str << "\n";
     }
 
     void CppGenerator::emitMain(FunctionDeclaration& node)
@@ -87,142 +136,123 @@ namespace wio::codegen
 
         emitLine("try");
         node.body->accept(*this);
-        emitLine("catch (const wio::runtime::RuntimeException& ex)"); // try {
+        emitLine("catch (const wio::runtime::RuntimeException& ex)"); 
         emitLine("{");
         indent();
-        emitLine(R"(std::cout << ex.what() << '\n';)"); // TODO: Refactor with own logging system
+        emitLine(R"(std::cout << ex.what() << '\n';)"); 
+        emitLine("return 1;");
         dedent();
-        emitLine("}"); // catch {
+        emitLine("}"); 
         dedent();
-        emitLine("}"); // int main(...) {
+        emitLine("}"); 
     }
 
     void CppGenerator::indent() { indentationLevel_++; }
     void CppGenerator::dedent() { indentationLevel_--; }
-
-    std::string CppGenerator::toCppType(const Ref<sema::Type>& type)
-    {
-        if (!type) return "void"; // Fallback
-        return type->toCppString();
-    }
     
     void CppGenerator::visit(Program& node)
     {
+        // TURN 1: Interfaces
+        for (auto& stmt : node.statements)
+            if (stmt->is<InterfaceDeclaration>()) stmt->accept(*this);
+        emitLine("");
+
+        // TURN 2: Component & Object (Forward Decl)
         for (auto& stmt : node.statements)
         {
-            stmt->accept(*this);
+            if (stmt->is<ComponentDeclaration>())
+                emitLine(std::format("struct {};", Mangler::mangleStruct(stmt->as<ComponentDeclaration>()->name->token.value)));
+            else if (stmt->is<ObjectDeclaration>())
+                emitLine(std::format("struct {};", Mangler::mangleStruct(stmt->as<ObjectDeclaration>()->name->token.value)));
         }
+        emitLine("");
+
+        // TURN 3: Global Vars
+        for (auto& stmt : node.statements)
+            if (stmt->is<VariableDeclaration>()) stmt->accept(*this);
+        emitLine("");
+
+        // TUR 4: Function Prototypes
+        isEmittingPrototypes_ = true; 
+        for (auto& stmt : node.statements)
+            if (stmt->is<FunctionDeclaration>()) stmt->accept(*this);
+        
+        isEmittingPrototypes_ = false;
+        emitLine("");
+
+        // TURN 5:  Object & Component Bodies
+        for (auto& stmt : node.statements)
+            if (stmt->is<ComponentDeclaration>() || stmt->is<ObjectDeclaration>())
+                stmt->accept(*this);
+        
+        emitLine("");
+
+        // TUR 6: Function Bodies & Entry (Main)
+        for (auto& stmt : node.statements)
+            if (stmt->is<FunctionDeclaration>()) stmt->accept(*this);
     }
 
-    void CppGenerator::visit(FunctionDeclaration& node)
+    void CppGenerator::visit(TypeSpecifier& node)
     {
-        auto sym = node.name->referencedSymbol.Lock();
-        auto funcType = sym->type.AsFast<sema::FunctionType>();
+        WIO_UNUSED(node);
+    }
 
-        std::string returnType = funcType->returnType ? toCppType(funcType->returnType) : "void";
-        std::string funcName = node.name->token.value;
+    void CppGenerator::visit(BinaryExpression& node)
+    {
+        emit("(");
+        node.left->accept(*this);
+        emit(" " + node.op.value + " ");
+        node.right->accept(*this);
+        emit(")");
+    }
 
-        if (funcName == "Entry")
-        { 
-            emitMain(node);
-            return;
-        }
-
-        emitLine();
-        emit(returnType + " ");
-
-        std::string mangledName = Mangler::mangleFunction(funcName, funcType->paramTypes);
-        emit(mangledName + "(");
-
-        for (size_t i = 0; i < node.parameters.size(); ++i)
+    void CppGenerator::visit(UnaryExpression& node)
+    {
+        if (node.opType == UnaryExpression::UnaryOperatorType::Prefix)
         {
-            auto& param = node.parameters[i];
-            emit(common::formatString("{} {}", toCppType(param.name->refType.Lock()), param.name->token.value));
-            if (i < node.parameters.size() - 1) emit(", ");
-        }
-
-        emit(")\n");
-        
-        if (node.body)
-        {
-            node.body->accept(*this);
+            emit(node.op.value);
+            node.operand->accept(*this);
         }
         else
         {
-            emitLine(";");
+            node.operand->accept(*this);
+            emit(node.op.value);
         }
     }
 
-    void CppGenerator::visit(BlockStatement& node)
+    void CppGenerator::visit(AssignmentExpression& node)
     {
-        emitLine("{");
-        indent();
-        for (auto& stmt : node.statements)
+        int derefCount = 0;
+
+        auto lhsType = node.left->refType.Lock();
+        auto rhsType = node.right->refType.Lock();
+
+        if (lhsType && rhsType && !lhsType->isCompatibleWith(rhsType))
         {
-            stmt->accept(*this);
-        }
-        dedent();
-        emitLine("}");
-    }
-
-    void CppGenerator::visit(VariableDeclaration& node)
-    {
-        auto sym = node.name->referencedSymbol.Lock();
-
-        std::string typeStr = toCppType(node.name->refType.Lock());
-        std::string prefix;
-
-        if (node.mutability == Mutability::Const)
-            prefix = "constexpr ";
-        else if (node.mutability == Mutability::Immutable)
-            prefix = "const ";
-
-        for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
-
-        buffer_ << prefix << typeStr << " ";
-
-        std::string varName = node.name->token.value;
-        if (sym && sym->innerScope && sym->innerScope->getKind() == sema::ScopeKind::Global)
-        {
-            buffer_ << Mangler::mangleGlobalVar(varName);
-        }
-        else
-        {
-            buffer_ << varName;
-        }
-
-        if (node.initializer)
-        {
-            buffer_ << " = ";
-            node.initializer->accept(*this);
-        }
-
-        buffer_ << ";\n";
-    }
-
-    void CppGenerator::visit(ReturnStatement& node)
-    {
-        for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
+            Ref<sema::Type> current = lhsType;
         
-        buffer_ << "return";
-        if (node.value)
-        {
-            buffer_ << " ";
-            node.value->accept(*this);
+            while (current && current->kind() == sema::TypeKind::Reference)
+            {
+                auto rType = current.AsFast<sema::ReferenceType>();
+                derefCount++;
+            
+                if (rType->referredType->isCompatibleWith(rhsType)) {
+                    break;
+                }
+                current = rType->referredType;
+            }
         }
-        buffer_ << ";\n";
-    }
 
-    void CppGenerator::visit(ExpressionStatement& node)
-    {
-        for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
-        node.expression->accept(*this);
-        buffer_ << ";\n";
-    }
+        for (int i = 0; i < derefCount; ++i) emit("*(");
+    
+        node.left->accept(*this);
+    
+        for (int i = 0; i < derefCount; ++i) emit(")");
 
-    // ==========================================
-    // (Expressions)
-    // ==========================================
+        emit(" " + node.op.value + " "); // =, +=, -= ...
+    
+        node.right->accept(*this);
+    }
 
     void CppGenerator::visit(IntegerLiteral& node)
     {
@@ -266,148 +296,8 @@ namespace wio::codegen
         else
             emit(valStr + "f"); 
     }
-    
-    void CppGenerator::visit(BoolLiteral& node)
-    {
-        emit(node.token.value);
-    }
 
-    void CppGenerator::visit(Identifier& node)
-    {
-        if (auto sym = node.referencedSymbol.Lock())
-        {
-            if (sym->kind == sema::SymbolKind::Namespace && node.token.value == "std")
-            {
-                emit("wio::runtime");
-                return;
-            }
-            
-            if (sym->flags.get_isStd() && (sym->kind == sema::SymbolKind::Function || sym->kind == sema::SymbolKind::FunctionGroup))
-            {
-                emit("b" + node.token.value);
-                return;
-            }
-
-            if (sym->kind == sema::SymbolKind::Function)
-            {
-                auto funcType = sym->type.AsFast<sema::FunctionType>();
-                emit(Mangler::mangleFunction(sym->name, funcType->paramTypes));
-                return;
-            }
-            
-            if (sym->kind == sema::SymbolKind::Variable && sym->innerScope && sym->innerScope->getKind() == sema::ScopeKind::Global)
-            {
-                emit(Mangler::mangleGlobalVar(sym->name));
-                return;
-            }
-        }
-
-        emit(node.token.value);
-    }
-
-    void CppGenerator::visit(BinaryExpression& node)
-    {
-        emit("(");
-        node.left->accept(*this);
-        emit(" " + node.op.value + " ");
-        node.right->accept(*this);
-        emit(")");
-    }
-    
-    void CppGenerator::visit(AssignmentExpression& node)
-    {
-        int derefCount = 0;
-
-        auto lhsType = node.left->refType.Lock();
-        auto rhsType = node.right->refType.Lock();
-
-        if (lhsType && rhsType && !lhsType->isCompatibleWith(rhsType))
-        {
-            Ref<sema::Type> current = lhsType;
-        
-            while (current && current->kind() == sema::TypeKind::Reference)
-            {
-                auto rType = current.AsFast<sema::ReferenceType>();
-                derefCount++;
-            
-                if (rType->referredType->isCompatibleWith(rhsType)) {
-                    break;
-                }
-                current = rType->referredType;
-            }
-        }
-
-        for (int i = 0; i < derefCount; ++i) emit("*(");
-    
-        node.left->accept(*this);
-    
-        for (int i = 0; i < derefCount; ++i) emit(")");
-
-        emit(" " + node.op.value + " "); // =, +=, -= ...
-    
-        node.right->accept(*this);
-    }
-
-    void CppGenerator::visit(FunctionCallExpression& node)
-    {
-        node.callee->accept(*this);
-        emit("(");
-        for (size_t i = 0; i < node.arguments.size(); ++i)
-        {
-            node.arguments[i]->accept(*this);
-            if (i < node.arguments.size() - 1) emit(", ");
-        }
-        emit(")");
-    }
-
-    void CppGenerator::visit(IfStatement& node)
-    {
-        for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
-        buffer_ << "if (";
-        node.condition->accept(*this);
-        buffer_ << ")\n";
-        
-        node.thenBranch->accept(*this);
-
-        if (node.elseBranch)
-        {
-            for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
-            buffer_ << "else\n";
-            node.elseBranch->accept(*this);
-        }
-    }
-    
-    void CppGenerator::visit(WhileStatement& node)
-    {
-        for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
-        buffer_ << "while (";
-        node.condition->accept(*this);
-        buffer_ << ")\n";
-        
-        node.body->accept(*this);
-    }
-
-    void CppGenerator::visit(TypeSpecifier& node)
-    {
-        // I guess we do not need this func
-        WIO_UNUSED(node);
-    }
-
-    void CppGenerator::visit(UnaryExpression& node)
-    {
-        if (node.opType == UnaryExpression::UnaryOperatorType::Prefix)
-        {
-            emit(node.op.value); // "!" or "-"
-            node.operand->accept(*this);
-        }
-        else
-        {
-            node.operand->accept(*this);
-            emit(node.op.value);
-        }
-    }
-    
-    void CppGenerator::visit(StringLiteral& node)
+        void CppGenerator::visit(StringLiteral& node)
     {
         emit("\"" + common::wioStringToEscapedCppString(node.token.value) + "\"");
     }
@@ -460,6 +350,11 @@ namespace wio::codegen
     
         emit(")");
     }
+
+    void CppGenerator::visit(BoolLiteral& node)
+    {
+        emit(node.token.value);
+    }
     
     void CppGenerator::visit(CharLiteral& node)
     {
@@ -491,8 +386,6 @@ namespace wio::codegen
     
     void CppGenerator::visit(ArrayLiteral& node)
     {
-        // Wio: [1, 2, 3] -> C++: {1, 2, 3}
-
         const bool nested = !node.elements.empty() && node.elements[0].As<ArrayLiteral>();
         
         if (nested)
@@ -512,14 +405,55 @@ namespace wio::codegen
     
     void CppGenerator::visit(DictionaryLiteral& node)
     {
-        //
+        // TODO: impl
+        WIO_UNUSED(node);
     }
     
     void CppGenerator::visit(LambdaLiteral& node)
     {
-        
+        // TODO: impl
+        WIO_UNUSED(node);
     }
-    
+
+    void CppGenerator::visit(Identifier& node)
+    {
+        if (auto sym = node.referencedSymbol.Lock())
+        {
+            if (sym->kind == sema::SymbolKind::Namespace && node.token.value == "std")
+            {
+                emit("wio::runtime");
+                return;
+            }
+            
+            if (sym->flags.get_isStd() && (sym->kind == sema::SymbolKind::Function || sym->kind == sema::SymbolKind::FunctionGroup))
+            {
+                emit("b" + node.token.value);
+                return;
+            }
+
+            if (sym->kind == sema::SymbolKind::Function)
+            {
+                auto funcType = sym->type.AsFast<sema::FunctionType>();
+                emit(Mangler::mangleFunction(sym->name, funcType->paramTypes));
+                return;
+            }
+            
+            if (sym->kind == sema::SymbolKind::Variable && sym->flags.get_isGlobal())
+            {
+                emit(Mangler::mangleGlobalVar(sym->name));
+                return;
+            }
+
+            if (sym->kind == sema::SymbolKind::Struct)
+            {
+                emit(Mangler::mangleStruct(sym->name));
+                return;
+            }
+        }
+
+        emit(node.token.value);
+    }
+
     void CppGenerator::visit(NullExpression& node)
     {
         auto lockedRefType = node.refType.Lock();
@@ -533,7 +467,7 @@ namespace wio::codegen
             emit("nullptr");
         }
     }
-    
+
     void CppGenerator::visit(ArrayAccessExpression& node)
     {
         // Wio: arr[0] -> C++: arr[0]
@@ -572,7 +506,19 @@ namespace wio::codegen
     
         node.member->accept(*this);
     }
-    
+
+    void CppGenerator::visit(FunctionCallExpression& node)
+    {
+        node.callee->accept(*this);
+        emit("(");
+        for (size_t i = 0; i < node.arguments.size(); ++i)
+        {
+            node.arguments[i]->accept(*this);
+            if (i < node.arguments.size() - 1) emit(", ");
+        }
+        emit(")");
+    }
+
     void CppGenerator::visit(RefExpression& node)
     {
         emit("&");
@@ -597,23 +543,299 @@ namespace wio::codegen
         emit(", " + minLimit + ", " + maxLimit + "))");
     }
 
+    void CppGenerator::visit(ExpressionStatement& node)
+    {
+        for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
+        node.expression->accept(*this);
+        buffer_ << ";\n";
+    }
+
+    void CppGenerator::visit(AttributeStatement& node)
+    {
+        WIO_UNUSED(node);
+    }
+
+    void CppGenerator::visit(VariableDeclaration& node)
+    {
+        auto sym = node.name->referencedSymbol.Lock();
+
+        std::string typeStr = toCppType(node.name->refType.Lock());
+        std::string prefix;
+        std::string suffix;
+
+        if (node.mutability == Mutability::Const)
+        {
+            prefix = "constexpr ";
+        }
+        else if (node.mutability == Mutability::Immutable)
+        {
+            if (!typeStr.empty() && typeStr.back() == '*')
+                suffix = " const"; 
+            else
+                prefix = "const ";
+        }
+
+        for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
+
+        buffer_ << prefix << typeStr << suffix << " ";
+
+        std::string varName = node.name->token.value;
+
+        buffer_ << ((sym && sym->flags.get_isGlobal()) ? Mangler::mangleGlobalVar(varName) : varName);
+        
+        if (node.initializer)
+        {
+            buffer_ << " = ";
+            node.initializer->accept(*this);
+        }
+
+        buffer_ << ";\n";
+    }
+
+    void CppGenerator::visit(FunctionDeclaration& node)
+    {
+        auto sym = node.name->referencedSymbol.Lock();
+        auto funcType = sym->type.AsFast<sema::FunctionType>();
+
+        std::string returnType = funcType->returnType ? toCppType(funcType->returnType) : "void";
+        std::string funcName = node.name->token.value;
+
+        if (funcName == "Entry")
+        { 
+            if (!isEmittingPrototypes_)
+                emitMain(node);
+            return;
+        }
+
+        emitLine();
+
+        if (!currentClassName_.empty())
+        {
+            if (funcName == "OnConstruct")
+            {
+                emit(currentClassName_ + "(");
+            } else if (funcName == "OnDestruct")
+            {
+                emit("~" + currentClassName_ + "() ");
+            }
+            else
+            {
+                emit("virtual " + returnType + " "); 
+                emit(Mangler::mangleFunction(funcName, funcType->paramTypes) + "(");
+            }
+        }
+        else 
+        {
+            emit(returnType + " ");
+            emit(Mangler::mangleFunction(funcName, funcType->paramTypes) + "(");
+        }
+
+        if (funcName != "OnDestruct")
+        {
+            for (size_t i = 0; i < node.parameters.size(); ++i)
+            {
+                auto& param = node.parameters[i];
+                emit(common::formatString("{} {}", toCppType(param.name->refType.Lock()), param.name->token.value));
+                if (i < node.parameters.size() - 1) emit(", ");
+            }
+            emit(")");
+        }
+
+        if (isEmittingPrototypes_)
+        {
+            emitLine(";\n");
+            return;
+        }
+
+        if (node.body)
+        {
+            emitLine();
+            node.body->accept(*this);
+        }
+        else
+        {
+            emitLine(";\n");
+        }
+    }
+
+    void CppGenerator::visit(InterfaceDeclaration& node)
+    {
+        std::string interfaceName = Mangler::mangleInterface("", node.name->token.value);
+        emitLine("struct " + interfaceName);
+        emitLine("{");
+        indent();
+        
+        emitLine("virtual ~" + interfaceName + "() = default;\n");
+
+        for (auto& method : node.methods)
+        {
+            auto sym = method->name->referencedSymbol.Lock();
+            auto funcType = sym->type.AsFast<sema::FunctionType>();
+            std::string retType = funcType->returnType ? toCppType(funcType->returnType) : "void";
+            
+            emit("virtual " + retType + " " + Mangler::mangleFunction(method->name->token.value, funcType->paramTypes) + "(");
+            
+            for (size_t i = 0; i < method->parameters.size(); ++i)
+            {
+                auto& param = method->parameters[i];
+                emit(common::formatString("{} {}", toCppType(param.name->refType.Lock()), param.name->token.value));
+                if (i < method->parameters.size() - 1) emit(", ");
+            }
+            emitLine(") = 0;");
+        }
+
+        dedent();
+        emitLine("};\n");
+    }
+
+    void CppGenerator::visit(ComponentDeclaration& node)
+    {
+        std::string structName = Mangler::mangleStruct(node.name->token.value);
+        emit("struct " + structName);
+        
+        auto bases = getBaseInterfaces(node.attributes);
+        if (!bases.empty())
+        {
+            emit(" : ");
+            for (size_t i = 0; i < bases.size(); ++i)
+            {
+                emit("public " + Mangler::mangleInterface("", bases[i]));
+                if (i < bases.size() - 1) emit(", ");
+            }
+        }
+        emitLine("\n{");
+        indent();
+
+        currentClassName_ = structName;
+        AccessModifier currentAccess = AccessModifier::Public;
+
+        for (auto& member : node.members)
+        {
+            if (member.access != currentAccess && member.access != AccessModifier::None)
+            {
+                dedent();
+                if (member.access == AccessModifier::Public)
+                    emitLine("public:");
+                else if (member.access == AccessModifier::Private)
+                    emitLine("private:");
+                else if (member.access == AccessModifier::Protected)
+                    emitLine("protected:");
+                indent();
+                currentAccess = member.access;
+            }
+            member.declaration->accept(*this);
+        }
+
+        currentClassName_ = "";
+        dedent();
+        emitLine("};\n");
+    }
+
+    void CppGenerator::visit(ObjectDeclaration& node)
+    {
+        std::string structName = Mangler::mangleStruct(node.name->token.value);
+        
+        emit("struct " + structName); 
+        
+        auto bases = getBaseInterfaces(node.attributes);
+        if (!bases.empty()) {
+            emit(" : ");
+            for (size_t i = 0; i < bases.size(); ++i) {
+                emit("public " + Mangler::mangleInterface("", bases[i]));
+                if (i < bases.size() - 1) emit(", ");
+            }
+        }
+        emitLine("\n{");
+        indent();
+
+        currentClassName_ = structName;
+        AccessModifier currentAccess = AccessModifier::Public;
+
+        for (auto& member : node.members)
+        {
+            AccessModifier targetAccess = (member.access == AccessModifier::None) ? AccessModifier::Private : member.access;
+
+            if (targetAccess != currentAccess)
+            {
+                dedent();
+                if (targetAccess == AccessModifier::Public) emitLine("public:");
+                else if (targetAccess == AccessModifier::Private) emitLine("private:");
+                else if (targetAccess == AccessModifier::Protected) emitLine("protected:");
+                indent();
+                currentAccess = targetAccess;
+            }
+            member.declaration->accept(*this);
+        }
+
+        currentClassName_ = "";
+        dedent();
+        emitLine("};\n");
+    }
+
+    void CppGenerator::visit(BlockStatement& node)
+    {
+        emitLine("{");
+        indent();
+        for (auto& stmt : node.statements)
+        {
+            stmt->accept(*this);
+        }
+        dedent();
+        emitLine("}");
+    }
+
+    void CppGenerator::visit(IfStatement& node)
+    {
+        for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
+        buffer_ << "if (";
+        node.condition->accept(*this);
+        buffer_ << ")\n";
+        
+        node.thenBranch->accept(*this);
+
+        if (node.elseBranch)
+        {
+            for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
+            buffer_ << "else\n";
+            node.elseBranch->accept(*this);
+        }
+    }
+    
+    void CppGenerator::visit(WhileStatement& node)
+    {
+        for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
+        buffer_ << "while (";
+        node.condition->accept(*this);
+        buffer_ << ")\n";
+        
+        node.body->accept(*this);
+    }
+
+    void CppGenerator::visit(ReturnStatement& node)
+    {
+        for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
+        
+        buffer_ << "return";
+        if (node.value)
+        {
+            buffer_ << " ";
+            node.value->accept(*this);
+        }
+        buffer_ << ";\n";
+    }
+
     void CppGenerator::visit(UseStatement& node)
     {
         if (node.isStdLib)
         {
             if (node.modulePath == "io")
             {
-                header_ << "#include \"io.h\"\n";
+                emitHeaderLine("#include \"io.h\"");
             }
         }
         else
         {
-            header_ << "#include \"" << node.modulePath << ".h\"\n";
+            emitHeaderLine("#include \"" + node.modulePath + ".h\"");
         }
-    }
-
-    void CppGenerator::visit(AttributeStatement& node)
-    {
-        WIO_UNUSED(node);
     }
 }

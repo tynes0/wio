@@ -37,10 +37,11 @@ namespace wio
       kwConst,
       kwType,
       kwRef,
-      kwFit,
       kwView,
-      kwEnum,
-      kwFlagset,
+      kwFit,
+      kwEnum, // todo: implament -> c++ enum blabla{};
+      kwFlag, // todo: implament -> c++ struct blabla{};
+      kwFlagset, // todo: implament -> c++ enum class blabla{};
 
       /* ===============================
          Keywords – types
@@ -62,17 +63,17 @@ namespace wio
       kwChar,
       kwUchar,
       kwString,
-      kwVoid,
       kwComponent,
-      kwSystem,
-      kwProgram,
       kwObject,
-
+      kwInterface,
+      kwVoid,
+      
       /* ===============================
-         Keywords – boolean
+         Keywords – boolean & null
          =============================== */
       kwTrue,
       kwFalse,
+      kwNull,
       
       /* ===============================
          Keywords – control flow
@@ -82,11 +83,12 @@ namespace wio
       kwMatch,
       kwFor,
       kwIn,
-      kwWhile,
+      kwWhile, // todo: rename with loop
       kwBreak,
       kwContinue,
       kwReturn,
       kwWhen,
+      kwAssumed,
    
       /* ===============================
          Keywords – logic / flow
@@ -104,21 +106,20 @@ namespace wio
       kwWait,
    
       /* ===============================
-         Keywords – error / result
-         =============================== */
-      kwResult,
-      kwNull,
-   
-      /* ===============================
          Keywords – binding / modules
          =============================== */
       kwUse,
       kwAs,
+
+      /* ===============================
+         Keywords – access
+         =============================== */
+      kwPublic,
+      kwPrivate,
+      kwProtected,
       kwSuper,
       kwSelf,
-      kwExtern,
-      kwEngine,
-
+      
       /* ===============================
          Keywords – binding / modules
          =============================== */
@@ -128,6 +129,12 @@ namespace wio
       kwYield,
       kwThread,
       kwLoop,
+
+      /* ===============================
+         Keywords – app
+         =============================== */
+      kwSystem,
+      kwProgram,
 
       /* ===============================
          Arrays
@@ -196,7 +203,6 @@ namespace wio
          =============================== */
       opFlowRight,       // |>
       opFlowLeft,        // <|
-   
       
       /* ===============================
          Operators – misc
@@ -236,13 +242,14 @@ namespace wio
       { "let",       TokenType::kwLet },
       { "mut",       TokenType::kwMut },
       { "const",     TokenType::kwConst },
+      { "type",      TokenType::kwType },
       { "ref",       TokenType::kwRef },
-      { "fit",       TokenType::kwFit },
       { "view",      TokenType::kwView },
+      { "fit",       TokenType::kwFit },
       { "enum",      TokenType::kwEnum },
+      { "flag",      TokenType::kwFlag },
       { "flagset",   TokenType::kwFlagset },
       
-      { "type",      TokenType::kwType },
       { "i8",        TokenType::kwI8 },
       { "i16",       TokenType::kwI16 },
       { "i32",       TokenType::kwI32 },
@@ -260,11 +267,14 @@ namespace wio
       { "char",      TokenType::kwChar },
       { "uchar",     TokenType::kwUchar },
       { "string",    TokenType::kwString },
+      { "component", TokenType::kwComponent },
+      { "object",    TokenType::kwObject },
+      { "interface", TokenType::kwInterface },
       { "void",      TokenType::kwVoid },
-      { "Result",    TokenType::kwResult },
 
       { "true",      TokenType::kwTrue },
       { "false",     TokenType::kwFalse },
+      { "null",      TokenType::kwNull },
    
       { "if",        TokenType::kwIf },
       { "else",      TokenType::kwElse },
@@ -275,8 +285,9 @@ namespace wio
       { "break",     TokenType::kwBreak },
       { "continue",  TokenType::kwContinue },
       { "return",    TokenType::kwReturn },
-   
       { "when",      TokenType::kwWhen },
+      { "assumed",   TokenType::kwAssumed },
+      
       { "and",       TokenType::kwAnd },
       { "or",        TokenType::kwOr },
       { "not",       TokenType::kwNot },
@@ -286,20 +297,24 @@ namespace wio
       { "during",    TokenType::kwDuring },
       { "wait",      TokenType::kwWait },
    
-      { "null",      TokenType::kwNull },
-   
       { "use",       TokenType::kwUse },
       { "as",        TokenType::kwAs },
+
+      { "public",    TokenType::kwPublic },
+      { "private",   TokenType::kwPrivate },
+      { "protected", TokenType::kwProtected },
       { "super",     TokenType::kwSuper },
       { "self",      TokenType::kwSelf },
-      { "extern",    TokenType::kwExtern },
-      { "engine",    TokenType::kwEngine },
 
       { "async",     TokenType::kwAsync },
       { "await",     TokenType::kwAwait },
       { "coroutine", TokenType::kwCoroutine },
+      { "yield",     TokenType::kwYield },
       { "thread",    TokenType::kwThread },
       { "loop",      TokenType::kwLoop },
+      
+      { "system",    TokenType::kwSystem },
+      { "Program",   TokenType::kwProgram },
    };
 
    /* ===============================
@@ -396,6 +411,7 @@ namespace wio
       [[nodiscard]] bool isSymbol() const;
       [[nodiscard]] bool isIdentifier() const;
       [[nodiscard]] bool isType() const;
+      [[nodiscard]] bool isTypeDeclaration() const;
       [[nodiscard]] bool isLiteral() const;
       [[nodiscard]] bool isComparison() const;
    };

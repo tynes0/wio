@@ -137,11 +137,6 @@ namespace wio
         utError(formattedErrMsg, current.loc);
     }
 
-    void Parser::finishLine()
-    {
-        consume(TokenType::semicolon);
-    }
-
     NodePtr<Expression> Parser::parseExpression(int minPrecedence)
     {
         NodePtr<Expression> left;
@@ -258,10 +253,10 @@ namespace wio
         if (match(TokenType::kwNull, true))
             return makeNodePtr<NullExpression>(peek(-1).loc);
 
-        if (match(TokenType::durationLiteral))
+        if (match(TokenType::durationLiteral, true))
             return makeNodePtr<DurationLiteral>(peek(-1));
         
-        if (match(TokenType::byteLiteral))
+        if (match(TokenType::byteLiteral, true))
             return makeNodePtr<ByteLiteral>(peek(-1));
 
         if (match(TokenType::leftParen, true))
@@ -470,12 +465,22 @@ namespace wio
         if (matchOneOf({ TokenType::semicolon, TokenType::endOfFile }, true))
             return nullptr;
 
+        std::vector<NodePtr<AttributeStatement>> attributes;
+        while (match(TokenType::atSign))
+            attributes.push_back(parseAttributeStatement());
+        
         if (peek().isKeyword())
         {
             if (matchOneOf({ TokenType::kwLet, TokenType::kwMut, TokenType::kwConst }))
-                return parseVariableDeclaration();
+                return parseVariableDeclaration(std::move(attributes));
             if (match(TokenType::kwFn))
-                return parseFunctionDeclaration();
+                return parseFunctionDeclaration(std::move(attributes));
+            if (match(TokenType::kwInterface))
+                return parseInterfaceDeclaration(std::move(attributes));
+            if (match(TokenType::kwComponent))
+                return parseComponentDeclaration(std::move(attributes));
+            if (match(TokenType::kwObject))
+                return parseObjectDeclaration(std::move(attributes));
             if (match(TokenType::kwIf))
                 return parseIfStatement();
             if (match(TokenType::kwWhile))
@@ -488,7 +493,7 @@ namespace wio
         else if (peek().isOperator())
         {
             NodePtr<Expression> expr = parseExpression();
-            finishLine();
+            consume(TokenType::semicolon);
             return makeNodePtr<ExpressionStatement>(std::move(expr), peek().loc);
         }
         else if (peek().isSymbol())
@@ -497,14 +502,10 @@ namespace wio
             {
                 return parseBlockStatement();
             }
-            if (match(TokenType::atSign))
-            {
-                return parseAttributeStatement();
-            }
         }
-
+        
         NodePtr<Expression> expr = parseExpression();
-        finishLine();
+        consume(TokenType::semicolon);
         return makeNodePtr<ExpressionStatement>(std::move(expr));
     }
 
@@ -527,7 +528,34 @@ namespace wio
         return makeNodePtr<BlockStatement>(std::move(statements));
     }
 
-    NodePtr<Statement> Parser::parseVariableDeclaration()
+    NodePtr<AttributeStatement> Parser::parseAttributeStatement()
+    {
+        Token startTok = consume(TokenType::atSign);
+        Location startLoc = startTok.loc;
+
+        Token id = consume(TokenType::identifier);
+
+        std::vector<Token> args;
+        if (match(TokenType::leftParen, true))
+        {
+            if (!match(TokenType::rightParen))
+            {
+                do
+                {
+                    args.push_back(advance());
+                } while (match(TokenType::comma, true));
+            }
+            consume(TokenType::rightParen);
+        }
+
+        if (std::optional<Attribute> attribute = frenum::cast<Attribute>(id.value); attribute.has_value())
+        {
+            return makeNodePtr<AttributeStatement>(attribute.value(), args, startLoc);
+        }
+        return makeNodePtr<AttributeStatement>(Attribute::Unknown, args, startLoc);
+    }
+
+    NodePtr<VariableDeclaration> Parser::parseVariableDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
     {
         Token startTok = advance();
         // NOLINTNEXTLINE
@@ -564,9 +592,10 @@ namespace wio
             }
         }
         
-        finishLine();
+        consume(TokenType::semicolon);
 
         return makeNodePtr<VariableDeclaration>(
+            std::move(attributes),
             mutability,
             std::move(name), 
             std::move(specifier),
@@ -575,10 +604,10 @@ namespace wio
         );
     }
 
-    NodePtr<Statement> Parser::parseFunctionDeclaration()
+    NodePtr<FunctionDeclaration> Parser::parseFunctionDeclaration(std::vector<NodePtr<AttributeStatement>> attributes, bool isLifecycle)
     {
-        Token startTok = consume(TokenType::kwFn); 
-
+        Token startTok = !isLifecycle ? consume(TokenType::kwFn) : peek();
+        
         NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
 
         consume(TokenType::leftParen);
@@ -608,15 +637,15 @@ namespace wio
         {
             returnType = parseType();
         }
-
-
+        
         std::vector<NodePtr<Expression>> guards;
         while (match(TokenType::kwWhen, true)) // 'when'
             guards.push_back(parseExpression());
 
-        NodePtr<Statement> body = parseBlockStatement();
+        NodePtr<Statement> body = match(TokenType::semicolon, true) ? nullptr : parseBlockStatement();
 
         return makeNodePtr<FunctionDeclaration>(
+            std::move(attributes),
             std::move(name),
             std::move(parameters),
             std::move(returnType),
@@ -624,6 +653,173 @@ namespace wio
             std::move(body),
             startTok.loc
         );
+    }
+
+    NodePtr<Statement> Parser::parseInterfaceDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
+    {
+        Token startTok = consume(TokenType::kwInterface);
+        NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+
+        consume(TokenType::leftBrace);
+        std::vector<NodePtr<FunctionDeclaration>> methods;
+
+        while (peek().isValid() && !match(TokenType::rightBrace))
+        {
+            std::vector<NodePtr<AttributeStatement>> methodAttrs;
+            while (peek().type == TokenType::atSign)
+                methodAttrs.push_back(parseAttributeStatement());
+
+            auto method = parseFunctionDeclaration(std::move(methodAttrs), false);
+            
+            if (method->body != nullptr) {
+                utError("Interface methods cannot have a body. Use ';' instead of '{...}'.", method->location());
+            }
+
+            methods.push_back(std::move(method));
+        }
+        consume(TokenType::rightBrace);
+        
+        return makeNodePtr<InterfaceDeclaration>(std::move(attributes), std::move(name), std::move(methods), startTok.loc);
+    }
+
+    NodePtr<Statement> Parser::parseComponentDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
+    {
+        Token startTok = consume(TokenType::kwComponent);
+        NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+
+        consume(TokenType::leftBrace);
+        std::vector<ComponentMember> members;
+
+        while (peek().isValid() && !match(TokenType::rightBrace))
+        {
+            std::vector<NodePtr<AttributeStatement>> memberAttrs;
+            while (peek().type == TokenType::atSign)
+                memberAttrs.push_back(parseAttributeStatement());
+
+            AccessModifier access = AccessModifier::Public; 
+            if (match(TokenType::kwPublic, true)) access = AccessModifier::Public;
+            else if (match(TokenType::kwPrivate, true)) access = AccessModifier::Private;
+            else if (match(TokenType::kwProtected, true)) access = AccessModifier::Protected;
+
+            if (match(TokenType::kwFn) ||
+                match(TokenType::identifier, "OnConstruct", false) ||
+                match(TokenType::identifier, "OnDestruct", false))
+            {
+                bool isLifecycle = !match(TokenType::kwFn);
+                auto method = parseFunctionDeclaration(std::move(memberAttrs), isLifecycle);
+                
+                members.push_back(ComponentMember{
+                    .attributes = std::vector<NodePtr<AttributeStatement>>{},
+                    .access = access,
+                    .declaration = std::move(method)
+                });
+            }
+            else
+            {
+                NodePtr<Identifier> memberName = makeNodePtr<Identifier>(consume(TokenType::identifier));
+                
+                NodePtr<TypeSpecifier> memberType = nullptr;
+                if (match(TokenType::opColon, true)) memberType = parseType();
+                
+                NodePtr<Expression> init = nullptr;
+                if (match(TokenType::opAssign, true)) init = parseExpression();
+
+                if (!memberType && !init) {
+                    utError("Component members must have an explicit type or an initializer.", peek(-1).loc);
+                }
+
+                match(TokenType::comma, true);
+                match(TokenType::semicolon, true); 
+
+                auto varDecl =
+                    makeNodePtr<VariableDeclaration>(
+                        std::move(memberAttrs),
+                        Mutability::Mutable,
+                        std::move(memberName),
+                        std::move(memberType),
+                        std::move(init),
+                        peek(-1).loc
+                    );
+
+                members.push_back(ComponentMember{
+                    .attributes = std::vector<NodePtr<AttributeStatement>>{},
+                    .access = access,
+                    .declaration = std::move(varDecl)
+                });
+            }
+        }
+        consume(TokenType::rightBrace);
+        return makeNodePtr<ComponentDeclaration>(std::move(attributes), std::move(name), std::move(members), startTok.loc);
+    }
+
+    NodePtr<Statement> Parser::parseObjectDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
+    {
+        Token startTok = consume(TokenType::kwObject);
+        NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+
+        consume(TokenType::leftBrace);
+        std::vector<ObjectMember> members;
+
+        while (peek().isValid() && !match(TokenType::rightBrace))
+        {
+            std::vector<NodePtr<AttributeStatement>> memberAttrs;
+            while (peek().type == TokenType::atSign)
+                memberAttrs.push_back(parseAttributeStatement());
+
+            AccessModifier access = AccessModifier::Private; 
+            if (match(TokenType::kwPublic, true)) access = AccessModifier::Public;
+            else if (match(TokenType::kwPrivate, true)) access = AccessModifier::Private;
+            else if (match(TokenType::kwProtected, true)) access = AccessModifier::Protected;
+
+            if (match(TokenType::kwFn) ||
+                match(TokenType::identifier, "OnConstruct", false) ||
+                match(TokenType::identifier, "OnDestruct", false))
+            {
+                bool isLifecycle = !match(TokenType::kwFn);
+                auto method = parseFunctionDeclaration(std::move(memberAttrs), isLifecycle);
+                
+                members.push_back(ObjectMember{
+                    .attributes = std::vector<NodePtr<AttributeStatement>>{},
+                    .access = access,
+                    .declaration = std::move(method)
+                });
+            }
+            else
+            {
+                NodePtr<Identifier> memberName = makeNodePtr<Identifier>(consume(TokenType::identifier));
+                
+                NodePtr<TypeSpecifier> memberType = nullptr;
+                if (match(TokenType::opColon, true)) memberType = parseType();
+                
+                NodePtr<Expression> init = nullptr;
+                if (match(TokenType::opAssign, true)) init = parseExpression();
+
+                if (!memberType && !init) {
+                    utError("Object members must have an explicit type or an initializer.", peek(-1).loc);
+                }
+
+                match(TokenType::comma, true);
+                match(TokenType::semicolon, true);
+
+                auto varDecl =
+                    makeNodePtr<VariableDeclaration>(
+                        std::move(memberAttrs),
+                        Mutability::Mutable,
+                        std::move(memberName),
+                        std::move(memberType),
+                        std::move(init),
+                        peek(-1).loc
+                    );
+
+                members.push_back(ObjectMember{
+                    .attributes = std::vector<NodePtr<AttributeStatement>>{},
+                    .access = access,
+                    .declaration = std::move(varDecl)
+                });
+            }
+        }
+        consume(TokenType::rightBrace);
+        return makeNodePtr<ObjectDeclaration>(std::move(attributes), std::move(name), std::move(members), startTok.loc);
     }
 
     NodePtr<Statement> Parser::parseIfStatement()
@@ -672,7 +868,7 @@ namespace wio
         if (!match(TokenType::semicolon, true))
         {
             value = parseExpression();
-            finishLine();
+            consume(TokenType::semicolon);
         }
 
         return makeNodePtr<ReturnStatement>(std::move(value), startLoc);
@@ -732,20 +928,6 @@ namespace wio
         consume(TokenType::semicolon);
         
         return makeNodePtr<UseStatement>(std::move(moduleName), std::move(modulePath), isStdLib, startLoc);
-    }
-
-    NodePtr<Statement> Parser::parseAttributeStatement()
-    {
-        Token startTok = consume(TokenType::atSign);
-        Location startLoc = startTok.loc;
-
-        Token id = consume(TokenType::identifier);
-        
-        if (std::optional<Attribute> attribute = frenum::cast<Attribute>(id.value); attribute.has_value())
-        {
-            return makeNodePtr<AttributeStatement>(attribute.value(), startLoc);
-        }
-        return makeNodePtr<AttributeStatement>(Attribute::Unknown, startLoc);
     }
 
     // todo: improve

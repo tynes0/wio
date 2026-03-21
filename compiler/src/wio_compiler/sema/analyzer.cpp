@@ -1,6 +1,5 @@
 ﻿#include "wio/sema/analyzer.h"
 
-#include "wio/codegen/mangler.h"
 #include "wio/common/exception.h"
 #include "wio/common/logger.h"
 #include "wio/common/utility.h"
@@ -73,27 +72,43 @@ namespace wio::sema
         return symbol;
     }
 
-    std::string SemanticAnalyzer::mangleName(const std::string& original, SymbolKind kind)
+    bool SemanticAnalyzer::hasAttribute(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
     {
-        return ""; // TODO: IMPL
+        return std::ranges::any_of(attributes, [targetAttr](const auto& attr) { return attr->attribute == targetAttr; });
+    }
+
+    std::vector<Token> SemanticAnalyzer::getAttributeArgs(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
+    {
+        for (const auto& attr : attributes) {
+            if (attr->attribute == targetAttr) return attr->args;
+        }
+        return {};
     }
 
     void SemanticAnalyzer::visit(Program& node)
     {
         enterScope(ScopeKind::Global);
 
-        // TODO: add built-in's 
-
+        isDeclarationPass_ = true;
         for (auto& stmt : node.statements)
-        {
             stmt->accept(*this);
-        }
 
+        isDeclarationPass_ = false;
+        isStructResolutionPass_ = true;
+        for (auto& stmt : node.statements)
+            if (stmt->is<ComponentDeclaration>() || stmt->is<ObjectDeclaration>())
+                stmt->accept(*this);
+        
+        isStructResolutionPass_ = false;
+        for (auto& stmt : node.statements)
+            stmt->accept(*this);
+        
         exitScope();
     }
 
     void SemanticAnalyzer::visit(BlockStatement& node)
     {
+        if (isDeclarationPass_) return;
         enterScope(ScopeKind::Block);
 
         for (auto& stmt : node.statements)
@@ -125,6 +140,20 @@ namespace wio::sema
                 node.generics[0]->accept(*this);
                 bool isMut = (node.name.type == TokenType::kwRef); 
                 type = Compiler::get().getTypeContext().getReferenceType(node.generics[0]->refType.Lock(), isMut);
+            }
+            else if (node.name.type == TokenType::identifier)
+            {
+                if (auto sym = currentScope_->resolve(node.name.value))
+                {
+                    if (sym->kind == SymbolKind::Struct) 
+                    {
+                        type = sym->type;
+                    }
+                    else
+                    {
+                        WIO_LOG_ADD_ERROR(node.location(), "'{}' is not a type.", node.name.value);
+                    }
+                }
             }
         }
 
@@ -235,18 +264,12 @@ namespace wio::sema
                     
                     if (!rType->isMutable) canMutate = false;
                     
-                    if (rType->referredType->isCompatibleWith(rhsType))
+                    if (rType->referredType->isCompatibleWith(rhsType) || 
+                       (rType->referredType->isNumeric() && rhsType->isNumeric())) // YENİ: Deref atamada sayısal esneklik
                     {
                         isAutoDeref = true;
-                        
-                        if (!canMutate)
-                        {
-                            WIO_LOG_ADD_ERROR(node.op.loc, "Cannot modify data through a read-only reference (view).");
-                        }
-                        else
-                        {
-                            isCompatible = true;
-                        }
+                        if (!canMutate) WIO_LOG_ADD_ERROR(node.op.loc, "Cannot modify data through a read-only reference (view).");
+                        else isCompatible = true;
                         break;
                     }
                     currentRef = rType->referredType;
@@ -256,24 +279,39 @@ namespace wio::sema
 
         if (lhsType && rhsType && !isCompatible)
         {
-            WIO_LOG_ADD_ERROR(node.op.loc,
-                "Type mismatch in assignment: Cannot assign '{}' to '{}'.",
-                rhsType->toString(),
-                lhsType->toString()
-            );
+            if (lhsType->isNumeric() && rhsType->isNumeric())
+            {
+            }
+            else
+            {
+                WIO_LOG_ADD_ERROR(node.op.loc,
+                    "Type mismatch in assignment: Cannot assign '{}' to '{}'.",
+                    rhsType->toString(),
+                    lhsType->toString()
+                );
+            }
         }
 
         if (!isAutoDeref)
         {
             if (auto referSym = node.left->referencedSymbol.Lock(); referSym)
             {
-                if (!referSym->flags.get_isMutable())
+                if (!referSym->flags.get_isMutable() && !referSym->flags.get_isReadOnly())
                 {
-                    WIO_LOG_ADD_ERROR(
-                        node.op.loc,
-                        "Cannot assign to immutable variable '{0}'. Hint: Declare it as 'mut {0}'.",
-                        referSym->name
-                    );
+                    WIO_LOG_ADD_ERROR(node.op.loc, "Cannot assign to immutable variable '{0}'. Hint: Declare it as 'mut {0}'.", referSym->name);
+                }
+                if (referSym->flags.get_isReadOnly())
+                {
+                    bool isInsideObject = false;
+                    auto currentSearch = currentScope_;
+                    while (currentSearch)
+                    {
+                        if (currentSearch->resolveLocally(referSym->name)) { isInsideObject = true; break; }
+                        currentSearch = currentSearch->getParent().Lock();
+                    }
+
+                    if (!isInsideObject)
+                        WIO_LOG_ADD_ERROR(node.op.loc, "Cannot modify @readonly member '{0}' from outside its object.", referSym->name);
                 }
             }
         }
@@ -430,8 +468,8 @@ namespace wio::sema
         node.refType = arrType->elementType;
     }
     
-void SemanticAnalyzer::visit(MemberAccessExpression& node)
-{
+    void SemanticAnalyzer::visit(MemberAccessExpression& node)
+    {
         node.object->accept(*this);
 
         Ref<Symbol> leftSymbol = node.object->referencedSymbol.Lock();
@@ -450,103 +488,138 @@ void SemanticAnalyzer::visit(MemberAccessExpression& node)
             leftType = lockedType;
         }
 
-    // 1. Durum: Namespace  (Örn: std::io)
-    if (leftSymbol && leftSymbol->kind == SymbolKind::Namespace)
-    {
-        if (!leftSymbol->innerScope)
+        if (leftSymbol && leftSymbol->kind == SymbolKind::Namespace)
         {
-            WIO_LOG_ADD_ERROR(node.location(), "The namespace contents are inaccessible. (No Scope): {}", leftSymbol->name);
-            return;
-        }
-        foundMember = leftSymbol->innerScope->resolve(node.member->token.value);
-    }
-    else 
-    {
-        // YARDIMCI ADIM: Tipimiz bir Alias (Takma ad) ise asıl tipe inelim.
-        // Örn: type MyStruct = RealStruct; yapılmış olabilir.
-        Ref<Type> baseType = leftType;
-        while (baseType && baseType->kind() == TypeKind::Alias)
-        {
-            baseType = baseType.AsFast<AliasType>()->aliasedType;
-        }
-
-        // 2. Durum: Doğrudan Struct Erişimi (Örn: obj.val)
-        if (baseType->kind() == TypeKind::Struct)
-        {
-            // NOT: İstersen dil kurallarına göre burada operatör kontrolü yapabilirsin.
-            // if (node.opType != TokenType::opDot) { Hata: "Struct'lar için '.' kullanmalısın" }
-
-            auto structType = baseType.AsFast<StructType>();
-            if (structType->structScope)
-                 foundMember = structType->structScope->resolve(node.member->token.value);
-        }
-        // 3. Durum: Pointer/Referans Erişimi (Örn: ptr->val veya ref.val)
-        else if (baseType->kind() == TypeKind::Reference)
-        {
-            // NOT: Yine diline özel operatör kuralı koyabilirsin. 
-            // C++ gibi yapacaksan: if (node.opType != TokenType::opArrow) { Hata ver }
-
-            // Referansın tuttuğu asıl tipe (referredType) iniyoruz.
-            Ref<Type> referredType = baseType.AsFast<ReferenceType>()->referredType;
-
-            // Referans edilen tip de bir Alias olabilir, asıl tipe inene kadar onu da soyalım
-            while (referredType && referredType->kind() == TypeKind::Alias)
+            if (!leftSymbol->innerScope)
             {
-                referredType = referredType.AsFast<AliasType>()->aliasedType;
+                WIO_LOG_ADD_ERROR(node.location(), "The namespace contents are inaccessible. (No Scope): {}", leftSymbol->name);
+                return;
             }
-
-            // Nihayet referansın ucundaki tip bir struct ise:
-            if (referredType && referredType->kind() == TypeKind::Struct)
+            foundMember = leftSymbol->innerScope->resolve(node.member->token.value);
+        }
+        else 
+        {
+            Ref<Type> baseType = leftType;
+            while (baseType && baseType->kind() == TypeKind::Alias)
             {
-                auto structType = referredType.AsFast<StructType>();
+                baseType = baseType.AsFast<AliasType>()->aliasedType;
+            }
+    
+            if (baseType->kind() == TypeKind::Struct)
+            {
+                auto structType = baseType.AsFast<StructType>();
                 if (structType->structScope)
                      foundMember = structType->structScope->resolve(node.member->token.value);
             }
-            else
+            else if (baseType->kind() == TypeKind::Reference)
             {
-                WIO_LOG_ADD_ERROR(node.member->location(), 
-                    "Cannot access member '{}'. Reference points to '{}', which is not a struct.", 
-                    node.member->token.value, 
-                    referredType ? referredType->toString() : "Unknown");
-                node.refType = Compiler::get().getTypeContext().getUnknown();
-                return;
+                Ref<Type> referredType = baseType.AsFast<ReferenceType>()->referredType;
+    
+                while (referredType && referredType->kind() == TypeKind::Alias)
+                {
+                    referredType = referredType.AsFast<AliasType>()->aliasedType;
+                }
+    
+                if (referredType && referredType->kind() == TypeKind::Struct)
+                {
+                    auto structType = referredType.AsFast<StructType>();
+                    if (structType->structScope)
+                         foundMember = structType->structScope->resolve(node.member->token.value);
+                }
+                else
+                {
+                    WIO_LOG_ADD_ERROR(node.member->location(), 
+                        "Cannot access member '{}'. Reference points to '{}', which is not a struct.", 
+                        node.member->token.value, 
+                        referredType ? referredType->toString() : "Unknown");
+                    node.refType = Compiler::get().getTypeContext().getUnknown();
+                    return;
+                }
             }
         }
-    }
-
-    // Üye bulunamadıysa hata ver ve bitir
-    if (!foundMember)
-    {
-        WIO_LOG_ADD_ERROR(node.member->location(), "Member not found: '{}' in type '{}'", node.member->token.value, leftType->toString());
-        node.refType = Compiler::get().getTypeContext().getUnknown();
-        return;
-    }
-
-    // Bulunan üyeyi ve tipini AST düğümlerine (node) kaydet
-    node.referencedSymbol = foundMember;
-    node.refType = foundMember->type;
     
-    if (auto memberId = node.member.Get(); memberId)
-    {
-        memberId->referencedSymbol = foundMember;
-        memberId->refType = foundMember->type;
+        if (!foundMember)
+        {
+            WIO_LOG_ADD_ERROR(node.member->location(), "Member not found: '{}' in type '{}'", node.member->token.value, leftType->toString());
+            node.refType = Compiler::get().getTypeContext().getUnknown();
+            return;
+        }
+
+        bool isInsideObject = false;
+        auto currentSearch = currentScope_;
+        while (currentSearch)
+        {
+            if (currentSearch == foundMember->innerScope || currentSearch->resolveLocally(foundMember->name))
+            {
+                isInsideObject = true;
+                break;
+            }
+            currentSearch = currentSearch->getParent().Lock();
+        }
+
+        if (foundMember->flags.get_isPrivate() && !isInsideObject)
+            WIO_LOG_ADD_ERROR(node.location(), "Cannot access private member '{}' from outside the object.", foundMember->name);
+
+        if (foundMember->flags.get_isProtected() && !isInsideObject)
+            WIO_LOG_ADD_ERROR(node.location(), "Cannot access protected member '{}' from outside the object hierarchy.", foundMember->name);
+    
+        node.referencedSymbol = foundMember;
+        node.refType = foundMember->type;
+        
+        if (auto memberId = node.member.Get(); memberId)
+        {
+            memberId->referencedSymbol = foundMember;
+            memberId->refType = foundMember->type;
+        }
     }
-}
 
     void SemanticAnalyzer::visit(FunctionCallExpression& node)
     {
         node.callee->accept(*this);
         Ref<Symbol> calleeSym = node.callee->referencedSymbol.Lock();
 
+        bool isConstructorCall = false;
+        Ref<Type> structReturnType = nullptr;
+
+        if (calleeSym && calleeSym->kind == SymbolKind::Struct)
+        {
+            isConstructorCall = true;
+            structReturnType = calleeSym->type;
+            
+            auto structType = structReturnType.AsFast<StructType>();
+            if (structType->structScope)
+            {
+                calleeSym = structType->structScope->resolveLocally("OnConstruct");
+            }
+            
+            if (!calleeSym)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "No constructor found for type '{}'.", structType->name);
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+        }
+
+        std::vector<Ref<Type>> argTypes;
+        for (auto& arg : node.arguments)
+        {
+            arg->accept(*this);
+            argTypes.push_back(arg->refType.Lock());
+        }
+
+        auto isSafeRefCast = [](const Ref<Type>& dest, const Ref<Type>& src) -> bool
+        {
+            if (dest && src && dest->kind() == TypeKind::Reference && src->kind() == TypeKind::Reference)
+            {
+                auto dRef = dest.AsFast<ReferenceType>();
+                auto sRef = src.AsFast<ReferenceType>();
+                if (!dRef->isMutable && sRef->isMutable && dRef->referredType->isCompatibleWith(sRef->referredType)) return true;
+            }
+            return false;
+        };
+
         if (calleeSym && calleeSym->kind == SymbolKind::FunctionGroup)
         {
-            std::vector<Ref<Type>> argTypes;
-            for (auto& arg : node.arguments)
-            {
-                arg->accept(*this);
-                argTypes.push_back(arg->refType.Lock());
-            }
-
             Ref<Symbol> bestMatch = nullptr;
             int bestScore = -1;
             bool isAmbiguous = false;
@@ -562,9 +635,9 @@ void SemanticAnalyzer::visit(MemberAccessExpression& node)
                 for (size_t i = 0; i < argTypes.size(); ++i)
                 {
                     auto dest = funcType->paramTypes[i];
-                    auto src = argTypes[i];
+                    const auto& src = argTypes[i];
 
-                    if (dest->isCompatibleWith(src))
+                    if (dest->isCompatibleWith(src) || (dest->isNumeric() && src->isNumeric()))
                     {
                         if (dest->kind() == TypeKind::Primitive && src->kind() == TypeKind::Primitive && 
                             dest.AsFast<PrimitiveType>()->name == src.AsFast<PrimitiveType>()->name)
@@ -574,10 +647,8 @@ void SemanticAnalyzer::visit(MemberAccessExpression& node)
                         else if (dest->kind() == TypeKind::Primitive && src->kind() == TypeKind::Primitive)
                         {
                             currentScore += 100;
-
                             auto destName = dest.AsFast<PrimitiveType>()->name;
                             auto srcName = src.AsFast<PrimitiveType>()->name;
-
                             bool destIsUn = destName.starts_with('u');
                             bool srcIsUn = srcName.starts_with('u');
                             bool destIsInt = destName.starts_with('i');
@@ -585,12 +656,10 @@ void SemanticAnalyzer::visit(MemberAccessExpression& node)
                             bool destIsFlt = destName.starts_with('f');
                             bool srcIsFlt = srcName.starts_with('f');
 
-                            if ((destIsUn && srcIsUn) || (destIsInt && srcIsInt) || (destIsFlt && srcIsFlt))
-                            {
-                                currentScore += 50;
-                            }
+                            if ((destIsUn && srcIsUn) || (destIsInt && srcIsInt) || (destIsFlt && srcIsFlt)) currentScore += 50;
 
-                            auto getSize = [](const std::string& s) -> int {
+                            auto getSize = [](const std::string& s) -> int
+                            {
                                 if (s.ends_with("8")) return 1;
                                 if (s.ends_with("16")) return 2;
                                 if (s.ends_with("32")) return 4;
@@ -599,16 +668,16 @@ void SemanticAnalyzer::visit(MemberAccessExpression& node)
                             };
 
                             int sizeDiff = getSize(destName) - getSize(srcName);
-                            if (sizeDiff >= 0)
-                            {
-                                currentScore += (10 - sizeDiff); 
-                            }
+                            if (sizeDiff >= 0) currentScore += (10 - sizeDiff); 
                         }
                         else
                         {
-                            // Primitive olmayan tipler (örn Struct, Reference vs) dönüşümü
                             currentScore += 10;
                         }
+                    }
+                    else if (isSafeRefCast(dest, src)) 
+                    {
+                        currentScore += 5; 
                     }
                     else
                     {
@@ -634,58 +703,51 @@ void SemanticAnalyzer::visit(MemberAccessExpression& node)
 
             if (isAmbiguous)
             {
-                WIO_LOG_ADD_ERROR(node.location(), "Ambiguous function call to '{}'. Multiple overloads equally match the arguments.", calleeSym->name);
+                WIO_LOG_ADD_ERROR(node.location(), "Ambiguous function call to '{}'.", calleeSym->name);
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
             }
-            else if (!bestMatch)
+            if (!bestMatch)
             {
-                WIO_LOG_ADD_ERROR(node.location(), "No matching function overload found for '{}'.", calleeSym->name);
+                WIO_LOG_ADD_ERROR(node.location(), "No matching function/constructor overload found.");
                 node.refType = Compiler::get().getTypeContext().getUnknown();
                 return;
             }
 
-            // Callee'yi spesifik ve en iyi puana sahip fonksiyona bağla
-            node.callee->referencedSymbol = bestMatch;
-            node.callee->refType = bestMatch->type;
-            node.refType = bestMatch->type.AsFast<FunctionType>()->returnType;
+            if (!isConstructorCall)
+            {
+                node.callee->referencedSymbol = bestMatch;
+                node.callee->refType = bestMatch->type;
+            }
+            
+            node.refType = isConstructorCall ? structReturnType : bestMatch->type.AsFast<FunctionType>()->returnType;
             return; 
         }
 
-        Ref<Type> calleeType = node.callee->refType.Lock();
-        
+        Ref<Type> calleeType = calleeSym->type;
         if (!calleeType || calleeType->kind() != TypeKind::Function)
         {
-            WIO_LOG_ADD_ERROR(node.location(), "Called expression is not a function.");
+            WIO_LOG_ADD_ERROR(node.location(), "Called expression is not a function or struct.");
             node.refType = Compiler::get().getTypeContext().getUnknown();
             return;
         }
 
         auto funcType = calleeType.AsFast<FunctionType>();
-
-        if (node.arguments.size() != funcType->paramTypes.size())
-        {
-            WIO_LOG_ADD_ERROR(node.location(), "Function expects '{}' arguments, but got '{}'.", funcType->paramTypes.size(), node.arguments.size());
-        }
-
-        size_t argCount = std::min(node.arguments.size(), funcType->paramTypes.size());
+        if (argTypes.size() != funcType->paramTypes.size())
+            WIO_LOG_ADD_ERROR(node.location(), "Function expects '{}' arguments, but got '{}'.", funcType->paramTypes.size(), argTypes.size());
+        
+        size_t argCount = std::min(argTypes.size(), funcType->paramTypes.size());
         for (size_t i = 0; i < argCount; ++i)
         {
-            node.arguments[i]->accept(*this);
-            Ref<Type> argType = node.arguments[i]->refType.Lock();
-            Ref<Type> paramType = funcType->paramTypes[i];
-
-            if (!paramType->isCompatibleWith(argType))
+            if (!funcType->paramTypes[i]->isCompatibleWith(argTypes[i]) && 
+                !isSafeRefCast(funcType->paramTypes[i], argTypes[i]) &&
+                !(funcType->paramTypes[i]->isNumeric() && argTypes[i]->isNumeric()))
             {
-                WIO_LOG_ADD_ERROR(
-                    node.arguments[i]->location(),
-                    "Argument mismatch at index '{}': Expected '{}', but got '{}'.",
-                    i,
-                    paramType->toString(),
-                    argType->toString()
-                );
+                WIO_LOG_ADD_ERROR(node.arguments[i]->location(), "Argument mismatch at index {}.", i);
             }
         }
 
-        node.refType = funcType->returnType;
+        node.refType = isConstructorCall ? structReturnType : funcType->returnType;
     }
     
     void SemanticAnalyzer::visit(RefExpression& node)
@@ -726,17 +788,16 @@ void SemanticAnalyzer::visit(MemberAccessExpression& node)
     
     void SemanticAnalyzer::visit(ExpressionStatement& node) 
     {
+        if (isDeclarationPass_) return;
         node.expression->accept(*this);
     }
     
-    void SemanticAnalyzer::visit(VariableDeclaration& node)
+void SemanticAnalyzer::visit(VariableDeclaration& node)
+{
+    if (isDeclarationPass_)
     {
-        Ref<Type> initType = nullptr;
-        if (node.initializer)
-        {
-            node.initializer->accept(*this);
-            initType = node.initializer->refType.Lock();
-        }
+        if (currentScope_->getKind() == ScopeKind::Function || currentScope_->getKind() == ScopeKind::Block)
+            return;
 
         Ref<Type> declaredType = nullptr;
         if (node.type)
@@ -744,111 +805,433 @@ void SemanticAnalyzer::visit(MemberAccessExpression& node)
             node.type->accept(*this);
             declaredType = node.type->refType.Lock();
         }
-
-        Ref<Type> finalType;
-
-        if (declaredType && initType)
-        {
-            if (!Type::matchTypes(declaredType, initType))
-                
-            if (!declaredType->isCompatibleWith(initType))
-            {
-                WIO_LOG_ADD_ERROR(
-                    node.location(),
-                    "Type mismatch! Variable '{}' expects {}, but got {}.",
-                    node.name->token.value,
-                    declaredType->toString(),
-                    initType->toString()
-                );
-            }
-
-            finalType = declaredType;
-        }
-        else if (declaredType)
-        {
-            finalType = declaredType;
-        }
-        else if (initType)
-        {
-            finalType = initType;
-        }
-        else
-        {
-            WIO_LOG_ADD_ERROR(node.location(), "Variable '{}' must have a type or an initializer.", node.name->token.value);
-            finalType = Compiler::get().getTypeContext().getUnknown();
-        }
-
-        SymbolFlags flags = SymbolFlags::createAllFalse();
-        if (node.mutability == Mutability::Mutable)
-            flags.set_isMutable(true);
-
-        Ref<Symbol> sym = createSymbol(node.name->token.value, finalType, SymbolKind::Variable, node.location(), flags);
-
-        currentScope_->define(node.name->token.value, sym);
         
-        node.name->refType = finalType;
-    }
-    
-    void SemanticAnalyzer::visit(FunctionDeclaration& node)
-    {
-        Ref<Type> returnType = Compiler::get().getTypeContext().getVoid();
-        if (node.returnType)
-        {
-            node.returnType->accept(*this);
-            returnType = node.returnType->refType.Lock();
-        }
+        SymbolFlags flags = SymbolFlags::createAllFalse();
+        if (node.mutability == Mutability::Mutable) flags.set_isMutable(true);
+        if (currentScope_->getKind() == ScopeKind::Global) flags.set_isGlobal(true);
 
-        std::vector<Ref<Type>> paramTypes;
-        for (auto& param : node.parameters)
+        Ref<Symbol> sym = createSymbol(node.name->token.value, declaredType, SymbolKind::Variable, node.location(), flags);
+        currentScope_->define(node.name->token.value, sym);
+        node.name->referencedSymbol = sym;
+        
+        return;
+    }
+
+    Ref<Symbol> sym = node.name->referencedSymbol.Lock();
+    
+    if (!sym)
+    {
+        Ref<Type> declaredType = nullptr;
+        if (node.type)
         {
-            Ref<Type> pType = Compiler::get().getTypeContext().getUnknown();
-            if (param.type)
+            node.type->accept(*this);
+            declaredType = node.type->refType.Lock();
+        }
+        
+        SymbolFlags flags = SymbolFlags::createAllFalse();
+        if (node.mutability == Mutability::Mutable) flags.set_isMutable(true);
+        
+        sym = createSymbol(node.name->token.value, declaredType, SymbolKind::Variable, node.location(), flags);
+        currentScope_->define(node.name->token.value, sym);
+        node.name->referencedSymbol = sym;
+    }
+
+    if (node.initializer)
+    {
+        node.initializer->accept(*this);
+        Ref<Type> initType = node.initializer->refType.Lock();
+
+        if (!sym->type || sym->type->isUnknown()) 
+        {
+            sym->type = initType;
+            node.name->refType = initType;
+        }
+        else if (!sym->type->isCompatibleWith(initType)) 
+        {
+            if (sym->type->isNumeric() && initType && initType->isNumeric())
             {
-                param.type->accept(*this);
-                pType = param.type->refType.Lock();
+                // No Problem!
             }
             else
             {
-                WIO_LOG_ADD_ERROR(param.name->location(), "Parameter '{}' must have a type.", param.name->token.value);
+                WIO_LOG_ADD_ERROR(node.location(), "Type mismatch for '{}'.", node.name->token.value);
             }
-            paramTypes.push_back(pType);
+        }
+    }
+}
+    
+    void SemanticAnalyzer::visit(FunctionDeclaration& node)
+    {
+        if (isDeclarationPass_)
+        {
+            Ref<Type> returnType = Compiler::get().getTypeContext().getVoid();
+            if (node.returnType)
+            {
+                node.returnType->accept(*this);
+                returnType = node.returnType->refType.Lock();
+            }
+
+            std::vector<Ref<Type>> paramTypes;
+            for (auto& param : node.parameters)
+            {
+                Ref<Type> pType = Compiler::get().getTypeContext().getUnknown();
+                if (param.type)
+                {
+                    param.type->accept(*this);
+                    pType = param.type->refType.Lock();
+                }
+                paramTypes.push_back(pType);
+            }
+
+            auto funcType = Compiler::get().getTypeContext().getFunctionType(returnType, paramTypes);
+            Ref<Symbol> funcSym = createSymbol(node.name->token.value, funcType, SymbolKind::Function, node.location());
+            currentScope_->define(node.name->token.value, funcSym);
+
+            node.name->refType = funcType;
+            node.name->referencedSymbol = funcSym;
+            return;
         }
 
-        auto funcType = Compiler::get().getTypeContext().getFunctionType(returnType, paramTypes);
-        
-        Ref<Symbol> funcSym = createSymbol(node.name->token.value, funcType, SymbolKind::Function, node.location());
-        currentScope_->define(node.name->token.value, funcSym);
-
-        node.name->refType = funcType;
-        node.name->referencedSymbol = funcSym;
+        auto funcSym = node.name->referencedSymbol.Lock();
+        auto funcType = funcSym->type.AsFast<FunctionType>();
 
         Ref<Type> prevRetType = currentFunctionReturnType_;
-        currentFunctionReturnType_ = returnType;
+        currentFunctionReturnType_ = funcType->returnType;
         
         enterScope(ScopeKind::Function);
 
         for (size_t i = 0; i < node.parameters.size(); ++i)
         {
             auto& param = node.parameters[i];
-            
-            Ref<Symbol> pSym = createSymbol(param.name->token.value, paramTypes[i], SymbolKind::Parameter, param.name->location());
+            Ref<Symbol> pSym = createSymbol(param.name->token.value, funcType->paramTypes[i], SymbolKind::Parameter, param.name->location());
             currentScope_->define(param.name->token.value, pSym);
             
             param.name->referencedSymbol = pSym;
-            param.name->refType = paramTypes[i];
+            param.name->refType = funcType->paramTypes[i];
         }
 
         if (node.body)
-        {
             node.body->accept(*this);
-        }
 
         exitScope();
         currentFunctionReturnType_ = prevRetType;
     }
+
+    void SemanticAnalyzer::visit(InterfaceDeclaration& node)
+    {
+        if (isDeclarationPass_)
+        {
+            auto interfaceScope = Ref<Scope>::Create(currentScope_, ScopeKind::Struct);
+            Ref<Type> interfaceType = Ref<StructType>::Create(node.name->token.value, interfaceScope);
+            
+            Ref<Symbol> interfaceSym = createSymbol(node.name->token.value, interfaceType, SymbolKind::Struct, node.location());
+            currentScope_->define(node.name->token.value, interfaceSym);
+            
+            node.name->refType = interfaceType;
+            node.name->referencedSymbol = interfaceSym;
+
+            enterScope(ScopeKind::Struct);
+            currentScope_ = interfaceScope;
+            
+            for (auto& method : node.methods)
+                method->accept(*this);
+            
+            exitScope();
+            return;
+        }
+
+        for (auto& method : node.methods)
+            method->accept(*this); 
+    }
+
+    void SemanticAnalyzer::visit(ComponentDeclaration& node)
+    {
+        if (isDeclarationPass_)
+        {
+            auto structScope = Ref<Scope>::Create(currentScope_, ScopeKind::Struct);
+            Ref<Type> structType = Ref<StructType>::Create(node.name->token.value, structScope);
+            
+            Ref<Symbol> compSym = createSymbol(node.name->token.value, structType, SymbolKind::Struct, node.location());
+            currentScope_->define(node.name->token.value, compSym);
+            
+            node.name->refType = structType;
+            node.name->referencedSymbol = compSym;
+
+            enterScope(ScopeKind::Struct);
+            currentScope_ = structScope;
+            
+            for (auto& member : node.members)
+                member.declaration->accept(*this);
+            
+            exitScope();
+            return;
+        }
+
+        auto sym = node.name->referencedSymbol.Lock();
+        auto structType = sym->type.AsFast<StructType>();
+        
+        if (isStructResolutionPass_)
+        {
+            enterScope(ScopeKind::Struct);
+            currentScope_ = structType->structScope;
+
+            bool hasCustomCtor = false;
+            bool hasNoDefaultCtor = hasAttribute(node.attributes, Attribute::NoDefaultCtor);
+            auto interfaces = getAttributeArgs(node.attributes, Attribute::From);
+
+            AccessModifier defaultAccess = AccessModifier::Public; 
+            
+            std::vector<Token> defaultArgs = getAttributeArgs(node.attributes, Attribute::Default);
+            if (!defaultArgs.empty())
+            {
+                if (defaultArgs[0].type == TokenType::kwPrivate) defaultAccess = AccessModifier::Private;
+                else if (defaultArgs[0].type == TokenType::kwProtected) defaultAccess = AccessModifier::Protected;
+            }
+
+            for (auto& member : node.members)
+            {
+                Ref<Symbol> memberSym = nullptr;
+
+                if (member.declaration->is<VariableDeclaration>())
+                {
+                    member.declaration->accept(*this);
+                    auto varDecl = member.declaration->as<VariableDeclaration>();
+                    memberSym = varDecl->name->referencedSymbol.Lock();
+                    
+                    if (hasAttribute(varDecl->attributes, Attribute::ReadOnly))
+                    {
+                        memberSym->flags.set_isReadOnly(true);
+                    }
+                }
+                else if (member.declaration->is<FunctionDeclaration>())
+                {
+                    auto funcDecl = member.declaration->as<FunctionDeclaration>();
+                    memberSym = funcDecl->name->referencedSymbol.Lock();
+                    std::string funcName = funcDecl->name->token.value;
+
+                    if (funcName == "OnConstruct")
+                    {
+                        hasCustomCtor = true;
+                    }
+                    else if (funcName != "OnDestruct") 
+                    {
+                        bool isOverride = false;
+                        for (const auto& ifaceToken : interfaces)
+                        {
+                            if (ifaceToken.type != TokenType::identifier) continue;
+
+                            if (auto ifaceSym = currentScope_->resolve(ifaceToken.value))
+                            {
+                                if (auto ifaceType = ifaceSym->type.AsFast<StructType>())
+                                {
+                                    if (ifaceType->structScope)
+                                    {
+                                        if (auto methodSym = ifaceType->structScope->resolveLocally(funcName))
+                                        {
+                                            if (methodSym->kind == SymbolKind::Function)
+                                            {
+                                                isOverride = true; 
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } 
+                        if (!isOverride)
+                        {
+                            WIO_LOG_ADD_ERROR(funcDecl->location(), "Components can only contain data, lifecycle methods, or interface implementations. Unexpected function: '{}'", funcName);
+                        }
+                    }
+                }
+
+                if (memberSym) 
+                {
+                    AccessModifier finalAccess = member.access;
+                    
+                    if (finalAccess == AccessModifier::None)
+                        finalAccess = defaultAccess;
+                    
+                    if (finalAccess == AccessModifier::Public) memberSym->flags.set_isPublic(true);
+                    else if (finalAccess == AccessModifier::Private) memberSym->flags.set_isPrivate(true);
+                    else if (finalAccess == AccessModifier::Protected) memberSym->flags.set_isProtected(true);
+                }
+            }
+
+            if (!hasCustomCtor && !hasNoDefaultCtor) 
+            {
+                auto voidType = Compiler::get().getTypeContext().getVoid();
+
+                auto defaultCtorType = Compiler::get().getTypeContext().getFunctionType(voidType, {});
+                Ref<Symbol> defaultSym = createSymbol("OnConstruct", defaultCtorType, SymbolKind::Function, node.location());
+                currentScope_->define("OnConstruct", defaultSym);
+
+                std::vector<Ref<Type>> memberTypes;
+                for (auto& member : node.members) 
+                {
+                    if (member.declaration->is<VariableDeclaration>()) 
+                    {
+                        auto vDecl = member.declaration->as<VariableDeclaration>();
+                        memberTypes.push_back(vDecl->name->referencedSymbol.Lock()->type);
+                    }
+                }
+                
+                if (!memberTypes.empty())
+                {
+                    auto memberCtorType = Compiler::get().getTypeContext().getFunctionType(voidType, memberTypes);
+                    Ref<Symbol> memberSym = createSymbol("OnConstruct", memberCtorType, SymbolKind::Function, node.location());
+                    currentScope_->define("OnConstruct", memberSym);
+                }
+
+                auto copyParamType = Ref<ReferenceType>::Create(structType, false);
+                auto copyCtorType = Compiler::get().getTypeContext().getFunctionType(voidType, { copyParamType });
+                Ref<Symbol> copySym = createSymbol("OnConstruct", copyCtorType, SymbolKind::Function, node.location());
+                currentScope_->define("OnConstruct", copySym);
+            }
+
+            exitScope();
+            return;
+        }
+
+        enterScope(ScopeKind::Struct);
+        currentScope_ = structType->structScope;
+        
+        for (auto& member : node.members) {
+            if (member.declaration->is<FunctionDeclaration>()) {
+                member.declaration->accept(*this);
+            }
+        }
+        
+        exitScope();
+    }
+
+    void SemanticAnalyzer::visit(ObjectDeclaration& node)
+    {
+        if (isDeclarationPass_)
+        {
+            auto structScope = Ref<Scope>::Create(currentScope_, ScopeKind::Struct);
+            Ref<Type> structType = Ref<StructType>::Create(node.name->token.value, structScope);
+            
+            Ref<Symbol> objSym = createSymbol(node.name->token.value, structType, SymbolKind::Struct, node.location());
+            currentScope_->define(node.name->token.value, objSym);
+            
+            node.name->refType = structType;
+            node.name->referencedSymbol = objSym;
+
+            enterScope(ScopeKind::Struct);
+            currentScope_ = structScope;
+            
+            for (auto& member : node.members)
+                member.declaration->accept(*this);
+            
+            exitScope();
+            return;
+        }
+
+        auto sym = node.name->referencedSymbol.Lock();
+        auto structType = sym->type.AsFast<StructType>();
+        
+        if (isStructResolutionPass_)
+        {
+            enterScope(ScopeKind::Struct);
+            currentScope_ = structType->structScope;
+
+            bool hasCustomCtor = false;
+            bool hasNoDefaultCtor = hasAttribute(node.attributes, Attribute::NoDefaultCtor);
+
+            AccessModifier defaultAccess = AccessModifier::Private; 
+            std::vector<Token> defaultArgs = getAttributeArgs(node.attributes, Attribute::Default);
+            if (!defaultArgs.empty())
+            {
+                if (defaultArgs[0].type == TokenType::kwPublic) defaultAccess = AccessModifier::Public;
+                else if (defaultArgs[0].type == TokenType::kwProtected) defaultAccess = AccessModifier::Protected;
+            }
+
+            for (auto& member : node.members)
+            {
+                Ref<Symbol> memberSym = nullptr;
+
+                if (member.declaration->is<VariableDeclaration>())
+                {
+                    member.declaration->accept(*this);
+                    auto varDecl = member.declaration->as<VariableDeclaration>();
+                    memberSym = varDecl->name->referencedSymbol.Lock();
+                    
+                    if (hasAttribute(varDecl->attributes, Attribute::ReadOnly))
+                        memberSym->flags.set_isReadOnly(true);
+                }
+                else if (member.declaration->is<FunctionDeclaration>())
+                {
+                    auto funcDecl = member.declaration->as<FunctionDeclaration>();
+                    memberSym = funcDecl->name->referencedSymbol.Lock();
+                    
+                    if (funcDecl->name->token.value == "OnConstruct") {
+                        hasCustomCtor = true;
+                    }
+                }
+
+                if (memberSym)
+                {
+                    AccessModifier finalAccess = member.access;
+                    if (finalAccess == AccessModifier::None)
+                        finalAccess = defaultAccess;
+
+                    if (finalAccess == AccessModifier::Public) memberSym->flags.set_isPublic(true);
+                    else if (finalAccess == AccessModifier::Private) memberSym->flags.set_isPrivate(true);
+                    else if (finalAccess == AccessModifier::Protected) memberSym->flags.set_isProtected(true);
+                }
+            }
+
+            if (!hasCustomCtor && !hasNoDefaultCtor) 
+            {
+                auto voidType = Compiler::get().getTypeContext().getVoid();
+
+                auto defaultCtorType = Compiler::get().getTypeContext().getFunctionType(voidType, {});
+                Ref<Symbol> defaultSym = createSymbol("OnConstruct", defaultCtorType, SymbolKind::Function, node.location());
+                currentScope_->define("OnConstruct", defaultSym);
+
+                std::vector<Ref<Type>> memberTypes;
+                for (auto& member : node.members) 
+                {
+                    if (member.declaration->is<VariableDeclaration>()) 
+                    {
+                        auto vDecl = member.declaration->as<VariableDeclaration>();
+                        memberTypes.push_back(vDecl->name->referencedSymbol.Lock()->type);
+                    }
+                }
+                
+                if (!memberTypes.empty())
+                {
+                    auto memberCtorType = Compiler::get().getTypeContext().getFunctionType(voidType, memberTypes);
+                    Ref<Symbol> memberSym = createSymbol("OnConstruct", memberCtorType, SymbolKind::Function, node.location());
+                    currentScope_->define("OnConstruct", memberSym);
+                }
+
+                auto copyParamType = Ref<ReferenceType>::Create(structType, false);
+                auto copyCtorType = Compiler::get().getTypeContext().getFunctionType(voidType, { copyParamType });
+                Ref<Symbol> copySym = createSymbol("OnConstruct", copyCtorType, SymbolKind::Function, node.location());
+                currentScope_->define("OnConstruct", copySym);
+            }
+            
+            exitScope();
+            return;
+        }
+
+        enterScope(ScopeKind::Struct);
+        currentScope_ = structType->structScope;
+        
+        for (auto& member : node.members) {
+            if (member.declaration->is<FunctionDeclaration>()) {
+                member.declaration->accept(*this);
+            }
+        }
+        
+        exitScope();
+    }
     
     void SemanticAnalyzer::visit(IfStatement& node)
     {
+        if (isDeclarationPass_) return;
         node.condition->accept(*this);
         
         if (node.condition->refType.Lock() != Compiler::get().getTypeContext().getBool()) // Todo: improve this
@@ -862,6 +1245,7 @@ void SemanticAnalyzer::visit(MemberAccessExpression& node)
     
     void SemanticAnalyzer::visit(WhileStatement& node)
     {
+        if (isDeclarationPass_) return;
         node.condition->accept(*this);
 
         if (node.condition->refType.Lock() != Compiler::get().getTypeContext().getBool()) // Todo: improve this
@@ -874,6 +1258,7 @@ void SemanticAnalyzer::visit(MemberAccessExpression& node)
     
     void SemanticAnalyzer::visit(ReturnStatement& node)
     {
+        if (isDeclarationPass_) return;
         Ref<Type> actualType = Compiler::get().getTypeContext().getVoid();
 
         if (node.value)
@@ -901,66 +1286,58 @@ void SemanticAnalyzer::visit(MemberAccessExpression& node)
     }
 
     void SemanticAnalyzer::visit(UseStatement& node)
-{
-    auto getOrCreateNamespace = [&](Ref<Scope> targetScope, const std::string& name) -> Ref<Symbol>
     {
-        if (auto existing = targetScope->resolve(name)) {
-            if (existing->kind == SymbolKind::Namespace)
-                return existing;
-            
-            WIO_LOG_ADD_ERROR(node.location(), "Symbol '{}' already exists and is not a namespace.", name);
-            return nullptr;
-        }
+        if (!isDeclarationPass_) return;
         
-        auto nsScope = Ref<Scope>::Create(targetScope, ScopeKind::Global); 
-        
-        auto nsSymbol = createSymbol(name, Compiler::get().getTypeContext().getUnknown(), SymbolKind::Namespace, node.location());
-        nsSymbol->innerScope = nsScope;
-        
-        targetScope->define(name, nsSymbol);
-        return nsSymbol;
-    };
-
-    if (node.isStdLib) // use std::io;
-    {
-        Ref<Symbol> stdNs = getOrCreateNamespace(currentScope_, "std");
-        if (!stdNs) return;
-
-        if (node.modulePath == "io")
+        auto getOrCreateNamespace = [&](const Ref<Scope>& targetScope, const std::string& name) -> Ref<Symbol>
         {
-            Ref<Symbol> ioNs = getOrCreateNamespace(stdNs->innerScope, "io");
-            if (!ioNs) return;
-
-            runtime::Loader<runtime::IOLoader>::Load(ioNs->innerScope, symbols_);
+            if (auto existing = targetScope->resolve(name)) {
+                if (existing->kind == SymbolKind::Namespace)
+                    return existing;
+                
+                WIO_LOG_ADD_ERROR(node.location(), "Symbol '{}' already exists and is not a namespace.", name);
+                return nullptr;
+            }
             
-            // OPSİYONEL KISAYOL: Wio dilinde kullanıcılar "std::io::print()" yazmak yerine
-            // "io::print()" de yazabilsin diye, 'io' namespace'inin bir referansını (alias) 
-            // bulunduğumuz scope'a da ekleyebiliriz:
-            currentScope_->define(node.moduleName, ioNs); 
+            auto nsScope = Ref<Scope>::Create(targetScope, ScopeKind::Global); 
+            
+            auto nsSymbol = createSymbol(name, Compiler::get().getTypeContext().getUnknown(), SymbolKind::Namespace, node.location());
+            nsSymbol->innerScope = nsScope;
+            
+            targetScope->define(name, nsSymbol);
+            return nsSymbol;
+        };
+    
+        if (node.isStdLib) // use std::io;
+        {
+            Ref<Symbol> stdNs = getOrCreateNamespace(currentScope_, "std");
+            if (!stdNs) return;
+    
+            if (node.modulePath == "io")
+            {
+                Ref<Symbol> ioNs = getOrCreateNamespace(stdNs->innerScope, "io");
+                if (!ioNs) return;
+    
+                runtime::Loader<runtime::IOLoader>::Load(ioNs->innerScope, symbols_);
+                
+                // OPSİYONEL KISAYOL: Wio dilinde kullanıcılar "std::io::print()" yazmak yerine
+                // "io::print()" de yazabilsin diye, 'io' namespace'inin bir referansını (alias) 
+                // bulunduğumuz scope'a da ekleyebiliriz:
+                currentScope_->define(node.moduleName, ioNs); 
+            }
+            else
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Unknown standard library module: 'std::{}'", node.modulePath);
+            }
         }
         else
         {
-            WIO_LOG_ADD_ERROR(node.location(), "Unknown standard library module: 'std::{}'", node.modulePath);
+            WIO_LOG_ADD_ERROR(node.location(), "User-defined module loading is not implemented yet.");
         }
     }
-    else
-    {
-        // Todo: Kullanıcı modüllerini (Örn: use "math.wio";) dosyadan okuyup AST'ye çevirme 
-        // ve Semantic Analyzer'dan geçirme işlemleri burada olacak.
-        WIO_LOG_ADD_ERROR(node.location(), "User-defined module loading is not implemented yet.");
-    }
-}
 
     void SemanticAnalyzer::visit(AttributeStatement& node)
     {
-        switch (node.attribute)
-        {
-        case Attribute::CppNamespaceStart:
-        case Attribute::CppNamespaceEnd:
-            break;
-        case Attribute::Unknown:
-            WIO_LOG_ADD_WARN(node.location(), "Unknown attribute!");
-            break;
-        }
+        WIO_UNUSED(node);
     }
 }

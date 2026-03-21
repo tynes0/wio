@@ -25,7 +25,6 @@ namespace wio
         bool multiMatch(const std::initializer_list<TokenType>& types, bool consume = false);
         bool matchOneOf(const std::initializer_list<TokenType>& types, bool consume = false);
         Token consume(TokenType type, std::string_view value = "");
-        void finishLine();
 
         NodePtr<Expression> parseExpression(int minPrecedence = 0);
         NodePtr<Expression> parsePrimary();
@@ -37,13 +36,16 @@ namespace wio
         
         NodePtr<Statement> parseStatement();
         NodePtr<Statement> parseBlockStatement();
-        NodePtr<Statement> parseVariableDeclaration();
-        NodePtr<Statement> parseFunctionDeclaration();
+        NodePtr<AttributeStatement> parseAttributeStatement();
+        NodePtr<VariableDeclaration> parseVariableDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
+        NodePtr<FunctionDeclaration> parseFunctionDeclaration(std::vector<NodePtr<AttributeStatement>> attributes, bool isLifecycle = false);
+        NodePtr<Statement> parseInterfaceDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
+        NodePtr<Statement> parseComponentDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
+        NodePtr<Statement> parseObjectDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
         NodePtr<Statement> parseIfStatement();
         NodePtr<Statement> parseWhileStatement();
         NodePtr<Statement> parseReturnStatement();
         NodePtr<Statement> parseUseStatement();
-        NodePtr<Statement> parseAttributeStatement();
 
         [[nodiscard]] static int getPrecedence(TokenType type);
         

@@ -23,14 +23,17 @@ namespace wio::codegen
         
         int indentationLevel_ = 0;
 
+        bool isEmittingPrototypes_ = false;
+        std::string currentClassName_;
+
         void generateHeader();
 
         void emit(const std::string& str);
         void emitLine(const std::string& str = "");
+        void emitHeader(const std::string& str);
+        void emitHeaderLine(const std::string& str = "");
         void emitMain(FunctionDeclaration& node);
         void indent();
         void dedent();
-        
-        std::string toCppType(const Ref<sema::Type>& type);
     };
 }

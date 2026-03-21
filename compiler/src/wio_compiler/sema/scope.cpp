@@ -33,11 +33,7 @@ namespace wio::sema
             }
 
             if (symbol)
-                throw RedefinitionError(
-                    ("Symbol already defined here: " + it->second->definitionLoc.toString()).c_str(),
-                    symbol->definitionLoc
-                    );
-            throw RedefinitionError(("Symbol already defined here: " + it->second->definitionLoc.toString()).c_str());
+                throw RedefinitionError(("Symbol already defined here: " + it->second->definitionLoc.toString()).c_str());
         }
         
         symbols_[name] = symbol;
@@ -53,6 +49,16 @@ namespace wio::sema
         if (auto locked = parent_.Lock(); locked)
         {
             return locked->resolve(name);
+        }
+
+        return nullptr;
+    }
+
+    Ref<Symbol> Scope::resolveLocally(const std::string& name)
+    {
+        if (auto it = symbols_.find(name); it != symbols_.end())
+        {
+            return it->second;
         }
 
         return nullptr;
