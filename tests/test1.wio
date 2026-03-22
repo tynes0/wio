@@ -24,7 +24,7 @@ fn Entry() -> i32 {
     hero.TakeDamage(25);
     std::io::Print($"Guncel Can (Disaridan Okuma): ${hero.health}\n"); 
 
-    mut heroClone = Player(ref hero);
+    let heroClone = Player(ref hero);
     std::io::Print("--- Klon Olusturuldu ---\n");
     heroClone.Describe();
 
@@ -51,17 +51,6 @@ component Transform {
     x: f32 = 0.0f32;
     y: f32 = 0.0f32;
     z: f32 = 0.0f32;
-    
-    OnConstruct()
-    {
-    }
-    
-    OnConstruct(_x: f32, _y: f32, _z: f32)
-    {
-        x = _x;
-        y = _y;
-        z = _z;
-    }
 
     fn Describe() {
         std::io::Print($"Transform Durumu: X=${x}, Y=${y}, Z=${z}\n");

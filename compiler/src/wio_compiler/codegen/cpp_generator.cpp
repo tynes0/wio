@@ -4,6 +4,8 @@
 #include "compiler.h"
 #include "wio/sema/symbol.h"
 
+#define EMIT_TABS() do { for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    "; } while(false)
+
 namespace wio::codegen
 {
     namespace 
@@ -23,6 +25,19 @@ namespace wio::codegen
                         if (arg.type == TokenType::identifier)
                             bases.push_back(arg.value);
             return bases;
+        }
+
+        bool hasAttribute(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
+        {
+            return std::ranges::any_of(attributes, [targetAttr](const auto& attr) { return attr->attribute == targetAttr; });
+        }
+
+        std::vector<Token> getAttributeArgs(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
+        {
+            for (const auto& attr : attributes) {
+                if (attr->attribute == targetAttr) return attr->args;
+            }
+            return {};
         }
     }
     
@@ -80,7 +95,7 @@ namespace wio::codegen
 
     void CppGenerator::emitLine(const std::string& str)
     {
-        for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
+        EMIT_TABS();
         buffer_ << str << "\n";
     }
 
@@ -550,7 +565,7 @@ namespace wio::codegen
 
     void CppGenerator::visit(ExpressionStatement& node)
     {
-        for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
+        EMIT_TABS();
         node.expression->accept(*this);
         buffer_ << ";\n";
     }
@@ -575,13 +590,16 @@ namespace wio::codegen
         }
         else if (node.mutability == Mutability::Immutable)
         {
-            if (!typeStr.empty() && typeStr.back() == '*')
-                suffix = " const"; 
-            else
-                prefix = "const ";
+            bool isStruct = (varType && varType->kind() == sema::TypeKind::Struct);
+            if (!isStruct)
+            {
+                if (!typeStr.empty() && typeStr.back() == '*')
+                    suffix = " const"; 
+                else
+                    prefix = "const ";
+            }
         }
-
-        for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
+        EMIT_TABS();
 
         buffer_ << prefix << typeStr << suffix << " ";
 
@@ -615,7 +633,7 @@ namespace wio::codegen
 
         emitLine();
 
-        for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
+        EMIT_TABS();
 
         if (!currentClassName_.empty())
         {
@@ -647,6 +665,12 @@ namespace wio::codegen
                 if (i < node.parameters.size() - 1) emit(", ");
             }
             emit(")");
+
+            if (!currentClassName_.empty())
+            {
+                if (sym && sym->flags.get_isOverride()) emit(" override");
+                if (hasAttribute(node.attributes, Attribute::Final)) emit(" final");
+            }
         }
 
         if (isEmittingPrototypes_)
@@ -681,7 +705,7 @@ namespace wio::codegen
             auto funcType = sym->type.AsFast<sema::FunctionType>();
             std::string retType = funcType->returnType ? toCppType(funcType->returnType) : "void";
 
-            for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
+            EMIT_TABS();
             emit("virtual " + retType + " " + Mangler::mangleFunction(method->name->token.value, funcType->paramTypes) + "(");
             
             for (size_t i = 0; i < method->parameters.size(); ++i)
@@ -697,10 +721,12 @@ namespace wio::codegen
         emitLine("};\n");
     }
 
-    void CppGenerator::visit(ComponentDeclaration& node)
+void CppGenerator::visit(ComponentDeclaration& node)
     {
         std::string structName = Mangler::mangleStruct(node.name->token.value);
         emit("struct " + structName);
+        
+        if (hasAttribute(node.attributes, Attribute::Final)) emit(" final");
         
         auto bases = getBaseInterfaces(node.attributes);
         if (!bases.empty())
@@ -715,11 +741,34 @@ namespace wio::codegen
         emitLine("\n{");
         indent();
 
+        // @trust (Friend Structs)
+        auto trustArgs = getAttributeArgs(node.attributes, Attribute::Trust);
+        for (const auto& t : trustArgs)
+        {
+            if (t.type == TokenType::identifier)
+                emitLine("friend struct " + Mangler::mangleStruct(t.value) + ";");
+        }
+
         currentClassName_ = structName;
         AccessModifier currentAccess = AccessModifier::Public;
 
+        bool hasCustomCtor = false;
+        std::vector<std::pair<std::string, std::string>> memberVars;
+
         for (auto& member : node.members)
         {
+            if (member.declaration->is<FunctionDeclaration>())
+            {
+                if (member.declaration->as<FunctionDeclaration>()->name->token.value == "OnConstruct") hasCustomCtor = true;
+            }
+            else if (member.declaration->is<VariableDeclaration>())
+            {
+                auto vDecl = member.declaration->as<VariableDeclaration>();
+                auto sym = vDecl->name->referencedSymbol.Lock();
+                Ref<sema::Type> varType = (sym && sym->type) ? sym->type : vDecl->name->refType.Lock();
+                memberVars.emplace_back(toCppType(varType), vDecl->name->token.value);
+            }
+
             if (member.access != currentAccess && member.access != AccessModifier::None)
             {
                 dedent();
@@ -735,6 +784,37 @@ namespace wio::codegen
             member.declaration->accept(*this);
         }
 
+        bool hasNoDefaultCtor = hasAttribute(node.attributes, Attribute::NoDefaultCtor);
+        if (!hasCustomCtor && !hasNoDefaultCtor) 
+        {
+            if (currentAccess != AccessModifier::Public)
+            {
+                dedent();
+                emitLine("public:");
+                indent();
+            }
+            emitLine(currentClassName_ + "() = default;");
+            emitLine(currentClassName_ + "(const " + currentClassName_ + "&) = default;");
+
+            EMIT_TABS();
+            if (!memberVars.empty())
+            {
+                emit(currentClassName_ + "(");
+                for (size_t i = 0; i < memberVars.size(); ++i)
+                {
+                    emit(memberVars[i].first + " _" + memberVars[i].second);
+                    if (i < memberVars.size() - 1) emit(", ");
+                }
+                emit(") : ");
+                for (size_t i = 0; i < memberVars.size(); ++i)
+                {
+                    emit(memberVars[i].second + "(_" + memberVars[i].second + ")");
+                    if (i < memberVars.size() - 1) emit(", ");
+                }
+                emit(" {}\n");
+            }
+        }
+
         currentClassName_ = "";
         dedent();
         emitLine("};\n");
@@ -743,13 +823,16 @@ namespace wio::codegen
     void CppGenerator::visit(ObjectDeclaration& node)
     {
         std::string structName = Mangler::mangleStruct(node.name->token.value);
-        
         emit("struct " + structName); 
         
+        if (hasAttribute(node.attributes, Attribute::Final)) emit(" final");
+        
         auto bases = getBaseInterfaces(node.attributes);
-        if (!bases.empty()) {
+        if (!bases.empty())
+        {
             emit(" : ");
-            for (size_t i = 0; i < bases.size(); ++i) {
+            for (size_t i = 0; i < bases.size(); ++i)
+            {
                 emit("public " + Mangler::mangleInterface("", bases[i]));
                 if (i < bases.size() - 1) emit(", ");
             }
@@ -757,14 +840,38 @@ namespace wio::codegen
         emitLine("\n{");
         indent();
 
+        auto trustArgs = getAttributeArgs(node.attributes, Attribute::Trust);
+        for (const auto& t : trustArgs)
+        {
+            if (t.type == TokenType::identifier)
+            {
+                emitLine("friend struct " + Mangler::mangleStruct(t.value) + ";");
+            }
+        }
+
         currentClassName_ = structName;
         AccessModifier currentAccess = AccessModifier::Public;
+        
+        bool hasCustomCtor = false;
+        std::vector<std::pair<std::string, std::string>> memberVars;
 
         for (auto& member : node.members)
         {
+            if (member.declaration->is<FunctionDeclaration>())
+            {
+                if (member.declaration->as<FunctionDeclaration>()->name->token.value == "OnConstruct") hasCustomCtor = true;
+            }
+            else if (member.declaration->is<VariableDeclaration>())
+            {
+                auto vDecl = member.declaration->as<VariableDeclaration>();
+                auto sym = vDecl->name->referencedSymbol.Lock();
+                Ref<sema::Type> varType = (sym && sym->type) ? sym->type : vDecl->name->refType.Lock();
+                memberVars.emplace_back(toCppType(varType), vDecl->name->token.value);
+            }
+
             AccessModifier targetAccess = (member.access == AccessModifier::None) ? AccessModifier::Private : member.access;
 
-            if (targetAccess != currentAccess)
+            if (targetAccess != currentAccess)//
             {
                 dedent();
                 if (targetAccess == AccessModifier::Public) emitLine("public:");
@@ -774,6 +881,34 @@ namespace wio::codegen
                 currentAccess = targetAccess;
             }
             member.declaration->accept(*this);
+        }
+
+        bool hasNoDefaultCtor = hasAttribute(node.attributes, Attribute::NoDefaultCtor);
+        if (!hasCustomCtor && !hasNoDefaultCtor) 
+        {
+            if (currentAccess != AccessModifier::Public) {
+                dedent();
+                emitLine("public:");
+                indent();
+            }
+            emitLine(currentClassName_ + "() = default;");
+            emitLine(currentClassName_ + "(const " + currentClassName_ + "&) = default;");
+
+            EMIT_TABS();
+            
+            if (!memberVars.empty()) {
+                emit(currentClassName_ + "(");
+                for (size_t i = 0; i < memberVars.size(); ++i) {
+                    emit(memberVars[i].first + " _" + memberVars[i].second);
+                    if (i < memberVars.size() - 1) emit(", ");
+                }
+                emit(") : ");
+                for (size_t i = 0; i < memberVars.size(); ++i) {
+                    emit(memberVars[i].second + "(_" + memberVars[i].second + ")");
+                    if (i < memberVars.size() - 1) emit(", ");
+                }
+                emit(" {}\n");
+            }
         }
 
         currentClassName_ = "";
@@ -795,7 +930,7 @@ namespace wio::codegen
 
     void CppGenerator::visit(IfStatement& node)
     {
-        for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
+        EMIT_TABS();
         buffer_ << "if (";
         node.condition->accept(*this);
         buffer_ << ")\n";
@@ -804,7 +939,7 @@ namespace wio::codegen
 
         if (node.elseBranch)
         {
-            for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
+            EMIT_TABS();
             buffer_ << "else\n";
             node.elseBranch->accept(*this);
         }
@@ -812,7 +947,7 @@ namespace wio::codegen
     
     void CppGenerator::visit(WhileStatement& node)
     {
-        for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
+        EMIT_TABS();
         buffer_ << "while (";
         node.condition->accept(*this);
         buffer_ << ")\n";
@@ -822,7 +957,7 @@ namespace wio::codegen
 
     void CppGenerator::visit(ReturnStatement& node)
     {
-        for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
+        EMIT_TABS();
         
         buffer_ << "return";
         if (node.value)

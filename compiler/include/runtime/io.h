@@ -4,7 +4,6 @@
 #include <string>
 #include <system_error>
 #include <typeinfo>
-#include <cstring>
 
 #include "exception.h"
 #include "../general/traits/integer_traits.h"
@@ -16,6 +15,27 @@
 
 namespace wio::runtime::io
 {
+    template <typename T>
+struct IsStringLike : std::false_type {};
+
+    template <>
+    struct IsStringLike<std::string> : std::true_type {};
+
+    template <>
+    struct IsStringLike<const char*> : std::true_type {};
+
+    template <>
+    struct IsStringLike<char*> : std::true_type {};
+
+    template <size_t N>
+    struct IsStringLike<const char[N]> : std::true_type {};
+
+    template <size_t N>
+    struct IsStringLike<char[N]> : std::true_type {};
+
+    template <typename T>
+    inline constexpr bool IsStringLikeV = IsStringLike<std::decay_t<T>>::value;
+    
     inline bool hWriteFileBase(FILE* file, const std::string& output)
     {
         if (!file)
@@ -47,7 +67,7 @@ namespace wio::runtime::io
     bool bWrite(FILE* file, const T& value)
     {
         std::string output;
-        if constexpr (std::is_same_v<T, std::string>)
+        if constexpr (IsStringLikeV<T>)
         {
             output = value;
         }

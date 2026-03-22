@@ -33,6 +33,19 @@ namespace wio::sema
 
             return nullptr; 
         }
+
+        bool hasAttribute(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
+        {
+            return std::ranges::any_of(attributes, [targetAttr](const auto& attr) { return attr->attribute == targetAttr; });
+        }
+
+        std::vector<Token> getAttributeArgs(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
+        {
+            for (const auto& attr : attributes) {
+                if (attr->attribute == targetAttr) return attr->args;
+            }
+            return {};
+        }
     }
     
     SemanticAnalyzer::SemanticAnalyzer()
@@ -70,19 +83,6 @@ namespace wio::sema
         auto symbol = Ref<Symbol>::Create(std::move(name), std::move(type), kind, flags, loc);
         symbols_.push_back(symbol);
         return symbol;
-    }
-
-    bool SemanticAnalyzer::hasAttribute(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
-    {
-        return std::ranges::any_of(attributes, [targetAttr](const auto& attr) { return attr->attribute == targetAttr; });
-    }
-
-    std::vector<Token> SemanticAnalyzer::getAttributeArgs(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
-    {
-        for (const auto& attr : attributes) {
-            if (attr->attribute == targetAttr) return attr->args;
-        }
-        return {};
     }
 
     void SemanticAnalyzer::visit(Program& node)
@@ -1030,7 +1030,7 @@ void SemanticAnalyzer::visit(VariableDeclaration& node)
                                         {
                                             if (methodSym->kind == SymbolKind::Function || methodSym->kind == SymbolKind::FunctionGroup)
                                             {
-                                                isOverride = true; 
+                                                isOverride = true;
                                                 break;
                                             }
                                         }
@@ -1041,6 +1041,10 @@ void SemanticAnalyzer::visit(VariableDeclaration& node)
                         if (!isOverride)
                         {
                             WIO_LOG_ADD_ERROR(funcDecl->location(), "Components can only contain data, lifecycle methods, or interface implementations. Unexpected function: '{}'", funcName);
+                        }
+                        else
+                        {
+                            memberSym->flags.set_isOverride(true);
                         }
                     }
                 }
@@ -1138,6 +1142,7 @@ void SemanticAnalyzer::visit(VariableDeclaration& node)
 
             bool hasCustomCtor = false;
             bool hasNoDefaultCtor = hasAttribute(node.attributes, Attribute::NoDefaultCtor);
+            auto interfaces = getAttributeArgs(node.attributes, Attribute::From);
 
             AccessModifier defaultAccess = AccessModifier::Private; 
             std::vector<Token> defaultArgs = getAttributeArgs(node.attributes, Attribute::Default);
@@ -1164,9 +1169,34 @@ void SemanticAnalyzer::visit(VariableDeclaration& node)
                 {
                     auto funcDecl = member.declaration->as<FunctionDeclaration>();
                     memberSym = funcDecl->name->referencedSymbol.Lock();
+                    std::string funcName = funcDecl->name->token.value;
                     
-                    if (funcDecl->name->token.value == "OnConstruct") {
+                    if (funcName == "OnConstruct")
+                    {
                         hasCustomCtor = true;
+                    }
+                    else if (funcName != "OnDestruct")
+                    {
+                        bool isOverride = false;
+                        for (const auto& ifaceToken : interfaces)
+                        {
+                            if (ifaceToken.type != TokenType::identifier) continue;
+                            if (auto ifaceSym = currentScope_->resolve(ifaceToken.value))
+                            {
+                                if (auto ifaceType = ifaceSym->type.AsFast<StructType>())
+                                {
+                                    if (ifaceType->structScope && ifaceType->structScope->resolveLocally(funcName))
+                                    {
+                                        isOverride = true; 
+                                        break;
+                                    }
+                                }
+                            }
+                        } 
+                        if (isOverride)
+                        {
+                            memberSym->flags.set_isOverride(true);
+                        }
                     }
                 }
 
