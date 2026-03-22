@@ -352,7 +352,7 @@ namespace wio::sema
         return "wio::DArray<" + elementType->toCppString() + ">";
     }
 
-    StructType::StructType(std::string name, Ref<Scope> structScope)
+    StructType::StructType(std::string name, WeakRef<Scope> structScope)
         : name(std::move(name)), structScope(std::move(structScope))
     {
     }

@@ -105,9 +105,9 @@ namespace wio
         struct StructType : Type
         {
             std::string name;
-            Ref<Scope> structScope;
+            WeakRef<Scope> structScope;
 
-            StructType(std::string name, Ref<Scope> structScope);
+            StructType(std::string name, WeakRef<Scope> structScope);
             
             TypeKind kind() const override;
             std::string toString() const override;

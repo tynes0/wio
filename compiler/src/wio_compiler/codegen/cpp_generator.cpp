@@ -827,14 +827,24 @@ void CppGenerator::visit(ComponentDeclaration& node)
         
         if (hasAttribute(node.attributes, Attribute::Final)) emit(" final");
         
+        auto symb = node.name->referencedSymbol.Lock();
+        auto globalScope = symb->innerScope->getParent().Lock();
+        
         auto bases = getBaseInterfaces(node.attributes);
         if (!bases.empty())
         {
             emit(" : ");
             for (size_t i = 0; i < bases.size(); ++i)
             {
-                emit("public " + Mangler::mangleInterface("", bases[i]));
-                if (i < bases.size() - 1) emit(", ");
+                auto baseSym = globalScope ? globalScope->resolve(bases[i]) : nullptr;
+                
+                if (baseSym && baseSym->flags.get_isInterface())
+                    emit("public " + Mangler::mangleInterface("", bases[i]));
+                else
+                    emit("public " + Mangler::mangleStruct(bases[i]));
+                
+                if (i < bases.size() - 1)
+                    emit(", ");
             }
         }
         emitLine("\n{");
@@ -864,14 +874,14 @@ void CppGenerator::visit(ComponentDeclaration& node)
             else if (member.declaration->is<VariableDeclaration>())
             {
                 auto vDecl = member.declaration->as<VariableDeclaration>();
-                auto sym = vDecl->name->referencedSymbol.Lock();
+                const auto& sym = vDecl->name->referencedSymbol.Lock();
                 Ref<sema::Type> varType = (sym && sym->type) ? sym->type : vDecl->name->refType.Lock();
                 memberVars.emplace_back(toCppType(varType), vDecl->name->token.value);
             }
 
             AccessModifier targetAccess = (member.access == AccessModifier::None) ? AccessModifier::Private : member.access;
 
-            if (targetAccess != currentAccess)//
+            if (targetAccess != currentAccess)
             {
                 dedent();
                 if (targetAccess == AccessModifier::Public) emitLine("public:");
@@ -886,7 +896,8 @@ void CppGenerator::visit(ComponentDeclaration& node)
         bool hasNoDefaultCtor = hasAttribute(node.attributes, Attribute::NoDefaultCtor);
         if (!hasCustomCtor && !hasNoDefaultCtor) 
         {
-            if (currentAccess != AccessModifier::Public) {
+            if (currentAccess != AccessModifier::Public)
+            {
                 dedent();
                 emitLine("public:");
                 indent();
@@ -896,16 +907,21 @@ void CppGenerator::visit(ComponentDeclaration& node)
 
             EMIT_TABS();
             
-            if (!memberVars.empty()) {
+            if (!memberVars.empty())
+            {
                 emit(currentClassName_ + "(");
-                for (size_t i = 0; i < memberVars.size(); ++i) {
+                for (size_t i = 0; i < memberVars.size(); ++i)
+                {
                     emit(memberVars[i].first + " _" + memberVars[i].second);
-                    if (i < memberVars.size() - 1) emit(", ");
+                    if (i < memberVars.size() - 1)
+                        emit(", ");
                 }
                 emit(") : ");
-                for (size_t i = 0; i < memberVars.size(); ++i) {
+                for (size_t i = 0; i < memberVars.size(); ++i)
+                {
                     emit(memberVars[i].second + "(_" + memberVars[i].second + ")");
-                    if (i < memberVars.size() - 1) emit(", ");
+                    if (i < memberVars.size() - 1)
+                        emit(", ");
                 }
                 emit(" {}\n");
             }

@@ -508,8 +508,8 @@ namespace wio::sema
             if (baseType->kind() == TypeKind::Struct)
             {
                 auto structType = baseType.AsFast<StructType>();
-                if (structType->structScope)
-                     foundMember = structType->structScope->resolve(node.member->token.value);
+                if (auto lockedScope = structType->structScope.Lock())
+                    foundMember = lockedScope->resolve(node.member->token.value);
             }
             else if (baseType->kind() == TypeKind::Reference)
             {
@@ -523,8 +523,8 @@ namespace wio::sema
                 if (referredType && referredType->kind() == TypeKind::Struct)
                 {
                     auto structType = referredType.AsFast<StructType>();
-                    if (structType->structScope)
-                         foundMember = structType->structScope->resolve(node.member->token.value);
+                    if (auto lockedScope = structType->structScope.Lock())
+                        foundMember = lockedScope->resolve(node.member->token.value);
                 }
                 else
                 {
@@ -587,11 +587,11 @@ namespace wio::sema
             structReturnType = calleeSym->type;
             
             auto structType = structReturnType.AsFast<StructType>();
-            if (structType->structScope)
+            if (auto lockedScope = structType->structScope.Lock())
             {
-                calleeSym = structType->structScope->resolveLocally("OnConstruct");
+                calleeSym = lockedScope->resolveLocally("OnConstruct");
             }
-            
+                
             if (!calleeSym)
             {
                 WIO_LOG_ADD_ERROR(node.location(), "No constructor found for type '{}'.", structType->name);
@@ -922,26 +922,32 @@ void SemanticAnalyzer::visit(VariableDeclaration& node)
         if (isDeclarationPass_)
         {
             auto interfaceScope = Ref<Scope>::Create(currentScope_, ScopeKind::Struct);
-            Ref<Type> interfaceType = Ref<StructType>::Create(node.name->token.value, interfaceScope);
+            scopes_.push_back(interfaceScope);
             
+            Ref<Type> interfaceType = Ref<StructType>::Create(node.name->token.value, interfaceScope);
             Ref<Symbol> interfaceSym = createSymbol(node.name->token.value, interfaceType, SymbolKind::Struct, node.location());
+            interfaceSym->innerScope = interfaceScope;
+            interfaceSym->flags.set_isInterface(true);
             currentScope_->define(node.name->token.value, interfaceSym);
             
             node.name->refType = interfaceType;
             node.name->referencedSymbol = interfaceSym;
 
-            enterScope(ScopeKind::Struct);
+            auto prevScope = currentScope_;
             currentScope_ = interfaceScope;
-            
-            for (auto& method : node.methods)
-                method->accept(*this);
-            
-            exitScope();
+            for (auto& method : node.methods) method->accept(*this);
+            currentScope_ = prevScope;
             return;
         }
 
+        auto sym = node.name->referencedSymbol.Lock();
+        auto prevScope = currentScope_;
+        currentScope_ = sym->innerScope;
+
         for (auto& method : node.methods)
             method->accept(*this); 
+            
+        currentScope_ = prevScope;
     }
 
     void SemanticAnalyzer::visit(ComponentDeclaration& node)
@@ -949,21 +955,20 @@ void SemanticAnalyzer::visit(VariableDeclaration& node)
         if (isDeclarationPass_)
         {
             auto structScope = Ref<Scope>::Create(currentScope_, ScopeKind::Struct);
-            Ref<Type> structType = Ref<StructType>::Create(node.name->token.value, structScope);
+            scopes_.push_back(structScope);
             
+            Ref<Type> structType = Ref<StructType>::Create(node.name->token.value, structScope);
             Ref<Symbol> compSym = createSymbol(node.name->token.value, structType, SymbolKind::Struct, node.location());
+            compSym->innerScope = structScope;
             currentScope_->define(node.name->token.value, compSym);
             
             node.name->refType = structType;
             node.name->referencedSymbol = compSym;
 
-            enterScope(ScopeKind::Struct);
+            auto prevScope = currentScope_;
             currentScope_ = structScope;
-            
-            for (auto& member : node.members)
-                member.declaration->accept(*this);
-            
-            exitScope();
+            for (auto& member : node.members) member.declaration->accept(*this);
+            currentScope_ = prevScope;
             return;
         }
 
@@ -972,20 +977,28 @@ void SemanticAnalyzer::visit(VariableDeclaration& node)
         
         if (isStructResolutionPass_)
         {
-            enterScope(ScopeKind::Struct);
-            currentScope_ = structType->structScope;
+            auto prevScope = currentScope_;
+            currentScope_ = sym->innerScope;
 
             bool hasCustomCtor = false;
             bool hasNoDefaultCtor = hasAttribute(node.attributes, Attribute::NoDefaultCtor);
-            auto interfaces = getAttributeArgs(node.attributes, Attribute::From);
+            auto bases = getAttributeArgs(node.attributes, Attribute::From);
 
             AccessModifier defaultAccess = AccessModifier::Public; 
-            
             std::vector<Token> defaultArgs = getAttributeArgs(node.attributes, Attribute::Default);
-            if (!defaultArgs.empty())
-            {
+            if (!defaultArgs.empty()) {
                 if (defaultArgs[0].type == TokenType::kwPrivate) defaultAccess = AccessModifier::Private;
                 else if (defaultArgs[0].type == TokenType::kwProtected) defaultAccess = AccessModifier::Protected;
+            }
+
+            for (const auto& baseToken : bases)
+            {
+                if (baseToken.type != TokenType::identifier)
+                    continue;
+                
+                if (auto baseSym = prevScope->resolve(baseToken.value); baseSym)
+                    if (!baseSym->flags.get_isInterface())
+                        WIO_LOG_ADD_ERROR(node.location(), "Component '{}' cannot inherit from '{}'. Components can only inherit from interfaces.", node.name->token.value, baseToken.value);
             }
 
             for (auto& member : node.members)
@@ -997,18 +1010,14 @@ void SemanticAnalyzer::visit(VariableDeclaration& node)
                     member.declaration->accept(*this);
                     auto varDecl = member.declaration->as<VariableDeclaration>();
                     memberSym = varDecl->name->referencedSymbol.Lock();
-                    
-                    if (hasAttribute(varDecl->attributes, Attribute::ReadOnly))
-                    {
-                        memberSym->flags.set_isReadOnly(true);
-                    }
+                    if (hasAttribute(varDecl->attributes, Attribute::ReadOnly)) memberSym->flags.set_isReadOnly(true);
                 }
                 else if (member.declaration->is<FunctionDeclaration>())
                 {
                     auto funcDecl = member.declaration->as<FunctionDeclaration>();
                     memberSym = funcDecl->name->referencedSymbol.Lock();
                     std::string funcName = funcDecl->name->token.value;
-
+                    
                     if (funcName == "OnConstruct")
                     {
                         hasCustomCtor = true;
@@ -1016,21 +1025,20 @@ void SemanticAnalyzer::visit(VariableDeclaration& node)
                     else if (funcName != "OnDestruct") 
                     {
                         bool isOverride = false;
-                        for (const auto& ifaceToken : interfaces)
+                        for (const auto& baseToken : bases)
                         {
-                            if (ifaceToken.type != TokenType::identifier) continue;
-
-                            if (auto ifaceSym = currentScope_->resolve(ifaceToken.value))
+                            if (baseToken.type != TokenType::identifier) continue;
+                            if (auto baseSym = prevScope->resolve(baseToken.value))
                             {
-                                if (auto ifaceType = ifaceSym->type.AsFast<StructType>())
+                                if (baseSym->flags.get_isInterface())
                                 {
-                                    if (ifaceType->structScope)
+                                    if (auto baseType = baseSym->type.AsFast<StructType>())
                                     {
-                                        if (auto methodSym = ifaceType->structScope->resolveLocally(funcName))
+                                        if (auto lockedScope = baseType->structScope.Lock())
                                         {
-                                            if (methodSym->kind == SymbolKind::Function || methodSym->kind == SymbolKind::FunctionGroup)
+                                            if (lockedScope->resolveLocally(funcName))
                                             {
-                                                isOverride = true;
+                                                isOverride = true; 
                                                 break;
                                             }
                                         }
@@ -1040,7 +1048,7 @@ void SemanticAnalyzer::visit(VariableDeclaration& node)
                         } 
                         if (!isOverride)
                         {
-                            WIO_LOG_ADD_ERROR(funcDecl->location(), "Components can only contain data, lifecycle methods, or interface implementations. Unexpected function: '{}'", funcName);
+                            WIO_LOG_ADD_ERROR(funcDecl->location(), "Components can only contain data, lifecycle methods, or interface implementations.");
                         }
                         else
                         {
@@ -1049,13 +1057,11 @@ void SemanticAnalyzer::visit(VariableDeclaration& node)
                     }
                 }
 
-                if (memberSym) 
+                if (memberSym)
                 {
                     AccessModifier finalAccess = member.access;
-                    
-                    if (finalAccess == AccessModifier::None)
-                        finalAccess = defaultAccess;
-                    
+                    if (finalAccess == AccessModifier::None) finalAccess = defaultAccess;
+
                     if (finalAccess == AccessModifier::Public) memberSym->flags.set_isPublic(true);
                     else if (finalAccess == AccessModifier::Private) memberSym->flags.set_isPrivate(true);
                     else if (finalAccess == AccessModifier::Protected) memberSym->flags.set_isProtected(true);
@@ -1071,9 +1077,9 @@ void SemanticAnalyzer::visit(VariableDeclaration& node)
                 currentScope_->define("OnConstruct", defaultSym);
 
                 std::vector<Ref<Type>> memberTypes;
-                for (auto& member : node.members) 
+                for (auto& member : node.members)
                 {
-                    if (member.declaration->is<VariableDeclaration>()) 
+                    if (member.declaration->is<VariableDeclaration>())
                     {
                         auto vDecl = member.declaration->as<VariableDeclaration>();
                         memberTypes.push_back(vDecl->name->referencedSymbol.Lock()->type);
@@ -1092,21 +1098,19 @@ void SemanticAnalyzer::visit(VariableDeclaration& node)
                 Ref<Symbol> copySym = createSymbol("OnConstruct", copyCtorType, SymbolKind::Function, node.location());
                 currentScope_->define("OnConstruct", copySym);
             }
-
-            exitScope();
+            
+            currentScope_ = prevScope;
             return;
         }
 
-        enterScope(ScopeKind::Struct);
-        currentScope_ = structType->structScope;
+        auto prevScope = currentScope_;
+        currentScope_ = sym->innerScope;
         
-        for (auto& member : node.members) {
-            if (member.declaration->is<FunctionDeclaration>()) {
+        for (auto& member : node.members)
+            if (member.declaration->is<FunctionDeclaration>())
                 member.declaration->accept(*this);
-            }
-        }
         
-        exitScope();
+        currentScope_ = prevScope;
     }
 
     void SemanticAnalyzer::visit(ObjectDeclaration& node)
@@ -1114,21 +1118,20 @@ void SemanticAnalyzer::visit(VariableDeclaration& node)
         if (isDeclarationPass_)
         {
             auto structScope = Ref<Scope>::Create(currentScope_, ScopeKind::Struct);
-            Ref<Type> structType = Ref<StructType>::Create(node.name->token.value, structScope);
+            scopes_.push_back(structScope);
             
+            Ref<Type> structType = Ref<StructType>::Create(node.name->token.value, structScope);
             Ref<Symbol> objSym = createSymbol(node.name->token.value, structType, SymbolKind::Struct, node.location());
+            objSym->innerScope = structScope;
             currentScope_->define(node.name->token.value, objSym);
             
             node.name->refType = structType;
             node.name->referencedSymbol = objSym;
 
-            enterScope(ScopeKind::Struct);
+            auto prevScope = currentScope_;
             currentScope_ = structScope;
-            
-            for (auto& member : node.members)
-                member.declaration->accept(*this);
-            
-            exitScope();
+            for (auto& member : node.members) member.declaration->accept(*this);
+            currentScope_ = prevScope;
             return;
         }
 
@@ -1137,19 +1140,29 @@ void SemanticAnalyzer::visit(VariableDeclaration& node)
         
         if (isStructResolutionPass_)
         {
-            enterScope(ScopeKind::Struct);
-            currentScope_ = structType->structScope;
+            auto prevScope = currentScope_;
+            currentScope_ = sym->innerScope;
 
             bool hasCustomCtor = false;
             bool hasNoDefaultCtor = hasAttribute(node.attributes, Attribute::NoDefaultCtor);
-            auto interfaces = getAttributeArgs(node.attributes, Attribute::From);
+            auto bases = getAttributeArgs(node.attributes, Attribute::From);
 
-            AccessModifier defaultAccess = AccessModifier::Private; 
+            AccessModifier defaultAccess = AccessModifier::Private;
             std::vector<Token> defaultArgs = getAttributeArgs(node.attributes, Attribute::Default);
             if (!defaultArgs.empty())
             {
-                if (defaultArgs[0].type == TokenType::kwPublic) defaultAccess = AccessModifier::Public;
-                else if (defaultArgs[0].type == TokenType::kwProtected) defaultAccess = AccessModifier::Protected;
+                if (defaultArgs[0].type == TokenType::kwPublic)
+                    defaultAccess = AccessModifier::Public;
+                else if (defaultArgs[0].type == TokenType::kwProtected)
+                    defaultAccess = AccessModifier::Protected;
+            }
+
+            for (const auto& baseToken : bases)
+            {
+                if (baseToken.type != TokenType::identifier) continue;
+                if (auto baseSym = prevScope->resolve(baseToken.value); baseSym)
+                    if (baseSym->kind != SymbolKind::Struct)
+                        WIO_LOG_ADD_ERROR(node.location(), "Object '{}' cannot inherit from '{}'. Objects can only inherit from interfaces, components, or other objects.", node.name->token.value, baseToken.value);
             }
 
             for (auto& member : node.members)
@@ -1162,8 +1175,7 @@ void SemanticAnalyzer::visit(VariableDeclaration& node)
                     auto varDecl = member.declaration->as<VariableDeclaration>();
                     memberSym = varDecl->name->referencedSymbol.Lock();
                     
-                    if (hasAttribute(varDecl->attributes, Attribute::ReadOnly))
-                        memberSym->flags.set_isReadOnly(true);
+                    if (hasAttribute(varDecl->attributes, Attribute::ReadOnly)) memberSym->flags.set_isReadOnly(true);
                 }
                 else if (member.declaration->is<FunctionDeclaration>())
                 {
@@ -1175,20 +1187,26 @@ void SemanticAnalyzer::visit(VariableDeclaration& node)
                     {
                         hasCustomCtor = true;
                     }
-                    else if (funcName != "OnDestruct")
+                    else if (funcName != "OnDestruct") 
                     {
                         bool isOverride = false;
-                        for (const auto& ifaceToken : interfaces)
+                        for (const auto& baseToken : bases)
                         {
-                            if (ifaceToken.type != TokenType::identifier) continue;
-                            if (auto ifaceSym = currentScope_->resolve(ifaceToken.value))
+                            if (baseToken.type != TokenType::identifier) continue;
+                            if (auto baseSym = prevScope->resolve(baseToken.value); baseSym)
                             {
-                                if (auto ifaceType = ifaceSym->type.AsFast<StructType>())
+                                if (baseSym->kind == SymbolKind::Struct)
                                 {
-                                    if (ifaceType->structScope && ifaceType->structScope->resolveLocally(funcName))
+                                    if (auto baseType = baseSym->type.AsFast<StructType>(); baseType)
                                     {
-                                        isOverride = true; 
-                                        break;
+                                        if (auto lockedScope = baseType->structScope.Lock(); lockedScope)
+                                        {
+                                            if (lockedScope->resolveLocally(funcName))
+                                            {
+                                                isOverride = true; 
+                                                break;
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1203,8 +1221,7 @@ void SemanticAnalyzer::visit(VariableDeclaration& node)
                 if (memberSym)
                 {
                     AccessModifier finalAccess = member.access;
-                    if (finalAccess == AccessModifier::None)
-                        finalAccess = defaultAccess;
+                    if (finalAccess == AccessModifier::None) finalAccess = defaultAccess;
 
                     if (finalAccess == AccessModifier::Public) memberSym->flags.set_isPublic(true);
                     else if (finalAccess == AccessModifier::Private) memberSym->flags.set_isPrivate(true);
@@ -1221,9 +1238,9 @@ void SemanticAnalyzer::visit(VariableDeclaration& node)
                 currentScope_->define("OnConstruct", defaultSym);
 
                 std::vector<Ref<Type>> memberTypes;
-                for (auto& member : node.members) 
+                for (auto& member : node.members)
                 {
-                    if (member.declaration->is<VariableDeclaration>()) 
+                    if (member.declaration->is<VariableDeclaration>())
                     {
                         auto vDecl = member.declaration->as<VariableDeclaration>();
                         memberTypes.push_back(vDecl->name->referencedSymbol.Lock()->type);
@@ -1243,20 +1260,18 @@ void SemanticAnalyzer::visit(VariableDeclaration& node)
                 currentScope_->define("OnConstruct", copySym);
             }
             
-            exitScope();
+            currentScope_ = prevScope;
             return;
         }
 
-        enterScope(ScopeKind::Struct);
-        currentScope_ = structType->structScope;
+        auto prevScope = currentScope_;
+        currentScope_ = sym->innerScope;
         
-        for (auto& member : node.members) {
-            if (member.declaration->is<FunctionDeclaration>()) {
+        for (auto& member : node.members)
+            if (member.declaration->is<FunctionDeclaration>())
                 member.declaration->accept(*this);
-            }
-        }
         
-        exitScope();
+        currentScope_ = prevScope;
     }
     
     void SemanticAnalyzer::visit(IfStatement& node)
