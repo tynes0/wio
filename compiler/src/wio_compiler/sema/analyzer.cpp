@@ -311,7 +311,7 @@ namespace wio::sema
                     }
 
                     if (!isInsideObject)
-                        WIO_LOG_ADD_ERROR(node.op.loc, "Cannot modify @readonly member '{0}' from outside its object.", referSym->name);
+                        WIO_LOG_ADD_ERROR(node.op.loc, "Cannot modify @Readonly member '{0}' from outside its object.", referSym->name);
                 }
             }
         }
@@ -1028,7 +1028,7 @@ void SemanticAnalyzer::visit(VariableDeclaration& node)
                                     {
                                         if (auto methodSym = ifaceType->structScope->resolveLocally(funcName))
                                         {
-                                            if (methodSym->kind == SymbolKind::Function)
+                                            if (methodSym->kind == SymbolKind::Function || methodSym->kind == SymbolKind::FunctionGroup)
                                             {
                                                 isOverride = true; 
                                                 break;

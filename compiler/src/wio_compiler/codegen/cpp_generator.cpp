@@ -152,6 +152,11 @@ namespace wio::codegen
     
     void CppGenerator::visit(Program& node)
     {
+        // TURN 0: Imports (Use Statements)
+        for (auto& stmt : node.statements)
+            if (stmt->is<UseStatement>()) stmt->accept(*this);
+        emitLine("");
+        
         // TURN 1: Interfaces
         for (auto& stmt : node.statements)
             if (stmt->is<InterfaceDeclaration>()) stmt->accept(*this);
@@ -559,7 +564,8 @@ namespace wio::codegen
     {
         auto sym = node.name->referencedSymbol.Lock();
 
-        std::string typeStr = toCppType(node.name->refType.Lock());
+        Ref<sema::Type> varType = (sym && sym->type) ? sym->type : node.name->refType.Lock();
+        std::string typeStr = toCppType(varType);
         std::string prefix;
         std::string suffix;
 
@@ -608,6 +614,8 @@ namespace wio::codegen
         }
 
         emitLine();
+
+        for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
 
         if (!currentClassName_.empty())
         {
@@ -672,7 +680,8 @@ namespace wio::codegen
             auto sym = method->name->referencedSymbol.Lock();
             auto funcType = sym->type.AsFast<sema::FunctionType>();
             std::string retType = funcType->returnType ? toCppType(funcType->returnType) : "void";
-            
+
+            for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    ";
             emit("virtual " + retType + " " + Mangler::mangleFunction(method->name->token.value, funcType->paramTypes) + "(");
             
             for (size_t i = 0; i < method->parameters.size(); ++i)
@@ -681,7 +690,7 @@ namespace wio::codegen
                 emit(common::formatString("{} {}", toCppType(param.name->refType.Lock()), param.name->token.value));
                 if (i < method->parameters.size() - 1) emit(", ");
             }
-            emitLine(") = 0;");
+            emit(") = 0;\n");
         }
 
         dedent();

@@ -5,14 +5,14 @@
 // ==========================================
 fn Entry() -> i32 {
     
-    io::Print("=== WIO MOTORU: OOP VE ECS TESTI BASLIYOR ===\n");
+    std::io::Print("=== WIO MOTORU: OOP VE ECS TESTI BASLIYOR ===\n");
 
     // --- COMPONENT TESTLERİ ---
     mut pos1 = Transform(); 
     mut pos2 = Transform(10.5, 20.0, 5.0); 
     
     // Wio'nun kendi String Interpolation'ı çalışıyor! (Arkada C++ std::format'a dönecek)
-    io::Print($"Transform 2'nin X degeri: ${pos2.x}\n");
+    std::io::Print($"Transform 2'nin X degeri: ${pos2.x}\n");
     
     pos1.x = 100.0;
     pos1.Describe(); 
@@ -22,13 +22,13 @@ fn Entry() -> i32 {
     hero.Describe();
     
     hero.TakeDamage(25);
-    io::Print($"Guncel Can (Disaridan Okuma): ${hero.health}\n"); 
+    std::io::Print($"Guncel Can (Disaridan Okuma): ${hero.health}\n"); 
 
-    let heroClone = Player(ref hero);
-    io::Print("--- Klon Olusturuldu ---\n");
+    mut heroClone = Player(ref hero);
+    std::io::Print("--- Klon Olusturuldu ---\n");
     heroClone.Describe();
 
-    io::Print("=== TUM TESTLER BASARILI! ===\n");
+    std::io::Print("=== TUM TESTLER BASARILI! ===\n");
     return 0;
 }
 
@@ -46,27 +46,38 @@ interface IDamageable {
 // ==========================================
 // 3. COMPONENT (Saf Veri ve Yaşam Döngüsü)
 // ==========================================
-@from(IDescribable)
+@From(IDescribable)
 component Transform {
     x: f32 = 0.0f32;
     y: f32 = 0.0f32;
     z: f32 = 0.0f32;
+    
+    OnConstruct()
+    {
+    }
+    
+    OnConstruct(_x: f32, _y: f32, _z: f32)
+    {
+        x = _x;
+        y = _y;
+        z = _z;
+    }
 
     fn Describe() {
-        io::Print($"Transform Durumu: X=${x}, Y=${y}, Z=${z}\n");
+        std::io::Print($"Transform Durumu: X=${x}, Y=${y}, Z=${z}\n");
     }
 }
 
 // ==========================================
 // 4. OBJECT (Mantık ve Gizlilik)
 // ==========================================
-@from(IDescribable, IDamageable)
-@default(private) 
+@From(IDescribable, IDamageable)
+@Default(private) 
 object Player {
     
     public name: string;
     
-    @readonly
+    @Readonly
     public health: i32; 
     
     secretKey: i32 = 42; 
@@ -74,7 +85,7 @@ object Player {
     public OnConstruct(playerName: string, startHealth: i32) {
         name = playerName;
         health = startHealth;
-        io::Print($"Player [${name}] oyuna katildi!\n");
+        std::io::Print($"Player [${name}] oyuna katildi!\n");
     }
 
     public OnConstruct(other: view Player) {
@@ -83,11 +94,11 @@ object Player {
     }       
 
     public fn Describe() {
-        io::Print($"Benim adim ${name}, canim ${health} ve gizli anahtarim ${secretKey}.\n");
+        std::io::Print($"Benim adim ${name}, canim ${health} ve gizli anahtarim ${secretKey}.\n");
     }
 
     public fn TakeDamage(amount: i32) {
         health = health - amount; 
-        io::Print($"${name} adli oyuncu ${amount} hasar aldi!\n");
+        std::io::Print($"${name} adli oyuncu ${amount} hasar aldi!\n");
     }
 }
