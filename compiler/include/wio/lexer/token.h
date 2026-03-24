@@ -208,10 +208,19 @@ namespace wio
          Operators – misc
          =============================== */
       opArrow,           // ->
+      opFatArrow,        // =>
       opQuestion,        // ?
       opColon,           // :
       opScope,           // ::
-   
+      opDot,             // .
+
+      /* ===============================
+         Operators – range
+         =============================== */
+
+      opRangeInclusive,  // ...
+      opRangeExclusive,  // ..<
+      
       /* ===============================
          Symbols
          =============================== */
@@ -229,7 +238,6 @@ namespace wio
       rightBracket,      // ]
    
       comma,             // ,
-      dot,               // .
       semicolon,         // ;
       newline            // statement boundary
    };
@@ -314,7 +322,7 @@ namespace wio
       { "loop",      TokenType::kwLoop },
       
       { "system",    TokenType::kwSystem },
-      { "Program",   TokenType::kwProgram },
+      { "program",   TokenType::kwProgram },
    };
 
    /* ===============================
@@ -322,12 +330,12 @@ namespace wio
       =============================== */
    
    inline const std::unordered_map<std::string_view, TokenType> operatorMap = {
-      { "<<=",  TokenType::opShiftLeftAssign },
-      { ">>=",  TokenType::opShiftRightAssign },
-      { "&=",   TokenType::opBitAndAssign },
-      { "|=",   TokenType::opBitOrAssign },
-      { "^=",   TokenType::opBitXorAssign },
-      { "~=",   TokenType::opBitNotAssign },
+      { "<<=", TokenType::opShiftLeftAssign },
+      { ">>=", TokenType::opShiftRightAssign },
+      { "&=",  TokenType::opBitAndAssign },
+      { "|=",  TokenType::opBitOrAssign },
+      { "^=",  TokenType::opBitXorAssign },
+      { "~=",  TokenType::opBitNotAssign },
       
       { "|>",  TokenType::opFlowRight },
       { "<|",  TokenType::opFlowLeft },
@@ -347,6 +355,7 @@ namespace wio
       { "%=",  TokenType::opPercentAssign },
       
       { "::",  TokenType::opScope },
+      { ".",   TokenType::opDot },
    
       { "+",   TokenType::opPlus },
       { "-",   TokenType::opMinus },
@@ -365,12 +374,16 @@ namespace wio
       { "~",   TokenType::opBitNot },
       
       { "!",   TokenType::opLogicalNot },
-      { "&&",   TokenType::opLogicalAnd },
-      { "||",   TokenType::opLogicalOr },
+      { "&&",  TokenType::opLogicalAnd },
+      { "||",  TokenType::opLogicalOr },
    
       { "->",  TokenType::opArrow },
+      { "=>",  TokenType::opFatArrow },
       { "?",   TokenType::opQuestion },
       { ":",   TokenType::opColon },
+      
+      { "...", TokenType::opRangeInclusive },
+      { "..<", TokenType::opRangeExclusive },
    };
    
    /* ===============================
@@ -386,7 +399,6 @@ namespace wio
        { ']', TokenType::rightBracket },
    
        { ',', TokenType::comma },
-       { '.', TokenType::dot },
        { ';', TokenType::semicolon },
    
        { '@', TokenType::atSign },

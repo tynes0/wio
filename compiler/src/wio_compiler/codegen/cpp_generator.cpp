@@ -12,6 +12,18 @@ namespace wio::codegen
     {
         std::string toCppType(const Ref<sema::Type>& type)
         {
+            if (type.Is<sema::FunctionType>())
+            {
+                auto funcType = type.As<sema::FunctionType>();
+                std::string result = "std::function<" + toCppType(funcType->returnType) + "(";
+                for (size_t i = 0; i < funcType->paramTypes.size(); ++i) {
+                    result += toCppType(funcType->paramTypes[i]);
+                    if (i < funcType->paramTypes.size() - 1) result += ", ";
+                }
+                result += ")>";
+                return result;
+            }
+            
             if (!type) return "void"; // Fallback
             return type->toCppString();
         }
@@ -62,7 +74,8 @@ namespace wio::codegen
         emitHeaderLine("#include <vector>");
         emitHeaderLine("#include <array>");
         emitHeaderLine("#include <format>");
-        emitHeaderLine("#include <iostream>"); 
+        emitHeaderLine("#include <iostream>");
+        emitHeaderLine("#include <functional>");
         emitHeaderLine("#include <exception.h>");
         emitHeaderLine("");
 
@@ -158,6 +171,7 @@ namespace wio::codegen
         emitLine("return 1;");
         dedent();
         emitLine("}"); 
+        emitLine("return 0;"); 
         dedent();
         emitLine("}"); 
     }
@@ -167,17 +181,15 @@ namespace wio::codegen
     
     void CppGenerator::visit(Program& node)
     {
-        // TURN 0: Imports (Use Statements)
+        // TURN 1: Imports (Use Statements)
         for (auto& stmt : node.statements)
             if (stmt->is<UseStatement>()) stmt->accept(*this);
-        emitLine("");
         
-        // TURN 1: Interfaces
+        // TURN 2: Interfaces
         for (auto& stmt : node.statements)
             if (stmt->is<InterfaceDeclaration>()) stmt->accept(*this);
-        emitLine("");
-
-        // TURN 2: Component & Object (Forward Decl)
+        
+        // TURN 3: Component & Object (Forward Decl)
         for (auto& stmt : node.statements)
         {
             if (stmt->is<ComponentDeclaration>())
@@ -185,58 +197,103 @@ namespace wio::codegen
             else if (stmt->is<ObjectDeclaration>())
                 emitLine(std::format("struct {};", Mangler::mangleStruct(stmt->as<ObjectDeclaration>()->name->token.value)));
         }
-        emitLine("");
 
-        // TURN 3: Global Vars
+        // TURN 4 - Enums, Flagsets, Flags
+        for (auto& stmt : node.statements)
+        {
+            if (stmt->is<EnumDeclaration>() || stmt->is<FlagsetDeclaration>() || stmt->is<FlagDeclaration>())
+            {
+                stmt->accept(*this);
+            }
+        }
+
+        // TURN 5: Global Vars
         for (auto& stmt : node.statements)
             if (stmt->is<VariableDeclaration>()) stmt->accept(*this);
-        emitLine("");
-
-        // TUR 4: Function Prototypes
+        
+        // TUR 6: Function Prototypes
         isEmittingPrototypes_ = true; 
         for (auto& stmt : node.statements)
             if (stmt->is<FunctionDeclaration>()) stmt->accept(*this);
         
         isEmittingPrototypes_ = false;
-        emitLine("");
-
-        // TURN 5:  Object & Component Bodies
+        
+        // TURN 7:  Object & Component Bodies
         for (auto& stmt : node.statements)
             if (stmt->is<ComponentDeclaration>() || stmt->is<ObjectDeclaration>())
                 stmt->accept(*this);
         
-        emitLine("");
-
-        // TUR 6: Function Bodies & Entry (Main)
+        // TURN 8: Function Bodies & Entry (Main)
         for (auto& stmt : node.statements)
-            if (stmt->is<FunctionDeclaration>()) stmt->accept(*this);
+            if (stmt->is<FunctionDeclaration>())
+                stmt->accept(*this);
     }
 
     void CppGenerator::visit(TypeSpecifier& node)
     {
-        WIO_UNUSED(node);
+        if (node.name.type == TokenType::kwFn)
+        {
+            emit("std::function<");
+            node.generics[0]->accept(*this);
+            emit("(");
+            
+            for (size_t i = 1; i < node.generics.size(); ++i)
+            {
+                node.generics[i]->accept(*this);
+                if (i < node.generics.size() - 1) emit(", ");
+            }
+            
+            emit(")>");
+        }
     }
 
     void CppGenerator::visit(BinaryExpression& node)
     {
+        if (node.op.type == TokenType::kwIn)
+        {
+            if (node.right->is<RangeExpression>())
+            {
+                auto range = node.right->as<RangeExpression>();
+                // C++ Output: [&](){ auto _val = (x); return _val >= (1) && _val <= (5); }()
+                emit("[&](){ auto _val = (");
+                node.left->accept(*this);
+                emit("); return _val >= (");
+                range->start->accept(*this);
+                emit(range->isInclusive ? ") && _val <= (" : ") && _val < (");
+                range->end->accept(*this);
+                emit("); }() ");
+                return;
+            }
+        }
+        
         emit("(");
         node.left->accept(*this);
-        emit(" " + node.op.value + " ");
+        
+        std::string opStr = node.op.value;
+        if (node.op.type == TokenType::kwAnd)
+            opStr = "&&";
+        else if (node.op.type == TokenType::kwOr)
+            opStr = "||";
+        
+        emit(" " + opStr + " ");
         node.right->accept(*this);
         emit(")");
     }
 
     void CppGenerator::visit(UnaryExpression& node)
     {
+        std::string opStr = node.op.value;
+        if (node.op.type == TokenType::kwNot) opStr = "!";
+        
         if (node.opType == UnaryExpression::UnaryOperatorType::Prefix)
         {
-            emit(node.op.value);
+            emit(opStr);
             node.operand->accept(*this);
         }
         else
         {
             node.operand->accept(*this);
-            emit(node.op.value);
+            emit(opStr);
         }
     }
 
@@ -278,7 +335,7 @@ namespace wio::codegen
     {
         std::string valStr = node.token.value;
     
-        const char* suffixes[] = { "i8", "u8", "i16", "u16", "i32", "u32", "i64", "u64", "isz", "usz" };
+        const char* suffixes[] = { "i", "u", "i8", "u8", "i16", "u16", "i32", "u32", "i64", "u64", "isz", "usz" };
         for (const auto& suf : suffixes)
         {
             if (valStr.ends_with(suf))
@@ -309,6 +366,8 @@ namespace wio::codegen
     
         if (valStr.ends_with("f32") || valStr.ends_with("f64"))
             valStr.erase(valStr.length() - 3);
+        else if (valStr.ends_with('f'))
+            valStr.erase(valStr.length() - 1);
 
         auto type = node.refType.Lock();
         if (type && type->toString() == "f64")
@@ -428,12 +487,6 @@ namespace wio::codegen
         // TODO: impl
         WIO_UNUSED(node);
     }
-    
-    void CppGenerator::visit(LambdaLiteral& node)
-    {
-        // TODO: impl
-        WIO_UNUSED(node);
-    }
 
     void CppGenerator::visit(Identifier& node)
     {
@@ -499,14 +552,32 @@ namespace wio::codegen
     
     void CppGenerator::visit(MemberAccessExpression& node)
     {
+        if (node.object->is<SuperExpression>()) 
+        {
+            auto lockedType = node.object->refType.Lock();
+            if (lockedType && lockedType->kind() == sema::TypeKind::Reference) 
+            {
+                auto refType = lockedType.AsFast<sema::ReferenceType>();
+                auto baseStruct = refType->referredType.AsFast<sema::StructType>();
+                
+                emit(Mangler::mangleStruct(baseStruct->name) + "::");
+                node.member->accept(*this);
+                return;
+            }
+        }
+        
         node.object->accept(*this);
     
         std::string op = ".";
     
         if (auto objSym = node.object->referencedSymbol.Lock())
         {
-            if (objSym->kind == sema::SymbolKind::Namespace)
+            if (objSym->kind == sema::SymbolKind::Namespace || 
+                objSym->flags.get_isEnum() || 
+                objSym->flags.get_isFlagset())
+            {
                 op = "::";
+            }
         }
     
         if (op == ".") 
@@ -534,9 +605,54 @@ namespace wio::codegen
         for (size_t i = 0; i < node.arguments.size(); ++i)
         {
             node.arguments[i]->accept(*this);
-            if (i < node.arguments.size() - 1) emit(", ");
+            if (i < node.arguments.size() - 1)
+                emit(", ");
         }
         emit(")");
+    }
+
+    void CppGenerator::visit(LambdaExpression& node)
+    {
+        emit("[&](");
+        
+        for (size_t i = 0; i < node.parameters.size(); ++i)
+        {
+            if (node.parameters[i].type)
+                emit(toCppType(node.parameters[i].type->refType.Lock()));
+            else
+                emit("auto"); 
+            emit(" ");
+            emit(node.parameters[i].name->token.value);
+            if (i < node.parameters.size() - 1)
+                emit(", ");
+        }
+        emit(")");
+
+        if (node.returnType)
+        {
+            emit(" -> ");
+            node.returnType->accept(*this);
+        }
+
+        emit(" {\n");
+        indent();
+
+        if (node.body->is<ExpressionStatement>())
+        {
+            EMIT_TABS();
+            emit("return ");
+            node.body->as<ExpressionStatement>()->expression->accept(*this);
+            emit(";\n");
+        }
+        else if (node.body->is<BlockStatement>())
+        {
+            auto block = node.body->as<BlockStatement>();
+            for (auto& stmt : block->statements)
+                stmt->accept(*this);
+        }
+
+        dedent();
+        EMIT_TABS(); emit("}");
     }
 
     void CppGenerator::visit(RefExpression& node)
@@ -561,6 +677,101 @@ namespace wio::codegen
         node.operand->accept(*this);
     
         emit(", " + minLimit + ", " + maxLimit + "))");
+    }
+
+    void CppGenerator::visit(SelfExpression& node)
+    {
+        WIO_UNUSED(node);
+        emit("this");
+    }
+
+    void CppGenerator::visit(SuperExpression& node)
+    {
+        // TODO: impl
+        WIO_UNUSED(node);
+        emit("/* super not implemented yet */");
+    }
+
+    void CppGenerator::visit(RangeExpression& node)
+    {
+        WIO_UNUSED(node);
+    }
+
+    void CppGenerator::visit(MatchExpression& node)
+    {
+        bool producesValue = false;
+        if (auto t = node.refType.Lock(); t)
+        {
+            producesValue = !t->isVoid() && !t->isUnknown();
+        }
+
+        emit("[&]() {\n");
+        indent();
+        EMIT_TABS();
+        emit("auto _match_val = (");
+        node.value->accept(*this);
+        emit(");\n");
+        
+        bool first = true;
+        for (auto& matchCase : node.cases)
+        {
+            EMIT_TABS();
+            if (matchCase.matchValues.empty()) // assumed
+            {
+                emit("else {\n");
+            }
+            else
+            {
+                if (!first) emit("else ");
+                emit("if (");
+                
+                for (size_t i = 0; i < matchCase.matchValues.size(); ++i)
+                {
+                    auto& mVal = matchCase.matchValues[i];
+                    if (mVal->is<RangeExpression>())
+                    {
+                        auto r = mVal->as<RangeExpression>();
+                        emit("(_match_val >= ");
+                        r->start->accept(*this);
+                        emit(r->isInclusive ? " && _match_val <= " : " && _match_val < ");
+                        r->end->accept(*this);
+                        emit(")");
+                    }
+                    else
+                    {
+                        emit("_match_val == ");
+                        mVal->accept(*this);
+                    }
+                    
+                    if (i < matchCase.matchValues.size() - 1)
+                        emit(" || ");
+                }
+                emit(") {\n");
+            }
+            first = false;
+            
+            indent();
+            
+            if (producesValue && matchCase.body->is<ExpressionStatement>())
+            {
+                EMIT_TABS();
+                emit("return ");
+                matchCase.body->as<ExpressionStatement>()->expression->accept(*this);
+                emit(";\n");
+            }
+            else
+            {
+                matchCase.body->accept(*this);
+            }
+            
+            dedent();
+            EMIT_TABS();
+            emit("}\n");
+        }
+        
+        dedent();
+        EMIT_TABS();
+        emit("}()");
     }
 
     void CppGenerator::visit(ExpressionStatement& node)
@@ -682,7 +893,40 @@ namespace wio::codegen
         if (node.body)
         {
             emitLine();
-            node.body->accept(*this);
+            
+            if (node.whenCondition) 
+            {
+                emitLine("{");
+                indent();
+                
+                EMIT_TABS(); emit("if (!(");
+                node.whenCondition->accept(*this);
+                emit(")) return");
+                if (node.whenFallback)
+                {
+                    emit(" ");
+                    node.whenFallback->accept(*this);
+                }
+                emit(";\n\n");
+                
+                if (node.body->is<BlockStatement>())
+                {
+                    auto block = node.body->as<BlockStatement>();
+                    for (auto& stmt : block->statements)
+                        stmt->accept(*this);
+                }//
+                else
+                {
+                    node.body->accept(*this);
+                }
+                
+                dedent();
+                emitLine("}");
+            }
+            else 
+            {
+                node.body->accept(*this);
+            }
         }
         else
         {
@@ -932,6 +1176,106 @@ void CppGenerator::visit(ComponentDeclaration& node)
         emitLine("};\n");
     }
 
+    void CppGenerator::visit(FlagDeclaration& node)
+    {
+        std::string structName = Mangler::mangleStruct(node.name->token.value);
+        emitLine(common::formatString("struct {0} {{ explicit {0}() = default; };\n", structName));
+    }
+
+    void CppGenerator::visit(EnumDeclaration& node)
+    {
+        std::string enumName = Mangler::mangleStruct(node.name->token.value);
+        std::string underType = "int32_t";
+        
+        auto typeArgs = getAttributeArgs(node.attributes, Attribute::Type);
+        if (!typeArgs.empty()) {
+            // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
+            switch (typeArgs[0].type)
+            {
+                case TokenType::kwI8: underType = "int8_t"; break;
+                case TokenType::kwU8: underType = "uint8_t"; break;
+                case TokenType::kwI16: underType = "int16_t"; break;
+                case TokenType::kwU16: underType = "uint16_t"; break;
+                case TokenType::kwI32: underType = "int32_t"; break;
+                case TokenType::kwU32: underType = "uint32_t"; break;
+                case TokenType::kwI64: underType = "int64_t"; break;
+                case TokenType::kwU64: underType = "uint64_t"; break;
+                default: break;
+            }
+        }
+
+        emitLine("enum " + enumName + " : " + underType + "\n{");
+        indent();
+
+        for (size_t i = 0; i < node.members.size(); ++i)
+        {
+            EMIT_TABS();
+            emit(node.members[i].name->token.value);
+            if (node.members[i].value)
+            {
+                emit(" = ");
+                node.members[i].value->accept(*this);
+            }
+            
+            if (i < node.members.size() - 1)
+                emit(",");
+            emit("\n");
+        }
+        
+        dedent();
+        emitLine("};\n");
+    }
+
+    void CppGenerator::visit(FlagsetDeclaration& node)
+    {
+        std::string enumName = Mangler::mangleStruct(node.name->token.value);
+        std::string underType = "uint32_t";
+        
+        auto typeArgs = getAttributeArgs(node.attributes, Attribute::Type);
+        if (!typeArgs.empty())
+        {
+            // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
+            switch (typeArgs[0].type)
+            {
+                case TokenType::kwI8: underType = "int8_t"; break;
+                case TokenType::kwU8: underType = "uint8_t"; break;
+                case TokenType::kwI16: underType = "int16_t"; break;
+                case TokenType::kwU16: underType = "uint16_t"; break;
+                case TokenType::kwI32: underType = "int32_t"; break;
+                case TokenType::kwU32: underType = "uint32_t"; break;
+                case TokenType::kwI64: underType = "int64_t"; break;
+                case TokenType::kwU64: underType = "uint64_t"; break;
+                default: break;
+            }
+        }
+
+        emitLine("enum class " + enumName + " : " + underType + "\n{");
+        indent();
+        
+        for (size_t i = 0; i < node.members.size(); ++i)
+        {
+            EMIT_TABS();
+            emit(node.members[i].name->token.value);
+            if (node.members[i].value)
+            {
+                emit(" = ");
+                node.members[i].value->accept(*this);
+            }
+            
+            if (i < node.members.size() - 1)
+                emit(",");
+            emit("\n");
+        }
+        
+        dedent();
+        emitLine("};");
+
+        emitLine(common::formatString("inline constexpr {0} operator|({0} a, {0} b) {{ return static_cast<{0}>(static_cast<{1}>(a) | static_cast<{1}>(b)); }}", enumName, underType));
+        emitLine(common::formatString("inline constexpr {0} operator&({0} a, {0} b) {{ return static_cast<{0}>(static_cast<{1}>(a) & static_cast<{1}>(b)); }}", enumName, underType));
+        emitLine(common::formatString("inline constexpr {0} operator^({0} a, {0} b) {{ return static_cast<{0}>(static_cast<{1}>(a) ^ static_cast<{1}>(b)); }}", enumName, underType));
+        emitLine(common::formatString("inline constexpr {0} operator~({0} a) {{ return static_cast<{0}>(~static_cast<{1}>(a)); }}", enumName, underType));
+    }
+
     void CppGenerator::visit(BlockStatement& node)
     {
         emitLine("{");
@@ -969,6 +1313,16 @@ void CppGenerator::visit(ComponentDeclaration& node)
         buffer_ << ")\n";
         
         node.body->accept(*this);
+    }
+
+    void CppGenerator::visit(BreakStatement& node)
+    {
+        emitLine("break;");
+    }
+
+    void CppGenerator::visit(ContinueStatement& node)
+    {
+        emitLine("continue;");
     }
 
     void CppGenerator::visit(ReturnStatement& node)

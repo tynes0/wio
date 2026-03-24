@@ -80,6 +80,7 @@ namespace wio::common
             { .str = "isz", .type = IntegerType::isize}, {.str =  "usz", .type = IntegerType::usize},
             { .str = "i64", .type = IntegerType::i64}, { .str = "u64", .type = IntegerType::u64},
             { .str = "i32", .type = IntegerType::i32}, { .str = "u32", .type = IntegerType::u32},
+            { .str = "i",   .type = IntegerType::i32}, { .str = "u",   .type = IntegerType::u32},
             { .str = "i16", .type = IntegerType::i16}, { .str = "u16", .type = IntegerType::u16},
             { .str = "i8",  .type = IntegerType::i8},  { .str = "u8",  .type = IntegerType::u8}
         };
@@ -249,6 +250,7 @@ namespace wio::common
         };
 
         Suffix suffixes[] = {
+            { .str = "f", .type = FloatType::f32 },
             { .str = "f32", .type = FloatType::f32 },
             { .str = "f64", .type = FloatType::f64 }
         };
@@ -298,14 +300,17 @@ namespace wio::common
         if (wioTypeStr == "void") return "void";
         if (wioTypeStr == "char") return "char";
         if (wioTypeStr == "uchar") return "unsigned char";
+        if (wioTypeStr == "i") return "int32_t";
         if (wioTypeStr == "i8") return "int8_t";
         if (wioTypeStr == "i16") return "int16_t";
         if (wioTypeStr == "i32") return "int32_t";
         if (wioTypeStr == "i64") return "int64_t";
+        if (wioTypeStr == "u") return "uint32_t";
         if (wioTypeStr == "u8") return "uint8_t";
         if (wioTypeStr == "u16") return "uint16_t";
         if (wioTypeStr == "u32") return "uint32_t";
         if (wioTypeStr == "u64") return "uint64_t";
+        if (wioTypeStr == "f") return "float";
         if (wioTypeStr == "f32") return "float";
         if (wioTypeStr == "f64") return "double";
         if (wioTypeStr == "usize") return "size_t";

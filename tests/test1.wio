@@ -1,93 +1,67 @@
 ﻿use std::io;
 
-// ==========================================
-// 1. FORWARD DECLARATION TESTİ (Entry En Üstte!)
-// ==========================================
+enum DamageType {
+    Physical = 0,
+    Magical = 1,
+    TrueDamage = 2
+}
+
+flagset StatusEffects {
+    None = 0,
+    Poisoned = 1,
+    Burning = 2,
+    Stunned = 4
+}
+
+fn LogHealth(hp: i32) when (hp >= 0) {
+    std::io::Print($"Current hp: ${hp}\n");
+}
+
+// Secured bypass
+fn CalculateMultiplier(level: i32, is_vip: bool) -> f32 when (level in 1...100) else 1.0f {
+    let base_multi = match (level) {
+        1..<10: 1.0f; // 1-9 
+        10...49: 1.5f; // 10-49 
+        50...99 or 100: 2.0f; // 50-99 or 100
+        assumed: 1.0f;
+    };
+    if (is_vip)
+        return base_multi * 1.5f;
+    return base_multi;
+}
+
+fn ApplyFilter(val: i32, filter_fn: fn(i32) -> i32) -> i32 {
+    return filter_fn(val);
+}
+
 fn Entry() -> i32 {
+    std::io::Print("=== WIO TEST ===\n\n");
+    let double_damage = (dmg: i32) => dmg * 2; // Semantic Analyzer will automatically detect the return type
+    let block_lambda: fn(i32) -> i32 = (dmg: i32) => { // We write the return value ourselves
+        std::io::Print($"[System] Block lambda is being processed: ${dmg}\n");
+        return dmg + 10;
+    };
+
+    let final_dmg1 = ApplyFilter(25, double_damage);
+    let final_dmg2 = ApplyFilter(25, block_lambda);
+    let final_dmg3 = ApplyFilter(25, (x: i32) => x * 3);
+
+    std::io::Print($"Final Dmg 1 (x2)  : ${final_dmg1}\n");
+    std::io::Print($"Final Dmg 2 (+10) : ${final_dmg2}\n");
+    std::io::Print($"Final Dmg 3 (x3)  : ${final_dmg3}\n");
+
+    let multi_vip = CalculateMultiplier(55, true);
+    let multi_invalid = CalculateMultiplier(999, false);
     
-    std::io::Print("=== WIO MOTORU: OOP VE ECS TESTI BASLIYOR ===\n");
+    std::io::Print($"55 Level VIP Multiplier: ${multi_vip}\n");
+    std::io::Print($"999 Level (Guard) Multiplier: ${multi_invalid}\n");
 
-    // --- COMPONENT TESTLERİ ---
-    mut pos1 = Transform(); 
-    mut pos2 = Transform(10.5, 20.0, 5.0); 
-    
-    // Wio'nun kendi String Interpolation'ı çalışıyor! (Arkada C++ std::format'a dönecek)
-    std::io::Print($"Transform 2'nin X degeri: ${pos2.x}\n");
-    
-    pos1.x = 100.0;
-    pos1.Describe(); 
+    // Only 100 is displayed on the screen, -50 is not.
+    LogHealth(100);
+    LogHealth(-50);
 
-    // --- OBJECT TESTLERİ ---
-    mut hero = Player("Arthur", 100);
-    hero.Describe();
-    
-    hero.TakeDamage(25);
-    std::io::Print($"Guncel Can (Disaridan Okuma): ${hero.health}\n"); 
-
-    let heroClone = Player(ref hero);
-    std::io::Print("--- Klon Olusturuldu ---\n");
-    heroClone.Describe();
-
-    std::io::Print("=== TUM TESTLER BASARILI! ===\n");
-    return 0;
-}
-
-// ==========================================
-// 2. ARAYÜZLER (Sözleşmeler)
-// ==========================================
-interface IDescribable {
-    fn Describe();
-}
-
-interface IDamageable {
-    fn TakeDamage(amount: i32);
-}
-
-// ==========================================
-// 3. COMPONENT (Saf Veri ve Yaşam Döngüsü)
-// ==========================================
-@From(IDescribable)
-component Transform {
-    x: f32 = 0.0f32;
-    y: f32 = 0.0f32;
-    z: f32 = 0.0f32;
-
-    fn Describe() {
-        std::io::Print($"Transform Durumu: X=${x}, Y=${y}, Z=${z}\n");
-    }
-}
-
-// ==========================================
-// 4. OBJECT (Mantık ve Gizlilik)
-// ==========================================
-@From(IDescribable, IDamageable)
-@Default(private) 
-object Player {
-    
-    public name: string;
-    
-    @Readonly
-    public health: i32; 
-    
-    secretKey: i32 = 42; 
-
-    public OnConstruct(playerName: string, startHealth: i32) {
-        name = playerName;
-        health = startHealth;
-        std::io::Print($"Player [${name}] oyuna katildi!\n");
-    }
-
-    public OnConstruct(other: view Player) {
-        name = $"${other.name} (Klonu)";
-        health = other.health;
-    }       
-
-    public fn Describe() {
-        std::io::Print($"Benim adim ${name}, canim ${health} ve gizli anahtarim ${secretKey}.\n");
-    }
-
-    public fn TakeDamage(amount: i32) {
-        health = health - amount; 
-        std::io::Print($"${name} adli oyuncu ${amount} hasar aldi!\n");
+    mut my_status = StatusEffects::Poisoned | StatusEffects::Burning;
+    if ((my_status & StatusEffects::Burning) == StatusEffects::Burning) {
+        std::io::Print("Fire!\n");
     }
 }

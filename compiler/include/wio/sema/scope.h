@@ -20,7 +20,8 @@ namespace wio::sema
         
         WeakRef<Scope> getParent() const;
         ScopeKind getKind() const;
-        
+
+        void clear();
     private:
         WeakRef<Scope> parent_;
         ScopeKind kind_;

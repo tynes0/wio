@@ -8,19 +8,24 @@
 
 namespace wio::sema
 {
+    // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions
     class SemanticAnalyzer : public ASTVisitor
     {
     public:
         SemanticAnalyzer();
+        ~SemanticAnalyzer() override;
         void analyze(const Ref<Program>& program);
 
 #include "../ast/visitor_overloads.def"
 
     private:
-        Ref<Scope> currentScope_;
         std::vector<Ref<Scope>> scopes_;
         std::vector<Ref<Symbol>> symbols_;
+        Ref<Scope> currentScope_ = nullptr;
         Ref<Type> currentFunctionReturnType_ = nullptr;
+        Ref<Type> currentStructType_ = nullptr;
+        Ref<Type> currentBaseStructType_ = nullptr;
+        uint32_t loopDepth_ = 0;
         bool isDeclarationPass_ = true;
         bool isStructResolutionPass_ = false;
         

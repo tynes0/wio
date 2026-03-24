@@ -1,6 +1,5 @@
 #include "wio/lexer/lexer.h"
 #include "wio/common/exception.h"
-#include "wio/common/logger.h"
 #include "wio/common/utility.h"
 
 #include <ranges>
@@ -318,11 +317,14 @@ namespace wio
 
         if (peek() == '.')
         {
-            isFloat = true;
-            result += advance();
-
-            while (std::isdigit(upeek()))
+            if (peek(1) != '.') 
+            {
+                isFloat = true;
                 result += advance();
+
+                while (std::isdigit(upeek()))
+                    result += advance();
+            }
         }
 
         if (matchOneOf("eE"))
@@ -354,13 +356,13 @@ namespace wio
             {
                 type = TokenType::durationLiteral;
             }
-            else if (suffix == "f32" || suffix == "f64")
+            else if (suffix == "f32" || suffix == "f64" || suffix == "f")
             {
                 type = TokenType::floatLiteral;
             }
             else if (suffix == "i8" || suffix == "u8" || suffix == "i16" || suffix == "u16" || 
                      suffix == "i32" || suffix == "u32" || suffix == "i64" || suffix == "u64" || 
-                     suffix == "isz" || suffix == "usz")
+                     suffix == "isz" || suffix == "usz" || suffix == "i" || suffix == "u")
             {
                 if (isFloat)
                 {

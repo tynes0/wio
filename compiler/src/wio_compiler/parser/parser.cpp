@@ -157,11 +157,6 @@ namespace wio
                 left = makeNodePtr<UnaryExpression>(std::move(op), std::move(operand));
             }
         }
-        else if (match(TokenType::leftParen, true))
-        {
-            left = parseExpression();
-            consume(TokenType::rightParen);
-        }
         else
         {
             left = parsePrimary();
@@ -179,7 +174,8 @@ namespace wio
 
                 if (!match(TokenType::rightParen))
                 {
-                    do {
+                    do
+                    {
                         if (match(TokenType::rightParen))
                             utError("The parameter is missing.", peek(-1).loc);
                         args.push_back(parseExpression());
@@ -199,7 +195,7 @@ namespace wio
                 left = makeNodePtr<ArrayAccessExpression>(std::move(left), std::move(index));
                 continue;
             }
-            if (matchOneOf({ TokenType::dot, TokenType::opScope }))
+            if (matchOneOf({ TokenType::opDot, TokenType::opScope }))
             {
                 Token op = advance();
                 NodePtr<Identifier> member = makeNodePtr<Identifier>(consume(TokenType::identifier));
@@ -224,7 +220,17 @@ namespace wio
             
             Token op = advance();
             NodePtr<Expression> right = parseExpression(precedence + 1);
-            left = makeNodePtr<BinaryExpression>(std::move(left), std::move(op), std::move(right));
+
+            if (op.type == TokenType::opRangeInclusive || op.type == TokenType::opRangeExclusive)
+            {
+                bool isInclusive = (op.type == TokenType::opRangeInclusive);
+                left = makeNodePtr<RangeExpression>(std::move(left), std::move(right), isInclusive, op.loc);
+            }
+            else
+            {
+                Location loc = op.loc;
+                left = makeNodePtr<BinaryExpression>(std::move(left), std::move(op), std::move(right), loc);
+            }
         }
         
         return left;
@@ -253,14 +259,48 @@ namespace wio
         if (match(TokenType::kwNull, true))
             return makeNodePtr<NullExpression>(peek(-1).loc);
 
+        if (match(TokenType::kwSelf, true))
+            return makeNodePtr<SelfExpression>(peek(-1).loc);
+            
+        if (match(TokenType::kwSuper, true))
+            return makeNodePtr<SuperExpression>(peek(-1).loc);
+
         if (match(TokenType::durationLiteral, true))
             return makeNodePtr<DurationLiteral>(peek(-1));
         
         if (match(TokenType::byteLiteral, true))
             return makeNodePtr<ByteLiteral>(peek(-1));
 
-        if (match(TokenType::leftParen, true))
+        if (match(TokenType::kwMatch))
+            return parseMatchExpression();
+
+        if (match(TokenType::leftParen))
         {
+            bool isLambda = false;
+            int offset = 1;
+            int parenCount = 1;
+            
+            while (peek(offset).isValid()) 
+            {
+                if (peek(offset).type == TokenType::leftParen)
+                    parenCount++;
+                else if (peek(offset).type == TokenType::rightParen)
+                    parenCount--;
+
+                if (parenCount == 0) 
+                {
+                    TokenType nextType = peek(offset + 1).type;
+                    if (nextType == TokenType::opFatArrow || nextType == TokenType::opArrow)
+                        isLambda = true;
+                    break;
+                }
+                offset++;
+            }
+
+            if (isLambda)
+                return parseLambdaExpression();
+            
+            advance();
             NodePtr<Expression> expr = parseExpression();
             consume(TokenType::rightParen);
             return expr;
@@ -361,6 +401,88 @@ namespace wio
         return makeNodePtr<DictionaryLiteral>(std::move(pairs), startLoc);
     }
 
+    NodePtr<Expression> Parser::parseLambdaExpression()
+    {
+        Location startLoc = peek().loc;
+        consume(TokenType::leftParen);
+
+        std::vector<Parameter> parameters;
+        if (!match(TokenType::rightParen))
+        {
+            do
+            {
+                NodePtr<Identifier> paramName = makeNodePtr<Identifier>(consume(TokenType::identifier));
+                NodePtr<TypeSpecifier> paramType = nullptr;
+
+                if (match(TokenType::opColon, true))
+                {
+                    paramType = parseType();
+                }
+
+                parameters.emplace_back(std::move(paramName), std::move(paramType));
+            } while (match(TokenType::comma, true));
+        }
+        consume(TokenType::rightParen);
+
+        NodePtr<TypeSpecifier> returnType = nullptr;
+        if (match(TokenType::opArrow, true)) 
+        {
+            returnType = parseType();
+        }
+
+        consume(TokenType::opFatArrow);
+
+        NodePtr<Statement> body;
+        if (match(TokenType::leftBrace))
+        {
+            body = parseBlockStatement();
+        }
+        else
+        {
+            auto expr = parseExpression();
+            body = makeNodePtr<ExpressionStatement>(std::move(expr), peek(-1).loc);
+        }
+
+        return makeNodePtr<LambdaExpression>(std::move(parameters), std::move(returnType), std::move(body), startLoc);
+    }
+
+    NodePtr<Expression> Parser::parseMatchExpression()
+    {
+        Token startTok = consume(TokenType::kwMatch);
+        consume(TokenType::leftParen);
+        auto value = parseExpression();
+        consume(TokenType::rightParen);
+        consume(TokenType::leftBrace);
+
+        std::vector<MatchCase> cases;
+
+        while (peek().isValid() && !match(TokenType::rightBrace))
+        {
+            std::vector<NodePtr<Expression>> matchValues;
+
+            if (match(TokenType::kwAssumed, true))
+            {
+            }
+            else
+            {
+                do
+                {
+                    matchValues.push_back(parseExpression(3));
+                }
+                while (match(TokenType::comma, true) || match(TokenType::kwOr, true));
+            }
+
+            consume(TokenType::opColon);
+            
+            NodePtr<Statement> body = parseStatement(); 
+            
+            cases.emplace_back(std::move(matchValues), std::move(body));
+        }
+        consume(TokenType::rightBrace);
+
+        return makeNodePtr<MatchExpression>(std::move(value), std::move(cases), startTok.loc);
+    }
+
     NodePtr<TypeSpecifier> Parser::parseType()
     {
         if (match(TokenType::kwRef, true))
@@ -416,6 +538,47 @@ namespace wio
             generics.push_back(std::move(innerType));
 
             return makeNodePtr<TypeSpecifier>(arrayToken, std::move(generics), size, false, false, startLoc);
+        }
+
+        if (match(TokenType::kwFn, true))
+        {
+            Location startLoc = peek(-1).loc;
+            consume(TokenType::leftParen);
+            
+            std::vector<NodePtr<TypeSpecifier>> generics;
+            generics.emplace_back(nullptr);
+
+            if (!match(TokenType::rightParen))
+            {
+                do {
+                    generics.push_back(parseType());
+                } while (match(TokenType::comma, true));
+            }
+            consume(TokenType::rightParen);
+
+            NodePtr<TypeSpecifier> retType = nullptr;
+            if (match(TokenType::opArrow, true))
+            {
+                retType = parseType();
+            }
+            else
+            {
+                Token voidTok {
+                    .type = TokenType::identifier,
+                    .value = "void",
+                    .loc = peek(-1).loc
+                };
+                retType = makeNodePtr<TypeSpecifier>(std::move(voidTok), std::vector<NodePtr<TypeSpecifier>>{}, 0, false, false, peek(-1).loc);
+            }
+            
+            generics[0] = std::move(retType);
+
+            Token fnTok {
+                .type = TokenType::kwFn,
+                .value = "fn",
+                .loc = startLoc
+            };
+            return makeNodePtr<TypeSpecifier>(std::move(fnTok), std::move(generics), 0, false, false, startLoc);
         }
 
         match(TokenType::kwConst, true);
@@ -481,10 +644,20 @@ namespace wio
                 return parseComponentDeclaration(std::move(attributes));
             if (match(TokenType::kwObject))
                 return parseObjectDeclaration(std::move(attributes));
+            if (match(TokenType::kwEnum))
+                return parseEnumDeclaration(std::move(attributes));
+            if (match(TokenType::kwFlagset))
+                return parseFlagsetDeclaration(std::move(attributes));
+            if (match(TokenType::kwFlag))
+                return parseFlagDeclaration(std::move(attributes));
             if (match(TokenType::kwIf))
                 return parseIfStatement();
             if (match(TokenType::kwWhile))
                 return parseWhileStatement();
+            if (match(TokenType::kwBreak))
+                return parseBreakStatement();
+            if (match(TokenType::kwContinue))
+                return parseContinueStatement();
             if (match(TokenType::kwReturn))
                 return parseReturnStatement();
             if (match(TokenType::kwUse))
@@ -499,13 +672,14 @@ namespace wio
         else if (peek().isSymbol())
         {
             if (match(TokenType::leftBrace))
-            {
                 return parseBlockStatement();
-            }
         }
         
         NodePtr<Expression> expr = parseExpression();
-        consume(TokenType::semicolon);
+        if (expr->is<MatchExpression>())
+            match(TokenType::semicolon, true);
+        else
+            consume(TokenType::semicolon);
         return makeNodePtr<ExpressionStatement>(std::move(expr));
     }
 
@@ -638,9 +812,16 @@ namespace wio
             returnType = parseType();
         }
         
-        std::vector<NodePtr<Expression>> guards;
-        while (match(TokenType::kwWhen, true)) // 'when'
-            guards.push_back(parseExpression());
+        NodePtr<Expression> whenCond = nullptr;
+        NodePtr<Expression> whenFallback = nullptr;
+
+        if (match(TokenType::kwWhen, true))
+        {
+            whenCond = parseExpression();
+            
+            if (match(TokenType::kwElse, true))
+                whenFallback = parseExpression();
+        }
 
         NodePtr<Statement> body = match(TokenType::semicolon, true) ? nullptr : parseBlockStatement();
 
@@ -649,7 +830,8 @@ namespace wio
             std::move(name),
             std::move(parameters),
             std::move(returnType),
-            std::move(guards),
+            std::move(whenCond),
+            std::move(whenFallback),
             std::move(body),
             startTok.loc
         );
@@ -822,6 +1004,63 @@ namespace wio
         return makeNodePtr<ObjectDeclaration>(std::move(attributes), std::move(name), std::move(members), startTok.loc);
     }
 
+    NodePtr<Statement> Parser::parseFlagDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
+    {
+        Token startTok = consume(TokenType::kwFlag);
+        NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+        consume(TokenType::semicolon); // flag IsDead;
+        
+        return makeNodePtr<FlagDeclaration>(std::move(attributes), std::move(name), startTok.loc);
+    }
+
+    NodePtr<Statement> Parser::parseEnumDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
+    {
+        Token startTok = consume(TokenType::kwEnum);
+        NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+        
+        consume(TokenType::leftBrace);
+        std::vector<EnumMember> members;
+        
+        while (peek().isValid() && !match(TokenType::rightBrace))
+        {
+            NodePtr<Identifier> memberName = makeNodePtr<Identifier>(consume(TokenType::identifier));
+            NodePtr<Expression> value = nullptr;
+            
+            if (match(TokenType::opAssign, true))
+                value = parseExpression();
+            
+            members.emplace_back(std::move(memberName), std::move(value));
+            match(TokenType::comma, true);
+        }
+        consume(TokenType::rightBrace);
+        
+        return makeNodePtr<EnumDeclaration>(std::move(attributes), std::move(name), std::move(members), startTok.loc);
+    }
+
+    NodePtr<Statement> Parser::parseFlagsetDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
+    {
+        Token startTok = consume(TokenType::kwFlagset);
+        NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+        
+        consume(TokenType::leftBrace);
+        std::vector<EnumMember> members;
+        
+        while (peek().isValid() && !match(TokenType::rightBrace))
+        {
+            NodePtr<Identifier> memberName = makeNodePtr<Identifier>(consume(TokenType::identifier));
+            NodePtr<Expression> value = nullptr;
+            
+            if (match(TokenType::opAssign, true))
+                value = parseExpression();
+            
+            members.emplace_back(std::move(memberName), std::move(value));
+            match(TokenType::comma, true);
+        }
+        consume(TokenType::rightBrace);
+        
+        return makeNodePtr<FlagsetDeclaration>(std::move(attributes), std::move(name), std::move(members), startTok.loc);
+    }
+
     NodePtr<Statement> Parser::parseIfStatement()
     {
         Token startTok = consume(TokenType::kwIf);
@@ -856,6 +1095,20 @@ namespace wio
         NodePtr<Statement> body = match(TokenType::leftBrace) ? parseBlockStatement() : parseStatement();
 
         return makeNodePtr<WhileStatement>(std::move(condition), std::move(body), startLoc);
+    }
+
+    NodePtr<Statement> Parser::parseBreakStatement()
+    {
+        Token startTok = consume(TokenType::kwBreak);
+        consume(TokenType::semicolon);
+        return makeNodePtr<BreakStatement>(startTok.loc);
+    }
+
+    NodePtr<Statement> Parser::parseContinueStatement()
+    {
+        Token startTok = consume(TokenType::kwContinue);
+        consume(TokenType::semicolon);
+        return makeNodePtr<ContinueStatement>(startTok.loc);
     }
 
     NodePtr<Statement> Parser::parseReturnStatement()
@@ -940,16 +1193,16 @@ namespace wio
         // fit
         // ---------------------------------
         case TokenType::kwFit:
-            return 12;
+            return 13;
             
         // ---------------------------------
         // Postfix / access / call
         // ---------------------------------
-        case TokenType::dot:
+        case TokenType::opDot:
         case TokenType::opScope:
         case TokenType::leftParen:    // call
         case TokenType::leftBracket:  // index
-            return 11;
+            return 12;
     
         // ---------------------------------
         // Prefix (unary)
@@ -958,7 +1211,7 @@ namespace wio
         case TokenType::kwNot:        // not
         case TokenType::opLogicalNot: // !
         case TokenType::opBitNot:     // ~
-            return 10;
+            return 11;
     
         // ---------------------------------
         // Multiplicative
@@ -966,20 +1219,27 @@ namespace wio
         case TokenType::opStar:
         case TokenType::opSlash:
         case TokenType::opPercent:
-            return 9;
+            return 10;
     
         // ---------------------------------
         // Additive
         // ---------------------------------
         case TokenType::opPlus:
         case TokenType::opMinus:
-            return 8;
+            return 9;
     
         // ---------------------------------
         // Shift
         // ---------------------------------
         case TokenType::opShiftLeft:
         case TokenType::opShiftRight:
+            return 8;
+            
+        // ---------------------------------
+        // Range
+        // ---------------------------------
+        case TokenType::opRangeInclusive:
+        case TokenType::opRangeExclusive:
             return 7;
     
         // ---------------------------------
@@ -989,6 +1249,7 @@ namespace wio
         case TokenType::opLessEqual:
         case TokenType::opGreater:
         case TokenType::opGreaterEqual:
+        case TokenType::kwIn:
             return 6;
     
         // ---------------------------------
@@ -1054,7 +1315,6 @@ namespace wio
             return -1;
         }
     }
-
 
     void Parser::utError(const std::string& message, Location location)
     {

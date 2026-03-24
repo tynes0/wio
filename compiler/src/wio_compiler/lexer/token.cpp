@@ -207,9 +207,17 @@ namespace wio
           Operators – misc
           =============================== */
        case TokenType::opArrow: return "opArrow";
+       case TokenType::opFatArrow: return "opFatArrow";
        case TokenType::opQuestion: return "opQuestion";
        case TokenType::opColon: return "opColon";
        case TokenType::opScope: return "opScope";
+       case TokenType::opDot: return "opDot";
+          
+      /* ===============================
+         Operators – range
+         =============================== */
+       case TokenType::opRangeInclusive: return "opRangeInclusive";
+       case TokenType::opRangeExclusive: return "opRangeExclusive";
    
        /* ===============================
           Symbols
@@ -228,7 +236,6 @@ namespace wio
        case TokenType::rightBracket: return "rightBracket";
    
        case TokenType::comma: return "comma";
-       case TokenType::dot: return "dot";
        case TokenType::semicolon: return "semicolon";
        case TokenType::newline: return "newline";
        }
@@ -283,6 +290,7 @@ namespace wio
           type == TokenType::opBitNot ||
           type == TokenType::opPlus ||
           type == TokenType::opMinus ||
+          type == TokenType::kwNot ||
           type == TokenType::opLogicalNot);
    }
 

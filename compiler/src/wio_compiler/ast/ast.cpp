@@ -1,6 +1,7 @@
 ﻿#include "wio/ast/ast.h"
 #include "wio/sema/type.h"
-#include "wio/sema/symbol.h"
+// NOLINTNEXTLINE(CppUnusedIncludeDirective)
+#include "wio/sema/symbol.h" 
 
 namespace wio
 {
@@ -161,6 +162,14 @@ namespace wio
 
     FunctionCallExpression::~FunctionCallExpression() = default;
 
+    LambdaExpression::LambdaExpression(std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType,
+        NodePtr<Statement> _body, common::Location _loc)
+            : Expression(_loc), parameters(std::move(_params)), returnType(std::move(_retType)), body(std::move(_body))
+    {
+    }
+
+    LambdaExpression::~LambdaExpression() = default;
+
     RefExpression::RefExpression(bool _isMut, NodePtr<Expression> _operand, common::Location _loc)
         : Expression(_loc.isValid() ? _loc : _operand->location()), isMut(_isMut), operand(std::move(_operand))
     {
@@ -174,6 +183,20 @@ namespace wio
     }
 
     FitExpression::~FitExpression() = default;
+
+    RangeExpression::RangeExpression(NodePtr<Expression> _start, NodePtr<Expression> _end, bool _isInclusive, common::Location _loc)
+         : Expression(_loc), start(std::move(_start)), end(std::move(_end)), isInclusive(_isInclusive)
+    {
+    }
+    
+    RangeExpression::~RangeExpression() = default;
+
+    MatchExpression::MatchExpression(NodePtr<Expression> _value, std::vector<MatchCase> _cases, common::Location _loc)
+        : Expression(_loc), value(std::move(_value)), cases(std::move(_cases))
+    {
+    }
+    
+    MatchExpression::~MatchExpression() = default;
     
     ExpressionStatement::ExpressionStatement(NodePtr<Expression> _expression, common::Location _loc)
         : Statement(_loc.isValid() ? _loc : _expression->location()), expression(std::move(_expression))
@@ -181,6 +204,13 @@ namespace wio
     }
 
     ExpressionStatement::~ExpressionStatement() = default;
+
+    AttributeStatement::AttributeStatement(Attribute _attribute, std::vector<Token> _args, common::Location _loc)
+        : Statement(_loc), attribute(_attribute), args(std::move(_args))
+    {
+    }
+
+    AttributeStatement::~AttributeStatement() = default;
 
     VariableDeclaration::VariableDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, Mutability _mutability,
         NodePtr<Identifier> _name, NodePtr<TypeSpecifier> _type, NodePtr<Expression> _init, common::Location _loc)
@@ -193,9 +223,10 @@ namespace wio
 
     FunctionDeclaration::FunctionDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
         NodePtr<Identifier> _name, std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType,
-        std::vector<NodePtr<Expression>> _guards, NodePtr<Statement> _body, common::Location _loc)
-        : Statement(_loc.isValid() ? _loc : _name->location()), attributes(std::move(_attributes)), name(std::move(_name)), parameters(std::move(_params)),
-        returnType(std::move(_retType)), guards(std::move(_guards)),  body(std::move(_body))
+        NodePtr<Expression> _whenCondition, NodePtr<Expression> _whenFallback, NodePtr<Statement> _body, common::Location _loc)
+            : Statement(_loc.isValid() ? _loc : _name->location()), attributes(std::move(_attributes)),
+            name(std::move(_name)), parameters(std::move(_params)), returnType(std::move(_retType)),
+            whenCondition(std::move(_whenCondition)), whenFallback(std::move(_whenFallback)),  body(std::move(_body))
     {
     }
 
@@ -228,6 +259,31 @@ namespace wio
 
     ObjectDeclaration::~ObjectDeclaration() = default;
 
+    EnumDeclaration::EnumDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
+        NodePtr<Identifier> _name, std::vector<EnumMember> _members, common::Location _loc)
+        : Statement(_loc.isValid() ? _loc : _name->location()), attributes(std::move(_attributes)),
+        name(std::move(_name)), members(std::move(_members))
+    {
+    }
+    
+    EnumDeclaration::~EnumDeclaration() = default;
+
+    FlagsetDeclaration::FlagsetDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
+        NodePtr<Identifier> _name, std::vector<EnumMember> _members, common::Location _loc)
+        : Statement(_loc.isValid() ? _loc : _name->location()), attributes(std::move(_attributes)),
+        name(std::move(_name)), members(std::move(_members))
+    {
+    }
+    
+    FlagsetDeclaration::~FlagsetDeclaration() = default;
+
+    FlagDeclaration::FlagDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name, common::Location _loc)
+        : Statement(_loc.isValid() ? _loc : _name->location()), attributes(std::move(_attributes)), name(std::move(_name))
+    {
+    }
+    
+    FlagDeclaration::~FlagDeclaration() = default;
+
     BlockStatement::BlockStatement(std::vector<NodePtr<Statement>> _statements, common::Location _loc)
         : Statement(_loc), statements(std::move(_statements))
     {
@@ -249,6 +305,20 @@ namespace wio
 
     WhileStatement::~WhileStatement() = default;
 
+    BreakStatement::BreakStatement(common::Location _loc)
+        : Statement(_loc)
+    {
+    }
+    
+    BreakStatement::~BreakStatement() = default;
+
+    ContinueStatement::ContinueStatement(common::Location _loc)
+        : Statement(_loc)
+    {
+    }
+    
+    ContinueStatement::~ContinueStatement() = default;
+
     ReturnStatement::ReturnStatement(NodePtr<Expression> _value, common::Location _loc)
         : Statement(_loc), value(std::move(_value))
     {
@@ -263,10 +333,17 @@ namespace wio
 
     UseStatement::~UseStatement() = default;
 
-    AttributeStatement::AttributeStatement(Attribute _attribute, std::vector<Token> _args, common::Location _loc)
-        : Statement(_loc), attribute(_attribute), args(std::move(_args))
+    SelfExpression::SelfExpression(common::Location _loc)
+        : Expression(_loc)
     {
     }
+    
+    SelfExpression::~SelfExpression() = default;
 
-    AttributeStatement::~AttributeStatement() = default;
+    SuperExpression::SuperExpression(common::Location _loc)
+        : Expression(_loc)
+    {
+    }
+    
+    SuperExpression::~SuperExpression() = default;
 }

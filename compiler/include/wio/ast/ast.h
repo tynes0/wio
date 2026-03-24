@@ -86,7 +86,8 @@ namespace wio
         NoDefaultCtor,
         From,
         Trust,
-        Final
+        Final,
+        Type
     );
 
     FrenumClassInNamespace(wio, AccessModifier, uint8_t,
@@ -345,11 +346,6 @@ namespace wio
         ~DictionaryLiteral() override;
     };
 
-    struct LambdaLiteral : Expression
-    {
-        WIO_EXP_NODE_BODY(LambdaLiteral)
-    };
-
     struct Identifier : Expression
     {
         WIO_EXP_NODE_BODY(Identifier)
@@ -402,6 +398,25 @@ namespace wio
         ~FunctionCallExpression() override;
     };
 
+    struct Parameter
+    {
+        NodePtr<Identifier> name;
+        NodePtr<TypeSpecifier> type;
+    };
+
+    struct LambdaExpression : Expression
+    {
+        WIO_EXP_NODE_BODY(LambdaExpression)
+
+        std::vector<Parameter> parameters;
+        NodePtr<TypeSpecifier> returnType;
+        NodePtr<Statement> body;
+
+        LambdaExpression(std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType, NodePtr<Statement> _body,
+            common::Location _loc = common::Location::invalid());
+        ~LambdaExpression() override;
+    };
+
     struct RefExpression : Expression
     {
         WIO_EXP_NODE_BODY(RefExpression)
@@ -422,6 +437,51 @@ namespace wio
 
         FitExpression(NodePtr<Expression> _operand, NodePtrUnchecked<TypeSpecifier> _targetType, common::Location _loc);
         ~FitExpression() override;
+    };
+
+    struct SelfExpression : Expression
+    {
+        WIO_EXP_NODE_BODY(SelfExpression)
+        
+        explicit SelfExpression(common::Location _loc = common::Location::invalid());
+        ~SelfExpression() override;
+    };
+
+    struct SuperExpression : Expression
+    {
+        WIO_EXP_NODE_BODY(SuperExpression)
+        
+        explicit SuperExpression(common::Location _loc = common::Location::invalid());
+        ~SuperExpression() override;
+    };
+
+    struct RangeExpression : Expression
+    {
+        WIO_EXP_NODE_BODY(RangeExpression)
+
+        NodePtr<Expression> start;
+        NodePtr<Expression> end;
+        bool isInclusive; // true '...', false '..<'
+
+        RangeExpression(NodePtr<Expression> _start, NodePtr<Expression> _end, bool _isInclusive, common::Location _loc = common::Location::invalid());
+        ~RangeExpression() override;
+    };
+
+    struct MatchCase
+    {
+        std::vector<NodePtr<Expression>> matchValues;
+        NodePtr<Statement> body;
+    };
+
+    struct MatchExpression : Expression
+    {
+        WIO_EXP_NODE_BODY(MatchExpression)
+
+        NodePtr<Expression> value;
+        std::vector<MatchCase> cases;
+
+        MatchExpression(NodePtr<Expression> _value, std::vector<MatchCase> _cases, common::Location _loc = common::Location::invalid());
+        ~MatchExpression() override;
     };
 
     struct ExpressionStatement : Statement
@@ -459,13 +519,7 @@ namespace wio
             NodePtr<Identifier> _name, NodePtr<TypeSpecifier> _type, NodePtr<Expression> _init, common::Location _loc);
         ~VariableDeclaration() override;
     };
-
-    struct Parameter
-    {
-        NodePtr<Identifier> name;
-        NodePtr<TypeSpecifier> type;
-    };
-
+    
     struct FunctionDeclaration : Statement
     {
         WIO_STMT_NODE_BODY(FunctionDeclaration)
@@ -473,13 +527,14 @@ namespace wio
         std::vector<NodePtr<AttributeStatement>> attributes;
         NodePtr<Identifier> name;
         std::vector<Parameter> parameters;
-        NodePtr<TypeSpecifier> returnType;       // -> ReturnType
-        std::vector<NodePtr<Expression>> guards; // when condition
-        NodePtr<Statement> body;                 // { ... }
+        NodePtr<TypeSpecifier> returnType;
+        NodePtr<Expression> whenCondition; 
+        NodePtr<Expression> whenFallback;
+        NodePtr<Statement> body;
 
         FunctionDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
-            std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType, std::vector<NodePtr<Expression>> _guards,
-            NodePtr<Statement> _body, common::Location _loc);
+            std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType, NodePtr<Expression> _whenCondition,
+            NodePtr<Expression> _whenFallback, NodePtr<Statement> _body, common::Location _loc);
         ~FunctionDeclaration() override;
     };
 
@@ -532,6 +587,44 @@ namespace wio
         ObjectDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name, std::vector<ObjectMember> _members, common::Location _loc);
         ~ObjectDeclaration() override;
     };
+
+    struct EnumMember
+    {
+        NodePtr<Identifier> name;
+        NodePtr<Expression> value;
+    };
+
+    struct EnumDeclaration : Statement
+    {
+        WIO_STMT_NODE_BODY(EnumDeclaration)
+        std::vector<NodePtr<AttributeStatement>> attributes;
+        NodePtr<Identifier> name;
+        std::vector<EnumMember> members;
+
+        EnumDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name, std::vector<EnumMember> _members, common::Location _loc = common::Location::invalid());
+        ~EnumDeclaration() override;
+    };
+
+    struct FlagsetDeclaration : Statement
+    {
+        WIO_STMT_NODE_BODY(FlagsetDeclaration)
+        std::vector<NodePtr<AttributeStatement>> attributes;
+        NodePtr<Identifier> name;
+        std::vector<EnumMember> members;
+
+        FlagsetDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name, std::vector<EnumMember> _members, common::Location _loc = common::Location::invalid());
+        ~FlagsetDeclaration() override;
+    };
+
+    struct FlagDeclaration : Statement
+    {
+        WIO_STMT_NODE_BODY(FlagDeclaration)
+        std::vector<NodePtr<AttributeStatement>> attributes;
+        NodePtr<Identifier> name;
+
+        FlagDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name, common::Location _loc = common::Location::invalid());
+        ~FlagDeclaration() override;
+    };
     
     struct BlockStatement : Statement
     {
@@ -564,6 +657,22 @@ namespace wio
 
         WhileStatement(NodePtr<Expression> _cond, NodePtr<Statement> _body, common::Location _loc);
         ~WhileStatement() override;
+    };
+
+    struct BreakStatement : Statement
+    {
+        WIO_STMT_NODE_BODY(BreakStatement)
+        
+        explicit BreakStatement(common::Location _loc = common::Location::invalid());
+        ~BreakStatement() override;
+    };
+
+    struct ContinueStatement : Statement
+    {
+        WIO_STMT_NODE_BODY(ContinueStatement)
+        
+        explicit ContinueStatement(common::Location _loc = common::Location::invalid());
+        ~ContinueStatement() override;
     };
     
     struct ReturnStatement : Statement

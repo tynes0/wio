@@ -202,6 +202,11 @@ namespace wio::sema
         return false;
     }
 
+    bool Type::isVoid() const
+    {
+        return this == Compiler::get().getTypeContext().getVoid().Get();
+    }
+
     bool Type::isUnknown() const
     {
         return this == Compiler::get().getTypeContext().getUnknown().Get();

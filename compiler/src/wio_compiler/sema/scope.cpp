@@ -73,4 +73,9 @@ namespace wio::sema
     {
         return kind_;
     }
+
+    void Scope::clear()
+    {
+        symbols_.clear();
+    }
 }

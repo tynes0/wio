@@ -16,6 +16,12 @@ namespace wio::codegen
         std::ranges::replace(typeStr, ';', 'S');
         std::ranges::replace(typeStr, '*', 'P');
         std::ranges::replace(typeStr, '&', 'R');
+
+        std::ranges::replace(typeStr, '(', '_');
+        std::ranges::replace(typeStr, ')', '_');
+        std::ranges::replace(typeStr, ',', '_');
+        std::ranges::replace(typeStr, '-', '_');
+        std::ranges::replace(typeStr, '>', '_');
         
         return typeStr;
     }

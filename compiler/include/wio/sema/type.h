@@ -34,6 +34,7 @@ namespace wio
 
             bool isNumeric() const;
             bool isCompatibleWith(const Ref<Type>& other) const;
+            bool isVoid() const;
             bool isUnknown() const;
 
             static Ref<Type> getTypeFromIntegerResult(const IntegerResult& result);

@@ -31,6 +31,8 @@ namespace wio
         NodePtr<Expression> parseStringLiteral();
         NodePtr<Expression> parseArrayLiteral();
         NodePtr<Expression> parseDictionaryLiteral();
+        NodePtr<Expression> parseLambdaExpression();
+        NodePtr<Expression> parseMatchExpression();
         
         NodePtr<TypeSpecifier> parseType();
         
@@ -42,8 +44,13 @@ namespace wio
         NodePtr<Statement> parseInterfaceDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
         NodePtr<Statement> parseComponentDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
         NodePtr<Statement> parseObjectDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
+        NodePtr<Statement> parseEnumDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
+        NodePtr<Statement> parseFlagsetDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
+        NodePtr<Statement> parseFlagDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
         NodePtr<Statement> parseIfStatement();
         NodePtr<Statement> parseWhileStatement();
+        NodePtr<Statement> parseBreakStatement();
+        NodePtr<Statement> parseContinueStatement();
         NodePtr<Statement> parseReturnStatement();
         NodePtr<Statement> parseUseStatement();
 
