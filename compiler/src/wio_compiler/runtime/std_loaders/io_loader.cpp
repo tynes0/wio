@@ -11,7 +11,7 @@ namespace wio::runtime
 
         auto addPrintOverload = [&](const Ref<sema::Type>& paramType) 
         {
-            auto funcType = typeContext.getFunctionType(typeContext.getI32(), {paramType});
+            auto funcType = typeContext.getOrCreateFunctionType(typeContext.getI32(), {paramType});
             auto symbol = Ref<sema::Symbol>::Create("Print", funcType, sema::SymbolKind::Function, flags, common::Location::invalid());
             
             symbols.push_back(symbol);

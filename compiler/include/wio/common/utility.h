@@ -14,6 +14,17 @@ namespace wio
         [[nodiscard]] IntegerResult getInteger(const std::string& data);
         [[nodiscard]] FloatResult getFloat(const std::string& data);
         [[nodiscard]] std::string wioPrimitiveTypeToCppType(const std::string& wioTypeStr);
+        
+        [[nodiscard]] constexpr uint64_t fnv1a(const char* str)
+        {
+            uint64_t hash = 1469598103934665603ull;
+            while (*str)
+            {
+                hash ^= static_cast<uint64_t>(*str++);
+                hash *= 1099511628211ull;
+            }
+            return hash;
+        }
 
         template <typename ...Args>
         [[nodiscard]] std::string formatString(const std::string_view& fmt, Args&&... args)

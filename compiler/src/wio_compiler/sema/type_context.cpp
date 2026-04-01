@@ -30,27 +30,37 @@ namespace wio::sema
         t_null = makeType<NullType>(t_void);
     }
 
-    Ref<Type> TypeContext::getReferenceType(Ref<Type> referredType, bool isMutable)
+    Ref<Type> TypeContext::getOrCreateReferenceType(Ref<Type> referredType, bool isMutable)
     {
         return makeType<ReferenceType>(std::move(referredType), isMutable);
     }
 
-    Ref<Type> TypeContext::getArrayType(Ref<Type> elementType, ArrayType::ArrayKind arrayKind, size_t size)
+    Ref<Type> TypeContext::getOrCreateArrayType(Ref<Type> elementType, ArrayType::ArrayKind arrayKind, size_t size)
     {
         return makeType<ArrayType>(std::move(elementType), arrayKind, size);
     }
+    
+    Ref<Type> TypeContext::getOrCreateDictionaryType(Ref<Type> keyType, Ref<Type> valueType, bool isOrdered)
+    {
+        return makeType<DictionaryType>(std::move(keyType), std::move(valueType), isOrdered);
+    }
 
-    Ref<Type> TypeContext::getFunctionType(Ref<Type> returnType, std::vector<Ref<Type>> paramTypes)
+    Ref<Type> TypeContext::getOrCreateTreeType(Ref<Type> keyType, Ref<Type> valueType)
+    {
+        return makeType<DictionaryType>(std::move(keyType), std::move(valueType), true);
+    }
+
+    Ref<Type> TypeContext::getOrCreateFunctionType(Ref<Type> returnType, std::vector<Ref<Type>> paramTypes)
     {
         return makeType<FunctionType>(std::move(paramTypes), std::move(returnType));
     }
 
-    Ref<Type> TypeContext::createStructType(const std::string& name, Ref<Scope> structScope)
+    Ref<Type> TypeContext::getOrCreateStructType(const std::string& name, const Ref<Scope>& structScope)
     {
-        return makeType<StructType>(name, std::move(structScope));
+        return makeType<StructType>(name, structScope);
     }
 
-    Ref<Type> TypeContext::createAliasType(const std::string& name, Ref<Type> aliasedType)
+    Ref<Type> TypeContext::getOrCreateAliasType(const std::string& name, Ref<Type> aliasedType)
     {
         return makeType<AliasType>(name, std::move(aliasedType));
     }

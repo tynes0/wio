@@ -30,7 +30,16 @@ namespace wio::sema
         }
         if (lhs->kind() == TypeKind::Function)
         {
-            return true; // TODO: Impl
+            if (rhs->kind() == TypeKind::Null)
+            {
+                rhs.AsFast<NullType>()->transformedType = lhs;
+                return true;
+            }
+            if (rhs->kind() == TypeKind::Function)
+            {
+                return lhs->isCompatibleWith(rhs);
+            }
+            return false;
         }
         if (lhs->kind() == TypeKind::Reference)
         {
@@ -56,9 +65,42 @@ namespace wio::sema
         
             return true;
         }
+        if (lhs->kind() == TypeKind::Dictionary)
+        {
+            if (rhs->kind() == TypeKind::Null)
+            {
+                rhs.AsFast<NullType>()->transformedType = lhs;
+            }
+            else if (rhs->kind() == TypeKind::Dictionary)
+            {
+                auto lDict = lhs.AsFast<DictionaryType>();
+                auto rDict = rhs.AsFast<DictionaryType>();
+
+                if (rDict->keyType->isUnknown() && !lDict->keyType->isUnknown())
+                    rDict->keyType = lDict->keyType;
+            
+                if (rDict->valueType->isUnknown() && !lDict->valueType->isUnknown())
+                    rDict->valueType = lDict->valueType;
+            }
+
+            return true;
+        }
         if (lhs->kind() == TypeKind::Struct)
         {
-            return true; // TODO: Impl
+            if (rhs->kind() == TypeKind::Null)
+            {
+                rhs.AsFast<NullType>()->transformedType = lhs;
+                return true;
+            }
+            if (rhs->kind() == TypeKind::Struct)
+            {
+                auto lStruct = lhs.AsFast<StructType>();
+                auto rStruct = rhs.AsFast<StructType>();
+            
+                return lStruct->name == rStruct->name;
+            }
+        
+            return false;
         }
         if (lhs->kind() == TypeKind::Alias)
         {
@@ -169,6 +211,18 @@ namespace wio::sema
             auto* a2 = static_cast<const ArrayType*>(t2);
             if (a2->size > a1->size) return false; // lhs should be bigger
             return a1->elementType->isCompatibleWith(a2->elementType);
+        }
+
+        case TypeKind::Dictionary:
+        {
+            if (other->kind() != TypeKind::Dictionary) return false;
+        
+            auto* d1 = static_cast<const DictionaryType*>(t1);
+            auto* d2 = static_cast<const DictionaryType*>(t2);
+        
+            return d1->isOrdered == d2->isOrdered &&
+                   d1->keyType->isCompatibleWith(d2->keyType) &&
+                   d1->valueType->isCompatibleWith(d2->valueType);
         }
 
         case TypeKind::Function:
@@ -325,11 +379,21 @@ namespace wio::sema
     std::string ReferenceType::toCppString() const
     {
         std::string baseTypeStr = referredType->toCppString();
-    
+        
+        if (referredType->kind() == sema::TypeKind::Struct)
+        {
+            auto sType = referredType.AsFast<StructType>();
+            if (sType->isObject || sType->isInterface) 
+            {
+                if (isMutable)
+                    return baseTypeStr + "&";
+                return "const " + baseTypeStr + "&";
+            }
+        }
+        
         if (isMutable)
             return baseTypeStr + "*";
-        else
-            return "const " + baseTypeStr + "*";
+        return "const " + baseTypeStr + "*";
     }
 
     ArrayType::ArrayType(Ref<Type> elementType, ArrayKind arrayKind, size_t size)
@@ -339,7 +403,7 @@ namespace wio::sema
 
     TypeKind ArrayType::kind() const
     {
-        return TypeKind::Array;
+        return TypeKind::Array; 
     }
 
     std::string ArrayType::toString() const
@@ -357,8 +421,28 @@ namespace wio::sema
         return "wio::DArray<" + elementType->toCppString() + ">";
     }
 
-    StructType::StructType(std::string name, WeakRef<Scope> structScope)
-        : name(std::move(name)), structScope(std::move(structScope))
+    DictionaryType::DictionaryType(Ref<Type> keyType, Ref<Type> valueType, bool isOrdered)
+        : keyType(std::move(keyType)), valueType(std::move(valueType)), isOrdered(isOrdered)
+    {
+    }
+
+    TypeKind DictionaryType::kind() const
+    {
+        return TypeKind::Dictionary;
+    }
+
+    std::string DictionaryType::toString() const
+    {
+        return (isOrdered ? "Tree<" : "Dict<") + keyType->toString() + ", " + valueType->toString() + ">";
+    }
+
+    std::string DictionaryType::toCppString() const
+    {
+        return "wio::" + std::string(isOrdered ? "Tree<" : "Dict<") + keyType->toCppString() + ", " + valueType->toCppString() + ">";
+    }
+
+    StructType::StructType(std::string name, WeakRef<Scope> structScope, bool isObject, bool isInterface)
+        : name(std::move(name)), structScope(std::move(structScope)), isObject(isObject), isInterface(isInterface)
     {
     }
 
@@ -374,7 +458,14 @@ namespace wio::sema
 
     std::string StructType::toCppString() const
     {
-        return codegen::Mangler::mangleStruct(name);
+        std::string mangled = isInterface ? codegen::Mangler::mangleInterface(name) 
+                                          : codegen::Mangler::mangleStruct(name);
+        
+        if (isObject || isInterface) 
+        {
+            return "wio::runtime::Ref<" + mangled + ">";
+        }
+        return mangled;
     }
 
     AliasType::AliasType(std::string name, Ref<Type> aliasedType)

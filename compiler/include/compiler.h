@@ -1,5 +1,6 @@
 #pragma once
 
+#include "wio/ast/ast.h"
 #include "wio/sema/type_context.h"
 #include "wio/common/auto_flags.h"
 
@@ -21,5 +22,8 @@ namespace wio
         CompilerFlags getFlags() const;
 
         static Compiler& get();
+
+    private:
+        static Ref<Program> parseAndMerge(const std::string& modulePath, bool isStdLib, const std::filesystem::path& currentDir);
     };
 }

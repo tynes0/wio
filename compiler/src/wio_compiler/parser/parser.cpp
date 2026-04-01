@@ -2,6 +2,7 @@
 
 #include "wio/common/exception.h"
 #include "wio/common/utility.h"
+#include "wio/common/logger.h"
 
 #include "general/traits/integer_traits.h"
 #include "general/traits/float_traits.h"
@@ -18,9 +19,16 @@ namespace wio
 
         while (peek().isValid())
         {
-            if (NodePtr<Statement> statement = parseStatement(); statement)
+            try 
             {
-                statements.emplace_back(std::move(statement));
+                if (NodePtr<Statement> statement = parseStatement(); statement)
+                {
+                    statements.emplace_back(std::move(statement));
+                }
+            }
+            catch (const std::exception&)
+            {
+                synchronize();
             }
         }
 
@@ -32,7 +40,6 @@ namespace wio
         size_t index = currentTokenIndex_ + offset;
         if (index < tokens_.size())
             return tokens_[index];
-        
         return Token::invalid();
     }
 
@@ -137,6 +144,38 @@ namespace wio
         utError(formattedErrMsg, current.loc);
     }
 
+    void Parser::synchronize()
+    {
+        advance();
+
+        while (peek().isValid())
+        {
+            if (peek(-1).type == TokenType::semicolon) return;
+
+            // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
+            switch (peek().type)
+            {
+            case TokenType::kwFn:
+            case TokenType::kwLet:
+            case TokenType::kwMut:
+            case TokenType::kwConst:
+            case TokenType::kwComponent:
+            case TokenType::kwObject:
+            case TokenType::kwInterface:
+            case TokenType::kwEnum:
+            case TokenType::kwFlagset:
+            case TokenType::kwFlag:
+            case TokenType::kwIf:
+            case TokenType::kwWhile:
+            case TokenType::kwFor:
+            case TokenType::kwReturn:
+                return;
+            default:
+                advance();
+            }
+        }
+    }
+
     NodePtr<Expression> Parser::parseExpression(int minPrecedence)
     {
         NodePtr<Expression> left;
@@ -165,8 +204,12 @@ namespace wio
         while (true)
         {
             int precedence = getPrecedence(peek().type);
-            if (precedence < minPrecedence) break;
+            if (precedence < minPrecedence)
+                break;//
 
+            if (peek().type == TokenType::opGreater && peek(1).type == TokenType::rightBrace)
+                break;
+            
             if (match(TokenType::leftParen))
             {
                 advance();
@@ -383,12 +426,20 @@ namespace wio
         Location startLoc = peek().loc;
         consume(TokenType::leftBrace);
         
+        bool isOrdered = match(TokenType::opLess, true); 
+        
         std::vector<std::pair<NodePtr<Expression>, NodePtr<Expression>>> pairs;
         
-        if (!match(TokenType::rightBrace))
+        bool isEmpty = isOrdered ? (peek().type == TokenType::opGreater && peek(1).type == TokenType::rightBrace) 
+                                 : (peek().type == TokenType::rightBrace);
+
+        if (!isEmpty)
         {
             do
             {
+                if (isOrdered && peek().type == TokenType::opGreater) break;
+                if (!isOrdered && peek().type == TokenType::rightBrace) break;
+                
                 NodePtr<Expression> key = parseExpression();
                 consume(TokenType::opColon);
                 NodePtr<Expression> value = parseExpression();
@@ -397,8 +448,11 @@ namespace wio
             }
             while (match(TokenType::comma, true));
         }
+
+        if (isOrdered) consume(TokenType::opGreater); 
         consume(TokenType::rightBrace);
-        return makeNodePtr<DictionaryLiteral>(std::move(pairs), startLoc);
+
+        return makeNodePtr<DictionaryLiteral>(std::move(pairs), isOrdered, startLoc);
     }
 
     NodePtr<Expression> Parser::parseLambdaExpression()
@@ -878,7 +932,7 @@ namespace wio
             while (peek().type == TokenType::atSign)
                 memberAttrs.push_back(parseAttributeStatement());
 
-            AccessModifier access = AccessModifier::Public; 
+            AccessModifier access = AccessModifier::None; 
             if (match(TokenType::kwPublic, true)) access = AccessModifier::Public;
             else if (match(TokenType::kwPrivate, true)) access = AccessModifier::Private;
             else if (match(TokenType::kwProtected, true)) access = AccessModifier::Protected;
@@ -948,7 +1002,7 @@ namespace wio
             while (peek().type == TokenType::atSign)
                 memberAttrs.push_back(parseAttributeStatement());
 
-            AccessModifier access = AccessModifier::Private; 
+            AccessModifier access = AccessModifier::None; 
             if (match(TokenType::kwPublic, true)) access = AccessModifier::Public;
             else if (match(TokenType::kwPrivate, true)) access = AccessModifier::Private;
             else if (match(TokenType::kwProtected, true)) access = AccessModifier::Protected;
@@ -1318,11 +1372,13 @@ namespace wio
 
     void Parser::utError(const std::string& message, Location location)
     {
+        WIO_LOG_ADD_ERROR(location, message);
         throw UnexpectedTokenError(message.c_str(), location);
     }
 
     void Parser::ucError(Location location)
     {
+        WIO_LOG_ADD_ERROR(location, "Constants must be initialized.");
         throw UninitializedConstantError("Constants must be initialized.", location);
     }
 }

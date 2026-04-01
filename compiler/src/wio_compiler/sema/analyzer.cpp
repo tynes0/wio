@@ -1,5 +1,7 @@
 ﻿#include "wio/sema/analyzer.h"
 
+#include <functional>
+
 #include "wio/common/exception.h"
 #include "wio/common/logger.h"
 #include "wio/common/utility.h"
@@ -34,6 +36,22 @@ namespace wio::sema
             return nullptr; 
         }
 
+        bool isTypeDerivedFrom(const Ref<Type>& derived, const Ref<Type>& base)
+        {
+            if (!derived || !base) return false;
+            if (derived->isCompatibleWith(base)) return true;
+            
+            if (derived->kind() == sema::TypeKind::Struct)
+            {
+                auto sType = derived.AsFast<sema::StructType>();
+                for (auto& bType : sType->baseTypes)
+                {
+                    if (isTypeDerivedFrom(bType, base)) return true;
+                }
+            }
+            return false;
+        }
+
         bool hasAttribute(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
         {
             return std::ranges::any_of(attributes, [targetAttr](const auto& attr) { return attr->attribute == targetAttr; });
@@ -41,10 +59,14 @@ namespace wio::sema
 
         std::vector<Token> getAttributeArgs(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
         {
+            std::vector<Token> allArgs;
             for (const auto& attr : attributes) {
-                if (attr->attribute == targetAttr) return attr->args;
+                if (attr->attribute == targetAttr)
+                {
+                    allArgs.insert(allArgs.end(), attr->args.begin(), attr->args.end());
+                }
             }
-            return {};
+            return allArgs;
         }
     }
     
@@ -77,9 +99,6 @@ namespace wio::sema
         currentScope_ = nullptr;
         
         program->accept(*this);
-
-        WIO_LOG_PROCESS_WARNINGS();
-        WIO_LOG_PROCESS_ERRORS(CompilationError);
     }
 
     void SemanticAnalyzer::enterScope(ScopeKind kind)
@@ -127,7 +146,12 @@ namespace wio::sema
         isStructResolutionPass_ = false;
         for (auto& stmt : node.statements)
             stmt->accept(*this);
-        
+
+        auto entrySym = currentScope_->resolveLocally("Entry");
+        if (!entrySym || (entrySym->kind != SymbolKind::Function && entrySym->kind != SymbolKind::FunctionGroup))
+        {
+            WIO_LOG_ADD_ERROR(common::Location::invalid(), "No 'Entry' function found! An executable Wio program must define an 'Entry' function.");
+        }
         exitScope();
     }
 
@@ -158,7 +182,29 @@ namespace wio::sema
                 paramTypes.push_back(node.generics[i]->refType.Lock());
             }
             
-            node.refType = Compiler::get().getTypeContext().getFunctionType(retType, paramTypes);
+            node.refType = Compiler::get().getTypeContext().getOrCreateFunctionType(retType, paramTypes);
+            return;
+        }
+
+        if (node.name.value == "Dict" || node.name.value == "Tree")
+        {
+            bool isOrdered = (node.name.value == "Tree");
+            
+            if (node.generics.size() != 2)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "'{}' requires exactly 2 generic arguments (Key, Value).", node.name.value);
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+
+            node.generics[0]->accept(*this);
+            node.generics[1]->accept(*this);
+
+            node.refType = Compiler::get().getTypeContext().getOrCreateDictionaryType(
+                node.generics[0]->refType.Lock(),
+                node.generics[1]->refType.Lock(),
+                isOrdered
+            );
             return;
         }
         
@@ -169,18 +215,18 @@ namespace wio::sema
             if (node.name.type == TokenType::StaticArray)
             {
                 node.generics[0]->accept(*this);
-                type = Compiler::get().getTypeContext().getArrayType(node.generics[0]->refType.Lock(), ArrayType::ArrayKind::Static, node.size);
+                type = Compiler::get().getTypeContext().getOrCreateArrayType(node.generics[0]->refType.Lock(), ArrayType::ArrayKind::Static, node.size);
             }
             else if (node.name.type == TokenType::DynamicArray)
             {
                 node.generics[0]->accept(*this);
-                type = Compiler::get().getTypeContext().getArrayType(node.generics[0]->refType.Lock(), ArrayType::ArrayKind::Dynamic);
+                type = Compiler::get().getTypeContext().getOrCreateArrayType(node.generics[0]->refType.Lock(), ArrayType::ArrayKind::Dynamic);
             }
             else if (node.name.type == TokenType::kwRef || node.name.type == TokenType::kwView)
             {
                 node.generics[0]->accept(*this);
                 bool isMut = (node.name.type == TokenType::kwRef); 
-                type = Compiler::get().getTypeContext().getReferenceType(node.generics[0]->refType.Lock(), isMut);
+                type = Compiler::get().getTypeContext().getOrCreateReferenceType(node.generics[0]->refType.Lock(), isMut);
             }
             else if (node.name.type == TokenType::identifier)
             {
@@ -438,7 +484,7 @@ namespace wio::sema
         {
             // Todo: Empty array: We can make the type Unknown array for now, or we can expect a generic one.
             // Let's call it [Unknown] for now.
-            node.refType = Compiler::get().getTypeContext().getArrayType(Compiler::get().getTypeContext().getUnknown(), ArrayType::ArrayKind::Static, 0);
+            node.refType = Compiler::get().getTypeContext().getOrCreateArrayType(Compiler::get().getTypeContext().getUnknown(), ArrayType::ArrayKind::Static, 0);
             return;
         }
 
@@ -466,13 +512,38 @@ namespace wio::sema
             }
         }
 
-        node.refType = Compiler::get().getTypeContext().getArrayType(baseType, ArrayType::ArrayKind::Literal, node.elements.size());
+        node.refType = Compiler::get().getTypeContext().getOrCreateArrayType(baseType, ArrayType::ArrayKind::Literal, node.elements.size());
     }
     
     void SemanticAnalyzer::visit(DictionaryLiteral& node)
     {
-        // Todo:: implement
-        node.refType = Compiler::get().getTypeContext().getUnknown();
+        if (node.pairs.empty())
+        {
+            node.refType = Compiler::get().getTypeContext().getUnknown();
+            return;
+        }
+
+        node.pairs[0].first->accept(*this);
+        node.pairs[0].second->accept(*this);
+
+        auto keyType = node.pairs[0].first->refType.Lock();
+        auto valType = node.pairs[0].second->refType.Lock();
+
+        for (size_t i = 1; i < node.pairs.size(); ++i)
+        {
+            node.pairs[i].first->accept(*this);
+            node.pairs[i].second->accept(*this);
+            
+            auto k = node.pairs[i].first->refType.Lock();
+            auto v = node.pairs[i].second->refType.Lock();
+
+            if (!keyType->isCompatibleWith(k) || !valType->isCompatibleWith(v))
+            {
+                WIO_LOG_ADD_ERROR(node.pairs[i].first->location(), "All keys and values in a dictionary literal must have the same type.");
+            }
+        }
+
+        node.refType = Compiler::get().getTypeContext().getOrCreateDictionaryType(keyType, valType, node.isOrdered);
     }
     
     void SemanticAnalyzer::visit(Identifier& node)
@@ -539,6 +610,27 @@ namespace wio::sema
             leftType = lockedType;
         }
 
+        std::function<Ref<Symbol>(Ref<Type>, const std::string&)> findMemberInHierarchy = 
+            [&](const Ref<Type>& t, const std::string& name) -> Ref<Symbol> {
+                if (!t || t->kind() != TypeKind::Struct)
+                    return nullptr;
+                auto sType = t.AsFast<StructType>();
+            
+                if (auto lockedScope = sType->structScope.Lock(); lockedScope)
+                {
+                    if (auto found = lockedScope->resolveLocally(name); found)
+                        return found;
+                }
+                for (auto& base : sType->baseTypes)
+                {
+                    if (auto found = findMemberInHierarchy(base, name); found)
+                        return found;
+                }
+                return nullptr;
+        };
+
+        Ref<Type> actualStructType = nullptr;
+        
         if (leftSymbol && leftSymbol->kind == SymbolKind::Namespace)
         {
             if (!leftSymbol->innerScope)
@@ -552,30 +644,24 @@ namespace wio::sema
         {
             Ref<Type> baseType = leftType;
             while (baseType && baseType->kind() == TypeKind::Alias)
-            {
                 baseType = baseType.AsFast<AliasType>()->aliasedType;
-            }
     
             if (baseType->kind() == TypeKind::Struct)
             {
-                auto structType = baseType.AsFast<StructType>();
-                if (auto lockedScope = structType->structScope.Lock())
-                    foundMember = lockedScope->resolve(node.member->token.value);
+                actualStructType = baseType;
+                foundMember = findMemberInHierarchy(actualStructType, node.member->token.value);
             }
             else if (baseType->kind() == TypeKind::Reference)
             {
                 Ref<Type> referredType = baseType.AsFast<ReferenceType>()->referredType;
     
                 while (referredType && referredType->kind() == TypeKind::Alias)
-                {
                     referredType = referredType.AsFast<AliasType>()->aliasedType;
-                }
     
                 if (referredType && referredType->kind() == TypeKind::Struct)
                 {
-                    auto structType = referredType.AsFast<StructType>();
-                    if (auto lockedScope = structType->structScope.Lock())
-                        foundMember = lockedScope->resolve(node.member->token.value);
+                    actualStructType = referredType;
+                    foundMember = findMemberInHierarchy(actualStructType, node.member->token.value);
                 }
                 else
                 {
@@ -596,22 +682,24 @@ namespace wio::sema
             return;
         }
 
-        bool isInsideObject = false;
-        auto currentSearch = currentScope_;
-        while (currentSearch)
+        bool isInsideHierarchy = false;
+        bool isInsideSameObject = false;
+
+        if (currentStructType_ && actualStructType)
         {
-            if (currentSearch == foundMember->innerScope || currentSearch->resolveLocally(foundMember->name))
+            if (currentStructType_ == actualStructType || 
+                isTypeDerivedFrom(currentStructType_, actualStructType) || 
+                isTypeDerivedFrom(actualStructType, currentStructType_))
             {
-                isInsideObject = true;
-                break;
+                isInsideHierarchy = true;
+                isInsideSameObject = true;
             }
-            currentSearch = currentSearch->getParent().Lock();
         }
 
-        if (foundMember->flags.get_isPrivate() && !isInsideObject)
+        if (foundMember->flags.get_isPrivate() && !isInsideSameObject)
             WIO_LOG_ADD_ERROR(node.location(), "Cannot access private member '{}' from outside the object.", foundMember->name);
 
-        if (foundMember->flags.get_isProtected() && !isInsideObject)
+        if (foundMember->flags.get_isProtected() && !isInsideHierarchy)
             WIO_LOG_ADD_ERROR(node.location(), "Cannot access protected member '{}' from outside the object hierarchy.", foundMember->name);
     
         node.referencedSymbol = foundMember;
@@ -649,7 +737,7 @@ namespace wio::sema
                 node.refType = Compiler::get().getTypeContext().getUnknown();
                 return;
             }
-        }
+        }//
 
         std::vector<Ref<Type>> argTypes;
         for (auto& arg : node.arguments)
@@ -658,13 +746,17 @@ namespace wio::sema
             argTypes.push_back(arg->refType.Lock());
         }
 
-        auto isSafeRefCast = [](const Ref<Type>& dest, const Ref<Type>& src) -> bool
+        auto isSafeRefCast = [&](const Ref<Type>& dest, const Ref<Type>& src) -> bool
         {
             if (dest && src && dest->kind() == TypeKind::Reference && src->kind() == TypeKind::Reference)
             {
                 auto dRef = dest.AsFast<ReferenceType>();
                 auto sRef = src.AsFast<ReferenceType>();
-                if (!dRef->isMutable && sRef->isMutable && dRef->referredType->isCompatibleWith(sRef->referredType)) return true;
+                
+                bool isCompatible = isTypeDerivedFrom(sRef->referredType, dRef->referredType);
+
+                if (!dRef->isMutable && isCompatible) return true;
+                if (dRef->isMutable && sRef->isMutable && isCompatible) return true;
             }
             return false;
         };
@@ -775,7 +867,14 @@ namespace wio::sema
             return; 
         }
 
-        Ref<Type> calleeType = calleeSym->type;
+        if (!calleeSym)
+        {
+            WIO_LOG_ADD_ERROR(node.location(), "Called expression is undefined.");
+            node.refType = Compiler::get().getTypeContext().getUnknown();
+            return;
+        }
+
+        Ref<Type> calleeType = calleeSym->type; //
         if (!calleeType || calleeType->kind() != TypeKind::Function)
         {
             WIO_LOG_ADD_ERROR(node.location(), "Called expression is not a function or struct.");
@@ -790,11 +889,36 @@ namespace wio::sema
         size_t argCount = std::min(argTypes.size(), funcType->paramTypes.size());
         for (size_t i = 0; i < argCount; ++i)
         {
-            if (!funcType->paramTypes[i]->isCompatibleWith(argTypes[i]) && 
-                !isSafeRefCast(funcType->paramTypes[i], argTypes[i]) &&
-                !(funcType->paramTypes[i]->isNumeric() && argTypes[i]->isNumeric()))
+            auto expectedType = funcType->paramTypes[i];
+            auto actualType = argTypes[i];
+
+            if (!expectedType->isCompatibleWith(actualType) && 
+                !isSafeRefCast(expectedType, actualType) &&
+                !(expectedType->isNumeric() && actualType->isNumeric()))
             {
-                WIO_LOG_ADD_ERROR(node.arguments[i]->location(), "Argument mismatch at index {}.", i);
+                std::string extraHint;
+                
+                if (expectedType->kind() == TypeKind::Reference && actualType->kind() == TypeKind::Reference)
+                {
+                    auto expRef = expectedType.AsFast<ReferenceType>();
+                    auto actRef = actualType.AsFast<ReferenceType>();
+                    
+                    if (expRef->isMutable && !actRef->isMutable)
+                    {
+                        extraHint = " Hint: The function expects a mutable reference ('ref'), but a read-only reference ('view') or immutable variable ('let') was provided.";
+                    }
+                    else if (!isTypeDerivedFrom(actRef->referredType, expRef->referredType))
+                    {
+                        extraHint = " Hint: Type '" + actRef->referredType->toString() + "' does not inherit from '" + expRef->referredType->toString() + "'.";
+                    }
+                }
+
+                WIO_LOG_ADD_ERROR(node.arguments[i]->location(), 
+                    "Argument mismatch at index {}: Expected '{}', but got '{}'.{}", 
+                    i, 
+                    expectedType->toString(), 
+                    actualType->toString(),
+                    extraHint);
             }
         }
 
@@ -806,9 +930,8 @@ namespace wio::sema
         enterScope(ScopeKind::Function);
 
         std::vector<Ref<Type>> paramTypes;
-
         for (auto& param : node.parameters)
-            {
+        {
             Ref<Type> pType = Compiler::get().getTypeContext().getUnknown();
             if (param.type)
             {
@@ -865,7 +988,7 @@ namespace wio::sema
 
         exitScope();
 
-        node.refType = Compiler::get().getTypeContext().getFunctionType(retType, paramTypes);
+        node.refType = Compiler::get().getTypeContext().getOrCreateFunctionType(retType, paramTypes);
     }
     
     void SemanticAnalyzer::visit(RefExpression& node)
@@ -880,7 +1003,7 @@ namespace wio::sema
             isMut = false; 
 
         node.isMut = isMut;
-        node.refType = Compiler::get().getTypeContext().getReferenceType(node.operand->refType.Lock(), isMut);
+        node.refType = Compiler::get().getTypeContext().getOrCreateReferenceType(node.operand->refType.Lock(), isMut);
     }
 
     void SemanticAnalyzer::visit(FitExpression& node)
@@ -914,7 +1037,7 @@ namespace wio::sema
             return;
         }
         
-        node.refType = Compiler::get().getTypeContext().getReferenceType(currentStructType_, true);
+        node.refType = Compiler::get().getTypeContext().getOrCreateReferenceType(currentStructType_, true);
     }
 
     void SemanticAnalyzer::visit(SuperExpression& node)
@@ -928,7 +1051,7 @@ namespace wio::sema
             return;
         }
         
-        node.refType = Compiler::get().getTypeContext().getReferenceType(currentBaseStructType_, true);
+        node.refType = Compiler::get().getTypeContext().getOrCreateReferenceType(currentBaseStructType_, true);
     }
 
     void SemanticAnalyzer::visit(RangeExpression& node)
@@ -1082,7 +1205,8 @@ namespace wio::sema
                 paramTypes.push_back(pType);
             }
 
-            auto funcType = Compiler::get().getTypeContext().getFunctionType(returnType, paramTypes);
+            auto funcType = Compiler::get().getTypeContext().getOrCreateFunctionType(returnType, paramTypes);
+            
             Ref<Symbol> funcSym = createSymbol(node.name->token.value, funcType, SymbolKind::Function, node.location());
             currentScope_->define(node.name->token.value, funcSym);
 
@@ -1102,6 +1226,7 @@ namespace wio::sema
         for (size_t i = 0; i < node.parameters.size(); ++i)
         {
             auto& param = node.parameters[i];
+            
             Ref<Symbol> pSym = createSymbol(param.name->token.value, funcType->paramTypes[i], SymbolKind::Parameter, param.name->location());
             currentScope_->define(param.name->token.value, pSym);
             
@@ -1137,7 +1262,7 @@ namespace wio::sema
             auto interfaceScope = Ref<Scope>::Create(currentScope_, ScopeKind::Struct);
             scopes_.push_back(interfaceScope);
             
-            Ref<Type> interfaceType = Ref<StructType>::Create(node.name->token.value, interfaceScope);
+            Ref<Type> interfaceType = Ref<StructType>::Create(node.name->token.value, interfaceScope, false, true);
             Ref<Symbol> interfaceSym = createSymbol(node.name->token.value, interfaceType, SymbolKind::Struct, node.location());
             interfaceSym->innerScope = interfaceScope;
             interfaceSym->flags.set_isInterface(true);
@@ -1285,7 +1410,7 @@ namespace wio::sema
             {
                 auto voidType = Compiler::get().getTypeContext().getVoid();
 
-                auto defaultCtorType = Compiler::get().getTypeContext().getFunctionType(voidType, {});
+                auto defaultCtorType = Compiler::get().getTypeContext().getOrCreateFunctionType(voidType, {});
                 Ref<Symbol> defaultSym = createSymbol("OnConstruct", defaultCtorType, SymbolKind::Function, node.location());
                 currentScope_->define("OnConstruct", defaultSym);
 
@@ -1301,13 +1426,13 @@ namespace wio::sema
                 
                 if (!memberTypes.empty())
                 {
-                    auto memberCtorType = Compiler::get().getTypeContext().getFunctionType(voidType, memberTypes);
+                    auto memberCtorType = Compiler::get().getTypeContext().getOrCreateFunctionType(voidType, memberTypes);
                     Ref<Symbol> memberSym = createSymbol("OnConstruct", memberCtorType, SymbolKind::Function, node.location());
                     currentScope_->define("OnConstruct", memberSym);
                 }
 
                 auto copyParamType = Ref<ReferenceType>::Create(structType, false);
-                auto copyCtorType = Compiler::get().getTypeContext().getFunctionType(voidType, { copyParamType });
+                auto copyCtorType = Compiler::get().getTypeContext().getOrCreateFunctionType(voidType, { copyParamType });
                 Ref<Symbol> copySym = createSymbol("OnConstruct", copyCtorType, SymbolKind::Function, node.location());
                 currentScope_->define("OnConstruct", copySym);
             }
@@ -1335,7 +1460,7 @@ namespace wio::sema
             auto structScope = Ref<Scope>::Create(currentScope_, ScopeKind::Struct);
             scopes_.push_back(structScope);
             
-            Ref<Type> structType = Ref<StructType>::Create(node.name->token.value, structScope);
+            Ref<Type> structType = Ref<StructType>::Create(node.name->token.value, structScope, true);
             Ref<Symbol> objSym = createSymbol(node.name->token.value, structType, SymbolKind::Struct, node.location());
             objSym->innerScope = structScope;
             currentScope_->define(node.name->token.value, objSym);
@@ -1380,6 +1505,8 @@ namespace wio::sema
                 
                 if (auto baseSym = prevScope->resolve(baseToken.value))
                 {
+                    structType->baseTypes.push_back(baseSym->type);
+                    
                     if (baseSym->kind != SymbolKind::Struct)
                     { 
                         WIO_LOG_ADD_ERROR(node.location(), "Object '{}' cannot inherit from '{}'.", node.name->token.value, baseToken.value);
@@ -1463,7 +1590,7 @@ namespace wio::sema
             {
                 auto voidType = Compiler::get().getTypeContext().getVoid();
 
-                auto defaultCtorType = Compiler::get().getTypeContext().getFunctionType(voidType, {});
+                auto defaultCtorType = Compiler::get().getTypeContext().getOrCreateFunctionType(voidType, {});
                 Ref<Symbol> defaultSym = createSymbol("OnConstruct", defaultCtorType, SymbolKind::Function, node.location());
                 currentScope_->define("OnConstruct", defaultSym);
 
@@ -1479,13 +1606,13 @@ namespace wio::sema
                 
                 if (!memberTypes.empty())
                 {
-                    auto memberCtorType = Compiler::get().getTypeContext().getFunctionType(voidType, memberTypes);
+                    auto memberCtorType = Compiler::get().getTypeContext().getOrCreateFunctionType(voidType, memberTypes);
                     Ref<Symbol> memberSym = createSymbol("OnConstruct", memberCtorType, SymbolKind::Function, node.location());
                     currentScope_->define("OnConstruct", memberSym);
                 }
 
                 auto copyParamType = Ref<ReferenceType>::Create(structType, false);
-                auto copyCtorType = Compiler::get().getTypeContext().getFunctionType(voidType, { copyParamType });
+                auto copyCtorType = Compiler::get().getTypeContext().getOrCreateFunctionType(voidType, { copyParamType });
                 Ref<Symbol> copySym = createSymbol("OnConstruct", copyCtorType, SymbolKind::Function, node.location());
                 currentScope_->define("OnConstruct", copySym);
             }
@@ -1548,7 +1675,7 @@ namespace wio::sema
             currentScope_ = sym->innerScope;
             
             auto voidType = Compiler::get().getTypeContext().getVoid();
-            auto defaultCtorType = Compiler::get().getTypeContext().getFunctionType(voidType, {});
+            auto defaultCtorType = Compiler::get().getTypeContext().getOrCreateFunctionType(voidType, {});
             Ref<Symbol> defaultSym = createSymbol("OnConstruct", defaultCtorType, SymbolKind::Function, node.location());
             currentScope_->define("OnConstruct", defaultSym);
             
@@ -1764,7 +1891,8 @@ namespace wio::sema
         
         auto getOrCreateNamespace = [&](const Ref<Scope>& targetScope, const std::string& name) -> Ref<Symbol>
         {
-            if (auto existing = targetScope->resolve(name)) {
+            if (auto existing = targetScope->resolve(name))
+            {
                 if (existing->kind == SymbolKind::Namespace)
                     return existing;
                 

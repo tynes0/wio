@@ -44,11 +44,13 @@ namespace wio::sema
 
         Ref<Type> getNull() const { return t_null; }
         
-        Ref<Type> getReferenceType(Ref<Type> referredType, bool isMutable);
-        Ref<Type> getArrayType(Ref<Type> elementType, ArrayType::ArrayKind arrayKind, size_t size = 0);
-        Ref<Type> getFunctionType(Ref<Type> returnType, std::vector<Ref<Type>> paramTypes);
-        Ref<Type> createStructType(const std::string& name, Ref<Scope> structScope);
-        Ref<Type> createAliasType(const std::string& name, Ref<Type> aliasedType);
+        Ref<Type> getOrCreateReferenceType(Ref<Type> referredType, bool isMutable);
+        Ref<Type> getOrCreateArrayType(Ref<Type> elementType, ArrayType::ArrayKind arrayKind, size_t size = 0);
+        Ref<Type> getOrCreateFunctionType(Ref<Type> returnType, std::vector<Ref<Type>> paramTypes);
+        Ref<Type> getOrCreateDictionaryType(Ref<Type> keyType, Ref<Type> valueType, bool isOrdered = false);
+        Ref<Type> getOrCreateTreeType(Ref<Type> keyType, Ref<Type> valueType);
+        Ref<Type> getOrCreateStructType(const std::string& name, const Ref<Scope>& structScope);
+        Ref<Type> getOrCreateAliasType(const std::string& name, Ref<Type> aliasedType);
 
     private:
         std::vector<Ref<Type>> ownedTypes_;

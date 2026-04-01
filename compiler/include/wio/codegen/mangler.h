@@ -17,6 +17,6 @@ namespace wio::codegen
         
         static std::string mangleType(const Ref<sema::Type>& type);
 
-        static std::string mangleInterface(const std::string& scopePath, const std::string& name);
+        static std::string mangleInterface(const std::string& name, const std::string& scopePath = "");
     };
 }

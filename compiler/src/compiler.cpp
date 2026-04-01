@@ -1,7 +1,7 @@
 #include "compiler.h"
 
 #include <filesystem>
-
+#include <unordered_set>
 #include <argonaut.h>
 
 #include "wio/codegen/cpp_generator.h"
@@ -19,6 +19,7 @@ namespace wio
         CompilerFlags flags;
         Argonaut::Parser argParser;
         sema::TypeContext typeContext_;
+        std::unordered_set<std::string> loadedModules;
     };
     
     namespace{ AppData gAppData; }
@@ -184,9 +185,43 @@ namespace wio
             Parser parser(std::move(tokens));
             auto program = parser.parseProgram();
 
+            gAppData.loadedModules.clear();
+            gAppData.loadedModules.insert(std::filesystem::absolute(sourcePath).string());
+
+            std::vector<NodePtr<Statement>> finalStatements;
+
+            for (auto& stmt : program->statements)
+            {
+                if (stmt->is<UseStatement>())
+                {
+                    auto useStmt = stmt->as<UseStatement>();
+                    if (useStmt->isStdLib)
+                    {
+                        finalStatements.push_back(std::move(stmt));
+                    }
+                    else
+                    {
+                        auto moduleProg = parseAndMerge(useStmt->modulePath, useStmt->isStdLib, sourcePath.parent_path());
+                        for (auto& modStmt : moduleProg->statements)
+                        {
+                            finalStatements.push_back(std::move(modStmt));
+                        }
+                    }
+                }
+                else
+                {
+                    finalStatements.push_back(std::move(stmt));
+                }
+            }
+            
+            program->statements = std::move(finalStatements);
+
             // 3. Semantic Analysis
             sema::SemanticAnalyzer analyzer;
             analyzer.analyze(program);
+
+            WIO_LOG_PROCESS_WARNINGS();
+            WIO_LOG_PROCESS_ERRORS(CompilationError);
 
             // 4. Code Generation
             codegen::CppGenerator generator;
@@ -271,5 +306,62 @@ namespace wio
     {
         static Compiler instance;
         return instance;
+    }
+
+    Ref<Program> Compiler::parseAndMerge(const std::string& modulePath, bool isStdLib, const std::filesystem::path& currentDir)
+    {
+        if (isStdLib)
+        {
+            return makeNodePtr<Program>(std::vector<NodePtr<Statement>>{});
+        }
+
+        std::filesystem::path actualPath = currentDir / (modulePath + ".wio");
+        std::string absolutePath = std::filesystem::absolute(actualPath).string();
+
+        if (gAppData.loadedModules.contains(absolutePath))
+        {
+            return makeNodePtr<Program>(std::vector<NodePtr<Statement>>{});
+        }
+        gAppData.loadedModules.insert(absolutePath);
+
+        std::string source = filesystem::readFile(actualPath);
+        if (source.empty())
+        {
+            WIO_LOG_ERROR("Module file is empty or not found: {}", actualPath.string());
+            return makeNodePtr<Program>(std::vector<NodePtr<Statement>>{});
+        }
+        filesystem::stripBOM(source);
+
+        Lexer lexer(source);
+        Parser parser(lexer.lex());
+        auto subProgram = parser.parseProgram();
+
+        std::vector<NodePtr<Statement>> mergedStatements;
+
+        for (auto& stmt : subProgram->statements)
+        {
+            if (stmt->is<UseStatement>())
+            {
+                auto useStmt = stmt->as<UseStatement>();
+                if (useStmt->isStdLib)
+                {
+                    mergedStatements.push_back(std::move(stmt));
+                }
+                else
+                {
+                    auto childProgram = parseAndMerge(useStmt->modulePath, useStmt->isStdLib, actualPath.parent_path());
+                    for (auto& childStmt : childProgram->statements)
+                    {
+                        mergedStatements.push_back(std::move(childStmt));
+                    }
+                }
+            }
+            else
+            {
+                mergedStatements.push_back(std::move(stmt));
+            }
+        }
+
+        return makeNodePtr<Program>(std::move(mergedStatements));
     }
 }

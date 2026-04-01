@@ -1,138 +1,94 @@
-﻿// ==========================
-// Components (DATA ONLY)
-// ==========================
+﻿use std::io;
 
-component Transform {
-    position: vec2;
-    rotation: f32;
+interface IDamageable {
+    fn TakeDamage(amount: f32);
+    fn IsDead() -> bool;
 }
 
-component Velocity {
-    value: vec2;
+interface IRenderable {
+    fn Render();
 }
 
-component Lifetime {
-    time: f32;
-}
+component Vector3 {
+    x: f32;
+    y: f32;
+    z: f32;
 
-
-// ==========================
-// Objects (STATE + METHODS)
-// ==========================
-
-object Player {
-
-    transform: Transform;
-    velocity: Velocity;
-    health: i32;
-
-    fn move(dir: vec2) {
-        self.velocity.value = dir * 5.0;
-    }
-
-    fn damage(amount: i32) {
-        self.health -= amount;
-        if self.health <= 0 {
-            destroy(self);
-        }
+    OnConstruct(x: f32, y: f32, z: f32) {
+        self.x = x;
+        self.y = y;
+        self.z = z;
     }
 }
 
-object Bomb {
+@From(IRenderable)
+object Entity {
+    protected id: i32;
+    protected position: Vector3; // Component, Object'in içinde!
 
-    transform: Transform;
-    lifetime: Lifetime;
+    OnConstruct(id: i32) {
+        self.id = id;
+        self.position = Vector3(0.0f, 0.0f, 0.0f);
+    }
 
-    fn explode() {
-        spawn Explosion at self.transform.position;
-        destroy(self);
+    public fn Render() {
+        std::io::Print($"[Entity] Rendering entity ID: ${self.id} at (${self.position.x}, ${self.position.y})");
     }
 }
 
-object Explosion {
-    transform: Transform;
-}
+@From(Entity)
+@From(IDamageable)
+@Default(public)
+object Boss {
+    name: string;
+    hp: f32;
 
+    OnConstruct(id: i32, name: string, startHp: f32) {
+        self.id = id;
+        self.position = Vector3(100.0f, 50.0f, 0.0f); 
+        self.name = name;
+        self.hp = startHp;
+    }
 
-// ==========================
-// Systems (PROGRAM-LEVEL)
-// ==========================
+    fn Render() {
+        std::io::Print($"[Boss] ${self.name} is looking menacing at (${self.position.x}, ${self.position.y})!");
+    }
 
-system Movement runs_each frame {
+    fn TakeDamage(amount: f32) {
+        self.hp -= amount;
+        std::io::Print($"[Boss] ${self.name} took ${amount} damage. Remaining HP: ${self.hp}");
+    }
 
-    for obj with Transform, Velocity {
-        obj.transform.position += obj.velocity.value * frame.delta;
+    fn IsDead() -> bool {
+        return self.hp <= 0.0f;
     }
 }
 
-system LifetimeSystem runs_each frame {
+fn ProcessEntity(ent: view Entity) {
+    ent.Render(); 
+}
 
-    for obj with Lifetime {
-        obj.lifetime.time -= frame.delta;
-
-        if obj.lifetime.time <= 0 {
-            if obj has fn explode {
-                obj.explode();
-            } else {
-                destroy(obj);
-            }
-        }
+fn ProcessCombat(target: ref IDamageable, dmg: f32) {
+    target.TakeDamage(dmg);
+    if (target.IsDead()) {
+        std::io::Print("Target is defeated!");
     }
 }
 
+fn Entry(args: string[]) -> i32 {
+    std::io::Print("--- WIO INHERITANCE & REF SYSTEM STRESS TEST ---");
 
-// ==========================
-// Coroutines
-// ==========================
+    mut my_boss = Boss(99, "Gargantua", 1000.0f);
 
-// coroutine fn explode_later(bomb: Bomb) {
-//     wait 2s;
-//     bomb.explode();
-// }
+    std::io::Print("1. Direct Virtual Call:");
+    my_boss.Render(); 
 
+    std::io::Print("\n2. Base Object Polymorphism Call:");
+    ProcessEntity(ref my_boss); 
 
-// ==========================
-// Program
-// ==========================
+    std::io::Print("\n3. Interface Polymorphism Call:");
+    ProcessCombat(ref my_boss, 350.0f); 
+    ProcessCombat(ref my_boss, 700.0f);
 
-program running window.is_open() {
-
-    init {
-        window.create(1280, 720, "WIO Engine");
-
-        program.add_system(Movement);
-        program.add_system(LifetimeSystem);
-
-        let player = spawn Player {
-            transform = { position = vec2(0, 0), rotation = 0 },
-            velocity  = { value = vec2(0, 0) },
-            health    = 100
-        };
-    }
-
-    frame {
-        input.update();
-
-        if input.key_pressed(Key.W) {
-            player.move(vec2(0, 1));
-        }
-
-        if input.key_pressed(Key.Space) {
-            let bomb = spawn Bomb {
-                transform = { position = player.transform.position },
-                lifetime  = { time = 3.0 }
-            };
-
-            explode_later(bomb);
-        }
-
-        renderer.begin();
-        renderer.draw_world();
-        renderer.end();
-    }
-
-    shutdown {
-        save_game();
-        window.close();
-    }
+    return 0;
 }

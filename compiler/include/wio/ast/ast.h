@@ -341,8 +341,10 @@ namespace wio
         WIO_EXP_NODE_BODY(DictionaryLiteral)
         
         std::vector<std::pair<NodePtr<Expression>, NodePtr<Expression>>> pairs;
+        bool isOrdered;
 
-        explicit DictionaryLiteral(std::vector<std::pair<NodePtr<Expression>, NodePtr<Expression>>> _pairs, common::Location _loc = common::Location::invalid());
+        explicit DictionaryLiteral(std::vector<std::pair<NodePtr<Expression>, NodePtr<Expression>>> _pairs,
+            bool _isOrdered, common::Location _loc = common::Location::invalid());
         ~DictionaryLiteral() override;
     };
 

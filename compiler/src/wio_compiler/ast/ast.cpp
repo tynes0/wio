@@ -120,8 +120,9 @@ namespace wio
 
     ArrayLiteral::~ArrayLiteral() = default;
 
-    DictionaryLiteral::DictionaryLiteral(std::vector<std::pair<NodePtr<Expression>, NodePtr<Expression>>> _pairs, common::Location _loc)
-        : Expression(_loc), pairs(std::move(_pairs))
+    DictionaryLiteral::DictionaryLiteral(std::vector<std::pair<NodePtr<Expression>, NodePtr<Expression>>> _pairs,
+        bool _isOrdered, common::Location _loc)
+        : Expression(_loc), pairs(std::move(_pairs)), isOrdered(_isOrdered)
     {
     }
 

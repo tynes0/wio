@@ -25,6 +25,7 @@ namespace wio
         bool multiMatch(const std::initializer_list<TokenType>& types, bool consume = false);
         bool matchOneOf(const std::initializer_list<TokenType>& types, bool consume = false);
         Token consume(TokenType type, std::string_view value = "");
+        void synchronize();
 
         NodePtr<Expression> parseExpression(int minPrecedence = 0);
         NodePtr<Expression> parsePrimary();
@@ -55,7 +56,7 @@ namespace wio
         NodePtr<Statement> parseUseStatement();
 
         [[nodiscard]] static int getPrecedence(TokenType type);
-        
+
         [[noreturn]] static void utError(const std::string& message, common::Location location);
         [[noreturn]] static void ucError(common::Location location);
     };

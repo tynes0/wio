@@ -17,6 +17,7 @@ namespace wio
             Null,       // null
             Reference,  // ref
             Array,      // [T]
+            Dictionary, // Dict<T,T> or Tree<T,T>
             Function,   // fn(int) -> string
             Struct,     // struct A {}
             Alias       // type ID = u32;
@@ -103,12 +104,28 @@ namespace wio
             std::string toCppString() const override;
         };
 
+        struct DictionaryType : Type
+        {
+            Ref<Type> keyType;
+            Ref<Type> valueType;
+            bool isOrdered; // false = Dict (Hash Map), true = Tree (Ordered Map)
+
+            DictionaryType(Ref<Type> keyType, Ref<Type> valueType, bool isOrdered);
+            
+            TypeKind kind() const override;
+            std::string toString() const override;
+            std::string toCppString() const override;
+        };
+
         struct StructType : Type
         {
             std::string name;
             WeakRef<Scope> structScope;
+            std::vector<Ref<Type>> baseTypes;
+            bool isObject;
+            bool isInterface;
 
-            StructType(std::string name, WeakRef<Scope> structScope);
+            StructType(std::string name, WeakRef<Scope> structScope, bool isObject = false, bool isInterface = false);
             
             TypeKind kind() const override;
             std::string toString() const override;
@@ -129,4 +146,4 @@ namespace wio
     }
 }
 
-MakeFrenumWithNamespace(wio::sema, TypeKind, Primitive, Null, Reference, Array, Function, Struct, Alias)
+MakeFrenumWithNamespace(wio::sema, TypeKind, Primitive, Null, Reference, Array, Dictionary, Function, Struct, Alias)
