@@ -292,8 +292,8 @@ namespace wio
 
     BlockStatement::~BlockStatement() = default;
 
-    IfStatement::IfStatement(NodePtr<Expression> _cond, NodePtr<Statement> _then, NodePtr<Statement> _else, common::Location _loc)
-        : Statement(_loc), condition(std::move(_cond)), thenBranch(std::move(_then)), elseBranch(std::move(_else))
+    IfStatement::IfStatement(NodePtr<Expression> _cond, NodePtr<Statement> _then, NodePtr<Statement> _else, Token _matchVar, common::Location _loc)
+        : Statement(_loc), condition(std::move(_cond)), thenBranch(std::move(_then)), elseBranch(std::move(_else)), matchVar(std::move(_matchVar))
     {
     }
 

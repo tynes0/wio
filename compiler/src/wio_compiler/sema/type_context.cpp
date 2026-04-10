@@ -28,6 +28,7 @@ namespace wio::sema
         t_unknown = makeType<PrimitiveType>("<unknown>");
         
         t_null = makeType<NullType>(t_void);
+        t_object = makeType<StructType>("object", nullptr, true, false);
     }
 
     Ref<Type> TypeContext::getOrCreateReferenceType(Ref<Type> referredType, bool isMutable)

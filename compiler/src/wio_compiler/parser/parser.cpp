@@ -176,7 +176,7 @@ namespace wio
         }
     }
 
-    NodePtr<Expression> Parser::parseExpression(int minPrecedence)
+    NodePtr<Expression> Parser::parseExpression(int minPrecedence, bool stopAtFit)
     {
         NodePtr<Expression> left;
        
@@ -186,13 +186,13 @@ namespace wio
             
             if (op.type == TokenType::kwRef)
             {
-                NodePtr<Expression> operand = parseExpression(getPrecedence(TokenType::kwRef));
+                NodePtr<Expression> operand = parseExpression(getPrecedence(TokenType::kwRef), stopAtFit);
                 left = makeNodePtr<RefExpression>(false, std::move(operand), op.loc);
             }
             else
             {
                 int precedence = getPrecedence(op.type);
-                NodePtr<Expression> operand = parseExpression(precedence);
+                NodePtr<Expression> operand = parseExpression(precedence, stopAtFit);
                 left = makeNodePtr<UnaryExpression>(std::move(op), std::move(operand));
             }
         }
@@ -203,9 +203,12 @@ namespace wio
 
         while (true)
         {
+            if (stopAtFit && peek().type == TokenType::kwFit)
+                break;
+            
             int precedence = getPrecedence(peek().type);
             if (precedence < minPrecedence)
-                break;//
+                break;
 
             if (peek().type == TokenType::opGreater && peek(1).type == TokenType::rightBrace)
                 break;
@@ -248,7 +251,7 @@ namespace wio
             if (peek().isAssignment())
             {
                 Token op = advance();
-                NodePtr<Expression> rhs = parseExpression(precedence);
+                NodePtr<Expression> rhs = parseExpression(precedence, stopAtFit);
                 left = makeNodePtr<AssignmentExpression>(std::move(left), std::move(op), std::move(rhs));
                 continue;
             }
@@ -262,7 +265,7 @@ namespace wio
             }
             
             Token op = advance();
-            NodePtr<Expression> right = parseExpression(precedence + 1);
+            NodePtr<Expression> right = parseExpression(precedence + 1, stopAtFit);
 
             if (op.type == TokenType::opRangeInclusive || op.type == TokenType::opRangeExclusive)
             {
@@ -1120,7 +1123,16 @@ namespace wio
         Token startTok = consume(TokenType::kwIf);
         Location startLoc = startTok.loc;
         
-        NodePtr<Expression> condition = parseExpression();
+        bool hasParen = match(TokenType::leftParen, true);
+
+        NodePtr<Expression> condition = parseExpression(0, true);
+
+        Token matchVar = Token::invalid();
+        if (match(TokenType::kwFit, true))
+            matchVar = consume(TokenType::identifier);
+
+        if (hasParen)
+            consume(TokenType::rightParen);
 
         NodePtr<Statement> thenBranch = match(TokenType::leftBrace) ? parseBlockStatement() : parseStatement();
         NodePtr<Statement> elseBranch = nullptr;
@@ -1137,7 +1149,7 @@ namespace wio
             }
         }
 
-        return makeNodePtr<IfStatement>(std::move(condition), std::move(thenBranch), std::move(elseBranch), startLoc);
+        return makeNodePtr<IfStatement>(std::move(condition), std::move(thenBranch), std::move(elseBranch), std::move(matchVar), startLoc);
     }
 
     NodePtr<Statement> Parser::parseWhileStatement()
@@ -1187,7 +1199,7 @@ namespace wio
         Token startTok = consume(TokenType::kwUse);
         Location startLoc = startTok.loc;
 
-        std::vector<std::string> moduleParts; // use io;
+        std::vector<std::string> moduleParts;
         bool isStdLib = false;
         
         while (matchOneOf({TokenType::kwSuper, TokenType::kwSelf, TokenType::identifier}))
@@ -1311,6 +1323,7 @@ namespace wio
         // ---------------------------------
         case TokenType::opEqual:
         case TokenType::opNotEqual:
+        case TokenType::kwIs:
             return 5;
     
         // ---------------------------------

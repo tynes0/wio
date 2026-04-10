@@ -33,6 +33,8 @@ namespace wio::sema
             if (name == "string") return ctx.getString();
             if (name == "void") return ctx.getVoid();
 
+            if (name == "object") return ctx.getObject();
+
             return nullptr; 
         }
 
@@ -267,6 +269,19 @@ namespace wio::sema
             }
             node.refType = Compiler::get().getTypeContext().getBool();
             return; 
+        }
+        if (node.op.type == TokenType::kwIs)
+        {
+            if (node.right->is<Identifier>())
+            {
+                auto typeSym = currentScope_->resolve(node.right->as<Identifier>()->token.value);
+                if (!typeSym || typeSym->kind != SymbolKind::Struct)
+                {
+                    WIO_LOG_ADD_ERROR(node.right->location(), "The right side of the 'is' operator must be an object or interface type.");
+                }
+            }
+            node.refType = Compiler::get().getTypeContext().getBool();
+            return;
         }
 
         Ref<Type> lhsType = node.left->refType.Lock();
@@ -890,7 +905,7 @@ namespace wio::sema
         for (size_t i = 0; i < argCount; ++i)
         {
             auto expectedType = funcType->paramTypes[i];
-            auto actualType = argTypes[i];
+            const auto& actualType = argTypes[i];
 
             if (!expectedType->isCompatibleWith(actualType) && 
                 !isSafeRefCast(expectedType, actualType) &&
@@ -1016,12 +1031,22 @@ namespace wio::sema
 
         if (srcType && destType)
         {
-            if (!srcType->isNumeric() || !destType->isNumeric())
+            if (srcType->isNumeric() && destType->isNumeric())
             {
-                WIO_LOG_ADD_ERROR(node.location(), "The 'fit' operator can only be used with numeric types.");
-                node.refType = Compiler::get().getTypeContext().getUnknown();
+                node.refType = destType;
                 return;
             }
+            
+            bool isSrcObject = (srcType->kind() == TypeKind::Reference || srcType->kind() == TypeKind::Struct);
+            bool isDestObject = (destType->kind() == TypeKind::Reference || destType->kind() == TypeKind::Struct);
+
+            if (isSrcObject && isDestObject) 
+            {
+                node.refType = Compiler::get().getTypeContext().getOrCreateReferenceType(destType, true);
+                return;
+            }
+
+            WIO_LOG_ADD_ERROR(node.location(), "The 'fit' operator can only be used with numeric types or objects/interfaces.");
         }
 
         node.refType = destType;
@@ -1319,8 +1344,17 @@ namespace wio::sema
             currentScope_ = sym->innerScope;
 
             bool hasCustomCtor = false;
+            bool hasEmptyCtor = false;
+            bool hasCopyCtor = false;
+            bool hasMemberCtor = false;
+            
             bool hasNoDefaultCtor = hasAttribute(node.attributes, Attribute::NoDefaultCtor);
+            bool forceGenerateCtors = hasAttribute(node.attributes, Attribute::GenerateCtors);
             auto bases = getAttributeArgs(node.attributes, Attribute::From);
+            if (!bases.empty())
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Components must be POD (Plain Old Data) and cannot inherit from objects or interfaces.");
+            }
 
             AccessModifier defaultAccess = AccessModifier::Public; 
             std::vector<Token> defaultArgs = getAttributeArgs(node.attributes, Attribute::Default);
@@ -1329,112 +1363,100 @@ namespace wio::sema
                 else if (defaultArgs[0].type == TokenType::kwProtected) defaultAccess = AccessModifier::Protected;
             }
 
-            for (const auto& baseToken : bases)
-            {
-                if (baseToken.type != TokenType::identifier)
-                    continue;
-                
-                if (auto baseSym = prevScope->resolve(baseToken.value); baseSym)
-                    if (!baseSym->flags.get_isInterface())
-                        WIO_LOG_ADD_ERROR(node.location(), "Component '{}' cannot inherit from '{}'. Components can only inherit from interfaces.", node.name->token.value, baseToken.value);
-            }
-
+            // PASS 1: Variables
+            std::vector<Ref<Type>> memberTypes;
             for (auto& member : node.members)
             {
-                Ref<Symbol> memberSym = nullptr;
-
                 if (member.declaration->is<VariableDeclaration>())
                 {
                     member.declaration->accept(*this);
                     auto varDecl = member.declaration->as<VariableDeclaration>();
-                    memberSym = varDecl->name->referencedSymbol.Lock();
+                    auto memberSym = varDecl->name->referencedSymbol.Lock();
                     if (hasAttribute(varDecl->attributes, Attribute::ReadOnly)) memberSym->flags.set_isReadOnly(true);
+                    
+                    if (memberSym && memberSym->type) memberTypes.push_back(memberSym->type);
+                    
+                    if (member.access == AccessModifier::None) member.access = defaultAccess;
+                    if (member.access == AccessModifier::Public) memberSym->flags.set_isPublic(true);
+                    else if (member.access == AccessModifier::Private) memberSym->flags.set_isPrivate(true);
+                    else if (member.access == AccessModifier::Protected) memberSym->flags.set_isProtected(true);
                 }
-                else if (member.declaration->is<FunctionDeclaration>())
+            }
+
+            // PASS 2: Functions
+            for (auto& member : node.members)
+            {
+                if (member.declaration->is<FunctionDeclaration>())
                 {
                     auto funcDecl = member.declaration->as<FunctionDeclaration>();
-                    memberSym = funcDecl->name->referencedSymbol.Lock();
+                    auto memberSym = funcDecl->name->referencedSymbol.Lock();
                     std::string funcName = funcDecl->name->token.value;
                     
                     if (funcName == "OnConstruct")
                     {
                         hasCustomCtor = true;
-                    }
-                    else if (funcName != "OnDestruct") 
-                    {
-                        bool isOverride = false;
-                        for (const auto& baseToken : bases)
+                        size_t pCount = funcDecl->parameters.size();
+                        
+                        if (pCount == 0) hasEmptyCtor = true;
+                        else if (pCount == 1) 
                         {
-                            if (baseToken.type != TokenType::identifier) continue;
-                            if (auto baseSym = prevScope->resolve(baseToken.value))
-                            {
-                                if (baseSym->flags.get_isInterface())
-                                {
-                                    if (auto baseType = baseSym->type.AsFast<StructType>())
-                                    {
-                                        if (auto lockedScope = baseType->structScope.Lock())
-                                        {
-                                            if (lockedScope->resolveLocally(funcName))
-                                            {
-                                                isOverride = true; 
-                                                break;
-                                            }
-                                        }
+                            if (memberSym && memberSym->type) {
+                                auto fType = memberSym->type.AsFast<FunctionType>();
+                                if (fType->paramTypes[0]->kind() == TypeKind::Reference && 
+                                    fType->paramTypes[0].AsFast<ReferenceType>()->referredType == structType) {
+                                    hasCopyCtor = true;
+                                }
+                            }
+                        }
+                        
+                        if (pCount == memberTypes.size() && !(pCount == 1 && hasCopyCtor)) 
+                        {
+                            bool typesMatch = true;
+                            if (memberSym && memberSym->type) {
+                                auto fType = memberSym->type.AsFast<FunctionType>();
+                                for (size_t i = 0; i < pCount; ++i) {
+                                    if (!fType->paramTypes[i]->isCompatibleWith(memberTypes[i])) {
+                                        typesMatch = false; break;
                                     }
                                 }
                             }
-                        } 
-                        if (!isOverride)
-                        {
-                            WIO_LOG_ADD_ERROR(funcDecl->location(), "Components can only contain data, lifecycle methods, or interface implementations.");
-                        }
-                        else
-                        {
-                            memberSym->flags.set_isOverride(true);
+                            if (typesMatch) hasMemberCtor = true;
                         }
                     }
-                }
 
-                if (memberSym)
-                {
-                    AccessModifier finalAccess = member.access;
-                    if (finalAccess == AccessModifier::None) finalAccess = defaultAccess;
-
-                    if (finalAccess == AccessModifier::Public) memberSym->flags.set_isPublic(true);
-                    else if (finalAccess == AccessModifier::Private) memberSym->flags.set_isPrivate(true);
-                    else if (finalAccess == AccessModifier::Protected) memberSym->flags.set_isProtected(true);
+                    if (memberSym)
+                    {
+                        if (member.access == AccessModifier::None) member.access = defaultAccess;
+                        if (member.access == AccessModifier::Public) memberSym->flags.set_isPublic(true);
+                        else if (member.access == AccessModifier::Private) memberSym->flags.set_isPrivate(true);
+                        else if (member.access == AccessModifier::Protected) memberSym->flags.set_isProtected(true);
+                    }
                 }
             }
 
-            if (!hasCustomCtor && !hasNoDefaultCtor) 
+            // PASS 3: Generate Constructors
+            if ((!hasCustomCtor && !hasNoDefaultCtor) || forceGenerateCtors) 
             {
                 auto voidType = Compiler::get().getTypeContext().getVoid();
 
-                auto defaultCtorType = Compiler::get().getTypeContext().getOrCreateFunctionType(voidType, {});
-                Ref<Symbol> defaultSym = createSymbol("OnConstruct", defaultCtorType, SymbolKind::Function, node.location());
-                currentScope_->define("OnConstruct", defaultSym);
-
-                std::vector<Ref<Type>> memberTypes;
-                for (auto& member : node.members)
-                {
-                    if (member.declaration->is<VariableDeclaration>())
-                    {
-                        auto vDecl = member.declaration->as<VariableDeclaration>();
-                        memberTypes.push_back(vDecl->name->referencedSymbol.Lock()->type);
-                    }
+                if (!hasEmptyCtor) {
+                    auto defaultCtorType = Compiler::get().getTypeContext().getOrCreateFunctionType(voidType, {});
+                    Ref<Symbol> defaultSym = createSymbol("OnConstruct", defaultCtorType, SymbolKind::Function, node.location());
+                    currentScope_->define("OnConstruct", defaultSym);
                 }
-                
-                if (!memberTypes.empty())
-                {
+
+                if (!hasMemberCtor && !memberTypes.empty()) {
                     auto memberCtorType = Compiler::get().getTypeContext().getOrCreateFunctionType(voidType, memberTypes);
                     Ref<Symbol> memberSym = createSymbol("OnConstruct", memberCtorType, SymbolKind::Function, node.location());
                     currentScope_->define("OnConstruct", memberSym);
                 }
 
-                auto copyParamType = Ref<ReferenceType>::Create(structType, false);
-                auto copyCtorType = Compiler::get().getTypeContext().getOrCreateFunctionType(voidType, { copyParamType });
-                Ref<Symbol> copySym = createSymbol("OnConstruct", copyCtorType, SymbolKind::Function, node.location());
-                currentScope_->define("OnConstruct", copySym);
+                if (!hasCopyCtor) {
+                    auto copyParamType = Ref<ReferenceType>::Create(structType, false);
+                    auto copyCtorType = Compiler::get().getTypeContext().getOrCreateFunctionType(voidType, { copyParamType });
+                    Ref<Symbol> copySym = createSymbol("OnConstruct", copyCtorType, SymbolKind::Function, node.location());
+                    currentScope_->define("OnConstruct", copySym);
+                }
             }
             
             currentScope_ = prevScope;
@@ -1484,7 +1506,12 @@ namespace wio::sema
             currentScope_ = sym->innerScope;
 
             bool hasCustomCtor = false;
+            bool hasEmptyCtor = false;
+            bool hasCopyCtor = false;
+            bool hasMemberCtor = false;
+            
             bool hasNoDefaultCtor = hasAttribute(node.attributes, Attribute::NoDefaultCtor);
+            bool forceGenerateCtors = hasAttribute(node.attributes, Attribute::GenerateCtors);
             auto bases = getAttributeArgs(node.attributes, Attribute::From);
 
             AccessModifier defaultAccess = AccessModifier::Private;
@@ -1518,31 +1545,103 @@ namespace wio::sema
                         {
                             WIO_LOG_ADD_ERROR(node.location(), "Object '{}' cannot inherit from multiple objects/components. Single class inheritance only!", node.name->token.value);
                         }
+                        else
+                        {
+                            bool hasDefaultCtor = false;
+                            
+                            if (auto ctorSym = baseSym->innerScope->resolveLocally("OnConstruct"))
+                            {
+                                if (ctorSym->kind == SymbolKind::FunctionGroup) 
+                                {
+                                    for (auto& overload : ctorSym->overloads) {
+                                        if (overload->type && overload->type.AsFast<FunctionType>()->paramTypes.empty()) {
+                                            hasDefaultCtor = true; break;
+                                        }
+                                    }
+                                } 
+                                else if (ctorSym->type && ctorSym->type.AsFast<FunctionType>()->paramTypes.empty()) 
+                                {
+                                    hasDefaultCtor = true;
+                                }
+                            }
+                            else 
+                            {
+                                hasDefaultCtor = true;
+                            }
+                            if (!hasDefaultCtor)
+                            {
+                                WIO_LOG_ADD_ERROR(node.location(), 
+                                    "Base object '{}' lacks a default (parameterless) constructor. Derived object '{}' cannot be instantiated safely. Hint: Add '@GenerateCtors' or an explicit 'OnConstruct() {{}}' to the base object.", 
+                                    baseToken.value, node.name->token.value);
+                            }
+                        }
                     }
                 }
             }
 
+            if (structBaseCount == 0)
+                structType->baseTypes.push_back(Compiler::get().getTypeContext().getObject());
+
+            // PASS 1: Variables
+            std::vector<Ref<Type>> memberTypes;
             for (auto& member : node.members)
             {
-                Ref<Symbol> memberSym = nullptr;
-
                 if (member.declaration->is<VariableDeclaration>())
                 {
                     member.declaration->accept(*this);
                     auto varDecl = member.declaration->as<VariableDeclaration>();
-                    memberSym = varDecl->name->referencedSymbol.Lock();
+                    auto memberSym = varDecl->name->referencedSymbol.Lock();
                     
                     if (hasAttribute(varDecl->attributes, Attribute::ReadOnly)) memberSym->flags.set_isReadOnly(true);
+                    
+                    if (memberSym && memberSym->type) memberTypes.push_back(memberSym->type);
+
+                    if (member.access == AccessModifier::None) member.access = defaultAccess;
+                    if (member.access == AccessModifier::Public) memberSym->flags.set_isPublic(true);
+                    else if (member.access == AccessModifier::Private) memberSym->flags.set_isPrivate(true);
+                    else if (member.access == AccessModifier::Protected) memberSym->flags.set_isProtected(true);
                 }
-                else if (member.declaration->is<FunctionDeclaration>())
+            }
+
+            // PASS 2: Functions
+            for (auto& member : node.members)
+            {
+                if (member.declaration->is<FunctionDeclaration>())
                 {
                     auto funcDecl = member.declaration->as<FunctionDeclaration>();
-                    memberSym = funcDecl->name->referencedSymbol.Lock();
+                    auto memberSym = funcDecl->name->referencedSymbol.Lock();
                     std::string funcName = funcDecl->name->token.value;
                     
                     if (funcName == "OnConstruct")
                     {
                         hasCustomCtor = true;
+                        size_t pCount = funcDecl->parameters.size();
+                        
+                        if (pCount == 0) hasEmptyCtor = true;
+                        else if (pCount == 1) 
+                        {
+                            if (memberSym && memberSym->type) {
+                                auto fType = memberSym->type.AsFast<FunctionType>();
+                                if (fType->paramTypes[0]->kind() == TypeKind::Reference && 
+                                    fType->paramTypes[0].AsFast<ReferenceType>()->referredType == structType) {
+                                    hasCopyCtor = true;
+                                }
+                            }
+                        }
+                        
+                        if (pCount == memberTypes.size() && !(pCount == 1 && hasCopyCtor)) 
+                        {
+                            bool typesMatch = true;
+                            if (memberSym && memberSym->type) {
+                                auto fType = memberSym->type.AsFast<FunctionType>();
+                                for (size_t i = 0; i < pCount; ++i) {
+                                    if (!fType->paramTypes[i]->isCompatibleWith(memberTypes[i])) {
+                                        typesMatch = false; break;
+                                    }
+                                }
+                            }
+                            if (typesMatch) hasMemberCtor = true;
+                        }
                     }
                     else if (funcName != "OnDestruct") 
                     {
@@ -1573,48 +1672,40 @@ namespace wio::sema
                             memberSym->flags.set_isOverride(true);
                         }
                     }
-                }
 
-                if (memberSym)
-                {
-                    AccessModifier finalAccess = member.access;
-                    if (finalAccess == AccessModifier::None) finalAccess = defaultAccess;
-
-                    if (finalAccess == AccessModifier::Public) memberSym->flags.set_isPublic(true);
-                    else if (finalAccess == AccessModifier::Private) memberSym->flags.set_isPrivate(true);
-                    else if (finalAccess == AccessModifier::Protected) memberSym->flags.set_isProtected(true);
+                    if (memberSym)
+                    {
+                        if (member.access == AccessModifier::None) member.access = defaultAccess;
+                        if (member.access == AccessModifier::Public) memberSym->flags.set_isPublic(true);
+                        else if (member.access == AccessModifier::Private) memberSym->flags.set_isPrivate(true);
+                        else if (member.access == AccessModifier::Protected) memberSym->flags.set_isProtected(true);
+                    }
                 }
             }
 
-            if (!hasCustomCtor && !hasNoDefaultCtor) 
+            // PASS 3: Generate Constructors
+            if ((!hasCustomCtor && !hasNoDefaultCtor) || forceGenerateCtors) 
             {
                 auto voidType = Compiler::get().getTypeContext().getVoid();
 
-                auto defaultCtorType = Compiler::get().getTypeContext().getOrCreateFunctionType(voidType, {});
-                Ref<Symbol> defaultSym = createSymbol("OnConstruct", defaultCtorType, SymbolKind::Function, node.location());
-                currentScope_->define("OnConstruct", defaultSym);
-
-                std::vector<Ref<Type>> memberTypes;
-                for (auto& member : node.members)
-                {
-                    if (member.declaration->is<VariableDeclaration>())
-                    {
-                        auto vDecl = member.declaration->as<VariableDeclaration>();
-                        memberTypes.push_back(vDecl->name->referencedSymbol.Lock()->type);
-                    }
+                if (!hasEmptyCtor) {
+                    auto defaultCtorType = Compiler::get().getTypeContext().getOrCreateFunctionType(voidType, {});
+                    Ref<Symbol> defaultSym = createSymbol("OnConstruct", defaultCtorType, SymbolKind::Function, node.location());
+                    currentScope_->define("OnConstruct", defaultSym);
                 }
-                
-                if (!memberTypes.empty())
-                {
+
+                if (!hasMemberCtor && !memberTypes.empty()) {
                     auto memberCtorType = Compiler::get().getTypeContext().getOrCreateFunctionType(voidType, memberTypes);
                     Ref<Symbol> memberSym = createSymbol("OnConstruct", memberCtorType, SymbolKind::Function, node.location());
                     currentScope_->define("OnConstruct", memberSym);
                 }
 
-                auto copyParamType = Ref<ReferenceType>::Create(structType, false);
-                auto copyCtorType = Compiler::get().getTypeContext().getOrCreateFunctionType(voidType, { copyParamType });
-                Ref<Symbol> copySym = createSymbol("OnConstruct", copyCtorType, SymbolKind::Function, node.location());
-                currentScope_->define("OnConstruct", copySym);
+                if (!hasCopyCtor) {
+                    auto copyParamType = Ref<ReferenceType>::Create(structType, false);
+                    auto copyCtorType = Compiler::get().getTypeContext().getOrCreateFunctionType(voidType, { copyParamType });
+                    Ref<Symbol> copySym = createSymbol("OnConstruct", copyCtorType, SymbolKind::Function, node.location());
+                    currentScope_->define("OnConstruct", copySym);
+                }
             }
             
             currentScope_ = prevScope;
@@ -1799,23 +1890,37 @@ namespace wio::sema
     
     void SemanticAnalyzer::visit(IfStatement& node)
     {
-        if (isDeclarationPass_) return;
         node.condition->accept(*this);
-        
-        if (auto condType = node.condition->refType.Lock(); condType != Compiler::get().getTypeContext().getBool())
+
+        auto ifScope = Ref<Scope>::Create(currentScope_, ScopeKind::Block);
+        auto prevScope = currentScope_;
+        currentScope_ = ifScope;
+
+        if (node.matchVar.isValid())
         {
-            // Todo: Check null (i.g. it's not works well)
-            if (!condType->isNumeric() && condType->kind() != TypeKind::Reference && condType->kind() != TypeKind::Null) 
+            if (node.condition->is<BinaryExpression>())
             {
-                WIO_LOG_ADD_ERROR(
-                    node.condition->location(),
-                    "If condition must be a boolean, numeric, or reference type. Got: {}",
-                    condType->toString()
-                );
+                auto binExpr = node.condition->as<BinaryExpression>();
+                if (binExpr->op.type == TokenType::kwIs && binExpr->right->is<Identifier>())
+                {
+                    auto typeSym = currentScope_->resolve(binExpr->right->as<Identifier>()->token.value);
+                    if (typeSym && typeSym->kind == SymbolKind::Struct) 
+                    {
+                        auto refType = Compiler::get().getTypeContext().getOrCreateReferenceType(typeSym->type, false);
+                        auto varSym = createSymbol(node.matchVar.value, refType, SymbolKind::Variable, node.matchVar.loc);
+                        currentScope_->define(node.matchVar.value, varSym);
+                    }
+                }
+                else
+                {
+                    WIO_LOG_ADD_ERROR(node.matchVar.loc, "Pattern matching 'fit' can only be used with the 'is' operator (e.g., target is Boss fit t).");
+                }
             }
         }
 
         if (node.thenBranch) node.thenBranch->accept(*this);
+        
+        currentScope_ = prevScope;
         if (node.elseBranch) node.elseBranch->accept(*this);
     }
     

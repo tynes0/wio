@@ -27,7 +27,7 @@ namespace wio
         Token consume(TokenType type, std::string_view value = "");
         void synchronize();
 
-        NodePtr<Expression> parseExpression(int minPrecedence = 0);
+        NodePtr<Expression> parseExpression(int minPrecedence = 0, bool stopAtFit = false);
         NodePtr<Expression> parsePrimary();
         NodePtr<Expression> parseStringLiteral();
         NodePtr<Expression> parseArrayLiteral();

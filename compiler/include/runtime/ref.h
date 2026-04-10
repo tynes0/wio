@@ -73,7 +73,6 @@ namespace wio::runtime
             return m_Strong.load(std::memory_order_acquire);
         }
     
-    
         /**
          * @brief Retrieves the current weak reference count.
          * @return The number of active weak references (including the internal +1 hold from strong refs).
@@ -89,8 +88,11 @@ namespace wio::runtime
          * before the physical memory is eventually deallocated.
          */
         virtual void OnZeroStrong() noexcept {}
-    
-    
+
+        // NOLINTNEXTLINE(clang-diagnostic-reserved-identifier, bugprone-reserved-identifier)
+        virtual bool _WF_IsA(uint64_t id) const { return false; }
+        // NOLINTNEXTLINE(clang-diagnostic-reserved-identifier, bugprone-reserved-identifier)
+        virtual void* _WF_CastTo(uint64_t id) { return nullptr; }
     private:
         /**
          * @brief Atomically increments the strong reference count.

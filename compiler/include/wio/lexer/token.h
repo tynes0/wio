@@ -87,6 +87,7 @@ namespace wio
       kwBreak,
       kwContinue,
       kwReturn,
+      kwIs,
       kwWhen,
       kwAssumed,
    
@@ -293,6 +294,7 @@ namespace wio
       { "break",     TokenType::kwBreak },
       { "continue",  TokenType::kwContinue },
       { "return",    TokenType::kwReturn },
+      { "is",        TokenType::kwIs },
       { "when",      TokenType::kwWhen },
       { "assumed",   TokenType::kwAssumed },
       

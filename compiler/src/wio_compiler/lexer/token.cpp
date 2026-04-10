@@ -86,6 +86,7 @@ namespace wio
        case TokenType::kwBreak: return "kwBreak";
        case TokenType::kwContinue: return "kwContinue";
        case TokenType::kwReturn: return "kwReturn";
+       case TokenType::kwIs: return "kwIs";
        case TokenType::kwWhen: return "kwWhen";
        case TokenType::kwAssumed: return "kwAssumed";
    
@@ -326,6 +327,7 @@ namespace wio
        case TokenType::kwUchar: 
        case TokenType::kwString:
        case TokenType::kwVoid:
+       case TokenType::kwObject:
        case TokenType::kwType:
            return true;
        default:
@@ -379,6 +381,7 @@ namespace wio
       case TokenType::opLessEqual:
       case TokenType::opGreater:
       case TokenType::opGreaterEqual:
+      case TokenType::kwIs:
          return true;
       default:
          return false;

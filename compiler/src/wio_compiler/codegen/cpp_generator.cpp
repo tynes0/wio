@@ -2,6 +2,7 @@
 
 #include "wio/common/filesystem/filesystem.h"
 #include "compiler.h"
+#include "wio/common/logger.h"
 #include "wio/sema/symbol.h"
 
 #define EMIT_TABS() do { for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    "; } while(false)
@@ -12,9 +13,11 @@ namespace wio::codegen
     {
         std::string toCppType(const Ref<sema::Type>& type)
         {
-            if (type.Is<sema::FunctionType>())
+            if (!type) return "void"; // Fallback
+
+            if (type->kind() == sema::TypeKind::Function)
             {
-                auto funcType = type.As<sema::FunctionType>();
+                auto funcType = type.AsFast<sema::FunctionType>();
                 std::string result = "std::function<" + toCppType(funcType->returnType) + "(";
                 for (size_t i = 0; i < funcType->paramTypes.size(); ++i) {
                     result += toCppType(funcType->paramTypes[i]);
@@ -24,7 +27,23 @@ namespace wio::codegen
                 return result;
             }
             
-            if (!type) return "void"; // Fallback
+            if (type->kind() == sema::TypeKind::Reference)
+            {
+                auto refType = type.AsFast<sema::ReferenceType>();
+                if (refType->referredType && refType->referredType->kind() == sema::TypeKind::Struct)
+                {
+                    auto sType = refType->referredType.AsFast<sema::StructType>();
+                    if (sType->isInterface)
+                        return Mangler::mangleInterface(sType->name) + "*";
+                }
+            }
+            else if (type->kind() == sema::TypeKind::Struct)
+            {
+                auto sType = type.AsFast<sema::StructType>();
+                if (sType->isInterface)
+                    return Mangler::mangleInterface(sType->name) + "*"; 
+            }
+
             return type->toCppString();
         }
 
@@ -304,6 +323,55 @@ namespace wio::codegen
                 emit("); }() ");
                 return;
             }
+        }
+
+        if (node.op.type == TokenType::kwIs)
+        {
+            node.left->accept(*this);
+            
+            bool isFatPointer = false;
+            const auto& lhsType = node.left->refType.Lock();
+            if (lhsType)
+            {
+                auto baseType = lhsType;
+                while (baseType && baseType->kind() == sema::TypeKind::Alias)
+                    baseType = baseType.AsFast<sema::AliasType>()->aliasedType;
+                    
+                if (baseType->kind() == sema::TypeKind::Struct &&
+                    baseType.AsFast<sema::StructType>()->isInterface)
+                {
+                    isFatPointer = true;
+                }
+                else if (baseType->kind() == sema::TypeKind::Reference)
+                {
+                    auto rType = baseType.AsFast<sema::ReferenceType>()->referredType;
+                    if (rType && rType->kind() == sema::TypeKind::Struct &&
+                        rType.AsFast<sema::StructType>()->isInterface)
+                        isFatPointer = true;
+                }
+            }
+
+            emit(isFatPointer ? "._WF_IsA(" : "->_WF_IsA(");
+
+            if (node.right->is<Identifier>())
+            {
+                auto rightSym = node.right->as<Identifier>()->referencedSymbol.Lock();
+                if (rightSym && rightSym->kind == sema::SymbolKind::Struct)
+                {
+                    auto sType = rightSym->type.AsFast<sema::StructType>();
+                    if (sType->isInterface) 
+                        emit(Mangler::mangleInterface(sType->name) + "::TYPE_ID");
+                    else 
+                        emit(Mangler::mangleStruct(sType->name) + "::TYPE_ID");
+                }
+                else
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "{} not a type!", node.right->kindName());
+                    emit("0 /* Error: Not a type! */");
+                }
+            }
+            emit(")");
+            return;//
         }
         
         emit("(");
@@ -638,9 +706,24 @@ namespace wio::codegen
                 while (baseType && baseType->kind() == sema::TypeKind::Alias)
                     baseType = baseType.AsFast<sema::AliasType>()->aliasedType;
             
-                if (baseType && baseType->kind() == sema::TypeKind::Reference ||
-                    baseType->kind() == sema::TypeKind::Struct && baseType.AsFast<sema::StructType>()->isObject)
+                bool isFatPointer = false;
+                if (baseType->kind() == sema::TypeKind::Struct && baseType.AsFast<sema::StructType>()->isInterface)
+                    isFatPointer = true;
+                else if (baseType->kind() == sema::TypeKind::Reference) {
+                    auto refType = baseType.AsFast<sema::ReferenceType>()->referredType;
+                    if (refType->kind() == sema::TypeKind::Struct && refType.AsFast<sema::StructType>()->isInterface)
+                        isFatPointer = true;
+                }
+
+                if (isFatPointer)
+                {
+                    op = ".";
+                }
+                if (baseType->kind() == sema::TypeKind::Reference ||
+                   (baseType->kind() == sema::TypeKind::Struct && (baseType.AsFast<sema::StructType>()->isObject || baseType.AsFast<sema::StructType>()->isInterface)))
+                {
                     op = "->";
+                }
             }
         }
 
@@ -733,17 +816,31 @@ namespace wio::codegen
     void CppGenerator::visit(RefExpression& node)
     {
         auto lockedType = node.operand->refType.Lock();
-        bool isSmartPtr = false;
-        if (lockedType && lockedType->kind() == sema::TypeKind::Struct)
+        bool isSmartPtrOrInterface = false;
+
+        if (lockedType)
         {
-            auto sType = lockedType.AsFast<sema::StructType>();
-            if (sType->isObject || sType->isInterface)
-                isSmartPtr = true;
+            auto baseType = lockedType;
+            while (baseType && baseType->kind() == sema::TypeKind::Alias)
+                baseType = baseType.AsFast<sema::AliasType>()->aliasedType;
+                
+            if (baseType->kind() == sema::TypeKind::Struct)
+            {
+                auto sType = baseType.AsFast<sema::StructType>();
+                if (sType->isObject || sType->isInterface) isSmartPtrOrInterface = true;
+            }
+            else if (baseType->kind() == sema::TypeKind::Reference)
+            {
+                auto refType = baseType.AsFast<sema::ReferenceType>()->referredType;
+                if (refType->kind() == sema::TypeKind::Struct)
+                {
+                    auto sType = refType.AsFast<sema::StructType>();
+                    if (sType->isObject || sType->isInterface) isSmartPtrOrInterface = true;
+                }
+            }
         }
         
-        if (!isSmartPtr)
-            emit("&");
-        
+        if (!isSmartPtrOrInterface) emit("&");
         node.operand->accept(*this);
     }
     
@@ -752,17 +849,53 @@ namespace wio::codegen
         auto srcType = node.operand->refType.Lock();
         auto destType = node.targetType->refType.Lock();
 
-        std::string cppDestType = destType->toCppString();
-        std::string cppSrcType = srcType->toCppString();
 
-        std::string minLimit = "static_cast<" + cppSrcType + ">(std::numeric_limits<" + cppDestType + ">::lowest())";
-        std::string maxLimit = "static_cast<" + cppSrcType + ">(std::numeric_limits<" + cppDestType + ">::max())";
+        if (srcType->isNumeric() && destType->isNumeric())
+        {
+            std::string cppDestType = destType->toCppString();
+            std::string cppSrcType = srcType->toCppString();
 
-        emit("static_cast<" + cppDestType + ">(std::clamp<" + cppSrcType + ">(");
+            std::string minLimit = "static_cast<" + cppSrcType + ">(std::numeric_limits<" + cppDestType + ">::lowest())";
+            std::string maxLimit = "static_cast<" + cppSrcType + ">(std::numeric_limits<" + cppDestType + ">::max())";
+
+            emit("static_cast<" + cppDestType + ">(std::clamp<" + cppSrcType + ">(");
     
-        node.operand->accept(*this);
+            node.operand->accept(*this);
     
-        emit(", " + minLimit + ", " + maxLimit + "))");
+            emit(", " + minLimit + ", " + maxLimit + "))");
+        }
+        else
+        {
+            std::string destCpp = toCppType(destType); 
+            std::string typeIdStr;
+            Ref<sema::StructType> sType;
+            
+            if (destType->kind() == sema::TypeKind::Reference) 
+                sType = destType.AsFast<sema::ReferenceType>()->referredType.AsFast<sema::StructType>();
+            else if (destType->kind() == sema::TypeKind::Struct) 
+                sType = destType.AsFast<sema::StructType>();
+
+            if (sType)
+            {
+                if (sType->isInterface)
+                    typeIdStr = Mangler::mangleInterface(sType->name) + "::TYPE_ID";
+                else
+                    typeIdStr = Mangler::mangleStruct(sType->name) + "::TYPE_ID";
+            }
+
+            if (sType && sType->isInterface)
+            {
+                emit(common::formatString("static_cast<{}>((", destCpp));
+                node.operand->accept(*this);
+                emit(common::formatString(")->_WF_CastTo({}))", typeIdStr));
+            }
+            else
+            {
+                emit(common::formatString("wio::runtime::Ref<{}>(static_cast<{}*>((", sType->name, Mangler::mangleStruct(sType->name)));
+                node.operand->accept(*this);
+                emit(common::formatString(")->_WF_CastTo({})))", typeIdStr));
+            }
+        }
     }
 
     void CppGenerator::visit(SelfExpression& node)
@@ -977,7 +1110,6 @@ namespace wio::codegen
 
             if (!currentClassName_.empty())
             {
-                if (sym && sym->flags.get_isOverride()) emit(" override");
                 if (hasAttribute(node.attributes, Attribute::Final)) emit(" final");
             }
         }
@@ -1012,7 +1144,7 @@ namespace wio::codegen
                     auto block = node.body->as<BlockStatement>();
                     for (auto& stmt : block->statements)
                         stmt->accept(*this);
-                }//
+                }
                 else
                 {
                     node.body->accept(*this);
@@ -1035,40 +1167,36 @@ namespace wio::codegen
     void CppGenerator::visit(InterfaceDeclaration& node)
     {
         std::string interfaceName = Mangler::mangleInterface(node.name->token.value);
-        emitLine("struct " + interfaceName);
+        emitLine(common::formatString("struct {}", interfaceName));
         emitLine("{");
         indent();
-        
+    
         uint64_t typeId = common::fnv1a(interfaceName.c_str());
         emitLine(common::formatString("static constexpr uint64_t TYPE_ID = {}ull;", typeId));
-        emitLine("virtual ~" + interfaceName + "() = default;\n");
-        emitLine("virtual uint64_t _WF_GetTypeID() const = 0;");
-        emitLine("virtual bool _WF_IsA(uint64_t id) const { return id == TYPE_ID; }\n");
-
+        emitLine(common::formatString("virtual ~{}() = default;\n", interfaceName));
+    
         for (auto& method : node.methods)
         {
+            EMIT_TABS();
             auto sym = method->name->referencedSymbol.Lock();
             auto funcType = sym->type.AsFast<sema::FunctionType>();
             std::string retType = funcType->returnType ? toCppType(funcType->returnType) : "void";
-
-            EMIT_TABS();
-            emit("virtual " + retType + " " + Mangler::mangleFunction(method->name->token.value, funcType->paramTypes) + "(");
-            
-            for (size_t i = 0; i < method->parameters.size(); ++i)
-            {
-                auto& param = method->parameters[i];
-                emit(common::formatString("{} {}", toCppType(param.name->refType.Lock()), param.name->token.value));
+            std::string mangledName = Mangler::mangleFunction(method->name->token.value, funcType->paramTypes);
+        
+            emit(common::formatString("virtual {} {}(", retType, mangledName));
+            for (size_t i = 0; i < method->parameters.size(); ++i) {
+                emit(common::formatString("{} {}", toCppType(method->parameters[i].name->refType.Lock()), method->parameters[i].name->token.value));
                 if (i < method->parameters.size() - 1) emit(", ");
             }
             emit(") = 0;\n");
         }
-
+    
         dedent();
         emitLine("};\n");
     }
 
-void CppGenerator::visit(ComponentDeclaration& node)
-    {
+    void CppGenerator::visit(ComponentDeclaration& node)
+        {
         std::string structName = Mangler::mangleStruct(node.name->token.value);
         emit("struct " + structName);
         
@@ -1086,52 +1214,80 @@ void CppGenerator::visit(ComponentDeclaration& node)
         }
         emitLine("\n{");
         indent();
-
-        // @trust (Friend Structs)
+    
         auto trustArgs = getAttributeArgs(node.attributes, Attribute::Trust);
         for (const auto& t : trustArgs)
         {
             if (t.type == TokenType::identifier)
                 emitLine("friend struct " + Mangler::mangleStruct(t.value) + ";");
         }
-
+    
         currentClassName_ = structName;
         AccessModifier currentAccess = AccessModifier::Public;
-
-        bool hasCustomCtor = false;
+    
         std::vector<std::pair<std::string, std::string>> memberVars;
-
         for (auto& member : node.members)
         {
-            if (member.declaration->is<FunctionDeclaration>())
-            {
-                if (member.declaration->as<FunctionDeclaration>()->name->token.value == "OnConstruct") hasCustomCtor = true;
-            }
-            else if (member.declaration->is<VariableDeclaration>())
+            if (member.declaration->is<VariableDeclaration>())
             {
                 auto vDecl = member.declaration->as<VariableDeclaration>();
                 auto sym = vDecl->name->referencedSymbol.Lock();
                 Ref<sema::Type> varType = (sym && sym->type) ? sym->type : vDecl->name->refType.Lock();
                 memberVars.emplace_back(toCppType(varType), vDecl->name->token.value);
             }
-
+        }
+    
+        bool hasCustomCtor = false;
+        bool hasEmptyCtor = false;
+        bool hasCopyCtor = false;
+        bool hasMemberCtor = false;
+    
+        for (auto& member : node.members)
+        {
+            if (member.declaration->is<FunctionDeclaration>())
+            {
+                auto funcDecl = member.declaration->as<FunctionDeclaration>();
+                if (funcDecl->name->token.value == "OnConstruct") 
+                {
+                    hasCustomCtor = true;
+                    size_t pCount = funcDecl->parameters.size();
+                    
+                    if (pCount == 0) hasEmptyCtor = true;
+                    else if (pCount == 1) 
+                    {
+                        std::string pType = toCppType(funcDecl->parameters[0].name->refType.Lock());
+                        if (pType.find(currentClassName_) != std::string::npos) hasCopyCtor = true;
+                    }
+                    
+                    if (pCount == memberVars.size() && !(pCount == 1 && hasCopyCtor)) 
+                    {
+                        bool typesMatch = true;
+                        for (size_t i = 0; i < pCount; ++i) {
+                            if (toCppType(funcDecl->parameters[i].name->refType.Lock()) != memberVars[i].first) {
+                                typesMatch = false; break;
+                            }
+                        }
+                        if (typesMatch) hasMemberCtor = true;
+                    }
+                }
+            }
+    
             if (member.access != currentAccess && member.access != AccessModifier::None)
             {
                 dedent();
-                if (member.access == AccessModifier::Public)
-                    emitLine("public:");
-                else if (member.access == AccessModifier::Private)
-                    emitLine("private:");
-                else if (member.access == AccessModifier::Protected)
-                    emitLine("protected:");
+                if (member.access == AccessModifier::Public) emitLine("public:");
+                else if (member.access == AccessModifier::Private) emitLine("private:");
+                else if (member.access == AccessModifier::Protected) emitLine("protected:");
                 indent();
                 currentAccess = member.access;
             }
             member.declaration->accept(*this);
         }
-
+    
+        bool forceGenerateCtors = hasAttribute(node.attributes, Attribute::GenerateCtors);
         bool hasNoDefaultCtor = hasAttribute(node.attributes, Attribute::NoDefaultCtor);
-        if (!hasCustomCtor && !hasNoDefaultCtor) 
+    
+        if ((!hasCustomCtor && !hasNoDefaultCtor) || forceGenerateCtors) 
         {
             if (currentAccess != AccessModifier::Public)
             {
@@ -1139,12 +1295,16 @@ void CppGenerator::visit(ComponentDeclaration& node)
                 emitLine("public:");
                 indent();
             }
-            emitLine(currentClassName_ + "() = default;");
-            emitLine(currentClassName_ + "(const " + currentClassName_ + "&) = default;");
-
-            EMIT_TABS();
-            if (!memberVars.empty())
+    
+            if (!hasEmptyCtor)
+                emitLine(currentClassName_ + "() = default;");
+                
+            if (!hasCopyCtor)
+                emitLine(currentClassName_ + "(const " + currentClassName_ + "&) = default;");
+    
+            if (!memberVars.empty() && !hasMemberCtor)
             {
+                EMIT_TABS();
                 emit(currentClassName_ + "(");
                 for (size_t i = 0; i < memberVars.size(); ++i)
                 {
@@ -1160,12 +1320,12 @@ void CppGenerator::visit(ComponentDeclaration& node)
                 emit(" {}\n");
             }
         }
-
+    
         currentClassName_ = "";
         dedent();
         emitLine("};\n");
     }
-
+    
     void CppGenerator::visit(ObjectDeclaration& node)
     {
         std::string structName = Mangler::mangleStruct(node.name->token.value);
@@ -1177,7 +1337,7 @@ void CppGenerator::visit(ComponentDeclaration& node)
         auto globalScope = symb->innerScope->getParent().Lock();
         
         auto bases = getBaseInterfaces(node.attributes);
-
+    
         bool hasBaseObject = false;
         if (globalScope)
         {
@@ -1191,9 +1351,9 @@ void CppGenerator::visit(ComponentDeclaration& node)
                 }
             }
         }
-
+    
         std::string baseList;
-
+    
         if (!hasBaseObject)
         {
             emit(" : public wio::runtime::RefCountedObject");
@@ -1202,46 +1362,62 @@ void CppGenerator::visit(ComponentDeclaration& node)
         for (const auto& base : bases)
         {
             auto baseSym = globalScope ? globalScope->resolve(base) : nullptr;
-            
             if (!baseList.empty()) baseList += ", ";
-            
+        
             if (baseSym && baseSym->flags.get_isInterface())
                 baseList += "public " + Mangler::mangleInterface(base);
             else
                 baseList += "public " + Mangler::mangleStruct(base);
         }
-
+    
         if (!baseList.empty())
         {
-            if (hasBaseObject)
-                emitLine(" : " + baseList);
-            else
-                emitLine(", " + baseList);
+            if (hasBaseObject) emitLine(" : " + baseList);
+            else emitLine(", " + baseList);
         }
         emitLine("{");
         indent();
-
+    
         uint64_t typeId = common::fnv1a(structName.c_str());
         emitLine(common::formatString("static constexpr uint64_t TYPE_ID = {}ull;", typeId));
-        emitLine("virtual uint64_t _WF_GetTypeID() const override { return TYPE_ID; }");
+        emitLine(common::formatString("virtual uint64_t _WF_GetTypeID() const {{ return {}ull; }}", typeId));
         
         emitLine("virtual bool _WF_IsA(uint64_t id) const override {");
         indent();
-        emitLine("if (id == TYPE_ID) return true;");
-        
-        for (const auto& base : bases)
-        {
+        emitLine(common::formatString("if (id == {}ull) return true;", typeId));
+        for (const auto& base : bases) {
             auto baseSym = globalScope ? globalScope->resolve(base) : nullptr;
-            std::string baseName = (baseSym && baseSym->flags.get_isInterface()) 
-                                   ? Mangler::mangleInterface(base) 
-                                   : Mangler::mangleStruct(base);
-            emitLine(std::format("if ({}::_WF_IsA(id)) return true;", baseName));
+            if (baseSym && baseSym->flags.get_isInterface()) {
+                emitLine(common::formatString("if (id == {}::TYPE_ID) return true;", Mangler::mangleInterface(base)));
+            } else {
+                emitLine(common::formatString("if ({}::_WF_IsA(id)) return true;", Mangler::mangleStruct(base)));
+            }
         }
-        
         emitLine("return false;");
         dedent();
         emitLine("}\n");
-
+    
+        emitLine("virtual void* _WF_CastTo(uint64_t id) override {");
+        indent();
+        emitLine(common::formatString("if (id == {}ull) return this;", typeId));
+        for (const auto& base : bases)
+        {
+            auto baseSym = globalScope ? globalScope->resolve(base) : nullptr;
+            if (baseSym && baseSym->flags.get_isInterface())
+            {
+                std::string intf = Mangler::mangleInterface(base);
+                emitLine(common::formatString("if (id == {}::TYPE_ID) return static_cast<{}*>(this);", intf, intf));
+            }
+            else
+            {
+                std::string bas = Mangler::mangleStruct(base);
+                emitLine(common::formatString("if (void* base_cast = {}::_WF_CastTo(id)) return base_cast;", bas));
+            }
+        }
+        emitLine("return nullptr;");
+        dedent();
+        emitLine("}\n");
+    
         emitLine("friend class wio::runtime::Ref<" + structName + ">;");
         auto trustArgs = getAttributeArgs(node.attributes, Attribute::Trust);
         for (const auto& t : trustArgs)
@@ -1251,29 +1427,59 @@ void CppGenerator::visit(ComponentDeclaration& node)
                 emitLine("friend struct " + Mangler::mangleStruct(t.value) + ";");
             }
         }
-
+    
         currentClassName_ = structName;
         AccessModifier currentAccess = AccessModifier::Public;
-        
-        bool hasCustomCtor = false;
+    
         std::vector<std::pair<std::string, std::string>> memberVars;
-
         for (auto& member : node.members)
         {
-            if (member.declaration->is<FunctionDeclaration>())
-            {
-                if (member.declaration->as<FunctionDeclaration>()->name->token.value == "OnConstruct") hasCustomCtor = true;
-            }
-            else if (member.declaration->is<VariableDeclaration>())
+            if (member.declaration->is<VariableDeclaration>())
             {
                 auto vDecl = member.declaration->as<VariableDeclaration>();
                 const auto& sym = vDecl->name->referencedSymbol.Lock();
                 Ref<sema::Type> varType = (sym && sym->type) ? sym->type : vDecl->name->refType.Lock();
                 memberVars.emplace_back(toCppType(varType), vDecl->name->token.value);
             }
-
+        }
+    
+        bool hasCustomCtor = false;
+        bool hasEmptyCtor = false;
+        bool hasCopyCtor = false;
+        bool hasMemberCtor = false;
+    
+        for (auto& member : node.members)
+        {
+            if (member.declaration->is<FunctionDeclaration>())
+            {
+                auto funcDecl = member.declaration->as<FunctionDeclaration>();
+                if (funcDecl->name->token.value == "OnConstruct") 
+                {
+                    hasCustomCtor = true;
+                    size_t pCount = funcDecl->parameters.size();
+                    
+                    if (pCount == 0) hasEmptyCtor = true;
+                    else if (pCount == 1) 
+                    {
+                        std::string pType = toCppType(funcDecl->parameters[0].name->refType.Lock());
+                        if (pType.find(currentClassName_) != std::string::npos) hasCopyCtor = true;
+                    }
+                    
+                    if (pCount == memberVars.size() && !(pCount == 1 && hasCopyCtor)) 
+                    {
+                        bool typesMatch = true;
+                        for (size_t i = 0; i < pCount; ++i) {
+                            if (toCppType(funcDecl->parameters[i].name->refType.Lock()) != memberVars[i].first) {
+                                typesMatch = false; break;
+                            }
+                        }
+                        if (typesMatch) hasMemberCtor = true;
+                    }
+                }
+            }
+    
             AccessModifier targetAccess = (member.access == AccessModifier::None) ? AccessModifier::Private : member.access;
-
+    
             if (targetAccess != currentAccess)
             {
                 dedent();
@@ -1285,9 +1491,11 @@ void CppGenerator::visit(ComponentDeclaration& node)
             }
             member.declaration->accept(*this);
         }
-
+    
+        bool forceGenerateCtors = hasAttribute(node.attributes, Attribute::GenerateCtors);
         bool hasNoDefaultCtor = hasAttribute(node.attributes, Attribute::NoDefaultCtor);
-        if (!hasCustomCtor && !hasNoDefaultCtor) 
+    
+        if ((!hasCustomCtor && !hasNoDefaultCtor) || forceGenerateCtors) 
         {
             if (currentAccess != AccessModifier::Public)
             {
@@ -1295,31 +1503,32 @@ void CppGenerator::visit(ComponentDeclaration& node)
                 emitLine("public:");
                 indent();
             }
-            emitLine(currentClassName_ + "() = default;");
-            emitLine(currentClassName_ + "(const " + currentClassName_ + "&) = default;");
-
-            EMIT_TABS();
-            
-            if (!memberVars.empty())
+    
+            if (!hasEmptyCtor)
+                emitLine(currentClassName_ + "() = default;");
+                
+            if (!hasCopyCtor)
+                emitLine(currentClassName_ + "(const " + currentClassName_ + "&) = default;");
+    
+            if (!memberVars.empty() && !hasMemberCtor)
             {
+                EMIT_TABS();
                 emit(currentClassName_ + "(");
                 for (size_t i = 0; i < memberVars.size(); ++i)
                 {
                     emit(memberVars[i].first + " _" + memberVars[i].second);
-                    if (i < memberVars.size() - 1)
-                        emit(", ");
+                    if (i < memberVars.size() - 1) emit(", ");
                 }
                 emit(") : ");
                 for (size_t i = 0; i < memberVars.size(); ++i)
                 {
                     emit(memberVars[i].second + "(_" + memberVars[i].second + ")");
-                    if (i < memberVars.size() - 1)
-                        emit(", ");
+                    if (i < memberVars.size() - 1) emit(", ");
                 }
                 emit(" {}\n");
             }
         }
-
+    
         currentClassName_ = "";
         dedent();
         emitLine("};\n");
@@ -1439,17 +1648,66 @@ void CppGenerator::visit(ComponentDeclaration& node)
 
     void CppGenerator::visit(IfStatement& node)
     {
-        EMIT_TABS();
-        buffer_ << "if (";
-        node.condition->accept(*this);
-        buffer_ << ")\n";
-        
-        node.thenBranch->accept(*this);
+        if (node.matchVar.isValid() && node.condition->is<BinaryExpression>())
+        {
+            auto binExpr = node.condition->as<BinaryExpression>();
+            auto typeSym = binExpr->right->as<Identifier>()->referencedSymbol.Lock();
+            auto sType = typeSym->type.AsFast<sema::StructType>();
+            
+            std::string destCpp = toCppType(typeSym->type);
+            std::string typeIdStr = sType->isInterface
+                ? (Mangler::mangleInterface(sType->name) + "::TYPE_ID")
+                : (Mangler::mangleStruct(sType->name) + "::TYPE_ID");
 
+            EMIT_TABS();
+            if (sType->isInterface)
+            {
+                emit(common::formatString("if ({} {} = static_cast<{}>((", destCpp, node.matchVar.value, destCpp));
+                binExpr->left->accept(*this);
+                emit(common::formatString(")->_WF_CastTo({})); {})", typeIdStr, node.matchVar.value));
+            }
+            else
+            {
+                emit(common::formatString("if ({}* _raw_{} = static_cast<{}*>((", Mangler::mangleStruct(sType->name), node.matchVar.value, Mangler::mangleStruct(sType->name)));
+                binExpr->left->accept(*this);
+                emit(common::formatString(")->_WF_CastTo({})))", typeIdStr));
+            }
+            emit("\n");
+            emitLine("{");
+            indent();
+            
+            if (!sType->isInterface)
+            {
+                emitLine(common::formatString("wio::runtime::Ref<{}> {}(_raw_{});", Mangler::mangleStruct(sType->name), node.matchVar.value, node.matchVar.value));
+            }
+            
+            if (node.thenBranch) node.thenBranch->accept(*this);
+            
+            dedent();
+            emitLine("}");
+            
+            if (node.elseBranch)
+            {
+                emit("else ");
+                node.elseBranch->accept(*this);
+            }
+            return;
+        }
+
+        EMIT_TABS();
+        emit("if (");
+        node.condition->accept(*this);
+        emit(")\n");
+        
+        if (node.thenBranch) {
+            if (!node.thenBranch->is<BlockStatement>()) { emitLine("{"); indent(); }
+            node.thenBranch->accept(*this);
+            if (!node.thenBranch->is<BlockStatement>()) { dedent(); emitLine("}"); }
+        }
+        
         if (node.elseBranch)
         {
-            EMIT_TABS();
-            buffer_ << "else\n";
+            emit("else ");
             node.elseBranch->accept(*this);
         }
     }

@@ -52,6 +52,8 @@ namespace wio::codegen
 
     std::string Mangler::mangleStruct(const std::string& name, const std::string& scopePath)
     {
+        if (name == "object") return "wio::runtime::RefCountedObject";
+        
         std::string mangled = "_WS_"; // Wio Struct
         if (!scopePath.empty()) mangled += scopePath + "_";
         mangled += name;

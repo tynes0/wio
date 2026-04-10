@@ -43,6 +43,7 @@ namespace wio::sema
         Ref<Type> getF64() const { return t_f64; }
 
         Ref<Type> getNull() const { return t_null; }
+        Ref<Type> getObject() const { return t_object; }
         
         Ref<Type> getOrCreateReferenceType(Ref<Type> referredType, bool isMutable);
         Ref<Type> getOrCreateArrayType(Ref<Type> elementType, ArrayType::ArrayKind arrayKind, size_t size = 0);
@@ -78,6 +79,7 @@ namespace wio::sema
         Ref<Type> t_f64 = nullptr;
 
         Ref<Type> t_null = nullptr;
+        Ref<Type> t_object = nullptr;
 
         template <typename T, typename... Args>
         Ref<T> makeType(Args&&... args)

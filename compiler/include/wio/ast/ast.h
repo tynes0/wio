@@ -84,6 +84,7 @@ namespace wio
         ReadOnly,
         Default,
         NoDefaultCtor,
+        GenerateCtors,
         From,
         Trust,
         Final,
@@ -645,8 +646,9 @@ namespace wio
         NodePtr<Expression> condition;
         NodePtr<Statement> thenBranch;
         NodePtr<Statement> elseBranch;
+        Token matchVar;
 
-        IfStatement(NodePtr<Expression> _cond, NodePtr<Statement> _then, NodePtr<Statement> _else, common::Location _loc);
+        IfStatement(NodePtr<Expression> _cond, NodePtr<Statement> _then, NodePtr<Statement> _else, Token _matchVar, common::Location _loc);
         ~IfStatement() override;
     };
 

@@ -382,18 +382,23 @@ namespace wio::sema
         
         if (referredType->kind() == sema::TypeKind::Struct)
         {
-            auto sType = referredType.AsFast<StructType>();
-            if (sType->isObject || sType->isInterface) 
+            auto sType = referredType.AsFast<sema::StructType>();
+            // YENİ: Interface'ler Fat Pointer olduğu için her yere doğrudan KOPYA (Value) gider.
+            // Bu, gecici (rvalue) nesne atama hatasını (cannot bind non-const lvalue) kökünden çözer!
+            if (sType->isInterface) 
             {
-                if (isMutable)
-                    return baseTypeStr + "&";
-                return "const " + baseTypeStr + "&";
+                return baseTypeStr; 
+            }
+            
+            if (sType->isObject) 
+            {
+                if (isMutable) return baseTypeStr + "&";
+                else return "const " + baseTypeStr + "&";
             }
         }
         
-        if (isMutable)
-            return baseTypeStr + "*";
-        return "const " + baseTypeStr + "*";
+        if (isMutable) return baseTypeStr + "*";
+        else return "const " + baseTypeStr + "*";
     }
 
     ArrayType::ArrayType(Ref<Type> elementType, ArrayKind arrayKind, size_t size)
