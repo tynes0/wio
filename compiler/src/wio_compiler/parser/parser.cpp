@@ -535,6 +535,26 @@ namespace wio
         return makeNodePtr<MatchExpression>(std::move(value), std::move(cases), startTok.loc);
     }
 
+    Token Parser::parseAttributeArgumentToken()
+    {
+        Token arg = advance();
+
+        if (!arg.isValid())
+            utError("Expected attribute argument.", peek().loc);
+
+        if (arg.type != TokenType::identifier || !match(TokenType::opScope))
+            return arg;
+
+        while (match(TokenType::opScope, true))
+        {
+            Token nextSegment = consume(TokenType::identifier);
+            arg.value += "::" + nextSegment.value;
+            arg.type = TokenType::identifier;
+        }
+
+        return arg;
+    }
+
     NodePtr<TypeSpecifier> Parser::parseType()
     {
         if (match(TokenType::kwRef, true))
@@ -641,6 +661,12 @@ namespace wio
             typeName = advance();
         else
             utError("Expected type name.", peek().loc);
+
+        while (typeName.type == TokenType::identifier && match(TokenType::opScope, true))
+        {
+            Token nextSegment = consume(TokenType::identifier);
+            typeName.value += "::" + nextSegment.value;
+        }
         
         Location startLoc = typeName.loc;
         std::vector<NodePtr<TypeSpecifier>> generics;
@@ -770,7 +796,7 @@ namespace wio
             {
                 do
                 {
-                    args.push_back(advance());
+                    args.push_back(parseAttributeArgumentToken());
                 } while (match(TokenType::comma, true));
             }
             consume(TokenType::rightParen);

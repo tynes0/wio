@@ -70,6 +70,50 @@ namespace wio::sema
             }
             return allArgs;
         }
+
+        Ref<Symbol> resolveQualifiedSymbol(const Ref<Scope>& startScope, std::string_view qualifiedName)
+        {
+            if (!startScope || qualifiedName.empty())
+                return nullptr;
+
+            size_t segmentStart = 0;
+            Ref<Scope> scope = startScope;
+            Ref<Symbol> resolvedSymbol = nullptr;
+
+            while (segmentStart < qualifiedName.size())
+            {
+                size_t separator = qualifiedName.find("::", segmentStart);
+                std::string segment = separator == std::string_view::npos
+                    ? std::string(qualifiedName.substr(segmentStart))
+                    : std::string(qualifiedName.substr(segmentStart, separator - segmentStart));
+
+                if (segment.empty())
+                    return nullptr;
+
+                resolvedSymbol = scope->resolve(segment);
+                if (!resolvedSymbol)
+                    return nullptr;
+
+                if (separator == std::string_view::npos)
+                    return resolvedSymbol;
+
+                if (!resolvedSymbol->innerScope)
+                    return nullptr;
+
+                scope = resolvedSymbol->innerScope;
+                segmentStart = separator + 2;
+            }
+
+            return resolvedSymbol;
+        }
+
+        Ref<Symbol> resolveAttributeSymbol(const Ref<Scope>& startScope, const Token& token)
+        {
+            if (token.type != TokenType::identifier)
+                return nullptr;
+
+            return resolveQualifiedSymbol(startScope, token.value);
+        }
     }
     
     SemanticAnalyzer::SemanticAnalyzer() = default;
@@ -250,7 +294,7 @@ namespace wio::sema
             }
             else if (node.name.type == TokenType::identifier)
             {
-                if (auto sym = currentScope_->resolve(node.name.value))
+                if (auto sym = resolveQualifiedSymbol(currentScope_, node.name.value))
                 {
                     if (sym->kind == SymbolKind::Struct) 
                     {
@@ -290,13 +334,10 @@ namespace wio::sema
         }
         if (node.op.type == TokenType::kwIs)
         {
-            if (node.right->is<Identifier>())
+            auto typeSym = node.right->referencedSymbol.Lock();
+            if (!typeSym || typeSym->kind != SymbolKind::Struct)
             {
-                auto typeSym = currentScope_->resolve(node.right->as<Identifier>()->token.value);
-                if (!typeSym || typeSym->kind != SymbolKind::Struct)
-                {
-                    WIO_LOG_ADD_ERROR(node.right->location(), "The right side of the 'is' operator must be an object or interface type.");
-                }
+                WIO_LOG_ADD_ERROR(node.right->location(), "The right side of the 'is' operator must be an object or interface type.");
             }
             node.refType = Compiler::get().getTypeContext().getBool();
             return;
@@ -1579,10 +1620,7 @@ namespace wio::sema
             int structBaseCount = 0;
             for (const auto& baseToken : bases)
             {
-                if (baseToken.type != TokenType::identifier)
-                    continue;
-                
-                if (auto baseSym = prevScope->resolve(baseToken.value))
+                if (auto baseSym = resolveAttributeSymbol(prevScope, baseToken))
                 {
                     structType->baseTypes.push_back(baseSym->type);
                     
@@ -1700,8 +1738,7 @@ namespace wio::sema
                         bool isOverride = false;
                         for (const auto& baseToken : bases)
                         {
-                            if (baseToken.type != TokenType::identifier) continue;
-                            if (auto baseSym = prevScope->resolve(baseToken.value); baseSym)
+                            if (auto baseSym = resolveAttributeSymbol(prevScope, baseToken); baseSym)
                             {
                                 if (baseSym->kind == SymbolKind::Struct)
                                 {
@@ -1772,10 +1809,7 @@ namespace wio::sema
         auto bases = getAttributeArgs(node.attributes, Attribute::From);
         for (const auto& baseToken : bases)
         {
-            if (baseToken.type != TokenType::identifier)
-                continue;
-            
-            if (auto baseSym = prevScope->resolve(baseToken.value))
+            if (auto baseSym = resolveAttributeSymbol(prevScope, baseToken))
             {
                 if (baseSym->kind == SymbolKind::Struct && !baseSym->flags.get_isInterface())
                 {
@@ -1956,15 +1990,12 @@ namespace wio::sema
             if (node.condition->is<BinaryExpression>())
             {
                 auto binExpr = node.condition->as<BinaryExpression>();
-                if (binExpr->op.type == TokenType::kwIs && binExpr->right->is<Identifier>())
+                auto typeSym = binExpr->right->referencedSymbol.Lock();
+                if (binExpr->op.type == TokenType::kwIs && typeSym && typeSym->kind == SymbolKind::Struct)
                 {
-                    auto typeSym = currentScope_->resolve(binExpr->right->as<Identifier>()->token.value);
-                    if (typeSym && typeSym->kind == SymbolKind::Struct) 
-                    {
-                        auto refType = Compiler::get().getTypeContext().getOrCreateReferenceType(typeSym->type, false);
-                        auto varSym = createSymbol(node.matchVar.value, refType, SymbolKind::Variable, node.matchVar.loc);
-                        currentScope_->define(node.matchVar.value, varSym);
-                    }
+                    auto refType = Compiler::get().getTypeContext().getOrCreateReferenceType(typeSym->type, false);
+                    auto varSym = createSymbol(node.matchVar.value, refType, SymbolKind::Variable, node.matchVar.loc);
+                    currentScope_->define(node.matchVar.value, varSym);
                 }
                 else
                 {

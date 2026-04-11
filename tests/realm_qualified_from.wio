@@ -1,0 +1,32 @@
+use std::io as console;
+
+realm gameplay {
+    interface IDamageable {
+        fn GetHp() -> i32;
+    }
+
+    object Actor {
+        protected hp: i32 = 7;
+
+        public fn GetHp() -> i32 {
+            return self.hp;
+        }
+    }
+
+    @From(gameplay::Actor, gameplay::IDamageable)
+    object Boss {
+        public fn GetHp() -> i32 {
+            return super.GetHp();
+        }
+
+        public fn ReadHp() -> i32 {
+            return super.GetHp();
+        }
+    }
+}
+
+fn Entry() -> i32 {
+    let boss: gameplay::Boss = gameplay::Boss();
+    console::Print($"Qualified from hp: ${boss.ReadHp()}");
+    return 0;
+}

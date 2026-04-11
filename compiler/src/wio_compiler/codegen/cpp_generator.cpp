@@ -103,6 +103,42 @@ namespace wio::codegen
             return symbol->type.AsFast<sema::StructType>();
         }
 
+        Ref<sema::Symbol> resolveQualifiedSymbol(const Ref<sema::Scope>& startScope, std::string_view qualifiedName)
+        {
+            if (!startScope || qualifiedName.empty())
+                return nullptr;
+
+            size_t segmentStart = 0;
+            Ref<sema::Scope> scope = startScope;
+            Ref<sema::Symbol> resolvedSymbol = nullptr;
+
+            while (segmentStart < qualifiedName.size())
+            {
+                size_t separator = qualifiedName.find("::", segmentStart);
+                std::string segment = separator == std::string_view::npos
+                    ? std::string(qualifiedName.substr(segmentStart))
+                    : std::string(qualifiedName.substr(segmentStart, separator - segmentStart));
+
+                if (segment.empty())
+                    return nullptr;
+
+                resolvedSymbol = scope->resolve(segment);
+                if (!resolvedSymbol)
+                    return nullptr;
+
+                if (separator == std::string_view::npos)
+                    return resolvedSymbol;
+
+                if (!resolvedSymbol->innerScope)
+                    return nullptr;
+
+                scope = resolvedSymbol->innerScope;
+                segmentStart = separator + 2;
+            }
+
+            return resolvedSymbol;
+        }
+
         std::string mangleNamedType(const Ref<sema::Symbol>& symbol)
         {
             return mangleNamedType(getStructTypeFromSymbol(symbol));
@@ -420,22 +456,19 @@ namespace wio::codegen
 
             emit(isFatPointer ? "._WF_IsA(" : "->_WF_IsA(");
 
-            if (node.right->is<Identifier>())
+            auto rightSym = node.right->referencedSymbol.Lock();
+            if (rightSym && rightSym->kind == sema::SymbolKind::Struct)
             {
-                auto rightSym = node.right->as<Identifier>()->referencedSymbol.Lock();
-                if (rightSym && rightSym->kind == sema::SymbolKind::Struct)
-                {
-                    auto sType = rightSym->type.AsFast<sema::StructType>();
-                    if (sType->isInterface) 
-                        emit(mangleInterfaceTypeName(sType) + "::TYPE_ID");
-                    else 
-                        emit(mangleStructTypeName(sType) + "::TYPE_ID");
-                }
-                else
-                {
-                    WIO_LOG_ADD_ERROR(node.location(), "{} not a type!", node.right->kindName());
-                    emit("0 /* Error: Not a type! */");
-                }
+                auto sType = rightSym->type.AsFast<sema::StructType>();
+                if (sType->isInterface) 
+                    emit(mangleInterfaceTypeName(sType) + "::TYPE_ID");
+                else 
+                    emit(mangleStructTypeName(sType) + "::TYPE_ID");
+            }
+            else
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "{} not a type!", node.right->kindName());
+                emit("0 /* Error: Not a type! */");
             }
             emit(")");
             return;//
@@ -737,6 +770,19 @@ namespace wio::codegen
     
     void CppGenerator::visit(MemberAccessExpression& node)
     {
+        auto emitMemberName = [&]()
+        {
+            if (auto memberSym = node.member->referencedSymbol.Lock();
+                memberSym && memberSym->kind == sema::SymbolKind::Function)
+            {
+                auto funcType = memberSym->type.AsFast<sema::FunctionType>();
+                emit(Mangler::mangleFunction(memberSym->name, funcType->paramTypes));
+                return;
+            }
+
+            node.member->accept(*this);
+        };
+
         if (auto objSym = node.object->referencedSymbol.Lock();
             objSym && objSym->kind == sema::SymbolKind::Namespace && objSym->flags.get_isStd())
         {
@@ -761,7 +807,7 @@ namespace wio::codegen
                 auto baseStruct = refType->referredType.AsFast<sema::StructType>();
                 
                 emit(Mangler::mangleStruct(baseStruct->name, baseStruct->scopePath) + "::");
-                node.member->accept(*this);
+                emitMemberName();
                 return;
             }
         }
@@ -810,8 +856,8 @@ namespace wio::codegen
         }
 
         emit(op);
-    
-        node.member->accept(*this);
+
+        emitMemberName();
     }
 
     void CppGenerator::visit(FunctionCallExpression& node)
@@ -1302,7 +1348,7 @@ namespace wio::codegen
             emit(" : ");
             for (size_t i = 0; i < bases.size(); ++i)
             {
-                auto baseSym = enclosingScope ? enclosingScope->resolve(bases[i]) : nullptr;
+                auto baseSym = enclosingScope ? resolveQualifiedSymbol(enclosingScope, bases[i]) : nullptr;
                 std::string baseName = mangleNamedType(baseSym);
                 if (baseName.empty())
                     baseName = Mangler::mangleInterface(bases[i]);
@@ -1319,7 +1365,7 @@ namespace wio::codegen
         {
             if (t.type == TokenType::identifier)
             {
-                auto trustSym = enclosingScope ? enclosingScope->resolve(t.value) : nullptr;
+                auto trustSym = enclosingScope ? resolveQualifiedSymbol(enclosingScope, t.value) : nullptr;
                 std::string trustName = mangleNamedType(trustSym);
                 if (trustName.empty())
                     trustName = Mangler::mangleStruct(t.value);
@@ -1450,7 +1496,7 @@ namespace wio::codegen
         {
             for (const auto& baseName : bases)
             {
-                auto baseSym = globalScope->resolve(baseName);
+                auto baseSym = resolveQualifiedSymbol(globalScope, baseName);
                 if (baseSym && !baseSym->flags.get_isInterface())
                 {
                     hasBaseObject = true;
@@ -1468,7 +1514,7 @@ namespace wio::codegen
         
         for (const auto& base : bases)
         {
-            auto baseSym = globalScope ? globalScope->resolve(base) : nullptr;
+            auto baseSym = globalScope ? resolveQualifiedSymbol(globalScope, base) : nullptr;
             if (!baseList.empty()) baseList += ", ";
         
             if (baseSym && baseSym->flags.get_isInterface())
@@ -1493,7 +1539,7 @@ namespace wio::codegen
         indent();
         emitLine(common::formatString("if (id == {}ull) return true;", typeId));
         for (const auto& base : bases) {
-            auto baseSym = globalScope ? globalScope->resolve(base) : nullptr;
+            auto baseSym = globalScope ? resolveQualifiedSymbol(globalScope, base) : nullptr;
             if (baseSym && baseSym->flags.get_isInterface()) {
                 emitLine(common::formatString("if (id == {}::TYPE_ID) return true;", mangleNamedType(baseSym)));
             } else {
@@ -1513,7 +1559,7 @@ namespace wio::codegen
         emitLine(common::formatString("if (id == {}ull) return this;", typeId));
         for (const auto& base : bases)
         {
-            auto baseSym = globalScope ? globalScope->resolve(base) : nullptr;
+            auto baseSym = globalScope ? resolveQualifiedSymbol(globalScope, base) : nullptr;
             if (baseSym && baseSym->flags.get_isInterface())
             {
                 std::string intf = mangleNamedType(baseSym);
@@ -1537,7 +1583,7 @@ namespace wio::codegen
         {
             if (t.type == TokenType::identifier)
             {
-                auto trustSym = globalScope ? globalScope->resolve(t.value) : nullptr;
+                auto trustSym = globalScope ? resolveQualifiedSymbol(globalScope, t.value) : nullptr;
                 std::string trustName = mangleNamedType(trustSym);
                 if (trustName.empty())
                     trustName = Mangler::mangleStruct(t.value);
@@ -1772,7 +1818,7 @@ namespace wio::codegen
         if (node.matchVar.isValid() && node.condition->is<BinaryExpression>())
         {
             auto binExpr = node.condition->as<BinaryExpression>();
-            auto typeSym = binExpr->right->as<Identifier>()->referencedSymbol.Lock();
+            auto typeSym = binExpr->right->referencedSymbol.Lock();
             auto sType = typeSym->type.AsFast<sema::StructType>();
             
             std::string destCpp = toCppType(typeSym->type);

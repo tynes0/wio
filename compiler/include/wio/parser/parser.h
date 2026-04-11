@@ -34,6 +34,7 @@ namespace wio
         NodePtr<Expression> parseDictionaryLiteral();
         NodePtr<Expression> parseLambdaExpression();
         NodePtr<Expression> parseMatchExpression();
+        Token parseAttributeArgumentToken();
         
         NodePtr<TypeSpecifier> parseType();
         

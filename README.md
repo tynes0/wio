@@ -67,6 +67,43 @@ Every file under `playground/*.wio` also gets its own parameterless targets:
 - `wio_file_<name>_check`
 - `wio_file_<name>_run`
 
+### Rider
+
+If your Rider build does not show `Settings | Build, Execution, Deployment | CMake`,
+that is okay. You can still work comfortably with shared scripts and Run
+Configurations.
+
+Recommended Rider setup:
+
+1. Open `Run | Edit Configurations...`.
+2. Create a new `PowerShell` configuration. If that template is missing, create a
+   `Native Executable` configuration and use `powershell` as the program.
+3. Use this quick playground command:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Run-WioFile.ps1 -BuildDir build-rider -Mode run
+```
+
+4. For the file currently open in the editor, use this command instead:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "$ProjectFileDir$\scripts\Run-WioFile.ps1" -BuildDir build-rider -File "$FilePath$" -Mode run
+```
+
+5. Set the working directory to `$ProjectFileDir$`.
+6. Remove any extra `Build before launch` step, because the script already
+   configures and builds the compiler executable.
+
+For all tests in Rider, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-Wio.ps1 -BuildDir build-rider
+```
+
+If the CMake tool window is available, you can also run the generated targets
+such as `wio_playground_run`, `wio_tests`, or `wio_file_<name>_run` directly
+from there.
+
 ### Backend Compiler
 
 Generated C++ is compiled with `g++` by default. You can override that at

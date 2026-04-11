@@ -1,0 +1,26 @@
+use std::io as console;
+
+realm gameplay {
+    realm enemies {
+        @GenerateCtors
+        object Boss {
+            public hp: i32;
+        }
+    }
+}
+
+fn ReadBoss(boss: gameplay::enemies::Boss) -> i32 {
+    return boss.hp;
+}
+
+fn Entry(args: string[]) -> i32 {
+    let boss: gameplay::enemies::Boss = gameplay::enemies::Boss(7);
+
+    console::Print($"Qualified hp: ${ReadBoss(boss)}");
+
+    if (boss is gameplay::enemies::Boss fit typed) {
+        console::Print($"Qualified cast hp: ${typed.hp}");
+    }
+
+    return 0;
+}

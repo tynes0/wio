@@ -222,6 +222,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_realm_qualified_types_run
+        "${CMAKE_SOURCE_DIR}/tests/realm_qualified_types.wio"
+        "Qualified cast hp: 7"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_realm_qualified_from_run
+        "${CMAKE_SOURCE_DIR}/tests/realm_qualified_from.wio"
+        "Qualified from hp: 7"
+        --run
+    )
+
+    add_wio_output_test(
         wio_show_tokens_alias_stream
         "${CMAKE_SOURCE_DIR}/tests/test_use_alias.wio"
         "kwAs 'as'"
