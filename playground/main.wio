@@ -1,0 +1,12 @@
+use std::io as console;
+
+realm sandbox {
+    fn DamageBase() -> i32 {
+        return 40;
+    }
+}
+
+fn Entry(args: string[]) -> i32 {
+    console::Print($"Playground damage: ${sandbox::DamageBase() + 2}");
+    return 0;
+}

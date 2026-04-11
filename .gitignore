@@ -77,3 +77,8 @@ Thumbs.db
 *.swp
 *.tmp
 
+# =========================
+# Wio generated artifacts
+# =========================
+*.wio.cpp
+

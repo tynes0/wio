@@ -1,0 +1,22 @@
+use std::io as console;
+
+realm gameplay {
+    realm combat {
+        fn Damage() -> i32 {
+            return 4;
+        }
+    }
+}
+
+realm ui {
+    realm hud {
+        fn Bonus() -> i32 {
+            return 3;
+        }
+    }
+}
+
+fn Entry(args: string[]) -> i32 {
+    console::Print($"Nested realm sum: ${gameplay::combat::Damage() + ui::hud::Bonus()}");
+    return 0;
+}

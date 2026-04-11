@@ -28,6 +28,88 @@ else()
     message(WARNING "WARNING: The 'tests' folder was not found; the copy operation was skipped.")
 endif()
 
+function(add_wio_dev_target target_name source_file)
+    add_custom_target(
+        ${target_name}
+        COMMAND $<TARGET_FILE:wio_app> "${source_file}" ${ARGN}
+        DEPENDS wio_app
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        USES_TERMINAL
+        VERBATIM
+    )
+endfunction()
+
+function(make_wio_target_suffix input_name output_var)
+    string(MAKE_C_IDENTIFIER "${input_name}" sanitized_name)
+    string(TOLOWER "${sanitized_name}" sanitized_name)
+    set(${output_var} "${sanitized_name}" PARENT_SCOPE)
+endfunction()
+
+set(wio_ctest_config_args)
+if (CMAKE_CONFIGURATION_TYPES)
+    set(wio_ctest_config_args -C $<CONFIG>)
+endif()
+
+add_custom_target(
+    wio_tests
+    COMMAND ${CMAKE_CTEST_COMMAND} ${wio_ctest_config_args} --output-on-failure
+    COMMAND_EXPAND_LISTS
+    DEPENDS wio_app
+    WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+    USES_TERMINAL
+    VERBATIM
+)
+
+set(WIO_PLAYGROUND_DIR "${CMAKE_SOURCE_DIR}/playground")
+set(WIO_PLAYGROUND_MAIN "${WIO_PLAYGROUND_DIR}/main.wio")
+
+if (EXISTS "${WIO_PLAYGROUND_MAIN}")
+    add_wio_dev_target(
+        wio_playground_check
+        "${WIO_PLAYGROUND_MAIN}"
+        --dry-run
+    )
+
+    add_wio_dev_target(
+        wio_playground_run
+        "${WIO_PLAYGROUND_MAIN}"
+        --run
+    )
+
+    add_wio_dev_target(
+        wio_playground_tokens
+        "${WIO_PLAYGROUND_MAIN}"
+        --show-tokens
+        --dry-run
+    )
+
+    add_wio_dev_target(
+        wio_playground_ast
+        "${WIO_PLAYGROUND_MAIN}"
+        --show-ast
+        --dry-run
+    )
+endif()
+
+file(GLOB WIO_PLAYGROUND_FILES CONFIGURE_DEPENDS "${WIO_PLAYGROUND_DIR}/*.wio")
+
+foreach (wio_playground_file IN LISTS WIO_PLAYGROUND_FILES)
+    get_filename_component(wio_playground_name "${wio_playground_file}" NAME_WE)
+    make_wio_target_suffix("${wio_playground_name}" wio_playground_suffix)
+
+    add_wio_dev_target(
+        "wio_file_${wio_playground_suffix}_check"
+        "${wio_playground_file}"
+        --dry-run
+    )
+
+    add_wio_dev_target(
+        "wio_file_${wio_playground_suffix}_run"
+        "${wio_playground_file}"
+        --run
+    )
+endforeach()
+
 if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     function(add_wio_success_test test_name source_file)
         add_test(
@@ -129,6 +211,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_realm_object_isolation_run
         "${CMAKE_SOURCE_DIR}/tests/realm_object_isolation.wio"
         "Realm counters: 3"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_realm_nested_run
+        "${CMAKE_SOURCE_DIR}/tests/realm_nested.wio"
+        "Nested realm sum: 7"
         --run
     )
 
