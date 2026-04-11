@@ -141,6 +141,52 @@ namespace wio::sema
             const std::string typeName = current->toString();
             return typeName != "string" && typeName != "object";
         }
+
+        bool isExactType(const Ref<Type>& actual, const Ref<Type>& expected)
+        {
+            Ref<Type> lhs = actual;
+            Ref<Type> rhs = expected;
+
+            while (lhs && lhs->kind() == TypeKind::Alias)
+                lhs = lhs.AsFast<AliasType>()->aliasedType;
+
+            while (rhs && rhs->kind() == TypeKind::Alias)
+                rhs = rhs.AsFast<AliasType>()->aliasedType;
+
+            return lhs && rhs && lhs->isCompatibleWith(rhs) && rhs->isCompatibleWith(lhs);
+        }
+
+        bool isModuleLifecycleAttribute(Attribute attribute)
+        {
+            return attribute == Attribute::ModuleApiVersion ||
+                   attribute == Attribute::ModuleLoad ||
+                   attribute == Attribute::ModuleUpdate ||
+                   attribute == Attribute::ModuleUnload;
+        }
+
+        std::vector<Attribute> getModuleLifecycleAttributes(const std::vector<NodePtr<AttributeStatement>>& attributes)
+        {
+            std::vector<Attribute> lifecycleAttributes;
+            for (const auto& attr : attributes)
+            {
+                if (attr && isModuleLifecycleAttribute(attr->attribute))
+                    lifecycleAttributes.push_back(attr->attribute);
+            }
+
+            return lifecycleAttributes;
+        }
+
+        const char* getModuleLifecycleAttributeName(Attribute attribute)
+        {
+            switch (attribute)
+            {
+            case Attribute::ModuleApiVersion: return "@ModuleApiVersion";
+            case Attribute::ModuleLoad: return "@ModuleLoad";
+            case Attribute::ModuleUpdate: return "@ModuleUpdate";
+            case Attribute::ModuleUnload: return "@ModuleUnload";
+            default: return "@UnknownModuleLifecycle";
+            }
+        }
     }
     
     SemanticAnalyzer::SemanticAnalyzer() = default;
@@ -171,6 +217,10 @@ namespace wio::sema
         symbols_.clear();
         currentScope_ = nullptr;
         currentNamespacePath_.clear();
+        seenModuleApiVersion_ = false;
+        seenModuleLoad_ = false;
+        seenModuleUpdate_ = false;
+        seenModuleUnload_ = false;
         
         program->accept(*this);
     }
@@ -1333,6 +1383,8 @@ namespace wio::sema
 
         bool isNative = hasAttribute(node.attributes, Attribute::Native);
         bool isExported = hasAttribute(node.attributes, Attribute::Export);
+        std::vector<Attribute> moduleLifecycleAttributes = getModuleLifecycleAttributes(node.attributes);
+        bool hasModuleLifecycle = !moduleLifecycleAttributes.empty();
         if (isNative)
         {
             if (node.body)
@@ -1395,6 +1447,140 @@ namespace wio::sema
                     node.name->token.value,
                     funcType->returnType ? funcType->returnType->toString() : "<unknown>"
                 );
+            }
+        }
+
+        if (moduleLifecycleAttributes.size() > 1)
+        {
+            WIO_LOG_ADD_ERROR(node.location(), "A function can declare only one module lifecycle attribute.");
+        }
+
+        if (hasModuleLifecycle)
+        {
+            Attribute lifecycleAttribute = moduleLifecycleAttributes.front();
+            bool* seenLifecycleFlag = nullptr;
+
+            switch (lifecycleAttribute)
+            {
+            case Attribute::ModuleApiVersion: seenLifecycleFlag = &seenModuleApiVersion_; break;
+            case Attribute::ModuleLoad: seenLifecycleFlag = &seenModuleLoad_; break;
+            case Attribute::ModuleUpdate: seenLifecycleFlag = &seenModuleUpdate_; break;
+            case Attribute::ModuleUnload: seenLifecycleFlag = &seenModuleUnload_; break;
+            default: break;
+            }
+
+            if (seenLifecycleFlag && *seenLifecycleFlag)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Only one {} function may be declared per compilation unit.",
+                    getModuleLifecycleAttributeName(lifecycleAttribute)
+                );
+            }
+            else if (seenLifecycleFlag)
+            {
+                *seenLifecycleFlag = true;
+            }
+
+            if (isNative)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "{} cannot be combined with @Native.",
+                    getModuleLifecycleAttributeName(lifecycleAttribute)
+                );
+            }
+
+            if (isExported)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "{} already defines a fixed exported symbol and cannot be combined with @Export.",
+                    getModuleLifecycleAttributeName(lifecycleAttribute)
+                );
+            }
+
+            if (!node.body)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "{} functions must define a Wio body.",
+                    getModuleLifecycleAttributeName(lifecycleAttribute)
+                );
+            }
+
+            if (currentScope_ && currentScope_->getKind() == ScopeKind::Struct)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "{} is currently supported only for top-level functions.",
+                    getModuleLifecycleAttributeName(lifecycleAttribute)
+                );
+            }
+
+            if (node.name->token.value == "Entry")
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Entry cannot be declared as {}.",
+                    getModuleLifecycleAttributeName(lifecycleAttribute)
+                );
+            }
+
+            if (hasAttribute(node.attributes, Attribute::CppName))
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "{} uses a fixed exported symbol and cannot be combined with @CppName.",
+                    getModuleLifecycleAttributeName(lifecycleAttribute)
+                );
+            }
+
+            switch (lifecycleAttribute)
+            {
+            case Attribute::ModuleApiVersion:
+                if (!node.parameters.empty())
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "@ModuleApiVersion must not declare parameters.");
+                }
+                if (!isExactType(funcType->returnType, Compiler::get().getTypeContext().getU32()))
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "@ModuleApiVersion must return u32.");
+                }
+                break;
+            case Attribute::ModuleLoad:
+                if (!node.parameters.empty())
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "@ModuleLoad must not declare parameters.");
+                }
+                if (!isExactType(funcType->returnType, Compiler::get().getTypeContext().getI32()))
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "@ModuleLoad must return i32.");
+                }
+                break;
+            case Attribute::ModuleUpdate:
+                if (node.parameters.size() != 1 ||
+                    !isExactType(funcType->paramTypes[0], Compiler::get().getTypeContext().getF32()))
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "@ModuleUpdate must declare exactly one f32 parameter.");
+                }
+                if (!isExactType(funcType->returnType, Compiler::get().getTypeContext().getVoid()))
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "@ModuleUpdate must return void.");
+                }
+                break;
+            case Attribute::ModuleUnload:
+                if (!node.parameters.empty())
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "@ModuleUnload must not declare parameters.");
+                }
+                if (!isExactType(funcType->returnType, Compiler::get().getTypeContext().getVoid()))
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "@ModuleUnload must return void.");
+                }
+                break;
+            default:
+                break;
             }
         }
 

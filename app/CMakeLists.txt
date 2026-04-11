@@ -60,6 +60,16 @@ add_custom_target(
     VERBATIM
 )
 
+add_custom_target(
+    wio_tests_list
+    COMMAND ${CMAKE_CTEST_COMMAND} ${wio_ctest_config_args} -N
+    COMMAND_EXPAND_LISTS
+    DEPENDS wio_app
+    WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+    USES_TERMINAL
+    VERBATIM
+)
+
 set(WIO_PLAYGROUND_DIR "${CMAKE_SOURCE_DIR}/playground")
 set(WIO_PLAYGROUND_MAIN "${WIO_PLAYGROUND_DIR}/main.wio")
 
@@ -201,6 +211,46 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         )
     endfunction()
 
+    function(add_wio_shared_host_interop_test test_name source_file host_source expected_output)
+        set(wio_host_args ${ARGN})
+        list(JOIN wio_host_args ";" wio_host_args_serialized)
+
+        if (WIN32)
+            set(wio_host_output "${CMAKE_BINARY_DIR}/interop/${test_name}.dll")
+            set(wio_host_link_args_serialized "")
+        elseif(APPLE)
+            set(wio_host_output "${CMAKE_BINARY_DIR}/interop/${test_name}.dylib")
+            set(wio_host_link_args_serialized "-ldl")
+        else()
+            set(wio_host_output "${CMAKE_BINARY_DIR}/interop/${test_name}.so")
+            set(wio_host_link_args_serialized "-ldl")
+        endif()
+
+        add_test(
+            NAME ${test_name}
+            COMMAND
+                ${CMAKE_COMMAND}
+                -DWIO_EXE=$<TARGET_FILE:wio_app>
+                -DWIO_SOURCE=${source_file}
+                -DWIO_OUTPUT=${wio_host_output}
+                -DWIO_HOST_SOURCE=${host_source}
+                -DWIO_HOST_CXX=${WIO_BACKEND_CXX_COMPILER}
+                -DWIO_TARGET=shared
+                -DWIO_EXPECT=${expected_output}
+                -DWIO_HOST_LINK_WITH_WIO_OUTPUT=OFF
+                "-DWIO_HOST_RUNTIME_ARGS=${wio_host_output}"
+                "-DWIO_HOST_LINK_ARGS=${wio_host_link_args_serialized}"
+                "-DWIO_ARGS=${wio_host_args_serialized}"
+                -P "${CMAKE_SOURCE_DIR}/cmake/RunWioHostInterop.cmake"
+        )
+
+        set_tests_properties(
+            ${test_name}
+            PROPERTIES
+                WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        )
+    endfunction()
+
     add_wio_success_test(
         wio_test1_dry_run
         "${CMAKE_SOURCE_DIR}/tests/test1.wio"
@@ -281,6 +331,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "Static export sum: 42"
     )
 
+    add_wio_shared_host_interop_test(
+        wio_test_shared_export_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/exported_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/shared_host.cpp"
+        "Shared export sum: 42"
+    )
+
+    add_wio_shared_host_interop_test(
+        wio_test_module_lifecycle_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/module_lifecycle.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/module_lifecycle_host.cpp"
+        "Module lifecycle: v1 load=0 counter=42"
+    )
+
     add_wio_output_test(
         wio_show_tokens_alias_stream
         "${CMAKE_SOURCE_DIR}/tests/test_use_alias.wio"
@@ -357,5 +421,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_export_string_return_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/export_string_return_not_supported.wio"
         "@Export currently supports only primitive or void return types"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_module_load_wrong_return
+        "${CMAKE_SOURCE_DIR}/tests/invalid/module_load_wrong_return.wio"
+        "@ModuleLoad must return i32"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_duplicate_module_update
+        "${CMAKE_SOURCE_DIR}/tests/invalid/duplicate_module_update.wio"
+        "Only one @ModuleUpdate function may be declared per compilation unit"
     )
 endif()

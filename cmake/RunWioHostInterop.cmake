@@ -30,6 +30,18 @@ if(NOT DEFINED WIO_ARGS OR WIO_ARGS STREQUAL "")
     set(WIO_ARGS)
 endif()
 
+if(NOT DEFINED WIO_HOST_LINK_WITH_WIO_OUTPUT OR WIO_HOST_LINK_WITH_WIO_OUTPUT STREQUAL "")
+    set(WIO_HOST_LINK_WITH_WIO_OUTPUT ON)
+endif()
+
+if(NOT DEFINED WIO_HOST_RUNTIME_ARGS OR WIO_HOST_RUNTIME_ARGS STREQUAL "")
+    set(WIO_HOST_RUNTIME_ARGS)
+endif()
+
+if(NOT DEFINED WIO_HOST_LINK_ARGS OR WIO_HOST_LINK_ARGS STREQUAL "")
+    set(WIO_HOST_LINK_ARGS)
+endif()
+
 get_filename_component(wio_output_dir "${WIO_OUTPUT}" DIRECTORY)
 file(MAKE_DIRECTORY "${wio_output_dir}")
 
@@ -63,8 +75,24 @@ else()
     set(host_exe "${WIO_OUTPUT}.host")
 endif()
 
+set(host_build_command
+    "${WIO_HOST_CXX}"
+    -std=c++20
+    "${WIO_HOST_SOURCE}"
+)
+
+if(WIO_HOST_LINK_WITH_WIO_OUTPUT)
+    list(APPEND host_build_command "${WIO_OUTPUT}")
+endif()
+
+if(WIO_HOST_LINK_ARGS)
+    list(APPEND host_build_command ${WIO_HOST_LINK_ARGS})
+endif()
+
+list(APPEND host_build_command -o "${host_exe}")
+
 execute_process(
-    COMMAND "${WIO_HOST_CXX}" -std=c++20 "${WIO_HOST_SOURCE}" "${WIO_OUTPUT}" -o "${host_exe}"
+    COMMAND ${host_build_command}
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     RESULT_VARIABLE host_build_result
     OUTPUT_VARIABLE host_build_stdout
@@ -81,7 +109,7 @@ if(NOT host_build_result EQUAL 0)
 endif()
 
 execute_process(
-    COMMAND "${host_exe}"
+    COMMAND "${host_exe}" ${WIO_HOST_RUNTIME_ARGS}
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     RESULT_VARIABLE host_run_result
     OUTPUT_VARIABLE host_run_stdout

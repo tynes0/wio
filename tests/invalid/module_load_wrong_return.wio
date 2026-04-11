@@ -1,0 +1,7 @@
+@ModuleLoad
+fn BootModule() {
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

@@ -754,8 +754,10 @@ This is currently one of the biggest blockers to real multi-file projects.
   - `@Export` now provides the first host-callable Wio-to-C++ bridge for
     top-level functions.
   - Static-library host interop is now covered by an end-to-end test.
-  - Shared-library generation now works as a build target, but host-side
-    loading/rebinding is still the next step.
+  - Shared-library host loading is now covered by an end-to-end loader test.
+  - A first fixed module lifecycle ABI now exists through `@ModuleApiVersion`,
+    `@ModuleLoad`, `@ModuleUpdate`, and `@ModuleUnload`.
+  - Safe rebinding and true hot-reload state handoff are still future work.
 
 - [ ] Add a first-class distinction between executable builds and library
       builds.

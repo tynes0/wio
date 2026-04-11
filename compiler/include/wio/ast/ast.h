@@ -92,7 +92,11 @@ namespace wio
         Native,
         CppHeader,
         CppName,
-        Export
+        Export,
+        ModuleApiVersion,
+        ModuleLoad,
+        ModuleUpdate,
+        ModuleUnload
     );
 
     FrenumClassInNamespace(wio, AccessModifier, uint8_t,

@@ -109,9 +109,15 @@ For all tests in Rider, use:
 powershell -ExecutionPolicy Bypass -File .\scripts\Test-Wio.ps1 -BuildDir build-rider
 ```
 
+To see every registered CTest case without running them:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-Wio.ps1 -BuildDir build-rider -List
+```
+
 If the CMake tool window is available, you can also run the generated targets
-such as `wio_playground_run`, `wio_tests`, or `wio_file_<name>_run` directly
-from there.
+such as `wio_playground_run`, `wio_tests`, `wio_tests_list`, or
+`wio_file_<name>_run` directly from there.
 
 ### Experimental Native Interop
 
@@ -161,8 +167,32 @@ Current status:
 - The export ABI is intentionally narrow for now: primitive parameters and
   primitive or `void` return types only.
 - Static host interop is covered by an end-to-end test.
-- Shared-library build generation works and is ready for the next host-loader
-  step.
+- Shared host loading is now covered by an end-to-end `LoadLibrary`/`dlopen`
+  test.
+- Module lifecycle hooks are now available through fixed exports:
+  `@ModuleApiVersion`, `@ModuleLoad`, `@ModuleUpdate`, and `@ModuleUnload`.
+
+Example:
+
+```wio
+@ModuleApiVersion
+fn RuntimeAbi() -> u32 {
+    return 1;
+}
+
+@ModuleLoad
+fn BootModule() -> i32 {
+    return 0;
+}
+
+@ModuleUpdate
+fn TickModule(deltaTime: f32) {
+}
+
+@ModuleUnload
+fn StopModule() {
+}
+```
 
 ### Backend Compiler
 

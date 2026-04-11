@@ -95,6 +95,28 @@ namespace wio::codegen
             return hasAttribute(node.attributes, Attribute::Export);
         }
 
+        std::optional<Attribute> getModuleLifecycleAttribute(const FunctionDeclaration& node)
+        {
+            for (const auto& attr : node.attributes)
+            {
+                if (!attr)
+                    continue;
+
+                switch (attr->attribute)
+                {
+                case Attribute::ModuleApiVersion:
+                case Attribute::ModuleLoad:
+                case Attribute::ModuleUpdate:
+                case Attribute::ModuleUnload:
+                    return attr->attribute;
+                default:
+                    break;
+                }
+            }
+
+            return std::nullopt;
+        }
+
         std::string getNativeCppSymbolName(const FunctionDeclaration& node)
         {
             if (auto cppNameArg = getSingleAttributeArg(node.attributes, Attribute::CppName); cppNameArg.has_value())
@@ -105,6 +127,18 @@ namespace wio::codegen
 
         std::string getExportedCppSymbolName(const FunctionDeclaration& node)
         {
+            if (std::optional<Attribute> lifecycleAttribute = getModuleLifecycleAttribute(node); lifecycleAttribute.has_value())
+            {
+                switch (*lifecycleAttribute)
+                {
+                case Attribute::ModuleApiVersion: return "WioModuleApiVersion";
+                case Attribute::ModuleLoad: return "WioModuleLoad";
+                case Attribute::ModuleUpdate: return "WioModuleUpdate";
+                case Attribute::ModuleUnload: return "WioModuleUnload";
+                default: break;
+                }
+            }
+
             if (auto cppNameArg = getSingleAttributeArg(node.attributes, Attribute::CppName); cppNameArg.has_value())
                 return cppNameArg->value;
 
@@ -1280,6 +1314,8 @@ namespace wio::codegen
         std::string funcName = node.name->token.value;
         bool isNative = isNativeFunction(node);
         bool isExported = isExportedFunction(node);
+        bool hasModuleLifecycleExport = getModuleLifecycleAttribute(node).has_value();
+        bool emitsExportWrapper = isExported || hasModuleLifecycleExport;
 
         if (funcName == "Entry" &&
             Compiler::get().getBuildTarget() == BuildTarget::Executable &&
@@ -1406,7 +1442,7 @@ namespace wio::codegen
             emitLine(";\n");
         }
 
-        if (isExported && !isEmittingPrototypes_ && currentClassName_.empty() && node.body)
+        if (emitsExportWrapper && !isEmittingPrototypes_ && currentClassName_.empty() && node.body)
         {
             std::string exportedSymbol = getExportedCppSymbolName(node);
             std::string internalSymbol = Mangler::mangleFunction(funcName, funcType->paramTypes, sym ? sym->scopePath : "");

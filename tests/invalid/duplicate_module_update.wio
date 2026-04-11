@@ -1,0 +1,11 @@
+@ModuleUpdate
+fn TickModuleA(deltaTime: f32) {
+}
+
+@ModuleUpdate
+fn TickModuleB(deltaTime: f32) {
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

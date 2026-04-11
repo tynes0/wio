@@ -29,6 +29,10 @@ namespace wio::sema
         uint32_t loopDepth_ = 0;
         bool isDeclarationPass_ = true;
         bool isStructResolutionPass_ = false;
+        bool seenModuleApiVersion_ = false;
+        bool seenModuleLoad_ = false;
+        bool seenModuleUpdate_ = false;
+        bool seenModuleUnload_ = false;
         
         void enterScope(ScopeKind kind);
         void exitScope();
