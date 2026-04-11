@@ -33,6 +33,8 @@ namespace wio::sema
         bool seenModuleLoad_ = false;
         bool seenModuleUpdate_ = false;
         bool seenModuleUnload_ = false;
+        bool seenModuleSaveState_ = false;
+        bool seenModuleRestoreState_ = false;
         
         void enterScope(ScopeKind kind);
         void exitScope();

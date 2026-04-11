@@ -254,6 +254,8 @@ This is one of the language-defining features and needs to be extremely solid.
 - [ ] Decide whether float narrowing also clamps.
 - [ ] Decide how NaN and infinity behave under `fit`.
 - [ ] Decide whether signed-to-unsigned negative conversion clamps or errors.
+- [ ] Fix the current signed/unsigned clamp path so mixed-width `fit`
+      conversions cannot trip backend/runtime assertions.
 
 ### 7.2 Object and Interface `fit`
 
@@ -757,6 +759,8 @@ This is currently one of the biggest blockers to real multi-file projects.
   - Shared-library host loading is now covered by an end-to-end loader test.
   - A first fixed module lifecycle ABI now exists through `@ModuleApiVersion`,
     `@ModuleLoad`, `@ModuleUpdate`, and `@ModuleUnload`.
+  - Reload-oriented state handoff now has an initial fixed ABI through
+    `@ModuleSaveState` and `@ModuleRestoreState`.
   - Safe rebinding and true hot-reload state handoff are still future work.
 
 - [ ] Add a first-class distinction between executable builds and library

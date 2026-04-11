@@ -96,7 +96,9 @@ namespace wio
         ModuleApiVersion,
         ModuleLoad,
         ModuleUpdate,
-        ModuleUnload
+        ModuleUnload,
+        ModuleSaveState,
+        ModuleRestoreState
     );
 
     FrenumClassInNamespace(wio, AccessModifier, uint8_t,

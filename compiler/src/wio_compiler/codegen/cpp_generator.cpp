@@ -108,6 +108,8 @@ namespace wio::codegen
                 case Attribute::ModuleLoad:
                 case Attribute::ModuleUpdate:
                 case Attribute::ModuleUnload:
+                case Attribute::ModuleSaveState:
+                case Attribute::ModuleRestoreState:
                     return attr->attribute;
                 default:
                     break;
@@ -135,6 +137,8 @@ namespace wio::codegen
                 case Attribute::ModuleLoad: return "WioModuleLoad";
                 case Attribute::ModuleUpdate: return "WioModuleUpdate";
                 case Attribute::ModuleUnload: return "WioModuleUnload";
+                case Attribute::ModuleSaveState: return "WioModuleSaveState";
+                case Attribute::ModuleRestoreState: return "WioModuleRestoreState";
                 default: break;
                 }
             }

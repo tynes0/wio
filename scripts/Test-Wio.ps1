@@ -2,7 +2,8 @@ param(
     [string]$BuildDir = "build",
     [string]$Config = "Debug",
     [switch]$List,
-    [switch]$Test
+    [switch]$Test,
+    [string]$Filter
 )
 
 $ErrorActionPreference = "Stop"
@@ -22,13 +23,23 @@ $repoRoot = Split-Path $PSScriptRoot -Parent
 $buildPath = Join-Path $repoRoot $BuildDir
 
 if ($List) {
-    & $invokeScript -Command @("ctest", "--test-dir", $buildPath, "-C", $Config, "-N")
+    $ctestListArgs = @("ctest", "--test-dir", $buildPath, "-C", $Config, "-N")
+    if ($Filter) {
+        $ctestListArgs += @("-R", $Filter)
+    }
+
+    & $invokeScript -Command $ctestListArgs
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }
 }
 
 if ($Test) {
-    & $invokeScript -Command @("ctest", "--test-dir", $buildPath, "-C", $Config, "--output-on-failure")
+    $ctestRunArgs = @("ctest", "--test-dir", $buildPath, "-C", $Config, "--output-on-failure")
+    if ($Filter) {
+        $ctestRunArgs += @("-R", $Filter)
+    }
+
+    & $invokeScript -Command $ctestRunArgs
     exit $LASTEXITCODE
 }

@@ -161,7 +161,9 @@ namespace wio::sema
             return attribute == Attribute::ModuleApiVersion ||
                    attribute == Attribute::ModuleLoad ||
                    attribute == Attribute::ModuleUpdate ||
-                   attribute == Attribute::ModuleUnload;
+                   attribute == Attribute::ModuleUnload ||
+                   attribute == Attribute::ModuleSaveState ||
+                   attribute == Attribute::ModuleRestoreState;
         }
 
         std::vector<Attribute> getModuleLifecycleAttributes(const std::vector<NodePtr<AttributeStatement>>& attributes)
@@ -184,6 +186,8 @@ namespace wio::sema
             case Attribute::ModuleLoad: return "@ModuleLoad";
             case Attribute::ModuleUpdate: return "@ModuleUpdate";
             case Attribute::ModuleUnload: return "@ModuleUnload";
+            case Attribute::ModuleSaveState: return "@ModuleSaveState";
+            case Attribute::ModuleRestoreState: return "@ModuleRestoreState";
             default: return "@UnknownModuleLifecycle";
             }
         }
@@ -221,6 +225,8 @@ namespace wio::sema
         seenModuleLoad_ = false;
         seenModuleUpdate_ = false;
         seenModuleUnload_ = false;
+        seenModuleSaveState_ = false;
+        seenModuleRestoreState_ = false;
         
         program->accept(*this);
     }
@@ -1466,6 +1472,8 @@ namespace wio::sema
             case Attribute::ModuleLoad: seenLifecycleFlag = &seenModuleLoad_; break;
             case Attribute::ModuleUpdate: seenLifecycleFlag = &seenModuleUpdate_; break;
             case Attribute::ModuleUnload: seenLifecycleFlag = &seenModuleUnload_; break;
+            case Attribute::ModuleSaveState: seenLifecycleFlag = &seenModuleSaveState_; break;
+            case Attribute::ModuleRestoreState: seenLifecycleFlag = &seenModuleRestoreState_; break;
             default: break;
             }
 
@@ -1579,6 +1587,27 @@ namespace wio::sema
                     WIO_LOG_ADD_ERROR(node.location(), "@ModuleUnload must return void.");
                 }
                 break;
+            case Attribute::ModuleSaveState:
+                if (!node.parameters.empty())
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "@ModuleSaveState must not declare parameters.");
+                }
+                if (!isExactType(funcType->returnType, Compiler::get().getTypeContext().getI32()))
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "@ModuleSaveState must return i32.");
+                }
+                break;
+            case Attribute::ModuleRestoreState:
+                if (node.parameters.size() != 1 ||
+                    !isExactType(funcType->paramTypes[0], Compiler::get().getTypeContext().getI32()))
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "@ModuleRestoreState must declare exactly one i32 parameter.");
+                }
+                if (!isExactType(funcType->returnType, Compiler::get().getTypeContext().getI32()))
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "@ModuleRestoreState must return i32.");
+                }
+                break;
             default:
                 break;
             }
@@ -1600,9 +1629,13 @@ namespace wio::sema
         if (hasAttribute(node.attributes, Attribute::CppName))
         {
             auto cppNameArgs = getAttributeArgs(node.attributes, Attribute::CppName);
-            if (!isNative && !isExported)
+            if (!isNative && !isExported && !hasModuleLifecycle)
             {
                 WIO_LOG_ADD_ERROR(node.location(), "@CppName can only be used together with @Native or @Export.");
+            }
+            else if (hasModuleLifecycle)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "{} uses a fixed exported symbol and cannot be combined with @CppName.", getModuleLifecycleAttributeName(moduleLifecycleAttributes.front()));
             }
             else if (cppNameArgs.size() != 1)
             {

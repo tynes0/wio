@@ -1,0 +1,8 @@
+@ModuleRestoreState
+fn RestoreState(snapshot: i64) -> i32 {
+    return snapshot;
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

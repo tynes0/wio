@@ -251,6 +251,43 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         )
     endfunction()
 
+    function(add_wio_shared_reload_interop_test test_name source_file host_source expected_output)
+        set(wio_host_args ${ARGN})
+        list(JOIN wio_host_args ";" wio_host_args_serialized)
+
+        if (WIN32)
+            set(wio_host_output_a "${CMAKE_BINARY_DIR}/interop/${test_name}.a.dll")
+            set(wio_host_output_b "${CMAKE_BINARY_DIR}/interop/${test_name}.b.dll")
+        elseif(APPLE)
+            set(wio_host_output_a "${CMAKE_BINARY_DIR}/interop/${test_name}.a.dylib")
+            set(wio_host_output_b "${CMAKE_BINARY_DIR}/interop/${test_name}.b.dylib")
+        else()
+            set(wio_host_output_a "${CMAKE_BINARY_DIR}/interop/${test_name}.a.so")
+            set(wio_host_output_b "${CMAKE_BINARY_DIR}/interop/${test_name}.b.so")
+        endif()
+
+        add_test(
+            NAME ${test_name}
+            COMMAND
+                ${CMAKE_COMMAND}
+                -DWIO_EXE=$<TARGET_FILE:wio_app>
+                -DWIO_SOURCE=${source_file}
+                -DWIO_OUTPUT_A=${wio_host_output_a}
+                -DWIO_OUTPUT_B=${wio_host_output_b}
+                -DWIO_HOST_SOURCE=${host_source}
+                -DWIO_HOST_CXX=${WIO_BACKEND_CXX_COMPILER}
+                -DWIO_EXPECT=${expected_output}
+                "-DWIO_ARGS=${wio_host_args_serialized}"
+                -P "${CMAKE_SOURCE_DIR}/cmake/RunWioSharedReloadInterop.cmake"
+        )
+
+        set_tests_properties(
+            ${test_name}
+            PROPERTIES
+                WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        )
+    endfunction()
+
     add_wio_success_test(
         wio_test1_dry_run
         "${CMAKE_SOURCE_DIR}/tests/test1.wio"
@@ -345,6 +382,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "Module lifecycle: v1 load=0 counter=42"
     )
 
+    add_wio_shared_reload_interop_test(
+        wio_test_module_reload_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/module_reload.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/module_reload_host.cpp"
+        "Module reload: v1 load=0 restore=0 before=42 after=42 retick=45"
+    )
+
     add_wio_output_test(
         wio_show_tokens_alias_stream
         "${CMAKE_SOURCE_DIR}/tests/test_use_alias.wio"
@@ -433,5 +477,11 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_duplicate_module_update
         "${CMAKE_SOURCE_DIR}/tests/invalid/duplicate_module_update.wio"
         "Only one @ModuleUpdate function may be declared per compilation unit"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_module_restore_wrong_param
+        "${CMAKE_SOURCE_DIR}/tests/invalid/module_restore_wrong_param.wio"
+        "@ModuleRestoreState must declare exactly one i32 parameter"
     )
 endif()

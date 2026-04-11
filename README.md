@@ -115,6 +115,26 @@ To see every registered CTest case without running them:
 powershell -ExecutionPolicy Bypass -File .\scripts\Test-Wio.ps1 -BuildDir build-rider -List
 ```
 
+To run or list a single test by name pattern:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-Wio.ps1 -BuildDir build-rider -Filter module_lifecycle_host_interop -Test
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-Wio.ps1 -BuildDir build-rider -Filter module_lifecycle_host_interop -List
+```
+
+If you want to build and run a native host interop example directly without
+going through CTest, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Run-WioHostInterop.ps1 -BuildDir build-rider -WioFile .\tests\native\module_lifecycle.wio -HostSource .\tests\native\module_lifecycle_host.cpp -Target shared
+```
+
+For the reload example:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-Wio.ps1 -BuildDir build-rider -Filter module_reload_host_interop -Test
+```
+
 If the CMake tool window is available, you can also run the generated targets
 such as `wio_playground_run`, `wio_tests`, `wio_tests_list`, or
 `wio_file_<name>_run` directly from there.
@@ -171,6 +191,8 @@ Current status:
   test.
 - Module lifecycle hooks are now available through fixed exports:
   `@ModuleApiVersion`, `@ModuleLoad`, `@ModuleUpdate`, and `@ModuleUnload`.
+- Reload-oriented state handoff now has an initial ABI through
+  `@ModuleSaveState` and `@ModuleRestoreState`.
 
 Example:
 
@@ -191,6 +213,16 @@ fn TickModule(deltaTime: f32) {
 
 @ModuleUnload
 fn StopModule() {
+}
+
+@ModuleSaveState
+fn SaveState() -> i32 {
+    return 0;
+}
+
+@ModuleRestoreState
+fn RestoreState(snapshot: i32) -> i32 {
+    return 0;
 }
 ```
 
