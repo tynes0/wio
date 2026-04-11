@@ -110,6 +110,7 @@ namespace wio
           =============================== */
        case TokenType::kwUse: return "kwUse";
        case TokenType::kwAs: return "kwAs";
+       case TokenType::kwRealm: return "kwRealm";
    
        /* ===============================
           Keywords – access

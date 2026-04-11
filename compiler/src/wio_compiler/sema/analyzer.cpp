@@ -99,6 +99,7 @@ namespace wio::sema
         scopes_.clear();
         symbols_.clear();
         currentScope_ = nullptr;
+        currentNamespacePath_.clear();
         
         program->accept(*this);
     }
@@ -116,9 +117,25 @@ namespace wio::sema
             currentScope_ = currentScope_->getParent().Lock();
     }
 
+    std::string SemanticAnalyzer::getCurrentNamespacePath() const
+    {
+        std::string namespacePath;
+
+        for (size_t i = 0; i < currentNamespacePath_.size(); ++i)
+        {
+            if (i > 0)
+                namespacePath += "_";
+
+            namespacePath += currentNamespacePath_[i];
+        }
+
+        return namespacePath;
+    }
+
     Ref<Symbol> SemanticAnalyzer::createSymbol(std::string name, Ref<Type> type, SymbolKind kind, common::Location loc, SymbolFlags flags)
     {
         auto symbol = Ref<Symbol>::Create(std::move(name), std::move(type), kind, flags, loc);
+        symbol->scopePath = getCurrentNamespacePath();
         symbols_.push_back(symbol);
         return symbol;
     }
@@ -139,7 +156,8 @@ namespace wio::sema
                 stmt->is<ObjectDeclaration>() ||
                 stmt->is<EnumDeclaration>() ||
                 stmt->is<FlagsetDeclaration>() ||
-                stmt->is<FlagDeclaration>())
+                stmt->is<FlagDeclaration>() ||
+                stmt->is<RealmDeclaration>())
             {
                 stmt->accept(*this);
             }
@@ -692,7 +710,8 @@ namespace wio::sema
     
         if (!foundMember)
         {
-            WIO_LOG_ADD_ERROR(node.member->location(), "Member not found: '{}' in type '{}'", node.member->token.value, leftType->toString());
+            std::string ownerName = leftType ? leftType->toString() : (leftSymbol ? leftSymbol->name : "<unknown>");
+            WIO_LOG_ADD_ERROR(node.member->location(), "Member not found: '{}' in '{}'", node.member->token.value, ownerName);
             node.refType = Compiler::get().getTypeContext().getUnknown();
             return;
         }
@@ -1280,6 +1299,36 @@ namespace wio::sema
         currentFunctionReturnType_ = prevRetType;
     }
 
+    void SemanticAnalyzer::visit(RealmDeclaration& node)
+    {
+        if (isDeclarationPass_)
+        {
+            auto realmScope = Ref<Scope>::Create(currentScope_, ScopeKind::Global);
+            scopes_.push_back(realmScope);
+
+            Ref<Symbol> realmSym = createSymbol(node.name->token.value, Compiler::get().getTypeContext().getUnknown(), SymbolKind::Namespace, node.location());
+            realmSym->innerScope = realmScope;
+            currentScope_->define(node.name->token.value, realmSym);
+
+            node.name->referencedSymbol = realmSym;
+            node.name->refType = realmSym->type;
+        }
+
+        auto realmSym = node.name->referencedSymbol.Lock();
+        if (!realmSym || !realmSym->innerScope)
+            return;
+
+        auto prevScope = currentScope_;
+        currentScope_ = realmSym->innerScope;
+        currentNamespacePath_.push_back(node.name->token.value);
+
+        for (auto& statement : node.statements)
+            statement->accept(*this);
+
+        currentNamespacePath_.pop_back();
+        currentScope_ = prevScope;
+    }
+
     void SemanticAnalyzer::visit(InterfaceDeclaration& node)
     {
         if (isDeclarationPass_)
@@ -1288,6 +1337,7 @@ namespace wio::sema
             scopes_.push_back(interfaceScope);
             
             Ref<Type> interfaceType = Ref<StructType>::Create(node.name->token.value, interfaceScope, false, true);
+            interfaceType.AsFast<StructType>()->scopePath = getCurrentNamespacePath();
             Ref<Symbol> interfaceSym = createSymbol(node.name->token.value, interfaceType, SymbolKind::Struct, node.location());
             interfaceSym->innerScope = interfaceScope;
             interfaceSym->flags.set_isInterface(true);
@@ -1321,6 +1371,7 @@ namespace wio::sema
             scopes_.push_back(structScope);
             
             Ref<Type> structType = Ref<StructType>::Create(node.name->token.value, structScope);
+            structType.AsFast<StructType>()->scopePath = getCurrentNamespacePath();
             Ref<Symbol> compSym = createSymbol(node.name->token.value, structType, SymbolKind::Struct, node.location());
             compSym->innerScope = structScope;
             currentScope_->define(node.name->token.value, compSym);
@@ -1483,6 +1534,7 @@ namespace wio::sema
             scopes_.push_back(structScope);
             
             Ref<Type> structType = Ref<StructType>::Create(node.name->token.value, structScope, true);
+            structType.AsFast<StructType>()->scopePath = getCurrentNamespacePath();
             Ref<Symbol> objSym = createSymbol(node.name->token.value, structType, SymbolKind::Struct, node.location());
             objSym->innerScope = structScope;
             currentScope_->define(node.name->token.value, objSym);
@@ -1750,6 +1802,7 @@ namespace wio::sema
             scopes_.push_back(structScope);
             
             Ref<Type> flagType = Ref<StructType>::Create(node.name->token.value, structScope);
+            flagType.AsFast<StructType>()->scopePath = getCurrentNamespacePath();
             Ref<Symbol> flagSym = createSymbol(node.name->token.value, flagType, SymbolKind::Struct, node.location());
             
             flagSym->innerScope = structScope;
@@ -1782,6 +1835,7 @@ namespace wio::sema
             scopes_.push_back(enumScope);
             
             Ref<Type> enumType = Ref<StructType>::Create(node.name->token.value, enumScope);
+            enumType.AsFast<StructType>()->scopePath = getCurrentNamespacePath();
             Ref<Symbol> enumSym = createSymbol(node.name->token.value, enumType, SymbolKind::Struct, node.location());
             
             enumSym->innerScope = enumScope;
@@ -1839,6 +1893,7 @@ namespace wio::sema
             scopes_.push_back(flagsetScope);
             
             Ref<Type> flagsetType = Ref<StructType>::Create(node.name->token.value, flagsetScope);
+            flagsetType.AsFast<StructType>()->scopePath = getCurrentNamespacePath();
             Ref<Symbol> flagsetSym = createSymbol(node.name->token.value, flagsetType, SymbolKind::Struct, node.location());
             
             flagsetSym->innerScope = flagsetScope;
@@ -2025,6 +2080,8 @@ namespace wio::sema
             {
                 Ref<Symbol> ioNs = getOrCreateNamespace(stdNs->innerScope, "io");
                 if (!ioNs) return;
+
+                ioNs->flags.set_isStd(true);
     
                 runtime::Loader<runtime::IOLoader>::Load(ioNs->innerScope, symbols_);
                 
@@ -2039,7 +2096,38 @@ namespace wio::sema
         }
         else
         {
-            WIO_LOG_ADD_ERROR(node.location(), "User-defined module loading is not implemented yet.");
+            if (node.aliasName.empty())
+                return;
+
+            std::vector<Ref<Symbol>> importedSymbols;
+            importedSymbols.reserve(node.importedSymbols.size());
+
+            for (const auto& importedName : node.importedSymbols)
+            {
+                auto importedSymbol = currentScope_->resolveLocally(importedName);
+                if (!importedSymbol)
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "Imported symbol '{}' from module '{}' could not be resolved after merge.", importedName, node.modulePath);
+                    continue;
+                }
+
+                importedSymbols.push_back(importedSymbol);
+            }
+
+            Ref<Symbol> aliasNamespace = getOrCreateNamespace(currentScope_, node.aliasName);
+            if (!aliasNamespace || !aliasNamespace->innerScope)
+                return;
+
+            for (const auto& importedSymbol : importedSymbols)
+            {
+                if (!importedSymbol)
+                    continue;
+
+                if (aliasNamespace->innerScope->resolveLocally(importedSymbol->name))
+                    continue;
+
+                aliasNamespace->innerScope->define(importedSymbol->name, importedSymbol);
+            }
         }
     }
 }

@@ -22,6 +22,7 @@ namespace wio::sema
     struct Symbol : RefCountedObject
     {
         std::string name;       // x
+        std::string scopePath;
         Ref<Type> type = nullptr; // int (sema::Type pointer)
         SymbolKind kind = SymbolKind::Variable; // Variable
         SymbolFlags flags;

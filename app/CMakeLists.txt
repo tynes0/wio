@@ -112,9 +112,38 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_user_module_alias_run
+        "${CMAKE_SOURCE_DIR}/tests/modules/user_alias_root.wio"
+        "Value: 42"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_realm_basic_run
+        "${CMAKE_SOURCE_DIR}/tests/realm_basic.wio"
+        "Realm sum: 3"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_realm_object_isolation_run
+        "${CMAKE_SOURCE_DIR}/tests/realm_object_isolation.wio"
+        "Realm counters: 3"
+        --run
+    )
+
+    add_wio_output_test(
         wio_show_tokens_alias_stream
         "${CMAKE_SOURCE_DIR}/tests/test_use_alias.wio"
         "kwAs 'as'"
+        --show-tokens
+        --dry-run
+    )
+
+    add_wio_output_test(
+        wio_show_tokens_realm_stream
+        "${CMAKE_SOURCE_DIR}/tests/realm_basic.wio"
+        "kwRealm 'realm'"
         --show-tokens
         --dry-run
     )
@@ -147,12 +176,6 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_readonly_external_mutation
         "${CMAKE_SOURCE_DIR}/tests/invalid/readonly_external_mutation.wio"
         "Cannot modify @Readonly member 'hp' from outside its object"
-    )
-
-    add_wio_failure_test(
-        wio_invalid_user_module_alias_not_supported
-        "${CMAKE_SOURCE_DIR}/tests/invalid/user_module_alias_not_supported.wio"
-        "Import aliasing with 'as' is currently supported only for standard library modules"
     )
 
     add_wio_failure_test(

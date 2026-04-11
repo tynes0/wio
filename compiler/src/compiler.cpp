@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <string_view>
 #include <sstream>
+#include <unordered_map>
 #include <unordered_set>
 #include <argonaut.h>
 
@@ -77,6 +78,59 @@ namespace wio
                     escapeTokenValueForDisplay(token.value)
                 );
             }
+        }
+
+        std::string getTopLevelDeclarationName(const NodePtr<Statement>& statement)
+        {
+            if (!statement)
+                return {};
+
+            if (const auto* varDecl = statement->as<VariableDeclaration>())
+                return varDecl->name ? varDecl->name->token.value : "";
+
+            if (const auto* fnDecl = statement->as<FunctionDeclaration>())
+                return fnDecl->name ? fnDecl->name->token.value : "";
+
+            if (const auto* interfaceDecl = statement->as<InterfaceDeclaration>())
+                return interfaceDecl->name ? interfaceDecl->name->token.value : "";
+
+            if (const auto* componentDecl = statement->as<ComponentDeclaration>())
+                return componentDecl->name ? componentDecl->name->token.value : "";
+
+            if (const auto* objectDecl = statement->as<ObjectDeclaration>())
+                return objectDecl->name ? objectDecl->name->token.value : "";
+
+            if (const auto* enumDecl = statement->as<EnumDeclaration>())
+                return enumDecl->name ? enumDecl->name->token.value : "";
+
+            if (const auto* flagsetDecl = statement->as<FlagsetDeclaration>())
+                return flagsetDecl->name ? flagsetDecl->name->token.value : "";
+
+            if (const auto* flagDecl = statement->as<FlagDeclaration>())
+                return flagDecl->name ? flagDecl->name->token.value : "";
+
+            if (const auto* realmDecl = statement->as<RealmDeclaration>())
+                return realmDecl->name ? realmDecl->name->token.value : "";
+
+            return {};
+        }
+
+        std::vector<std::string> collectExportedSymbols(const std::vector<NodePtr<Statement>>& statements)
+        {
+            std::vector<std::string> exportedSymbols;
+            std::unordered_set<std::string> seenSymbols;
+
+            for (const auto& statement : statements)
+            {
+                std::string symbolName = getTopLevelDeclarationName(statement);
+                if (symbolName.empty())
+                    continue;
+
+                if (seenSymbols.insert(symbolName).second)
+                    exportedSymbols.push_back(std::move(symbolName));
+            }
+
+            return exportedSymbols;
         }
     }
     
@@ -268,10 +322,17 @@ namespace wio
                     {
                         if (!gAppData.flags.get_SingleFile())
                         {
-                            auto moduleProg = parseAndMerge(useStmt->modulePath, useStmt->isStdLib, sourcePath.parent_path());
+                            std::vector<std::string> importedSymbols;
+                            auto moduleProg = parseAndMerge(useStmt->modulePath, useStmt->isStdLib, sourcePath.parent_path(), &importedSymbols);
                             for (auto& modStmt : moduleProg->statements)
                             {
                                 finalStatements.push_back(std::move(modStmt));
+                            }
+
+                            if (!useStmt->aliasName.empty())
+                            {
+                                useStmt->importedSymbols = std::move(importedSymbols);
+                                finalStatements.push_back(std::move(stmt));
                             }
                         }
                     }
@@ -387,10 +448,12 @@ namespace wio
         return instance;
     }
 
-    Ref<Program> Compiler::parseAndMerge(const std::string& modulePath, bool isStdLib, const std::filesystem::path& currentDir)
+    Ref<Program> Compiler::parseAndMerge(const std::string& modulePath, bool isStdLib, const std::filesystem::path& currentDir, std::vector<std::string>* exportedSymbols)
     {
         if (isStdLib)
         {
+            if (exportedSymbols)
+                exportedSymbols->clear();
             return makeNodePtr<Program>(std::vector<NodePtr<Statement>>{});
         }
 
@@ -415,6 +478,10 @@ namespace wio
         Parser parser(lexer.lex());
         auto subProgram = parser.parseProgram();
 
+        std::vector<std::string> moduleExportedSymbols = collectExportedSymbols(subProgram->statements);
+        if (exportedSymbols)
+            *exportedSymbols = moduleExportedSymbols;
+
         std::vector<NodePtr<Statement>> mergedStatements;
 
         for (auto& stmt : subProgram->statements)
@@ -433,10 +500,17 @@ namespace wio
                 {
                     if (!gAppData.flags.get_SingleFile())
                     {
-                        auto childProgram = parseAndMerge(useStmt->modulePath, useStmt->isStdLib, actualPath.parent_path());
+                        std::vector<std::string> childExportedSymbols;
+                        auto childProgram = parseAndMerge(useStmt->modulePath, useStmt->isStdLib, actualPath.parent_path(), &childExportedSymbols);
                         for (auto& childStmt : childProgram->statements)
                         {
                             mergedStatements.push_back(std::move(childStmt));
+                        }
+
+                        if (!useStmt->aliasName.empty())
+                        {
+                            useStmt->importedSymbols = std::move(childExportedSymbols);
+                            mergedStatements.push_back(std::move(stmt));
                         }
                     }
                 }

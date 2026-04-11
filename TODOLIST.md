@@ -687,11 +687,18 @@ This is currently one of the biggest blockers to real multi-file projects.
 - [ ] Decide how the compiler should cache previously loaded modules.
 - [ ] Add end-to-end tests for multi-file projects.
 
-### 16.5 Namespace Semantics
+### 16.5 Realm and Namespace Semantics
 
-- [ ] Decide whether namespaces are explicit, implicit from modules, or both.
-- [ ] Clarify how `::` lookup works for std modules, imported modules, enums,
-      flagsets, and nested declarations.
+- [ ] Treat `realm` as the explicit Wio surface keyword for namespace-like
+      scopes.
+- [ ] Decide whether modules implicitly create realms, remain flat, or can do
+      both.
+- [ ] Clarify how `::` lookup works for realms, std modules, imported modules,
+      enums, flagsets, and nested declarations.
+- [ ] Define whether nested `realm` declarations are fully supported and how
+      name mangling stays stable across them.
+- [ ] Add positive and negative tests for realm collisions, nested realm lookup,
+      and realm-qualified type references.
 
 ---
 
@@ -742,6 +749,8 @@ This is currently one of the biggest blockers to real multi-file projects.
 - [ ] Support shared/dynamic library output for host-driven scripting workflows.
 - [ ] Define a stable host ABI for calling Wio code from C++ and C++ code from
       Wio.
+- [ ] Design native/foreign declarations plus backend link configuration so Wio
+      code can consume existing C++ static and shared libraries directly.
 - [ ] Design reload-safe boundaries for future hot-reload support.
 - [ ] Decide what metadata or registration layer is needed so hot-reloaded
       modules can be discovered and rebound safely.

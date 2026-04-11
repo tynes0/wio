@@ -54,6 +54,7 @@ namespace wio
         NodePtr<Statement> parseContinueStatement();
         NodePtr<Statement> parseReturnStatement();
         NodePtr<Statement> parseUseStatement();
+        NodePtr<Statement> parseRealmDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
 
         [[nodiscard]] static int getPrecedence(TokenType type);
 

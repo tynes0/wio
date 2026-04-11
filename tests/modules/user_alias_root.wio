@@ -1,0 +1,7 @@
+use std::io as console;
+use helper as gp;
+
+fn Entry(args: string[]) -> i32 {
+    console::Print($"Value: ${gp::GetValue()}");
+    return 0;
+}

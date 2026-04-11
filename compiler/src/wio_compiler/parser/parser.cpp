@@ -159,6 +159,7 @@ namespace wio
             case TokenType::kwEnum:
             case TokenType::kwFlagset:
             case TokenType::kwFlag:
+            case TokenType::kwRealm:
             case TokenType::kwIf:
             case TokenType::kwWhile:
             case TokenType::kwFor:
@@ -701,6 +702,8 @@ namespace wio
                 return parseFlagsetDeclaration(std::move(attributes));
             if (match(TokenType::kwFlag))
                 return parseFlagDeclaration(std::move(attributes));
+            if (match(TokenType::kwRealm))
+                return parseRealmDeclaration(std::move(attributes));
             if (match(TokenType::kwIf))
                 return parseIfStatement();
             if (match(TokenType::kwWhile))
@@ -1245,14 +1248,32 @@ namespace wio
         if (match(TokenType::kwAs, true))
         {
             aliasName = consume(TokenType::identifier).value;
-
-            if (!isStdLib)
-                utError("Import aliasing with 'as' is currently supported only for standard library modules.", peek(-1).loc);
         }
 
         consume(TokenType::semicolon);
         
         return makeNodePtr<UseStatement>(std::move(moduleName), std::move(modulePath), std::move(aliasName), isStdLib, startLoc);
+    }
+
+    NodePtr<Statement> Parser::parseRealmDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
+    {
+        if (!attributes.empty())
+            utError("Attributes are not supported on realm declarations yet.", attributes.front()->location());
+
+        Token startTok = consume(TokenType::kwRealm);
+        NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+
+        consume(TokenType::leftBrace);
+
+        std::vector<NodePtr<Statement>> statements;
+        while (peek().isValid() && !match(TokenType::rightBrace))
+        {
+            if (NodePtr<Statement> statement = parseStatement(); statement)
+                statements.emplace_back(std::move(statement));
+        }
+
+        consume(TokenType::rightBrace);
+        return makeNodePtr<RealmDeclaration>(std::move(name), std::move(statements), startTok.loc);
     }
 
     // todo: improve

@@ -25,6 +25,7 @@ namespace wio::sema
         Ref<Type> currentFunctionReturnType_ = nullptr;
         Ref<Type> currentStructType_ = nullptr;
         Ref<Type> currentBaseStructType_ = nullptr;
+        std::vector<std::string> currentNamespacePath_;
         uint32_t loopDepth_ = 0;
         bool isDeclarationPass_ = true;
         bool isStructResolutionPass_ = false;
@@ -32,6 +33,7 @@ namespace wio::sema
         void enterScope(ScopeKind kind);
         void exitScope();
 
+        [[nodiscard]] std::string getCurrentNamespacePath() const;
         Ref<Symbol> createSymbol(std::string name, Ref<Type> type, SymbolKind kind, common::Location loc, SymbolFlags flags = SymbolFlags::createAllFalse());
     };
 }

@@ -120,6 +120,7 @@ namespace wio
         struct StructType : Type
         {
             std::string name;
+            std::string scopePath;
             WeakRef<Scope> structScope;
             std::vector<Ref<Type>> baseTypes;
             bool isObject;

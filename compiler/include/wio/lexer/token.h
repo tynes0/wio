@@ -111,6 +111,7 @@ namespace wio
          =============================== */
       kwUse,
       kwAs,
+      kwRealm,
 
       /* ===============================
          Keywords – access
@@ -309,6 +310,7 @@ namespace wio
    
       { "use",       TokenType::kwUse },
       { "as",        TokenType::kwAs },
+      { "realm",     TokenType::kwRealm },
 
       { "public",    TokenType::kwPublic },
       { "private",   TokenType::kwPrivate },

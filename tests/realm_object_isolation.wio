@@ -1,0 +1,31 @@
+use std::io as console;
+
+realm alpha {
+    @GenerateCtors
+    object Counter {
+        public value: i32;
+    }
+
+    fn Make() -> Counter {
+        return Counter(1);
+    }
+}
+
+realm beta {
+    @GenerateCtors
+    object Counter {
+        public value: i32;
+    }
+
+    fn Make() -> Counter {
+        return Counter(2);
+    }
+}
+
+fn Entry(args: string[]) -> i32 {
+    let left = alpha::Make();
+    let right = beta::Make();
+
+    console::Print($"Realm counters: ${left.value + right.value}");
+    return 0;
+}

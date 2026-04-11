@@ -334,6 +334,13 @@ namespace wio
 
     UseStatement::~UseStatement() = default;
 
+    RealmDeclaration::RealmDeclaration(NodePtr<Identifier> _name, std::vector<NodePtr<Statement>> _statements, common::Location _loc)
+        : Statement(_loc.isValid() ? _loc : _name->location()), name(std::move(_name)), statements(std::move(_statements))
+    {
+    }
+
+    RealmDeclaration::~RealmDeclaration() = default;
+
     SelfExpression::SelfExpression(common::Location _loc)
         : Expression(_loc)
     {

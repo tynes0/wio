@@ -696,10 +696,22 @@ namespace wio
         std::string moduleName;
         std::string modulePath;
         std::string aliasName;
+        std::vector<std::string> importedSymbols;
         bool isStdLib = false;
         
         explicit UseStatement(std::string _moduleName, std::string _modulePath, std::string _aliasName, bool _isStdLib, common::Location _loc = common::Location::invalid());
         ~UseStatement() override;
+    };
+
+    struct RealmDeclaration : Statement
+    {
+        WIO_STMT_NODE_BODY(RealmDeclaration)
+
+        NodePtr<Identifier> name;
+        std::vector<NodePtr<Statement>> statements;
+
+        RealmDeclaration(NodePtr<Identifier> _name, std::vector<NodePtr<Statement>> _statements, common::Location _loc = common::Location::invalid());
+        ~RealmDeclaration() override;
     };
     
     // NOLINTEND(cppcoreguidelines-special-member-functions)

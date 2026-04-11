@@ -97,7 +97,7 @@ namespace wio::sema
                 auto lStruct = lhs.AsFast<StructType>();
                 auto rStruct = rhs.AsFast<StructType>();
             
-                return lStruct->name == rStruct->name;
+                return lStruct->name == rStruct->name && lStruct->scopePath == rStruct->scopePath;
             }
         
             return false;
@@ -244,7 +244,7 @@ namespace wio::sema
         {
             auto* s1 = static_cast<const StructType*>(t1);
             auto* s2 = static_cast<const StructType*>(t2);
-            return s1->name == s2->name;
+            return s1->name == s2->name && s1->scopePath == s2->scopePath;
         }
         
         case TypeKind::Alias:
@@ -463,8 +463,8 @@ namespace wio::sema
 
     std::string StructType::toCppString() const
     {
-        std::string mangled = isInterface ? codegen::Mangler::mangleInterface(name) 
-                                          : codegen::Mangler::mangleStruct(name);
+        std::string mangled = isInterface ? codegen::Mangler::mangleInterface(name, scopePath) 
+                                          : codegen::Mangler::mangleStruct(name, scopePath);
         
         if (isObject || isInterface) 
         {

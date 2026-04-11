@@ -2,7 +2,9 @@
 
 #include <sstream>
 #include <string>
+#include <vector>
 
+#include "wio/ast/ast.h"
 #include "wio/ast/ast_visitor.h"
 #include "wio/codegen/mangler.h"
 
@@ -26,6 +28,7 @@ namespace wio::codegen
         bool isEmittingPrototypes_ = false;
         std::string currentClassName_;
 
+        void emitStatements(const std::vector<NodePtr<Statement>>& statements);
         void generateHeader();
 
         void emit(const std::string& str);

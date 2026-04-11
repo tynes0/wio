@@ -1,0 +1,18 @@
+use std::io as console;
+
+realm alpha {
+    fn Value() -> i32 {
+        return 1;
+    }
+}
+
+realm beta {
+    fn Value() -> i32 {
+        return 2;
+    }
+}
+
+fn Entry(args: string[]) -> i32 {
+    console::Print($"Realm sum: ${alpha::Value() + beta::Value()}");
+    return 0;
+}

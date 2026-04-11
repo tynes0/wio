@@ -24,6 +24,6 @@ namespace wio
         static Compiler& get();
 
     private:
-        static Ref<Program> parseAndMerge(const std::string& modulePath, bool isStdLib, const std::filesystem::path& currentDir);
+        static Ref<Program> parseAndMerge(const std::string& modulePath, bool isStdLib, const std::filesystem::path& currentDir, std::vector<std::string>* exportedSymbols = nullptr);
     };
 }
