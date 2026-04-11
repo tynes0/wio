@@ -1,0 +1,14 @@
+object BaseA {
+}
+
+object BaseB {
+}
+
+@From(BaseA)
+@From(BaseB)
+object Child {
+}
+
+fn Entry(args: string[]) -> i32 {
+    return 0;
+}

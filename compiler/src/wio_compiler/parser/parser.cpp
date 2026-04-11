@@ -1235,15 +1235,24 @@ namespace wio
 
         std::string moduleName = moduleParts.back();
         std::string modulePath;
+        std::string aliasName;
 
         std::ranges::for_each(moduleParts, [&modulePath](const std::string& part)
         {
             modulePath.append(part);
         });
 
+        if (match(TokenType::kwAs, true))
+        {
+            aliasName = consume(TokenType::identifier).value;
+
+            if (!isStdLib)
+                utError("Import aliasing with 'as' is currently supported only for standard library modules.", peek(-1).loc);
+        }
+
         consume(TokenType::semicolon);
         
-        return makeNodePtr<UseStatement>(std::move(moduleName), std::move(modulePath), isStdLib, startLoc);
+        return makeNodePtr<UseStatement>(std::move(moduleName), std::move(modulePath), std::move(aliasName), isStdLib, startLoc);
     }
 
     // todo: improve

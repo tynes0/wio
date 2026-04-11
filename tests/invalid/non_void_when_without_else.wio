@@ -1,0 +1,7 @@
+fn ClampPositive(x: i32) -> i32 when (x > 0) {
+    return x;
+}
+
+fn Entry(args: string[]) -> i32 {
+    return ClampPositive(5);
+}

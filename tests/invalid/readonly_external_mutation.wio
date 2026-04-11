@@ -1,0 +1,11 @@
+@Default(public)
+object Player {
+    @ReadOnly
+    hp: i32;
+}
+
+fn Entry(args: string[]) -> i32 {
+    mut player = Player();
+    player.hp = 10;
+    return 0;
+}

@@ -2018,6 +2018,8 @@ namespace wio::sema
         {
             Ref<Symbol> stdNs = getOrCreateNamespace(currentScope_, "std");
             if (!stdNs) return;
+
+            std::string importAlias = node.aliasName.empty() ? node.moduleName : node.aliasName;
     
             if (node.modulePath == "io")
             {
@@ -2026,10 +2028,9 @@ namespace wio::sema
     
                 runtime::Loader<runtime::IOLoader>::Load(ioNs->innerScope, symbols_);
                 
-                // OPSİYONEL KISAYOL: Wio dilinde kullanıcılar "std::io::print()" yazmak yerine
-                // "io::print()" de yazabilsin diye, 'io' namespace'inin bir referansını (alias) 
-                // bulunduğumuz scope'a da ekleyebiliriz:
-                currentScope_->define(node.moduleName, ioNs); 
+                // Import the requested alias into the current scope. Without an
+                // explicit alias, the last module segment is used.
+                currentScope_->define(importAlias, ioNs); 
             }
             else
             {

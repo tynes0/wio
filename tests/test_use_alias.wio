@@ -1,0 +1,6 @@
+use std::io as console;
+
+fn Entry(args: string[]) -> i32 {
+    console::Print("Alias import works.");
+    return 0;
+}

@@ -1,0 +1,11 @@
+object BaseObject {
+}
+
+@From(BaseObject)
+component BadComponent {
+    value: i32;
+}
+
+fn Entry(args: string[]) -> i32 {
+    return 0;
+}

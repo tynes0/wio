@@ -695,9 +695,10 @@ namespace wio
 
         std::string moduleName;
         std::string modulePath;
+        std::string aliasName;
         bool isStdLib = false;
         
-        explicit UseStatement(std::string _moduleName, std::string _modulePath, bool _isStdLib, common::Location _loc = common::Location::invalid());
+        explicit UseStatement(std::string _moduleName, std::string _modulePath, std::string _aliasName, bool _isStdLib, common::Location _loc = common::Location::invalid());
         ~UseStatement() override;
     };
     
