@@ -88,7 +88,11 @@ namespace wio
         From,
         Trust,
         Final,
-        Type
+        Type,
+        Native,
+        CppHeader,
+        CppName,
+        Export
     );
 
     FrenumClassInNamespace(wio, AccessModifier, uint8_t,

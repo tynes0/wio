@@ -1,0 +1,5 @@
+@Export
+@CppName(WioAddNumbers)
+fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
+    return lhs + rhs;
+}

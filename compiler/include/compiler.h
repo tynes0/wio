@@ -10,6 +10,13 @@
 
 namespace wio
 {
+    enum class BuildTarget : uint8_t
+    {
+        Executable,
+        StaticLibrary,
+        SharedLibrary
+    };
+
     class Compiler
     {
     public:
@@ -20,6 +27,7 @@ namespace wio
 
         sema::TypeContext& getTypeContext() const;
         CompilerFlags getFlags() const;
+        BuildTarget getBuildTarget() const;
 
         static Compiler& get();
 

@@ -173,6 +173,34 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         )
     endfunction()
 
+    function(add_wio_host_interop_test test_name source_file host_source expected_output)
+        set(wio_host_args ${ARGN})
+        list(JOIN wio_host_args ";" wio_host_args_serialized)
+
+        set(wio_host_output "${CMAKE_BINARY_DIR}/interop/${test_name}.a")
+
+        add_test(
+            NAME ${test_name}
+            COMMAND
+                ${CMAKE_COMMAND}
+                -DWIO_EXE=$<TARGET_FILE:wio_app>
+                -DWIO_SOURCE=${source_file}
+                -DWIO_OUTPUT=${wio_host_output}
+                -DWIO_HOST_SOURCE=${host_source}
+                -DWIO_HOST_CXX=${WIO_BACKEND_CXX_COMPILER}
+                -DWIO_TARGET=static
+                -DWIO_EXPECT=${expected_output}
+                "-DWIO_ARGS=${wio_host_args_serialized}"
+                -P "${CMAKE_SOURCE_DIR}/cmake/RunWioHostInterop.cmake"
+        )
+
+        set_tests_properties(
+            ${test_name}
+            PROPERTIES
+                WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        )
+    endfunction()
+
     add_wio_success_test(
         wio_test1_dry_run
         "${CMAKE_SOURCE_DIR}/tests/test1.wio"
@@ -236,6 +264,24 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_native_bridge_run
+        "${CMAKE_SOURCE_DIR}/tests/native/native_bridge.wio"
+        "Native multiply: 42"
+        --run
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
+        --backend-arg
+        "${CMAKE_SOURCE_DIR}/tests/native/native_math.cpp"
+    )
+
+    add_wio_host_interop_test(
+        wio_test_static_export_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/exported_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/static_host.cpp"
+        "Static export sum: 42"
+    )
+
+    add_wio_output_test(
         wio_show_tokens_alias_stream
         "${CMAKE_SOURCE_DIR}/tests/test_use_alias.wio"
         "kwAs 'as'"
@@ -293,5 +339,23 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/test_use_alias.wio"
         "Undefined symbol: 'console'"
         --no-builtin
+    )
+
+    add_wio_failure_test(
+        wio_invalid_native_function_with_body
+        "${CMAKE_SOURCE_DIR}/tests/invalid/native_function_with_body.wio"
+        "@Native functions cannot define a Wio body"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_native_method_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/native_method_not_supported.wio"
+        "@Native is currently supported only for top-level functions"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_export_string_return_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/export_string_return_not_supported.wio"
+        "@Export currently supports only primitive or void return types"
     )
 endif()

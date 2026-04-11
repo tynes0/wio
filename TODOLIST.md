@@ -742,6 +742,21 @@ This is currently one of the biggest blockers to real multi-file projects.
 
 ### 17.6 Library and Host Integration
 
+- Experimental progress:
+  - `@Native`, `@CppHeader`, and `@CppName` now provide an initial top-level
+    C++ function bridge.
+  - `--include-dir`, `--link-dir`, `--link-lib`, and `--backend-arg` now allow
+    backend compile/link customization from the CLI.
+  - A real end-to-end native bridge test now exists, but the surface is still
+    alpha and currently limited to top-level functions.
+  - `--target exe|static|shared` and `--output` now exist as an initial build
+    mode split.
+  - `@Export` now provides the first host-callable Wio-to-C++ bridge for
+    top-level functions.
+  - Static-library host interop is now covered by an end-to-end test.
+  - Shared-library generation now works as a build target, but host-side
+    loading/rebinding is still the next step.
+
 - [ ] Add a first-class distinction between executable builds and library
       builds.
 - [ ] Support static library output for embedding Wio-generated code into larger

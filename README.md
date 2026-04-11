@@ -15,6 +15,8 @@ cmake --build build
 ```powershell
 build\app\Debug\wio_app.exe tests\test1.wio
 build\app\Debug\wio_app.exe tests\test1.wio --run
+build\app\Debug\wio_app.exe tests\native\exported_library.wio --target static --output build\interop\exported_library.a
+build\app\Debug\wio_app.exe tests\native\exported_library.wio --target shared --output build\interop\exported_library.dll
 ```
 
 `--dry-run` validates the source through semantic analysis without generating or
@@ -52,6 +54,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Run-WioFile.ps1 -File .\playg
 ```
 
 Supported modes are `run`, `check`, `tokens`, and `ast`.
+
+Any extra arguments after the script parameters are forwarded directly to
+`wio_app.exe`, which is useful for experimental interop and backend tuning:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Run-WioFile.ps1 -File .\tests\native\native_bridge.wio -Mode run --include-dir .\tests\native --backend-arg .\tests\native\native_math.cpp
+```
 
 If you use the CMake project inside Rider or Visual Studio, these IDE-friendly
 targets are also generated automatically:
@@ -103,6 +112,57 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Test-Wio.ps1 -BuildDir build-
 If the CMake tool window is available, you can also run the generated targets
 such as `wio_playground_run`, `wio_tests`, or `wio_file_<name>_run` directly
 from there.
+
+### Experimental Native Interop
+
+Wio now has an early native bridge for top-level functions:
+
+```wio
+@Native
+@CppHeader("native_math.h")
+@CppName(native_math::Multiply)
+fn Multiply(lhs: i32, rhs: i32) -> i32;
+```
+
+Current status:
+
+- `@Native` works for top-level bodyless functions.
+- `@CppHeader("...")` injects a C++ header include into generated output.
+- `@CppName(...)` maps the Wio declaration to an existing C++ symbol.
+- `--include-dir`, `--link-dir`, `--link-lib`, and `--backend-arg` forward
+  backend build inputs to the generated C++ compile step.
+
+This is intentionally still an alpha bridge, but it already lets Wio call into
+existing C++ code with a real end-to-end workflow.
+
+### Experimental Library Mode
+
+Wio now also has an early distinction between executable and library outputs:
+
+- `--target exe` keeps the current executable workflow.
+- `--target static` builds a static archive.
+- `--target shared` builds a shared library.
+- `--output <path>` overrides the produced file path.
+
+For host-visible Wio functions, use `@Export`:
+
+```wio
+@Export
+@CppName(WioAddNumbers)
+fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
+    return lhs + rhs;
+}
+```
+
+Current status:
+
+- `@Export` works for top-level Wio functions with bodies.
+- Export wrappers are emitted as `extern "C"` bridge functions.
+- The export ABI is intentionally narrow for now: primitive parameters and
+  primitive or `void` return types only.
+- Static host interop is covered by an end-to-end test.
+- Shared-library build generation works and is ready for the next host-loader
+  step.
 
 ### Backend Compiler
 

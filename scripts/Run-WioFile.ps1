@@ -4,7 +4,9 @@ param(
     [string]$Config = "Debug",
     [ValidateSet("run", "check", "tokens", "ast")]
     [string]$Mode = "run",
-    [switch]$Configure
+    [switch]$Configure,
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$ExtraCompilerArgs
 )
 
 $ErrorActionPreference = "Stop"
@@ -71,6 +73,10 @@ switch ($Mode) {
         $compilerArgs += "--show-ast"
         $compilerArgs += "--dry-run"
     }
+}
+
+if ($ExtraCompilerArgs) {
+    $compilerArgs += $ExtraCompilerArgs
 }
 
 & $invokeScript -Command (@($wioExe) + $compilerArgs)

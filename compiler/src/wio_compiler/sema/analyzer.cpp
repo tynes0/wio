@@ -71,6 +71,17 @@ namespace wio::sema
             return allArgs;
         }
 
+        const Token* getFirstAttributeArg(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
+        {
+            for (const auto& attr : attributes)
+            {
+                if (attr->attribute == targetAttr && !attr->args.empty())
+                    return &attr->args.front();
+            }
+
+            return nullptr;
+        }
+
         Ref<Symbol> resolveQualifiedSymbol(const Ref<Scope>& startScope, std::string_view qualifiedName)
         {
             if (!startScope || qualifiedName.empty())
@@ -113,6 +124,22 @@ namespace wio::sema
                 return nullptr;
 
             return resolveQualifiedSymbol(startScope, token.value);
+        }
+
+        bool isCAbiSafeExportType(const Ref<Type>& type)
+        {
+            Ref<Type> current = type;
+            while (current && current->kind() == TypeKind::Alias)
+                current = current.AsFast<AliasType>()->aliasedType;
+
+            if (!current)
+                return false;
+
+            if (current->kind() != TypeKind::Primitive)
+                return false;
+
+            const std::string typeName = current->toString();
+            return typeName != "string" && typeName != "object";
         }
     }
     
@@ -212,7 +239,8 @@ namespace wio::sema
             stmt->accept(*this);
 
         auto entrySym = currentScope_->resolveLocally("Entry");
-        if (!entrySym || (entrySym->kind != SymbolKind::Function && entrySym->kind != SymbolKind::FunctionGroup))
+        if (Compiler::get().getBuildTarget() == BuildTarget::Executable &&
+            (!entrySym || (entrySym->kind != SymbolKind::Function && entrySym->kind != SymbolKind::FunctionGroup)))
         {
             WIO_LOG_ADD_ERROR(common::Location::invalid(), "No 'Entry' function found! An executable Wio program must define an 'Entry' function.");
         }
@@ -1302,6 +1330,110 @@ namespace wio::sema
 
         auto funcSym = node.name->referencedSymbol.Lock();
         auto funcType = funcSym->type.AsFast<FunctionType>();
+
+        bool isNative = hasAttribute(node.attributes, Attribute::Native);
+        bool isExported = hasAttribute(node.attributes, Attribute::Export);
+        if (isNative)
+        {
+            if (node.body)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "@Native functions cannot define a Wio body. Declare them with ';' only.");
+            }
+
+            if (currentScope_ && currentScope_->getKind() == ScopeKind::Struct)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "@Native is currently supported only for top-level functions.");
+            }
+
+            if (node.name->token.value == "Entry")
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Entry cannot be declared as @Native.");
+            }
+        }
+
+        if (isExported)
+        {
+            if (isNative)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "@Export cannot be combined with @Native.");
+            }
+
+            if (!node.body)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "@Export functions must define a Wio body.");
+            }
+
+            if (currentScope_ && currentScope_->getKind() == ScopeKind::Struct)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "@Export is currently supported only for top-level functions.");
+            }
+
+            if (node.name->token.value == "Entry")
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Entry cannot be declared as @Export.");
+            }
+
+            for (size_t i = 0; i < funcType->paramTypes.size(); ++i)
+            {
+                if (!isCAbiSafeExportType(funcType->paramTypes[i]))
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "@Export currently supports only primitive parameter types. Parameter {} in '{}' uses '{}'.",
+                        i,
+                        node.name->token.value,
+                        funcType->paramTypes[i] ? funcType->paramTypes[i]->toString() : "<unknown>"
+                    );
+                }
+            }
+
+            if (!isCAbiSafeExportType(funcType->returnType))
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "@Export currently supports only primitive or void return types. '{}' returns '{}'.",
+                    node.name->token.value,
+                    funcType->returnType ? funcType->returnType->toString() : "<unknown>"
+                );
+            }
+        }
+
+        if (hasAttribute(node.attributes, Attribute::CppHeader))
+        {
+            auto headerArgs = getAttributeArgs(node.attributes, Attribute::CppHeader);
+            if (!isNative)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "@CppHeader can only be used together with @Native.");
+            }
+            else if (headerArgs.size() != 1 || headerArgs.front().type != TokenType::stringLiteral)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "@CppHeader expects exactly one string literal argument.");
+            }
+        }
+
+        if (hasAttribute(node.attributes, Attribute::CppName))
+        {
+            auto cppNameArgs = getAttributeArgs(node.attributes, Attribute::CppName);
+            if (!isNative && !isExported)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "@CppName can only be used together with @Native or @Export.");
+            }
+            else if (cppNameArgs.size() != 1)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "@CppName expects exactly one target symbol argument.");
+            }
+            else if (const Token* cppNameArg = getFirstAttributeArg(node.attributes, Attribute::CppName); cppNameArg)
+            {
+                if (cppNameArg->type != TokenType::identifier && cppNameArg->type != TokenType::stringLiteral)
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "@CppName expects an identifier path like foo::bar or a string literal.");
+                }
+                else if (isExported && cppNameArg->value.find("::") != std::string::npos)
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "@CppName on @Export must be a plain symbol name, not a qualified path.");
+                }
+            }
+        }
 
         Ref<Type> prevRetType = currentFunctionReturnType_;
         currentFunctionReturnType_ = funcType->returnType;

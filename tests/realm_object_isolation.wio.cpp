@@ -10,6 +10,12 @@
 #include <exception.h>
 #include <ref.h>
 
+#if defined(_WIN32)
+#define WIO_EXPORT __declspec(dllexport)
+#else
+#define WIO_EXPORT __attribute__((visibility("default")))
+#endif
+
 namespace wio
 {
     using String = std::string;

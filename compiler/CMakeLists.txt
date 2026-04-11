@@ -10,6 +10,7 @@ file(GLOB_RECURSE WIO_HEADERS CONFIGURE_DEPENDS
 
 file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/include/runtime" WIO_RUNTIME_INCLUDE_DIR)
 set(WIO_BACKEND_CXX_COMPILER "g++" CACHE STRING "C++ compiler used for generated Wio output.")
+set(WIO_BACKEND_AR "ar" CACHE STRING "Archiver used for generated Wio static libraries.")
 
 add_library(wio_compiler STATIC 
     ${WIO_SOURCES}
@@ -40,6 +41,7 @@ target_compile_definitions(wio_compiler
         WIO_BUILD
         WIO_RUNTIME_INCLUDE_DIR="${WIO_RUNTIME_INCLUDE_DIR}"
         WIO_BACKEND_CXX_COMPILER="${WIO_BACKEND_CXX_COMPILER}"
+        WIO_BACKEND_AR="${WIO_BACKEND_AR}"
 )
 
 # Warning options

@@ -5,6 +5,9 @@
 #include "wio/common/logger.h"
 #include "wio/sema/symbol.h"
 
+#include <optional>
+#include <unordered_set>
+
 #define EMIT_TABS() do { for (int _____I_____ = 0; _____I_____ < indentationLevel_; ++_____I_____) buffer_ << "    "; } while(false)
 
 namespace wio::codegen
@@ -69,6 +72,69 @@ namespace wio::codegen
                 if (attr->attribute == targetAttr) return attr->args;
             }
             return {};
+        }
+
+        std::optional<Token> getSingleAttributeArg(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
+        {
+            for (const auto& attr : attributes)
+            {
+                if (attr->attribute == targetAttr && attr->args.size() == 1)
+                    return attr->args.front();
+            }
+
+            return std::nullopt;
+        }
+
+        bool isNativeFunction(const FunctionDeclaration& node)
+        {
+            return hasAttribute(node.attributes, Attribute::Native);
+        }
+
+        bool isExportedFunction(const FunctionDeclaration& node)
+        {
+            return hasAttribute(node.attributes, Attribute::Export);
+        }
+
+        std::string getNativeCppSymbolName(const FunctionDeclaration& node)
+        {
+            if (auto cppNameArg = getSingleAttributeArg(node.attributes, Attribute::CppName); cppNameArg.has_value())
+                return cppNameArg->value;
+
+            return node.name ? node.name->token.value : "";
+        }
+
+        std::string getExportedCppSymbolName(const FunctionDeclaration& node)
+        {
+            if (auto cppNameArg = getSingleAttributeArg(node.attributes, Attribute::CppName); cppNameArg.has_value())
+                return cppNameArg->value;
+
+            return node.name ? node.name->token.value : "";
+        }
+
+        void collectCppHeaders(const std::vector<NodePtr<Statement>>& statements, std::unordered_set<std::string>& seenHeaders, std::vector<std::string>& orderedHeaders)
+        {
+            for (const auto& statement : statements)
+            {
+                if (!statement)
+                    continue;
+
+                if (const auto* realmDecl = statement->as<RealmDeclaration>())
+                {
+                    collectCppHeaders(realmDecl->statements, seenHeaders, orderedHeaders);
+                    continue;
+                }
+
+                const auto* fnDecl = statement->as<FunctionDeclaration>();
+                if (!fnDecl || !isNativeFunction(*fnDecl))
+                    continue;
+
+                auto headerArg = getSingleAttributeArg(fnDecl->attributes, Attribute::CppHeader);
+                if (!headerArg.has_value() || headerArg->type != TokenType::stringLiteral)
+                    continue;
+
+                if (seenHeaders.insert(headerArg->value).second)
+                    orderedHeaders.push_back(headerArg->value);
+            }
         }
 
         std::string mangleStructTypeName(const Ref<sema::StructType>& type)
@@ -153,6 +219,17 @@ namespace wio::codegen
         indentationLevel_ = 0;
 
         generateHeader();
+
+        std::unordered_set<std::string> seenHeaders;
+        std::vector<std::string> nativeHeaders;
+        collectCppHeaders(program->statements, seenHeaders, nativeHeaders);
+        for (const auto& header : nativeHeaders)
+        {
+            emitHeaderLine("#include \"" + common::wioStringToEscapedCppString(header) + "\"");
+        }
+        if (!nativeHeaders.empty())
+            emitHeaderLine("");
+
         program->accept(*this);
 
         return header_.str() + buffer_.str();
@@ -172,6 +249,13 @@ namespace wio::codegen
         emitHeaderLine("#include <unordered_map>");
         emitHeaderLine("#include <exception.h>");
         emitHeaderLine("#include <ref.h>");
+        emitHeaderLine("");
+
+        emitHeaderLine("#if defined(_WIN32)");
+        emitHeaderLine("#define WIO_EXPORT __declspec(dllexport)");
+        emitHeaderLine("#else");
+        emitHeaderLine("#define WIO_EXPORT __attribute__((visibility(\"default\")))");
+        emitHeaderLine("#endif");
         emitHeaderLine("");
 
         emitHeaderLine("namespace wio");
@@ -1194,8 +1278,12 @@ namespace wio::codegen
 
         std::string returnType = funcType->returnType ? toCppType(funcType->returnType) : "void";
         std::string funcName = node.name->token.value;
+        bool isNative = isNativeFunction(node);
+        bool isExported = isExportedFunction(node);
 
-        if (funcName == "Entry" && (!sym || sym->scopePath.empty()))
+        if (funcName == "Entry" &&
+            Compiler::get().getBuildTarget() == BuildTarget::Executable &&
+            (!sym || sym->scopePath.empty()))
         { 
             if (!isEmittingPrototypes_)
                 emitMain(node);
@@ -1249,7 +1337,32 @@ namespace wio::codegen
             return;
         }
 
-        if (node.body)
+        if (isNative)
+        {
+            std::string nativeSymbol = getNativeCppSymbolName(node);
+
+            emitLine();
+            emitLine("{");
+            indent();
+            EMIT_TABS();
+
+            if (funcType->returnType && !funcType->returnType->isVoid())
+                emit("return ");
+
+            emit(nativeSymbol + "(");
+            for (size_t i = 0; i < node.parameters.size(); ++i)
+            {
+                emit(node.parameters[i].name->token.value);
+                if (i < node.parameters.size() - 1)
+                    emit(", ");
+            }
+            emit(");");
+            emit("\n");
+
+            dedent();
+            emitLine("}");
+        }
+        else if (node.body)
         {
             emitLine();
             
@@ -1291,6 +1404,41 @@ namespace wio::codegen
         else
         {
             emitLine(";\n");
+        }
+
+        if (isExported && !isEmittingPrototypes_ && currentClassName_.empty() && node.body)
+        {
+            std::string exportedSymbol = getExportedCppSymbolName(node);
+            std::string internalSymbol = Mangler::mangleFunction(funcName, funcType->paramTypes, sym ? sym->scopePath : "");
+
+            emitLine();
+            EMIT_TABS();
+            emit("extern \"C\" WIO_EXPORT " + returnType + " " + exportedSymbol + "(");
+            for (size_t i = 0; i < node.parameters.size(); ++i)
+            {
+                auto& param = node.parameters[i];
+                emit(common::formatString("{} {}", toCppType(param.name->refType.Lock()), param.name->token.value));
+                if (i < node.parameters.size() - 1) emit(", ");
+            }
+            emit(")");
+            emit("\n");
+            emitLine("{");
+            indent();
+            EMIT_TABS();
+
+            if (funcType->returnType && !funcType->returnType->isVoid())
+                emit("return ");
+
+            emit(internalSymbol + "(");
+            for (size_t i = 0; i < node.parameters.size(); ++i)
+            {
+                emit(node.parameters[i].name->token.value);
+                if (i < node.parameters.size() - 1) emit(", ");
+            }
+            emit(");");
+            emit("\n");
+            dedent();
+            emitLine("}");
         }
     }
 
