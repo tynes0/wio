@@ -1,0 +1,5 @@
+use helper;
+
+fn Entry(args: string[]) -> i32 {
+    return GetValue();
+}

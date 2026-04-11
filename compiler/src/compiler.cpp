@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <string_view>
 #include <sstream>
 #include <unordered_set>
 #include <argonaut.h>
@@ -57,6 +58,25 @@ namespace wio
                 return value;
             
             return "\"" + value + "\"";
+        }
+
+        std::string escapeTokenValueForDisplay(std::string_view value)
+        {
+            return common::wioStringToEscapedCppString(std::string(value));
+        }
+
+        void dumpTokens(const std::vector<Token>& tokens)
+        {
+            for (const auto& token : tokens)
+            {
+                WIO_LOG_INFO(
+                    "[{}:{}] {:<24} '{}'",
+                    token.loc.line,
+                    token.loc.column,
+                    tokenTypeToString(token.type),
+                    escapeTokenValueForDisplay(token.value)
+                );
+            }
         }
     }
     
@@ -218,6 +238,11 @@ namespace wio
             Lexer lexer(source);
             auto tokens = lexer.lex();
 
+            if (gAppData.flags.get_ShowTokens())
+            {
+                dumpTokens(tokens);
+            }
+
             // 2. Parser
             Parser parser(std::move(tokens));
             auto program = parser.parseProgram();
@@ -234,14 +259,20 @@ namespace wio
                     auto useStmt = stmt->as<UseStatement>();
                     if (useStmt->isStdLib)
                     {
-                        finalStatements.push_back(std::move(stmt));
+                        if (!gAppData.flags.get_NoBuiltin())
+                        {
+                            finalStatements.push_back(std::move(stmt));
+                        }
                     }
                     else
                     {
-                        auto moduleProg = parseAndMerge(useStmt->modulePath, useStmt->isStdLib, sourcePath.parent_path());
-                        for (auto& modStmt : moduleProg->statements)
+                        if (!gAppData.flags.get_SingleFile())
                         {
-                            finalStatements.push_back(std::move(modStmt));
+                            auto moduleProg = parseAndMerge(useStmt->modulePath, useStmt->isStdLib, sourcePath.parent_path());
+                            for (auto& modStmt : moduleProg->statements)
+                            {
+                                finalStatements.push_back(std::move(modStmt));
+                            }
                         }
                     }
                 }
@@ -393,14 +424,20 @@ namespace wio
                 auto useStmt = stmt->as<UseStatement>();
                 if (useStmt->isStdLib)
                 {
-                    mergedStatements.push_back(std::move(stmt));
+                    if (!gAppData.flags.get_NoBuiltin())
+                    {
+                        mergedStatements.push_back(std::move(stmt));
+                    }
                 }
                 else
                 {
-                    auto childProgram = parseAndMerge(useStmt->modulePath, useStmt->isStdLib, actualPath.parent_path());
-                    for (auto& childStmt : childProgram->statements)
+                    if (!gAppData.flags.get_SingleFile())
                     {
-                        mergedStatements.push_back(std::move(childStmt));
+                        auto childProgram = parseAndMerge(useStmt->modulePath, useStmt->isStdLib, actualPath.parent_path());
+                        for (auto& childStmt : childProgram->statements)
+                        {
+                            mergedStatements.push_back(std::move(childStmt));
+                        }
                     }
                 }
             }

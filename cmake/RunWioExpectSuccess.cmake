@@ -24,9 +24,9 @@ execute_process(
 
 set(wio_output "${wio_stdout}${wio_stderr}")
 
-if(wio_result EQUAL 0)
+if(NOT wio_result EQUAL 0)
     message(FATAL_ERROR
-        "Expected compilation to fail for '${WIO_SOURCE}', but it succeeded.\n"
+        "Expected compilation to succeed for '${WIO_SOURCE}', but it failed with code ${wio_result}.\n"
         "Compiler output:\n${wio_output}"
     )
 endif()
@@ -35,9 +35,9 @@ string(REGEX MATCH "${WIO_EXPECT}" wio_match "${wio_output}")
 
 if(NOT wio_match)
     message(FATAL_ERROR
-        "Expected failure output matching '${WIO_EXPECT}' for '${WIO_SOURCE}', but it was not found.\n"
+        "Expected output matching '${WIO_EXPECT}' for '${WIO_SOURCE}', but it was not found.\n"
         "Compiler output:\n${wio_output}"
     )
 endif()
 
-message(STATUS "Observed expected Wio compiler failure for: ${WIO_SOURCE}")
+message(STATUS "Observed expected Wio compiler output for: ${WIO_SOURCE}")

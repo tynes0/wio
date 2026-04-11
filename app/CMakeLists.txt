@@ -32,7 +32,34 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     function(add_wio_success_test test_name source_file)
         add_test(
             NAME ${test_name}
-            COMMAND $<TARGET_FILE:wio_app> "${source_file}" --dry-run
+            COMMAND $<TARGET_FILE:wio_app> "${source_file}" --dry-run ${ARGN}
+        )
+
+        set_tests_properties(
+            ${test_name}
+            PROPERTIES
+                WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        )
+    endfunction()
+
+    function(add_wio_output_test test_name source_file expected_output)
+        set(wio_output_args ${ARGN})
+
+        if (NOT wio_output_args)
+            set(wio_output_args --dry-run)
+        endif()
+
+        list(JOIN wio_output_args ";" wio_output_args_serialized)
+
+        add_test(
+            NAME ${test_name}
+            COMMAND
+                ${CMAKE_COMMAND}
+                -DWIO_EXE=$<TARGET_FILE:wio_app>
+                -DWIO_SOURCE=${source_file}
+                -DWIO_EXPECT=${expected_output}
+                "-DWIO_ARGS=${wio_output_args_serialized}"
+                -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExpectSuccess.cmake"
         )
 
         set_tests_properties(
@@ -43,6 +70,9 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     endfunction()
 
     function(add_wio_failure_test test_name source_file expected_output)
+        set(wio_failure_args --dry-run ${ARGN})
+        list(JOIN wio_failure_args ";" wio_failure_args_serialized)
+
         add_test(
             NAME ${test_name}
             COMMAND
@@ -50,6 +80,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
                 -DWIO_EXE=$<TARGET_FILE:wio_app>
                 -DWIO_SOURCE=${source_file}
                 -DWIO_EXPECT=${expected_output}
+                "-DWIO_ARGS=${wio_failure_args_serialized}"
                 -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExpectFailure.cmake"
         )
 
@@ -73,6 +104,19 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_success_test(
         wio_test_use_alias_dry_run
         "${CMAKE_SOURCE_DIR}/tests/test_use_alias.wio"
+    )
+
+    add_wio_success_test(
+        wio_test_user_module_merge_dry_run
+        "${CMAKE_SOURCE_DIR}/tests/modules/single_file_root.wio"
+    )
+
+    add_wio_output_test(
+        wio_show_tokens_alias_stream
+        "${CMAKE_SOURCE_DIR}/tests/test_use_alias.wio"
+        "kwAs 'as'"
+        --show-tokens
+        --dry-run
     )
 
     add_wio_failure_test(
@@ -109,5 +153,19 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_user_module_alias_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/user_module_alias_not_supported.wio"
         "Import aliasing with 'as' is currently supported only for standard library modules"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_single_file_ignores_user_imports
+        "${CMAKE_SOURCE_DIR}/tests/modules/single_file_root.wio"
+        "Undefined symbol: 'GetValue'"
+        --single-file
+    )
+
+    add_wio_failure_test(
+        wio_invalid_no_builtin_ignores_stdlib_imports
+        "${CMAKE_SOURCE_DIR}/tests/test_use_alias.wio"
+        "Undefined symbol: 'console'"
+        --no-builtin
     )
 endif()

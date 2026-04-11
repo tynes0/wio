@@ -37,6 +37,8 @@ steps obvious.
 - [ ] Improve diagnostics so language errors feel deliberate and readable.
 - [ ] Make backend generation reproducible and less Windows-specific.
 - [ ] Expand the standard library beyond the current `std::io` bootstrap state.
+- [ ] Keep the compiler/runtime shape compatible with embeddable static/shared
+      libraries, host-driven scripting, and future hot reload.
 
 ### P2 - Make Wio pleasant to use
 
@@ -731,6 +733,25 @@ This is currently one of the biggest blockers to real multi-file projects.
 - [ ] Plan the runtime/library side of reflection before exposing it in syntax.
 - [ ] Decide how reflection metadata is emitted and accessed.
 
+### 17.6 Library and Host Integration
+
+- [ ] Add a first-class distinction between executable builds and library
+      builds.
+- [ ] Support static library output for embedding Wio-generated code into larger
+      C++ projects.
+- [ ] Support shared/dynamic library output for host-driven scripting workflows.
+- [ ] Define a stable host ABI for calling Wio code from C++ and C++ code from
+      Wio.
+- [ ] Design reload-safe boundaries for future hot-reload support.
+- [ ] Decide what metadata or registration layer is needed so hot-reloaded
+      modules can be discovered and rebound safely.
+- [ ] Define what "game scripting mode" means in practice:
+  - host-owned lifetime,
+  - dynamic module reload,
+  - event entry points,
+  - safe state handoff,
+  - low-friction C++ interop.
+
 ---
 
 ## 18. Code Generation and Backend Design
@@ -761,6 +782,22 @@ This is currently one of the biggest blockers to real multi-file projects.
 - [ ] Audit lowering for `ref`, `view`, `fit`, `match`, lambdas, dictionary
       literals, generated ctors, and interface dispatch.
 - [ ] Add goldens or snapshot tests for generated C++ output.
+
+### 18.5 Performance and Transpilation Goals
+
+- [ ] Keep the generated C++ close enough to idiomatic code that optimized
+      builds can realistically match hand-written C++ performance in common
+      cases.
+- [ ] Track where Wio runtime abstractions add unavoidable overhead and where
+      they can be zero-cost.
+- [ ] Define which language features must remain performance-transparent for
+      gameplay scripting use cases.
+- [ ] Benchmark generated output against equivalent C++ for:
+  - function calls,
+  - object/interface dispatch,
+  - arrays and dictionaries,
+  - string formatting,
+  - hot path arithmetic.
 
 ---
 
