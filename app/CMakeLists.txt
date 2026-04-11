@@ -27,3 +27,22 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tests")
 else()
     message(WARNING "WARNING: The 'tests' folder was not found; the copy operation was skipped.")
 endif()
+
+if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
+    add_test(
+        NAME wio_test1_dry_run
+        COMMAND $<TARGET_FILE:wio_app> "${CMAKE_SOURCE_DIR}/tests/test1.wio" --dry-run
+    )
+
+    add_test(
+        NAME wio_test2_dry_run
+        COMMAND $<TARGET_FILE:wio_app> "${CMAKE_SOURCE_DIR}/tests/test2.wio" --dry-run
+    )
+
+    set_tests_properties(
+        wio_test1_dry_run
+        wio_test2_dry_run
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+endif()

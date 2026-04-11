@@ -103,12 +103,6 @@ namespace wio
 
     bool Parser::matchOneOf(const std::initializer_list<TokenType>& types, bool consume)
     {
-        for (auto type : types)
-        {
-            if (match(type, consume))
-                return true;
-        }
-
         return std::ranges::any_of(types, [&](TokenType type)
         {
             return (match(type, consume));
@@ -1232,6 +1226,9 @@ namespace wio
                 moduleParts.emplace_back("/");
             }
         }
+
+        if (moduleParts.empty())
+            utError("Use statement must include a module path.", startLoc);
 
         if (moduleParts.back() == ".." || moduleParts.back() == "/")
             utError("Unfinished use statement. Use statements should finish with a module name.", peek(-1).loc);

@@ -39,9 +39,9 @@ namespace wio
       kwRef,
       kwView,
       kwFit,
-      kwEnum, // todo: implament -> c++ enum blabla{};
-      kwFlag, // todo: implament -> c++ struct blabla{};
-      kwFlagset, // todo: implament -> c++ enum class blabla{};
+      kwEnum,
+      kwFlag,
+      kwFlagset,
 
       /* ===============================
          Keywords – types

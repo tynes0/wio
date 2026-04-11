@@ -22,6 +22,7 @@ component Vector3 {
 }
 
 @From(IRenderable)
+@GenerateCtors
 object Entity {
     protected id: i32;
     protected position: Vector3; // Component, Object'in içinde!

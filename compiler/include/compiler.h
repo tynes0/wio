@@ -16,7 +16,7 @@ namespace wio
         Compiler();
 
         void loadArgs(int argc, char* argv[]) const;
-        void compile() const;
+        int compile() const;
 
         sema::TypeContext& getTypeContext() const;
         CompilerFlags getFlags() const;

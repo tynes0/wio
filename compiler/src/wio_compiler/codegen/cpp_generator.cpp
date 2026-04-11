@@ -5,7 +5,7 @@
 #include "wio/common/logger.h"
 #include "wio/sema/symbol.h"
 
-#define EMIT_TABS() do { for (int i = 0; i < indentationLevel_; ++i) buffer_ << "    "; } while(false)
+#define EMIT_TABS() do { for (int _____I_____ = 0; _____I_____ < indentationLevel_; ++_____I_____) buffer_ << "    "; } while(false)
 
 namespace wio::codegen
 {
@@ -1129,7 +1129,8 @@ namespace wio::codegen
                 emitLine("{");
                 indent();
                 
-                EMIT_TABS(); emit("if (!(");
+                EMIT_TABS();
+                emit("if (!(");
                 node.whenCondition->accept(*this);
                 emit(")) return");
                 if (node.whenFallback)
@@ -1724,11 +1725,13 @@ namespace wio::codegen
 
     void CppGenerator::visit(BreakStatement& node)
     {
+        WIO_UNUSED(node);
         emitLine("break;");
     }
 
     void CppGenerator::visit(ContinueStatement& node)
     {
+        WIO_UNUSED(node);
         emitLine("continue;");
     }
 

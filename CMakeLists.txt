@@ -5,6 +5,8 @@ project(wio_lang
     LANGUAGES C CXX
 )
 
+include(CTest)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -15,7 +17,7 @@ endif()
 
 option(WIO_BUILD_APP "Build application" ON)
 
-# If the project is added to someone else's project, let's set the examples to OFF by default.
+# If the project is added to someone else's project, let's set the app to OFF by default.
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(WIO_BUILD_APP OFF CACHE BOOL "" FORCE)
 endif()
@@ -29,4 +31,6 @@ add_subdirectory(libs/frenum)
 
 # --- Main Project ---
 add_subdirectory(compiler)
-add_subdirectory(app)
+if (WIO_BUILD_APP)
+    add_subdirectory(app)
+endif()

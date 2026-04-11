@@ -1,6 +1,8 @@
 #include "compiler.h"
 
+#include <cstdlib>
 #include <filesystem>
+#include <sstream>
 #include <unordered_set>
 #include <argonaut.h>
 
@@ -22,7 +24,41 @@ namespace wio
         std::unordered_set<std::string> loadedModules;
     };
     
-    namespace{ AppData gAppData; }
+    namespace
+    {
+        AppData gAppData;
+
+        std::filesystem::path getRuntimeIncludeDir()
+        {
+#ifdef WIO_RUNTIME_INCLUDE_DIR
+            return std::filesystem::path(WIO_RUNTIME_INCLUDE_DIR);
+#else
+            return {};
+#endif
+        }
+
+        std::string getBackendCompiler()
+        {
+#ifdef WIO_BACKEND_CXX_COMPILER
+            return WIO_BACKEND_CXX_COMPILER;
+#else
+            return "g++";
+#endif
+        }
+
+        std::string quotePath(const std::filesystem::path& path)
+        {
+            return "\"" + path.string() + "\"";
+        }
+
+        std::string quoteCommand(const std::string& value)
+        {
+            if (value.find_first_of(" \t") == std::string::npos)
+                return value;
+            
+            return "\"" + value + "\"";
+        }
+    }
     
     Compiler::Compiler()
     {
@@ -159,20 +195,21 @@ namespace wio
     }
 
     // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
-    void Compiler::compile() const
+    int Compiler::compile() const
     {
         try
         {
             std::vector<std::string> filePaths = gAppData.argParser.GetValuesOf<std::string>("FILE");
             std::string filePathStr = filePaths.at(0);
             std::filesystem::path sourcePath(filePathStr);
+            gAppData.basePath = std::filesystem::absolute(sourcePath).parent_path();
             
             std::string source = filesystem::readFile(sourcePath);
             
             if (source.empty())
             {
                 WIO_LOG_ERROR("File is empty or not found: {}", filePathStr);
-                return;
+                return EXIT_FAILURE;
             }
 
             filesystem::stripBOM(source);
@@ -223,6 +260,12 @@ namespace wio
             WIO_LOG_PROCESS_WARNINGS();
             WIO_LOG_PROCESS_ERRORS(CompilationError);
 
+            if (gAppData.flags.get_DryRun())
+            {
+                WIO_LOG_INFO("Dry run completed successfully.");
+                return EXIT_SUCCESS;
+            }
+
             // 4. Code Generation
             codegen::CppGenerator generator;
             std::string cppCode = generator.generate(program);
@@ -231,30 +274,32 @@ namespace wio
             auto cppPath = sourcePath;
             cppPath += ".cpp";
             
-            filesystem::writeFilepath(cppCode, cppPath);
+            if (!filesystem::writeFilepath(cppCode, cppPath))
+            {
+                WIO_LOG_FATAL("Generated C++ output could not be written to: {}", cppPath.string());
+                return EXIT_FAILURE;
+            }
             
             std::filesystem::path exePath = sourcePath.parent_path() / sourcePath.stem();
-            
+
 #ifdef _WIN32
             exePath.replace_extension(".exe");
-            
-            std::filesystem::path compilerPath = std::filesystem::current_path(); 
-            std::filesystem::path rootPath = compilerPath.parent_path().parent_path();
-    
-            std::filesystem::path runtimePath = rootPath / "compiler" / "include"/ "runtime";
-            
-            std::stringstream cmd;
-            cmd << "g++ -std=c++20 \"";
-            cmd << cppPath.string();
-            cmd << "\"";
-            cmd << " -I\"";
-            cmd << runtimePath.string();
-            cmd << "\"";
-            cmd << " -o \"";
-            cmd << exePath.string();
-            cmd << "\"";
+#endif
 
-            std::string s = cmd.str();
+            std::filesystem::path runtimePath = getRuntimeIncludeDir();
+            if (runtimePath.empty() || !std::filesystem::exists(runtimePath))
+            {
+                WIO_LOG_FATAL("Runtime headers were not found. Expected directory: {}", runtimePath.string());
+                return EXIT_FAILURE;
+            }
+
+            std::string backendCompiler = getBackendCompiler();
+            std::stringstream cmd;
+            cmd << quoteCommand(backendCompiler);
+            cmd << " -std=c++20 ";
+            cmd << quotePath(cppPath);
+            cmd << " -I" << quotePath(runtimePath);
+            cmd << " -o " << quotePath(exePath);
             
             // NOLINTNEXTLINE(concurrency-mt-unsafe)
             int exitCode = std::system(cmd.str().c_str());
@@ -262,7 +307,7 @@ namespace wio
             if (exitCode != 0)
             {
                 WIO_LOG_FATAL("Backend compilation failed with code: {}", exitCode);
-                return;
+                return EXIT_FAILURE;
             }
 
             if (gAppData.flags.get_Run())
@@ -280,13 +325,16 @@ namespace wio
                 if (runExitCode != 0)
                 {
                     WIO_LOG_WARN("Program exited with code: {}", runExitCode);
+                    return runExitCode;
                 }
             }
-#endif
+
+            return EXIT_SUCCESS;
         }
         catch (const std::exception& e)
         {
             WIO_LOG_FATAL("Compiling failed: {}", e.what());
+            return EXIT_FAILURE;
         }
     }
 
