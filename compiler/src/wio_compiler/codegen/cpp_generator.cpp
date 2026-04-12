@@ -50,6 +50,28 @@ namespace wio::codegen
             return type->toCppString();
         }
 
+        Ref<sema::Type> unwrapAliasType(Ref<sema::Type> type)
+        {
+            while (type && type->kind() == sema::TypeKind::Alias)
+                type = type.AsFast<sema::AliasType>()->aliasedType;
+            return type;
+        }
+
+        std::string getPrimitiveTypeName(const Ref<sema::Type>& type)
+        {
+            Ref<sema::Type> resolvedType = unwrapAliasType(type);
+            if (!resolvedType || resolvedType->kind() != sema::TypeKind::Primitive)
+                return {};
+
+            return resolvedType.AsFast<sema::PrimitiveType>()->name;
+        }
+
+        bool isFloatingPointType(const Ref<sema::Type>& type)
+        {
+            const std::string primitiveName = getPrimitiveTypeName(type);
+            return primitiveName == "f32" || primitiveName == "f64";
+        }
+
         std::vector<std::string> getBaseInterfaces(const std::vector<NodePtr<AttributeStatement>>& attributes)
         {
             std::vector<std::string> bases;
@@ -147,6 +169,60 @@ namespace wio::codegen
                 return cppNameArg->value;
 
             return node.name ? node.name->token.value : "";
+        }
+
+        struct ModuleLifecycleFunctions
+        {
+            const FunctionDeclaration* apiVersion = nullptr;
+            const FunctionDeclaration* load = nullptr;
+            const FunctionDeclaration* update = nullptr;
+            const FunctionDeclaration* unload = nullptr;
+            const FunctionDeclaration* saveState = nullptr;
+            const FunctionDeclaration* restoreState = nullptr;
+
+            bool hasAny() const
+            {
+                return apiVersion || load || update || unload || saveState || restoreState;
+            }
+        };
+
+        void setLifecycleFunctionIfEmpty(const FunctionDeclaration*& slot, const FunctionDeclaration* declaration)
+        {
+            if (slot == nullptr)
+                slot = declaration;
+        }
+
+        void collectModuleLifecycleFunctions(const std::vector<NodePtr<Statement>>& statements, ModuleLifecycleFunctions& lifecycleFunctions)
+        {
+            for (const auto& statement : statements)
+            {
+                if (!statement)
+                    continue;
+
+                if (const auto* realmDecl = statement->as<RealmDeclaration>())
+                {
+                    collectModuleLifecycleFunctions(realmDecl->statements, lifecycleFunctions);
+                    continue;
+                }
+
+                const auto* fnDecl = statement->as<FunctionDeclaration>();
+                if (!fnDecl)
+                    continue;
+
+                if (std::optional<Attribute> lifecycleAttribute = getModuleLifecycleAttribute(*fnDecl); lifecycleAttribute.has_value())
+                {
+                    switch (*lifecycleAttribute)
+                    {
+                    case Attribute::ModuleApiVersion: setLifecycleFunctionIfEmpty(lifecycleFunctions.apiVersion, fnDecl); break;
+                    case Attribute::ModuleLoad: setLifecycleFunctionIfEmpty(lifecycleFunctions.load, fnDecl); break;
+                    case Attribute::ModuleUpdate: setLifecycleFunctionIfEmpty(lifecycleFunctions.update, fnDecl); break;
+                    case Attribute::ModuleUnload: setLifecycleFunctionIfEmpty(lifecycleFunctions.unload, fnDecl); break;
+                    case Attribute::ModuleSaveState: setLifecycleFunctionIfEmpty(lifecycleFunctions.saveState, fnDecl); break;
+                    case Attribute::ModuleRestoreState: setLifecycleFunctionIfEmpty(lifecycleFunctions.restoreState, fnDecl); break;
+                    default: break;
+                    }
+                }
+            }
         }
 
         void collectCppHeaders(const std::vector<NodePtr<Statement>>& statements, std::unordered_set<std::string>& seenHeaders, std::vector<std::string>& orderedHeaders)
@@ -269,6 +345,7 @@ namespace wio::codegen
             emitHeaderLine("");
 
         program->accept(*this);
+        emitModuleApiTable(program);
 
         return header_.str() + buffer_.str();
     }
@@ -277,6 +354,7 @@ namespace wio::codegen
     {
         header_.str("");
         emitHeaderLine("#include <cstdint>");
+        emitHeaderLine("#include <limits>");
         emitHeaderLine("#include <string>");
         emitHeaderLine("#include <vector>");
         emitHeaderLine("#include <array>");
@@ -286,6 +364,8 @@ namespace wio::codegen
         emitHeaderLine("#include <map>");
         emitHeaderLine("#include <unordered_map>");
         emitHeaderLine("#include <exception.h>");
+        emitHeaderLine("#include <fit.h>");
+        emitHeaderLine("#include <module_api.h>");
         emitHeaderLine("#include <ref.h>");
         emitHeaderLine("");
 
@@ -322,6 +402,49 @@ namespace wio::codegen
         dedent();
         emitHeaderLine("}");
         emitHeaderLine("");
+    }
+
+    void CppGenerator::emitModuleApiTable(const Ref<Program>& program)
+    {
+        if (!program)
+            return;
+
+        ModuleLifecycleFunctions lifecycleFunctions;
+        collectModuleLifecycleFunctions(program->statements, lifecycleFunctions);
+        if (!lifecycleFunctions.hasAny())
+            return;
+
+        std::uint32_t capabilities = 0;
+        if (lifecycleFunctions.apiVersion) capabilities |= (1u << 0);
+        if (lifecycleFunctions.load) capabilities |= (1u << 1);
+        if (lifecycleFunctions.update) capabilities |= (1u << 2);
+        if (lifecycleFunctions.unload) capabilities |= (1u << 3);
+        if (lifecycleFunctions.saveState) capabilities |= (1u << 4);
+        if (lifecycleFunctions.restoreState) capabilities |= (1u << 5);
+        std::uint32_t stateSchemaVersion = (lifecycleFunctions.saveState || lifecycleFunctions.restoreState) ? 1u : 0u;
+
+        emitLine();
+        emitLine("extern \"C\" WIO_EXPORT const WioModuleApi* WioModuleGetApi()");
+        emitLine("{");
+        indent();
+        emitLine("static const WioModuleApi API =");
+        emitLine("{");
+        indent();
+        emitLine("WIO_MODULE_API_DESCRIPTOR_VERSION,");
+        emitLine(std::to_string(capabilities) + "u,");
+        emitLine(std::to_string(stateSchemaVersion) + "u,");
+        emitLine("0u,");
+        emitLine(lifecycleFunctions.apiVersion ? "&WioModuleApiVersion," : "nullptr,");
+        emitLine(lifecycleFunctions.load ? "&WioModuleLoad," : "nullptr,");
+        emitLine(lifecycleFunctions.update ? "&WioModuleUpdate," : "nullptr,");
+        emitLine(lifecycleFunctions.saveState ? "&WioModuleSaveState," : "nullptr,");
+        emitLine(lifecycleFunctions.restoreState ? "&WioModuleRestoreState," : "nullptr,");
+        emitLine(lifecycleFunctions.unload ? "&WioModuleUnload" : "nullptr");
+        dedent();
+        emitLine("};");
+        emitLine("return &API;");
+        dedent();
+        emitLine("}");
     }
 
     void CppGenerator::emit(const std::string& str)
@@ -1103,16 +1226,18 @@ namespace wio::codegen
         if (srcType->isNumeric() && destType->isNumeric())
         {
             std::string cppDestType = destType->toCppString();
-            std::string cppSrcType = srcType->toCppString();
-
-            std::string minLimit = "static_cast<" + cppSrcType + ">(std::numeric_limits<" + cppDestType + ">::lowest())";
-            std::string maxLimit = "static_cast<" + cppSrcType + ">(std::numeric_limits<" + cppDestType + ">::max())";
-
-            emit("static_cast<" + cppDestType + ">(std::clamp<" + cppSrcType + ">(");
-    
-            node.operand->accept(*this);
-    
-            emit(", " + minLimit + ", " + maxLimit + "))");
+            if (isFloatingPointType(srcType) || isFloatingPointType(destType))
+            {
+                emit("wio::FitNumeric<" + cppDestType + ">(");
+                node.operand->accept(*this);
+                emit(")");
+            }
+            else
+            {
+                emit("wio::FitNumeric<" + cppDestType + ">(");
+                node.operand->accept(*this);
+                emit(")");
+            }
         }
         else
         {

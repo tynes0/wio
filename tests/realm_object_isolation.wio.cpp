@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 #include <array>
@@ -8,6 +9,8 @@
 #include <map>
 #include <unordered_map>
 #include <exception.h>
+#include <fit.h>
+#include <module_api.h>
 #include <ref.h>
 
 #if defined(_WIN32)

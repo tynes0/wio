@@ -193,6 +193,13 @@ Current status:
   `@ModuleApiVersion`, `@ModuleLoad`, `@ModuleUpdate`, and `@ModuleUnload`.
 - Reload-oriented state handoff now has an initial ABI through
   `@ModuleSaveState` and `@ModuleRestoreState`.
+- Lifecycle-capable modules now also export a single `WioModuleGetApi()` entry
+  that returns a function-pointer table for host integration.
+- The shared host ABI now lives in a reusable runtime header:
+  `compiler/include/runtime/module_api.h`.
+- Numeric `fit` lowering now goes through a runtime helper in
+  `compiler/include/runtime/fit.h`, which avoids the mixed signed/unsigned
+  clamp crash seen in earlier generated code.
 
 Example:
 

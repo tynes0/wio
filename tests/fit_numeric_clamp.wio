@@ -1,0 +1,12 @@
+use std::io as console;
+
+fn Entry() -> i32 {
+    let negative: i32 = -5;
+    let wideUnsigned: u64 = 500;
+
+    let clampedUnsigned = negative fit u32;
+    let clampedSigned = wideUnsigned fit i8;
+
+    console::Print($"Fit clamp: ${clampedUnsigned}, ${clampedSigned}");
+    return 0;
+}

@@ -36,6 +36,7 @@ namespace wio::codegen
         void emitHeader(const std::string& str);
         void emitHeaderLine(const std::string& str = "");
         void emitMain(FunctionDeclaration& node);
+        void emitModuleApiTable(const Ref<Program>& program);
         void indent();
         void dedent();
     };

@@ -78,6 +78,8 @@ endif()
 set(host_build_command
     "${WIO_HOST_CXX}"
     -std=c++20
+    -I
+    "${CMAKE_SOURCE_DIR}/compiler/include/runtime"
     "${WIO_HOST_SOURCE}"
     -o "${host_exe}"
 )

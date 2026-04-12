@@ -102,6 +102,8 @@ if ($LASTEXITCODE -ne 0) {
 $hostCompileArgs = @(
     "g++",
     "-std=c++20",
+    "-I",
+    (Join-Path $repoRoot "compiler\\include\\runtime"),
     $resolvedHostSource
 )
 

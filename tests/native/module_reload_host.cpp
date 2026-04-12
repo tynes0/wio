@@ -1,19 +1,13 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <module_api.h>
 
 #if defined(_WIN32)
 #include <windows.h>
 #else
 #include <dlfcn.h>
 #endif
-
-using ModuleApiVersionFn = std::uint32_t(*)();
-using ModuleLoadFn = std::int32_t(*)();
-using ModuleUpdateFn = void(*)(float);
-using ModuleSaveStateFn = std::int32_t(*)();
-using ModuleRestoreStateFn = std::int32_t(*)(std::int32_t);
-using ModuleUnloadFn = void(*)();
 using GetCounterFn = std::int32_t(*)();
 
 namespace
@@ -73,26 +67,33 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
-    ModuleApiVersionFn apiVersionA = loadSymbol<ModuleApiVersionFn>(moduleA, "WioModuleApiVersion");
-    ModuleLoadFn moduleLoadA = loadSymbol<ModuleLoadFn>(moduleA, "WioModuleLoad");
-    ModuleUpdateFn moduleUpdateA = loadSymbol<ModuleUpdateFn>(moduleA, "WioModuleUpdate");
-    ModuleSaveStateFn moduleSaveStateA = loadSymbol<ModuleSaveStateFn>(moduleA, "WioModuleSaveState");
-    ModuleUnloadFn moduleUnloadA = loadSymbol<ModuleUnloadFn>(moduleA, "WioModuleUnload");
+    WioModuleGetApiFn moduleGetApiA = loadSymbol<WioModuleGetApiFn>(moduleA, "WioModuleGetApi");
     GetCounterFn getCounterA = loadSymbol<GetCounterFn>(moduleA, "WioGetCounter");
+    const WioModuleApi* apiA = moduleGetApiA ? moduleGetApiA() : nullptr;
 
-    if (apiVersionA == nullptr || moduleLoadA == nullptr || moduleUpdateA == nullptr || moduleSaveStateA == nullptr || moduleUnloadA == nullptr || getCounterA == nullptr)
+    if (apiA == nullptr ||
+        apiA->descriptorVersion != WIO_MODULE_API_DESCRIPTOR_VERSION ||
+        apiA->capabilities != (WIO_MODULE_CAP_API_VERSION | WIO_MODULE_CAP_LOAD | WIO_MODULE_CAP_UPDATE | WIO_MODULE_CAP_UNLOAD | WIO_MODULE_CAP_SAVE_STATE | WIO_MODULE_CAP_RESTORE_STATE) ||
+        apiA->stateSchemaVersion != 1 ||
+        apiA->apiVersion == nullptr ||
+        apiA->load == nullptr ||
+        apiA->update == nullptr ||
+        apiA->saveState == nullptr ||
+        apiA->restoreState == nullptr ||
+        apiA->unload == nullptr ||
+        getCounterA == nullptr)
     {
         std::cerr << "Failed to load one or more symbols from the first module." << '\n';
         closeModule(moduleA);
         return EXIT_FAILURE;
     }
 
-    std::uint32_t version = apiVersionA();
-    std::int32_t loadResultA = moduleLoadA();
-    moduleUpdateA(2.0f);
-    std::int32_t snapshot = moduleSaveStateA();
+    std::uint32_t version = apiA->apiVersion();
+    std::int32_t loadResultA = apiA->load();
+    apiA->update(2.0f);
+    std::int32_t snapshot = apiA->saveState();
     std::int32_t counterBeforeReload = getCounterA();
-    moduleUnloadA();
+    apiA->unload();
     closeModule(moduleA);
 
     ModuleHandle moduleB = openModule(argv[2]);
@@ -102,24 +103,30 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
-    ModuleRestoreStateFn moduleRestoreStateB = loadSymbol<ModuleRestoreStateFn>(moduleB, "WioModuleRestoreState");
-    ModuleUpdateFn moduleUpdateB = loadSymbol<ModuleUpdateFn>(moduleB, "WioModuleUpdate");
+    WioModuleGetApiFn moduleGetApiB = loadSymbol<WioModuleGetApiFn>(moduleB, "WioModuleGetApi");
     GetCounterFn getCounterB = loadSymbol<GetCounterFn>(moduleB, "WioGetCounter");
+    const WioModuleApi* apiB = moduleGetApiB ? moduleGetApiB() : nullptr;
 
-    if (moduleRestoreStateB == nullptr || moduleUpdateB == nullptr || getCounterB == nullptr)
+    if (apiB == nullptr ||
+        apiB->descriptorVersion != WIO_MODULE_API_DESCRIPTOR_VERSION ||
+        apiB->capabilities != (WIO_MODULE_CAP_API_VERSION | WIO_MODULE_CAP_LOAD | WIO_MODULE_CAP_UPDATE | WIO_MODULE_CAP_UNLOAD | WIO_MODULE_CAP_SAVE_STATE | WIO_MODULE_CAP_RESTORE_STATE) ||
+        apiB->stateSchemaVersion != 1 ||
+        apiB->restoreState == nullptr ||
+        apiB->update == nullptr ||
+        getCounterB == nullptr)
     {
         std::cerr << "Failed to load one or more symbols from the second module." << '\n';
         closeModule(moduleB);
         return EXIT_FAILURE;
     }
 
-    std::int32_t restoreResult = moduleRestoreStateB(snapshot);
+    std::int32_t restoreResult = apiB->restoreState(snapshot);
     std::int32_t counterAfterRestore = getCounterB();
-    moduleUpdateB(3.0f);
+    apiB->update(3.0f);
     std::int32_t counterAfterRetick = getCounterB();
 
     std::cout
-        << "Module reload: v" << version
+        << "Module reload: table=1 caps=" << apiA->capabilities << " schema=" << apiA->stateSchemaVersion << " v" << version
         << " load=" << loadResultA
         << " restore=" << restoreResult
         << " before=" << counterBeforeReload
