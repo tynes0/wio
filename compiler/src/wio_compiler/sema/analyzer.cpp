@@ -2587,6 +2587,8 @@ namespace wio::sema
         if (node.step)
             node.step->accept(*this);
 
+        Ref<Type> stepType = node.step ? getAutoReadableType(node.step->refType.Lock()) : nullptr;
+
         Ref<Type> iterableType = node.iterable->refType.Lock();
         while (iterableType && iterableType->kind() == TypeKind::Alias)
             iterableType = iterableType.AsFast<AliasType>()->aliasedType;
@@ -2640,7 +2642,6 @@ namespace wio::sema
             auto rangeExpr = node.iterable->as<RangeExpression>();
             Ref<Type> startType = getAutoReadableType(rangeExpr->start->refType.Lock());
             Ref<Type> endType = getAutoReadableType(rangeExpr->end->refType.Lock());
-            Ref<Type> stepType = node.step ? getAutoReadableType(node.step->refType.Lock()) : nullptr;
 
             if (node.bindings.size() != 1)
             {
@@ -2673,12 +2674,18 @@ namespace wio::sema
         }
         else if (iterableType && iterableType->kind() == TypeKind::Array)
         {
-            if (node.step)
-                WIO_LOG_ADD_ERROR(node.location(), "Step clauses are currently supported only for range iteration.");
-
             auto arrayType = iterableType.AsFast<ArrayType>();
             Ref<Type> elementType = arrayType->elementType;
             Ref<Type> indexType = Compiler::get().getTypeContext().getUSize();
+
+            if (node.step && !isIntegralLikeType(stepType))
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Array step expressions must be integer values.");
+            }
+            else if (node.step && isZeroIntegerLiteralExpression(node.step))
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Array step cannot be zero.");
+            }
 
             if (node.bindings.size() == 1)
             {

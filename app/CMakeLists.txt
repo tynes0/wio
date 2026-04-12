@@ -428,6 +428,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_for_parenthesized_array_step_run
+        "${CMAKE_SOURCE_DIR}/tests/for_parenthesized_array_step.wio"
+        "Parenthesized array step score: 28"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_for_array_index_value_run
         "${CMAKE_SOURCE_DIR}/tests/for_array_index_value.wio"
         "Array index/value score: 51"
@@ -473,6 +480,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_for_component_index_binding_run
         "${CMAKE_SOURCE_DIR}/tests/for_component_index_binding.wio"
         "Component index binding total: 11"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_for_component_index_binding_step_run
+        "${CMAKE_SOURCE_DIR}/tests/for_component_index_binding_step.wio"
+        "Component step binding total: 16"
         --run
     )
 
@@ -649,9 +663,15 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_failure_test(
-        wio_invalid_for_array_step_not_supported
-        "${CMAKE_SOURCE_DIR}/tests/invalid/for_array_step_not_supported.wio"
+        wio_invalid_for_dict_step_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/for_dict_step_not_supported.wio"
         "Step clauses are currently supported only for range iteration"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_for_array_step_requires_integer
+        "${CMAKE_SOURCE_DIR}/tests/invalid/for_array_step_requires_integer.wio"
+        "Array step expressions must be integer values"
     )
 
     add_wio_failure_test(

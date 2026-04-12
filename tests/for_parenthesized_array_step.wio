@@ -1,0 +1,13 @@
+use std::io as console;
+
+fn Entry() -> i32 {
+    let values: i32[] = [2, 4, 6, 8];
+    mut score: i32 = 0;
+
+    for (idx | value in values step 2) {
+        score += (idx fit i32) * 10 + value;
+    }
+
+    console::Print($"Parenthesized array step score: ${score}");
+    return 0;
+}

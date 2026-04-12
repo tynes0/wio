@@ -2785,7 +2785,19 @@ namespace wio::codegen
               }
           };
 
-        const bool usesIndexedArrayLoop = !node.bindingAccessors.empty() && node.bindingAccessors.front() == "__index__";
+        auto isArrayIterable = [&]() -> bool
+        {
+            Ref<sema::Type> iterableType = node.iterable ? node.iterable->refType.Lock() : nullptr;
+            iterableType = unwrapAliasType(iterableType);
+
+            while (iterableType && iterableType->kind() == sema::TypeKind::Reference)
+                iterableType = unwrapAliasType(iterableType.AsFast<sema::ReferenceType>()->referredType);
+
+            return iterableType && iterableType->kind() == sema::TypeKind::Array;
+        };
+
+        const bool explicitIndexBinding = !node.bindingAccessors.empty() && node.bindingAccessors.front() == "__index__";
+        const bool usesIndexedArrayLoop = isArrayIterable() && (explicitIndexBinding || node.step != nullptr);
         if (usesIndexedArrayLoop)
         {
             emitLine("{");
@@ -2797,39 +2809,66 @@ namespace wio::codegen
             emit(");\n");
 
             EMIT_TABS();
-            emit("for (std::size_t _wio_index = 0; _wio_index < _wio_range.size(); ++_wio_index)\n");
+            emit("auto _wio_array_step = static_cast<std::int64_t>(");
+            if (node.step)
+                node.step->accept(*this);
+            else
+                emit("1");
+            emit(");\n");
+
+            emitLine("if (_wio_array_step <= 0) throw std::runtime_error(\"Array step must be positive.\");");
+
+            EMIT_TABS();
+            emit("for (std::size_t _wio_index = 0; _wio_index < _wio_range.size(); _wio_index += static_cast<std::size_t>(_wio_array_step))\n");
             emitLine("{");
             indent();
 
-            const auto& indexBinding = node.bindings.front();
-            const ForBindingMode indexBindingMode = getBindingMode(0);
-            auto indexBindingSym = indexBinding->referencedSymbol.Lock();
-            Ref<sema::Type> indexBindingType = (indexBindingSym && indexBindingSym->type) ? indexBindingSym->type : indexBinding->refType.Lock();
-            std::string indexCastExpr = "static_cast<" + toCppType(indexBindingType) + ">(_wio_index)";
-
-            switch (indexBindingMode)
+            if (explicitIndexBinding)
             {
-            case ForBindingMode::ValueMutable:
-                emitLine("auto " + indexBinding->token.value + " = " + indexCastExpr + ";");
-                break;
-            case ForBindingMode::ValueImmutable:
-                emitLine("const auto " + indexBinding->token.value + " = " + indexCastExpr + ";");
-                break;
-            case ForBindingMode::ReferenceMutable:
-            case ForBindingMode::ReferenceView:
-                break;
+                const auto& indexBinding = node.bindings.front();
+                const ForBindingMode indexBindingMode = getBindingMode(0);
+                auto indexBindingSym = indexBinding->referencedSymbol.Lock();
+                Ref<sema::Type> indexBindingType = (indexBindingSym && indexBindingSym->type) ? indexBindingSym->type : indexBinding->refType.Lock();
+                std::string indexCastExpr = "static_cast<" + toCppType(indexBindingType) + ">(_wio_index)";
+
+                switch (indexBindingMode)
+                {
+                case ForBindingMode::ValueMutable:
+                    emitLine("auto " + indexBinding->token.value + " = " + indexCastExpr + ";");
+                    break;
+                case ForBindingMode::ValueImmutable:
+                    emitLine("const auto " + indexBinding->token.value + " = " + indexCastExpr + ";");
+                    break;
+                case ForBindingMode::ReferenceMutable:
+                case ForBindingMode::ReferenceView:
+                    break;
+                }
             }
 
             const std::string itemExpr = "_wio_range[_wio_index]";
-            if (node.bindingAccessors.size() >= 2 && node.bindingAccessors[1] == "__value__")
+            if (node.bindingAccessors.empty())
             {
-                emitBoundDeclaration(1, itemExpr);
+                emitBoundDeclaration(0, itemExpr);
             }
             else
             {
-                for (size_t i = 1; i < node.bindings.size() && i < node.bindingAccessors.size(); ++i)
+                const size_t bindingStartIndex = explicitIndexBinding ? 1 : 0;
+                if (explicitIndexBinding && node.bindingAccessors.size() >= 2 && node.bindingAccessors[1] == "__value__")
                 {
-                    emitBoundDeclaration(i, itemExpr + "." + node.bindingAccessors[i]);
+                    emitBoundDeclaration(1, itemExpr);
+                }
+                else
+                {
+                    for (size_t i = bindingStartIndex; i < node.bindings.size() && i < node.bindingAccessors.size(); ++i)
+                    {
+                        if (node.bindingAccessors[i] == "__index__")
+                            continue;
+
+                        if (node.bindingAccessors[i] == "__value__")
+                            emitBoundDeclaration(i, itemExpr);
+                        else
+                            emitBoundDeclaration(i, itemExpr + "." + node.bindingAccessors[i]);
+                    }
                 }
             }
 
