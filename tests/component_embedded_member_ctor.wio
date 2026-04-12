@@ -1,0 +1,34 @@
+use std::io as console;
+
+component Stats {
+    hp: i32;
+    shield: i32;
+
+    OnConstruct(hp: i32, shield: i32) {
+        self.hp = hp;
+        self.shield = shield;
+    }
+}
+
+@GenerateCtors
+object Enemy {
+    state: Stats;
+
+    OnConstruct(hp: i32, shield: i32) {
+        self.state = Stats(hp, shield);
+    }
+
+    public fn GetHp() -> i32 {
+        return self.state.hp;
+    }
+
+    public fn GetShield() -> i32 {
+        return self.state.shield;
+    }
+}
+
+fn Entry(args: string[]) -> i32 {
+    let enemy: Enemy = Enemy(7, 3);
+    console::Print($"Embedded component: ${enemy.GetHp()}/${enemy.GetShield()}");
+    return 0;
+}

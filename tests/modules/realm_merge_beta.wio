@@ -1,0 +1,5 @@
+realm arena {
+    fn Two() -> i32 {
+        return 2;
+    }
+}

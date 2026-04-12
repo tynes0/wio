@@ -12,13 +12,6 @@ realm arena {
             rage: i32;
             phase: i32;
 
-            OnConstruct() {
-                self.health = 0;
-                self.shield = 0;
-                self.rage = 0;
-                self.phase = 0;
-            }
-
             OnConstruct(health: i32, shield: i32, rage: i32, phase: i32) {
                 self.health = health;
                 self.shield = shield;
@@ -125,14 +118,14 @@ realm arena {
     }
 
     realm sim {
-        fn ApplyScaledHit(target: ref arena::model::Boss, baseDamage: i32, difficulty100: i32, phase: i32, rage: i32) -> i32 {
-            target.TakeDamage(arenaffi::ScaleDamage(baseDamage, difficulty100, phase, rage));
-            return arenaffi::ScaleDamage(baseDamage, difficulty100, phase, rage);
+        fn ApplyScaledHit(target: ref arena::model::IDamageable, baseDamage: i32, difficulty100: i32, phase: i32, rage: i32) -> i32 {
+            target.TakeDamage(arena::ffi::ScaleDamage(baseDamage, difficulty100, phase, rage));
+            return arena::ffi::ScaleDamage(baseDamage, difficulty100, phase, rage);
         }
 
         fn AdvanceTick(target: ref arena::model::Boss, deltaTime: f32, pulseCount: i32) {
-            target.BoostShield(arenaffi::ComputeShieldGain(target.GetPhase(), deltaTime));
-            target.AddRage(arenaffi::ComputeRageGain(deltaTime, pulseCount));
+            target.BoostShield(arena::ffi::ComputeShieldGain(target.GetPhase(), deltaTime));
+            target.AddRage(arena::ffi::ComputeRageGain(deltaTime, pulseCount));
 
             if (target.GetRage() >= 100) {
                 target.RaisePhase();

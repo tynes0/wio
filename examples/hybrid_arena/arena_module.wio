@@ -143,5 +143,5 @@ fn OnArenaTickCore(deltaTime: f32) {
 @CppName(WioArenaTickTelemetry)
 fn OnArenaTickTelemetry(deltaTime: f32) {
     gPulseCount += 1;
-    gBossShield += arenaffi::ComputePulseShield(deltaTime, gPulseCount);
+    gBossShield += arena::ffi::ComputePulseShield(deltaTime, gPulseCount);
 }

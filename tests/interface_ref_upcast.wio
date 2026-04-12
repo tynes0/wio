@@ -1,0 +1,38 @@
+use std::io as console;
+
+realm combat {
+    interface IDamageable {
+        fn TakeDamage(amount: i32);
+        fn GetHp() -> i32;
+    }
+
+    @From(combat::IDamageable)
+    object Boss {
+        hp: i32;
+
+        OnConstruct() {
+            self.hp = 10;
+        }
+
+        public fn TakeDamage(amount: i32) {
+            self.hp -= amount;
+        }
+
+        public fn GetHp() -> i32 {
+            return self.hp;
+        }
+    }
+
+    realm sim {
+        fn ApplyHit(target: ref combat::IDamageable, amount: i32) {
+            target.TakeDamage(amount);
+        }
+    }
+}
+
+fn Entry(args: string[]) -> i32 {
+    mut boss: combat::Boss = combat::Boss();
+    combat::sim::ApplyHit(ref boss, 3);
+    console::Print($"Interface ref hp: ${boss.GetHp()}");
+    return 0;
+}

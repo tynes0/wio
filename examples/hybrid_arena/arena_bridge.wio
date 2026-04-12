@@ -1,21 +1,23 @@
-realm arenaffi {
-    @Native
-    @CppHeader("hybrid_arena_native.h")
-    @CppName(hybrid_arena::ScaleDamage)
-    fn ScaleDamage(baseDamage: i32, difficulty100: i32, phase: i32, rage: i32) -> i32;
+realm arena {
+    realm ffi {
+        @Native
+        @CppHeader("hybrid_arena_native.h")
+        @CppName(hybrid_arena::ScaleDamage)
+        fn ScaleDamage(baseDamage: i32, difficulty100: i32, phase: i32, rage: i32) -> i32;
 
-    @Native
-    @CppHeader("hybrid_arena_native.h")
-    @CppName(hybrid_arena::ComputeShieldGain)
-    fn ComputeShieldGain(phase: i32, deltaTime: f32) -> i32;
+        @Native
+        @CppHeader("hybrid_arena_native.h")
+        @CppName(hybrid_arena::ComputeShieldGain)
+        fn ComputeShieldGain(phase: i32, deltaTime: f32) -> i32;
 
-    @Native
-    @CppHeader("hybrid_arena_native.h")
-    @CppName(hybrid_arena::ComputeRageGain)
-    fn ComputeRageGain(deltaTime: f32, pulseCount: i32) -> i32;
+        @Native
+        @CppHeader("hybrid_arena_native.h")
+        @CppName(hybrid_arena::ComputeRageGain)
+        fn ComputeRageGain(deltaTime: f32, pulseCount: i32) -> i32;
 
-    @Native
-    @CppHeader("hybrid_arena_native.h")
-    @CppName(hybrid_arena::ComputePulseShield)
-    fn ComputePulseShield(deltaTime: f32, pulseCount: i32) -> i32;
+        @Native
+        @CppHeader("hybrid_arena_native.h")
+        @CppName(hybrid_arena::ComputePulseShield)
+        fn ComputePulseShield(deltaTime: f32, pulseCount: i32) -> i32;
+    }
 }

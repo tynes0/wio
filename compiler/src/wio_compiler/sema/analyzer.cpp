@@ -1741,12 +1741,31 @@ namespace wio::sema
     {
         if (isDeclarationPass_)
         {
-            auto realmScope = Ref<Scope>::Create(currentScope_, ScopeKind::Global);
-            scopes_.push_back(realmScope);
+            Ref<Symbol> realmSym = currentScope_->resolveLocally(node.name->token.value);
+            if (realmSym)
+            {
+                if (realmSym->kind != SymbolKind::Namespace)
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "Symbol '{}' already exists and is not a realm.", node.name->token.value);
+                    return;
+                }
 
-            Ref<Symbol> realmSym = createSymbol(node.name->token.value, Compiler::get().getTypeContext().getUnknown(), SymbolKind::Namespace, node.location());
-            realmSym->innerScope = realmScope;
-            currentScope_->define(node.name->token.value, realmSym);
+                if (!realmSym->innerScope)
+                {
+                    auto realmScope = Ref<Scope>::Create(currentScope_, ScopeKind::Global);
+                    scopes_.push_back(realmScope);
+                    realmSym->innerScope = realmScope;
+                }
+            }
+            else
+            {
+                auto realmScope = Ref<Scope>::Create(currentScope_, ScopeKind::Global);
+                scopes_.push_back(realmScope);
+
+                realmSym = createSymbol(node.name->token.value, Compiler::get().getTypeContext().getUnknown(), SymbolKind::Namespace, node.location());
+                realmSym->innerScope = realmScope;
+                currentScope_->define(node.name->token.value, realmSym);
+            }
 
             node.name->referencedSymbol = realmSym;
             node.name->refType = realmSym->type;

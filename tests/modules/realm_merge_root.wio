@@ -1,0 +1,8 @@
+use std::io as console;
+use realm_merge_alpha;
+use realm_merge_beta;
+
+fn Entry(args: string[]) -> i32 {
+    console::Print($"Merged realm sum: ${arena::One() + arena::Two()}");
+    return 0;
+}

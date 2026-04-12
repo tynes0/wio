@@ -316,6 +316,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_realm_merge_across_modules_run
+        "${CMAKE_SOURCE_DIR}/tests/modules/realm_merge_root.wio"
+        "Merged realm sum: 3"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_realm_basic_run
         "${CMAKE_SOURCE_DIR}/tests/realm_basic.wio"
         "Realm sum: 3"
@@ -347,6 +354,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_realm_qualified_from_run
         "${CMAKE_SOURCE_DIR}/tests/realm_qualified_from.wio"
         "Qualified from hp: 7"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_interface_ref_upcast_run
+        "${CMAKE_SOURCE_DIR}/tests/interface_ref_upcast.wio"
+        "Interface ref hp: 7"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_component_embedded_member_ctor_run
+        "${CMAKE_SOURCE_DIR}/tests/component_embedded_member_ctor.wio"
+        "Embedded component: 7/3"
         --run
     )
 

@@ -1402,11 +1402,56 @@ namespace wio::codegen
             return;
         }
 
+        Ref<sema::FunctionType> functionType = nullptr;
+        if (auto calleeSym = node.callee->referencedSymbol.Lock();
+            calleeSym && calleeSym->type && calleeSym->type->kind() == sema::TypeKind::Function)
+        {
+            functionType = calleeSym->type.AsFast<sema::FunctionType>();
+        }
+        else if (calleeType && calleeType->kind() == sema::TypeKind::Function)
+        {
+            functionType = calleeType.AsFast<sema::FunctionType>();
+        }
+
+        auto emitArgumentWithImplicitCast = [&](const Ref<Expression>& argument, const Ref<sema::Type>& expectedType)
+        {
+            auto actualType = argument ? argument->refType.Lock() : nullptr;
+            auto resolvedExpected = unwrapAliasType(expectedType);
+            auto resolvedActual = unwrapAliasType(actualType);
+
+            if (resolvedExpected && resolvedActual &&
+                resolvedExpected->kind() == sema::TypeKind::Reference &&
+                resolvedActual->kind() == sema::TypeKind::Reference &&
+                !resolvedExpected->isCompatibleWith(resolvedActual))
+            {
+                auto expectedRef = resolvedExpected.AsFast<sema::ReferenceType>();
+                auto expectedTarget = unwrapAliasType(expectedRef->referredType);
+
+                if (expectedTarget && expectedTarget->kind() == sema::TypeKind::Struct)
+                {
+                    auto expectedStruct = expectedTarget.AsFast<sema::StructType>();
+                    if (expectedStruct->isInterface)
+                    {
+                        emit("static_cast<" + toCppType(expectedType) + ">((");
+                        argument->accept(*this);
+                        emit(")->_WF_CastTo(" + mangleInterfaceTypeName(expectedStruct) + "::TYPE_ID))");
+                        return;
+                    }
+                }
+            }
+
+            argument->accept(*this);
+        };
+
         node.callee->accept(*this);
         emit("(");
         for (size_t i = 0; i < node.arguments.size(); ++i)
         {
-            node.arguments[i]->accept(*this);
+            Ref<sema::Type> expectedType = nullptr;
+            if (functionType && i < functionType->paramTypes.size())
+                expectedType = functionType->paramTypes[i];
+
+            emitArgumentWithImplicitCast(node.arguments[i], expectedType);
             if (i < node.arguments.size() - 1)
                 emit(", ");
         }
@@ -2022,6 +2067,37 @@ namespace wio::codegen
     
         bool forceGenerateCtors = hasAttribute(node.attributes, Attribute::GenerateCtors);
         bool hasNoDefaultCtor = hasAttribute(node.attributes, Attribute::NoDefaultCtor);
+
+        auto emitValueInitDefaultCtor = [&]()
+        {
+            EMIT_TABS();
+            emit(currentClassName_ + "()");
+            if (!memberVars.empty())
+            {
+                emit(" : ");
+                for (size_t i = 0; i < memberVars.size(); ++i)
+                {
+                    emit(memberVars[i].second + "()");
+                    if (i < memberVars.size() - 1) emit(", ");
+                }
+            }
+            emit(" {}\n");
+        };
+
+        // Keep components embeddable inside generated C++ objects even when the Wio
+        // surface only exposes member constructors.
+        if (!hasEmptyCtor && !hasNoDefaultCtor)
+        {
+            if (currentAccess != AccessModifier::Public)
+            {
+                dedent();
+                emitLine("public:");
+                indent();
+                currentAccess = AccessModifier::Public;
+            }
+
+            emitValueInitDefaultCtor();
+        }
     
         if ((!hasCustomCtor && !hasNoDefaultCtor) || forceGenerateCtors) 
         {
@@ -2031,9 +2107,6 @@ namespace wio::codegen
                 emitLine("public:");
                 indent();
             }
-    
-            if (!hasEmptyCtor)
-                emitLine(currentClassName_ + "() = default;");
                 
             if (!hasCopyCtor)
                 emitLine(currentClassName_ + "(const " + currentClassName_ + "&) = default;");
