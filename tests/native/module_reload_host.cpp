@@ -67,10 +67,10 @@ namespace
         return exportEntry->parameterTypes != nullptr;
     }
 
-    bool invokeI32Export(const WioModuleApi* api, const char* logicalName, const WioValue* args, std::uint32_t argCount, std::int32_t& outValue)
+    bool invokeI32Command(const WioModuleApi* api, const char* commandName, const WioValue* args, std::uint32_t argCount, std::int32_t& outValue)
     {
         WioValue result{};
-        const std::int32_t status = WioInvokeModuleExport(api, logicalName, args, argCount, &result);
+        const std::int32_t status = WioInvokeModuleCommand(api, commandName, args, argCount, &result);
         if (status != WIO_INVOKE_OK || result.type != WIO_ABI_I32)
             return false;
 
@@ -107,20 +107,33 @@ int main(int argc, char** argv)
         apiA->saveState == nullptr ||
         apiA->restoreState == nullptr ||
         apiA->unload == nullptr ||
-        apiA->exportCount != 2)
+        apiA->exportCount != 3 ||
+        apiA->commandCount != 2 ||
+        apiA->eventHookCount != 1)
     {
         std::cerr << "Failed to load one or more API entries from the first module." << '\n';
         closeModule(moduleA);
         return EXIT_FAILURE;
     }
 
-    const WioModuleExport* counterExportA = WioFindModuleExport(apiA, "GetCounter");
-    const WioModuleExport* addExportA = WioFindModuleExport(apiA, "AddToCounter");
-    if (!expectI32Export(counterExportA, "WioGetCounter", 0) ||
-        !expectI32Export(addExportA, "WioAddToCounter", 1) ||
-        addExportA->parameterTypes[0] != WIO_ABI_I32)
+    const WioModuleCommand* getCommandA = WioFindModuleCommand(apiA, "counter.get");
+    const WioModuleCommand* addCommandA = WioFindModuleCommand(apiA, "counter.add");
+    const WioModuleEventHook* tickHookA = WioFindFirstModuleEventHookForEvent(apiA, "game.tick");
+    if (getCommandA == nullptr ||
+        addCommandA == nullptr ||
+        tickHookA == nullptr ||
+        !expectI32Export(getCommandA->exportEntry, "WioGetCounter", 0) ||
+        !expectI32Export(addCommandA->exportEntry, "WioAddToCounter", 1) ||
+        addCommandA->exportEntry->parameterTypes[0] != WIO_ABI_I32 ||
+        tickHookA->exportEntry == nullptr ||
+        std::strcmp(tickHookA->hookName, "ApplyScriptTick") != 0 ||
+        std::strcmp(tickHookA->exportEntry->symbolName, "WioApplyScriptTick") != 0 ||
+        tickHookA->exportEntry->returnType != WIO_ABI_VOID ||
+        tickHookA->exportEntry->parameterCount != 1 ||
+        tickHookA->exportEntry->parameterTypes == nullptr ||
+        tickHookA->exportEntry->parameterTypes[0] != WIO_ABI_F32)
     {
-        std::cerr << "Failed to resolve export metadata from the first module." << '\n';
+        std::cerr << "Failed to resolve command or event metadata from the first module." << '\n';
         closeModule(moduleA);
         return EXIT_FAILURE;
     }
@@ -130,9 +143,9 @@ int main(int argc, char** argv)
     apiA->update(2.0f);
     std::int32_t snapshot = apiA->saveState();
     std::int32_t counterBeforeReload = 0;
-    if (!invokeI32Export(apiA, "GetCounter", nullptr, 0, counterBeforeReload))
+    if (!invokeI32Command(apiA, "counter.get", nullptr, 0, counterBeforeReload))
     {
-        std::cerr << "Failed to invoke GetCounter from the first module." << '\n';
+        std::cerr << "Failed to invoke counter.get from the first module." << '\n';
         closeModule(moduleA);
         return EXIT_FAILURE;
     }
@@ -156,29 +169,60 @@ int main(int argc, char** argv)
         apiB->restoreState == nullptr ||
         apiB->update == nullptr ||
         apiB->unload == nullptr ||
-        apiB->exportCount != 2)
+        apiB->exportCount != 3 ||
+        apiB->commandCount != 2 ||
+        apiB->eventHookCount != 1)
     {
         std::cerr << "Failed to load one or more API entries from the second module." << '\n';
         closeModule(moduleB);
         return EXIT_FAILURE;
     }
 
-    const WioModuleExport* counterExportB = WioFindModuleExport(apiB, "GetCounter");
-    const WioModuleExport* addExportB = WioFindModuleExport(apiB, "AddToCounter");
-    if (!expectI32Export(counterExportB, "WioGetCounter", 0) ||
-        !expectI32Export(addExportB, "WioAddToCounter", 1) ||
-        addExportB->parameterTypes[0] != WIO_ABI_I32)
+    const WioModuleCommand* getCommandB = WioFindModuleCommand(apiB, "counter.get");
+    const WioModuleCommand* addCommandB = WioFindModuleCommand(apiB, "counter.add");
+    const WioModuleEventHook* tickHookB = WioFindFirstModuleEventHookForEvent(apiB, "game.tick");
+    if (getCommandB == nullptr ||
+        addCommandB == nullptr ||
+        tickHookB == nullptr ||
+        !expectI32Export(getCommandB->exportEntry, "WioGetCounter", 0) ||
+        !expectI32Export(addCommandB->exportEntry, "WioAddToCounter", 1) ||
+        addCommandB->exportEntry->parameterTypes[0] != WIO_ABI_I32 ||
+        tickHookB->exportEntry == nullptr ||
+        std::strcmp(tickHookB->hookName, "ApplyScriptTick") != 0 ||
+        std::strcmp(tickHookB->exportEntry->symbolName, "WioApplyScriptTick") != 0 ||
+        tickHookB->exportEntry->returnType != WIO_ABI_VOID ||
+        tickHookB->exportEntry->parameterCount != 1 ||
+        tickHookB->exportEntry->parameterTypes == nullptr ||
+        tickHookB->exportEntry->parameterTypes[0] != WIO_ABI_F32)
     {
-        std::cerr << "Failed to resolve export metadata from the second module." << '\n';
+        std::cerr << "Failed to resolve command or event metadata from the second module." << '\n';
         closeModule(moduleB);
         return EXIT_FAILURE;
     }
 
     std::int32_t restoreResult = apiB->restoreState(snapshot);
     std::int32_t counterAfterRestore = 0;
-    if (!invokeI32Export(apiB, "GetCounter", nullptr, 0, counterAfterRestore))
+    if (!invokeI32Command(apiB, "counter.get", nullptr, 0, counterAfterRestore))
     {
-        std::cerr << "Failed to invoke GetCounter from the second module." << '\n';
+        std::cerr << "Failed to invoke counter.get from the second module." << '\n';
+        closeModule(moduleB);
+        return EXIT_FAILURE;
+    }
+
+    WioValue tickArgs[1]{};
+    tickArgs[0].type = WIO_ABI_F32;
+    tickArgs[0].value.v_f32 = 5.0f;
+    if (WioInvokeModuleEventHook(apiB, "ApplyScriptTick", tickArgs, 1, nullptr) != WIO_INVOKE_OK)
+    {
+        std::cerr << "Failed to invoke ApplyScriptTick from the second module." << '\n';
+        closeModule(moduleB);
+        return EXIT_FAILURE;
+    }
+
+    std::int32_t counterAfterTick = 0;
+    if (!invokeI32Command(apiB, "counter.get", nullptr, 0, counterAfterTick))
+    {
+        std::cerr << "Failed to read counter.get after ApplyScriptTick." << '\n';
         closeModule(moduleB);
         return EXIT_FAILURE;
     }
@@ -188,9 +232,9 @@ int main(int argc, char** argv)
     addArgs[0].value.v_i32 = 3;
 
     std::int32_t addResult = 0;
-    if (!invokeI32Export(apiB, "AddToCounter", addArgs, 1, addResult))
+    if (!invokeI32Command(apiB, "counter.add", addArgs, 1, addResult))
     {
-        std::cerr << "Failed to invoke AddToCounter from the second module." << '\n';
+        std::cerr << "Failed to invoke counter.add from the second module." << '\n';
         closeModule(moduleB);
         return EXIT_FAILURE;
     }
@@ -198,11 +242,12 @@ int main(int argc, char** argv)
     apiB->unload();
 
     std::cout
-        << "Module reload: table=1 caps=" << apiA->capabilities << " schema=" << apiA->stateSchemaVersion << " exports=" << apiA->exportCount << " v" << version
+        << "Module reload: table=1 caps=" << apiA->capabilities << " schema=" << apiA->stateSchemaVersion << " exports=" << apiA->exportCount << " commands=" << apiA->commandCount << " events=" << apiA->eventHookCount << " v" << version
         << " load=" << loadResultA
         << " restore=" << restoreResult
         << " before=" << counterBeforeReload
         << " after=" << counterAfterRestore
+        << " tick=" << counterAfterTick
         << " add=" << addResult
         << '\n';
 

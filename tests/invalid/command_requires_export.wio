@@ -1,0 +1,4 @@
+@Command("counter.get")
+fn GetCounter() -> i32 {
+    return 42;
+}

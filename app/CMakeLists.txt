@@ -379,14 +379,14 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_module_lifecycle_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/module_lifecycle.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/module_lifecycle_host.cpp"
-        "Module lifecycle: table=1 caps=15 schema=0 exports=2 v1 load=0 counter=42 add=45"
+        "Module lifecycle: table=1 caps=15 schema=0 exports=3 commands=2 events=1 v1 load=0 counter=47 add=50"
     )
 
     add_wio_shared_reload_interop_test(
         wio_test_module_reload_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/module_reload.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/module_reload_host.cpp"
-        "Module reload: table=1 caps=63 schema=1 exports=2 v1 load=0 restore=0 before=42 after=42 add=45"
+        "Module reload: table=1 caps=63 schema=1 exports=3 commands=2 events=1 v1 load=0 restore=0 before=42 after=42 tick=47 add=50"
     )
 
     add_wio_output_test(
@@ -490,5 +490,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_module_restore_wrong_param
         "${CMAKE_SOURCE_DIR}/tests/invalid/module_restore_wrong_param.wio"
         "@ModuleRestoreState must declare exactly one i32 parameter"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_command_requires_export
+        "${CMAKE_SOURCE_DIR}/tests/invalid/command_requires_export.wio"
+        "@Command requires @Export on the same function"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_event_requires_void_return
+        "${CMAKE_SOURCE_DIR}/tests/invalid/event_requires_void_return.wio"
+        "@Event hooks must return void"
     )
 endif()

@@ -1,0 +1,5 @@
+@Export
+@Event("game.tick")
+fn OnGameTick() -> i32 {
+    return 1;
+}

@@ -93,6 +93,8 @@ namespace wio
         CppHeader,
         CppName,
         Export,
+        Command,
+        Event,
         ModuleApiVersion,
         ModuleLoad,
         ModuleUpdate,

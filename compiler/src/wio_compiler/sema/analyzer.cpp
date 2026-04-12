@@ -1389,8 +1389,54 @@ namespace wio::sema
 
         bool isNative = hasAttribute(node.attributes, Attribute::Native);
         bool isExported = hasAttribute(node.attributes, Attribute::Export);
+        bool isCommand = hasAttribute(node.attributes, Attribute::Command);
+        bool isEvent = hasAttribute(node.attributes, Attribute::Event);
         std::vector<Attribute> moduleLifecycleAttributes = getModuleLifecycleAttributes(node.attributes);
         bool hasModuleLifecycle = !moduleLifecycleAttributes.empty();
+        if (isCommand && isEvent)
+        {
+            WIO_LOG_ADD_ERROR(node.location(), "@Command and @Event cannot be combined on the same function.");
+        }
+
+        if ((isCommand || isEvent) && !isExported)
+        {
+            WIO_LOG_ADD_ERROR(node.location(), "{} requires @Export on the same function.", isCommand ? "@Command" : "@Event");
+        }
+
+        if (isCommand)
+        {
+            auto commandArgs = getAttributeArgs(node.attributes, Attribute::Command);
+            if (commandArgs.size() > 1)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "@Command accepts at most one command name argument.");
+            }
+            else if (!commandArgs.empty() &&
+                     commandArgs.front().type != TokenType::identifier &&
+                     commandArgs.front().type != TokenType::stringLiteral)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "@Command expects an identifier path or a string literal command name.");
+            }
+        }
+
+        if (isEvent)
+        {
+            auto eventArgs = getAttributeArgs(node.attributes, Attribute::Event);
+            if (eventArgs.size() != 1)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "@Event expects exactly one event name argument.");
+            }
+            else if (eventArgs.front().type != TokenType::identifier &&
+                     eventArgs.front().type != TokenType::stringLiteral)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "@Event expects an identifier path or a string literal event name.");
+            }
+
+            if (!isExactType(funcType->returnType, Compiler::get().getTypeContext().getVoid()))
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "@Event hooks must return void.");
+            }
+        }
+
         if (isNative)
         {
             if (node.body)

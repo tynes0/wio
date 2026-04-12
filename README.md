@@ -203,6 +203,10 @@ Current status:
 - Hosts can invoke primitive `@Export` entrypoints directly through
   `WioInvokeModuleExport(...)`, which removes the need to bind every exported
   function manually with `GetProcAddress`/`dlsym`.
+- `@Command("name")` and `@Event("event.name")` extend the module API with
+  discoverable command and event-hook registries. Hosts can query them through
+  `WioFindModuleCommand(...)`, `WioInvokeModuleCommand(...)`,
+  `WioFindModuleEventHook(...)`, and `WioInvokeModuleEventHook(...)`.
 - Numeric `fit` lowering now goes through a runtime helper in
   `compiler/include/runtime/fit.h`, which avoids the mixed signed/unsigned
   clamp crash seen in earlier generated code.

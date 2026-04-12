@@ -88,6 +88,19 @@ struct WioModuleExport
     WioModuleInvokeFn invoke;
 };
 
+struct WioModuleCommand
+{
+    const char* commandName;
+    const WioModuleExport* exportEntry;
+};
+
+struct WioModuleEventHook
+{
+    const char* hookName;
+    const char* eventName;
+    const WioModuleExport* exportEntry;
+};
+
 struct WioModuleApi
 {
     std::uint32_t descriptorVersion;
@@ -102,6 +115,10 @@ struct WioModuleApi
     void (*unload)();
     std::uint32_t exportCount;
     const WioModuleExport* exports;
+    std::uint32_t commandCount;
+    const WioModuleCommand* commands;
+    std::uint32_t eventHookCount;
+    const WioModuleEventHook* eventHooks;
 };
 
 using WioModuleGetApiFn = const WioModuleApi*(*)();
@@ -131,4 +148,73 @@ inline std::int32_t WioInvokeModuleExport(const WioModuleApi* api, const char* l
         return WIO_INVOKE_NOT_CALLABLE;
 
     return exportEntry->invoke(args, argCount, outResult);
+}
+
+inline const WioModuleCommand* WioFindModuleCommand(const WioModuleApi* api, const char* commandName)
+{
+    if (api == nullptr || commandName == nullptr || api->commands == nullptr)
+        return nullptr;
+
+    for (std::uint32_t i = 0; i < api->commandCount; ++i)
+    {
+        const WioModuleCommand& commandEntry = api->commands[i];
+        if (commandEntry.commandName != nullptr && std::strcmp(commandEntry.commandName, commandName) == 0)
+            return &commandEntry;
+    }
+
+    return nullptr;
+}
+
+inline std::int32_t WioInvokeModuleCommand(const WioModuleApi* api, const char* commandName, const WioValue* args, std::uint32_t argCount, WioValue* outResult)
+{
+    const WioModuleCommand* commandEntry = WioFindModuleCommand(api, commandName);
+    if (commandEntry == nullptr || commandEntry->exportEntry == nullptr)
+        return WIO_INVOKE_EXPORT_NOT_FOUND;
+
+    if (commandEntry->exportEntry->invoke == nullptr)
+        return WIO_INVOKE_NOT_CALLABLE;
+
+    return commandEntry->exportEntry->invoke(args, argCount, outResult);
+}
+
+inline const WioModuleEventHook* WioFindModuleEventHook(const WioModuleApi* api, const char* hookName)
+{
+    if (api == nullptr || hookName == nullptr || api->eventHooks == nullptr)
+        return nullptr;
+
+    for (std::uint32_t i = 0; i < api->eventHookCount; ++i)
+    {
+        const WioModuleEventHook& hookEntry = api->eventHooks[i];
+        if (hookEntry.hookName != nullptr && std::strcmp(hookEntry.hookName, hookName) == 0)
+            return &hookEntry;
+    }
+
+    return nullptr;
+}
+
+inline const WioModuleEventHook* WioFindFirstModuleEventHookForEvent(const WioModuleApi* api, const char* eventName)
+{
+    if (api == nullptr || eventName == nullptr || api->eventHooks == nullptr)
+        return nullptr;
+
+    for (std::uint32_t i = 0; i < api->eventHookCount; ++i)
+    {
+        const WioModuleEventHook& hookEntry = api->eventHooks[i];
+        if (hookEntry.eventName != nullptr && std::strcmp(hookEntry.eventName, eventName) == 0)
+            return &hookEntry;
+    }
+
+    return nullptr;
+}
+
+inline std::int32_t WioInvokeModuleEventHook(const WioModuleApi* api, const char* hookName, const WioValue* args, std::uint32_t argCount, WioValue* outResult)
+{
+    const WioModuleEventHook* hookEntry = WioFindModuleEventHook(api, hookName);
+    if (hookEntry == nullptr || hookEntry->exportEntry == nullptr)
+        return WIO_INVOKE_EXPORT_NOT_FOUND;
+
+    if (hookEntry->exportEntry->invoke == nullptr)
+        return WIO_INVOKE_NOT_CALLABLE;
+
+    return hookEntry->exportEntry->invoke(args, argCount, outResult);
 }

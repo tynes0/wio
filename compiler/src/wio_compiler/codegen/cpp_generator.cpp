@@ -117,6 +117,16 @@ namespace wio::codegen
             return hasAttribute(node.attributes, Attribute::Export);
         }
 
+        bool isCommandFunction(const FunctionDeclaration& node)
+        {
+            return hasAttribute(node.attributes, Attribute::Command);
+        }
+
+        bool isEventFunction(const FunctionDeclaration& node)
+        {
+            return hasAttribute(node.attributes, Attribute::Event);
+        }
+
         std::optional<Attribute> getModuleLifecycleAttribute(const FunctionDeclaration& node)
         {
             for (const auto& attr : node.attributes)
@@ -197,6 +207,8 @@ namespace wio::codegen
             const FunctionDeclaration* declaration = nullptr;
             std::string logicalName;
             std::string symbolName;
+            std::optional<std::string> commandName;
+            std::optional<std::string> eventName;
         };
 
         std::string getAbiTypeEnumName(const Ref<sema::Type>& type)
@@ -311,6 +323,20 @@ namespace wio::codegen
                 info.declaration = fnDecl;
                 info.logicalName = fnDecl->name ? fnDecl->name->token.value : "";
                 info.symbolName = getExportedCppSymbolName(*fnDecl);
+                if (isCommandFunction(*fnDecl))
+                {
+                    if (auto commandArg = getSingleAttributeArg(fnDecl->attributes, Attribute::Command); commandArg.has_value())
+                        info.commandName = commandArg->value;
+                    else
+                        info.commandName = info.logicalName;
+                }
+
+                if (isEventFunction(*fnDecl))
+                {
+                    if (auto eventArg = getSingleAttributeArg(fnDecl->attributes, Attribute::Event); eventArg.has_value())
+                        info.eventName = eventArg->value;
+                }
+
                 exportedFunctions.push_back(std::move(info));
             }
         }
@@ -615,6 +641,53 @@ namespace wio::codegen
             emitLine("};");
         }
 
+        std::vector<size_t> commandExportIndices;
+        std::vector<size_t> eventExportIndices;
+        for (size_t i = 0; i < exportedFunctions.size(); ++i)
+        {
+            if (exportedFunctions[i].commandName.has_value())
+                commandExportIndices.push_back(i);
+            if (exportedFunctions[i].eventName.has_value())
+                eventExportIndices.push_back(i);
+        }
+
+        if (!commandExportIndices.empty())
+        {
+            emitLine("static const WioModuleCommand WIO_MODULE_COMMANDS[] =");
+            emitLine("{");
+            indent();
+            for (size_t i = 0; i < commandExportIndices.size(); ++i)
+            {
+                size_t exportIndex = commandExportIndices[i];
+                std::string suffix = (i + 1 < commandExportIndices.size()) ? "," : "";
+                emitLine(
+                    "{ \"" + common::wioStringToEscapedCppString(exportedFunctions[exportIndex].commandName.value()) +
+                    "\", &WIO_MODULE_EXPORTS[" + std::to_string(exportIndex) + "] }" + suffix
+                );
+            }
+            dedent();
+            emitLine("};");
+        }
+
+        if (!eventExportIndices.empty())
+        {
+            emitLine("static const WioModuleEventHook WIO_MODULE_EVENT_HOOKS[] =");
+            emitLine("{");
+            indent();
+            for (size_t i = 0; i < eventExportIndices.size(); ++i)
+            {
+                size_t exportIndex = eventExportIndices[i];
+                std::string suffix = (i + 1 < eventExportIndices.size()) ? "," : "";
+                emitLine(
+                    "{ \"" + common::wioStringToEscapedCppString(exportedFunctions[exportIndex].logicalName) +
+                    "\", \"" + common::wioStringToEscapedCppString(exportedFunctions[exportIndex].eventName.value()) +
+                    "\", &WIO_MODULE_EXPORTS[" + std::to_string(exportIndex) + "] }" + suffix
+                );
+            }
+            dedent();
+            emitLine("};");
+        }
+
         emitLine("extern \"C\" WIO_EXPORT const WioModuleApi* WioModuleGetApi()");
         emitLine("{");
         indent();
@@ -633,7 +706,11 @@ namespace wio::codegen
         emitLine(lifecycleFunctions.restoreState ? "&WioModuleRestoreState," : "nullptr,");
         emitLine(lifecycleFunctions.unload ? "&WioModuleUnload," : "nullptr,");
         emitLine(std::to_string(exportedFunctions.size()) + "u,");
-        emitLine(exportedFunctions.empty() ? "nullptr" : "WIO_MODULE_EXPORTS");
+        emitLine(exportedFunctions.empty() ? "nullptr," : "WIO_MODULE_EXPORTS,");
+        emitLine(std::to_string(commandExportIndices.size()) + "u,");
+        emitLine(commandExportIndices.empty() ? "nullptr," : "WIO_MODULE_COMMANDS,");
+        emitLine(std::to_string(eventExportIndices.size()) + "u,");
+        emitLine(eventExportIndices.empty() ? "nullptr" : "WIO_MODULE_EVENT_HOOKS");
         dedent();
         emitLine("};");
         emitLine("return &API;");

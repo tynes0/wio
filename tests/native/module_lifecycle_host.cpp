@@ -67,10 +67,10 @@ namespace
         return exportEntry->parameterTypes != nullptr;
     }
 
-    bool invokeI32Export(const WioModuleApi* api, const char* logicalName, const WioValue* args, std::uint32_t argCount, std::int32_t& outValue)
+    bool invokeI32Command(const WioModuleApi* api, const char* commandName, const WioValue* args, std::uint32_t argCount, std::int32_t& outValue)
     {
         WioValue result{};
-        const std::int32_t status = WioInvokeModuleExport(api, logicalName, args, argCount, &result);
+        const std::int32_t status = WioInvokeModuleCommand(api, commandName, args, argCount, &result);
         if (status != WIO_INVOKE_OK || result.type != WIO_ABI_I32)
             return false;
 
@@ -107,20 +107,33 @@ int main(int argc, char** argv)
         api->unload == nullptr ||
         api->saveState != nullptr ||
         api->restoreState != nullptr ||
-        api->exportCount != 2)
+        api->exportCount != 3 ||
+        api->commandCount != 2 ||
+        api->eventHookCount != 1)
     {
         std::cerr << "Failed to load one or more module API entries." << '\n';
         closeModule(moduleHandle);
         return EXIT_FAILURE;
     }
 
-    const WioModuleExport* counterExport = WioFindModuleExport(api, "GetCounter");
-    const WioModuleExport* addExport = WioFindModuleExport(api, "AddToCounter");
-    if (!expectI32Export(counterExport, "WioGetCounter", 0) ||
-        !expectI32Export(addExport, "WioAddToCounter", 1) ||
-        addExport->parameterTypes[0] != WIO_ABI_I32)
+    const WioModuleCommand* getCommand = WioFindModuleCommand(api, "counter.get");
+    const WioModuleCommand* addCommand = WioFindModuleCommand(api, "counter.add");
+    const WioModuleEventHook* tickHook = WioFindModuleEventHook(api, "ApplyScriptTick");
+    if (getCommand == nullptr ||
+        addCommand == nullptr ||
+        tickHook == nullptr ||
+        !expectI32Export(getCommand->exportEntry, "WioGetCounter", 0) ||
+        !expectI32Export(addCommand->exportEntry, "WioAddToCounter", 1) ||
+        addCommand->exportEntry->parameterTypes[0] != WIO_ABI_I32 ||
+        tickHook->exportEntry == nullptr ||
+        std::strcmp(tickHook->eventName, "game.tick") != 0 ||
+        std::strcmp(tickHook->exportEntry->symbolName, "WioApplyScriptTick") != 0 ||
+        tickHook->exportEntry->returnType != WIO_ABI_VOID ||
+        tickHook->exportEntry->parameterCount != 1 ||
+        tickHook->exportEntry->parameterTypes == nullptr ||
+        tickHook->exportEntry->parameterTypes[0] != WIO_ABI_F32)
     {
-        std::cerr << "Failed to resolve exported function metadata." << '\n';
+        std::cerr << "Failed to resolve command or event hook metadata." << '\n';
         closeModule(moduleHandle);
         return EXIT_FAILURE;
     }
@@ -129,10 +142,20 @@ int main(int argc, char** argv)
     std::int32_t loadResult = api->load();
     api->update(2.0f);
 
-    std::int32_t counter = 0;
-    if (!invokeI32Export(api, "GetCounter", nullptr, 0, counter))
+    WioValue tickArgs[1]{};
+    tickArgs[0].type = WIO_ABI_F32;
+    tickArgs[0].value.v_f32 = 5.0f;
+    if (WioInvokeModuleEventHook(api, "ApplyScriptTick", tickArgs, 1, nullptr) != WIO_INVOKE_OK)
     {
-        std::cerr << "Failed to invoke GetCounter through the module export registry." << '\n';
+        std::cerr << "Failed to invoke ApplyScriptTick through the module event registry." << '\n';
+        closeModule(moduleHandle);
+        return EXIT_FAILURE;
+    }
+
+    std::int32_t counter = 0;
+    if (!invokeI32Command(api, "counter.get", nullptr, 0, counter))
+    {
+        std::cerr << "Failed to invoke counter.get through the module command registry." << '\n';
         closeModule(moduleHandle);
         return EXIT_FAILURE;
     }
@@ -142,16 +165,16 @@ int main(int argc, char** argv)
     addArgs[0].value.v_i32 = 3;
 
     std::int32_t add = 0;
-    if (!invokeI32Export(api, "AddToCounter", addArgs, 1, add))
+    if (!invokeI32Command(api, "counter.add", addArgs, 1, add))
     {
-        std::cerr << "Failed to invoke AddToCounter through the module export registry." << '\n';
+        std::cerr << "Failed to invoke counter.add through the module command registry." << '\n';
         closeModule(moduleHandle);
         return EXIT_FAILURE;
     }
 
     api->unload();
 
-    std::cout << "Module lifecycle: table=1 caps=" << api->capabilities << " schema=" << api->stateSchemaVersion << " exports=" << api->exportCount << " v" << version << " load=" << loadResult << " counter=" << counter << " add=" << add << '\n';
+    std::cout << "Module lifecycle: table=1 caps=" << api->capabilities << " schema=" << api->stateSchemaVersion << " exports=" << api->exportCount << " commands=" << api->commandCount << " events=" << api->eventHookCount << " v" << version << " load=" << loadResult << " counter=" << counter << " add=" << add << '\n';
     closeModule(moduleHandle);
     return EXIT_SUCCESS;
 }
