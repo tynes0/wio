@@ -207,6 +207,48 @@ inline const WioModuleEventHook* WioFindFirstModuleEventHookForEvent(const WioMo
     return nullptr;
 }
 
+inline std::uint32_t WioCountModuleEventHooksForEvent(const WioModuleApi* api, const char* eventName)
+{
+    if (api == nullptr || eventName == nullptr || api->eventHooks == nullptr)
+        return 0;
+
+    std::uint32_t count = 0;
+    for (std::uint32_t i = 0; i < api->eventHookCount; ++i)
+    {
+        const WioModuleEventHook& hookEntry = api->eventHooks[i];
+        if (hookEntry.eventName != nullptr && std::strcmp(hookEntry.eventName, eventName) == 0)
+            ++count;
+    }
+
+    return count;
+}
+
+inline std::int32_t WioBroadcastModuleEvent(const WioModuleApi* api, const char* eventName, const WioValue* args, std::uint32_t argCount)
+{
+    if (api == nullptr || eventName == nullptr || api->eventHooks == nullptr)
+        return WIO_INVOKE_EXPORT_NOT_FOUND;
+
+    bool foundAny = false;
+    for (std::uint32_t i = 0; i < api->eventHookCount; ++i)
+    {
+        const WioModuleEventHook& hookEntry = api->eventHooks[i];
+        if (hookEntry.eventName == nullptr || std::strcmp(hookEntry.eventName, eventName) != 0)
+            continue;
+
+        foundAny = true;
+        if (hookEntry.exportEntry == nullptr)
+            return WIO_INVOKE_EXPORT_NOT_FOUND;
+        if (hookEntry.exportEntry->invoke == nullptr)
+            return WIO_INVOKE_NOT_CALLABLE;
+
+        const std::int32_t status = hookEntry.exportEntry->invoke(args, argCount, nullptr);
+        if (status != WIO_INVOKE_OK)
+            return status;
+    }
+
+    return foundAny ? WIO_INVOKE_OK : WIO_INVOKE_EXPORT_NOT_FOUND;
+}
+
 inline std::int32_t WioInvokeModuleEventHook(const WioModuleApi* api, const char* hookName, const WioValue* args, std::uint32_t argCount, WioValue* outResult)
 {
     const WioModuleEventHook* hookEntry = WioFindModuleEventHook(api, hookName);

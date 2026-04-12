@@ -67,6 +67,23 @@ namespace
         return exportEntry->parameterTypes != nullptr;
     }
 
+    bool expectVoidExport(const WioModuleExport* exportEntry, const char* symbolName, std::uint32_t parameterCount)
+    {
+        if (exportEntry == nullptr ||
+            std::strcmp(exportEntry->symbolName, symbolName) != 0 ||
+            exportEntry->returnType != WIO_ABI_VOID ||
+            exportEntry->parameterCount != parameterCount ||
+            exportEntry->invoke == nullptr)
+        {
+            return false;
+        }
+
+        if (parameterCount == 0)
+            return exportEntry->parameterTypes == nullptr;
+
+        return exportEntry->parameterTypes != nullptr;
+    }
+
     bool invokeI32Command(const WioModuleApi* api, const char* commandName, const WioValue* args, std::uint32_t argCount, std::int32_t& outValue)
     {
         WioValue result{};
@@ -107,9 +124,9 @@ int main(int argc, char** argv)
         apiA->saveState == nullptr ||
         apiA->restoreState == nullptr ||
         apiA->unload == nullptr ||
-        apiA->exportCount != 3 ||
+        apiA->exportCount != 4 ||
         apiA->commandCount != 2 ||
-        apiA->eventHookCount != 1)
+        apiA->eventHookCount != 2)
     {
         std::cerr << "Failed to load one or more API entries from the first module." << '\n';
         closeModule(moduleA);
@@ -119,19 +136,24 @@ int main(int argc, char** argv)
     const WioModuleCommand* getCommandA = WioFindModuleCommand(apiA, "counter.get");
     const WioModuleCommand* addCommandA = WioFindModuleCommand(apiA, "counter.add");
     const WioModuleEventHook* tickHookA = WioFindFirstModuleEventHookForEvent(apiA, "game.tick");
+    const WioModuleEventHook* tickBonusHookA = WioFindModuleEventHook(apiA, "ApplyScriptTickBonus");
     if (getCommandA == nullptr ||
         addCommandA == nullptr ||
         tickHookA == nullptr ||
+        tickBonusHookA == nullptr ||
+        WioCountModuleEventHooksForEvent(apiA, "game.tick") != 2 ||
         !expectI32Export(getCommandA->exportEntry, "WioGetCounter", 0) ||
         !expectI32Export(addCommandA->exportEntry, "WioAddToCounter", 1) ||
         addCommandA->exportEntry->parameterTypes[0] != WIO_ABI_I32 ||
         tickHookA->exportEntry == nullptr ||
+        tickBonusHookA->exportEntry == nullptr ||
         std::strcmp(tickHookA->hookName, "ApplyScriptTick") != 0 ||
         std::strcmp(tickHookA->exportEntry->symbolName, "WioApplyScriptTick") != 0 ||
-        tickHookA->exportEntry->returnType != WIO_ABI_VOID ||
-        tickHookA->exportEntry->parameterCount != 1 ||
-        tickHookA->exportEntry->parameterTypes == nullptr ||
-        tickHookA->exportEntry->parameterTypes[0] != WIO_ABI_F32)
+        std::strcmp(tickBonusHookA->exportEntry->symbolName, "WioApplyScriptTickBonus") != 0 ||
+        !expectVoidExport(tickHookA->exportEntry, "WioApplyScriptTick", 1) ||
+        !expectVoidExport(tickBonusHookA->exportEntry, "WioApplyScriptTickBonus", 1) ||
+        tickHookA->exportEntry->parameterTypes[0] != WIO_ABI_F32 ||
+        tickBonusHookA->exportEntry->parameterTypes[0] != WIO_ABI_F32)
     {
         std::cerr << "Failed to resolve command or event metadata from the first module." << '\n';
         closeModule(moduleA);
@@ -169,9 +191,9 @@ int main(int argc, char** argv)
         apiB->restoreState == nullptr ||
         apiB->update == nullptr ||
         apiB->unload == nullptr ||
-        apiB->exportCount != 3 ||
+        apiB->exportCount != 4 ||
         apiB->commandCount != 2 ||
-        apiB->eventHookCount != 1)
+        apiB->eventHookCount != 2)
     {
         std::cerr << "Failed to load one or more API entries from the second module." << '\n';
         closeModule(moduleB);
@@ -181,19 +203,24 @@ int main(int argc, char** argv)
     const WioModuleCommand* getCommandB = WioFindModuleCommand(apiB, "counter.get");
     const WioModuleCommand* addCommandB = WioFindModuleCommand(apiB, "counter.add");
     const WioModuleEventHook* tickHookB = WioFindFirstModuleEventHookForEvent(apiB, "game.tick");
+    const WioModuleEventHook* tickBonusHookB = WioFindModuleEventHook(apiB, "ApplyScriptTickBonus");
     if (getCommandB == nullptr ||
         addCommandB == nullptr ||
         tickHookB == nullptr ||
+        tickBonusHookB == nullptr ||
+        WioCountModuleEventHooksForEvent(apiB, "game.tick") != 2 ||
         !expectI32Export(getCommandB->exportEntry, "WioGetCounter", 0) ||
         !expectI32Export(addCommandB->exportEntry, "WioAddToCounter", 1) ||
         addCommandB->exportEntry->parameterTypes[0] != WIO_ABI_I32 ||
         tickHookB->exportEntry == nullptr ||
+        tickBonusHookB->exportEntry == nullptr ||
         std::strcmp(tickHookB->hookName, "ApplyScriptTick") != 0 ||
         std::strcmp(tickHookB->exportEntry->symbolName, "WioApplyScriptTick") != 0 ||
-        tickHookB->exportEntry->returnType != WIO_ABI_VOID ||
-        tickHookB->exportEntry->parameterCount != 1 ||
-        tickHookB->exportEntry->parameterTypes == nullptr ||
-        tickHookB->exportEntry->parameterTypes[0] != WIO_ABI_F32)
+        std::strcmp(tickBonusHookB->exportEntry->symbolName, "WioApplyScriptTickBonus") != 0 ||
+        !expectVoidExport(tickHookB->exportEntry, "WioApplyScriptTick", 1) ||
+        !expectVoidExport(tickBonusHookB->exportEntry, "WioApplyScriptTickBonus", 1) ||
+        tickHookB->exportEntry->parameterTypes[0] != WIO_ABI_F32 ||
+        tickBonusHookB->exportEntry->parameterTypes[0] != WIO_ABI_F32)
     {
         std::cerr << "Failed to resolve command or event metadata from the second module." << '\n';
         closeModule(moduleB);
@@ -212,9 +239,9 @@ int main(int argc, char** argv)
     WioValue tickArgs[1]{};
     tickArgs[0].type = WIO_ABI_F32;
     tickArgs[0].value.v_f32 = 5.0f;
-    if (WioInvokeModuleEventHook(apiB, "ApplyScriptTick", tickArgs, 1, nullptr) != WIO_INVOKE_OK)
+    if (WioBroadcastModuleEvent(apiB, "game.tick", tickArgs, 1) != WIO_INVOKE_OK)
     {
-        std::cerr << "Failed to invoke ApplyScriptTick from the second module." << '\n';
+        std::cerr << "Failed to broadcast game.tick from the second module." << '\n';
         closeModule(moduleB);
         return EXIT_FAILURE;
     }

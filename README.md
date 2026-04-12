@@ -135,6 +135,12 @@ For the reload example:
 powershell -ExecutionPolicy Bypass -File .\scripts\Test-Wio.ps1 -BuildDir build-rider -Filter module_reload_host_interop -Test
 ```
 
+For a larger mixed Wio/C++ demo project:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Run-HybridArenaDemo.ps1 -BuildDir build-rider -Config Debug
+```
+
 If the CMake tool window is available, you can also run the generated targets
 such as `wio_playground_run`, `wio_tests`, `wio_tests_list`, or
 `wio_file_<name>_run` directly from there.
@@ -206,7 +212,8 @@ Current status:
 - `@Command("name")` and `@Event("event.name")` extend the module API with
   discoverable command and event-hook registries. Hosts can query them through
   `WioFindModuleCommand(...)`, `WioInvokeModuleCommand(...)`,
-  `WioFindModuleEventHook(...)`, and `WioInvokeModuleEventHook(...)`.
+  `WioFindModuleEventHook(...)`, `WioCountModuleEventHooksForEvent(...)`,
+  `WioBroadcastModuleEvent(...)`, and `WioInvokeModuleEventHook(...)`.
 - Numeric `fit` lowering now goes through a runtime helper in
   `compiler/include/runtime/fit.h`, which avoids the mixed signed/unsigned
   clamp crash seen in earlier generated code.

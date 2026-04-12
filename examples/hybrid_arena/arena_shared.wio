@@ -1,0 +1,158 @@
+realm arena {
+    realm model {
+        interface IDamageable {
+            fn TakeDamage(amount: i32);
+            fn GetHealth() -> i32;
+            fn IsDead() -> bool;
+        }
+
+        component EncounterState {
+            health: i32;
+            shield: i32;
+            rage: i32;
+            phase: i32;
+
+            OnConstruct() {
+                self.health = 0;
+                self.shield = 0;
+                self.rage = 0;
+                self.phase = 0;
+            }
+
+            OnConstruct(health: i32, shield: i32, rage: i32, phase: i32) {
+                self.health = health;
+                self.shield = shield;
+                self.rage = rage;
+                self.phase = phase;
+            }
+        }
+
+        @GenerateCtors
+        object Unit {
+            protected codename: string;
+            protected state: EncounterState;
+
+            OnConstruct(codename: string, health: i32, shield: i32, rage: i32, phase: i32) {
+                self.codename = codename;
+                self.state = EncounterState(health, shield, rage, phase);
+            }
+
+            public fn GetHealth() -> i32 {
+                return self.state.health;
+            }
+
+            public fn GetShield() -> i32 {
+                return self.state.shield;
+            }
+
+            public fn GetRage() -> i32 {
+                return self.state.rage;
+            }
+
+            public fn GetPhase() -> i32 {
+                return self.state.phase;
+            }
+
+            public fn BoostShield(amount: i32) {
+                self.state.shield += amount;
+            }
+
+            public fn AddRage(amount: i32) {
+                self.state.rage += amount;
+            }
+
+            public fn RaisePhase() {
+                if (self.state.phase < 3) {
+                    self.state.phase += 1;
+                }
+            }
+        }
+
+        @From(arena::model::Unit)
+        @From(arena::model::IDamageable)
+        @Default(public)
+        object Boss {
+            title: string;
+            berserkThreshold: i32;
+
+            OnConstruct(title: string, health: i32, shield: i32, rage: i32, phase: i32, berserkThreshold: i32) {
+                self.codename = title;
+                self.title = title;
+                self.berserkThreshold = berserkThreshold;
+                self.state = EncounterState(health, shield, rage, phase);
+            }
+
+            fn TakeDamage(amount: i32) {
+                mut remaining = amount;
+
+                if (self.state.shield > 0) {
+                    if (remaining <= self.state.shield) {
+                        self.state.shield -= remaining;
+                        remaining = 0;
+                    }
+                    else {
+                        remaining -= self.state.shield;
+                        self.state.shield = 0;
+                    }
+                }
+
+                if (remaining > 0) {
+                    self.state.health -= remaining;
+                }
+
+                if (self.state.health < 0) {
+                    self.state.health = 0;
+                }
+
+                if (self.state.health <= self.berserkThreshold && self.state.phase < 3) {
+                    self.state.phase += 1;
+                    self.state.rage += 10;
+                }
+            }
+
+            fn GetHealth() -> i32 {
+                return super.GetHealth();
+            }
+
+            fn IsDead() -> bool {
+                return self.state.health <= 0;
+            }
+
+            fn GetThreatCode() -> i32 {
+                return (self.state.phase * 1000) + (self.state.rage * 10) + self.state.shield;
+            }
+        }
+    }
+
+    realm sim {
+        fn ApplyScaledHit(target: ref arena::model::Boss, baseDamage: i32, difficulty100: i32, phase: i32, rage: i32) -> i32 {
+            target.TakeDamage(arenaffi::ScaleDamage(baseDamage, difficulty100, phase, rage));
+            return arenaffi::ScaleDamage(baseDamage, difficulty100, phase, rage);
+        }
+
+        fn AdvanceTick(target: ref arena::model::Boss, deltaTime: f32, pulseCount: i32) {
+            target.BoostShield(arenaffi::ComputeShieldGain(target.GetPhase(), deltaTime));
+            target.AddRage(arenaffi::ComputeRageGain(deltaTime, pulseCount));
+
+            if (target.GetRage() >= 100) {
+                target.RaisePhase();
+            }
+        }
+
+        fn ComputeThreat(target: view arena::model::Boss) -> i32 {
+            return target.GetThreatCode();
+        }
+
+        fn IsAlive(target: view arena::model::Boss) -> i32 {
+            if (target is arena::model::IDamageable fit damageable) {
+                if (damageable.IsDead()) {
+                    return 0;
+                }
+
+                return 1;
+            }
+
+            return -1;
+        }
+    }
+}

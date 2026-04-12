@@ -42,3 +42,10 @@ fn AddToCounter(delta: i32) -> i32 {
 fn ApplyScriptTick(deltaTime: f32) {
     gCounter += deltaTime fit i32;
 }
+
+@Export
+@Event("game.tick")
+@CppName(WioApplyScriptTickBonus)
+fn ApplyScriptTickBonus(deltaTime: f32) {
+    gCounter += 1;
+}

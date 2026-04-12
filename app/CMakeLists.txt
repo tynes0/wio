@@ -379,14 +379,25 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_module_lifecycle_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/module_lifecycle.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/module_lifecycle_host.cpp"
-        "Module lifecycle: table=1 caps=15 schema=0 exports=3 commands=2 events=1 v1 load=0 counter=47 add=50"
+        "Module lifecycle: table=1 caps=15 schema=0 exports=4 commands=2 events=2 v1 load=0 counter=48 add=51"
     )
 
     add_wio_shared_reload_interop_test(
         wio_test_module_reload_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/module_reload.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/module_reload_host.cpp"
-        "Module reload: table=1 caps=63 schema=1 exports=3 commands=2 events=1 v1 load=0 restore=0 before=42 after=42 tick=47 add=50"
+        "Module reload: table=1 caps=63 schema=1 exports=4 commands=2 events=2 v1 load=0 restore=0 before=42 after=42 tick=48 add=51"
+    )
+
+    add_wio_shared_reload_interop_test(
+        wio_test_hybrid_arena_demo
+        "${CMAKE_SOURCE_DIR}/examples/hybrid_arena/arena_module.wio"
+        "${CMAKE_SOURCE_DIR}/examples/hybrid_arena/hybrid_arena_host.cpp"
+        "Hybrid arena summary: start=240/35/12/1 afterTickA=240/40/18/1 pulseA=1 afterHitA=207 restore=0 afterTickB=207/5/28/1 pulseB=2 final=78/0/38/2 threat=2380 alive=1 v1 load=0"
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/examples/hybrid_arena"
+        --backend-arg
+        "${CMAKE_SOURCE_DIR}/examples/hybrid_arena/hybrid_arena_native.cpp"
     )
 
     add_wio_output_test(

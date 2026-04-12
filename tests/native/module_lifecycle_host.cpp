@@ -67,6 +67,23 @@ namespace
         return exportEntry->parameterTypes != nullptr;
     }
 
+    bool expectVoidExport(const WioModuleExport* exportEntry, const char* symbolName, std::uint32_t parameterCount)
+    {
+        if (exportEntry == nullptr ||
+            std::strcmp(exportEntry->symbolName, symbolName) != 0 ||
+            exportEntry->returnType != WIO_ABI_VOID ||
+            exportEntry->parameterCount != parameterCount ||
+            exportEntry->invoke == nullptr)
+        {
+            return false;
+        }
+
+        if (parameterCount == 0)
+            return exportEntry->parameterTypes == nullptr;
+
+        return exportEntry->parameterTypes != nullptr;
+    }
+
     bool invokeI32Command(const WioModuleApi* api, const char* commandName, const WioValue* args, std::uint32_t argCount, std::int32_t& outValue)
     {
         WioValue result{};
@@ -107,9 +124,9 @@ int main(int argc, char** argv)
         api->unload == nullptr ||
         api->saveState != nullptr ||
         api->restoreState != nullptr ||
-        api->exportCount != 3 ||
+        api->exportCount != 4 ||
         api->commandCount != 2 ||
-        api->eventHookCount != 1)
+        api->eventHookCount != 2)
     {
         std::cerr << "Failed to load one or more module API entries." << '\n';
         closeModule(moduleHandle);
@@ -119,19 +136,28 @@ int main(int argc, char** argv)
     const WioModuleCommand* getCommand = WioFindModuleCommand(api, "counter.get");
     const WioModuleCommand* addCommand = WioFindModuleCommand(api, "counter.add");
     const WioModuleEventHook* tickHook = WioFindModuleEventHook(api, "ApplyScriptTick");
+    const WioModuleEventHook* tickBonusHook = WioFindModuleEventHook(api, "ApplyScriptTickBonus");
+    const WioModuleEventHook* firstTickHook = WioFindFirstModuleEventHookForEvent(api, "game.tick");
     if (getCommand == nullptr ||
         addCommand == nullptr ||
         tickHook == nullptr ||
+        tickBonusHook == nullptr ||
+        firstTickHook == nullptr ||
+        WioCountModuleEventHooksForEvent(api, "game.tick") != 2 ||
         !expectI32Export(getCommand->exportEntry, "WioGetCounter", 0) ||
         !expectI32Export(addCommand->exportEntry, "WioAddToCounter", 1) ||
         addCommand->exportEntry->parameterTypes[0] != WIO_ABI_I32 ||
         tickHook->exportEntry == nullptr ||
+        tickBonusHook->exportEntry == nullptr ||
+        std::strcmp(firstTickHook->hookName, "ApplyScriptTick") != 0 ||
         std::strcmp(tickHook->eventName, "game.tick") != 0 ||
+        std::strcmp(tickBonusHook->eventName, "game.tick") != 0 ||
         std::strcmp(tickHook->exportEntry->symbolName, "WioApplyScriptTick") != 0 ||
-        tickHook->exportEntry->returnType != WIO_ABI_VOID ||
-        tickHook->exportEntry->parameterCount != 1 ||
-        tickHook->exportEntry->parameterTypes == nullptr ||
-        tickHook->exportEntry->parameterTypes[0] != WIO_ABI_F32)
+        std::strcmp(tickBonusHook->exportEntry->symbolName, "WioApplyScriptTickBonus") != 0 ||
+        !expectVoidExport(tickHook->exportEntry, "WioApplyScriptTick", 1) ||
+        !expectVoidExport(tickBonusHook->exportEntry, "WioApplyScriptTickBonus", 1) ||
+        tickHook->exportEntry->parameterTypes[0] != WIO_ABI_F32 ||
+        tickBonusHook->exportEntry->parameterTypes[0] != WIO_ABI_F32)
     {
         std::cerr << "Failed to resolve command or event hook metadata." << '\n';
         closeModule(moduleHandle);
@@ -145,9 +171,9 @@ int main(int argc, char** argv)
     WioValue tickArgs[1]{};
     tickArgs[0].type = WIO_ABI_F32;
     tickArgs[0].value.v_f32 = 5.0f;
-    if (WioInvokeModuleEventHook(api, "ApplyScriptTick", tickArgs, 1, nullptr) != WIO_INVOKE_OK)
+    if (WioBroadcastModuleEvent(api, "game.tick", tickArgs, 1) != WIO_INVOKE_OK)
     {
-        std::cerr << "Failed to invoke ApplyScriptTick through the module event registry." << '\n';
+        std::cerr << "Failed to broadcast game.tick through the module event registry." << '\n';
         closeModule(moduleHandle);
         return EXIT_FAILURE;
     }

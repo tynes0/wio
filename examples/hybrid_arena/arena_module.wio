@@ -1,0 +1,147 @@
+use arena_bridge;
+use arena_shared;
+
+mut gBossHealth: i32 = 0;
+mut gBossShield: i32 = 0;
+mut gBossRage: i32 = 0;
+mut gBossPhase: i32 = 0;
+mut gPulseCount: i32 = 0;
+
+const gDifficulty100: i32 = 120;
+const gBerserkThreshold: i32 = 90;
+
+fn ResetEncounter() {
+    gBossHealth = 240;
+    gBossShield = 35;
+    gBossRage = 12;
+    gBossPhase = 1;
+    gPulseCount = 0;
+}
+
+fn SyncBossState(snapshot: view arena::model::Boss) {
+    gBossHealth = snapshot.GetHealth();
+    gBossShield = snapshot.GetShield();
+    gBossRage = snapshot.GetRage();
+    gBossPhase = snapshot.GetPhase();
+}
+
+@ModuleApiVersion
+fn RuntimeAbi() -> u32 {
+    return 1;
+}
+
+@ModuleLoad
+fn BootArena() -> i32 {
+    ResetEncounter();
+    return 0;
+}
+
+@ModuleUpdate
+fn UpdateArena(deltaTime: f32) {
+}
+
+@ModuleSaveState
+fn SaveArenaState() -> i32 {
+    return (gBossHealth & 1023) |
+           ((gBossShield & 255) << 10) |
+           ((gBossRage & 255) << 18) |
+           ((gBossPhase & 3) << 26) |
+           ((gPulseCount & 15) << 28);
+}
+
+@ModuleRestoreState
+fn RestoreArenaState(snapshot: i32) -> i32 {
+    gBossHealth = snapshot & 1023;
+    gBossShield = (snapshot >> 10) & 255;
+    gBossRage = (snapshot >> 18) & 255;
+    gBossPhase = (snapshot >> 26) & 3;
+    gPulseCount = (snapshot >> 28) & 15;
+    return 0;
+}
+
+@ModuleUnload
+fn ShutdownArena() {
+    gBossHealth = 0;
+    gBossShield = 0;
+    gBossRage = 0;
+    gBossPhase = 0;
+    gPulseCount = 0;
+}
+
+@Export
+@Command("arena.hp")
+@CppName(WioArenaGetHealth)
+fn ArenaGetHealth() -> i32 {
+    return gBossHealth;
+}
+
+@Export
+@Command("arena.shield")
+@CppName(WioArenaGetShield)
+fn ArenaGetShield() -> i32 {
+    return gBossShield;
+}
+
+@Export
+@Command("arena.rage")
+@CppName(WioArenaGetRage)
+fn ArenaGetRage() -> i32 {
+    return gBossRage;
+}
+
+@Export
+@Command("arena.phase")
+@CppName(WioArenaGetPhase)
+fn ArenaGetPhase() -> i32 {
+    return gBossPhase;
+}
+
+@Export
+@Command("arena.pulse")
+@CppName(WioArenaGetPulse)
+fn ArenaGetPulse() -> i32 {
+    return gPulseCount;
+}
+
+@Export
+@Command("arena.hit")
+@CppName(WioArenaHit)
+fn ArenaHit(baseDamage: i32) -> i32 {
+    mut boss: arena::model::Boss = arena::model::Boss("Iron Warden", gBossHealth, gBossShield, gBossRage, gBossPhase, gBerserkThreshold);
+    arena::sim::ApplyScaledHit(ref boss, baseDamage, gDifficulty100, boss.GetPhase(), boss.GetRage());
+    SyncBossState(ref boss);
+    return gBossHealth;
+}
+
+@Export
+@Command("arena.threat")
+@CppName(WioArenaGetThreat)
+fn ArenaGetThreat() -> i32 {
+    let boss: arena::model::Boss = arena::model::Boss("Iron Warden", gBossHealth, gBossShield, gBossRage, gBossPhase, gBerserkThreshold);
+    return arena::sim::ComputeThreat(ref boss);
+}
+
+@Export
+@Command("arena.alive")
+@CppName(WioArenaIsAlive)
+fn ArenaIsAlive() -> i32 {
+    let boss: arena::model::Boss = arena::model::Boss("Iron Warden", gBossHealth, gBossShield, gBossRage, gBossPhase, gBerserkThreshold);
+    return arena::sim::IsAlive(ref boss);
+}
+
+@Export
+@Event("arena.tick")
+@CppName(WioArenaTickCore)
+fn OnArenaTickCore(deltaTime: f32) {
+    mut boss: arena::model::Boss = arena::model::Boss("Iron Warden", gBossHealth, gBossShield, gBossRage, gBossPhase, gBerserkThreshold);
+    arena::sim::AdvanceTick(ref boss, deltaTime, gPulseCount);
+    SyncBossState(ref boss);
+}
+
+@Export
+@Event("arena.tick")
+@CppName(WioArenaTickTelemetry)
+fn OnArenaTickTelemetry(deltaTime: f32) {
+    gPulseCount += 1;
+    gBossShield += arenaffi::ComputePulseShield(deltaTime, gPulseCount);
+}
