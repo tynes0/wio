@@ -1,0 +1,9 @@
+fn Entry() -> i32 {
+    let weights: Tree<i32, i32> = {< 1: 2 >};
+
+    for ref key | value in weights {
+        return 0;
+    }
+
+    return 0;
+}

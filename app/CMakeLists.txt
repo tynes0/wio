@@ -379,6 +379,55 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_for_in_dynamic_array_run
+        "${CMAKE_SOURCE_DIR}/tests/for_in_dynamic_array.wio"
+        "For in dynamic sum: 7"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_for_in_static_array_run
+        "${CMAKE_SOURCE_DIR}/tests/for_in_static_array.wio"
+        "For in static sum: 9"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_foreach_dynamic_array_run
+        "${CMAKE_SOURCE_DIR}/tests/foreach_dynamic_array.wio"
+        "Foreach sum: 12"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_for_ref_view_array_run
+        "${CMAKE_SOURCE_DIR}/tests/for_ref_view_array.wio"
+        "Ref/view array: 11, 12, 13 => 3"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_for_dict_key_value_run
+        "${CMAKE_SOURCE_DIR}/tests/for_dict_key_value.wio"
+        "Dict loop score: 100"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_for_component_binding_run
+        "${CMAKE_SOURCE_DIR}/tests/for_component_binding.wio"
+        "Component binding total: 16"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_c_style_for_loop_run
+        "${CMAKE_SOURCE_DIR}/tests/c_style_for_loop.wio"
+        "C for sum: 10"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_native_bridge_run
         "${CMAKE_SOURCE_DIR}/tests/native/native_bridge.wio"
         "Native multiply: 42"
@@ -511,6 +560,30 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_export_string_return_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/export_string_return_not_supported.wio"
         "@Export currently supports only primitive or void return types"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_for_in_requires_array
+        "${CMAKE_SOURCE_DIR}/tests/invalid/for_in_requires_array.wio"
+        "For-in loops currently require an array or dictionary type"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_for_dict_requires_two_bindings
+        "${CMAKE_SOURCE_DIR}/tests/invalid/for_dict_requires_two_bindings.wio"
+        "Dictionary iteration requires exactly 2 bindings"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_for_ref_dict_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/for_ref_dict_not_supported.wio"
+        "Dictionary iteration does not yet support 'ref' bindings"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_for_component_binding_count_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/for_component_binding_count_mismatch.wio"
+        "Component binding expects 2 names, but 3 were provided"
     )
 
     add_wio_failure_test(

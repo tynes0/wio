@@ -51,6 +51,8 @@ namespace wio
         NodePtr<Statement> parseFlagDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
         NodePtr<Statement> parseIfStatement();
         NodePtr<Statement> parseWhileStatement();
+        NodePtr<Statement> parseForInStatement();
+        NodePtr<Statement> parseCForStatement(common::Location startLoc);
         NodePtr<Statement> parseBreakStatement();
         NodePtr<Statement> parseContinueStatement();
         NodePtr<Statement> parseReturnStatement();

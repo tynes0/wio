@@ -209,6 +209,13 @@ namespace wio::sema
         {
             auto* a1 = static_cast<const ArrayType*>(t1);
             auto* a2 = static_cast<const ArrayType*>(t2);
+
+            if (a1->arrayKind == ArrayType::ArrayKind::Dynamic)
+                return a1->elementType->isCompatibleWith(a2->elementType);
+
+            if (a2->arrayKind == ArrayType::ArrayKind::Dynamic)
+                return false;
+
             if (a2->size > a1->size) return false; // lhs should be bigger
             return a1->elementType->isCompatibleWith(a2->elementType);
         }

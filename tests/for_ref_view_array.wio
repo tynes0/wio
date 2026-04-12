@@ -1,0 +1,21 @@
+use std::io as console;
+
+fn Touch(value: view i32) {
+}
+
+fn Entry() -> i32 {
+    mut values: i32[] = [1, 2, 3];
+
+    for ref value in values {
+        value += 10;
+    }
+
+    mut sum: i32 = 0;
+    foreach view value in values {
+        Touch(value);
+        sum += 1;
+    }
+
+    console::Print($"Ref/view array: ${values[0]}, ${values[1]}, ${values[2]} => ${sum}");
+    return 0;
+}

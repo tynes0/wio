@@ -1882,6 +1882,9 @@ namespace wio::sema
                 else if (defaultArgs[0].type == TokenType::kwProtected) defaultAccess = AccessModifier::Protected;
             }
 
+            structType->fieldNames.clear();
+            structType->fieldTypes.clear();
+
             // PASS 1: Variables
             std::vector<Ref<Type>> memberTypes;
             for (auto& member : node.members)
@@ -1893,7 +1896,12 @@ namespace wio::sema
                     auto memberSym = varDecl->name->referencedSymbol.Lock();
                     if (hasAttribute(varDecl->attributes, Attribute::ReadOnly)) memberSym->flags.set_isReadOnly(true);
                     
-                    if (memberSym && memberSym->type) memberTypes.push_back(memberSym->type);
+                    if (memberSym && memberSym->type)
+                    {
+                        memberTypes.push_back(memberSym->type);
+                        structType->fieldNames.push_back(varDecl->name->token.value);
+                        structType->fieldTypes.push_back(memberSym->type);
+                    }
                     
                     if (member.access == AccessModifier::None) member.access = defaultAccess;
                     if (member.access == AccessModifier::Public) memberSym->flags.set_isPublic(true);
@@ -2099,6 +2107,9 @@ namespace wio::sema
             if (structBaseCount == 0)
                 structType->baseTypes.push_back(Compiler::get().getTypeContext().getObject());
 
+            structType->fieldNames.clear();
+            structType->fieldTypes.clear();
+
             // PASS 1: Variables
             std::vector<Ref<Type>> memberTypes;
             for (auto& member : node.members)
@@ -2111,7 +2122,12 @@ namespace wio::sema
                     
                     if (hasAttribute(varDecl->attributes, Attribute::ReadOnly)) memberSym->flags.set_isReadOnly(true);
                     
-                    if (memberSym && memberSym->type) memberTypes.push_back(memberSym->type);
+                    if (memberSym && memberSym->type)
+                    {
+                        memberTypes.push_back(memberSym->type);
+                        structType->fieldNames.push_back(varDecl->name->token.value);
+                        structType->fieldTypes.push_back(memberSym->type);
+                    }
 
                     if (member.access == AccessModifier::None) member.access = defaultAccess;
                     if (member.access == AccessModifier::Public) memberSym->flags.set_isPublic(true);
@@ -2458,6 +2474,156 @@ namespace wio::sema
         loopDepth_++;
         if (node.body) node.body->accept(*this);
         loopDepth_--;
+    }
+
+    void SemanticAnalyzer::visit(ForInStatement& node)
+    {
+        if (isDeclarationPass_) return;
+
+        node.iterable->accept(*this);
+
+        Ref<Type> iterableType = node.iterable->refType.Lock();
+        while (iterableType && iterableType->kind() == TypeKind::Alias)
+            iterableType = iterableType.AsFast<AliasType>()->aliasedType;
+        while (iterableType && iterableType->kind() == TypeKind::Reference)
+            iterableType = iterableType.AsFast<ReferenceType>()->referredType;
+        while (iterableType && iterableType->kind() == TypeKind::Alias)
+            iterableType = iterableType.AsFast<AliasType>()->aliasedType;
+
+        enterScope(ScopeKind::Block);
+
+        auto createLoopBindingType = [&](const Ref<Type>& valueType) -> Ref<Type>
+        {
+            switch (node.bindingMode)
+            {
+            case ForBindingMode::ValueMutable:
+            case ForBindingMode::ValueImmutable:
+                return valueType;
+            case ForBindingMode::ReferenceMutable:
+                return Compiler::get().getTypeContext().getOrCreateReferenceType(valueType, true);
+            case ForBindingMode::ReferenceView:
+                return Compiler::get().getTypeContext().getOrCreateReferenceType(valueType, false);
+            }
+
+            return valueType;
+        };
+
+        auto createBindingSymbol = [&](const NodePtr<Identifier>& binding, const Ref<Type>& bindingType)
+        {
+            SymbolFlags flags = SymbolFlags::createAllFalse();
+            if (node.bindingMode == ForBindingMode::ValueMutable || node.bindingMode == ForBindingMode::ReferenceMutable)
+                flags.set_isMutable(true);
+
+            Ref<Symbol> bindingSym = createSymbol(binding->token.value, bindingType, SymbolKind::Variable, binding->location(), flags);
+            currentScope_->define(binding->token.value, bindingSym);
+            binding->referencedSymbol = bindingSym;
+            binding->refType = bindingType;
+        };
+
+        node.bindingAccessors.clear();
+
+        if (iterableType && iterableType->kind() == TypeKind::Array)
+        {
+            auto arrayType = iterableType.AsFast<ArrayType>();
+            Ref<Type> elementType = arrayType->elementType;
+
+            if (node.bindings.size() == 1)
+            {
+                createBindingSymbol(node.bindings[0], createLoopBindingType(elementType));
+            }
+            else if (elementType && elementType->kind() == TypeKind::Struct)
+            {
+                auto structType = elementType.AsFast<StructType>();
+                if (structType->isObject || structType->isInterface)
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "Destructuring in array loops currently supports component-like POD structs only.");
+                }
+                else if (structType->fieldNames.size() != node.bindings.size())
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "Component binding expects {} names, but {} were provided.", structType->fieldNames.size(), node.bindings.size());
+                }
+                else
+                {
+                    for (size_t i = 0; i < node.bindings.size(); ++i)
+                    {
+                        node.bindingAccessors.push_back(structType->fieldNames[i]);
+                        createBindingSymbol(node.bindings[i], createLoopBindingType(structType->fieldTypes[i]));
+                    }
+                }
+            }
+            else
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Array destructuring currently requires a component-like struct element type.");
+            }
+        }
+        else if (iterableType && iterableType->kind() == TypeKind::Dictionary)
+        {
+            auto dictType = iterableType.AsFast<DictionaryType>();
+            if (node.bindings.size() != 2)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Dictionary iteration requires exactly 2 bindings: key | value.");
+            }
+            else
+            {
+                if (node.bindingMode == ForBindingMode::ReferenceMutable)
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "Dictionary iteration does not yet support 'ref' bindings. Use value, 'mut', or 'view'.");
+                }
+                else
+                {
+                    node.bindingAccessors = { "first", "second" };
+                    createBindingSymbol(node.bindings[0], createLoopBindingType(dictType->keyType));
+                    createBindingSymbol(node.bindings[1], createLoopBindingType(dictType->valueType));
+                }
+            }
+        }
+        else
+        {
+            const std::string actualType = iterableType ? iterableType->toString() : "<unknown>";
+            WIO_LOG_ADD_ERROR(node.location(), "For-in loops currently require an array or dictionary type. Got '{}'.", actualType);
+        }
+
+        loopDepth_++;
+        if (node.body) node.body->accept(*this);
+        loopDepth_--;
+
+        exitScope();
+    }
+
+    void SemanticAnalyzer::visit(CForStatement& node)
+    {
+        if (isDeclarationPass_) return;
+
+        enterScope(ScopeKind::Block);
+
+        if (node.initializer)
+            node.initializer->accept(*this);
+
+        if (node.condition)
+        {
+            node.condition->accept(*this);
+
+            if (auto condType = node.condition->refType.Lock(); condType != Compiler::get().getTypeContext().getBool())
+            {
+                if (!condType->isNumeric() && condType->kind() != TypeKind::Reference && condType->kind() != TypeKind::Null)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.condition->location(),
+                        "For-loop condition must be a boolean, numeric, or reference type. Got: {}",
+                        condType->toString()
+                    );
+                }
+            }
+        }
+
+        if (node.increment)
+            node.increment->accept(*this);
+
+        loopDepth_++;
+        if (node.body) node.body->accept(*this);
+        loopDepth_--;
+
+        exitScope();
     }
 
     void SemanticAnalyzer::visit(BreakStatement& node)

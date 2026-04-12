@@ -1,0 +1,14 @@
+component Vec2 {
+    x: i32;
+    y: i32;
+}
+
+fn Entry() -> i32 {
+    let points: Vec2[] = [Vec2(), Vec2()];
+
+    for x | y | z in points {
+        return 0;
+    }
+
+    return 0;
+}

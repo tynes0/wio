@@ -1,0 +1,17 @@
+use std::io as console;
+
+fn Entry() -> i32 {
+    let values: i32[] = [1, 2, 3, 4];
+    mut sum: i32 = 0;
+
+    for value in values {
+        if (value == 3) {
+            continue;
+        }
+
+        sum += value;
+    }
+
+    console::Print($"For in dynamic sum: ${sum}");
+    return 0;
+}

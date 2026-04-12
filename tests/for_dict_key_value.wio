@@ -1,0 +1,13 @@
+use std::io as console;
+
+fn Entry() -> i32 {
+    let weights: Tree<i32, i32> = {< 2: 10, 4: 20 >};
+    mut score: i32 = 0;
+
+    for key | value in weights {
+        score += key * value;
+    }
+
+    console::Print($"Dict loop score: ${score}");
+    return 0;
+}

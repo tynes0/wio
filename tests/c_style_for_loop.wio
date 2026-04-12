@@ -1,0 +1,12 @@
+use std::io as console;
+
+fn Entry() -> i32 {
+    mut sum: i32 = 0;
+
+    for (mut i: i32 = 0; i < 5; i += 1) {
+        sum += i;
+    }
+
+    console::Print($"C for sum: ${sum}");
+    return 0;
+}

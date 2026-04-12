@@ -110,6 +110,13 @@ namespace wio
         None
     );
 
+    FrenumClassInNamespace(wio, ForBindingMode, uint8_t,
+        ValueImmutable,
+        ValueMutable,
+        ReferenceMutable,
+        ReferenceView
+    );
+
     struct ASTNode;
     struct Expression;
     struct Statement;
@@ -673,6 +680,33 @@ namespace wio
 
         WhileStatement(NodePtr<Expression> _cond, NodePtr<Statement> _body, common::Location _loc);
         ~WhileStatement() override;
+    };
+
+    struct ForInStatement : Statement
+    {
+        WIO_STMT_NODE_BODY(ForInStatement)
+
+        ForBindingMode bindingMode = ForBindingMode::ValueImmutable;
+        std::vector<NodePtr<Identifier>> bindings;
+        std::vector<std::string> bindingAccessors;
+        NodePtr<Expression> iterable;
+        NodePtr<Statement> body;
+
+        ForInStatement(ForBindingMode _bindingMode, std::vector<NodePtr<Identifier>> _bindings, NodePtr<Expression> _iterable, NodePtr<Statement> _body, common::Location _loc);
+        ~ForInStatement() override;
+    };
+
+    struct CForStatement : Statement
+    {
+        WIO_STMT_NODE_BODY(CForStatement)
+
+        NodePtr<Statement> initializer;
+        NodePtr<Expression> condition;
+        NodePtr<Expression> increment;
+        NodePtr<Statement> body;
+
+        CForStatement(NodePtr<Statement> _initializer, NodePtr<Expression> _condition, NodePtr<Expression> _increment, NodePtr<Statement> _body, common::Location _loc);
+        ~CForStatement() override;
     };
 
     struct BreakStatement : Statement

@@ -163,6 +163,7 @@ namespace wio
             case TokenType::kwIf:
             case TokenType::kwWhile:
             case TokenType::kwFor:
+            case TokenType::kwForeach:
             case TokenType::kwReturn:
                 return;
             default:
@@ -734,6 +735,8 @@ namespace wio
                 return parseIfStatement();
             if (match(TokenType::kwWhile))
                 return parseWhileStatement();
+            if (matchOneOf({ TokenType::kwFor, TokenType::kwForeach }))
+                return parseForInStatement();
             if (match(TokenType::kwBreak))
                 return parseBreakStatement();
             if (match(TokenType::kwContinue))
@@ -1184,6 +1187,160 @@ namespace wio
         NodePtr<Statement> body = match(TokenType::leftBrace) ? parseBlockStatement() : parseStatement();
 
         return makeNodePtr<WhileStatement>(std::move(condition), std::move(body), startLoc);
+    }
+
+    NodePtr<Statement> Parser::parseForInStatement()
+    {
+        Token startTok = advance();
+        if (startTok.type != TokenType::kwFor && startTok.type != TokenType::kwForeach)
+            utError("Expected 'for' or 'foreach'.", startTok.loc);
+
+        Location startLoc = startTok.loc;
+
+        bool hasParen = match(TokenType::leftParen, true);
+
+        auto headerLooksLikeCStyleFor = [&]() -> bool
+        {
+            if (startTok.type != TokenType::kwFor || !hasParen)
+                return false;
+
+            int parenDepth = 0;
+            int braceDepth = 0;
+            int bracketDepth = 0;
+
+            for (int offset = 0; ; ++offset)
+            {
+                Token token = peek(offset);
+                if (!token.isValid())
+                    break;
+
+                if (token.type == TokenType::leftParen) ++parenDepth;
+                else if (token.type == TokenType::rightParen)
+                {
+                    if (parenDepth == 0 && braceDepth == 0 && bracketDepth == 0)
+                        break;
+                    --parenDepth;
+                }
+                else if (token.type == TokenType::leftBrace) ++braceDepth;
+                else if (token.type == TokenType::rightBrace && braceDepth > 0) --braceDepth;
+                else if (token.type == TokenType::leftBracket) ++bracketDepth;
+                else if (token.type == TokenType::rightBracket && bracketDepth > 0) --bracketDepth;
+                else if (token.type == TokenType::semicolon && parenDepth == 0 && braceDepth == 0 && bracketDepth == 0)
+                    return true;
+            }
+
+            return false;
+        };
+
+        if (headerLooksLikeCStyleFor())
+            return parseCForStatement(startLoc);
+
+        ForBindingMode bindingMode = ForBindingMode::ValueImmutable;
+        if (match(TokenType::kwMut, true))
+        {
+            bindingMode = ForBindingMode::ValueMutable;
+        }
+        else if (match(TokenType::kwLet, true))
+        {
+            bindingMode = ForBindingMode::ValueImmutable;
+        }
+        else if (match(TokenType::kwRef, true))
+        {
+            bindingMode = ForBindingMode::ReferenceMutable;
+        }
+        else if (match(TokenType::kwView, true))
+        {
+            bindingMode = ForBindingMode::ReferenceView;
+        }
+        else if (match(TokenType::kwConst, true))
+        {
+            utError("'const' is not supported in loop bindings. Use 'let', 'mut', 'ref', or 'view'.", peek(-1).loc);
+        }
+
+        std::vector<NodePtr<Identifier>> bindings;
+        bindings.push_back(makeNodePtr<Identifier>(consume(TokenType::identifier)));
+        while (match(TokenType::opBitOr, true))
+        {
+            bindings.push_back(makeNodePtr<Identifier>(consume(TokenType::identifier)));
+        }
+
+        consume(TokenType::kwIn);
+
+        NodePtr<Expression> iterable = parseExpression();
+
+        if (hasParen)
+            consume(TokenType::rightParen);
+
+        NodePtr<Statement> body = match(TokenType::leftBrace) ? parseBlockStatement() : parseStatement();
+
+        return makeNodePtr<ForInStatement>(bindingMode, std::move(bindings), std::move(iterable), std::move(body), startLoc);
+    }
+
+    NodePtr<Statement> Parser::parseCForStatement(common::Location startLoc)
+    {
+        NodePtr<Statement> initializer = nullptr;
+        if (!match(TokenType::semicolon, true))
+        {
+            if (matchOneOf({ TokenType::kwLet, TokenType::kwMut, TokenType::kwConst }))
+            {
+                Token startTok = advance();
+                Mutability mutability = Mutability::Immutable;
+
+                switch (startTok.type)
+                {
+                case TokenType::kwLet:   mutability = Mutability::Immutable; break;
+                case TokenType::kwMut:   mutability = Mutability::Mutable; break;
+                case TokenType::kwConst: mutability = Mutability::Const; break;
+                default:
+                    utError("Unexpected for-loop initializer qualifier.", startTok.loc);
+                }
+
+                NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+
+                NodePtr<TypeSpecifier> specifier = nullptr;
+                if (match(TokenType::opColon, true))
+                    specifier = parseType();
+
+                NodePtr<Expression> value = nullptr;
+                if (match(TokenType::opAssign, true))
+                    value = parseExpression();
+                else if (mutability == Mutability::Const)
+                    ucError(startTok.loc);
+
+                initializer = makeNodePtr<VariableDeclaration>(
+                    std::vector<NodePtr<AttributeStatement>>{},
+                    mutability,
+                    std::move(name),
+                    std::move(specifier),
+                    std::move(value),
+                    startTok.loc
+                );
+            }
+            else
+            {
+                NodePtr<Expression> initExpr = parseExpression();
+                initializer = makeNodePtr<ExpressionStatement>(std::move(initExpr), startLoc);
+            }
+
+            consume(TokenType::semicolon);
+        }
+
+        NodePtr<Expression> condition = nullptr;
+        if (!match(TokenType::semicolon, true))
+        {
+            condition = parseExpression();
+            consume(TokenType::semicolon);
+        }
+
+        NodePtr<Expression> increment = nullptr;
+        if (!match(TokenType::rightParen, true))
+        {
+            increment = parseExpression();
+            consume(TokenType::rightParen);
+        }
+
+        NodePtr<Statement> body = match(TokenType::leftBrace) ? parseBlockStatement() : parseStatement();
+        return makeNodePtr<CForStatement>(std::move(initializer), std::move(condition), std::move(increment), std::move(body), startLoc);
     }
 
     NodePtr<Statement> Parser::parseBreakStatement()

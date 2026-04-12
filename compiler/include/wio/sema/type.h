@@ -123,6 +123,8 @@ namespace wio
             std::string scopePath;
             WeakRef<Scope> structScope;
             std::vector<Ref<Type>> baseTypes;
+            std::vector<std::string> fieldNames;
+            std::vector<Ref<Type>> fieldTypes;
             bool isObject;
             bool isInterface;
 

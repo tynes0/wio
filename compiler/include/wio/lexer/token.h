@@ -82,6 +82,7 @@ namespace wio
       kwElse,
       kwMatch,
       kwFor,
+      kwForeach,
       kwIn,
       kwWhile, // todo: rename with loop
       kwBreak,
@@ -290,6 +291,7 @@ namespace wio
       { "else",      TokenType::kwElse },
       { "match",     TokenType::kwMatch },
       { "for",       TokenType::kwFor },
+      { "foreach",   TokenType::kwForeach },
       { "in",        TokenType::kwIn },
       { "while",     TokenType::kwWhile },
       { "break",     TokenType::kwBreak },

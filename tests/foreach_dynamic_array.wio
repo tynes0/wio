@@ -1,0 +1,13 @@
+use std::io as console;
+
+fn Entry() -> i32 {
+    let values = [2, 4, 6];
+    mut sum: i32 = 0;
+
+    foreach value in values {
+        sum += value;
+    }
+
+    console::Print($"Foreach sum: ${sum}");
+    return 0;
+}

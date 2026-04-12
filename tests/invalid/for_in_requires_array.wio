@@ -1,0 +1,9 @@
+fn Entry() -> i32 {
+    let value: i32 = 42;
+
+    for item in value {
+        break;
+    }
+
+    return 0;
+}

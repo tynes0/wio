@@ -1,0 +1,27 @@
+use std::io as console;
+
+component Vec2 {
+    x: i32;
+    y: i32;
+
+    OnConstruct(x: i32, y: i32) {
+        self.x = x;
+        self.y = y;
+    }
+}
+
+fn Entry() -> i32 {
+    mut points: Vec2[] = [Vec2(1, 2), Vec2(3, 4)];
+
+    for ref point in points {
+        point.x += point.y;
+    }
+
+    mut total: i32 = 0;
+    foreach x | y in points {
+        total += x + y;
+    }
+
+    console::Print($"Component binding total: ${total}");
+    return 0;
+}

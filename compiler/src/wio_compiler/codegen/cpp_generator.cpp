@@ -2573,6 +2573,146 @@ namespace wio::codegen
         node.body->accept(*this);
     }
 
+    void CppGenerator::visit(ForInStatement& node)
+    {
+        auto emitLoopBodyStatements = [&](const NodePtr<Statement>& body)
+        {
+            if (!body)
+                return;
+
+            if (body->is<BlockStatement>())
+            {
+                auto block = body->as<BlockStatement>();
+                for (auto& stmt : block->statements)
+                    stmt->accept(*this);
+                return;
+            }
+
+            body->accept(*this);
+        };
+
+        auto unwrapAliasType = [](Ref<sema::Type> type)
+        {
+            while (type && type->kind() == sema::TypeKind::Alias)
+                type = type.AsFast<sema::AliasType>()->aliasedType;
+            return type;
+        };
+
+        auto buildReferenceInitializer = [&](const Ref<sema::Type>& bindingType, const std::string& sourceExpr)
+        {
+            Ref<sema::Type> resolvedType = unwrapAliasType(bindingType);
+            if (!resolvedType || resolvedType->kind() != sema::TypeKind::Reference)
+                return sourceExpr;
+
+            auto refType = resolvedType.AsFast<sema::ReferenceType>();
+            Ref<sema::Type> referredType = unwrapAliasType(refType->referredType);
+
+            if (referredType && referredType->kind() == sema::TypeKind::Struct)
+            {
+                auto structType = referredType.AsFast<sema::StructType>();
+                if (structType->isObject || structType->isInterface)
+                    return sourceExpr;
+            }
+
+            return "&(" + sourceExpr + ")";
+        };
+
+        auto emitBoundDeclaration = [&](const NodePtr<Identifier>& binding, const std::string& sourceExpr)
+        {
+            auto bindingSym = binding->referencedSymbol.Lock();
+            Ref<sema::Type> bindingType = (bindingSym && bindingSym->type) ? bindingSym->type : binding->refType.Lock();
+
+            switch (node.bindingMode)
+            {
+            case ForBindingMode::ValueMutable:
+                emitLine("auto " + binding->token.value + " = " + sourceExpr + ";");
+                return;
+            case ForBindingMode::ValueImmutable:
+                emitLine("const auto& " + binding->token.value + " = " + sourceExpr + ";");
+                return;
+            case ForBindingMode::ReferenceMutable:
+            case ForBindingMode::ReferenceView:
+                emitLine(toCppType(bindingType) + " " + binding->token.value + " = " + buildReferenceInitializer(bindingType, sourceExpr) + ";");
+                return;
+            }
+        };
+
+        const bool needsPrelude = node.bindings.size() > 1 ||
+            node.bindingMode == ForBindingMode::ReferenceMutable ||
+            node.bindingMode == ForBindingMode::ReferenceView;
+
+        std::string rangeVarName = needsPrelude ? "_wio_loop_item" : node.bindings.front()->token.value;
+        std::string rangeDecl;
+        switch (node.bindingMode)
+        {
+        case ForBindingMode::ValueMutable:
+            rangeDecl = "auto " + rangeVarName;
+            break;
+        case ForBindingMode::ValueImmutable:
+            rangeDecl = "const auto& " + rangeVarName;
+            break;
+        case ForBindingMode::ReferenceMutable:
+            rangeDecl = "auto& " + rangeVarName;
+            break;
+        case ForBindingMode::ReferenceView:
+            rangeDecl = "const auto& " + rangeVarName;
+            break;
+        }
+
+        EMIT_TABS();
+        buffer_ << "for (" << rangeDecl << " : ";
+        node.iterable->accept(*this);
+        buffer_ << ")\n";
+
+        emitLine("{");
+        indent();
+
+        if (needsPrelude)
+        {
+            if (node.bindingAccessors.empty())
+            {
+                emitBoundDeclaration(node.bindings.front(), rangeVarName);
+            }
+            else
+            {
+                for (size_t i = 0; i < node.bindings.size() && i < node.bindingAccessors.size(); ++i)
+                {
+                    emitBoundDeclaration(node.bindings[i], rangeVarName + "." + node.bindingAccessors[i]);
+                }
+            }
+        }
+
+        emitLoopBodyStatements(node.body);
+        dedent();
+        emitLine("}");
+    }
+
+    void CppGenerator::visit(CForStatement& node)
+    {
+        emitLine("{");
+        indent();
+
+        if (node.initializer)
+            node.initializer->accept(*this);
+
+        EMIT_TABS();
+        emit("for (; ");
+        if (node.condition)
+            node.condition->accept(*this);
+        else
+            emit("true");
+        emit("; ");
+        if (node.increment)
+            node.increment->accept(*this);
+        emit(")\n");
+
+        if (node.body)
+            node.body->accept(*this);
+
+        dedent();
+        emitLine("}");
+    }
+
     void CppGenerator::visit(BreakStatement& node)
     {
         WIO_UNUSED(node);
