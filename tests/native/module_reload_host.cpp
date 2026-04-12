@@ -8,7 +8,6 @@
 #else
 #include <dlfcn.h>
 #endif
-using GetCounterFn = std::int32_t(*)();
 
 namespace
 {
@@ -50,6 +49,34 @@ namespace
 
         return reinterpret_cast<T>(rawSymbol);
     }
+
+    bool expectI32Export(const WioModuleExport* exportEntry, const char* symbolName, std::uint32_t parameterCount)
+    {
+        if (exportEntry == nullptr ||
+            std::strcmp(exportEntry->symbolName, symbolName) != 0 ||
+            exportEntry->returnType != WIO_ABI_I32 ||
+            exportEntry->parameterCount != parameterCount ||
+            exportEntry->invoke == nullptr)
+        {
+            return false;
+        }
+
+        if (parameterCount == 0)
+            return exportEntry->parameterTypes == nullptr;
+
+        return exportEntry->parameterTypes != nullptr;
+    }
+
+    bool invokeI32Export(const WioModuleApi* api, const char* logicalName, const WioValue* args, std::uint32_t argCount, std::int32_t& outValue)
+    {
+        WioValue result{};
+        const std::int32_t status = WioInvokeModuleExport(api, logicalName, args, argCount, &result);
+        if (status != WIO_INVOKE_OK || result.type != WIO_ABI_I32)
+            return false;
+
+        outValue = result.value.v_i32;
+        return true;
+    }
 }
 
 int main(int argc, char** argv)
@@ -68,7 +95,6 @@ int main(int argc, char** argv)
     }
 
     WioModuleGetApiFn moduleGetApiA = loadSymbol<WioModuleGetApiFn>(moduleA, "WioModuleGetApi");
-    GetCounterFn getCounterA = loadSymbol<GetCounterFn>(moduleA, "WioGetCounter");
     const WioModuleApi* apiA = moduleGetApiA ? moduleGetApiA() : nullptr;
 
     if (apiA == nullptr ||
@@ -81,9 +107,20 @@ int main(int argc, char** argv)
         apiA->saveState == nullptr ||
         apiA->restoreState == nullptr ||
         apiA->unload == nullptr ||
-        getCounterA == nullptr)
+        apiA->exportCount != 2)
     {
-        std::cerr << "Failed to load one or more symbols from the first module." << '\n';
+        std::cerr << "Failed to load one or more API entries from the first module." << '\n';
+        closeModule(moduleA);
+        return EXIT_FAILURE;
+    }
+
+    const WioModuleExport* counterExportA = WioFindModuleExport(apiA, "GetCounter");
+    const WioModuleExport* addExportA = WioFindModuleExport(apiA, "AddToCounter");
+    if (!expectI32Export(counterExportA, "WioGetCounter", 0) ||
+        !expectI32Export(addExportA, "WioAddToCounter", 1) ||
+        addExportA->parameterTypes[0] != WIO_ABI_I32)
+    {
+        std::cerr << "Failed to resolve export metadata from the first module." << '\n';
         closeModule(moduleA);
         return EXIT_FAILURE;
     }
@@ -92,7 +129,13 @@ int main(int argc, char** argv)
     std::int32_t loadResultA = apiA->load();
     apiA->update(2.0f);
     std::int32_t snapshot = apiA->saveState();
-    std::int32_t counterBeforeReload = getCounterA();
+    std::int32_t counterBeforeReload = 0;
+    if (!invokeI32Export(apiA, "GetCounter", nullptr, 0, counterBeforeReload))
+    {
+        std::cerr << "Failed to invoke GetCounter from the first module." << '\n';
+        closeModule(moduleA);
+        return EXIT_FAILURE;
+    }
     apiA->unload();
     closeModule(moduleA);
 
@@ -104,7 +147,6 @@ int main(int argc, char** argv)
     }
 
     WioModuleGetApiFn moduleGetApiB = loadSymbol<WioModuleGetApiFn>(moduleB, "WioModuleGetApi");
-    GetCounterFn getCounterB = loadSymbol<GetCounterFn>(moduleB, "WioGetCounter");
     const WioModuleApi* apiB = moduleGetApiB ? moduleGetApiB() : nullptr;
 
     if (apiB == nullptr ||
@@ -113,25 +155,55 @@ int main(int argc, char** argv)
         apiB->stateSchemaVersion != 1 ||
         apiB->restoreState == nullptr ||
         apiB->update == nullptr ||
-        getCounterB == nullptr)
+        apiB->unload == nullptr ||
+        apiB->exportCount != 2)
     {
-        std::cerr << "Failed to load one or more symbols from the second module." << '\n';
+        std::cerr << "Failed to load one or more API entries from the second module." << '\n';
+        closeModule(moduleB);
+        return EXIT_FAILURE;
+    }
+
+    const WioModuleExport* counterExportB = WioFindModuleExport(apiB, "GetCounter");
+    const WioModuleExport* addExportB = WioFindModuleExport(apiB, "AddToCounter");
+    if (!expectI32Export(counterExportB, "WioGetCounter", 0) ||
+        !expectI32Export(addExportB, "WioAddToCounter", 1) ||
+        addExportB->parameterTypes[0] != WIO_ABI_I32)
+    {
+        std::cerr << "Failed to resolve export metadata from the second module." << '\n';
         closeModule(moduleB);
         return EXIT_FAILURE;
     }
 
     std::int32_t restoreResult = apiB->restoreState(snapshot);
-    std::int32_t counterAfterRestore = getCounterB();
-    apiB->update(3.0f);
-    std::int32_t counterAfterRetick = getCounterB();
+    std::int32_t counterAfterRestore = 0;
+    if (!invokeI32Export(apiB, "GetCounter", nullptr, 0, counterAfterRestore))
+    {
+        std::cerr << "Failed to invoke GetCounter from the second module." << '\n';
+        closeModule(moduleB);
+        return EXIT_FAILURE;
+    }
+
+    WioValue addArgs[1]{};
+    addArgs[0].type = WIO_ABI_I32;
+    addArgs[0].value.v_i32 = 3;
+
+    std::int32_t addResult = 0;
+    if (!invokeI32Export(apiB, "AddToCounter", addArgs, 1, addResult))
+    {
+        std::cerr << "Failed to invoke AddToCounter from the second module." << '\n';
+        closeModule(moduleB);
+        return EXIT_FAILURE;
+    }
+
+    apiB->unload();
 
     std::cout
-        << "Module reload: table=1 caps=" << apiA->capabilities << " schema=" << apiA->stateSchemaVersion << " v" << version
+        << "Module reload: table=1 caps=" << apiA->capabilities << " schema=" << apiA->stateSchemaVersion << " exports=" << apiA->exportCount << " v" << version
         << " load=" << loadResultA
         << " restore=" << restoreResult
         << " before=" << counterBeforeReload
         << " after=" << counterAfterRestore
-        << " retick=" << counterAfterRetick
+        << " add=" << addResult
         << '\n';
 
     closeModule(moduleB);

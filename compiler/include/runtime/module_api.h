@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
 
 inline constexpr std::uint32_t WIO_MODULE_API_DESCRIPTOR_VERSION = 1u;
 
@@ -12,6 +14,78 @@ enum WioModuleCapability : std::uint32_t
     WIO_MODULE_CAP_UNLOAD = 1u << 3,
     WIO_MODULE_CAP_SAVE_STATE = 1u << 4,
     WIO_MODULE_CAP_RESTORE_STATE = 1u << 5
+};
+
+enum WioAbiType : std::uint32_t
+{
+    WIO_ABI_UNKNOWN = 0,
+    WIO_ABI_VOID,
+    WIO_ABI_BOOL,
+    WIO_ABI_CHAR,
+    WIO_ABI_UCHAR,
+    WIO_ABI_BYTE,
+    WIO_ABI_I8,
+    WIO_ABI_I16,
+    WIO_ABI_I32,
+    WIO_ABI_I64,
+    WIO_ABI_U8,
+    WIO_ABI_U16,
+    WIO_ABI_U32,
+    WIO_ABI_U64,
+    WIO_ABI_ISIZE,
+    WIO_ABI_USIZE,
+    WIO_ABI_F32,
+    WIO_ABI_F64
+};
+
+union WioValuePayload
+{
+    bool v_bool;
+    char v_char;
+    unsigned char v_uchar;
+    std::uint8_t v_byte;
+    std::int8_t v_i8;
+    std::int16_t v_i16;
+    std::int32_t v_i32;
+    std::int64_t v_i64;
+    std::uint8_t v_u8;
+    std::uint16_t v_u16;
+    std::uint32_t v_u32;
+    std::uint64_t v_u64;
+    std::intptr_t v_isize;
+    std::uintptr_t v_usize;
+    float v_f32;
+    double v_f64;
+
+    constexpr WioValuePayload() : v_u64(0) {}
+};
+
+struct WioValue
+{
+    WioAbiType type = WIO_ABI_UNKNOWN;
+    WioValuePayload value{};
+};
+
+enum WioInvokeStatus : std::int32_t
+{
+    WIO_INVOKE_OK = 0,
+    WIO_INVOKE_EXPORT_NOT_FOUND = 1,
+    WIO_INVOKE_BAD_ARGUMENTS = 2,
+    WIO_INVOKE_TYPE_MISMATCH = 3,
+    WIO_INVOKE_RESULT_REQUIRED = 4,
+    WIO_INVOKE_NOT_CALLABLE = 5
+};
+
+using WioModuleInvokeFn = std::int32_t(*)(const WioValue* args, std::uint32_t argCount, WioValue* outResult);
+
+struct WioModuleExport
+{
+    const char* logicalName;
+    const char* symbolName;
+    WioAbiType returnType;
+    std::uint32_t parameterCount;
+    const WioAbiType* parameterTypes;
+    WioModuleInvokeFn invoke;
 };
 
 struct WioModuleApi
@@ -26,6 +100,35 @@ struct WioModuleApi
     std::int32_t (*saveState)();
     std::int32_t (*restoreState)(std::int32_t);
     void (*unload)();
+    std::uint32_t exportCount;
+    const WioModuleExport* exports;
 };
 
 using WioModuleGetApiFn = const WioModuleApi*(*)();
+
+inline const WioModuleExport* WioFindModuleExport(const WioModuleApi* api, const char* logicalName)
+{
+    if (api == nullptr || logicalName == nullptr || api->exports == nullptr)
+        return nullptr;
+
+    for (std::uint32_t i = 0; i < api->exportCount; ++i)
+    {
+        const WioModuleExport& exportEntry = api->exports[i];
+        if (exportEntry.logicalName != nullptr && std::strcmp(exportEntry.logicalName, logicalName) == 0)
+            return &exportEntry;
+    }
+
+    return nullptr;
+}
+
+inline std::int32_t WioInvokeModuleExport(const WioModuleApi* api, const char* logicalName, const WioValue* args, std::uint32_t argCount, WioValue* outResult)
+{
+    const WioModuleExport* exportEntry = WioFindModuleExport(api, logicalName);
+    if (exportEntry == nullptr)
+        return WIO_INVOKE_EXPORT_NOT_FOUND;
+
+    if (exportEntry->invoke == nullptr)
+        return WIO_INVOKE_NOT_CALLABLE;
+
+    return exportEntry->invoke(args, argCount, outResult);
+}

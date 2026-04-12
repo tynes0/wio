@@ -197,6 +197,12 @@ Current status:
   that returns a function-pointer table for host integration.
 - The shared host ABI now lives in a reusable runtime header:
   `compiler/include/runtime/module_api.h`.
+- `WioModuleGetApi()` now also exposes an export registry, so hosts can
+  discover Wio-callable entrypoints by logical name and inspect their primitive
+  ABI metadata before resolving symbols.
+- Hosts can invoke primitive `@Export` entrypoints directly through
+  `WioInvokeModuleExport(...)`, which removes the need to bind every exported
+  function manually with `GetProcAddress`/`dlsym`.
 - Numeric `fit` lowering now goes through a runtime helper in
   `compiler/include/runtime/fit.h`, which avoids the mixed signed/unsigned
   clamp crash seen in earlier generated code.

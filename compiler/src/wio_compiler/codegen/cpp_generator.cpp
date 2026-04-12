@@ -192,6 +192,71 @@ namespace wio::codegen
                 slot = declaration;
         }
 
+        struct ExportedFunctionInfo
+        {
+            const FunctionDeclaration* declaration = nullptr;
+            std::string logicalName;
+            std::string symbolName;
+        };
+
+        std::string getAbiTypeEnumName(const Ref<sema::Type>& type)
+        {
+            Ref<sema::Type> resolvedType = unwrapAliasType(type);
+            if (!resolvedType)
+                return "WIO_ABI_UNKNOWN";
+
+            if (resolvedType->isVoid())
+                return "WIO_ABI_VOID";
+
+            if (resolvedType->kind() != sema::TypeKind::Primitive)
+                return "WIO_ABI_UNKNOWN";
+
+            const std::string primitiveName = resolvedType.AsFast<sema::PrimitiveType>()->name;
+            if (primitiveName == "bool") return "WIO_ABI_BOOL";
+            if (primitiveName == "char") return "WIO_ABI_CHAR";
+            if (primitiveName == "uchar") return "WIO_ABI_UCHAR";
+            if (primitiveName == "byte") return "WIO_ABI_BYTE";
+            if (primitiveName == "i8") return "WIO_ABI_I8";
+            if (primitiveName == "i16") return "WIO_ABI_I16";
+            if (primitiveName == "i32") return "WIO_ABI_I32";
+            if (primitiveName == "i64") return "WIO_ABI_I64";
+            if (primitiveName == "u8") return "WIO_ABI_U8";
+            if (primitiveName == "u16") return "WIO_ABI_U16";
+            if (primitiveName == "u32") return "WIO_ABI_U32";
+            if (primitiveName == "u64") return "WIO_ABI_U64";
+            if (primitiveName == "isize") return "WIO_ABI_ISIZE";
+            if (primitiveName == "usize") return "WIO_ABI_USIZE";
+            if (primitiveName == "f32") return "WIO_ABI_F32";
+            if (primitiveName == "f64") return "WIO_ABI_F64";
+            return "WIO_ABI_UNKNOWN";
+        }
+
+        std::string getAbiValueFieldName(const Ref<sema::Type>& type)
+        {
+            Ref<sema::Type> resolvedType = unwrapAliasType(type);
+            if (!resolvedType || resolvedType->kind() != sema::TypeKind::Primitive)
+                return {};
+
+            const std::string primitiveName = resolvedType.AsFast<sema::PrimitiveType>()->name;
+            if (primitiveName == "bool") return "v_bool";
+            if (primitiveName == "char") return "v_char";
+            if (primitiveName == "uchar") return "v_uchar";
+            if (primitiveName == "byte") return "v_byte";
+            if (primitiveName == "i8") return "v_i8";
+            if (primitiveName == "i16") return "v_i16";
+            if (primitiveName == "i32") return "v_i32";
+            if (primitiveName == "i64") return "v_i64";
+            if (primitiveName == "u8") return "v_u8";
+            if (primitiveName == "u16") return "v_u16";
+            if (primitiveName == "u32") return "v_u32";
+            if (primitiveName == "u64") return "v_u64";
+            if (primitiveName == "isize") return "v_isize";
+            if (primitiveName == "usize") return "v_usize";
+            if (primitiveName == "f32") return "v_f32";
+            if (primitiveName == "f64") return "v_f64";
+            return {};
+        }
+
         void collectModuleLifecycleFunctions(const std::vector<NodePtr<Statement>>& statements, ModuleLifecycleFunctions& lifecycleFunctions)
         {
             for (const auto& statement : statements)
@@ -222,6 +287,31 @@ namespace wio::codegen
                     default: break;
                     }
                 }
+            }
+        }
+
+        void collectExportedFunctions(const std::vector<NodePtr<Statement>>& statements, std::vector<ExportedFunctionInfo>& exportedFunctions)
+        {
+            for (const auto& statement : statements)
+            {
+                if (!statement)
+                    continue;
+
+                if (const auto* realmDecl = statement->as<RealmDeclaration>())
+                {
+                    collectExportedFunctions(realmDecl->statements, exportedFunctions);
+                    continue;
+                }
+
+                const auto* fnDecl = statement->as<FunctionDeclaration>();
+                if (!fnDecl || !isExportedFunction(*fnDecl))
+                    continue;
+
+                ExportedFunctionInfo info;
+                info.declaration = fnDecl;
+                info.logicalName = fnDecl->name ? fnDecl->name->token.value : "";
+                info.symbolName = getExportedCppSymbolName(*fnDecl);
+                exportedFunctions.push_back(std::move(info));
             }
         }
 
@@ -411,7 +501,10 @@ namespace wio::codegen
 
         ModuleLifecycleFunctions lifecycleFunctions;
         collectModuleLifecycleFunctions(program->statements, lifecycleFunctions);
-        if (!lifecycleFunctions.hasAny())
+        std::vector<ExportedFunctionInfo> exportedFunctions;
+        collectExportedFunctions(program->statements, exportedFunctions);
+
+        if (!lifecycleFunctions.hasAny() && exportedFunctions.empty())
             return;
 
         std::uint32_t capabilities = 0;
@@ -424,9 +517,108 @@ namespace wio::codegen
         std::uint32_t stateSchemaVersion = (lifecycleFunctions.saveState || lifecycleFunctions.restoreState) ? 1u : 0u;
 
         emitLine();
+        for (size_t i = 0; i < exportedFunctions.size(); ++i)
+        {
+            const auto& exportInfo = exportedFunctions[i];
+            auto exportSymbol = exportInfo.declaration->name->referencedSymbol.Lock();
+            auto exportFunctionType = exportSymbol->type.AsFast<sema::FunctionType>();
+            std::string internalSymbol = Mangler::mangleFunction(
+                exportInfo.declaration->name->token.value,
+                exportFunctionType->paramTypes,
+                exportSymbol ? exportSymbol->scopePath : ""
+            );
+
+            emitLine("static std::int32_t WIO_INVOKE_EXPORT_" + std::to_string(i) + "(const WioValue* args, std::uint32_t argCount, WioValue* outResult)");
+            emitLine("{");
+            indent();
+            emitLine("if (argCount != " + std::to_string(exportFunctionType->paramTypes.size()) + "u) return WIO_INVOKE_BAD_ARGUMENTS;");
+            if (!exportFunctionType->paramTypes.empty())
+                emitLine("if (args == nullptr) return WIO_INVOKE_BAD_ARGUMENTS;");
+
+            for (size_t paramIndex = 0; paramIndex < exportFunctionType->paramTypes.size(); ++paramIndex)
+            {
+                emitLine(
+                    "if (args[" + std::to_string(paramIndex) + "].type != " +
+                    getAbiTypeEnumName(exportFunctionType->paramTypes[paramIndex]) +
+                    ") return WIO_INVOKE_TYPE_MISMATCH;"
+                );
+            }
+
+            if (!exportFunctionType->returnType->isVoid())
+                emitLine("if (outResult == nullptr) return WIO_INVOKE_RESULT_REQUIRED;");
+
+            std::string callExpression = internalSymbol + "(";
+            for (size_t paramIndex = 0; paramIndex < exportFunctionType->paramTypes.size(); ++paramIndex)
+            {
+                if (paramIndex > 0)
+                    callExpression += ", ";
+
+                callExpression += "args[" + std::to_string(paramIndex) + "].value." + getAbiValueFieldName(exportFunctionType->paramTypes[paramIndex]);
+            }
+            callExpression += ")";
+
+            if (exportFunctionType->returnType->isVoid())
+            {
+                emitLine(callExpression + ";");
+                emitLine("if (outResult != nullptr) outResult->type = WIO_ABI_VOID;");
+            }
+            else
+            {
+                emitLine("auto result = " + callExpression + ";");
+                emitLine("outResult->type = " + getAbiTypeEnumName(exportFunctionType->returnType) + ";");
+                emitLine("outResult->value." + getAbiValueFieldName(exportFunctionType->returnType) + " = result;");
+            }
+
+            emitLine("return WIO_INVOKE_OK;");
+            dedent();
+            emitLine("}");
+
+            if (!exportFunctionType->paramTypes.empty())
+            {
+                emitLine("static const WioAbiType WIO_EXPORT_PARAM_TYPES_" + std::to_string(i) + "[] =");
+                emitLine("{");
+                indent();
+                for (size_t paramIndex = 0; paramIndex < exportFunctionType->paramTypes.size(); ++paramIndex)
+                {
+                    std::string suffix = (paramIndex + 1 < exportFunctionType->paramTypes.size()) ? "," : "";
+                    emitLine(getAbiTypeEnumName(exportFunctionType->paramTypes[paramIndex]) + suffix);
+                }
+                dedent();
+                emitLine("};");
+            }
+        }
+
+        if (!exportedFunctions.empty())
+        {
+            emitLine("static const WioModuleExport WIO_MODULE_EXPORTS[] =");
+            emitLine("{");
+            indent();
+            for (size_t i = 0; i < exportedFunctions.size(); ++i)
+            {
+                const auto& exportInfo = exportedFunctions[i];
+                auto exportSymbol = exportInfo.declaration->name->referencedSymbol.Lock();
+                auto exportFunctionType = exportSymbol->type.AsFast<sema::FunctionType>();
+                std::string paramTypesExpr = exportFunctionType->paramTypes.empty()
+                    ? "nullptr"
+                    : ("WIO_EXPORT_PARAM_TYPES_" + std::to_string(i));
+                std::string suffix = (i + 1 < exportedFunctions.size()) ? "," : "";
+
+                emitLine(
+                    "{ \"" + common::wioStringToEscapedCppString(exportInfo.logicalName) +
+                    "\", \"" + common::wioStringToEscapedCppString(exportInfo.symbolName) +
+                    "\", " + getAbiTypeEnumName(exportFunctionType->returnType) +
+                    ", " + std::to_string(exportFunctionType->paramTypes.size()) + "u, " + paramTypesExpr +
+                    ", &WIO_INVOKE_EXPORT_" + std::to_string(i) + " }" + suffix
+                );
+            }
+            dedent();
+            emitLine("};");
+        }
+
         emitLine("extern \"C\" WIO_EXPORT const WioModuleApi* WioModuleGetApi()");
         emitLine("{");
         indent();
+
         emitLine("static const WioModuleApi API =");
         emitLine("{");
         indent();
@@ -439,7 +631,9 @@ namespace wio::codegen
         emitLine(lifecycleFunctions.update ? "&WioModuleUpdate," : "nullptr,");
         emitLine(lifecycleFunctions.saveState ? "&WioModuleSaveState," : "nullptr,");
         emitLine(lifecycleFunctions.restoreState ? "&WioModuleRestoreState," : "nullptr,");
-        emitLine(lifecycleFunctions.unload ? "&WioModuleUnload" : "nullptr");
+        emitLine(lifecycleFunctions.unload ? "&WioModuleUnload," : "nullptr,");
+        emitLine(std::to_string(exportedFunctions.size()) + "u,");
+        emitLine(exportedFunctions.empty() ? "nullptr" : "WIO_MODULE_EXPORTS");
         dedent();
         emitLine("};");
         emitLine("return &API;");

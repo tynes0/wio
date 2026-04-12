@@ -26,3 +26,10 @@ fn StopModule() {
 fn GetCounter() -> i32 {
     return gCounter;
 }
+
+@Export
+@CppName(WioAddToCounter)
+fn AddToCounter(delta: i32) -> i32 {
+    gCounter += delta;
+    return gCounter;
+}

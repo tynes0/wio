@@ -8,7 +8,6 @@
 #else
 #include <dlfcn.h>
 #endif
-using GetCounterFn = std::int32_t(*)();
 
 namespace
 {
@@ -50,6 +49,34 @@ namespace
 
         return reinterpret_cast<T>(rawSymbol);
     }
+
+    bool expectI32Export(const WioModuleExport* exportEntry, const char* symbolName, std::uint32_t parameterCount)
+    {
+        if (exportEntry == nullptr ||
+            std::strcmp(exportEntry->symbolName, symbolName) != 0 ||
+            exportEntry->returnType != WIO_ABI_I32 ||
+            exportEntry->parameterCount != parameterCount ||
+            exportEntry->invoke == nullptr)
+        {
+            return false;
+        }
+
+        if (parameterCount == 0)
+            return exportEntry->parameterTypes == nullptr;
+
+        return exportEntry->parameterTypes != nullptr;
+    }
+
+    bool invokeI32Export(const WioModuleApi* api, const char* logicalName, const WioValue* args, std::uint32_t argCount, std::int32_t& outValue)
+    {
+        WioValue result{};
+        const std::int32_t status = WioInvokeModuleExport(api, logicalName, args, argCount, &result);
+        if (status != WIO_INVOKE_OK || result.type != WIO_ABI_I32)
+            return false;
+
+        outValue = result.value.v_i32;
+        return true;
+    }
 }
 
 int main(int argc, char** argv)
@@ -68,7 +95,6 @@ int main(int argc, char** argv)
     }
 
     WioModuleGetApiFn moduleGetApi = loadSymbol<WioModuleGetApiFn>(moduleHandle, "WioModuleGetApi");
-    GetCounterFn getCounter = loadSymbol<GetCounterFn>(moduleHandle, "WioGetCounter");
     const WioModuleApi* api = moduleGetApi ? moduleGetApi() : nullptr;
 
     if (api == nullptr ||
@@ -81,9 +107,20 @@ int main(int argc, char** argv)
         api->unload == nullptr ||
         api->saveState != nullptr ||
         api->restoreState != nullptr ||
-        getCounter == nullptr)
+        api->exportCount != 2)
     {
-        std::cerr << "Failed to load one or more module symbols." << '\n';
+        std::cerr << "Failed to load one or more module API entries." << '\n';
+        closeModule(moduleHandle);
+        return EXIT_FAILURE;
+    }
+
+    const WioModuleExport* counterExport = WioFindModuleExport(api, "GetCounter");
+    const WioModuleExport* addExport = WioFindModuleExport(api, "AddToCounter");
+    if (!expectI32Export(counterExport, "WioGetCounter", 0) ||
+        !expectI32Export(addExport, "WioAddToCounter", 1) ||
+        addExport->parameterTypes[0] != WIO_ABI_I32)
+    {
+        std::cerr << "Failed to resolve exported function metadata." << '\n';
         closeModule(moduleHandle);
         return EXIT_FAILURE;
     }
@@ -91,10 +128,30 @@ int main(int argc, char** argv)
     std::uint32_t version = api->apiVersion();
     std::int32_t loadResult = api->load();
     api->update(2.0f);
-    std::int32_t counter = getCounter();
+
+    std::int32_t counter = 0;
+    if (!invokeI32Export(api, "GetCounter", nullptr, 0, counter))
+    {
+        std::cerr << "Failed to invoke GetCounter through the module export registry." << '\n';
+        closeModule(moduleHandle);
+        return EXIT_FAILURE;
+    }
+
+    WioValue addArgs[1]{};
+    addArgs[0].type = WIO_ABI_I32;
+    addArgs[0].value.v_i32 = 3;
+
+    std::int32_t add = 0;
+    if (!invokeI32Export(api, "AddToCounter", addArgs, 1, add))
+    {
+        std::cerr << "Failed to invoke AddToCounter through the module export registry." << '\n';
+        closeModule(moduleHandle);
+        return EXIT_FAILURE;
+    }
+
     api->unload();
 
-    std::cout << "Module lifecycle: table=1 caps=" << api->capabilities << " schema=" << api->stateSchemaVersion << " v" << version << " load=" << loadResult << " counter=" << counter << '\n';
+    std::cout << "Module lifecycle: table=1 caps=" << api->capabilities << " schema=" << api->stateSchemaVersion << " exports=" << api->exportCount << " v" << version << " load=" << loadResult << " counter=" << counter << " add=" << add << '\n';
     closeModule(moduleHandle);
     return EXIT_SUCCESS;
 }
