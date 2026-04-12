@@ -1,0 +1,23 @@
+use std::io as console;
+
+component Pair {
+    x: i32;
+    y: i32;
+
+    OnConstruct(x: i32, y: i32) {
+        self.x = x;
+        self.y = y;
+    }
+}
+
+fn Entry() -> i32 {
+    let pairs: Pair[] = [Pair(1, 2), Pair(3, 4)];
+    mut total: i32 = 0;
+
+    foreach idx | x | y in pairs {
+        total += (idx fit i32) + x + y;
+    }
+
+    console::Print($"Component index binding total: ${total}");
+    return 0;
+}

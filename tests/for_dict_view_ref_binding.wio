@@ -1,0 +1,21 @@
+use std::io as console;
+
+fn TouchKey(key: view i32) {
+}
+
+fn Entry() -> i32 {
+    mut weights: Tree<i32, i32> = {< 1: 2, 3: 4 >};
+
+    for view key | ref value in weights {
+        TouchKey(key);
+        value = value + key;
+    }
+
+    mut score: i32 = 0;
+    for key | value in weights {
+        score += key * 10 + value;
+    }
+
+    console::Print($"Dict ref/value score: ${score}");
+    return 0;
+}

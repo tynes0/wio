@@ -1,0 +1,9 @@
+fn Entry() -> i32 {
+    let values: i32[] = [1, 2, 3];
+
+    for ref idx | value in values {
+        return value;
+    }
+
+    return 0;
+}

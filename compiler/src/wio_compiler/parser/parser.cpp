@@ -1235,45 +1235,47 @@ namespace wio
         if (headerLooksLikeCStyleFor())
             return parseCForStatement(startLoc);
 
-        ForBindingMode bindingMode = ForBindingMode::ValueImmutable;
-        if (match(TokenType::kwMut, true))
-        {
-            bindingMode = ForBindingMode::ValueMutable;
-        }
-        else if (match(TokenType::kwLet, true))
-        {
-            bindingMode = ForBindingMode::ValueImmutable;
-        }
-        else if (match(TokenType::kwRef, true))
-        {
-            bindingMode = ForBindingMode::ReferenceMutable;
-        }
-        else if (match(TokenType::kwView, true))
-        {
-            bindingMode = ForBindingMode::ReferenceView;
-        }
-        else if (match(TokenType::kwConst, true))
-        {
-            utError("'const' is not supported in loop bindings. Use 'let', 'mut', 'ref', or 'view'.", peek(-1).loc);
-        }
-
         std::vector<NodePtr<Identifier>> bindings;
+        std::vector<ForBindingMode> bindingModes;
+
+        auto parseBindingMode = [&]() -> ForBindingMode
+        {
+            if (match(TokenType::kwMut, true))
+                return ForBindingMode::ValueMutable;
+            if (match(TokenType::kwLet, true))
+                return ForBindingMode::ValueImmutable;
+            if (match(TokenType::kwRef, true))
+                return ForBindingMode::ReferenceMutable;
+            if (match(TokenType::kwView, true))
+                return ForBindingMode::ReferenceView;
+            if (match(TokenType::kwConst, true))
+                utError("'const' is not supported in loop bindings. Use 'let', 'mut', 'ref', or 'view'.", peek(-1).loc);
+
+            return ForBindingMode::ValueImmutable;
+        };
+
+        bindingModes.push_back(parseBindingMode());
         bindings.push_back(makeNodePtr<Identifier>(consume(TokenType::identifier)));
         while (match(TokenType::opBitOr, true))
         {
+            bindingModes.push_back(parseBindingMode());
             bindings.push_back(makeNodePtr<Identifier>(consume(TokenType::identifier)));
         }
 
         consume(TokenType::kwIn);
 
         NodePtr<Expression> iterable = parseExpression();
+        NodePtr<Expression> step = nullptr;
+
+        if (match(TokenType::kwStep, true))
+            step = parseExpression();
 
         if (hasParen)
             consume(TokenType::rightParen);
 
         NodePtr<Statement> body = match(TokenType::leftBrace) ? parseBlockStatement() : parseStatement();
 
-        return makeNodePtr<ForInStatement>(bindingMode, std::move(bindings), std::move(iterable), std::move(body), startLoc);
+        return makeNodePtr<ForInStatement>(std::move(bindings), std::move(bindingModes), std::move(iterable), std::move(step), std::move(body), startLoc);
     }
 
     NodePtr<Statement> Parser::parseCForStatement(common::Location startLoc)

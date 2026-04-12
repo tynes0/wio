@@ -170,6 +170,22 @@ The language reference now exists, but it still needs to become a true spec.
 - [ ] Decide whether aliases can name function types, arrays, and dictionary
       types.
 
+### 4.4 Generics / Templates
+
+- [ ] Decide whether Wio exposes this feature as `generic`, template-like
+      parameter lists, or another surface syntax entirely.
+- [ ] Design generic type declarations for `object`, `component`, `interface`,
+      `enum`, and aliases.
+- [ ] Design generic function declarations and generic methods.
+- [ ] Decide monomorphization versus backend C++ template lowering.
+- [ ] Define generic constraint syntax, if any, before exposing advanced type
+      relations.
+- [ ] Decide how overload resolution interacts with generic functions.
+- [ ] Decide whether generic defaults and partial specialization will ever
+      exist.
+- [ ] Add end-to-end examples such as `Array<T>`, `Result<T>`, `Pair<K, V>`,
+      and generic utility functions once the surface syntax is frozen.
+
 ---
 
 ## 5. Variables, Constants, and Initialization

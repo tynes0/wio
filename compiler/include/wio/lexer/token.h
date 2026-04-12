@@ -84,6 +84,7 @@ namespace wio
       kwFor,
       kwForeach,
       kwIn,
+      kwStep,
       kwWhile, // todo: rename with loop
       kwBreak,
       kwContinue,
@@ -293,6 +294,7 @@ namespace wio
       { "for",       TokenType::kwFor },
       { "foreach",   TokenType::kwForeach },
       { "in",        TokenType::kwIn },
+      { "step",      TokenType::kwStep },
       { "while",     TokenType::kwWhile },
       { "break",     TokenType::kwBreak },
       { "continue",  TokenType::kwContinue },

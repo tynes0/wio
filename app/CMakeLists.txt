@@ -400,6 +400,41 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_for_in_inclusive_range_run
+        "${CMAKE_SOURCE_DIR}/tests/for_in_inclusive_range.wio"
+        "Inclusive range sum: 10"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_for_in_exclusive_range_run
+        "${CMAKE_SOURCE_DIR}/tests/for_in_exclusive_range.wio"
+        "Exclusive range sum: 6"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_for_in_range_step_positive_run
+        "${CMAKE_SOURCE_DIR}/tests/for_in_range_step_positive.wio"
+        "Positive step sum: 16"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_for_in_range_step_negative_run
+        "${CMAKE_SOURCE_DIR}/tests/for_in_range_step_negative.wio"
+        "Negative step sum: 16"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_for_array_index_value_run
+        "${CMAKE_SOURCE_DIR}/tests/for_array_index_value.wio"
+        "Array index/value score: 51"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_for_ref_view_array_run
         "${CMAKE_SOURCE_DIR}/tests/for_ref_view_array.wio"
         "Ref/view array: 11, 12, 13 => 3"
@@ -414,9 +449,30 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_for_dict_view_ref_binding_run
+        "${CMAKE_SOURCE_DIR}/tests/for_dict_view_ref_binding.wio"
+        "Dict ref/value score: 50"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_for_component_binding_run
         "${CMAKE_SOURCE_DIR}/tests/for_component_binding.wio"
         "Component binding total: 16"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_for_component_ref_binding_arithmetic_run
+        "${CMAKE_SOURCE_DIR}/tests/for_component_ref_binding_arithmetic.wio"
+        "Component ref binding total: 16, seen: 16"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_for_component_index_binding_run
+        "${CMAKE_SOURCE_DIR}/tests/for_component_index_binding.wio"
+        "Component index binding total: 11"
         --run
     )
 
@@ -577,13 +633,43 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_for_ref_dict_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/for_ref_dict_not_supported.wio"
-        "Dictionary iteration does not yet support 'ref' bindings"
+        "Dictionary keys are immutable"
     )
 
     add_wio_failure_test(
         wio_invalid_for_component_binding_count_mismatch
         "${CMAKE_SOURCE_DIR}/tests/invalid/for_component_binding_count_mismatch.wio"
-        "Component binding expects 2 names, but 3 were provided"
+        "Component binding expects 2 names, or 3 with an index binding, but 4 were provided"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_for_array_index_ref_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/for_array_index_ref_not_supported.wio"
+        "Array index bindings do not support 'ref' or 'view'"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_for_array_step_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/for_array_step_not_supported.wio"
+        "Step clauses are currently supported only for range iteration"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_for_range_ref_binding_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/for_range_ref_binding_not_supported.wio"
+        "Range iteration does not support 'ref' or 'view' bindings"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_for_range_step_zero
+        "${CMAKE_SOURCE_DIR}/tests/invalid/for_range_step_zero.wio"
+        "Range step cannot be zero"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_for_range_requires_integer_bounds
+        "${CMAKE_SOURCE_DIR}/tests/invalid/for_range_requires_integer_bounds.wio"
+        "Range iteration currently requires integer bounds"
     )
 
     add_wio_failure_test(

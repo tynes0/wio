@@ -1,0 +1,13 @@
+use std::io as console;
+
+fn Entry() -> i32 {
+    let values: i32[] = [5, 7, 9];
+    mut score: i32 = 0;
+
+    for idx | value in values {
+        score += (idx fit i32) * 10 + value;
+    }
+
+    console::Print($"Array index/value score: ${score}");
+    return 0;
+}

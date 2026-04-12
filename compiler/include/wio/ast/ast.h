@@ -686,13 +686,14 @@ namespace wio
     {
         WIO_STMT_NODE_BODY(ForInStatement)
 
-        ForBindingMode bindingMode = ForBindingMode::ValueImmutable;
         std::vector<NodePtr<Identifier>> bindings;
+        std::vector<ForBindingMode> bindingModes;
         std::vector<std::string> bindingAccessors;
         NodePtr<Expression> iterable;
+        NodePtr<Expression> step;
         NodePtr<Statement> body;
 
-        ForInStatement(ForBindingMode _bindingMode, std::vector<NodePtr<Identifier>> _bindings, NodePtr<Expression> _iterable, NodePtr<Statement> _body, common::Location _loc);
+        ForInStatement(std::vector<NodePtr<Identifier>> _bindings, std::vector<ForBindingMode> _bindingModes, NodePtr<Expression> _iterable, NodePtr<Expression> _step, NodePtr<Statement> _body, common::Location _loc);
         ~ForInStatement() override;
     };
 

@@ -1,0 +1,12 @@
+use std::io as console;
+
+fn Entry() -> i32 {
+    mut sum: i32 = 0;
+
+    for mut i in 0..<4 {
+        sum += i;
+    }
+
+    console::Print($"Exclusive range sum: ${sum}");
+    return 0;
+}

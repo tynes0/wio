@@ -83,6 +83,7 @@ namespace wio
        case TokenType::kwFor: return "kwFor";
        case TokenType::kwForeach: return "kwForeach";
        case TokenType::kwIn: return "kwIn";
+       case TokenType::kwStep: return "kwStep";
        case TokenType::kwWhile: return "kwWhile";
        case TokenType::kwBreak: return "kwBreak";
        case TokenType::kwContinue: return "kwContinue";

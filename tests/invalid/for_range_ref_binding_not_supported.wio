@@ -1,0 +1,7 @@
+fn Entry() -> i32 {
+    for ref i in 1...3 {
+        return i;
+    }
+
+    return 0;
+}

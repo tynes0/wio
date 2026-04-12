@@ -6,7 +6,7 @@ component Vec2 {
 fn Entry() -> i32 {
     let points: Vec2[] = [Vec2(), Vec2()];
 
-    for x | y | z in points {
+    for a | x | y | z in points {
         return 0;
     }
 

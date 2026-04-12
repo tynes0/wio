@@ -1,0 +1,12 @@
+use std::io as console;
+
+fn Entry() -> i32 {
+    mut sum: i32 = 0;
+
+    for i in 7...1 step -2 {
+        sum += i;
+    }
+
+    console::Print($"Negative step sum: ${sum}");
+    return 0;
+}

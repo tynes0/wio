@@ -14,6 +14,100 @@ namespace wio::sema
 {
     namespace
     {
+        Ref<Type> unwrapAliasType(Ref<Type> type)
+        {
+            while (type && type->kind() == TypeKind::Alias)
+                type = type.AsFast<AliasType>()->aliasedType;
+
+            return type;
+        }
+
+        bool shouldAutoReadReferenceType(const Ref<Type>& type)
+        {
+            Ref<Type> current = unwrapAliasType(type);
+            if (!current || current->kind() != TypeKind::Reference)
+                return false;
+
+            while (current && current->kind() == TypeKind::Reference)
+            {
+                auto refType = current.AsFast<ReferenceType>();
+                current = unwrapAliasType(refType->referredType);
+
+                if (!current)
+                    return false;
+
+                if (current->kind() == TypeKind::Struct)
+                {
+                    auto structType = current.AsFast<StructType>();
+                    if (structType->isObject || structType->isInterface)
+                        return false;
+                }
+            }
+
+            return true;
+        }
+
+        Ref<Type> getAutoReadableType(const Ref<Type>& type)
+        {
+            Ref<Type> current = unwrapAliasType(type);
+            if (!shouldAutoReadReferenceType(type))
+                return current;
+
+            while (current && current->kind() == TypeKind::Reference)
+                current = unwrapAliasType(current.AsFast<ReferenceType>()->referredType);
+
+            return current;
+        }
+
+        bool isIntegralLikeType(const Ref<Type>& type)
+        {
+            Ref<Type> resolved = unwrapAliasType(type);
+            if (!resolved || resolved->kind() != TypeKind::Primitive)
+                return false;
+
+            const std::string& name = resolved.AsFast<PrimitiveType>()->name;
+            return name == "i8" || name == "i16" || name == "i32" || name == "i64" ||
+                   name == "u8" || name == "u16" || name == "u32" || name == "u64" ||
+                   name == "isize" || name == "usize" || name == "byte" ||
+                   name == "char" || name == "uchar";
+        }
+
+        bool isZeroIntegerLiteralExpression(const NodePtr<Expression>& expression)
+        {
+            if (!expression)
+                return false;
+
+            if (const auto* literal = expression->as<IntegerLiteral>())
+            {
+                IntegerResult result = common::getInteger(literal->token.value);
+                if (!result.isValid)
+                    return false;
+
+                switch (result.type)
+                {
+                case IntegerType::i8: return result.value.v_i8 == 0;
+                case IntegerType::i16: return result.value.v_i16 == 0;
+                case IntegerType::i32: return result.value.v_i32 == 0;
+                case IntegerType::i64: return result.value.v_i64 == 0;
+                case IntegerType::u8: return result.value.v_u8 == 0;
+                case IntegerType::u16: return result.value.v_u16 == 0;
+                case IntegerType::u32: return result.value.v_u32 == 0;
+                case IntegerType::u64: return result.value.v_u64 == 0;
+                case IntegerType::isize: return result.value.v_isize == 0;
+                case IntegerType::usize: return result.value.v_usize == 0;
+                case IntegerType::Unknown: return false;
+                }
+            }
+
+            if (const auto* unary = expression->as<UnaryExpression>())
+            {
+                if (unary->op.type == TokenType::opMinus || unary->op.type == TokenType::opPlus)
+                    return isZeroIntegerLiteralExpression(unary->operand);
+            }
+
+            return false;
+        }
+
         Ref<Type> resolvePrimitiveType(const std::string& name)
         {
             auto& ctx = Compiler::get().getTypeContext();
@@ -429,6 +523,8 @@ namespace wio::sema
 
         Ref<Type> lhsType = node.left->refType.Lock();
         Ref<Type> rhsType = node.right->refType.Lock();
+        Ref<Type> readableLhsType = getAutoReadableType(lhsType);
+        Ref<Type> readableRhsType = getAutoReadableType(rhsType);
 
         if (!lhsType || !rhsType)
         {
@@ -436,7 +532,14 @@ namespace wio::sema
             return;
         }
 
-        if (!lhsType->isCompatibleWith(rhsType))
+        bool isCompatible = lhsType->isCompatibleWith(rhsType);
+        if (!isCompatible && readableLhsType && readableRhsType &&
+            (shouldAutoReadReferenceType(lhsType) || shouldAutoReadReferenceType(rhsType)))
+        {
+            isCompatible = readableLhsType->isCompatibleWith(readableRhsType);
+        }
+
+        if (!isCompatible)
         {
             WIO_LOG_ADD_ERROR(
                 node.op.loc,
@@ -461,7 +564,7 @@ namespace wio::sema
         else
         {
             // Todo: In arithmetic operations (for now), the result type is the same as the type of the left operand.
-            node.refType = lhsType;
+            node.refType = readableLhsType ? readableLhsType : lhsType;
         }
     }
     
@@ -2481,6 +2584,8 @@ namespace wio::sema
         if (isDeclarationPass_) return;
 
         node.iterable->accept(*this);
+        if (node.step)
+            node.step->accept(*this);
 
         Ref<Type> iterableType = node.iterable->refType.Lock();
         while (iterableType && iterableType->kind() == TypeKind::Alias)
@@ -2492,9 +2597,17 @@ namespace wio::sema
 
         enterScope(ScopeKind::Block);
 
-        auto createLoopBindingType = [&](const Ref<Type>& valueType) -> Ref<Type>
+        auto getBindingMode = [&](size_t index) -> ForBindingMode
         {
-            switch (node.bindingMode)
+            if (index < node.bindingModes.size())
+                return node.bindingModes[index];
+
+            return ForBindingMode::ValueImmutable;
+        };
+
+        auto createLoopBindingType = [&](const Ref<Type>& valueType, ForBindingMode bindingMode) -> Ref<Type>
+        {
+            switch (bindingMode)
             {
             case ForBindingMode::ValueMutable:
             case ForBindingMode::ValueImmutable:
@@ -2508,10 +2621,10 @@ namespace wio::sema
             return valueType;
         };
 
-        auto createBindingSymbol = [&](const NodePtr<Identifier>& binding, const Ref<Type>& bindingType)
+        auto createBindingSymbol = [&](const NodePtr<Identifier>& binding, const Ref<Type>& bindingType, ForBindingMode bindingMode)
         {
             SymbolFlags flags = SymbolFlags::createAllFalse();
-            if (node.bindingMode == ForBindingMode::ValueMutable || node.bindingMode == ForBindingMode::ReferenceMutable)
+            if (bindingMode == ForBindingMode::ValueMutable || bindingMode == ForBindingMode::ReferenceMutable)
                 flags.set_isMutable(true);
 
             Ref<Symbol> bindingSym = createSymbol(binding->token.value, bindingType, SymbolKind::Variable, binding->location(), flags);
@@ -2522,14 +2635,54 @@ namespace wio::sema
 
         node.bindingAccessors.clear();
 
-        if (iterableType && iterableType->kind() == TypeKind::Array)
+        if (node.iterable->is<RangeExpression>())
         {
+            auto rangeExpr = node.iterable->as<RangeExpression>();
+            Ref<Type> startType = getAutoReadableType(rangeExpr->start->refType.Lock());
+            Ref<Type> endType = getAutoReadableType(rangeExpr->end->refType.Lock());
+            Ref<Type> stepType = node.step ? getAutoReadableType(node.step->refType.Lock()) : nullptr;
+
+            if (node.bindings.size() != 1)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Range iteration requires exactly 1 binding.");
+            }
+            else if (getBindingMode(0) == ForBindingMode::ReferenceMutable || getBindingMode(0) == ForBindingMode::ReferenceView)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Range iteration does not support 'ref' or 'view' bindings.");
+            }
+            else if (!isIntegralLikeType(startType) || !isIntegralLikeType(endType))
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Range iteration currently requires integer bounds.");
+            }
+            else if (node.step && !isIntegralLikeType(stepType))
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Range step expressions must be integer values.");
+            }
+            else if (node.step && isZeroIntegerLiteralExpression(node.step))
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Range step cannot be zero.");
+            }
+            else
+            {
+                Ref<Type> rangeValueType = startType;
+                if (!rangeValueType || !rangeValueType->isCompatibleWith(endType))
+                    rangeValueType = endType;
+
+                createBindingSymbol(node.bindings[0], createLoopBindingType(rangeValueType, getBindingMode(0)), getBindingMode(0));
+            }
+        }
+        else if (iterableType && iterableType->kind() == TypeKind::Array)
+        {
+            if (node.step)
+                WIO_LOG_ADD_ERROR(node.location(), "Step clauses are currently supported only for range iteration.");
+
             auto arrayType = iterableType.AsFast<ArrayType>();
             Ref<Type> elementType = arrayType->elementType;
+            Ref<Type> indexType = Compiler::get().getTypeContext().getUSize();
 
             if (node.bindings.size() == 1)
             {
-                createBindingSymbol(node.bindings[0], createLoopBindingType(elementType));
+                createBindingSymbol(node.bindings[0], createLoopBindingType(elementType, getBindingMode(0)), getBindingMode(0));
             }
             else if (elementType && elementType->kind() == TypeKind::Struct)
             {
@@ -2538,26 +2691,82 @@ namespace wio::sema
                 {
                     WIO_LOG_ADD_ERROR(node.location(), "Destructuring in array loops currently supports component-like POD structs only.");
                 }
-                else if (structType->fieldNames.size() != node.bindings.size())
-                {
-                    WIO_LOG_ADD_ERROR(node.location(), "Component binding expects {} names, but {} were provided.", structType->fieldNames.size(), node.bindings.size());
-                }
-                else
+                else if (node.bindings.size() == structType->fieldNames.size())
                 {
                     for (size_t i = 0; i < node.bindings.size(); ++i)
                     {
                         node.bindingAccessors.push_back(structType->fieldNames[i]);
-                        createBindingSymbol(node.bindings[i], createLoopBindingType(structType->fieldTypes[i]));
+                        createBindingSymbol(
+                            node.bindings[i],
+                            createLoopBindingType(structType->fieldTypes[i], getBindingMode(i)),
+                            getBindingMode(i)
+                        );
                     }
+                }
+                else if (node.bindings.size() == structType->fieldNames.size() + 1)
+                {
+                    if (getBindingMode(0) == ForBindingMode::ReferenceMutable || getBindingMode(0) == ForBindingMode::ReferenceView)
+                    {
+                        WIO_LOG_ADD_ERROR(node.location(), "Array index bindings do not support 'ref' or 'view'.");
+                    }
+                    else
+                    {
+                        node.bindingAccessors.push_back("__index__");
+                        createBindingSymbol(node.bindings[0], indexType, getBindingMode(0));
+
+                        for (size_t i = 1; i < node.bindings.size(); ++i)
+                        {
+                            node.bindingAccessors.push_back(structType->fieldNames[i - 1]);
+                            createBindingSymbol(
+                                node.bindings[i],
+                                createLoopBindingType(structType->fieldTypes[i - 1], getBindingMode(i)),
+                                getBindingMode(i)
+                            );
+                        }
+                    }
+                }
+                else if (node.bindings.size() == 2)
+                {
+                    if (getBindingMode(0) == ForBindingMode::ReferenceMutable || getBindingMode(0) == ForBindingMode::ReferenceView)
+                    {
+                        WIO_LOG_ADD_ERROR(node.location(), "Array index bindings do not support 'ref' or 'view'.");
+                    }
+                    else
+                    {
+                        node.bindingAccessors = { "__index__", "__value__" };
+                        createBindingSymbol(node.bindings[0], indexType, getBindingMode(0));
+                        createBindingSymbol(node.bindings[1], createLoopBindingType(elementType, getBindingMode(1)), getBindingMode(1));
+                    }
+                }
+                else
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "Component binding expects {} names, or {} with an index binding, but {} were provided.",
+                        structType->fieldNames.size(), structType->fieldNames.size() + 1, node.bindings.size());
+                }
+            }
+            else if (node.bindings.size() == 2)
+            {
+                if (getBindingMode(0) == ForBindingMode::ReferenceMutable || getBindingMode(0) == ForBindingMode::ReferenceView)
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "Array index bindings do not support 'ref' or 'view'.");
+                }
+                else
+                {
+                    node.bindingAccessors = { "__index__", "__value__" };
+                    createBindingSymbol(node.bindings[0], indexType, getBindingMode(0));
+                    createBindingSymbol(node.bindings[1], createLoopBindingType(elementType, getBindingMode(1)), getBindingMode(1));
                 }
             }
             else
             {
-                WIO_LOG_ADD_ERROR(node.location(), "Array destructuring currently requires a component-like struct element type.");
+                WIO_LOG_ADD_ERROR(node.location(), "Array iteration supports either a single value binding or 'index | value'.");
             }
         }
         else if (iterableType && iterableType->kind() == TypeKind::Dictionary)
         {
+            if (node.step)
+                WIO_LOG_ADD_ERROR(node.location(), "Step clauses are currently supported only for range iteration.");
+
             auto dictType = iterableType.AsFast<DictionaryType>();
             if (node.bindings.size() != 2)
             {
@@ -2565,15 +2774,18 @@ namespace wio::sema
             }
             else
             {
-                if (node.bindingMode == ForBindingMode::ReferenceMutable)
+                const ForBindingMode keyMode = getBindingMode(0);
+                const ForBindingMode valueMode = getBindingMode(1);
+
+                if (keyMode == ForBindingMode::ReferenceMutable)
                 {
-                    WIO_LOG_ADD_ERROR(node.location(), "Dictionary iteration does not yet support 'ref' bindings. Use value, 'mut', or 'view'.");
+                    WIO_LOG_ADD_ERROR(node.location(), "Dictionary keys are immutable. Use a value binding or 'view' for the key.");
                 }
                 else
                 {
                     node.bindingAccessors = { "first", "second" };
-                    createBindingSymbol(node.bindings[0], createLoopBindingType(dictType->keyType));
-                    createBindingSymbol(node.bindings[1], createLoopBindingType(dictType->valueType));
+                    createBindingSymbol(node.bindings[0], createLoopBindingType(dictType->keyType, keyMode), keyMode);
+                    createBindingSymbol(node.bindings[1], createLoopBindingType(dictType->valueType, valueMode), valueMode);
                 }
             }
         }

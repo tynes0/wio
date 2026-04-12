@@ -1,0 +1,7 @@
+fn Entry() -> i32 {
+    for i in 0.5...3.5 {
+        return i fit i32;
+    }
+
+    return 0;
+}

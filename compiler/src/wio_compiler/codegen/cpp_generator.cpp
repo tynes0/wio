@@ -57,6 +57,47 @@ namespace wio::codegen
             return type;
         }
 
+        bool shouldAutoReadReferenceType(const Ref<sema::Type>& type)
+        {
+            Ref<sema::Type> current = unwrapAliasType(type);
+            if (!current || current->kind() != sema::TypeKind::Reference)
+                return false;
+
+            while (current && current->kind() == sema::TypeKind::Reference)
+            {
+                auto refType = current.AsFast<sema::ReferenceType>();
+                current = unwrapAliasType(refType->referredType);
+
+                if (!current)
+                    return false;
+
+                if (current->kind() == sema::TypeKind::Struct)
+                {
+                    auto structType = current.AsFast<sema::StructType>();
+                    if (structType->isObject || structType->isInterface)
+                        return false;
+                }
+            }
+
+            return true;
+        }
+
+        std::size_t getAutoReadableReferenceDepth(const Ref<sema::Type>& type)
+        {
+            if (!shouldAutoReadReferenceType(type))
+                return 0;
+
+            std::size_t depth = 0;
+            Ref<sema::Type> current = unwrapAliasType(type);
+            while (current && current->kind() == sema::TypeKind::Reference)
+            {
+                ++depth;
+                current = unwrapAliasType(current.AsFast<sema::ReferenceType>()->referredType);
+            }
+
+            return depth;
+        }
+
         std::string getPrimitiveTypeName(const Ref<sema::Type>& type)
         {
             Ref<sema::Type> resolvedType = unwrapAliasType(type);
@@ -478,6 +519,7 @@ namespace wio::codegen
         emitHeaderLine("#include <iostream>");
         emitHeaderLine("#include <functional>");
         emitHeaderLine("#include <map>");
+        emitHeaderLine("#include <stdexcept>");
         emitHeaderLine("#include <unordered_map>");
         emitHeaderLine("#include <exception.h>");
         emitHeaderLine("#include <fit.h>");
@@ -927,6 +969,18 @@ namespace wio::codegen
 
     void CppGenerator::visit(BinaryExpression& node)
     {
+        auto emitReadableExpression = [&](const NodePtr<Expression>& expression)
+        {
+            const std::size_t derefCount = getAutoReadableReferenceDepth(expression ? expression->refType.Lock() : nullptr);
+            for (std::size_t i = 0; i < derefCount; ++i)
+                emit("*(");
+
+            expression->accept(*this);
+
+            for (std::size_t i = 0; i < derefCount; ++i)
+                emit(")");
+        };
+
         if (node.op.type == TokenType::kwIn)
         {
             if (node.right->is<RangeExpression>())
@@ -934,7 +988,7 @@ namespace wio::codegen
                 auto range = node.right->as<RangeExpression>();
                 // C++ Output: [&](){ auto _val = (x); return _val >= (1) && _val <= (5); }()
                 emit("[&](){ auto _val = (");
-                node.left->accept(*this);
+                emitReadableExpression(node.left);
                 emit("); return _val >= (");
                 range->start->accept(*this);
                 emit(range->isInclusive ? ") && _val <= (" : ") && _val < (");
@@ -991,7 +1045,7 @@ namespace wio::codegen
         }
         
         emit("(");
-        node.left->accept(*this);
+        emitReadableExpression(node.left);
         
         std::string opStr = node.op.value;
         if (node.op.type == TokenType::kwAnd)
@@ -1000,7 +1054,7 @@ namespace wio::codegen
             opStr = "||";
         
         emit(" " + opStr + " ");
-        node.right->accept(*this);
+        emitReadableExpression(node.right);
         emit(")");
     }
 
@@ -2617,12 +2671,106 @@ namespace wio::codegen
             return "&(" + sourceExpr + ")";
         };
 
-        auto emitBoundDeclaration = [&](const NodePtr<Identifier>& binding, const std::string& sourceExpr)
+        auto getBindingMode = [&](size_t index) -> ForBindingMode
         {
+            if (index < node.bindingModes.size())
+                return node.bindingModes[index];
+
+            return ForBindingMode::ValueImmutable;
+        };
+
+        if (node.iterable->is<RangeExpression>())
+        {
+            const auto* range = node.iterable->as<RangeExpression>();
+            const auto& binding = node.bindings.front();
+            const ForBindingMode bindingMode = getBindingMode(0);
             auto bindingSym = binding->referencedSymbol.Lock();
             Ref<sema::Type> bindingType = (bindingSym && bindingSym->type) ? bindingSym->type : binding->refType.Lock();
 
-            switch (node.bindingMode)
+            const std::string loopVarName = bindingMode == ForBindingMode::ValueImmutable
+                ? "_wio_range_value"
+                : binding->token.value;
+
+            emitLine("{");
+            indent();
+
+            EMIT_TABS();
+            emit("auto _wio_range_start = (");
+            range->start->accept(*this);
+            emit(");\n");
+
+            EMIT_TABS();
+            emit("auto _wio_range_end = (");
+            range->end->accept(*this);
+            emit(");\n");
+
+            EMIT_TABS();
+            emit("auto _wio_range_step = static_cast<" + toCppType(bindingType) + ">(");
+            if (node.step)
+                node.step->accept(*this);
+            else
+                emit("1");
+            emit(");\n");
+
+            emitLine("if (_wio_range_step == 0) throw std::runtime_error(\"Range step cannot be zero.\");");
+
+            emitLine("if (_wio_range_step > 0)");
+            emitLine("{");
+            indent();
+
+            EMIT_TABS();
+            emit("for (" + toCppType(bindingType) + " " + loopVarName + " = _wio_range_start; ");
+            emit(loopVarName);
+            emit(range->isInclusive ? " <= " : " < ");
+            emit("_wio_range_end; " + loopVarName + " = static_cast<" + toCppType(bindingType) + ">(" + loopVarName + " + _wio_range_step))\n");
+
+            emitLine("{");
+            indent();
+
+            if (bindingMode == ForBindingMode::ValueImmutable)
+                emitLine("const auto& " + binding->token.value + " = " + loopVarName + ";");
+
+            emitLoopBodyStatements(node.body);
+            dedent();
+            emitLine("}");
+            dedent();
+            emitLine("}");
+
+            emitLine("else");
+            emitLine("{");
+            indent();
+
+            EMIT_TABS();
+            emit("for (" + toCppType(bindingType) + " " + loopVarName + " = _wio_range_start; ");
+            emit(loopVarName);
+            emit(range->isInclusive ? " >= " : " > ");
+            emit("_wio_range_end; " + loopVarName + " = static_cast<" + toCppType(bindingType) + ">(" + loopVarName + " + _wio_range_step))\n");
+
+            emitLine("{");
+            indent();
+
+            if (bindingMode == ForBindingMode::ValueImmutable)
+                emitLine("const auto& " + binding->token.value + " = " + loopVarName + ";");
+
+            emitLoopBodyStatements(node.body);
+            dedent();
+            emitLine("}");
+
+            dedent();
+            emitLine("}");
+            dedent();
+            emitLine("}");
+            return;
+        }
+
+        auto emitBoundDeclaration = [&](size_t index, const std::string& sourceExpr)
+        {
+            const auto& binding = node.bindings[index];
+            const ForBindingMode bindingMode = getBindingMode(index);
+            auto bindingSym = binding->referencedSymbol.Lock();
+            Ref<sema::Type> bindingType = (bindingSym && bindingSym->type) ? bindingSym->type : binding->refType.Lock();
+
+            switch (bindingMode)
             {
             case ForBindingMode::ValueMutable:
                 emitLine("auto " + binding->token.value + " = " + sourceExpr + ";");
@@ -2632,31 +2780,99 @@ namespace wio::codegen
                 return;
             case ForBindingMode::ReferenceMutable:
             case ForBindingMode::ReferenceView:
-                emitLine(toCppType(bindingType) + " " + binding->token.value + " = " + buildReferenceInitializer(bindingType, sourceExpr) + ";");
-                return;
+                  emitLine(toCppType(bindingType) + " " + binding->token.value + " = " + buildReferenceInitializer(bindingType, sourceExpr) + ";");
+                  return;
+              }
+          };
+
+        const bool usesIndexedArrayLoop = !node.bindingAccessors.empty() && node.bindingAccessors.front() == "__index__";
+        if (usesIndexedArrayLoop)
+        {
+            emitLine("{");
+            indent();
+
+            EMIT_TABS();
+            emit("auto&& _wio_range = (");
+            node.iterable->accept(*this);
+            emit(");\n");
+
+            EMIT_TABS();
+            emit("for (std::size_t _wio_index = 0; _wio_index < _wio_range.size(); ++_wio_index)\n");
+            emitLine("{");
+            indent();
+
+            const auto& indexBinding = node.bindings.front();
+            const ForBindingMode indexBindingMode = getBindingMode(0);
+            auto indexBindingSym = indexBinding->referencedSymbol.Lock();
+            Ref<sema::Type> indexBindingType = (indexBindingSym && indexBindingSym->type) ? indexBindingSym->type : indexBinding->refType.Lock();
+            std::string indexCastExpr = "static_cast<" + toCppType(indexBindingType) + ">(_wio_index)";
+
+            switch (indexBindingMode)
+            {
+            case ForBindingMode::ValueMutable:
+                emitLine("auto " + indexBinding->token.value + " = " + indexCastExpr + ";");
+                break;
+            case ForBindingMode::ValueImmutable:
+                emitLine("const auto " + indexBinding->token.value + " = " + indexCastExpr + ";");
+                break;
+            case ForBindingMode::ReferenceMutable:
+            case ForBindingMode::ReferenceView:
+                break;
             }
-        };
+
+            const std::string itemExpr = "_wio_range[_wio_index]";
+            if (node.bindingAccessors.size() >= 2 && node.bindingAccessors[1] == "__value__")
+            {
+                emitBoundDeclaration(1, itemExpr);
+            }
+            else
+            {
+                for (size_t i = 1; i < node.bindings.size() && i < node.bindingAccessors.size(); ++i)
+                {
+                    emitBoundDeclaration(i, itemExpr + "." + node.bindingAccessors[i]);
+                }
+            }
+
+            emitLoopBodyStatements(node.body);
+            dedent();
+            emitLine("}");
+            dedent();
+            emitLine("}");
+            return;
+        }
+
+        const bool hasMutableReferenceBinding = std::ranges::any_of(node.bindingModes, [](ForBindingMode mode)
+        {
+            return mode == ForBindingMode::ReferenceMutable;
+        });
 
         const bool needsPrelude = node.bindings.size() > 1 ||
-            node.bindingMode == ForBindingMode::ReferenceMutable ||
-            node.bindingMode == ForBindingMode::ReferenceView;
+            getBindingMode(0) == ForBindingMode::ReferenceMutable ||
+            getBindingMode(0) == ForBindingMode::ReferenceView;
 
         std::string rangeVarName = needsPrelude ? "_wio_loop_item" : node.bindings.front()->token.value;
-        std::string rangeDecl;
-        switch (node.bindingMode)
+        std::string rangeDecl = "const auto& " + rangeVarName;
+        if (!needsPrelude)
         {
-        case ForBindingMode::ValueMutable:
-            rangeDecl = "auto " + rangeVarName;
-            break;
-        case ForBindingMode::ValueImmutable:
-            rangeDecl = "const auto& " + rangeVarName;
-            break;
-        case ForBindingMode::ReferenceMutable:
+            switch (getBindingMode(0))
+            {
+            case ForBindingMode::ValueMutable:
+                rangeDecl = "auto " + rangeVarName;
+                break;
+            case ForBindingMode::ValueImmutable:
+                rangeDecl = "const auto& " + rangeVarName;
+                break;
+            case ForBindingMode::ReferenceMutable:
+                rangeDecl = "auto& " + rangeVarName;
+                break;
+            case ForBindingMode::ReferenceView:
+                rangeDecl = "const auto& " + rangeVarName;
+                break;
+            }
+        }
+        else if (hasMutableReferenceBinding)
+        {
             rangeDecl = "auto& " + rangeVarName;
-            break;
-        case ForBindingMode::ReferenceView:
-            rangeDecl = "const auto& " + rangeVarName;
-            break;
         }
 
         EMIT_TABS();
@@ -2671,13 +2887,13 @@ namespace wio::codegen
         {
             if (node.bindingAccessors.empty())
             {
-                emitBoundDeclaration(node.bindings.front(), rangeVarName);
+                emitBoundDeclaration(0, rangeVarName);
             }
             else
             {
                 for (size_t i = 0; i < node.bindings.size() && i < node.bindingAccessors.size(); ++i)
                 {
-                    emitBoundDeclaration(node.bindings[i], rangeVarName + "." + node.bindingAccessors[i]);
+                    emitBoundDeclaration(i, rangeVarName + "." + node.bindingAccessors[i]);
                 }
             }
         }

@@ -306,8 +306,8 @@ namespace wio
 
     WhileStatement::~WhileStatement() = default;
 
-    ForInStatement::ForInStatement(ForBindingMode _bindingMode, std::vector<NodePtr<Identifier>> _bindings, NodePtr<Expression> _iterable, NodePtr<Statement> _body, common::Location _loc)
-        : Statement(_loc), bindingMode(_bindingMode), bindings(std::move(_bindings)), iterable(std::move(_iterable)), body(std::move(_body))
+    ForInStatement::ForInStatement(std::vector<NodePtr<Identifier>> _bindings, std::vector<ForBindingMode> _bindingModes, NodePtr<Expression> _iterable, NodePtr<Expression> _step, NodePtr<Statement> _body, common::Location _loc)
+        : Statement(_loc), bindings(std::move(_bindings)), bindingModes(std::move(_bindingModes)), iterable(std::move(_iterable)), step(std::move(_step)), body(std::move(_body))
     {
     }
 

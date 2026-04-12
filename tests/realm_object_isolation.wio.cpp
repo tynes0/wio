@@ -7,6 +7,7 @@
 #include <iostream>
 #include <functional>
 #include <map>
+#include <stdexcept>
 #include <unordered_map>
 #include <exception.h>
 #include <fit.h>

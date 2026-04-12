@@ -1,0 +1,29 @@
+use std::io as console;
+
+component Pair {
+    x: i32;
+    y: i32;
+
+    OnConstruct(x: i32, y: i32) {
+        self.x = x;
+        self.y = y;
+    }
+}
+
+fn Entry() -> i32 {
+    mut pairs: Pair[] = [Pair(1, 2), Pair(3, 4)];
+    mut seen: i32 = 0;
+
+    for ref x | view y in pairs {
+        x = x + y;
+        seen += x + y;
+    }
+
+    mut total: i32 = 0;
+    foreach x | y in pairs {
+        total += x + y;
+    }
+
+    console::Print($"Component ref binding total: ${total}, seen: ${seen}");
+    return 0;
+}
