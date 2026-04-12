@@ -1328,9 +1328,9 @@ namespace wio::codegen
             }
         }
         
-        node.object->accept(*this);
-    
         std::string op = ".";
+        std::size_t referenceDepth = 0;
+        Ref<sema::Type> terminalType = nullptr;
     
         if (auto objSym = node.object->referencedSymbol.Lock())
         {
@@ -1349,27 +1349,53 @@ namespace wio::codegen
                 auto baseType = objType;
                 while (baseType && baseType->kind() == sema::TypeKind::Alias)
                     baseType = baseType.AsFast<sema::AliasType>()->aliasedType;
-            
-                bool isFatPointer = false;
-                if (baseType->kind() == sema::TypeKind::Struct && baseType.AsFast<sema::StructType>()->isInterface)
-                    isFatPointer = true;
-                else if (baseType->kind() == sema::TypeKind::Reference) {
-                    auto refType = baseType.AsFast<sema::ReferenceType>()->referredType;
-                    if (refType->kind() == sema::TypeKind::Struct && refType.AsFast<sema::StructType>()->isInterface)
-                        isFatPointer = true;
+
+                while (baseType && baseType->kind() == sema::TypeKind::Reference)
+                {
+                    referenceDepth++;
+                    baseType = baseType.AsFast<sema::ReferenceType>()->referredType;
+                    while (baseType && baseType->kind() == sema::TypeKind::Alias)
+                        baseType = baseType.AsFast<sema::AliasType>()->aliasedType;
                 }
 
-                if (isFatPointer)
-                {
-                    op = ".";
-                }
-                if (baseType->kind() == sema::TypeKind::Reference ||
-                   (baseType->kind() == sema::TypeKind::Struct && (baseType.AsFast<sema::StructType>()->isObject || baseType.AsFast<sema::StructType>()->isInterface)))
+                terminalType = baseType;
+
+                if (referenceDepth > 0)
                 {
                     op = "->";
                 }
+                else if (terminalType && terminalType->kind() == sema::TypeKind::Struct)
+                {
+                    auto structType = terminalType.AsFast<sema::StructType>();
+                    if (structType->isObject || structType->isInterface)
+                        op = "->";
+                }
             }
         }
+
+        auto emitObjectWithReferenceDepth = [&](std::size_t extraReferenceDepth)
+        {
+            if (op == "::")
+            {
+                node.object->accept(*this);
+                return;
+            }
+
+            if (extraReferenceDepth <= 1)
+            {
+                node.object->accept(*this);
+                return;
+            }
+
+            emit("(");
+            for (std::size_t i = 0; i < extraReferenceDepth - 1; ++i)
+                emit("*");
+            emit("(");
+            node.object->accept(*this);
+            emit("))");
+        };
+
+        emitObjectWithReferenceDepth(referenceDepth);
 
         emit(op);
 

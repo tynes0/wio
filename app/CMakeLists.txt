@@ -372,6 +372,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_inferred_object_and_fit_locals_run
+        "${CMAKE_SOURCE_DIR}/tests/inferred_object_and_fit_locals.wio"
+        "Inferred locals hp: 7"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_native_bridge_run
         "${CMAKE_SOURCE_DIR}/tests/native/native_bridge.wio"
         "Native multiply: 42"

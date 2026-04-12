@@ -181,13 +181,13 @@ namespace wio
             
             if (op.type == TokenType::kwRef)
             {
-                NodePtr<Expression> operand = parseExpression(getPrecedence(TokenType::kwRef), stopAtFit);
+                NodePtr<Expression> operand = parseExpression(getPrecedence(TokenType::kwRef) + 1, stopAtFit);
                 left = makeNodePtr<RefExpression>(false, std::move(operand), op.loc);
             }
             else
             {
                 int precedence = getPrecedence(op.type);
-                NodePtr<Expression> operand = parseExpression(precedence, stopAtFit);
+                NodePtr<Expression> operand = parseExpression(precedence + 1, stopAtFit);
                 left = makeNodePtr<UnaryExpression>(std::move(op), std::move(operand));
             }
         }
@@ -352,7 +352,7 @@ namespace wio
 
             bool isMut = match(TokenType::kwMut, true);
             
-            NodePtr<Expression> operand = parseExpression(getPrecedence(TokenType::kwRef)); 
+            NodePtr<Expression> operand = parseExpression(getPrecedence(TokenType::kwRef) + 1); 
             
             return makeNodePtr<RefExpression>(isMut, std::move(operand), startLoc);
         }

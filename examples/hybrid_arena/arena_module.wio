@@ -107,7 +107,7 @@ fn ArenaGetPulse() -> i32 {
 @Command("arena.hit")
 @CppName(WioArenaHit)
 fn ArenaHit(baseDamage: i32) -> i32 {
-    mut boss: arena::model::Boss = arena::model::Boss("Iron Warden", gBossHealth, gBossShield, gBossRage, gBossPhase, gBerserkThreshold);
+    mut boss = arena::model::Boss("Iron Warden", gBossHealth, gBossShield, gBossRage, gBossPhase, gBerserkThreshold);
     arena::sim::ApplyScaledHit(ref boss, baseDamage, gDifficulty100, boss.GetPhase(), boss.GetRage());
     SyncBossState(ref boss);
     return gBossHealth;
@@ -117,7 +117,7 @@ fn ArenaHit(baseDamage: i32) -> i32 {
 @Command("arena.threat")
 @CppName(WioArenaGetThreat)
 fn ArenaGetThreat() -> i32 {
-    let boss: arena::model::Boss = arena::model::Boss("Iron Warden", gBossHealth, gBossShield, gBossRage, gBossPhase, gBerserkThreshold);
+    let boss = arena::model::Boss("Iron Warden", gBossHealth, gBossShield, gBossRage, gBossPhase, gBerserkThreshold);
     return arena::sim::ComputeThreat(ref boss);
 }
 
@@ -125,7 +125,7 @@ fn ArenaGetThreat() -> i32 {
 @Command("arena.alive")
 @CppName(WioArenaIsAlive)
 fn ArenaIsAlive() -> i32 {
-    let boss: arena::model::Boss = arena::model::Boss("Iron Warden", gBossHealth, gBossShield, gBossRage, gBossPhase, gBerserkThreshold);
+    let boss = arena::model::Boss("Iron Warden", gBossHealth, gBossShield, gBossRage, gBossPhase, gBerserkThreshold);
     return arena::sim::IsAlive(ref boss);
 }
 
@@ -133,7 +133,7 @@ fn ArenaIsAlive() -> i32 {
 @Event("arena.tick")
 @CppName(WioArenaTickCore)
 fn OnArenaTickCore(deltaTime: f32) {
-    mut boss: arena::model::Boss = arena::model::Boss("Iron Warden", gBossHealth, gBossShield, gBossRage, gBossPhase, gBerserkThreshold);
+    mut boss = arena::model::Boss("Iron Warden", gBossHealth, gBossShield, gBossRage, gBossPhase, gBerserkThreshold);
     arena::sim::AdvanceTick(ref boss, deltaTime, gPulseCount);
     SyncBossState(ref boss);
 }

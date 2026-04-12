@@ -812,9 +812,20 @@ namespace wio::sema
             else if (baseType->kind() == TypeKind::Reference)
             {
                 Ref<Type> referredType = baseType.AsFast<ReferenceType>()->referredType;
-    
-                while (referredType && referredType->kind() == TypeKind::Alias)
-                    referredType = referredType.AsFast<AliasType>()->aliasedType;
+
+                while (referredType)
+                {
+                    while (referredType && referredType->kind() == TypeKind::Alias)
+                        referredType = referredType.AsFast<AliasType>()->aliasedType;
+
+                    if (referredType && referredType->kind() == TypeKind::Reference)
+                    {
+                        referredType = referredType.AsFast<ReferenceType>()->referredType;
+                        continue;
+                    }
+
+                    break;
+                }
     
                 if (referredType && referredType->kind() == TypeKind::Struct)
                 {
@@ -1186,7 +1197,7 @@ namespace wio::sema
 
             if (isSrcObject && isDestObject) 
             {
-                node.refType = Compiler::get().getTypeContext().getOrCreateReferenceType(destType, true);
+                node.refType = destType;
                 return;
             }
 

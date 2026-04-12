@@ -1,0 +1,34 @@
+use std::io as console;
+
+realm combat {
+    interface IDamageable {
+        fn TakeDamage(amount: i32);
+        fn GetHp() -> i32;
+    }
+
+    @From(combat::IDamageable)
+    @Default(public)
+    object Boss {
+        hp: i32;
+
+        OnConstruct() {
+            self.hp = 10;
+        }
+
+        fn TakeDamage(amount: i32) {
+            self.hp -= amount;
+        }
+
+        fn GetHp() -> i32 {
+            return self.hp;
+        }
+    }
+}
+
+fn Entry(args: string[]) -> i32 {
+    mut boss = combat::Boss();
+    let damageable = ref boss fit combat::IDamageable;
+    damageable.TakeDamage(3);
+    console::Print($"Inferred locals hp: ${boss.GetHp()}");
+    return 0;
+}
