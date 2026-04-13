@@ -1,0 +1,13 @@
+use std::io as console;
+
+fn Assign<T>(target: ref T, value: T) {
+    target = value;
+}
+
+fn Entry() -> i32 {
+    mut hp: i32 = 10;
+    Assign(ref hp, 25);
+
+    console::Print($"Generic assign: ${hp}");
+    return 0;
+}

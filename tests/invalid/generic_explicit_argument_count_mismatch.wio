@@ -1,0 +1,8 @@
+fn MakeLabel<T, U>(left: T, right: U) -> string {
+    return "invalid";
+}
+
+fn Entry() -> i32 {
+    let text = MakeLabel<i32>(7, "oops");
+    return 0;
+}

@@ -156,8 +156,8 @@ namespace wio
 
     MemberAccessExpression::~MemberAccessExpression() = default;
 
-    FunctionCallExpression::FunctionCallExpression(NodePtr<Expression> _callee, std::vector<NodePtr<Expression>> _args, common::Location _loc)
-        : Expression(_loc.isValid() ? _loc : _callee->location()), callee(std::move(_callee)), arguments(std::move(_args))
+    FunctionCallExpression::FunctionCallExpression(NodePtr<Expression> _callee, std::vector<NodePtr<TypeSpecifier>> _explicitTypeArguments, std::vector<NodePtr<Expression>> _args, common::Location _loc)
+        : Expression(_loc.isValid() ? _loc : _callee->location()), callee(std::move(_callee)), explicitTypeArguments(std::move(_explicitTypeArguments)), arguments(std::move(_args))
     {
     }
 
@@ -222,39 +222,52 @@ namespace wio
 
     VariableDeclaration::~VariableDeclaration() = default;
 
+    TypeAliasDeclaration::TypeAliasDeclaration(NodePtr<Identifier> _name,
+        std::vector<NodePtr<Identifier>> _genericParameters,
+        NodePtr<TypeSpecifier> _aliasedType,
+        common::Location _loc)
+        : Statement(_loc.isValid() ? _loc : _name->location()),
+          name(std::move(_name)),
+          genericParameters(std::move(_genericParameters)),
+          aliasedType(std::move(_aliasedType))
+    {
+    }
+
+    TypeAliasDeclaration::~TypeAliasDeclaration() = default;
+
     FunctionDeclaration::FunctionDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
-        NodePtr<Identifier> _name, std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType,
+        NodePtr<Identifier> _name, std::vector<NodePtr<Identifier>> _genericParameters, std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType,
         NodePtr<Expression> _whenCondition, NodePtr<Expression> _whenFallback, NodePtr<Statement> _body, common::Location _loc)
-            : Statement(_loc.isValid() ? _loc : _name->location()), attributes(std::move(_attributes)),
-            name(std::move(_name)), parameters(std::move(_params)), returnType(std::move(_retType)),
-            whenCondition(std::move(_whenCondition)), whenFallback(std::move(_whenFallback)),  body(std::move(_body))
+              : Statement(_loc.isValid() ? _loc : _name->location()), attributes(std::move(_attributes)),
+              name(std::move(_name)), genericParameters(std::move(_genericParameters)), parameters(std::move(_params)), returnType(std::move(_retType)),
+              whenCondition(std::move(_whenCondition)), whenFallback(std::move(_whenFallback)),  body(std::move(_body))
     {
     }
 
     FunctionDeclaration::~FunctionDeclaration() = default;
 
     InterfaceDeclaration::InterfaceDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
-        NodePtr<Identifier> _name, std::vector<NodePtr<FunctionDeclaration>> _methods, common::Location _loc)
+        NodePtr<Identifier> _name, std::vector<NodePtr<Identifier>> _genericParameters, std::vector<NodePtr<FunctionDeclaration>> _methods, common::Location _loc)
             : Statement(_loc.isValid() ? _loc : _name->location()), attributes(std::move(_attributes)),
-            name(std::move(_name)), methods(std::move(_methods))
+            name(std::move(_name)), genericParameters(std::move(_genericParameters)), methods(std::move(_methods))
     {
     }
 
     InterfaceDeclaration::~InterfaceDeclaration() = default;
 
     ComponentDeclaration::ComponentDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
-                                               NodePtr<Identifier> _name, std::vector<ComponentMember> _members, common::Location _loc)
+                                               NodePtr<Identifier> _name, std::vector<NodePtr<Identifier>> _genericParameters, std::vector<ComponentMember> _members, common::Location _loc)
             : Statement(_loc.isValid() ? _loc : _name->location()), attributes(std::move(_attributes)),
-            name(std::move(_name)), members(std::move(_members))
+            name(std::move(_name)), genericParameters(std::move(_genericParameters)), members(std::move(_members))
     {
     }
 
     ComponentDeclaration::~ComponentDeclaration() = default;
 
     ObjectDeclaration::ObjectDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
-        NodePtr<Identifier> _name, std::vector<ObjectMember> _members, common::Location _loc)
+        NodePtr<Identifier> _name, std::vector<NodePtr<Identifier>> _genericParameters, std::vector<ObjectMember> _members, common::Location _loc)
             : Statement(_loc.isValid() ? _loc : _name->location()), attributes(std::move(_attributes)),
-            name(std::move(_name)), members(std::move(_members))
+            name(std::move(_name)), genericParameters(std::move(_genericParameters)), members(std::move(_members))
     {
     }
 

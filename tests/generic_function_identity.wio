@@ -1,0 +1,18 @@
+use std::io as console;
+
+fn Identity<T>(value: T) -> T {
+    return value;
+}
+
+fn Head<T>(values: T[]) -> T {
+    return values[0];
+}
+
+fn Entry() -> i32 {
+    let first = Identity(42);
+    let words: string[] = ["wio", "arena"];
+    let head = Head(words);
+
+    console::Print($"Generic values: ${first}, ${head}");
+    return 0;
+}

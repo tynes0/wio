@@ -1,0 +1,11 @@
+interface Reader<T> {
+    fn Read() -> T;
+}
+
+fn ReadThrough<T>(reader: view Reader<T>) -> T {
+    return reader.Read();
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

@@ -15,6 +15,7 @@ namespace wio
         enum class TypeKind : uint8_t {
             Primitive,  // i32, f32, bool, void
             Null,       // null
+            GenericParameter, // T
             Reference,  // ref
             Array,      // [T]
             Dictionary, // Dict<T,T> or Tree<T,T>
@@ -63,6 +64,17 @@ namespace wio
             std::string toString() const override;
             std::string toCppString() const override;
             
+        };
+
+        struct GenericParameterType : Type
+        {
+            std::string name;
+
+            explicit GenericParameterType(std::string name);
+
+            TypeKind kind() const override;
+            std::string toString() const override;
+            std::string toCppString() const override;
         };
     
         struct FunctionType : Type
@@ -122,6 +134,8 @@ namespace wio
             std::string name;
             std::string scopePath;
             WeakRef<Scope> structScope;
+            std::vector<std::string> genericParameterNames;
+            std::vector<Ref<Type>> genericArguments;
             std::vector<Ref<Type>> baseTypes;
             std::vector<std::string> fieldNames;
             std::vector<Ref<Type>> fieldTypes;
@@ -149,4 +163,4 @@ namespace wio
     }
 }
 
-MakeFrenumWithNamespace(wio::sema, TypeKind, Primitive, Null, Reference, Array, Dictionary, Function, Struct, Alias)
+MakeFrenumWithNamespace(wio::sema, TypeKind, Primitive, Null, GenericParameter, Reference, Array, Dictionary, Function, Struct, Alias)

@@ -1,6 +1,7 @@
 ﻿#include "wio/sema/analyzer.h"
 
 #include <functional>
+#include <optional>
 
 #include "wio/common/exception.h"
 #include "wio/common/logger.h"
@@ -106,6 +107,343 @@ namespace wio::sema
             }
 
             return false;
+        }
+
+        bool isTypeDerivedFrom(const Ref<Type>& derived, const Ref<Type>& base);
+
+        std::unordered_map<std::string, Ref<Type>> buildGenericTypeBindings(const std::vector<std::string>& parameterNames,
+                                                                            const std::vector<Ref<Type>>& typeArguments)
+        {
+            std::unordered_map<std::string, Ref<Type>> bindings;
+            const size_t bindingCount = std::min(parameterNames.size(), typeArguments.size());
+            bindings.reserve(bindingCount);
+
+            for (size_t i = 0; i < bindingCount; ++i)
+                bindings.emplace(parameterNames[i], typeArguments[i]);
+
+            return bindings;
+        }
+
+        bool containsGenericParameterType(const Ref<Type>& type)
+        {
+            Ref<Type> current = unwrapAliasType(type);
+            if (!current)
+                return false;
+
+            switch (current->kind())
+            {
+            case TypeKind::GenericParameter:
+                return true;
+            case TypeKind::Reference:
+                return containsGenericParameterType(current.AsFast<ReferenceType>()->referredType);
+            case TypeKind::Array:
+                return containsGenericParameterType(current.AsFast<ArrayType>()->elementType);
+            case TypeKind::Dictionary:
+            {
+                auto dictType = current.AsFast<DictionaryType>();
+                return containsGenericParameterType(dictType->keyType) ||
+                       containsGenericParameterType(dictType->valueType);
+            }
+            case TypeKind::Function:
+            {
+                auto funcType = current.AsFast<FunctionType>();
+                if (containsGenericParameterType(funcType->returnType))
+                    return true;
+
+                return std::ranges::any_of(funcType->paramTypes, [](const Ref<Type>& paramType)
+                {
+                    return containsGenericParameterType(paramType);
+                });
+            }
+            case TypeKind::Struct:
+            {
+                auto structType = current.AsFast<StructType>();
+                if (!structType->genericParameterNames.empty() && structType->genericArguments.empty())
+                    return true;
+
+                return std::ranges::any_of(structType->genericArguments, [](const Ref<Type>& genericArgument)
+                {
+                    return containsGenericParameterType(genericArgument);
+                });
+            }
+            case TypeKind::Alias:
+                return containsGenericParameterType(current.AsFast<AliasType>()->aliasedType);
+            default:
+                return false;
+            }
+        }
+
+        Ref<Type> instantiateGenericType(const Ref<Type>& type, const std::unordered_map<std::string, Ref<Type>>& bindings);
+
+        Ref<Type> instantiateGenericStructType(const Ref<StructType>& structType,
+                                               const std::vector<Ref<Type>>& explicitTypeArguments)
+        {
+            if (!structType)
+                return nullptr;
+
+            if (structType->genericParameterNames.empty())
+                return structType;
+
+            auto bindings = buildGenericTypeBindings(structType->genericParameterNames, explicitTypeArguments);
+
+            auto instantiatedScope = structType->structScope.Lock();
+            auto instantiatedType = Compiler::get().getTypeContext().getOrCreateStructType(
+                structType->name,
+                instantiatedScope,
+                structType->isObject,
+                structType->isInterface
+            ).AsFast<StructType>();
+
+            instantiatedType->scopePath = structType->scopePath;
+            instantiatedType->genericParameterNames = structType->genericParameterNames;
+            instantiatedType->genericArguments = explicitTypeArguments;
+            instantiatedType->fieldNames = structType->fieldNames;
+
+            instantiatedType->fieldTypes.reserve(structType->fieldTypes.size());
+            for (const auto& fieldType : structType->fieldTypes)
+                instantiatedType->fieldTypes.push_back(instantiateGenericType(fieldType, bindings));
+
+            instantiatedType->baseTypes.reserve(structType->baseTypes.size());
+            for (const auto& baseType : structType->baseTypes)
+                instantiatedType->baseTypes.push_back(instantiateGenericType(baseType, bindings));
+
+            return instantiatedType;
+        }
+
+        Ref<Type> instantiateGenericType(const Ref<Type>& type, const std::unordered_map<std::string, Ref<Type>>& bindings)
+        {
+            Ref<Type> current = unwrapAliasType(type);
+            if (!current)
+                return nullptr;
+
+            auto& ctx = Compiler::get().getTypeContext();
+
+            switch (current->kind())
+            {
+            case TypeKind::GenericParameter:
+            {
+                auto genericParam = current.AsFast<GenericParameterType>();
+                if (auto it = bindings.find(genericParam->name); it != bindings.end())
+                    return it->second;
+                return current;
+            }
+            case TypeKind::Reference:
+            {
+                auto refType = current.AsFast<ReferenceType>();
+                return ctx.getOrCreateReferenceType(
+                    instantiateGenericType(refType->referredType, bindings),
+                    refType->isMutable
+                );
+            }
+            case TypeKind::Array:
+            {
+                auto arrayType = current.AsFast<ArrayType>();
+                return ctx.getOrCreateArrayType(
+                    instantiateGenericType(arrayType->elementType, bindings),
+                    arrayType->arrayKind,
+                    arrayType->size
+                );
+            }
+            case TypeKind::Dictionary:
+            {
+                auto dictType = current.AsFast<DictionaryType>();
+                return ctx.getOrCreateDictionaryType(
+                    instantiateGenericType(dictType->keyType, bindings),
+                    instantiateGenericType(dictType->valueType, bindings),
+                    dictType->isOrdered
+                );
+            }
+            case TypeKind::Function:
+            {
+                auto funcType = current.AsFast<FunctionType>();
+                std::vector<Ref<Type>> instantiatedParams;
+                instantiatedParams.reserve(funcType->paramTypes.size());
+                for (const auto& paramType : funcType->paramTypes)
+                    instantiatedParams.push_back(instantiateGenericType(paramType, bindings));
+
+                return ctx.getOrCreateFunctionType(
+                    instantiateGenericType(funcType->returnType, bindings),
+                    instantiatedParams
+                );
+            }
+            case TypeKind::Struct:
+            {
+                auto structType = current.AsFast<StructType>();
+                std::vector<Ref<Type>> instantiatedArguments;
+
+                if (!structType->genericArguments.empty())
+                {
+                    instantiatedArguments.reserve(structType->genericArguments.size());
+                    for (const auto& genericArgument : structType->genericArguments)
+                        instantiatedArguments.push_back(instantiateGenericType(genericArgument, bindings));
+
+                    return instantiateGenericStructType(structType, instantiatedArguments);
+                }
+
+                if (!structType->genericParameterNames.empty())
+                {
+                    instantiatedArguments.reserve(structType->genericParameterNames.size());
+                    for (const auto& genericParameterName : structType->genericParameterNames)
+                    {
+                        auto bindingIt = bindings.find(genericParameterName);
+                        if (bindingIt == bindings.end())
+                            return current;
+
+                        instantiatedArguments.push_back(bindingIt->second);
+                    }
+
+                    return instantiateGenericStructType(structType, instantiatedArguments);
+                }
+
+                return current;
+            }
+            case TypeKind::Alias:
+                return instantiateGenericType(current.AsFast<AliasType>()->aliasedType, bindings);
+            default:
+                return current;
+            }
+        }
+
+        bool deduceGenericBindings(const Ref<Type>& expected,
+                                   const Ref<Type>& actual,
+                                   std::unordered_map<std::string, Ref<Type>>& bindings)
+        {
+            Ref<Type> resolvedExpected = unwrapAliasType(expected);
+            Ref<Type> resolvedActual = unwrapAliasType(actual);
+
+            if (!resolvedExpected || !resolvedActual || resolvedActual->isUnknown())
+                return false;
+
+            if (resolvedExpected->kind() == TypeKind::GenericParameter)
+            {
+                if (resolvedActual->kind() == TypeKind::Null)
+                    return false;
+
+                auto genericParam = resolvedExpected.AsFast<GenericParameterType>();
+                if (auto it = bindings.find(genericParam->name); it != bindings.end())
+                    return it->second->isCompatibleWith(resolvedActual) &&
+                           resolvedActual->isCompatibleWith(it->second);
+
+                bindings.emplace(genericParam->name, resolvedActual);
+                return true;
+            }
+
+            if (resolvedExpected->kind() == TypeKind::Reference &&
+                resolvedActual->kind() == TypeKind::Reference)
+            {
+                auto expectedRef = resolvedExpected.AsFast<ReferenceType>();
+                auto actualRef = resolvedActual.AsFast<ReferenceType>();
+
+                if (expectedRef->isMutable && !actualRef->isMutable)
+                    return false;
+
+                if (containsGenericParameterType(expectedRef->referredType))
+                    return deduceGenericBindings(expectedRef->referredType, actualRef->referredType, bindings);
+
+                return expectedRef->referredType->isCompatibleWith(actualRef->referredType) ||
+                       isTypeDerivedFrom(actualRef->referredType, expectedRef->referredType);
+            }
+
+            if (resolvedExpected->kind() == TypeKind::Reference &&
+                resolvedActual->kind() == TypeKind::Struct)
+            {
+                auto expectedRef = resolvedExpected.AsFast<ReferenceType>();
+                auto expectedTarget = unwrapAliasType(expectedRef->referredType);
+
+                if (!expectedRef->isMutable &&
+                    expectedTarget && expectedTarget->kind() == TypeKind::Struct)
+                {
+                    auto expectedStruct = expectedTarget.AsFast<StructType>();
+                    auto actualStruct = resolvedActual.AsFast<StructType>();
+
+                    if ((expectedStruct->isObject || expectedStruct->isInterface) &&
+                        (actualStruct->isObject || actualStruct->isInterface))
+                    {
+                        if (containsGenericParameterType(expectedTarget))
+                            return deduceGenericBindings(expectedTarget, resolvedActual, bindings);
+
+                        return expectedTarget->isCompatibleWith(resolvedActual) ||
+                               isTypeDerivedFrom(resolvedActual, expectedTarget);
+                    }
+                }
+            }
+
+            if (resolvedExpected->kind() == TypeKind::Array &&
+                resolvedActual->kind() == TypeKind::Array)
+            {
+                auto expectedArray = resolvedExpected.AsFast<ArrayType>();
+                auto actualArray = resolvedActual.AsFast<ArrayType>();
+
+                if (expectedArray->arrayKind == ArrayType::ArrayKind::Dynamic)
+                    return deduceGenericBindings(expectedArray->elementType, actualArray->elementType, bindings);
+
+                if (actualArray->arrayKind == ArrayType::ArrayKind::Dynamic)
+                    return false;
+
+                if (actualArray->size > expectedArray->size)
+                    return false;
+
+                return deduceGenericBindings(expectedArray->elementType, actualArray->elementType, bindings);
+            }
+
+            if (resolvedExpected->kind() == TypeKind::Dictionary &&
+                resolvedActual->kind() == TypeKind::Dictionary)
+            {
+                auto expectedDict = resolvedExpected.AsFast<DictionaryType>();
+                auto actualDict = resolvedActual.AsFast<DictionaryType>();
+
+                if (expectedDict->isOrdered != actualDict->isOrdered)
+                    return false;
+
+                return deduceGenericBindings(expectedDict->keyType, actualDict->keyType, bindings) &&
+                       deduceGenericBindings(expectedDict->valueType, actualDict->valueType, bindings);
+            }
+
+            if (resolvedExpected->kind() == TypeKind::Function &&
+                resolvedActual->kind() == TypeKind::Function)
+            {
+                auto expectedFunc = resolvedExpected.AsFast<FunctionType>();
+                auto actualFunc = resolvedActual.AsFast<FunctionType>();
+
+                if (expectedFunc->paramTypes.size() != actualFunc->paramTypes.size())
+                    return false;
+
+                if (!deduceGenericBindings(expectedFunc->returnType, actualFunc->returnType, bindings))
+                    return false;
+
+                for (size_t i = 0; i < expectedFunc->paramTypes.size(); ++i)
+                {
+                    if (!deduceGenericBindings(expectedFunc->paramTypes[i], actualFunc->paramTypes[i], bindings))
+                        return false;
+                }
+
+                return true;
+            }
+
+            if (resolvedExpected->kind() == TypeKind::Struct &&
+                resolvedActual->kind() == TypeKind::Struct)
+            {
+                auto expectedStruct = resolvedExpected.AsFast<StructType>();
+                auto actualStruct = resolvedActual.AsFast<StructType>();
+
+                if (expectedStruct->name != actualStruct->name ||
+                    expectedStruct->scopePath != actualStruct->scopePath ||
+                    expectedStruct->genericArguments.size() != actualStruct->genericArguments.size())
+                {
+                    return false;
+                }
+
+                for (size_t i = 0; i < expectedStruct->genericArguments.size(); ++i)
+                {
+                    if (!deduceGenericBindings(expectedStruct->genericArguments[i], actualStruct->genericArguments[i], bindings))
+                        return false;
+                }
+
+                return true;
+            }
+
+            return resolvedExpected->isCompatibleWith(resolvedActual) ||
+                   (resolvedExpected->isNumeric() && resolvedActual->isNumeric());
         }
 
         Ref<Type> resolvePrimitiveType(const std::string& name)
@@ -412,6 +750,22 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(TypeSpecifier& node)
     {
+        auto formatAppliedTypeName = [](const std::string& baseName, const std::vector<Ref<Type>>& typeArguments) -> std::string
+        {
+            if (typeArguments.empty())
+                return baseName;
+
+            std::string result = baseName + "<";
+            for (size_t i = 0; i < typeArguments.size(); ++i)
+            {
+                result += typeArguments[i] ? typeArguments[i]->toString() : "<unknown>";
+                if (i + 1 < typeArguments.size())
+                    result += ", ";
+            }
+            result += ">";
+            return result;
+        };
+
         if (node.name.type == TokenType::kwFn)
         {
             node.generics[0]->accept(*this);
@@ -452,6 +806,20 @@ namespace wio::sema
         
         Ref<Type> type = resolvePrimitiveType(node.name.value);
 
+        if (!type &&
+            node.name.type == TokenType::identifier &&
+            node.name.value.find("::") == std::string::npos)
+        {
+            for (auto it = genericTypeParameterScopes_.rbegin(); it != genericTypeParameterScopes_.rend(); ++it)
+            {
+                if (auto genericTypeIt = it->find(node.name.value); genericTypeIt != it->end())
+                {
+                    type = genericTypeIt->second;
+                    break;
+                }
+            }
+        }
+
         if (!type)
         {
             if (node.name.type == TokenType::StaticArray)
@@ -474,9 +842,97 @@ namespace wio::sema
             {
                 if (auto sym = resolveQualifiedSymbol(currentScope_, node.name.value))
                 {
+                    std::vector<Ref<Type>> explicitTypeArguments;
+                    explicitTypeArguments.reserve(node.generics.size());
+                    for (auto& genericArgument : node.generics)
+                    {
+                        genericArgument->accept(*this);
+                        explicitTypeArguments.push_back(genericArgument->refType.Lock());
+                    }
+
                     if (sym->kind == SymbolKind::Struct) 
                     {
-                        type = sym->type;
+                        auto structType = sym->type.AsFast<StructType>();
+                        if (!structType->genericParameterNames.empty())
+                        {
+                            if (explicitTypeArguments.size() != structType->genericParameterNames.size())
+                            {
+                                WIO_LOG_ADD_ERROR(
+                                    node.location(),
+                                    "Generic type '{}' expects {} generic arguments, but got {}.",
+                                    node.name.value,
+                                    structType->genericParameterNames.size(),
+                                    explicitTypeArguments.size()
+                                );
+                                type = Compiler::get().getTypeContext().getUnknown();
+                            }
+                            else
+                            {
+                                type = instantiateGenericStructType(structType, explicitTypeArguments);
+                            }
+                        }
+                        else
+                        {
+                            if (!explicitTypeArguments.empty())
+                            {
+                                WIO_LOG_ADD_ERROR(
+                                    node.location(),
+                                    "Type '{}' does not accept generic arguments.",
+                                    node.name.value
+                                );
+                                type = Compiler::get().getTypeContext().getUnknown();
+                            }
+                            else
+                            {
+                                type = sym->type;
+                            }
+                        }
+                    }
+                    else if (sym->kind == SymbolKind::TypeAlias)
+                    {
+                        if (!sym->genericParameterNames.empty())
+                        {
+                            if (explicitTypeArguments.size() != sym->genericParameterNames.size())
+                            {
+                                WIO_LOG_ADD_ERROR(
+                                    node.location(),
+                                    "Type alias '{}' expects {} generic arguments, but got {}.",
+                                    node.name.value,
+                                    sym->genericParameterNames.size(),
+                                    explicitTypeArguments.size()
+                                );
+                                type = Compiler::get().getTypeContext().getUnknown();
+                            }
+                            else
+                            {
+                                std::unordered_map<std::string, Ref<Type>> bindings;
+                                bindings.reserve(sym->genericParameterNames.size());
+                                for (size_t i = 0; i < sym->genericParameterNames.size(); ++i)
+                                    bindings.emplace(sym->genericParameterNames[i], explicitTypeArguments[i]);
+
+                                Ref<Type> instantiatedAliasTarget = instantiateGenericType(sym->aliasTargetType, bindings);
+                                type = Compiler::get().getTypeContext().getOrCreateAliasType(
+                                    formatAppliedTypeName(node.name.value, explicitTypeArguments),
+                                    instantiatedAliasTarget
+                                );
+                            }
+                        }
+                        else
+                        {
+                            if (!explicitTypeArguments.empty())
+                            {
+                                WIO_LOG_ADD_ERROR(
+                                    node.location(),
+                                    "Type alias '{}' does not accept generic arguments.",
+                                    node.name.value
+                                );
+                                type = Compiler::get().getTypeContext().getUnknown();
+                            }
+                            else
+                            {
+                                type = sym->type;
+                            }
+                        }
                     }
                     else
                     {
@@ -906,6 +1362,13 @@ namespace wio::sema
             Ref<Type> baseType = leftType;
             while (baseType && baseType->kind() == TypeKind::Alias)
                 baseType = baseType.AsFast<AliasType>()->aliasedType;
+
+            if (!baseType)
+            {
+                WIO_LOG_ADD_ERROR(node.member->location(), "Cannot access member '{}'. The left-hand side has no resolved type.", node.member->token.value);
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
     
             if (baseType->kind() == TypeKind::Struct)
             {
@@ -974,14 +1437,22 @@ namespace wio::sema
 
         if (foundMember->flags.get_isProtected() && !isInsideHierarchy)
             WIO_LOG_ADD_ERROR(node.location(), "Cannot access protected member '{}' from outside the object hierarchy.", foundMember->name);
-    
+
+        Ref<Type> memberType = foundMember->type;
+        if (auto instantiatedStructType = actualStructType ? actualStructType.AsFast<StructType>() : nullptr;
+            instantiatedStructType && !instantiatedStructType->genericParameterNames.empty() && !instantiatedStructType->genericArguments.empty())
+        {
+            auto bindings = buildGenericTypeBindings(instantiatedStructType->genericParameterNames, instantiatedStructType->genericArguments);
+            memberType = instantiateGenericType(memberType, bindings);
+        }
+
         node.referencedSymbol = foundMember;
-        node.refType = foundMember->type;
+        node.refType = memberType;
         
         if (auto memberId = node.member.Get(); memberId)
         {
             memberId->referencedSymbol = foundMember;
-            memberId->refType = foundMember->type;
+            memberId->refType = memberType;
         }
     }
 
@@ -989,16 +1460,51 @@ namespace wio::sema
     {
         node.callee->accept(*this);
         Ref<Symbol> calleeSym = node.callee->referencedSymbol.Lock();
+        std::vector<Ref<Type>> explicitTypeArguments;
+        explicitTypeArguments.reserve(node.explicitTypeArguments.size());
+        for (auto& explicitTypeArgument : node.explicitTypeArguments)
+        {
+            explicitTypeArgument->accept(*this);
+            explicitTypeArguments.push_back(explicitTypeArgument->refType.Lock());
+        }
 
         bool isConstructorCall = false;
         Ref<Type> structReturnType = nullptr;
+        std::unordered_map<std::string, Ref<Type>> constructorGenericBindings;
+        bool useExplicitFunctionTypeArguments = false;
 
         if (calleeSym && calleeSym->kind == SymbolKind::Struct)
         {
             isConstructorCall = true;
-            structReturnType = calleeSym->type;
-            
-            auto structType = structReturnType.AsFast<StructType>();
+            auto structType = calleeSym->type.AsFast<StructType>();
+            structReturnType = structType;
+
+            if (!structType->genericParameterNames.empty())
+            {
+                if (explicitTypeArguments.size() != structType->genericParameterNames.size())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "Generic type '{}' expects {} generic arguments, but got {}.",
+                        structType->name,
+                        structType->genericParameterNames.size(),
+                        explicitTypeArguments.size()
+                    );
+                    node.refType = Compiler::get().getTypeContext().getUnknown();
+                    return;
+                }
+
+                constructorGenericBindings = buildGenericTypeBindings(structType->genericParameterNames, explicitTypeArguments);
+                structReturnType = instantiateGenericStructType(structType, explicitTypeArguments);
+                node.callee->refType = structReturnType;
+            }
+            else if (!explicitTypeArguments.empty())
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Type '{}' does not accept generic arguments.", structType->name);
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+
             if (auto lockedScope = structType->structScope.Lock())
             {
                 calleeSym = lockedScope->resolveLocally("OnConstruct");
@@ -1010,7 +1516,9 @@ namespace wio::sema
                 node.refType = Compiler::get().getTypeContext().getUnknown();
                 return;
             }
-        }//
+        }
+
+        useExplicitFunctionTypeArguments = !isConstructorCall && !explicitTypeArguments.empty();
 
         std::vector<Ref<Type>> argTypes;
         for (auto& arg : node.arguments)
@@ -1034,23 +1542,71 @@ namespace wio::sema
             return false;
         };
 
+        auto isImplicitObjectViewBridge = [&](const Ref<Type>& dest, const Ref<Type>& src) -> bool
+        {
+            Ref<Type> resolvedDest = unwrapAliasType(dest);
+            Ref<Type> resolvedSrc = unwrapAliasType(src);
+
+            if (!resolvedDest || !resolvedSrc || resolvedDest->kind() != TypeKind::Reference)
+                return false;
+
+            auto expectedRef = resolvedDest.AsFast<ReferenceType>();
+            if (expectedRef->isMutable || resolvedSrc->kind() != TypeKind::Struct)
+                return false;
+
+            auto expectedTarget = unwrapAliasType(expectedRef->referredType);
+            if (!expectedTarget || expectedTarget->kind() != TypeKind::Struct)
+                return false;
+
+            auto expectedStruct = expectedTarget.AsFast<StructType>();
+            auto actualStruct = resolvedSrc.AsFast<StructType>();
+            if ((!expectedStruct->isObject && !expectedStruct->isInterface) ||
+                (!actualStruct->isObject && !actualStruct->isInterface))
+            {
+                return false;
+            }
+
+            return expectedTarget->isCompatibleWith(resolvedSrc) ||
+                   isTypeDerivedFrom(resolvedSrc, expectedTarget);
+        };
+
+        std::vector<Ref<Symbol>> candidateSymbols;
+        bool requiresOverloadResolution = false;
         if (calleeSym && calleeSym->kind == SymbolKind::FunctionGroup)
         {
-            Ref<Symbol> bestMatch = nullptr;
-            int bestScore = -1;
-            bool isAmbiguous = false;
+            candidateSymbols = calleeSym->overloads;
+            requiresOverloadResolution = true;
+        }
+        else if (calleeSym && calleeSym->kind == SymbolKind::Function)
+        {
+            candidateSymbols.push_back(calleeSym);
+            Ref<Type> resolvedCalleeType = calleeSym->type;
+            if (!constructorGenericBindings.empty())
+                resolvedCalleeType = instantiateGenericType(resolvedCalleeType, constructorGenericBindings);
 
-            for (auto& overload : calleeSym->overloads)
+            requiresOverloadResolution = (!calleeSym->genericParameterNames.empty() && containsGenericParameterType(resolvedCalleeType)) ||
+                                         useExplicitFunctionTypeArguments ||
+                                         !constructorGenericBindings.empty();
+        }
+
+        if (requiresOverloadResolution)
+        {
+            struct ResolvedFunctionCandidate
             {
-                auto funcType = overload->type.AsFast<FunctionType>();
-                if (funcType->paramTypes.size() != argTypes.size()) continue;
+                Ref<Symbol> symbol = nullptr;
+                Ref<Type> functionType = nullptr;
+                int score = -1;
+            };
 
-                bool isMatch = true;
+            auto scoreResolvedCall = [&](const Ref<FunctionType>& functionType, bool isGenericCandidate) -> std::optional<int>
+            {
+                if (!functionType || functionType->paramTypes.size() != argTypes.size())
+                    return std::nullopt;
+
                 int currentScore = 0;
-
                 for (size_t i = 0; i < argTypes.size(); ++i)
                 {
-                    auto dest = funcType->paramTypes[i];
+                    auto dest = functionType->paramTypes[i];
                     const auto& src = argTypes[i];
 
                     if (dest->isCompatibleWith(src) || (dest->isNumeric() && src->isNumeric()))
@@ -1091,29 +1647,111 @@ namespace wio::sema
                             currentScore += 10;
                         }
                     }
+                    else if (isImplicitObjectViewBridge(dest, src))
+                    {
+                        currentScore += 9;
+                    }
                     else if (isSafeRefCast(dest, src)) 
                     {
                         currentScore += 5; 
                     }
                     else
                     {
-                        isMatch = false;
-                        break;
+                        return std::nullopt;
                     }
                 }
 
-                if (isMatch)
+                if (isGenericCandidate)
+                    currentScore -= 1;
+
+                return currentScore;
+            };
+
+            auto tryResolveFunctionCandidate = [&](const Ref<Symbol>& overload) -> std::optional<ResolvedFunctionCandidate>
+            {
+                if (!overload || !overload->type || overload->type->kind() != TypeKind::Function)
+                    return std::nullopt;
+
+                Ref<Type> resolvedFunctionType = overload->type;
+                if (!constructorGenericBindings.empty())
+                    resolvedFunctionType = instantiateGenericType(resolvedFunctionType, constructorGenericBindings);
+
+                auto declaredFunctionType = resolvedFunctionType.AsFast<FunctionType>();
+                bool isGenericCandidate = containsGenericParameterType(resolvedFunctionType);
+                if (useExplicitFunctionTypeArguments && !isGenericCandidate)
+                    return std::nullopt;
+
+                std::unordered_map<std::string, Ref<Type>> bindings;
+
+                if (isGenericCandidate)
                 {
-                    if (currentScore > bestScore)
+                    if (useExplicitFunctionTypeArguments)
                     {
-                        bestMatch = overload;
-                        bestScore = currentScore;
-                        isAmbiguous = false;
+                        if (overload->genericParameterNames.size() != explicitTypeArguments.size())
+                            return std::nullopt;
+
+                        for (size_t i = 0; i < explicitTypeArguments.size(); ++i)
+                        {
+                            if (!explicitTypeArguments[i] || explicitTypeArguments[i]->isUnknown())
+                                return std::nullopt;
+
+                            bindings.emplace(overload->genericParameterNames[i], explicitTypeArguments[i]);
+                        }
                     }
-                    else if (currentScore == bestScore)
+
+                    if (bindings.empty())
                     {
-                        isAmbiguous = true;
+                        for (size_t i = 0; i < argTypes.size(); ++i)
+                        {
+                            if (!deduceGenericBindings(declaredFunctionType->paramTypes[i], argTypes[i], bindings))
+                                return std::nullopt;
+                        }
                     }
+
+                    std::vector<Ref<Type>> instantiatedParamTypes;
+                    instantiatedParamTypes.reserve(declaredFunctionType->paramTypes.size());
+                    for (const auto& paramType : declaredFunctionType->paramTypes)
+                    {
+                        Ref<Type> instantiatedType = instantiateGenericType(paramType, bindings);
+                        if (!instantiatedType || containsGenericParameterType(instantiatedType))
+                            return std::nullopt;
+
+                        instantiatedParamTypes.push_back(instantiatedType);
+                    }
+
+                    Ref<Type> instantiatedReturnType = instantiateGenericType(declaredFunctionType->returnType, bindings);
+                    if (!instantiatedReturnType || containsGenericParameterType(instantiatedReturnType))
+                        return std::nullopt;
+
+                    resolvedFunctionType = Compiler::get().getTypeContext().getOrCreateFunctionType(
+                        instantiatedReturnType,
+                        instantiatedParamTypes
+                    );
+                }
+
+                if (auto score = scoreResolvedCall(resolvedFunctionType.AsFast<FunctionType>(), isGenericCandidate); score.has_value())
+                    return ResolvedFunctionCandidate{ overload, resolvedFunctionType, *score };
+
+                return std::nullopt;
+            };
+
+            std::optional<ResolvedFunctionCandidate> bestMatch;
+            bool isAmbiguous = false;
+
+            for (const auto& overload : candidateSymbols)
+            {
+                auto resolvedCandidate = tryResolveFunctionCandidate(overload);
+                if (!resolvedCandidate.has_value())
+                    continue;
+
+                if (!bestMatch.has_value() || resolvedCandidate->score > bestMatch->score)
+                {
+                    bestMatch = resolvedCandidate;
+                    isAmbiguous = false;
+                }
+                else if (resolvedCandidate->score == bestMatch->score)
+                {
+                    isAmbiguous = true;
                 }
             }
 
@@ -1123,7 +1761,7 @@ namespace wio::sema
                 node.refType = Compiler::get().getTypeContext().getUnknown();
                 return;
             }
-            if (!bestMatch)
+            if (!bestMatch.has_value())
             {
                 WIO_LOG_ADD_ERROR(node.location(), "No matching function/constructor overload found.");
                 node.refType = Compiler::get().getTypeContext().getUnknown();
@@ -1132,11 +1770,11 @@ namespace wio::sema
 
             if (!isConstructorCall)
             {
-                node.callee->referencedSymbol = bestMatch;
-                node.callee->refType = bestMatch->type;
+                node.callee->referencedSymbol = bestMatch->symbol;
+                node.callee->refType = bestMatch->functionType;
             }
             
-            node.refType = isConstructorCall ? structReturnType : bestMatch->type.AsFast<FunctionType>()->returnType;
+            node.refType = isConstructorCall ? structReturnType : bestMatch->functionType.AsFast<FunctionType>()->returnType;
             return; 
         }
 
@@ -1148,6 +1786,9 @@ namespace wio::sema
         }
 
         Ref<Type> calleeType = calleeSym->type; //
+        if (!constructorGenericBindings.empty())
+            calleeType = instantiateGenericType(calleeType, constructorGenericBindings);
+
         if (!calleeType || calleeType->kind() != TypeKind::Function)
         {
             WIO_LOG_ADD_ERROR(node.location(), "Called expression is not a function or struct.");
@@ -1166,6 +1807,7 @@ namespace wio::sema
             const auto& actualType = argTypes[i];
 
             if (!expectedType->isCompatibleWith(actualType) && 
+                !isImplicitObjectViewBridge(expectedType, actualType) &&
                 !isSafeRefCast(expectedType, actualType) &&
                 !(expectedType->isNumeric() && actualType->isNumeric()))
             {
@@ -1464,11 +2106,97 @@ namespace wio::sema
             }
         }
     }
+
+    void SemanticAnalyzer::visit(TypeAliasDeclaration& node)
+    {
+        auto buildGenericTypeParameterScope = [&]() -> std::unordered_map<std::string, Ref<Type>>
+        {
+            std::unordered_map<std::string, Ref<Type>> scope;
+            scope.reserve(node.genericParameters.size());
+
+            for (const auto& genericParameter : node.genericParameters)
+            {
+                if (!genericParameter)
+                    continue;
+
+                const std::string& parameterName = genericParameter->token.value;
+                if (scope.contains(parameterName))
+                {
+                    WIO_LOG_ADD_ERROR(genericParameter->location(), "Generic parameter '{}' is already declared on this type alias.", parameterName);
+                    continue;
+                }
+
+                Ref<Type> parameterType = Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
+                genericParameter->refType = parameterType;
+                scope.emplace(parameterName, parameterType);
+            }
+
+            return scope;
+        };
+
+        if (!isDeclarationPass_)
+        {
+            if (!node.name->referencedSymbol.Lock())
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Local type aliases are not supported yet. Declare type aliases at global or realm scope.");
+            }
+            return;
+        }
+
+        auto genericScope = buildGenericTypeParameterScope();
+        genericTypeParameterScopes_.push_back(genericScope);
+
+        node.aliasedType->accept(*this);
+        Ref<Type> aliasedType = node.aliasedType->refType.Lock();
+        Ref<Type> aliasType = Compiler::get().getTypeContext().getOrCreateAliasType(node.name->token.value, aliasedType);
+        Ref<Symbol> aliasSym = createSymbol(node.name->token.value, aliasType, SymbolKind::TypeAlias, node.location());
+        aliasSym->aliasTargetType = aliasedType;
+        aliasSym->genericParameterNames.reserve(node.genericParameters.size());
+        for (const auto& genericParameter : node.genericParameters)
+        {
+            if (genericParameter)
+                aliasSym->genericParameterNames.push_back(genericParameter->token.value);
+        }
+
+        currentScope_->define(node.name->token.value, aliasSym);
+        node.name->referencedSymbol = aliasSym;
+        node.name->refType = aliasType;
+
+        genericTypeParameterScopes_.pop_back();
+    }
     
     void SemanticAnalyzer::visit(FunctionDeclaration& node)
     {
+        auto buildGenericTypeParameterScope = [&]() -> std::unordered_map<std::string, Ref<Type>>
+        {
+            std::unordered_map<std::string, Ref<Type>> scope;
+            scope.reserve(node.genericParameters.size());
+
+            for (const auto& genericParameter : node.genericParameters)
+            {
+                if (!genericParameter)
+                    continue;
+
+                const std::string& parameterName = genericParameter->token.value;
+                if (scope.contains(parameterName))
+                {
+                    WIO_LOG_ADD_ERROR(genericParameter->location(), "Generic parameter '{}' is already declared on this function.", parameterName);
+                    continue;
+                }
+
+                Ref<Type> parameterType = Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
+                genericParameter->refType = parameterType;
+                scope.emplace(parameterName, parameterType);
+            }
+
+            return scope;
+        };
+
         if (isDeclarationPass_)
         {
+            auto genericScope = buildGenericTypeParameterScope();
+            genericTypeParameterScopes_.push_back(genericScope);
+
             Ref<Type> returnType = Compiler::get().getTypeContext().getVoid();
             if (node.returnType)
             {
@@ -1491,10 +2219,17 @@ namespace wio::sema
             auto funcType = Compiler::get().getTypeContext().getOrCreateFunctionType(returnType, paramTypes);
             
             Ref<Symbol> funcSym = createSymbol(node.name->token.value, funcType, SymbolKind::Function, node.location());
+            funcSym->genericParameterNames.reserve(node.genericParameters.size());
+            for (const auto& genericParameter : node.genericParameters)
+            {
+                if (genericParameter)
+                    funcSym->genericParameterNames.push_back(genericParameter->token.value);
+            }
             currentScope_->define(node.name->token.value, funcSym);
 
             node.name->refType = funcType;
             node.name->referencedSymbol = funcSym;
+            genericTypeParameterScopes_.pop_back();
             return;
         }
 
@@ -1507,9 +2242,33 @@ namespace wio::sema
         bool isEvent = hasAttribute(node.attributes, Attribute::Event);
         std::vector<Attribute> moduleLifecycleAttributes = getModuleLifecycleAttributes(node.attributes);
         bool hasModuleLifecycle = !moduleLifecycleAttributes.empty();
+        bool isGenericFunction = !node.genericParameters.empty();
         if (isCommand && isEvent)
         {
             WIO_LOG_ADD_ERROR(node.location(), "@Command and @Event cannot be combined on the same function.");
+        }
+
+        if (isGenericFunction)
+        {
+            if (currentScope_ && currentScope_->getKind() == ScopeKind::Struct)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Generic methods are not supported yet. Only top-level generic functions are currently available.");
+            }
+
+            if (node.name->token.value == "Entry")
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Entry cannot be declared as a generic function.");
+            }
+
+            if (isNative)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "@Native generic functions are not supported yet.");
+            }
+
+            if (isExported || isCommand || isEvent || hasModuleLifecycle)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Generic functions cannot currently use C ABI or module export attributes.");
+            }
         }
 
         if ((isCommand || isEvent) && !isExported)
@@ -1816,6 +2575,9 @@ namespace wio::sema
 
         Ref<Type> prevRetType = currentFunctionReturnType_;
         currentFunctionReturnType_ = funcType->returnType;
+
+        auto genericScope = buildGenericTypeParameterScope();
+        genericTypeParameterScopes_.push_back(genericScope);
         
         enterScope(ScopeKind::Function);
 
@@ -1848,6 +2610,7 @@ namespace wio::sema
             node.body->accept(*this);
 
         exitScope();
+        genericTypeParameterScopes_.pop_back();
         currentFunctionReturnType_ = prevRetType;
     }
 
@@ -1902,6 +2665,31 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(InterfaceDeclaration& node)
     {
+        auto buildGenericTypeParameterScope = [&]() -> std::unordered_map<std::string, Ref<Type>>
+        {
+            std::unordered_map<std::string, Ref<Type>> scope;
+            scope.reserve(node.genericParameters.size());
+
+            for (const auto& genericParameter : node.genericParameters)
+            {
+                if (!genericParameter)
+                    continue;
+
+                const std::string& parameterName = genericParameter->token.value;
+                if (scope.contains(parameterName))
+                {
+                    WIO_LOG_ADD_ERROR(genericParameter->location(), "Generic parameter '{}' is already declared on this interface.", parameterName);
+                    continue;
+                }
+
+                Ref<Type> parameterType = Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
+                genericParameter->refType = parameterType;
+                scope.emplace(parameterName, parameterType);
+            }
+
+            return scope;
+        };
+
         if (isDeclarationPass_)
         {
             auto interfaceScope = Ref<Scope>::Create(currentScope_, ScopeKind::Struct);
@@ -1909,9 +2697,16 @@ namespace wio::sema
             
             Ref<Type> interfaceType = Ref<StructType>::Create(node.name->token.value, interfaceScope, false, true);
             interfaceType.AsFast<StructType>()->scopePath = getCurrentNamespacePath();
+            interfaceType.AsFast<StructType>()->genericParameterNames.reserve(node.genericParameters.size());
+            for (const auto& genericParameter : node.genericParameters)
+            {
+                if (genericParameter)
+                    interfaceType.AsFast<StructType>()->genericParameterNames.push_back(genericParameter->token.value);
+            }
             Ref<Symbol> interfaceSym = createSymbol(node.name->token.value, interfaceType, SymbolKind::Struct, node.location());
             interfaceSym->innerScope = interfaceScope;
             interfaceSym->flags.set_isInterface(true);
+            interfaceSym->genericParameterNames = interfaceType.AsFast<StructType>()->genericParameterNames;
             currentScope_->define(node.name->token.value, interfaceSym);
             
             node.name->refType = interfaceType;
@@ -1919,7 +2714,9 @@ namespace wio::sema
 
             auto prevScope = currentScope_;
             currentScope_ = interfaceScope;
+            genericTypeParameterScopes_.push_back(buildGenericTypeParameterScope());
             for (auto& method : node.methods) method->accept(*this);
+            genericTypeParameterScopes_.pop_back();
             currentScope_ = prevScope;
             return;
         }
@@ -1927,15 +2724,42 @@ namespace wio::sema
         auto sym = node.name->referencedSymbol.Lock();
         auto prevScope = currentScope_;
         currentScope_ = sym->innerScope;
+        genericTypeParameterScopes_.push_back(buildGenericTypeParameterScope());
 
         for (auto& method : node.methods)
             method->accept(*this); 
-            
+
+        genericTypeParameterScopes_.pop_back();
         currentScope_ = prevScope;
     }
 
     void SemanticAnalyzer::visit(ComponentDeclaration& node)
     {
+        auto buildGenericTypeParameterScope = [&]() -> std::unordered_map<std::string, Ref<Type>>
+        {
+            std::unordered_map<std::string, Ref<Type>> scope;
+            scope.reserve(node.genericParameters.size());
+
+            for (const auto& genericParameter : node.genericParameters)
+            {
+                if (!genericParameter)
+                    continue;
+
+                const std::string& parameterName = genericParameter->token.value;
+                if (scope.contains(parameterName))
+                {
+                    WIO_LOG_ADD_ERROR(genericParameter->location(), "Generic parameter '{}' is already declared on this component.", parameterName);
+                    continue;
+                }
+
+                Ref<Type> parameterType = Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
+                genericParameter->refType = parameterType;
+                scope.emplace(parameterName, parameterType);
+            }
+
+            return scope;
+        };
+
         if (isDeclarationPass_)
         {
             auto structScope = Ref<Scope>::Create(currentScope_, ScopeKind::Struct);
@@ -1943,8 +2767,15 @@ namespace wio::sema
             
             Ref<Type> structType = Ref<StructType>::Create(node.name->token.value, structScope);
             structType.AsFast<StructType>()->scopePath = getCurrentNamespacePath();
+            structType.AsFast<StructType>()->genericParameterNames.reserve(node.genericParameters.size());
+            for (const auto& genericParameter : node.genericParameters)
+            {
+                if (genericParameter)
+                    structType.AsFast<StructType>()->genericParameterNames.push_back(genericParameter->token.value);
+            }
             Ref<Symbol> compSym = createSymbol(node.name->token.value, structType, SymbolKind::Struct, node.location());
             compSym->innerScope = structScope;
+            compSym->genericParameterNames = structType.AsFast<StructType>()->genericParameterNames;
             currentScope_->define(node.name->token.value, compSym);
             
             node.name->refType = structType;
@@ -1952,7 +2783,9 @@ namespace wio::sema
 
             auto prevScope = currentScope_;
             currentScope_ = structScope;
+            genericTypeParameterScopes_.push_back(buildGenericTypeParameterScope());
             for (auto& member : node.members) member.declaration->accept(*this);
+            genericTypeParameterScopes_.pop_back();
             currentScope_ = prevScope;
             return;
         }
@@ -1964,6 +2797,23 @@ namespace wio::sema
         {
             auto prevScope = currentScope_;
             currentScope_ = sym->innerScope;
+            auto genericScope = buildGenericTypeParameterScope();
+            genericTypeParameterScopes_.push_back(genericScope);
+
+            Ref<Type> generatedSelfType = structType;
+            if (!structType->genericParameterNames.empty())
+            {
+                std::vector<Ref<Type>> genericSelfArguments;
+                genericSelfArguments.reserve(structType->genericParameterNames.size());
+                for (const auto& genericParameterName : structType->genericParameterNames)
+                {
+                    if (auto genericIt = genericScope.find(genericParameterName); genericIt != genericScope.end())
+                        genericSelfArguments.push_back(genericIt->second);
+                }
+
+                if (genericSelfArguments.size() == structType->genericParameterNames.size())
+                    generatedSelfType = instantiateGenericStructType(structType, genericSelfArguments);
+            }
 
             bool hasCustomCtor = false;
             bool hasEmptyCtor = false;
@@ -2082,13 +2932,14 @@ namespace wio::sema
                 }
 
                 if (!hasCopyCtor) {
-                    auto copyParamType = Ref<ReferenceType>::Create(structType, false);
+                    auto copyParamType = Compiler::get().getTypeContext().getOrCreateReferenceType(generatedSelfType, false);
                     auto copyCtorType = Compiler::get().getTypeContext().getOrCreateFunctionType(voidType, { copyParamType });
                     Ref<Symbol> copySym = createSymbol("OnConstruct", copyCtorType, SymbolKind::Function, node.location());
                     currentScope_->define("OnConstruct", copySym);
                 }
             }
             
+            genericTypeParameterScopes_.pop_back();
             currentScope_ = prevScope;
             return;
         }
@@ -2096,17 +2947,44 @@ namespace wio::sema
         auto prevScope = currentScope_;
         currentScope_ = sym->innerScope;
         currentStructType_ = structType;
+        genericTypeParameterScopes_.push_back(buildGenericTypeParameterScope());
         
         for (auto& member : node.members)
             if (member.declaration->is<FunctionDeclaration>())
                 member.declaration->accept(*this);
 
+        genericTypeParameterScopes_.pop_back();
         currentStructType_ = nullptr;
         currentScope_ = prevScope;
     }
 
     void SemanticAnalyzer::visit(ObjectDeclaration& node)
     {
+        auto buildGenericTypeParameterScope = [&]() -> std::unordered_map<std::string, Ref<Type>>
+        {
+            std::unordered_map<std::string, Ref<Type>> scope;
+            scope.reserve(node.genericParameters.size());
+
+            for (const auto& genericParameter : node.genericParameters)
+            {
+                if (!genericParameter)
+                    continue;
+
+                const std::string& parameterName = genericParameter->token.value;
+                if (scope.contains(parameterName))
+                {
+                    WIO_LOG_ADD_ERROR(genericParameter->location(), "Generic parameter '{}' is already declared on this object.", parameterName);
+                    continue;
+                }
+
+                Ref<Type> parameterType = Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
+                genericParameter->refType = parameterType;
+                scope.emplace(parameterName, parameterType);
+            }
+
+            return scope;
+        };
+
         if (isDeclarationPass_)
         {
             auto structScope = Ref<Scope>::Create(currentScope_, ScopeKind::Struct);
@@ -2114,8 +2992,15 @@ namespace wio::sema
             
             Ref<Type> structType = Ref<StructType>::Create(node.name->token.value, structScope, true);
             structType.AsFast<StructType>()->scopePath = getCurrentNamespacePath();
+            structType.AsFast<StructType>()->genericParameterNames.reserve(node.genericParameters.size());
+            for (const auto& genericParameter : node.genericParameters)
+            {
+                if (genericParameter)
+                    structType.AsFast<StructType>()->genericParameterNames.push_back(genericParameter->token.value);
+            }
             Ref<Symbol> objSym = createSymbol(node.name->token.value, structType, SymbolKind::Struct, node.location());
             objSym->innerScope = structScope;
+            objSym->genericParameterNames = structType.AsFast<StructType>()->genericParameterNames;
             currentScope_->define(node.name->token.value, objSym);
             
             node.name->refType = structType;
@@ -2123,7 +3008,9 @@ namespace wio::sema
 
             auto prevScope = currentScope_;
             currentScope_ = structScope;
+            genericTypeParameterScopes_.push_back(buildGenericTypeParameterScope());
             for (auto& member : node.members) member.declaration->accept(*this);
+            genericTypeParameterScopes_.pop_back();
             currentScope_ = prevScope;
             return;
         }
@@ -2135,6 +3022,23 @@ namespace wio::sema
         {
             auto prevScope = currentScope_;
             currentScope_ = sym->innerScope;
+            auto genericScope = buildGenericTypeParameterScope();
+            genericTypeParameterScopes_.push_back(genericScope);
+
+            Ref<Type> generatedSelfType = structType;
+            if (!structType->genericParameterNames.empty())
+            {
+                std::vector<Ref<Type>> genericSelfArguments;
+                genericSelfArguments.reserve(structType->genericParameterNames.size());
+                for (const auto& genericParameterName : structType->genericParameterNames)
+                {
+                    if (auto genericIt = genericScope.find(genericParameterName); genericIt != genericScope.end())
+                        genericSelfArguments.push_back(genericIt->second);
+                }
+
+                if (genericSelfArguments.size() == structType->genericParameterNames.size())
+                    generatedSelfType = instantiateGenericStructType(structType, genericSelfArguments);
+            }
 
             bool hasCustomCtor = false;
             bool hasEmptyCtor = false;
@@ -2336,13 +3240,14 @@ namespace wio::sema
                 }
 
                 if (!hasCopyCtor) {
-                    auto copyParamType = Ref<ReferenceType>::Create(structType, false);
+                    auto copyParamType = Compiler::get().getTypeContext().getOrCreateReferenceType(generatedSelfType, false);
                     auto copyCtorType = Compiler::get().getTypeContext().getOrCreateFunctionType(voidType, { copyParamType });
                     Ref<Symbol> copySym = createSymbol("OnConstruct", copyCtorType, SymbolKind::Function, node.location());
                     currentScope_->define("OnConstruct", copySym);
                 }
             }
             
+            genericTypeParameterScopes_.pop_back();
             currentScope_ = prevScope;
             return;
         }
@@ -2351,6 +3256,7 @@ namespace wio::sema
         currentScope_ = sym->innerScope;
         currentStructType_ = structType;
         currentBaseStructType_ = nullptr;
+        genericTypeParameterScopes_.push_back(buildGenericTypeParameterScope());
 
         auto bases = getAttributeArgs(node.attributes, Attribute::From);
         for (const auto& baseToken : bases)
@@ -2368,7 +3274,8 @@ namespace wio::sema
         for (auto& member : node.members)
             if (member.declaration->is<FunctionDeclaration>())
                 member.declaration->accept(*this);
-        
+
+        genericTypeParameterScopes_.pop_back();
         currentStructType_ = nullptr;
         currentBaseStructType_ = nullptr;
         currentScope_ = prevScope;

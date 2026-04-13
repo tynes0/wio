@@ -1,0 +1,23 @@
+use std::io as console;
+
+object Box<T> {
+    public value: T;
+
+    OnConstruct(value: T) {
+        self.value = value;
+    }
+
+    public fn Get() -> T {
+        return self.value;
+    }
+}
+
+fn ReadBox<T>(box: view Box<T>) -> T {
+    return box.Get();
+}
+
+fn Entry() -> i32 {
+    let box: Box<i32> = Box<i32>(7);
+    console::Print($"Generic object: ${box.Get()}, ${ReadBox(box)}");
+    return 0;
+}

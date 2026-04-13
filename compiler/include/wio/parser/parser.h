@@ -34,6 +34,7 @@ namespace wio
         NodePtr<Expression> parseDictionaryLiteral();
         NodePtr<Expression> parseLambdaExpression();
         NodePtr<Expression> parseMatchExpression();
+        std::vector<NodePtr<TypeSpecifier>> parseExplicitTypeArgumentList();
         Token parseAttributeArgumentToken();
         
         NodePtr<TypeSpecifier> parseType();
@@ -42,6 +43,7 @@ namespace wio
         NodePtr<Statement> parseBlockStatement();
         NodePtr<AttributeStatement> parseAttributeStatement();
         NodePtr<VariableDeclaration> parseVariableDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
+        NodePtr<TypeAliasDeclaration> parseTypeAliasDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
         NodePtr<FunctionDeclaration> parseFunctionDeclaration(std::vector<NodePtr<AttributeStatement>> attributes, bool isLifecycle = false);
         NodePtr<Statement> parseInterfaceDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
         NodePtr<Statement> parseComponentDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
@@ -60,6 +62,7 @@ namespace wio
         NodePtr<Statement> parseRealmDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
 
         [[nodiscard]] static int getPrecedence(TokenType type);
+        [[nodiscard]] bool canParseExplicitTypeArgumentCall() const;
 
         [[noreturn]] static void utError(const std::string& message, common::Location location);
         [[noreturn]] static void ucError(common::Location location);

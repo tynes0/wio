@@ -1,0 +1,12 @@
+use std::io as console;
+
+component Pair<T, U> {
+    first: T;
+    second: U;
+}
+
+fn Entry() -> i32 {
+    let pair: Pair<i32, string> = Pair<i32, string>(7, "wio");
+    console::Print($"Generic component: ${pair.first}/${pair.second}");
+    return 0;
+}

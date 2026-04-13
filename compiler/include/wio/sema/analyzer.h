@@ -4,6 +4,7 @@
 #include "symbol.h"
 #include "scope.h"
 #include "type.h"
+#include <unordered_map>
 #include <vector>
 
 namespace wio::sema
@@ -26,6 +27,7 @@ namespace wio::sema
         Ref<Type> currentStructType_ = nullptr;
         Ref<Type> currentBaseStructType_ = nullptr;
         std::vector<std::string> currentNamespacePath_;
+        std::vector<std::unordered_map<std::string, Ref<Type>>> genericTypeParameterScopes_;
         uint32_t loopDepth_ = 0;
         bool isDeclarationPass_ = true;
         bool isStructResolutionPass_ = false;

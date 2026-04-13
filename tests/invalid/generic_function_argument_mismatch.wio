@@ -1,0 +1,8 @@
+fn PickFirst<T>(first: T, second: T) -> T {
+    return first;
+}
+
+fn Entry() -> i32 {
+    let value = PickFirst(1, "oops");
+    return value;
+}

@@ -50,8 +50,12 @@ namespace wio::sema
         Ref<Type> getOrCreateFunctionType(Ref<Type> returnType, std::vector<Ref<Type>> paramTypes);
         Ref<Type> getOrCreateDictionaryType(Ref<Type> keyType, Ref<Type> valueType, bool isOrdered = false);
         Ref<Type> getOrCreateTreeType(Ref<Type> keyType, Ref<Type> valueType);
-        Ref<Type> getOrCreateStructType(const std::string& name, const Ref<Scope>& structScope);
+        Ref<Type> getOrCreateStructType(const std::string& name,
+                                        const Ref<Scope>& structScope,
+                                        bool isObject = false,
+                                        bool isInterface = false);
         Ref<Type> getOrCreateAliasType(const std::string& name, Ref<Type> aliasedType);
+        Ref<Type> getOrCreateGenericParameterType(const std::string& name);
 
     private:
         std::vector<Ref<Type>> ownedTypes_;

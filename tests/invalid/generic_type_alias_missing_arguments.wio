@@ -1,0 +1,6 @@
+type Buffer<T> = T[];
+
+fn Entry() -> i32 {
+    let values: Buffer = [1, 2, 3];
+    return 0;
+}

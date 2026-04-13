@@ -153,6 +153,7 @@ namespace wio
             case TokenType::kwLet:
             case TokenType::kwMut:
             case TokenType::kwConst:
+            case TokenType::kwType:
             case TokenType::kwComponent:
             case TokenType::kwObject:
             case TokenType::kwInterface:
@@ -208,6 +209,31 @@ namespace wio
 
             if (peek().type == TokenType::opGreater && peek(1).type == TokenType::rightBrace)
                 break;
+
+            if (peek().type == TokenType::opLess &&
+                (left->is<Identifier>() || left->is<MemberAccessExpression>()) &&
+                canParseExplicitTypeArgumentCall())
+            {
+                std::vector<NodePtr<TypeSpecifier>> explicitTypeArguments = parseExplicitTypeArgumentList();
+
+                consume(TokenType::leftParen);
+                std::vector<NodePtr<Expression>> args;
+
+                if (!match(TokenType::rightParen))
+                {
+                    do
+                    {
+                        if (match(TokenType::rightParen))
+                            utError("The parameter is missing.", peek(-1).loc);
+                        args.push_back(parseExpression());
+                    } while (match(TokenType::comma, true));
+                }
+
+                consume(TokenType::rightParen);
+
+                left = makeNodePtr<FunctionCallExpression>(std::move(left), std::move(explicitTypeArguments), std::move(args));
+                continue;
+            }
             
             if (match(TokenType::leftParen))
             {
@@ -226,7 +252,7 @@ namespace wio
 
                 consume(TokenType::rightParen);
 
-                left = makeNodePtr<FunctionCallExpression>(std::move(left), std::move(args));
+                left = makeNodePtr<FunctionCallExpression>(std::move(left), std::vector<NodePtr<TypeSpecifier>>{}, std::move(args));
                 continue;
             }
             if (match(TokenType::leftBracket))
@@ -398,6 +424,20 @@ namespace wio
         }
 
         return makeNodePtr<InterpolatedStringLiteral>(std::move(parts), startTok.loc);
+    }
+
+    std::vector<NodePtr<TypeSpecifier>> Parser::parseExplicitTypeArgumentList()
+    {
+        consume(TokenType::opLess);
+
+        std::vector<NodePtr<TypeSpecifier>> typeArguments;
+        do
+        {
+            typeArguments.push_back(parseType());
+        } while (match(TokenType::comma, true));
+
+        consume(TokenType::opGreater);
+        return typeArguments;
     }
 
     NodePtr<Expression> Parser::parseArrayLiteral()
@@ -715,6 +755,8 @@ namespace wio
         {
             if (matchOneOf({ TokenType::kwLet, TokenType::kwMut, TokenType::kwConst }))
                 return parseVariableDeclaration(std::move(attributes));
+            if (match(TokenType::kwType))
+                return parseTypeAliasDeclaration(std::move(attributes));
             if (match(TokenType::kwFn))
                 return parseFunctionDeclaration(std::move(attributes));
             if (match(TokenType::kwInterface))
@@ -861,11 +903,53 @@ namespace wio
         );
     }
 
+    NodePtr<TypeAliasDeclaration> Parser::parseTypeAliasDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
+    {
+        if (!attributes.empty())
+            utError("Attributes are not currently supported on type aliases.", attributes.front()->location());
+
+        Token startTok = consume(TokenType::kwType);
+        NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+
+        std::vector<NodePtr<Identifier>> genericParameters;
+        if (match(TokenType::opLess, true))
+        {
+            do
+            {
+                genericParameters.push_back(makeNodePtr<Identifier>(consume(TokenType::identifier)));
+            } while (match(TokenType::comma, true));
+
+            consume(TokenType::opGreater);
+        }
+
+        consume(TokenType::opAssign);
+        NodePtr<TypeSpecifier> aliasedType = parseType();
+        consume(TokenType::semicolon);
+
+        return makeNodePtr<TypeAliasDeclaration>(
+            std::move(name),
+            std::move(genericParameters),
+            std::move(aliasedType),
+            startTok.loc
+        );
+    }
+
     NodePtr<FunctionDeclaration> Parser::parseFunctionDeclaration(std::vector<NodePtr<AttributeStatement>> attributes, bool isLifecycle)
     {
         Token startTok = !isLifecycle ? consume(TokenType::kwFn) : peek();
         
         NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+        std::vector<NodePtr<Identifier>> genericParameters;
+
+        if (match(TokenType::opLess, true))
+        {
+            do
+            {
+                genericParameters.push_back(makeNodePtr<Identifier>(consume(TokenType::identifier)));
+            } while (match(TokenType::comma, true));
+
+            consume(TokenType::opGreater);
+        }
 
         consume(TokenType::leftParen);
         
@@ -911,6 +995,7 @@ namespace wio
         return makeNodePtr<FunctionDeclaration>(
             std::move(attributes),
             std::move(name),
+            std::move(genericParameters),
             std::move(parameters),
             std::move(returnType),
             std::move(whenCond),
@@ -924,6 +1009,17 @@ namespace wio
     {
         Token startTok = consume(TokenType::kwInterface);
         NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+        std::vector<NodePtr<Identifier>> genericParameters;
+
+        if (match(TokenType::opLess, true))
+        {
+            do
+            {
+                genericParameters.push_back(makeNodePtr<Identifier>(consume(TokenType::identifier)));
+            } while (match(TokenType::comma, true));
+
+            consume(TokenType::opGreater);
+        }
 
         consume(TokenType::leftBrace);
         std::vector<NodePtr<FunctionDeclaration>> methods;
@@ -944,13 +1040,24 @@ namespace wio
         }
         consume(TokenType::rightBrace);
         
-        return makeNodePtr<InterfaceDeclaration>(std::move(attributes), std::move(name), std::move(methods), startTok.loc);
+        return makeNodePtr<InterfaceDeclaration>(std::move(attributes), std::move(name), std::move(genericParameters), std::move(methods), startTok.loc);
     }
 
     NodePtr<Statement> Parser::parseComponentDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
     {
         Token startTok = consume(TokenType::kwComponent);
         NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+        std::vector<NodePtr<Identifier>> genericParameters;
+
+        if (match(TokenType::opLess, true))
+        {
+            do
+            {
+                genericParameters.push_back(makeNodePtr<Identifier>(consume(TokenType::identifier)));
+            } while (match(TokenType::comma, true));
+
+            consume(TokenType::opGreater);
+        }
 
         consume(TokenType::leftBrace);
         std::vector<ComponentMember> members;
@@ -1014,13 +1121,24 @@ namespace wio
             }
         }
         consume(TokenType::rightBrace);
-        return makeNodePtr<ComponentDeclaration>(std::move(attributes), std::move(name), std::move(members), startTok.loc);
+        return makeNodePtr<ComponentDeclaration>(std::move(attributes), std::move(name), std::move(genericParameters), std::move(members), startTok.loc);
     }
 
     NodePtr<Statement> Parser::parseObjectDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
     {
         Token startTok = consume(TokenType::kwObject);
         NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+        std::vector<NodePtr<Identifier>> genericParameters;
+
+        if (match(TokenType::opLess, true))
+        {
+            do
+            {
+                genericParameters.push_back(makeNodePtr<Identifier>(consume(TokenType::identifier)));
+            } while (match(TokenType::comma, true));
+
+            consume(TokenType::opGreater);
+        }
 
         consume(TokenType::leftBrace);
         std::vector<ObjectMember> members;
@@ -1084,7 +1202,7 @@ namespace wio
             }
         }
         consume(TokenType::rightBrace);
-        return makeNodePtr<ObjectDeclaration>(std::move(attributes), std::move(name), std::move(members), startTok.loc);
+        return makeNodePtr<ObjectDeclaration>(std::move(attributes), std::move(name), std::move(genericParameters), std::move(members), startTok.loc);
     }
 
     NodePtr<Statement> Parser::parseFlagDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
@@ -1605,5 +1723,53 @@ namespace wio
     {
         WIO_LOG_ADD_ERROR(location, "Constants must be initialized.");
         throw UninitializedConstantError("Constants must be initialized.", location);
+    }
+
+    bool Parser::canParseExplicitTypeArgumentCall() const
+    {
+        if (peek().type != TokenType::opLess)
+            return false;
+
+        int angleDepth = 0;
+        bool sawInnerToken = false;
+
+        for (size_t index = currentTokenIndex_; index < tokens_.size(); ++index)
+        {
+            TokenType type = tokens_[index].type;
+
+            if (type == TokenType::opLess)
+            {
+                ++angleDepth;
+                continue;
+            }
+
+            if (type == TokenType::opGreater)
+            {
+                if (angleDepth == 0)
+                    return false;
+
+                --angleDepth;
+                if (angleDepth == 0)
+                    return sawInnerToken &&
+                           index + 1 < tokens_.size() &&
+                           tokens_[index + 1].type == TokenType::leftParen;
+
+                continue;
+            }
+
+            if (angleDepth == 0)
+                return false;
+
+            sawInnerToken = true;
+
+            if (type == TokenType::semicolon ||
+                type == TokenType::leftBrace ||
+                type == TokenType::rightBrace)
+            {
+                return false;
+            }
+        }
+
+        return false;
     }
 }

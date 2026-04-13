@@ -1,0 +1,12 @@
+fn Echo<T>(value: T) -> T {
+    return value;
+}
+
+fn Echo<U>(value: U) -> U {
+    return value;
+}
+
+fn Entry() -> i32 {
+    let value = Echo(42);
+    return value;
+}

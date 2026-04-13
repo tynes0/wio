@@ -1,0 +1,6 @@
+type Score = i32;
+
+fn Entry() -> i32 {
+    let value: Score<i32> = 7;
+    return 0;
+}

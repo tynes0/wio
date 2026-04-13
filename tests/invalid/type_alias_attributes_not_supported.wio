@@ -1,0 +1,6 @@
+@ReadOnly
+type Score = i32;
+
+fn Entry() -> i32 {
+    return 0;
+}

@@ -1,0 +1,17 @@
+use std::io as console;
+
+fn Describe(value: i32) -> string {
+    return "int";
+}
+
+fn Describe<T>(value: T) -> string {
+    return "generic";
+}
+
+fn Entry() -> i32 {
+    let left = Describe(42);
+    let right = Describe("wio");
+
+    console::Print($"Generic overloads: ${left}, ${right}");
+    return 0;
+}

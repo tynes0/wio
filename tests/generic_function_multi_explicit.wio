@@ -1,0 +1,18 @@
+use std::io as console;
+
+fn MakeLabel<T, U>(left: T, right: U) -> string {
+    return $"${left}|${right}";
+}
+
+fn Identity<T>(value: T) -> T {
+    return value;
+}
+
+fn Entry() -> i32 {
+    let deduced = MakeLabel(7, "deduced");
+    let explicitLabel = MakeLabel<i32, string>(8, "explicit");
+    let word = Identity<string>("wio");
+
+    console::Print($"Generic multi: ${deduced}, ${explicitLabel}, ${word}");
+    return 0;
+}

@@ -18,6 +18,22 @@ namespace wio::codegen
         {
             if (!type) return "void"; // Fallback
 
+            auto appendGenericArguments = [&](std::string baseName, const Ref<sema::StructType>& structType)
+            {
+                if (!structType || structType->genericArguments.empty())
+                    return baseName;
+
+                baseName += "<";
+                for (size_t i = 0; i < structType->genericArguments.size(); ++i)
+                {
+                    baseName += toCppType(structType->genericArguments[i]);
+                    if (i + 1 < structType->genericArguments.size())
+                        baseName += ", ";
+                }
+                baseName += ">";
+                return baseName;
+            };
+
             if (type->kind() == sema::TypeKind::Function)
             {
                 auto funcType = type.AsFast<sema::FunctionType>();
@@ -37,14 +53,14 @@ namespace wio::codegen
                 {
                     auto sType = refType->referredType.AsFast<sema::StructType>();
                     if (sType->isInterface)
-                        return Mangler::mangleInterface(sType->name, sType->scopePath) + "*";
+                        return appendGenericArguments(Mangler::mangleInterface(sType->name, sType->scopePath), sType) + "*";
                 }
             }
             else if (type->kind() == sema::TypeKind::Struct)
             {
                 auto sType = type.AsFast<sema::StructType>();
                 if (sType->isInterface)
-                    return Mangler::mangleInterface(sType->name, sType->scopePath) + "*"; 
+                    return appendGenericArguments(Mangler::mangleInterface(sType->name, sType->scopePath), sType) + "*"; 
             }
 
             return type->toCppString();
@@ -412,16 +428,40 @@ namespace wio::codegen
         {
             if (!type)
                 return {};
+            std::string name = Mangler::mangleStruct(type->name, type->scopePath);
+            if (!type->genericArguments.empty())
+            {
+                name += "<";
+                for (size_t i = 0; i < type->genericArguments.size(); ++i)
+                {
+                    name += toCppType(type->genericArguments[i]);
+                    if (i + 1 < type->genericArguments.size())
+                        name += ", ";
+                }
+                name += ">";
+            }
 
-            return Mangler::mangleStruct(type->name, type->scopePath);
+            return name;
         }
 
         std::string mangleInterfaceTypeName(const Ref<sema::StructType>& type)
         {
             if (!type)
                 return {};
+            std::string name = Mangler::mangleInterface(type->name, type->scopePath);
+            if (!type->genericArguments.empty())
+            {
+                name += "<";
+                for (size_t i = 0; i < type->genericArguments.size(); ++i)
+                {
+                    name += toCppType(type->genericArguments[i]);
+                    if (i + 1 < type->genericArguments.size())
+                        name += ", ";
+                }
+                name += ">";
+            }
 
-            return Mangler::mangleInterface(type->name, type->scopePath);
+            return name;
         }
 
         std::string mangleNamedType(const Ref<sema::StructType>& type)
@@ -886,6 +926,22 @@ namespace wio::codegen
             }
         };
 
+        auto emitTemplateForwardDeclarationPrefix = [&](const std::vector<NodePtr<Identifier>>& genericParameters)
+        {
+            if (genericParameters.empty())
+                return;
+
+            std::string templateLine = "template <";
+            for (size_t i = 0; i < genericParameters.size(); ++i)
+            {
+                templateLine += "typename " + genericParameters[i]->token.value;
+                if (i + 1 < genericParameters.size())
+                    templateLine += ", ";
+            }
+            templateLine += ">";
+            emitLine(templateLine);
+        };
+
         emitPhase(emitPhase, statements, [&](const auto& stmt)
         {
             if (stmt->is<UseStatement>())
@@ -902,18 +958,24 @@ namespace wio::codegen
         {
             if (stmt->is<ComponentDeclaration>())
             {
-                auto sym = stmt->as<ComponentDeclaration>()->name->referencedSymbol.Lock();
-                emitLine(std::format("struct {};", Mangler::mangleStruct(stmt->as<ComponentDeclaration>()->name->token.value, sym ? sym->scopePath : "")));
+                auto declaration = stmt->as<ComponentDeclaration>();
+                auto sym = declaration->name->referencedSymbol.Lock();
+                emitTemplateForwardDeclarationPrefix(declaration->genericParameters);
+                emitLine(std::format("struct {};", Mangler::mangleStruct(declaration->name->token.value, sym ? sym->scopePath : "")));
             }
             else if (stmt->is<ObjectDeclaration>())
             {
-                auto sym = stmt->as<ObjectDeclaration>()->name->referencedSymbol.Lock();
-                emitLine(std::format("struct {};", Mangler::mangleStruct(stmt->as<ObjectDeclaration>()->name->token.value, sym ? sym->scopePath : "")));
+                auto declaration = stmt->as<ObjectDeclaration>();
+                auto sym = declaration->name->referencedSymbol.Lock();
+                emitTemplateForwardDeclarationPrefix(declaration->genericParameters);
+                emitLine(std::format("struct {};", Mangler::mangleStruct(declaration->name->token.value, sym ? sym->scopePath : "")));
             }
             else if (stmt->is<InterfaceDeclaration>())
             {
-                auto sym = stmt->as<InterfaceDeclaration>()->name->referencedSymbol.Lock();
-                emitLine(std::format("struct {};", Mangler::mangleInterface(stmt->as<InterfaceDeclaration>()->name->token.value, sym ? sym->scopePath : "")));
+                auto declaration = stmt->as<InterfaceDeclaration>();
+                auto sym = declaration->name->referencedSymbol.Lock();
+                emitTemplateForwardDeclarationPrefix(declaration->genericParameters);
+                emitLine(std::format("struct {};", Mangler::mangleInterface(declaration->name->token.value, sym ? sym->scopePath : "")));
             }
         });
 
@@ -964,7 +1026,16 @@ namespace wio::codegen
             }
             
             emit(")>");
+            return;
         }
+
+        if (auto resolvedType = node.refType.Lock())
+        {
+            emit(toCppType(resolvedType));
+            return;
+        }
+
+        emit(node.name.value);
     }
 
     void CppGenerator::visit(BinaryExpression& node)
@@ -1465,11 +1536,11 @@ namespace wio::codegen
             auto structType = calleeType.AsFast<sema::StructType>();
             if (structType->isObject)
             {
-                emit("wio::runtime::Ref<" + Mangler::mangleStruct(structType->name, structType->scopePath) + ">::Create(");
+                emit("wio::runtime::Ref<" + mangleStructTypeName(structType) + ">::Create(");
             }
             else
             {
-                emit(Mangler::mangleStruct(structType->name, structType->scopePath) + "(");
+                emit(mangleStructTypeName(structType) + "(");
             }
             
             for (size_t i = 0; i < node.arguments.size(); ++i)
@@ -1483,14 +1554,14 @@ namespace wio::codegen
         }
 
         Ref<sema::FunctionType> functionType = nullptr;
-        if (auto calleeSym = node.callee->referencedSymbol.Lock();
-            calleeSym && calleeSym->type && calleeSym->type->kind() == sema::TypeKind::Function)
-        {
-            functionType = calleeSym->type.AsFast<sema::FunctionType>();
-        }
-        else if (calleeType && calleeType->kind() == sema::TypeKind::Function)
+        if (calleeType && calleeType->kind() == sema::TypeKind::Function)
         {
             functionType = calleeType.AsFast<sema::FunctionType>();
+        }
+        else if (auto calleeSym = node.callee->referencedSymbol.Lock();
+                 calleeSym && calleeSym->type && calleeSym->type->kind() == sema::TypeKind::Function)
+        {
+            functionType = calleeSym->type.AsFast<sema::FunctionType>();
         }
 
         auto emitArgumentWithImplicitCast = [&](const Ref<Expression>& argument, const Ref<sema::Type>& expectedType)
@@ -1501,7 +1572,6 @@ namespace wio::codegen
 
             if (resolvedExpected && resolvedActual &&
                 resolvedExpected->kind() == sema::TypeKind::Reference &&
-                resolvedActual->kind() == sema::TypeKind::Reference &&
                 !resolvedExpected->isCompatibleWith(resolvedActual))
             {
                 auto expectedRef = resolvedExpected.AsFast<sema::ReferenceType>();
@@ -1512,10 +1582,17 @@ namespace wio::codegen
                     auto expectedStruct = expectedTarget.AsFast<sema::StructType>();
                     if (expectedStruct->isInterface)
                     {
-                        emit("static_cast<" + toCppType(expectedType) + ">((");
-                        argument->accept(*this);
-                        emit(")->_WF_CastTo(" + mangleInterfaceTypeName(expectedStruct) + "::TYPE_ID))");
-                        return;
+                        bool canCastObjectHandle = resolvedActual->kind() == sema::TypeKind::Struct;
+                        if (!canCastObjectHandle && resolvedActual->kind() == sema::TypeKind::Reference)
+                            canCastObjectHandle = true;
+
+                        if (canCastObjectHandle)
+                        {
+                            emit("static_cast<" + toCppType(expectedType) + ">((");
+                            argument->accept(*this);
+                            emit(")->_WF_CastTo(" + mangleInterfaceTypeName(expectedStruct) + "::TYPE_ID))");
+                            return;
+                        }
                     }
                 }
             }
@@ -1524,6 +1601,17 @@ namespace wio::codegen
         };
 
         node.callee->accept(*this);
+        if (!node.explicitTypeArguments.empty())
+        {
+            emit("<");
+            for (size_t i = 0; i < node.explicitTypeArguments.size(); ++i)
+            {
+                node.explicitTypeArguments[i]->accept(*this);
+                if (i < node.explicitTypeArguments.size() - 1)
+                    emit(", ");
+            }
+            emit(">");
+        }
         emit("(");
         for (size_t i = 0; i < node.arguments.size(); ++i)
         {
@@ -1830,6 +1918,33 @@ namespace wio::codegen
         buffer_ << ";\n";
     }
 
+    void CppGenerator::visit(TypeAliasDeclaration& node)
+    {
+        auto sym = node.name->referencedSymbol.Lock();
+        const std::string aliasName = sym ? Mangler::mangleStruct(sym->name, sym->scopePath) : node.name->token.value;
+
+        if (!node.genericParameters.empty())
+        {
+            EMIT_TABS();
+            emit("template <");
+            for (size_t i = 0; i < node.genericParameters.size(); ++i)
+            {
+                emit("typename " + node.genericParameters[i]->token.value);
+                if (i + 1 < node.genericParameters.size())
+                    emit(", ");
+            }
+            emitLine(">");
+        }
+
+        EMIT_TABS();
+        emit("using " + aliasName + " = ");
+        if (node.aliasedType)
+            node.aliasedType->accept(*this);
+        else
+            emit("void");
+        emitLine(";");
+    }
+
     void CppGenerator::visit(FunctionDeclaration& node)
     {
         auto sym = node.name->referencedSymbol.Lock();
@@ -1843,6 +1958,7 @@ namespace wio::codegen
         bool emitsExportWrapper = isExported || hasModuleLifecycleExport;
 
         if (funcName == "Entry" &&
+            node.genericParameters.empty() &&
             Compiler::get().getBuildTarget() == BuildTarget::Executable &&
             (!sym || sym->scopePath.empty()))
         { 
@@ -1852,6 +1968,19 @@ namespace wio::codegen
         }
 
         emitLine();
+
+        if (currentClassName_.empty() && !node.genericParameters.empty())
+        {
+            EMIT_TABS();
+            emit("template <");
+            for (size_t i = 0; i < node.genericParameters.size(); ++i)
+            {
+                emit("typename " + node.genericParameters[i]->token.value);
+                if (i < node.genericParameters.size() - 1)
+                    emit(", ");
+            }
+            emitLine(">");
+        }
 
         EMIT_TABS();
 
@@ -2011,6 +2140,18 @@ namespace wio::codegen
     void CppGenerator::visit(InterfaceDeclaration& node)
     {
         auto interfaceType = getStructTypeFromSymbol(node.name->referencedSymbol.Lock());
+        if (!node.genericParameters.empty())
+        {
+            EMIT_TABS();
+            emit("template <");
+            for (size_t i = 0; i < node.genericParameters.size(); ++i)
+            {
+                emit("typename " + node.genericParameters[i]->token.value);
+                if (i + 1 < node.genericParameters.size())
+                    emit(", ");
+            }
+            emitLine(">");
+        }
         std::string interfaceName = mangleInterfaceTypeName(interfaceType);
         emitLine(common::formatString("struct {}", interfaceName));
         emitLine("{");
@@ -2045,6 +2186,19 @@ namespace wio::codegen
         auto componentSym = node.name->referencedSymbol.Lock();
         auto componentType = getStructTypeFromSymbol(componentSym);
         auto enclosingScope = componentSym && componentSym->innerScope ? componentSym->innerScope->getParent().Lock() : nullptr;
+
+        if (!node.genericParameters.empty())
+        {
+            EMIT_TABS();
+            emit("template <");
+            for (size_t i = 0; i < node.genericParameters.size(); ++i)
+            {
+                emit("typename " + node.genericParameters[i]->token.value);
+                if (i + 1 < node.genericParameters.size())
+                    emit(", ");
+            }
+            emitLine(">");
+        }
 
         std::string structName = mangleStructTypeName(componentType);
         emit("struct " + structName);
@@ -2219,6 +2373,18 @@ namespace wio::codegen
     {
         auto symb = node.name->referencedSymbol.Lock();
         auto objectType = getStructTypeFromSymbol(symb);
+        if (!node.genericParameters.empty())
+        {
+            EMIT_TABS();
+            emit("template <");
+            for (size_t i = 0; i < node.genericParameters.size(); ++i)
+            {
+                emit("typename " + node.genericParameters[i]->token.value);
+                if (i + 1 < node.genericParameters.size())
+                    emit(", ");
+            }
+            emitLine(">");
+        }
         std::string structName = mangleStructTypeName(objectType);
         emit("struct " + structName); 
         
@@ -2314,7 +2480,19 @@ namespace wio::codegen
         dedent();
         emitLine("}\n");
     
-        emitLine("friend class wio::runtime::Ref<" + structName + ">;");
+        std::string objectRefFriend = structName;
+        if (!node.genericParameters.empty())
+        {
+            objectRefFriend += "<";
+            for (size_t i = 0; i < node.genericParameters.size(); ++i)
+            {
+                objectRefFriend += node.genericParameters[i]->token.value;
+                if (i + 1 < node.genericParameters.size())
+                    objectRefFriend += ", ";
+            }
+            objectRefFriend += ">";
+        }
+        emitLine("friend class wio::runtime::Ref<" + objectRefFriend + ">;");
         auto trustArgs = getAttributeArgs(node.attributes, Attribute::Trust);
         for (const auto& t : trustArgs)
         {

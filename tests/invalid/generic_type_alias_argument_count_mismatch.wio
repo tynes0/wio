@@ -1,0 +1,6 @@
+type Ordered<K, V> = Tree<K, V>;
+
+fn Entry() -> i32 {
+    let values: Ordered<i32> = {< 1: 2 >};
+    return 0;
+}

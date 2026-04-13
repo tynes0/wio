@@ -164,27 +164,69 @@ The language reference now exists, but it still needs to become a true spec.
 
 ### 4.3 Type Aliases
 
-- [ ] Finalize source-level `type` alias syntax.
+- [x] Land the first source-level `type` alias syntax as
+      `type Name = ExistingType;`.
 - [ ] Decide whether aliases are pure aliases or new nominal types.
-- [ ] Decide whether aliases can be generic.
+- [x] Land the first generic alias slice as
+      `type Buffer<T> = T[];` with explicit type arguments only.
 - [ ] Decide whether aliases can name function types, arrays, and dictionary
       types.
+- [ ] Decide whether alias declarations should eventually accept attributes.
 
 ### 4.4 Generics / Templates
 
-- [ ] Decide whether Wio exposes this feature as `generic`, template-like
-      parameter lists, or another surface syntax entirely.
+- [x] Freeze the initial surface syntax for generic functions as
+      `fn Name<T, U>(...) -> ...`.
+- [x] Land a first implementation for top-level generic free functions with
+      parameter-based type deduction.
+- [x] Support explicit generic call syntax for functions such as
+      `Identity<i32>(42)` and `MakePair<i32, string>(...)`.
+- [x] Lower the first generic slice through backend C++ templates rather than
+      front-end monomorphization.
+- [x] Add initial end-to-end tests for generic value passing, generic
+      references, mismatch diagnostics, and unsupported generic methods.
 - [ ] Design generic type declarations for `object`, `component`, `interface`,
       `enum`, and aliases.
-- [ ] Design generic function declarations and generic methods.
-- [ ] Decide monomorphization versus backend C++ template lowering.
+- [ ] Broaden the first generic type-declaration slice beyond aliases:
+      generic `component`, generic `object`, and generic `interface`
+      declarations with explicit type arguments at use sites.
+- [ ] After the first generic struct slice lands, decide whether constructor
+      calls may deduce generic type arguments or whether explicit
+      `Box<i32>(...)`-style construction stays required.
+- [ ] Define runtime type identity for generic objects/interfaces so
+      specialization-aware `is`, `fit`, export metadata, and hot-reload lookup
+      stay sound.
+- [ ] Extend generic functions with explicit type arguments at call sites when
+      inference is insufficient.
+- [ ] Support generic methods after object/component/interface method lowering
+      rules are clear.
+- [ ] Decide whether Wio should ever support front-end monomorphization in
+      addition to backend C++ template lowering.
 - [ ] Define generic constraint syntax, if any, before exposing advanced type
       relations.
-- [ ] Decide how overload resolution interacts with generic functions.
+- [ ] Broaden overload resolution tests for generic-vs-concrete preference,
+      ambiguous generic overloads, and mixed namespace/module calls.
+- [ ] Decide whether generic `@Native` functions should:
+      stay unsupported,
+      map only to externally instantiated C++ templates,
+      or require explicit Wio-side instantiation syntax.
+- [ ] Decide whether generic `@Export` functions should:
+      stay forbidden for ABI stability,
+      require explicit exported instantiations,
+      or expose a generated monomorphic wrapper list.
+- [ ] Short-term rule: keep generic `@Native` and generic `@Export`
+      deliberately rejected until an explicit instantiation surface exists.
+- [ ] Design a source-level explicit-instantiation surface for interop, such as
+      a future `instantiate` declaration or attribute-driven instance list.
+- [ ] Decide whether exported generic instances must have explicit stable C ABI
+      names via something like `@CppName`/`@ExportAs`.
+- [ ] If generic interop is ever allowed, define how explicit instantiation,
+      symbol naming, and host ABI stability interact.
 - [ ] Decide whether generic defaults and partial specialization will ever
       exist.
 - [ ] Add end-to-end examples such as `Array<T>`, `Result<T>`, `Pair<K, V>`,
-      and generic utility functions once the surface syntax is frozen.
+      generic utility functions, and container-oriented generic loops once the
+      rest of the surface is frozen.
 
 ---
 

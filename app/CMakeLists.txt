@@ -555,6 +555,74 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_generic_function_identity_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_function_identity.wio"
+        "Generic values: 42, wio"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_generic_function_ref_assign_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_function_ref_assign.wio"
+        "Generic assign: 25"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_generic_function_multi_explicit_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_function_multi_explicit.wio"
+        "Generic multi: 7|deduced, 8|explicit, wio"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_generic_overload_prefers_concrete_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_overload_prefers_concrete.wio"
+        "Generic overloads: int, generic"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_generic_realm_explicit_call_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_realm_explicit_call.wio"
+        "Realm generic: 5/hp"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_generic_type_alias_identity_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_type_alias_identity.wio"
+        "Generic alias: 42, alias, 10"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_generic_type_alias_nested_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_type_alias_nested.wio"
+        "Generic alias nested: 12, 36"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_generic_component_pair_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_component_pair.wio"
+        "Generic component: 7/wio"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_generic_object_box_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_object_box.wio"
+        "Generic object: 7, 7"
+        --run
+    )
+
+    add_wio_success_test(
+        wio_test_generic_interface_declaration_dry_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_interface_declaration.wio"
+    )
+
+    add_wio_output_test(
         wio_show_tokens_alias_stream
         "${CMAKE_SOURCE_DIR}/tests/test_use_alias.wio"
         "kwAs 'as'"
@@ -720,5 +788,71 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_event_requires_void_return
         "${CMAKE_SOURCE_DIR}/tests/invalid/event_requires_void_return.wio"
         "@Event hooks must return void"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_function_argument_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_function_argument_mismatch.wio"
+        "No matching function/constructor overload found"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_method_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_method_not_supported.wio"
+        "Generic methods are not supported yet"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_explicit_argument_count_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_explicit_argument_count_mismatch.wio"
+        "No matching function/constructor overload found"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_overload_ambiguous
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_overload_ambiguous.wio"
+        "Ambiguous function call"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_native_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_native_not_supported.wio"
+        "@Native generic functions are not supported yet"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_export_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_export_not_supported.wio"
+        "Generic functions cannot currently use C ABI or module export attributes"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_type_alias_missing_arguments
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_type_alias_missing_arguments.wio"
+        "Type alias 'Buffer' expects 1 generic arguments, but got 0"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_type_alias_argument_count_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_type_alias_argument_count_mismatch.wio"
+        "Type alias 'Ordered' expects 2 generic arguments, but got 1"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_type_alias_generic_args_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/type_alias_generic_args_not_supported.wio"
+        "Type alias 'Score' does not accept generic arguments"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_type_alias_attributes_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/type_alias_attributes_not_supported.wio"
+        "Attributes are not currently supported on type aliases"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_object_constructor_missing_arguments
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_object_constructor_missing_arguments.wio"
+        "Generic type 'Box' expects 1 generic arguments, but got 0"
     )
 endif()

@@ -1,0 +1,20 @@
+use std::io as console;
+
+type Score = i32;
+type Ordered<K, V> = Tree<K, V>;
+type ScoreTable = Ordered<Score, Score>;
+
+fn Entry() -> i32 {
+    mut score: Score = 7;
+    score = score + 5;
+
+    let weights: ScoreTable = {< 2: 10, 4: 20 >};
+    mut total: i32 = 0;
+
+    for key | value in weights {
+        total += key + value;
+    }
+
+    console::Print($"Generic alias nested: ${score}, ${total}");
+    return 0;
+}

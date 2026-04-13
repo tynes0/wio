@@ -414,9 +414,10 @@ namespace wio
         WIO_EXP_NODE_BODY(FunctionCallExpression)
 
         NodePtr<Expression> callee;
+        std::vector<NodePtr<TypeSpecifier>> explicitTypeArguments;
         std::vector<NodePtr<Expression>> arguments;
 
-        FunctionCallExpression(NodePtr<Expression> _callee, std::vector<NodePtr<Expression>> _args, common::Location _loc = common::Location::invalid());
+        FunctionCallExpression(NodePtr<Expression> _callee, std::vector<NodePtr<TypeSpecifier>> _explicitTypeArguments, std::vector<NodePtr<Expression>> _args, common::Location _loc = common::Location::invalid());
         ~FunctionCallExpression() override;
     };
 
@@ -541,6 +542,21 @@ namespace wio
             NodePtr<Identifier> _name, NodePtr<TypeSpecifier> _type, NodePtr<Expression> _init, common::Location _loc);
         ~VariableDeclaration() override;
     };
+
+    struct TypeAliasDeclaration : Statement
+    {
+        WIO_STMT_NODE_BODY(TypeAliasDeclaration)
+
+        NodePtr<Identifier> name;
+        std::vector<NodePtr<Identifier>> genericParameters;
+        NodePtr<TypeSpecifier> aliasedType;
+
+        TypeAliasDeclaration(NodePtr<Identifier> _name,
+            std::vector<NodePtr<Identifier>> _genericParameters,
+            NodePtr<TypeSpecifier> _aliasedType,
+            common::Location _loc);
+        ~TypeAliasDeclaration() override;
+    };
     
     struct FunctionDeclaration : Statement
     {
@@ -548,6 +564,7 @@ namespace wio
 
         std::vector<NodePtr<AttributeStatement>> attributes;
         NodePtr<Identifier> name;
+        std::vector<NodePtr<Identifier>> genericParameters;
         std::vector<Parameter> parameters;
         NodePtr<TypeSpecifier> returnType;
         NodePtr<Expression> whenCondition; 
@@ -555,7 +572,7 @@ namespace wio
         NodePtr<Statement> body;
 
         FunctionDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
-            std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType, NodePtr<Expression> _whenCondition,
+            std::vector<NodePtr<Identifier>> _genericParameters, std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType, NodePtr<Expression> _whenCondition,
             NodePtr<Expression> _whenFallback, NodePtr<Statement> _body, common::Location _loc);
         ~FunctionDeclaration() override;
     };
@@ -566,9 +583,11 @@ namespace wio
 
         std::vector<NodePtr<AttributeStatement>> attributes;
         NodePtr<Identifier> name;
+        std::vector<NodePtr<Identifier>> genericParameters;
         std::vector<NodePtr<FunctionDeclaration>> methods;
 
-        InterfaceDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name, std::vector<NodePtr<FunctionDeclaration>> _methods, common::Location _loc);
+        InterfaceDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
+            std::vector<NodePtr<Identifier>> _genericParameters, std::vector<NodePtr<FunctionDeclaration>> _methods, common::Location _loc);
         ~InterfaceDeclaration() override;
     };
 
@@ -585,9 +604,11 @@ namespace wio
 
         std::vector<NodePtr<AttributeStatement>> attributes;
         NodePtr<Identifier> name;
+        std::vector<NodePtr<Identifier>> genericParameters;
         std::vector<ComponentMember> members;
 
-        ComponentDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name, std::vector<ComponentMember> _members, common::Location _loc);
+        ComponentDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
+            std::vector<NodePtr<Identifier>> _genericParameters, std::vector<ComponentMember> _members, common::Location _loc);
         ~ComponentDeclaration() override;
     };
 
@@ -604,9 +625,11 @@ namespace wio
 
         std::vector<NodePtr<AttributeStatement>> attributes;
         NodePtr<Identifier> name;
+        std::vector<NodePtr<Identifier>> genericParameters;
         std::vector<ObjectMember> members;
 
-        ObjectDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name, std::vector<ObjectMember> _members, common::Location _loc);
+        ObjectDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
+            std::vector<NodePtr<Identifier>> _genericParameters, std::vector<ObjectMember> _members, common::Location _loc);
         ~ObjectDeclaration() override;
     };
 

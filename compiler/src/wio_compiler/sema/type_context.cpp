@@ -56,13 +56,21 @@ namespace wio::sema
         return makeType<FunctionType>(std::move(paramTypes), std::move(returnType));
     }
 
-    Ref<Type> TypeContext::getOrCreateStructType(const std::string& name, const Ref<Scope>& structScope)
+    Ref<Type> TypeContext::getOrCreateStructType(const std::string& name,
+                                                 const Ref<Scope>& structScope,
+                                                 bool isObject,
+                                                 bool isInterface)
     {
-        return makeType<StructType>(name, structScope);
+        return makeType<StructType>(name, structScope, isObject, isInterface);
     }
 
     Ref<Type> TypeContext::getOrCreateAliasType(const std::string& name, Ref<Type> aliasedType)
     {
         return makeType<AliasType>(name, std::move(aliasedType));
+    }
+
+    Ref<Type> TypeContext::getOrCreateGenericParameterType(const std::string& name)
+    {
+        return makeType<GenericParameterType>(name);
     }
 }

@@ -1,13 +1,7 @@
 use std::io as console;
-
-realm ffi {
-    @Native
-    @CppHeader("native_math.h")
-    @CppName(native_math::Multiply)
-    fn Multiply(lhs: i32, rhs: i32) -> i32;
+fn MakeLabel<T, U, a1>(first: T, second: U, third: a1) -> string {
+    return $"${first} | ${second} | ${third}";
 }
-
 fn Entry() -> i32 {
-    console::Print($"Native multiply: ${ffi::Multiply(6, 7)}");
-    return 0;
+    console::Print(MakeLabel(1, 2.4, "Test"));
 }

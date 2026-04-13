@@ -128,29 +128,28 @@ namespace wio::sema
 
         const Type* t1 = this;
         const Type* t2 = other.Get();
-        
-        if (kind() != other->kind())
+
+        while (t1 && t1->kind() == TypeKind::Alias)
+            t1 = static_cast<const AliasType*>(t1)->aliasedType.Get();
+
+        while (t2 && t2->kind() == TypeKind::Alias)
+            t2 = static_cast<const AliasType*>(t2)->aliasedType.Get();
+
+        if (!t1 || !t2)
+            return false;
+
+        TypeKind kind1 = t1->kind();
+        TypeKind kind2 = t2->kind();
+
+        if (kind1 != kind2)
         {
-            if (kind() == TypeKind::Alias)
-            {
-                t1 = static_cast<const AliasType*>(this)->aliasedType.Get();
-            }
-            else if (other->kind() == TypeKind::Alias)
-            {
-                t2 = other.AsFast<AliasType>()->aliasedType.Get();
-            }
-            else if (other->kind() == TypeKind::Null)
-            {
-                return true; // Null compatible with all types 
-            }
-            else
-            {
-                return false;
-            }
+            if (kind2 == TypeKind::Null)
+                return true; // Null compatible with all types
+
+            return false;
         }
 
-
-        switch (kind())
+        switch (kind1)
         {
         case TypeKind::Primitive:
             {
@@ -189,13 +188,18 @@ namespace wio::sema
         {
            return true;
         }
+
+        case TypeKind::GenericParameter:
+        {
+            auto* g1 = static_cast<const GenericParameterType*>(t1);
+            auto* g2 = static_cast<const GenericParameterType*>(t2);
+            return g1->name == g2->name;
+        }
         
         case TypeKind::Reference:
         {
-            if (other->kind() != TypeKind::Reference) return false;
-
-            auto* r1 = static_cast<const ReferenceType*>(this);
-            auto* r2 = static_cast<const ReferenceType*>(other.Get());
+            auto* r1 = static_cast<const ReferenceType*>(t1);
+            auto* r2 = static_cast<const ReferenceType*>(t2);
 
             if (r1->isMutable && !r2->isMutable)
             {
@@ -222,8 +226,6 @@ namespace wio::sema
 
         case TypeKind::Dictionary:
         {
-            if (other->kind() != TypeKind::Dictionary) return false;
-        
             auto* d1 = static_cast<const DictionaryType*>(t1);
             auto* d2 = static_cast<const DictionaryType*>(t2);
         
@@ -251,13 +253,23 @@ namespace wio::sema
         {
             auto* s1 = static_cast<const StructType*>(t1);
             auto* s2 = static_cast<const StructType*>(t2);
-            return s1->name == s2->name && s1->scopePath == s2->scopePath;
+            if (s1->name != s2->name || s1->scopePath != s2->scopePath)
+                return false;
+
+            if (s1->genericArguments.size() != s2->genericArguments.size())
+                return false;
+
+            for (size_t i = 0; i < s1->genericArguments.size(); ++i)
+            {
+                if (!s1->genericArguments[i]->isCompatibleWith(s2->genericArguments[i]))
+                    return false;
+            }
+
+            return true;
         }
-        
+
         case TypeKind::Alias:
-            auto* a1 = static_cast<const AliasType*>(t1);
-            auto* a2 = static_cast<const AliasType*>(t2);
-            return a1->aliasedType->isCompatibleWith(a2->aliasedType);
+            return t1 == t2;
         }
         
         return false;
@@ -333,6 +345,26 @@ namespace wio::sema
     std::string NullType::toCppString() const
     {
         return "nullptr";
+    }
+
+    GenericParameterType::GenericParameterType(std::string name)
+        : name(std::move(name))
+    {
+    }
+
+    TypeKind GenericParameterType::kind() const
+    {
+        return TypeKind::GenericParameter;
+    }
+
+    std::string GenericParameterType::toString() const
+    {
+        return name;
+    }
+
+    std::string GenericParameterType::toCppString() const
+    {
+        return name;
     }
 
     FunctionType::FunctionType(std::vector<Ref<Type>> paramTypes, Ref<Type> returnType)
@@ -465,13 +497,36 @@ namespace wio::sema
 
     std::string StructType::toString() const
     {
-        return name;
+        if (genericArguments.empty())
+            return name;
+
+        std::string result = name + "<";
+        for (size_t i = 0; i < genericArguments.size(); ++i)
+        {
+            result += genericArguments[i] ? genericArguments[i]->toString() : "<unknown>";
+            if (i + 1 < genericArguments.size())
+                result += ", ";
+        }
+        result += ">";
+        return result;
     }
 
     std::string StructType::toCppString() const
     {
         std::string mangled = isInterface ? codegen::Mangler::mangleInterface(name, scopePath) 
                                           : codegen::Mangler::mangleStruct(name, scopePath);
+
+        if (!genericArguments.empty())
+        {
+            mangled += "<";
+            for (size_t i = 0; i < genericArguments.size(); ++i)
+            {
+                mangled += genericArguments[i] ? genericArguments[i]->toCppString() : "void";
+                if (i + 1 < genericArguments.size())
+                    mangled += ", ";
+            }
+            mangled += ">";
+        }
         
         if (isObject || isInterface) 
         {

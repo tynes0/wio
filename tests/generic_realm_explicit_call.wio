@@ -1,0 +1,13 @@
+use std::io as console;
+
+realm util {
+    fn Join<T, U>(left: T, right: U) -> string {
+        return $"${left}/${right}";
+    }
+}
+
+fn Entry() -> i32 {
+    let label = util::Join<i32, string>(5, "hp");
+    console::Print($"Realm generic: ${label}");
+    return 0;
+}

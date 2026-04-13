@@ -1,0 +1,23 @@
+use std::io as console;
+
+type Id<T> = T;
+type Buffer<T> = T[];
+
+fn Sum(values: Buffer<i32>) -> i32 {
+    mut sum: i32 = 0;
+
+    for value in values {
+        sum += value;
+    }
+
+    return sum;
+}
+
+fn Entry() -> i32 {
+    let value: Id<i32> = 42;
+    let label: Id<string> = "alias";
+    let values: Buffer<i32> = [1, 2, 3, 4];
+
+    console::Print($"Generic alias: ${value}, ${label}, ${Sum(values)}");
+    return 0;
+}
