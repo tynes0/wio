@@ -1,0 +1,28 @@
+use std::io as console;
+
+object Box<T> {
+    public value: T;
+
+    OnConstruct(value: T) {
+        self.value = value;
+    }
+
+    public fn Select<V>(fallback: V) -> V {
+        return fallback;
+    }
+
+    public fn Mirror<U>(incoming: U) -> T {
+        let chosen = self.Select(incoming);
+        console::Print($"Generic method inner: ${chosen}\n");
+        return self.value;
+    }
+}
+
+fn Entry() -> i32 {
+    let box: Box<i32> = Box<i32>(7);
+    let explicit = box.Select<string>("wio");
+    let deduced = box.Select(42);
+    let mirrored = box.Mirror<bool>(true);
+    console::Print($"Generic methods: ${explicit}, ${deduced}, ${mirrored}");
+    return 0;
+}

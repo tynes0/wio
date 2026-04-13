@@ -187,19 +187,34 @@ The language reference now exists, but it still needs to become a true spec.
       references, mismatch diagnostics, and unsupported generic methods.
 - [ ] Design generic type declarations for `object`, `component`, `interface`,
       `enum`, and aliases.
-- [ ] Broaden the first generic type-declaration slice beyond aliases:
+- [x] Broaden the first generic type-declaration slice beyond aliases:
       generic `component`, generic `object`, and generic `interface`
       declarations with explicit type arguments at use sites.
-- [ ] After the first generic struct slice lands, decide whether constructor
+- [x] Support generic `@From(...)` inheritance for object/interface graphs,
+      including generic base specialization such as `@From(Box<T>)` and
+      `@From(Reader<i32>)`.
+- [~] After the first generic struct slice lands, decide whether constructor
       calls may deduce generic type arguments or whether explicit
       `Box<i32>(...)`-style construction stays required.
+  - [x] Allow constructor-based deduction for generic `object` construction
+        when `OnConstruct(...)` parameters fully determine all generic slots.
+  - [ ] Decide whether generic `component` construction should follow the same
+        deduction rules.
+  - [ ] Decide whether zero-argument constructors may ever infer from expected
+        type context, or must stay explicit.
 - [ ] Define runtime type identity for generic objects/interfaces so
       specialization-aware `is`, `fit`, export metadata, and hot-reload lookup
       stay sound.
 - [ ] Extend generic functions with explicit type arguments at call sites when
       inference is insufficient.
-- [ ] Support generic methods after object/component/interface method lowering
+- [~] Support generic methods after object/component/interface method lowering
       rules are clear.
+  - [x] Allow generic methods on `object` declarations.
+  - [ ] Decide whether `component` generic methods should exist at all.
+  - [ ] Keep generic `interface` methods unsupported unless the lowering model
+        stops depending on C++ virtual templates.
+  - [ ] Keep generic constructors/destructors unsupported until constructor
+        deduction and specialization rules are explicit.
 - [ ] Decide whether Wio should ever support front-end monomorphization in
       addition to backend C++ template lowering.
 - [ ] Define generic constraint syntax, if any, before exposing advanced type

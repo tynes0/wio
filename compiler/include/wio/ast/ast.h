@@ -523,8 +523,9 @@ namespace wio
 
         Attribute attribute;
         std::vector<Token> args;
+        std::vector<NodePtr<TypeSpecifier>> typeArgs;
 
-        AttributeStatement(Attribute _attribute, std::vector<Token> _args, common::Location _loc = common::Location::invalid());
+        AttributeStatement(Attribute _attribute, std::vector<Token> _args, std::vector<NodePtr<TypeSpecifier>> _typeArgs = {}, common::Location _loc = common::Location::invalid());
         ~AttributeStatement() override;
     };
 

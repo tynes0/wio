@@ -14,6 +14,38 @@ namespace wio::codegen
 {
     namespace 
     {
+        bool isCppReservedIdentifier(std::string_view identifier)
+        {
+            static const std::unordered_set<std::string_view> reservedIdentifiers = {
+                "alignas", "alignof", "and", "and_eq", "asm", "auto", "bitand", "bitor",
+                "bool", "break", "case", "catch", "char", "char8_t", "char16_t", "char32_t",
+                "class", "compl", "concept", "const", "consteval", "constexpr", "constinit",
+                "const_cast", "continue", "co_await", "co_return", "co_yield", "decltype",
+                "default", "delete", "do", "double", "dynamic_cast", "else", "enum",
+                "explicit", "export", "extern", "false", "float", "for", "friend", "goto",
+                "if", "inline", "int", "long", "mutable", "namespace", "new", "noexcept",
+                "not", "not_eq", "nullptr", "operator", "or", "or_eq", "private",
+                "protected", "public", "register", "reinterpret_cast", "requires", "return",
+                "short", "signed", "sizeof", "static", "static_assert", "static_cast",
+                "struct", "switch", "template", "this", "thread_local", "throw", "true",
+                "try", "typedef", "typeid", "typename", "union", "unsigned", "using",
+                "virtual", "void", "volatile", "wchar_t", "while", "xor", "xor_eq"
+            };
+
+            return reservedIdentifiers.contains(identifier);
+        }
+
+        std::string sanitizeCppIdentifier(std::string_view identifier)
+        {
+            if (identifier.empty())
+                return "_wio_empty";
+
+            if (isCppReservedIdentifier(identifier))
+                return "_wio_" + std::string(identifier);
+
+            return std::string(identifier);
+        }
+
         std::string toCppType(const Ref<sema::Type>& type)
         {
             if (!type) return "void"; // Fallback
@@ -856,7 +888,7 @@ namespace wio::codegen
                 throw InvalidEntryParameter("The `Entry` function's parameter type must be `string[]`", node.location());
             }
 
-            paramName = param.name->token.value;
+            paramName = sanitizeCppIdentifier(param.name->token.value);
             hasArgs = true;
             
             emitLine("int main(int argc, char** argv) {");
@@ -1383,7 +1415,7 @@ namespace wio::codegen
             }
         }
 
-        emit(node.token.value);
+        emit(sanitizeCppIdentifier(node.token.value));
     }
 
     void CppGenerator::visit(NullExpression& node)
@@ -1447,7 +1479,7 @@ namespace wio::codegen
                 auto refType = lockedType.AsFast<sema::ReferenceType>();
                 auto baseStruct = refType->referredType.AsFast<sema::StructType>();
                 
-                emit(Mangler::mangleStruct(baseStruct->name, baseStruct->scopePath) + "::");
+                emit(mangleStructTypeName(baseStruct) + "::");
                 emitMemberName();
                 return;
             }
@@ -1905,7 +1937,7 @@ namespace wio::codegen
 
         buffer_ << prefix << typeStr << suffix << " ";
 
-        std::string varName = node.name->token.value;
+        std::string varName = sanitizeCppIdentifier(node.name->token.value);
 
         buffer_ << ((sym && sym->flags.get_isGlobal()) ? Mangler::mangleGlobalVar(varName, sym->scopePath) : varName);
         
@@ -1969,7 +2001,7 @@ namespace wio::codegen
 
         emitLine();
 
-        if (currentClassName_.empty() && !node.genericParameters.empty())
+        if (!node.genericParameters.empty())
         {
             EMIT_TABS();
             emit("template <");
@@ -1995,7 +2027,9 @@ namespace wio::codegen
             }
             else
             {
-                emit("virtual " + returnType + " "); 
+                if (node.genericParameters.empty())
+                    emit("virtual ");
+                emit(returnType + " "); 
                 emit(Mangler::mangleFunction(funcName, funcType->paramTypes) + "(");
             }
         }
@@ -2010,7 +2044,7 @@ namespace wio::codegen
             for (size_t i = 0; i < node.parameters.size(); ++i)
             {
                 auto& param = node.parameters[i];
-                emit(common::formatString("{} {}", toCppType(param.name->refType.Lock()), param.name->token.value));
+                emit(common::formatString("{} {}", toCppType(param.name->refType.Lock()), sanitizeCppIdentifier(param.name->token.value)));
                 if (i < node.parameters.size() - 1) emit(", ");
             }
             emit(")");
@@ -2042,7 +2076,7 @@ namespace wio::codegen
             emit(nativeSymbol + "(");
             for (size_t i = 0; i < node.parameters.size(); ++i)
             {
-                emit(node.parameters[i].name->token.value);
+                emit(sanitizeCppIdentifier(node.parameters[i].name->token.value));
                 if (i < node.parameters.size() - 1)
                     emit(", ");
             }
@@ -2107,7 +2141,7 @@ namespace wio::codegen
             for (size_t i = 0; i < node.parameters.size(); ++i)
             {
                 auto& param = node.parameters[i];
-                emit(common::formatString("{} {}", toCppType(param.name->refType.Lock()), param.name->token.value));
+                emit(common::formatString("{} {}", toCppType(param.name->refType.Lock()), sanitizeCppIdentifier(param.name->token.value)));
                 if (i < node.parameters.size() - 1) emit(", ");
             }
             emit(")");
@@ -2122,7 +2156,7 @@ namespace wio::codegen
             emit(internalSymbol + "(");
             for (size_t i = 0; i < node.parameters.size(); ++i)
             {
-                emit(node.parameters[i].name->token.value);
+                emit(sanitizeCppIdentifier(node.parameters[i].name->token.value));
                 if (i < node.parameters.size() - 1) emit(", ");
             }
             emit(");");
@@ -2171,7 +2205,7 @@ namespace wio::codegen
         
             emit(common::formatString("virtual {} {}(", retType, mangledName));
             for (size_t i = 0; i < method->parameters.size(); ++i) {
-                emit(common::formatString("{} {}", toCppType(method->parameters[i].name->refType.Lock()), method->parameters[i].name->token.value));
+                emit(common::formatString("{} {}", toCppType(method->parameters[i].name->refType.Lock()), sanitizeCppIdentifier(method->parameters[i].name->token.value)));
                 if (i < method->parameters.size() - 1) emit(", ");
             }
             emit(") = 0;\n");
@@ -2248,7 +2282,7 @@ namespace wio::codegen
                 auto vDecl = member.declaration->as<VariableDeclaration>();
                 auto sym = vDecl->name->referencedSymbol.Lock();
                 Ref<sema::Type> varType = (sym && sym->type) ? sym->type : vDecl->name->refType.Lock();
-                memberVars.emplace_back(toCppType(varType), vDecl->name->token.value);
+                memberVars.emplace_back(toCppType(varType), sanitizeCppIdentifier(vDecl->name->token.value));
             }
         }
     
@@ -2391,20 +2425,31 @@ namespace wio::codegen
         if (hasAttribute(node.attributes, Attribute::Final)) emit(" final");
         
         auto globalScope = symb->innerScope->getParent().Lock();
-        
-        auto bases = getBaseInterfaces(node.attributes);
+
+        std::vector<Ref<sema::StructType>> bases;
+        if (objectType)
+        {
+            for (const auto& baseType : objectType->baseTypes)
+            {
+                auto resolvedBaseType = unwrapAliasType(baseType);
+                if (!resolvedBaseType || resolvedBaseType->kind() != sema::TypeKind::Struct)
+                    continue;
+
+                auto baseStruct = resolvedBaseType.AsFast<sema::StructType>();
+                if (baseStruct->name == "object" && baseStruct->scopePath.empty())
+                    continue;
+
+                bases.push_back(baseStruct);
+            }
+        }
     
         bool hasBaseObject = false;
-        if (globalScope)
+        for (const auto& baseType : bases)
         {
-            for (const auto& baseName : bases)
+            if (baseType && !baseType->isInterface)
             {
-                auto baseSym = resolveQualifiedSymbol(globalScope, baseName);
-                if (baseSym && !baseSym->flags.get_isInterface())
-                {
-                    hasBaseObject = true;
-                    break;
-                }
+                hasBaseObject = true;
+                break;
             }
         }
     
@@ -2417,13 +2462,8 @@ namespace wio::codegen
         
         for (const auto& base : bases)
         {
-            auto baseSym = globalScope ? resolveQualifiedSymbol(globalScope, base) : nullptr;
             if (!baseList.empty()) baseList += ", ";
-        
-            if (baseSym && baseSym->flags.get_isInterface())
-                baseList += "public " + mangleNamedType(baseSym);
-            else
-                baseList += "public " + (mangleNamedType(baseSym).empty() ? Mangler::mangleStruct(base) : mangleNamedType(baseSym));
+            baseList += "public " + mangleNamedType(base);
         }
     
         if (!baseList.empty())
@@ -2442,15 +2482,10 @@ namespace wio::codegen
         indent();
         emitLine(common::formatString("if (id == {}ull) return true;", typeId));
         for (const auto& base : bases) {
-            auto baseSym = globalScope ? resolveQualifiedSymbol(globalScope, base) : nullptr;
-            if (baseSym && baseSym->flags.get_isInterface()) {
-                emitLine(common::formatString("if (id == {}::TYPE_ID) return true;", mangleNamedType(baseSym)));
+            if (base && base->isInterface) {
+                emitLine(common::formatString("if (id == {}::TYPE_ID) return true;", mangleNamedType(base)));
             } else {
-                std::string baseName = mangleNamedType(baseSym);
-                if (baseName.empty())
-                    baseName = Mangler::mangleStruct(base);
-
-                emitLine(common::formatString("if ({}::_WF_IsA(id)) return true;", baseName));
+                emitLine(common::formatString("if ({}::_WF_IsA(id)) return true;", mangleNamedType(base)));
             }
         }
         emitLine("return false;");
@@ -2462,18 +2497,14 @@ namespace wio::codegen
         emitLine(common::formatString("if (id == {}ull) return this;", typeId));
         for (const auto& base : bases)
         {
-            auto baseSym = globalScope ? resolveQualifiedSymbol(globalScope, base) : nullptr;
-            if (baseSym && baseSym->flags.get_isInterface())
+            if (base && base->isInterface)
             {
-                std::string intf = mangleNamedType(baseSym);
+                std::string intf = mangleNamedType(base);
                 emitLine(common::formatString("if (id == {}::TYPE_ID) return static_cast<{}*>(this);", intf, intf));
             }
             else
             {
-                std::string bas = mangleNamedType(baseSym);
-                if (bas.empty())
-                    bas = Mangler::mangleStruct(base);
-                emitLine(common::formatString("if (void* base_cast = {}::_WF_CastTo(id)) return base_cast;", bas));
+                emitLine(common::formatString("if (void* base_cast = {}::_WF_CastTo(id)) return base_cast;", mangleNamedType(base)));
             }
         }
         emitLine("return nullptr;");
@@ -2518,7 +2549,7 @@ namespace wio::codegen
                 auto vDecl = member.declaration->as<VariableDeclaration>();
                 const auto& sym = vDecl->name->referencedSymbol.Lock();
                 Ref<sema::Type> varType = (sym && sym->type) ? sym->type : vDecl->name->refType.Lock();
-                memberVars.emplace_back(toCppType(varType), vDecl->name->token.value);
+                memberVars.emplace_back(toCppType(varType), sanitizeCppIdentifier(vDecl->name->token.value));
             }
         }
     

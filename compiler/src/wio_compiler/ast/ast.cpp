@@ -206,8 +206,8 @@ namespace wio
 
     ExpressionStatement::~ExpressionStatement() = default;
 
-    AttributeStatement::AttributeStatement(Attribute _attribute, std::vector<Token> _args, common::Location _loc)
-        : Statement(_loc), attribute(_attribute), args(std::move(_args))
+    AttributeStatement::AttributeStatement(Attribute _attribute, std::vector<Token> _args, std::vector<NodePtr<TypeSpecifier>> _typeArgs, common::Location _loc)
+        : Statement(_loc), attribute(_attribute), args(std::move(_args)), typeArgs(std::move(_typeArgs))
     {
     }
 

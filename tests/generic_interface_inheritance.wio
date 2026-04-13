@@ -1,0 +1,28 @@
+use std::io as console;
+
+interface Reader<T> {
+    fn Read() -> T;
+}
+
+@From(Reader<T>)
+object ReaderBox<T> {
+    public value: T;
+
+    OnConstruct(value: T) {
+        self.value = value;
+    }
+
+    public fn Read() -> T {
+        return self.value;
+    }
+}
+
+fn Consume<T>(reader: view Reader<T>) -> T {
+    return reader.Read();
+}
+
+fn Entry() -> i32 {
+    let reader: ReaderBox<i32> = ReaderBox<i32>(9);
+    console::Print($"Generic interface inheritance: ${Consume(reader)} / ${reader.Read()}");
+    return 0;
+}

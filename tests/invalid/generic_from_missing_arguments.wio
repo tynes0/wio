@@ -1,0 +1,14 @@
+interface Reader<T> {
+    fn Read() -> T;
+}
+
+@From(Reader)
+object BrokenReader {
+    public fn Read() -> i32 {
+        return 1;
+    }
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

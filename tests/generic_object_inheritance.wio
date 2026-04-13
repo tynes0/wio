@@ -1,0 +1,30 @@
+use std::io as console;
+
+object Box<T> {
+    public value: T;
+
+    public OnConstruct() {
+    }
+
+    public OnConstruct(value: T) {
+        self.value = value;
+    }
+
+    public fn Get() -> T {
+        return self.value;
+    }
+}
+
+@From(Box<T>)
+object EchoBox<T> {
+    public fn Echo() -> T {
+        return super.Get();
+    }
+}
+
+fn Entry() -> i32 {
+    let box: EchoBox<i32> = EchoBox<i32>();
+    box.value = 11;
+    console::Print($"Generic object inheritance: ${box.Echo()} / ${box.Get()}");
+    return 0;
+}

@@ -1,19 +1,19 @@
 use std::io as console;
-object Box<T> 
-{
+
+object Box<T> {
     public value: T;
-    OnConstruct(value: T) 
-    {
+
+    OnConstruct(value: T) {
         self.value = value;
     }
-    public fn Get() -> T 
-    {
+
+    public fn Get() -> T {
         return self.value;
     }
 }
-fn Entry() -> i32 
-{
-    let numberBox = Box<i8>(100);
+
+fn Entry() -> i32 {
+    let numberBox = Box(7);
     let textBox = Box("wio");
     console::Print($"Generic ctor deduction: ${numberBox.Get()}, ${textBox.Get()}");
     return 0;

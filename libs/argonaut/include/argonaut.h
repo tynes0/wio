@@ -84,7 +84,8 @@ namespace Argonaut
             : Id_(std::move(arg_id))
         {
             // Normalize ID to uppercase for case-insensitive lookup
-            std::transform(Id_.begin(), Id_.end(), Id_.begin(), ::toupper);
+            for (auto& ch : Id_)
+                ch = static_cast<char>(::toupper(ch));
         }
 
         /**
@@ -110,7 +111,8 @@ namespace Argonaut
         Argument& SetId(const std::string& id)
         {
             Id_ = id;
-            std::transform(Id_.begin(), Id_.end(), Id_.begin(), ::toupper);
+            for (auto& ch : Id_)
+                ch = static_cast<char>(::toupper(ch));
             return *this;
         }
 
@@ -312,7 +314,8 @@ namespace Argonaut
         static bool Convert(const std::string& v)
         {
             std::string tmp = v;
-            std::transform(tmp.begin(), tmp.end(), tmp.begin(), ::tolower);
+            for (auto& ch : tmp)
+                ch = static_cast<char>(::tolower(ch));
             return (tmp == "true" || tmp == "1" || tmp == "yes" || tmp == "on");
         }
     };
@@ -488,7 +491,8 @@ namespace Argonaut
         {
             // 1. ID Normalization and Search 
             std::string ID = ArgumentID;
-            std::transform(ID.begin(), ID.end(), ID.begin(), ::toupper); 
+            for (auto& ch : ID)
+                ch = static_cast<char>(::toupper(ch));
             
             auto ArgIt = ArgumentDefinitions_.find(ID);
             if (ArgIt == ArgumentDefinitions_.end())

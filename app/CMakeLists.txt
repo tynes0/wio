@@ -617,6 +617,41 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         --run
     )
 
+    add_wio_output_test(
+        wio_test_generic_object_inheritance_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_object_inheritance.wio"
+        "Generic object inheritance: 11 / 11"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_generic_object_constructor_deduction_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_object_constructor_deduction.wio"
+        "Generic ctor deduction: 7, wio"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_generic_object_method_basic_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_object_method_basic.wio"
+        "Generic method inner: true\nGeneric methods: wio, 42, 7"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_cpp_reserved_identifier_codegen_run
+        "${CMAKE_SOURCE_DIR}/tests/cpp_reserved_identifier_codegen.wio"
+        "Reserved identifiers: 7/11"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_generic_interface_inheritance_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_interface_inheritance.wio"
+        "Generic interface inheritance: 9 / 9"
+        --run
+    )
+
     add_wio_success_test(
         wio_test_generic_interface_declaration_dry_run
         "${CMAKE_SOURCE_DIR}/tests/generic_interface_declaration.wio"
@@ -797,9 +832,9 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_failure_test(
-        wio_invalid_generic_method_not_supported
-        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_method_not_supported.wio"
-        "Generic methods are not supported yet"
+        wio_invalid_generic_interface_method_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_interface_method_not_supported.wio"
+        "Generic methods are currently supported only on object methods"
     )
 
     add_wio_failure_test(
@@ -853,6 +888,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_generic_object_constructor_missing_arguments
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_object_constructor_missing_arguments.wio"
-        "Generic type 'Box' expects 1 generic arguments, but got 0"
+        "Cannot infer generic arguments for constructor 'Box'. Use explicit type arguments."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_from_missing_arguments
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_from_missing_arguments.wio"
+        "Generic type 'Reader' expects 1 generic arguments, but got 0"
     )
 endif()

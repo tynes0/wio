@@ -12,6 +12,19 @@
 namespace wio
 {
     using namespace common;
+
+    namespace
+    {
+        bool canStartAttributeTypeArgument(const Token& token)
+        {
+            return token.isIdentifier() ||
+                   token.isType() ||
+                   token.type == TokenType::kwRef ||
+                   token.type == TokenType::kwView ||
+                   token.type == TokenType::kwFn ||
+                   token.type == TokenType::leftBracket;
+        }
+    }
     
     NodePtr<Program> Parser::parseProgram()
     {
@@ -835,13 +848,38 @@ namespace wio
         Token id = consume(TokenType::identifier);
 
         std::vector<Token> args;
+        std::vector<NodePtr<TypeSpecifier>> typeArgs;
         if (match(TokenType::leftParen, true))
         {
             if (!match(TokenType::rightParen))
             {
                 do
                 {
-                    args.push_back(parseAttributeArgumentToken());
+                    if (canStartAttributeTypeArgument(peek()))
+                    {
+                        const size_t typeStartIndex = currentTokenIndex_;
+                        auto parsedType = parseType();
+                        const size_t typeEndIndex = currentTokenIndex_;
+
+                        std::string rawArgument;
+                        for (size_t tokenIndex = typeStartIndex; tokenIndex < typeEndIndex; ++tokenIndex)
+                            rawArgument += tokens_[tokenIndex].value;
+
+                        Token rawToken = Token::invalid();
+                        if (typeStartIndex < tokens_.size())
+                        {
+                            rawToken = tokens_[typeStartIndex];
+                            rawToken.value = std::move(rawArgument);
+                        }
+
+                        args.push_back(std::move(rawToken));
+                        typeArgs.push_back(std::move(parsedType));
+                    }
+                    else
+                    {
+                        args.push_back(parseAttributeArgumentToken());
+                        typeArgs.emplace_back(nullptr);
+                    }
                 } while (match(TokenType::comma, true));
             }
             consume(TokenType::rightParen);
@@ -849,9 +887,9 @@ namespace wio
 
         if (std::optional<Attribute> attribute = frenum::cast<Attribute>(id.value); attribute.has_value())
         {
-            return makeNodePtr<AttributeStatement>(attribute.value(), args, startLoc);
+            return makeNodePtr<AttributeStatement>(attribute.value(), args, typeArgs, startLoc);
         }
-        return makeNodePtr<AttributeStatement>(Attribute::Unknown, args, startLoc);
+        return makeNodePtr<AttributeStatement>(Attribute::Unknown, args, typeArgs, startLoc);
     }
 
     NodePtr<VariableDeclaration> Parser::parseVariableDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)

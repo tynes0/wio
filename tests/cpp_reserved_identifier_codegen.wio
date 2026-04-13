@@ -1,0 +1,22 @@
+use std::io as console;
+
+object Holder {
+    public explicit: i32;
+
+    OnConstruct(explicit: i32) {
+        self.explicit = explicit;
+    }
+
+    public fn Add(concept: i32) -> i32 {
+        let requires = self.explicit + concept;
+        return requires;
+    }
+}
+
+fn Entry() -> i32 {
+    let holder = Holder(7);
+    let explicit = holder.explicit;
+    let concept = holder.Add(4);
+    console::Print($"Reserved identifiers: ${explicit}/${concept}");
+    return 0;
+}

@@ -1,12 +1,9 @@
 object Box<T> {
-    public value: T;
-
-    OnConstruct(value: T) {
-        self.value = value;
+    OnConstruct() {
     }
 }
 
 fn Entry() -> i32 {
-    let box = Box(7);
+    let box = Box();
     return 0;
 }

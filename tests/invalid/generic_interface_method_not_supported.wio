@@ -1,0 +1,7 @@
+interface Box {
+    fn Identity<T>(value: T) -> T;
+}
+
+fn Entry() -> i32 {
+    return 0;
+}
