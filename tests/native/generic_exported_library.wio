@@ -1,0 +1,7 @@
+@Export
+@CppName(WioEcho)
+@Instantiate(i32)
+@Instantiate(bool)
+fn Echo<T>(value: T) -> T {
+    return value;
+}

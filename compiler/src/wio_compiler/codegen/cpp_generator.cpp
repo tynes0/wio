@@ -105,6 +105,225 @@ namespace wio::codegen
             return type;
         }
 
+        std::unordered_map<std::string, Ref<sema::Type>> buildGenericTypeBindings(
+            const std::vector<std::string>& parameterNames,
+            const std::vector<Ref<sema::Type>>& typeArguments)
+        {
+            std::unordered_map<std::string, Ref<sema::Type>> bindings;
+            const size_t bindingCount = std::min(parameterNames.size(), typeArguments.size());
+            bindings.reserve(bindingCount);
+
+            for (size_t i = 0; i < bindingCount; ++i)
+                bindings.emplace(parameterNames[i], typeArguments[i]);
+
+            return bindings;
+        }
+
+        Ref<sema::Type> instantiateGenericType(const Ref<sema::Type>& type,
+                                               const std::unordered_map<std::string, Ref<sema::Type>>& bindings);
+
+        Ref<sema::Type> instantiateGenericStructType(const Ref<sema::StructType>& structType,
+                                                     const std::vector<Ref<sema::Type>>& explicitTypeArguments)
+        {
+            if (!structType)
+                return nullptr;
+
+            if (structType->genericParameterNames.empty())
+                return structType;
+
+            auto bindingMap = buildGenericTypeBindings(structType->genericParameterNames, explicitTypeArguments);
+            auto instantiatedScope = structType->structScope.Lock();
+            auto instantiatedType = Compiler::get().getTypeContext().getOrCreateStructType(
+                structType->name,
+                instantiatedScope,
+                structType->isObject,
+                structType->isInterface
+            ).AsFast<sema::StructType>();
+
+            instantiatedType->scopePath = structType->scopePath;
+            instantiatedType->genericParameterNames = structType->genericParameterNames;
+            instantiatedType->genericArguments = explicitTypeArguments;
+            instantiatedType->fieldNames = structType->fieldNames;
+
+            instantiatedType->fieldTypes.reserve(structType->fieldTypes.size());
+            for (const auto& fieldType : structType->fieldTypes)
+                instantiatedType->fieldTypes.push_back(instantiateGenericType(fieldType, bindingMap));
+
+            instantiatedType->baseTypes.reserve(structType->baseTypes.size());
+            for (const auto& baseType : structType->baseTypes)
+                instantiatedType->baseTypes.push_back(instantiateGenericType(baseType, bindingMap));
+
+            return instantiatedType;
+        }
+
+        Ref<sema::Type> instantiateGenericType(const Ref<sema::Type>& type,
+                                               const std::unordered_map<std::string, Ref<sema::Type>>& bindings)
+        {
+            Ref<sema::Type> current = unwrapAliasType(type);
+            if (!current)
+                return nullptr;
+
+            auto& ctx = Compiler::get().getTypeContext();
+
+            switch (current->kind())
+            {
+            case sema::TypeKind::GenericParameter:
+            {
+                auto genericParam = current.AsFast<sema::GenericParameterType>();
+                if (auto it = bindings.find(genericParam->name); it != bindings.end())
+                    return it->second;
+                return current;
+            }
+            case sema::TypeKind::Reference:
+            {
+                auto refType = current.AsFast<sema::ReferenceType>();
+                return ctx.getOrCreateReferenceType(
+                    instantiateGenericType(refType->referredType, bindings),
+                    refType->isMutable
+                );
+            }
+            case sema::TypeKind::Array:
+            {
+                auto arrayType = current.AsFast<sema::ArrayType>();
+                return ctx.getOrCreateArrayType(
+                    instantiateGenericType(arrayType->elementType, bindings),
+                    arrayType->arrayKind,
+                    arrayType->size
+                );
+            }
+            case sema::TypeKind::Dictionary:
+            {
+                auto dictType = current.AsFast<sema::DictionaryType>();
+                return ctx.getOrCreateDictionaryType(
+                    instantiateGenericType(dictType->keyType, bindings),
+                    instantiateGenericType(dictType->valueType, bindings),
+                    dictType->isOrdered
+                );
+            }
+            case sema::TypeKind::Function:
+            {
+                auto functionType = current.AsFast<sema::FunctionType>();
+                std::vector<Ref<sema::Type>> instantiatedParamTypes;
+                instantiatedParamTypes.reserve(functionType->paramTypes.size());
+                for (const auto& paramType : functionType->paramTypes)
+                    instantiatedParamTypes.push_back(instantiateGenericType(paramType, bindings));
+
+                return ctx.getOrCreateFunctionType(
+                    instantiateGenericType(functionType->returnType, bindings),
+                    instantiatedParamTypes
+                );
+            }
+            case sema::TypeKind::Struct:
+            {
+                auto structType = current.AsFast<sema::StructType>();
+                if (!structType->genericArguments.empty())
+                {
+                    std::vector<Ref<sema::Type>> instantiatedArguments;
+                    instantiatedArguments.reserve(structType->genericArguments.size());
+                    for (const auto& genericArgument : structType->genericArguments)
+                        instantiatedArguments.push_back(instantiateGenericType(genericArgument, bindings));
+
+                    return instantiateGenericStructType(structType, instantiatedArguments);
+                }
+
+                if (!structType->genericParameterNames.empty())
+                {
+                    std::vector<Ref<sema::Type>> instantiatedArguments;
+                    instantiatedArguments.reserve(structType->genericParameterNames.size());
+                    for (const auto& genericParameterName : structType->genericParameterNames)
+                    {
+                        if (auto it = bindings.find(genericParameterName); it != bindings.end())
+                            instantiatedArguments.push_back(it->second);
+                        else
+                            return current;
+                    }
+
+                    return instantiateGenericStructType(structType, instantiatedArguments);
+                }
+
+                return current;
+            }
+            default:
+                return current;
+            }
+        }
+
+        std::vector<std::vector<Ref<sema::Type>>> getInstantiateTypeLists(const FunctionDeclaration& node)
+        {
+            std::vector<std::vector<Ref<sema::Type>>> instantiations;
+            for (const auto& attribute : node.attributes)
+            {
+                if (!attribute || attribute->attribute != Attribute::Instantiate)
+                    continue;
+
+                std::vector<Ref<sema::Type>> instantiationTypes;
+                instantiationTypes.reserve(attribute->typeArgs.size());
+                bool isValidInstantiation = true;
+
+                for (const auto& typeArg : attribute->typeArgs)
+                {
+                    if (!typeArg)
+                    {
+                        isValidInstantiation = false;
+                        break;
+                    }
+
+                    Ref<sema::Type> instantiatedType = typeArg->refType.Lock();
+                    if (!instantiatedType)
+                    {
+                        isValidInstantiation = false;
+                        break;
+                    }
+
+                    instantiationTypes.push_back(instantiatedType);
+                }
+
+                if (isValidInstantiation && !instantiationTypes.empty())
+                    instantiations.push_back(std::move(instantiationTypes));
+            }
+
+            return instantiations;
+        }
+
+        std::string formatInstantiatedLogicalName(const std::string& baseName, const std::vector<Ref<sema::Type>>& instantiationTypes)
+        {
+            std::string result = baseName + "<";
+            for (size_t i = 0; i < instantiationTypes.size(); ++i)
+            {
+                result += instantiationTypes[i] ? instantiationTypes[i]->toString() : "unknown";
+                if (i + 1 < instantiationTypes.size())
+                    result += ", ";
+            }
+            result += ">";
+            return result;
+        }
+
+        std::string formatInstantiatedExportSymbolName(const std::string& baseName, const std::vector<Ref<sema::Type>>& instantiationTypes)
+        {
+            std::string result = baseName;
+            for (const auto& instantiationType : instantiationTypes)
+            {
+                result += "__";
+                std::string fragment = Mangler::mangleType(instantiationType);
+                std::ranges::replace(fragment, ':', '_');
+                result += fragment;
+            }
+            return result;
+        }
+
+        std::string formatTemplateArgumentList(const std::vector<Ref<sema::Type>>& instantiationTypes)
+        {
+            std::string result = "<";
+            for (size_t i = 0; i < instantiationTypes.size(); ++i)
+            {
+                result += toCppType(instantiationTypes[i]);
+                if (i + 1 < instantiationTypes.size())
+                    result += ", ";
+            }
+            result += ">";
+            return result;
+        }
+
         bool shouldAutoReadReferenceType(const Ref<sema::Type>& type)
         {
             Ref<sema::Type> current = unwrapAliasType(type);
@@ -294,8 +513,11 @@ namespace wio::codegen
         struct ExportedFunctionInfo
         {
             const FunctionDeclaration* declaration = nullptr;
+            Ref<sema::FunctionType> functionType = nullptr;
             std::string logicalName;
             std::string symbolName;
+            std::string internalSymbol;
+            std::vector<Ref<sema::Type>> templateArguments;
             std::optional<std::string> commandName;
             std::optional<std::string> eventName;
         };
@@ -408,24 +630,64 @@ namespace wio::codegen
                 if (!fnDecl || !isExportedFunction(*fnDecl))
                     continue;
 
+                auto exportSymbol = fnDecl->name ? fnDecl->name->referencedSymbol.Lock() : nullptr;
+                auto declaredFunctionType = exportSymbol && exportSymbol->type
+                    ? exportSymbol->type.AsFast<sema::FunctionType>()
+                    : nullptr;
+                const std::string baseLogicalName = fnDecl->name ? fnDecl->name->token.value : "";
+                const std::string baseSymbolName = getExportedCppSymbolName(*fnDecl);
+                const std::string internalSymbol = exportSymbol
+                    ? Mangler::mangleFunction(fnDecl->name->token.value, declaredFunctionType->paramTypes, exportSymbol->scopePath)
+                    : "";
+
+                auto appendCommandAndEventMetadata = [&](ExportedFunctionInfo& info)
+                {
+                    if (isCommandFunction(*fnDecl))
+                    {
+                        if (auto commandArg = getSingleAttributeArg(fnDecl->attributes, Attribute::Command); commandArg.has_value())
+                            info.commandName = commandArg->value;
+                        else
+                            info.commandName = info.logicalName;
+                    }
+
+                    if (isEventFunction(*fnDecl))
+                    {
+                        if (auto eventArg = getSingleAttributeArg(fnDecl->attributes, Attribute::Event); eventArg.has_value())
+                            info.eventName = eventArg->value;
+                    }
+                };
+
+                auto instantiations = getInstantiateTypeLists(*fnDecl);
+                if (!fnDecl->genericParameters.empty() && !instantiations.empty())
+                {
+                    for (const auto& instantiationTypes : instantiations)
+                    {
+                        ExportedFunctionInfo info;
+                        info.declaration = fnDecl;
+                        info.logicalName = formatInstantiatedLogicalName(baseLogicalName, instantiationTypes);
+                        info.symbolName = formatInstantiatedExportSymbolName(baseSymbolName, instantiationTypes);
+                        info.internalSymbol = internalSymbol;
+                        info.templateArguments = instantiationTypes;
+
+                        if (exportSymbol)
+                        {
+                            auto bindings = buildGenericTypeBindings(exportSymbol->genericParameterNames, instantiationTypes);
+                            info.functionType = instantiateGenericType(exportSymbol->type, bindings).AsFast<sema::FunctionType>();
+                        }
+
+                        appendCommandAndEventMetadata(info);
+                        exportedFunctions.push_back(std::move(info));
+                    }
+                    continue;
+                }
+
                 ExportedFunctionInfo info;
                 info.declaration = fnDecl;
-                info.logicalName = fnDecl->name ? fnDecl->name->token.value : "";
-                info.symbolName = getExportedCppSymbolName(*fnDecl);
-                if (isCommandFunction(*fnDecl))
-                {
-                    if (auto commandArg = getSingleAttributeArg(fnDecl->attributes, Attribute::Command); commandArg.has_value())
-                        info.commandName = commandArg->value;
-                    else
-                        info.commandName = info.logicalName;
-                }
-
-                if (isEventFunction(*fnDecl))
-                {
-                    if (auto eventArg = getSingleAttributeArg(fnDecl->attributes, Attribute::Event); eventArg.has_value())
-                        info.eventName = eventArg->value;
-                }
-
+                info.functionType = declaredFunctionType;
+                info.logicalName = baseLogicalName;
+                info.symbolName = baseSymbolName;
+                info.internalSymbol = internalSymbol;
+                appendCommandAndEventMetadata(info);
                 exportedFunctions.push_back(std::move(info));
             }
         }
@@ -660,13 +922,7 @@ namespace wio::codegen
         for (size_t i = 0; i < exportedFunctions.size(); ++i)
         {
             const auto& exportInfo = exportedFunctions[i];
-            auto exportSymbol = exportInfo.declaration->name->referencedSymbol.Lock();
-            auto exportFunctionType = exportSymbol->type.AsFast<sema::FunctionType>();
-            std::string internalSymbol = Mangler::mangleFunction(
-                exportInfo.declaration->name->token.value,
-                exportFunctionType->paramTypes,
-                exportSymbol ? exportSymbol->scopePath : ""
-            );
+            auto exportFunctionType = exportInfo.functionType;
 
             emitLine("static std::int32_t WIO_INVOKE_EXPORT_" + std::to_string(i) + "(const WioValue* args, std::uint32_t argCount, WioValue* outResult)");
             emitLine("{");
@@ -687,7 +943,10 @@ namespace wio::codegen
             if (!exportFunctionType->returnType->isVoid())
                 emitLine("if (outResult == nullptr) return WIO_INVOKE_RESULT_REQUIRED;");
 
-            std::string callExpression = internalSymbol + "(";
+            std::string callExpression = exportInfo.internalSymbol;
+            if (!exportInfo.templateArguments.empty())
+                callExpression += formatTemplateArgumentList(exportInfo.templateArguments);
+            callExpression += "(";
             for (size_t paramIndex = 0; paramIndex < exportFunctionType->paramTypes.size(); ++paramIndex)
             {
                 if (paramIndex > 0)
@@ -736,8 +995,7 @@ namespace wio::codegen
             for (size_t i = 0; i < exportedFunctions.size(); ++i)
             {
                 const auto& exportInfo = exportedFunctions[i];
-                auto exportSymbol = exportInfo.declaration->name->referencedSymbol.Lock();
-                auto exportFunctionType = exportSymbol->type.AsFast<sema::FunctionType>();
+                auto exportFunctionType = exportInfo.functionType;
                 std::string paramTypesExpr = exportFunctionType->paramTypes.empty()
                     ? "nullptr"
                     : ("WIO_EXPORT_PARAM_TYPES_" + std::to_string(i));
@@ -1981,6 +2239,7 @@ namespace wio::codegen
     {
         auto sym = node.name->referencedSymbol.Lock();
         auto funcType = sym->type.AsFast<sema::FunctionType>();
+        auto instantiationTypeLists = getInstantiateTypeLists(node);
 
         std::string returnType = funcType->returnType ? toCppType(funcType->returnType) : "void";
         std::string funcName = node.name->token.value;
@@ -2000,6 +2259,37 @@ namespace wio::codegen
         }
 
         emitLine();
+
+        auto instantiateFunctionTypeForCodegen = [&](const std::vector<Ref<sema::Type>>& instantiationTypes)
+        {
+            auto bindings = buildGenericTypeBindings(sym->genericParameterNames, instantiationTypes);
+            return instantiateGenericType(funcType, bindings).AsFast<sema::FunctionType>();
+        };
+
+        auto emitTemplateSpecializationArguments = [&](const std::vector<Ref<sema::Type>>& instantiationTypes)
+        {
+            emit(formatTemplateArgumentList(instantiationTypes));
+        };
+
+        auto emitExplicitInstantiationDeclaration = [&](const std::vector<Ref<sema::Type>>& instantiationTypes)
+        {
+            auto instantiatedFunctionType = instantiateFunctionTypeForCodegen(instantiationTypes);
+            if (!instantiatedFunctionType)
+                return;
+
+            EMIT_TABS();
+            emit("template " + toCppType(instantiatedFunctionType->returnType) + " ");
+            emit(Mangler::mangleFunction(funcName, funcType->paramTypes, sym ? sym->scopePath : ""));
+            emitTemplateSpecializationArguments(instantiationTypes);
+            emit("(");
+            for (size_t i = 0; i < instantiatedFunctionType->paramTypes.size(); ++i)
+            {
+                emit(toCppType(instantiatedFunctionType->paramTypes[i]));
+                if (i + 1 < instantiatedFunctionType->paramTypes.size())
+                    emit(", ");
+            }
+            emitLine(");");
+        };
 
         if (!node.genericParameters.empty())
         {
@@ -2132,37 +2422,92 @@ namespace wio::codegen
 
         if (emitsExportWrapper && !isEmittingPrototypes_ && currentClassName_.empty() && node.body)
         {
-            std::string exportedSymbol = getExportedCppSymbolName(node);
             std::string internalSymbol = Mangler::mangleFunction(funcName, funcType->paramTypes, sym ? sym->scopePath : "");
+            if (!node.genericParameters.empty() && !instantiationTypeLists.empty())
+            {
+                const std::string exportBaseSymbol = getExportedCppSymbolName(node);
+                for (const auto& instantiationTypes : instantiationTypeLists)
+                {
+                    auto instantiatedFunctionType = instantiateFunctionTypeForCodegen(instantiationTypes);
+                    if (!instantiatedFunctionType)
+                        continue;
 
+                    emitLine();
+                    EMIT_TABS();
+                    emit("extern \"C\" WIO_EXPORT " + toCppType(instantiatedFunctionType->returnType) + " " +
+                         formatInstantiatedExportSymbolName(exportBaseSymbol, instantiationTypes) + "(");
+                    for (size_t i = 0; i < node.parameters.size(); ++i)
+                    {
+                        emit(common::formatString(
+                            "{} {}",
+                            toCppType(instantiatedFunctionType->paramTypes[i]),
+                            sanitizeCppIdentifier(node.parameters[i].name->token.value)
+                        ));
+                        if (i < node.parameters.size() - 1) emit(", ");
+                    }
+                    emit(")");
+                    emit("\n");
+                    emitLine("{");
+                    indent();
+                    EMIT_TABS();
+
+                    if (instantiatedFunctionType->returnType && !instantiatedFunctionType->returnType->isVoid())
+                        emit("return ");
+
+                    emit(internalSymbol);
+                    emitTemplateSpecializationArguments(instantiationTypes);
+                    emit("(");
+                    for (size_t i = 0; i < node.parameters.size(); ++i)
+                    {
+                        emit(sanitizeCppIdentifier(node.parameters[i].name->token.value));
+                        if (i < node.parameters.size() - 1) emit(", ");
+                    }
+                    emit(");");
+                    emit("\n");
+                    dedent();
+                    emitLine("}");
+                }
+            }
+            else
+            {
+                std::string exportedSymbol = getExportedCppSymbolName(node);
+
+                emitLine();
+                EMIT_TABS();
+                emit("extern \"C\" WIO_EXPORT " + returnType + " " + exportedSymbol + "(");
+                for (size_t i = 0; i < node.parameters.size(); ++i)
+                {
+                    auto& param = node.parameters[i];
+                    emit(common::formatString("{} {}", toCppType(param.name->refType.Lock()), sanitizeCppIdentifier(param.name->token.value)));
+                    if (i < node.parameters.size() - 1) emit(", ");
+                }
+                emit(")");
+                emit("\n");
+                emitLine("{");
+                indent();
+                EMIT_TABS();
+
+                if (funcType->returnType && !funcType->returnType->isVoid())
+                    emit("return ");
+
+                emit(internalSymbol + "(");
+                for (size_t i = 0; i < node.parameters.size(); ++i)
+                {
+                    emit(sanitizeCppIdentifier(node.parameters[i].name->token.value));
+                    if (i < node.parameters.size() - 1) emit(", ");
+                }
+                emit(");");
+                emit("\n");
+                dedent();
+                emitLine("}");
+            }
+        }
+
+        if (!isEmittingPrototypes_ && currentClassName_.empty() && !node.genericParameters.empty() && !instantiationTypeLists.empty() && (isNative || isExported))
+        {
             emitLine();
-            EMIT_TABS();
-            emit("extern \"C\" WIO_EXPORT " + returnType + " " + exportedSymbol + "(");
-            for (size_t i = 0; i < node.parameters.size(); ++i)
-            {
-                auto& param = node.parameters[i];
-                emit(common::formatString("{} {}", toCppType(param.name->refType.Lock()), sanitizeCppIdentifier(param.name->token.value)));
-                if (i < node.parameters.size() - 1) emit(", ");
-            }
-            emit(")");
-            emit("\n");
-            emitLine("{");
-            indent();
-            EMIT_TABS();
-
-            if (funcType->returnType && !funcType->returnType->isVoid())
-                emit("return ");
-
-            emit(internalSymbol + "(");
-            for (size_t i = 0; i < node.parameters.size(); ++i)
-            {
-                emit(sanitizeCppIdentifier(node.parameters[i].name->token.value));
-                if (i < node.parameters.size() - 1) emit(", ");
-            }
-            emit(");");
-            emit("\n");
-            dedent();
-            emitLine("}");
+            for (const auto& instantiationTypes : instantiationTypeLists)
+                emitExplicitInstantiationDeclaration(instantiationTypes);
         }
     }
 

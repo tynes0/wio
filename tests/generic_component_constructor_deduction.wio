@@ -1,0 +1,18 @@
+use std::io as console;
+
+component Pair<T, U> {
+    public left: T;
+    public right: U;
+
+    OnConstruct(left: T, right: U) {
+        self.left = left;
+        self.right = right;
+    }
+}
+
+fn Entry() -> i32 {
+    let numbers = Pair(7, 9);
+    let words = Pair("wio", true);
+    console::Print($"Generic component ctor deduction: ${numbers.left}/${numbers.right}, ${words.left}/${words.right}");
+    return 0;
+}

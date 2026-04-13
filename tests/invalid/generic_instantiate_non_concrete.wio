@@ -1,0 +1,5 @@
+@Export
+@Instantiate(T)
+fn Echo<T>(value: T) -> T {
+    return value;
+}

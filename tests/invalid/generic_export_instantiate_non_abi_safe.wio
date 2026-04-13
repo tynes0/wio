@@ -1,0 +1,4 @@
+@Export
+@Instantiate(string)
+fn Accept<T>(value: T) {
+}

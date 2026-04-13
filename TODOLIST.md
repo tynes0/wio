@@ -198,8 +198,9 @@ The language reference now exists, but it still needs to become a true spec.
       `Box<i32>(...)`-style construction stays required.
   - [x] Allow constructor-based deduction for generic `object` construction
         when `OnConstruct(...)` parameters fully determine all generic slots.
-  - [ ] Decide whether generic `component` construction should follow the same
-        deduction rules.
+  - [x] Allow constructor-based deduction for generic `component`
+        construction when `OnConstruct(...)` parameters fully determine all
+        generic slots.
   - [ ] Decide whether zero-argument constructors may ever infer from expected
         type context, or must stay explicit.
 - [ ] Define runtime type identity for generic objects/interfaces so
@@ -219,24 +220,31 @@ The language reference now exists, but it still needs to become a true spec.
       addition to backend C++ template lowering.
 - [ ] Define generic constraint syntax, if any, before exposing advanced type
       relations.
-- [ ] Broaden overload resolution tests for generic-vs-concrete preference,
+- [~] Broaden overload resolution tests for generic-vs-concrete preference,
       ambiguous generic overloads, and mixed namespace/module calls.
-- [ ] Decide whether generic `@Native` functions should:
-      stay unsupported,
-      map only to externally instantiated C++ templates,
-      or require explicit Wio-side instantiation syntax.
-- [ ] Decide whether generic `@Export` functions should:
-      stay forbidden for ABI stability,
-      require explicit exported instantiations,
-      or expose a generated monomorphic wrapper list.
-- [ ] Short-term rule: keep generic `@Native` and generic `@Export`
-      deliberately rejected until an explicit instantiation surface exists.
-- [ ] Design a source-level explicit-instantiation surface for interop, such as
-      a future `instantiate` declaration or attribute-driven instance list.
-- [ ] Decide whether exported generic instances must have explicit stable C ABI
-      names via something like `@CppName`/`@ExportAs`.
-- [ ] If generic interop is ever allowed, define how explicit instantiation,
-      symbol naming, and host ABI stability interact.
+  - [x] Cover concrete-vs-generic preference.
+  - [x] Cover specialized-generic-vs-broad-generic preference.
+  - [x] Cover explicit type-argument calls preferring the generic overload.
+  - [ ] Add broader mixed realm/module and conversion-heavy overload cases.
+- [x] Allow generic `@Native` functions only through explicit concrete
+      `@Instantiate(...)` instance lists.
+- [x] Allow generic `@Export` functions only through explicit concrete
+      `@Instantiate(...)` instance lists.
+- [x] Land a first source-level explicit-instantiation surface for interop via
+      `@Instantiate(...)`.
+- [x] Emit concrete exported generic wrappers and module metadata entries per
+      `@Instantiate(...)` specialization.
+- [x] Validate each generic `@Export` instantiation against the primitive C ABI
+      surface before codegen.
+- [x] Require generic exported instances to derive concrete C ABI symbol names
+      from the base export symbol plus concrete type mangling.
+- [ ] Decide whether the long-term explicit-instantiation syntax should stay
+      attribute-based or evolve into dedicated `instantiate` declarations.
+- [ ] Decide whether generic native bridging should assume header-only template
+      definitions, or grow a stronger model for separately compiled template
+      instantiations.
+- [ ] Define long-term ABI stability/versioning rules for exported generic
+      instances, including what hosts may rely on in symbol names.
 - [ ] Decide whether generic defaults and partial specialization will ever
       exist.
 - [ ] Add end-to-end examples such as `Array<T>`, `Result<T>`, `Pair<K, V>`,
@@ -784,6 +792,15 @@ This is currently one of the biggest blockers to real multi-file projects.
 - [ ] Document the runtime ABI expected by generated C++.
 - [ ] Separate runtime concerns from compiler concerns more cleanly.
 - [ ] Decide what is guaranteed to exist in every Wio program.
+- [x] Keep `runtime/*` intentionally small and low-level: refcounting,
+      exceptions, ABI glue, `fit`, low-level I/O hooks, and host/module support.
+- [x] Treat `runtime/*` as the implementation substrate, not the primary
+      user-facing standard library surface.
+- [ ] Define a clean boundary between:
+  - compiler-private internals,
+  - mandatory runtime support,
+  - public host/embedding SDK,
+  - and user-facing `std` modules.
 
 ### 17.2 `std::io`
 
@@ -794,6 +811,14 @@ This is currently one of the biggest blockers to real multi-file projects.
 
 ### 17.3 Core Library Modules
 
+- [x] Make the public standard-library surface primarily `.wio`-first, with
+      `@Native` used where the implementation must drop to runtime/C++.
+- [ ] Move high-level public APIs out of raw `runtime/*.h` exposure and into
+      `std/*.wio` declarations/modules.
+- [ ] Classify each std module as one of:
+  - pure Wio,
+  - Wio surface backed by `@Native`,
+  - or runtime-only/internal.
 - [ ] Design a minimal `std` layout:
   - `std::io`
   - `std::math`
@@ -803,6 +828,10 @@ This is currently one of the biggest blockers to real multi-file projects.
   - `std::strings`
   - `std::reflect`
 - [ ] Decide which of these are language-critical versus optional.
+- [ ] Keep the early stdlib intentionally small/medium sized rather than
+      shipping a giant all-in-one runtime surface.
+- [ ] Prefer pure Wio implementations for higher-level algorithms, helpers,
+      and utilities once the language surface is stable enough.
 
 ### 17.4 Collections Library
 
@@ -836,6 +865,23 @@ This is currently one of the biggest blockers to real multi-file projects.
     `@ModuleSaveState` and `@ModuleRestoreState`.
   - Safe rebinding and true hot-reload state handoff are still future work.
 
+- [x] Plan a user-facing host/bridge SDK as a separate public surface instead
+      of exposing compiler internals directly.
+- [ ] Package the project conceptually as:
+  - `wio.exe` for compilation,
+  - a small runtime support layer,
+  - and a public host/embedding SDK for C++ integration.
+- [ ] Define the public host SDK around embedding/interop concerns only:
+  - module loading,
+  - export discovery,
+  - command/event invocation,
+  - reload helpers,
+  - and runtime/result/error helpers.
+- [ ] Keep AST, parser, sema, and codegen internals out of the public SDK.
+- [ ] Decide which `runtime/*` headers stay internal and which become official,
+      documented SDK headers.
+- [ ] Add end-to-end examples where a C++ app integrates Wio through the
+      official SDK rather than ad-hoc helper code.
 - [ ] Add a first-class distinction between executable builds and library
       builds.
 - [ ] Support static library output for embedding Wio-generated code into larger

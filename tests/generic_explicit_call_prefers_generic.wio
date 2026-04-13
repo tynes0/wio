@@ -1,0 +1,15 @@
+use std::io as console;
+
+fn Describe(value: i32) -> string {
+    return "int";
+}
+
+fn Describe<T>(value: T) -> string {
+    return "generic";
+}
+
+fn Entry() -> i32 {
+    let forced = Describe<i32>(42);
+    console::Print($"Generic explicit overload: ${forced}");
+    return 0;
+}

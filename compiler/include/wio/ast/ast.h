@@ -92,6 +92,7 @@ namespace wio
         Native,
         CppHeader,
         CppName,
+        Instantiate,
         Export,
         Command,
         Event,

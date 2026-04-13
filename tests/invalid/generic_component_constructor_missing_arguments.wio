@@ -1,0 +1,9 @@
+component Pair<T, U> {
+    OnConstruct() {
+    }
+}
+
+fn Entry() -> i32 {
+    let pair = Pair();
+    return 0;
+}

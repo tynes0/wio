@@ -508,6 +508,15 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/native/native_math.cpp"
     )
 
+    add_wio_output_test(
+        wio_test_native_generic_bridge_run
+        "${CMAKE_SOURCE_DIR}/tests/native/native_generic_bridge.wio"
+        "Generic native double: 42, 42"
+        --run
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
+    )
+
     add_wio_host_interop_test(
         wio_test_static_export_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/exported_library.wio"
@@ -520,6 +529,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/native/exported_library.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/shared_host.cpp"
         "Shared export sum: 42"
+    )
+
+    add_wio_shared_host_interop_test(
+        wio_test_generic_export_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/generic_exported_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/generic_export_host.cpp"
+        "Generic export instantiate: table=1 exports=2 i32=41 bool=true"
     )
 
     add_wio_shared_host_interop_test(
@@ -583,6 +599,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_generic_overload_prefers_specialized_generic_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_overload_prefers_specialized_generic.wio"
+        "Generic specialized overloads: same, mixed"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_generic_explicit_call_prefers_generic_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_explicit_call_prefers_generic.wio"
+        "Generic explicit overload: generic"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_generic_realm_explicit_call_run
         "${CMAKE_SOURCE_DIR}/tests/generic_realm_explicit_call.wio"
         "Realm generic: 5/hp"
@@ -607,6 +637,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_generic_component_pair_run
         "${CMAKE_SOURCE_DIR}/tests/generic_component_pair.wio"
         "Generic component: 7/wio"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_generic_component_constructor_deduction_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_component_constructor_deduction.wio"
+        "Generic component ctor deduction: 7/9, wio/true"
         --run
     )
 
@@ -852,13 +889,37 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_generic_native_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_native_not_supported.wio"
-        "@Native generic functions are not supported yet"
+        "Generic @Native functions require at least one @Instantiate\\(\\.\\.\\.\\) declaration\\."
     )
 
     add_wio_failure_test(
         wio_invalid_generic_export_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_export_not_supported.wio"
-        "Generic functions cannot currently use C ABI or module export attributes"
+        "Generic @Export functions require at least one @Instantiate\\(\\.\\.\\.\\) declaration\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_instantiate_argument_count_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_instantiate_argument_count_mismatch.wio"
+        "@Instantiate expects exactly 2 type arguments for 'PickLeft'\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_instantiate_non_concrete
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_instantiate_non_concrete.wio"
+        "@Instantiate must use fully concrete type arguments\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_instantiate_requires_native_or_export
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_instantiate_requires_native_or_export.wio"
+        "@Instantiate is currently supported only together with @Native or @Export\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_export_instantiate_non_abi_safe
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_export_instantiate_non_abi_safe.wio"
+        "@Export instantiated with 'string' produces a non-C-ABI-safe parameter 0 of type 'string'\\."
     )
 
     add_wio_failure_test(
@@ -889,6 +950,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_generic_object_constructor_missing_arguments
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_object_constructor_missing_arguments.wio"
         "Cannot infer generic arguments for constructor 'Box'. Use explicit type arguments."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_component_constructor_missing_arguments
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_component_constructor_missing_arguments.wio"
+        "Cannot infer generic arguments for constructor 'Pair'. Use explicit type arguments."
     )
 
     add_wio_failure_test(

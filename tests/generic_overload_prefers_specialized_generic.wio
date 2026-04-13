@@ -1,0 +1,16 @@
+use std::io as console;
+
+fn Classify<T>(left: T, right: T) -> string {
+    return "same";
+}
+
+fn Classify<T, U>(left: T, right: U) -> string {
+    return "mixed";
+}
+
+fn Entry() -> i32 {
+    let same = Classify(7, 9);
+    let mixed = Classify(7, "wio");
+    console::Print($"Generic specialized overloads: ${same}, ${mixed}");
+    return 0;
+}

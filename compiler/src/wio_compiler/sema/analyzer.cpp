@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <optional>
+#include <unordered_set>
 
 #include "wio/common/exception.h"
 #include "wio/common/logger.h"
@@ -585,6 +586,18 @@ namespace wio::sema
         bool hasAttribute(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
         {
             return std::ranges::any_of(attributes, [targetAttr](const auto& attr) { return attr->attribute == targetAttr; });
+        }
+
+        std::vector<const AttributeStatement*> getAttributeStatements(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
+        {
+            std::vector<const AttributeStatement*> matches;
+            for (const auto& attr : attributes)
+            {
+                if (attr && attr->attribute == targetAttr)
+                    matches.push_back(attr.Get());
+            }
+
+            return matches;
         }
 
         std::vector<Token> getAttributeArgs(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
@@ -1734,7 +1747,7 @@ namespace wio::sema
                 std::unordered_map<std::string, Ref<Type>> genericBindings;
             };
 
-            auto scoreResolvedCall = [&](const Ref<FunctionType>& functionType, bool isGenericCandidate) -> std::optional<int>
+            auto scoreResolvedCall = [&](const Ref<FunctionType>& functionType, bool isGenericCandidate, size_t genericParameterCount) -> std::optional<int>
             {
                 if (!functionType || functionType->paramTypes.size() != argTypes.size())
                     return std::nullopt;
@@ -1798,7 +1811,7 @@ namespace wio::sema
                 }
 
                 if (isGenericCandidate)
-                    currentScore -= 1;
+                    currentScore -= static_cast<int>(std::max<size_t>(1, genericParameterCount));
 
                 return currentScore;
             };
@@ -1885,7 +1898,11 @@ namespace wio::sema
                     );
                 }
 
-                if (auto score = scoreResolvedCall(resolvedFunctionType.AsFast<FunctionType>(), isGenericCandidate); score.has_value())
+                if (auto score = scoreResolvedCall(
+                        resolvedFunctionType.AsFast<FunctionType>(),
+                        isGenericCandidate,
+                        activeGenericParameterNames.size()
+                    ); score.has_value())
                     return ResolvedFunctionCandidate{ overload, resolvedFunctionType, *score, bindings };
 
                 return std::nullopt;
@@ -2427,9 +2444,21 @@ namespace wio::sema
         bool hasModuleLifecycle = !moduleLifecycleAttributes.empty();
         bool isGenericFunction = !node.genericParameters.empty();
         bool isStructMethod = currentScope_ && currentScope_->getKind() == ScopeKind::Struct;
+        auto instantiateAttributes = getAttributeStatements(node.attributes, Attribute::Instantiate);
+        bool hasInstantiate = !instantiateAttributes.empty();
         if (isCommand && isEvent)
         {
             WIO_LOG_ADD_ERROR(node.location(), "@Command and @Event cannot be combined on the same function.");
+        }
+
+        if (isNative && isExported)
+        {
+            WIO_LOG_ADD_ERROR(node.location(), "@Export cannot be combined with @Native.");
+        }
+
+        if (hasInstantiate && !isGenericFunction)
+        {
+            WIO_LOG_ADD_ERROR(node.location(), "@Instantiate can only be used on generic functions.");
         }
 
         if (isGenericFunction)
@@ -2452,15 +2481,33 @@ namespace wio::sema
                 WIO_LOG_ADD_ERROR(node.location(), "Entry cannot be declared as a generic function.");
             }
 
-            if (isNative)
+            if (hasInstantiate && isStructMethod)
             {
-                WIO_LOG_ADD_ERROR(node.location(), "@Native generic functions are not supported yet.");
+                WIO_LOG_ADD_ERROR(node.location(), "@Instantiate is currently supported only on top-level generic functions.");
             }
 
-            if (isExported || isCommand || isEvent || hasModuleLifecycle)
+            if (hasInstantiate && !isNative && !isExported)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "@Instantiate is currently supported only together with @Native or @Export.");
+            }
+
+            if ((isNative || isExported) && !hasInstantiate)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Generic {} functions require at least one @Instantiate(...) declaration.",
+                    isNative ? "@Native" : "@Export"
+                );
+            }
+
+            if (isCommand || isEvent || hasModuleLifecycle)
             {
                 WIO_LOG_ADD_ERROR(node.location(), "Generic functions cannot currently use C ABI or module export attributes.");
             }
+        }
+        else if (hasInstantiate)
+        {
+            WIO_LOG_ADD_ERROR(node.location(), "@Instantiate can only be used on generic functions.");
         }
 
         if ((isCommand || isEvent) && !isExported)
@@ -2520,7 +2567,7 @@ namespace wio::sema
             }
         }
 
-        if (isExported)
+        if (isExported && !isGenericFunction)
         {
             if (isNative)
             {
@@ -2770,6 +2817,110 @@ namespace wio::sema
 
         auto genericScope = buildGenericTypeParameterScope();
         genericTypeParameterScopes_.push_back(genericScope);
+
+        if (hasInstantiate)
+        {
+            std::unordered_set<std::string> seenInstantiationSignatures;
+            for (const auto* instantiateAttribute : instantiateAttributes)
+            {
+                if (!instantiateAttribute)
+                    continue;
+
+                if (instantiateAttribute->typeArgs.size() != node.genericParameters.size())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "@Instantiate expects exactly {} type arguments for '{}'.",
+                        node.genericParameters.size(),
+                        node.name->token.value
+                    );
+                    continue;
+                }
+
+                std::vector<Ref<Type>> instantiationTypes;
+                instantiationTypes.reserve(instantiateAttribute->typeArgs.size());
+                bool isValidInstantiation = true;
+                std::string instantiationSignature;
+
+                for (size_t i = 0; i < instantiateAttribute->typeArgs.size(); ++i)
+                {
+                    auto typeSpecifier = instantiateAttribute->typeArgs[i];
+                    if (!typeSpecifier)
+                    {
+                        WIO_LOG_ADD_ERROR(node.location(), "@Instantiate expects concrete type arguments, not raw tokens.");
+                        isValidInstantiation = false;
+                        break;
+                    }
+
+                    typeSpecifier->accept(*this);
+                    Ref<Type> instantiationType = typeSpecifier->refType.Lock();
+                    if (!instantiationType || instantiationType->isUnknown())
+                    {
+                        WIO_LOG_ADD_ERROR(node.location(), "@Instantiate contains an unresolved type argument.");
+                        isValidInstantiation = false;
+                        break;
+                    }
+
+                    if (containsGenericParameterType(instantiationType))
+                    {
+                        WIO_LOG_ADD_ERROR(node.location(), "@Instantiate must use fully concrete type arguments.");
+                        isValidInstantiation = false;
+                        break;
+                    }
+
+                    instantiationTypes.push_back(instantiationType);
+                    if (!instantiationSignature.empty())
+                        instantiationSignature += "|";
+                    instantiationSignature += instantiationType->toString();
+                }
+
+                if (!isValidInstantiation)
+                    continue;
+
+                if (!seenInstantiationSignatures.insert(instantiationSignature).second)
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "Duplicate @Instantiate declaration for '{}'.", instantiationSignature);
+                    continue;
+                }
+
+                if (isExported)
+                {
+                    auto instantiationBindings = buildGenericTypeBindings(funcSym->genericParameterNames, instantiationTypes);
+                    Ref<Type> instantiatedFunctionTypeRef = instantiateGenericType(funcType, instantiationBindings);
+                    auto instantiatedFunctionType = instantiatedFunctionTypeRef ? instantiatedFunctionTypeRef.AsFast<FunctionType>() : nullptr;
+
+                    if (!instantiatedFunctionType)
+                    {
+                        WIO_LOG_ADD_ERROR(node.location(), "@Instantiate failed to produce a concrete exported signature.");
+                        continue;
+                    }
+
+                    for (size_t i = 0; i < instantiatedFunctionType->paramTypes.size(); ++i)
+                    {
+                        if (!isCAbiSafeExportType(instantiatedFunctionType->paramTypes[i]))
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                node.location(),
+                                "@Export instantiated with '{}' produces a non-C-ABI-safe parameter {} of type '{}'.",
+                                instantiationSignature,
+                                i,
+                                instantiatedFunctionType->paramTypes[i] ? instantiatedFunctionType->paramTypes[i]->toString() : "<unknown>"
+                            );
+                        }
+                    }
+
+                    if (!isCAbiSafeExportType(instantiatedFunctionType->returnType))
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            node.location(),
+                            "@Export instantiated with '{}' produces a non-C-ABI-safe return type '{}'.",
+                            instantiationSignature,
+                            instantiatedFunctionType->returnType ? instantiatedFunctionType->returnType->toString() : "<unknown>"
+                        );
+                    }
+                }
+            }
+        }
         
         enterScope(ScopeKind::Function);
 

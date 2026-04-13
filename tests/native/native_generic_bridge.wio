@@ -1,0 +1,17 @@
+use std::io as console;
+
+realm ffi {
+    @Native
+    @CppHeader("native_generic_math.h")
+    @CppName(native_generic::DoubleValue)
+    @Instantiate(i32)
+    @Instantiate(i64)
+    fn DoubleValue<T>(value: T) -> T;
+}
+
+fn Entry() -> i32 {
+    let small = ffi::DoubleValue(21);
+    let large = ffi::DoubleValue<i64>(21);
+    console::Print($"Generic native double: ${small}, ${large}");
+    return 0;
+}

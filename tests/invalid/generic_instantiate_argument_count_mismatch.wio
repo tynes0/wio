@@ -1,0 +1,5 @@
+@Export
+@Instantiate(i32)
+fn PickLeft<T, U>(left: T, right: U) -> T {
+    return left;
+}
