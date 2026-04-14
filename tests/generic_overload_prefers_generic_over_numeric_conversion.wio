@@ -1,0 +1,15 @@
+use std::io as console;
+
+fn Classify(value: i64) -> string {
+    return "numeric";
+}
+
+fn Classify<T>(value: T) -> string {
+    return "generic";
+}
+
+fn Entry() -> i32 {
+    let result = Classify(7u32);
+    console::Print($"Generic numeric preference: ${result}");
+    return 0;
+}

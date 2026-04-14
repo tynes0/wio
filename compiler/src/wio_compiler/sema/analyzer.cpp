@@ -10,13 +10,32 @@
 #include "wio/common/utility.h"
 
 #include "compiler.h"
-#include "wio/runtime/loader.h"
-#include "wio/runtime/std_loaders/io_loader.h"
-
 namespace wio::sema
 {
     namespace
     {
+        std::vector<std::string> splitModulePath(std::string_view modulePath)
+        {
+            std::vector<std::string> parts;
+            size_t start = 0;
+
+            while (start <= modulePath.size())
+            {
+                size_t separator = modulePath.find('/', start);
+                size_t count = separator == std::string_view::npos ? modulePath.size() - start : separator - start;
+
+                if (count > 0)
+                    parts.emplace_back(modulePath.substr(start, count));
+
+                if (separator == std::string_view::npos)
+                    break;
+
+                start = separator + 1;
+            }
+
+            return parts;
+        }
+
         Ref<Type> unwrapAliasType(Ref<Type> type)
         {
             while (type && type->kind() == TypeKind::Alias)
@@ -559,6 +578,8 @@ namespace wio::sema
             if (name == "u16") return ctx.getU16();
             if (name == "u32") return ctx.getU32();
             if (name == "u64") return ctx.getU64();
+            if (name == "isize") return ctx.getISize();
+            if (name == "usize") return ctx.getUSize();
             if (name == "f32") return ctx.getF32();
             if (name == "f64") return ctx.getF64();
             if (name == "bool") return ctx.getBool();
@@ -794,7 +815,9 @@ namespace wio::sema
     {
         scopes_.clear();
         symbols_.clear();
+        functionDeclarationsBySymbol_.clear();
         currentScope_ = nullptr;
+        currentExpectedExpressionType_ = nullptr;
         currentNamespacePath_.clear();
         seenModuleApiVersion_ = false;
         seenModuleLoad_ = false;
@@ -1204,7 +1227,10 @@ namespace wio::sema
     void SemanticAnalyzer::visit(AssignmentExpression& node)
     {
         node.left->accept(*this);
+        Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
+        currentExpectedExpressionType_ = getAutoReadableType(node.left->refType.Lock());
         node.right->accept(*this);
+        currentExpectedExpressionType_ = previousExpectedExpressionType;
 
         Ref<Type> lhsType = node.left->refType.Lock();
         Ref<Type> rhsType = node.right->refType.Lock();
@@ -1647,6 +1673,39 @@ namespace wio::sema
                     structReturnType = instantiateGenericStructType(structType, explicitTypeArguments);
                     node.callee->refType = structReturnType;
                 }
+                else if (currentExpectedExpressionType_)
+                {
+                    Ref<Type> expectedType = unwrapAliasType(currentExpectedExpressionType_);
+                    if (expectedType && expectedType->kind() == TypeKind::Struct)
+                    {
+                        auto expectedStructType = expectedType.AsFast<StructType>();
+                        if (expectedStructType &&
+                            expectedStructType->name == structType->name &&
+                            expectedStructType->scopePath == structType->scopePath &&
+                            expectedStructType->genericArguments.size() == structType->genericParameterNames.size())
+                        {
+                            bool hasConcreteExpectedArguments = true;
+                            for (const auto& genericArgument : expectedStructType->genericArguments)
+                            {
+                                if (!genericArgument || genericArgument->isUnknown() || containsGenericParameterType(genericArgument))
+                                {
+                                    hasConcreteExpectedArguments = false;
+                                    break;
+                                }
+                            }
+
+                            if (hasConcreteExpectedArguments)
+                            {
+                                constructorGenericBindings = buildGenericTypeBindings(
+                                    structType->genericParameterNames,
+                                    expectedStructType->genericArguments
+                                );
+                                structReturnType = instantiateGenericStructType(structType, expectedStructType->genericArguments);
+                                node.callee->refType = structReturnType;
+                            }
+                        }
+                    }
+                }
             }
             else if (!explicitTypeArguments.empty())
             {
@@ -1752,6 +1811,83 @@ namespace wio::sema
                 std::unordered_map<std::string, Ref<Type>> genericBindings;
             };
 
+            auto formatInstantiationSignature = [&](const std::vector<Ref<Type>>& types) -> std::string
+            {
+                std::string signature = "<";
+                for (size_t i = 0; i < types.size(); ++i)
+                {
+                    signature += types[i] ? types[i]->toString() : "<unknown>";
+                    if (i + 1 < types.size())
+                        signature += ", ";
+                }
+                signature += ">";
+                return signature;
+            };
+
+            auto isAllowedInstantiateBinding = [&](const Ref<Symbol>& overload,
+                                                   const std::vector<std::string>& activeGenericParameterNames,
+                                                   const std::unordered_map<std::string, Ref<Type>>& bindings) -> bool
+            {
+                if (!overload || activeGenericParameterNames.empty())
+                    return true;
+
+                auto foundDeclaration = functionDeclarationsBySymbol_.find(overload.Get());
+                if (foundDeclaration == functionDeclarationsBySymbol_.end() || !foundDeclaration->second)
+                    return true;
+
+                const auto* functionDeclaration = foundDeclaration->second;
+                if (!hasAttribute(functionDeclaration->attributes, Attribute::Native) &&
+                    !hasAttribute(functionDeclaration->attributes, Attribute::Export))
+                {
+                    return true;
+                }
+
+                auto instantiateAttributes = getAttributeStatements(functionDeclaration->attributes, Attribute::Instantiate);
+                if (instantiateAttributes.empty())
+                    return false;
+
+                std::vector<Ref<Type>> resolvedBindingTypes;
+                resolvedBindingTypes.reserve(activeGenericParameterNames.size());
+                for (const auto& genericParameterName : activeGenericParameterNames)
+                {
+                    auto foundBinding = bindings.find(genericParameterName);
+                    if (foundBinding == bindings.end() || !foundBinding->second)
+                        return false;
+
+                    resolvedBindingTypes.push_back(foundBinding->second);
+                }
+
+                for (const auto* instantiateAttribute : instantiateAttributes)
+                {
+                    if (!instantiateAttribute || instantiateAttribute->typeArgs.size() != resolvedBindingTypes.size())
+                        continue;
+
+                    bool matches = true;
+                    for (size_t i = 0; i < instantiateAttribute->typeArgs.size(); ++i)
+                    {
+                        auto typeSpecifier = instantiateAttribute->typeArgs[i];
+                        if (!typeSpecifier)
+                        {
+                            matches = false;
+                            break;
+                        }
+
+                        typeSpecifier->accept(*this);
+                        Ref<Type> declaredInstantiationType = typeSpecifier->refType.Lock();
+                        if (!declaredInstantiationType || !isExactType(declaredInstantiationType, resolvedBindingTypes[i]))
+                        {
+                            matches = false;
+                            break;
+                        }
+                    }
+
+                    if (matches)
+                        return true;
+                }
+
+                return false;
+            };
+
             auto scoreResolvedCall = [&](const Ref<FunctionType>& functionType, bool isGenericCandidate, size_t genericParameterCount) -> std::optional<int>
             {
                 if (!functionType || functionType->paramTypes.size() != argTypes.size())
@@ -1821,6 +1957,10 @@ namespace wio::sema
                 return currentScore;
             };
 
+            bool rejectedByInstantiationWhitelist = false;
+            std::string rejectedInstantiationFunctionName;
+            std::string rejectedInstantiationSignature;
+
             auto tryResolveFunctionCandidate = [&](const Ref<Symbol>& overload) -> std::optional<ResolvedFunctionCandidate>
             {
                 if (!overload || !overload->type || overload->type->kind() != TypeKind::Function)
@@ -1880,6 +2020,23 @@ namespace wio::sema
                         {
                             return std::nullopt;
                         }
+                    }
+
+                    if (!isAllowedInstantiateBinding(overload, activeGenericParameterNames, bindings))
+                    {
+                        std::vector<Ref<Type>> resolvedBindingTypes;
+                        resolvedBindingTypes.reserve(activeGenericParameterNames.size());
+                        for (const auto& genericParameterName : activeGenericParameterNames)
+                        {
+                            auto foundBinding = bindings.find(genericParameterName);
+                            if (foundBinding != bindings.end())
+                                resolvedBindingTypes.push_back(foundBinding->second);
+                        }
+
+                        rejectedByInstantiationWhitelist = true;
+                        rejectedInstantiationFunctionName = overload->name;
+                        rejectedInstantiationSignature = formatInstantiationSignature(resolvedBindingTypes);
+                        return std::nullopt;
                     }
 
                     std::vector<Ref<Type>> instantiatedParamTypes;
@@ -1946,7 +2103,19 @@ namespace wio::sema
             }
             if (!bestMatch.has_value())
             {
-                WIO_LOG_ADD_ERROR(node.location(), "No matching function/constructor overload found.");
+                if (rejectedByInstantiationWhitelist)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "Generic interop function '{}' does not declare @Instantiate{}.",
+                        rejectedInstantiationFunctionName,
+                        rejectedInstantiationSignature
+                    );
+                }
+                else
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "No matching function/constructor overload found.");
+                }
                 node.refType = Compiler::get().getTypeContext().getUnknown();
                 return;
             }
@@ -1956,7 +2125,7 @@ namespace wio::sema
                 node.callee->referencedSymbol = bestMatch->symbol;
                 node.callee->refType = bestMatch->functionType;
             }
-            else if (constructorStructType && !constructorGenericParameterNames.empty() && !explicitTypeArguments.empty())
+            else if (constructorStructType && !constructorGenericParameterNames.empty() && !constructorGenericBindings.empty())
             {
                 node.callee->refType = structReturnType;
             }
@@ -1995,7 +2164,9 @@ namespace wio::sema
             return;
         }
 
-        Ref<Type> calleeType = calleeSym->type; //
+        Ref<Type> calleeType = node.callee->refType.Lock();
+        if (!calleeType || calleeType->kind() != TypeKind::Function)
+            calleeType = calleeSym->type;
         if (!constructorGenericBindings.empty())
             calleeType = instantiateGenericType(calleeType, constructorGenericBindings);
 
@@ -2295,7 +2466,10 @@ namespace wio::sema
     
         if (node.initializer)
         {
+            Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
+            currentExpectedExpressionType_ = sym->type;
             node.initializer->accept(*this);
+            currentExpectedExpressionType_ = previousExpectedExpressionType;
             Ref<Type> initType = node.initializer->refType.Lock();
     
             if (!sym->type || sym->type->isUnknown()) 
@@ -2436,6 +2610,7 @@ namespace wio::sema
                     funcSym->genericParameterNames.push_back(genericParameter->token.value);
             }
             currentScope_->define(node.name->token.value, funcSym);
+            functionDeclarationsBySymbol_[funcSym.Get()] = &node;
 
             node.name->refType = funcType;
             node.name->referencedSymbol = funcSym;
@@ -4148,7 +4323,10 @@ namespace wio::sema
 
         if (node.value)
         {
+            Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
+            currentExpectedExpressionType_ = currentFunctionReturnType_;
             node.value->accept(*this);
+            currentExpectedExpressionType_ = previousExpectedExpressionType;
             actualType = node.value->refType.Lock();
         }
 
@@ -4193,66 +4371,88 @@ namespace wio::sema
             targetScope->define(name, nsSymbol);
             return nsSymbol;
         };
-    
-        if (node.isStdLib) // use std::io;
+
+        auto resolveImportedNamespace = [&]() -> Ref<Symbol>
         {
-            Ref<Symbol> stdNs = getOrCreateNamespace(currentScope_, "std");
-            if (!stdNs) return;
+            std::vector<std::string> namespaceParts;
+            if (node.isStdLib)
+                namespaceParts.emplace_back("std");
 
-            std::string importAlias = node.aliasName.empty() ? node.moduleName : node.aliasName;
-    
-            if (node.modulePath == "io")
-            {
-                Ref<Symbol> ioNs = getOrCreateNamespace(stdNs->innerScope, "io");
-                if (!ioNs) return;
+            auto moduleParts = splitModulePath(node.modulePath);
+            namespaceParts.insert(namespaceParts.end(), moduleParts.begin(), moduleParts.end());
 
-                ioNs->flags.set_isStd(true);
-    
-                runtime::Loader<runtime::IOLoader>::Load(ioNs->innerScope, symbols_);
-                
-                // Import the requested alias into the current scope. Without an
-                // explicit alias, the last module segment is used.
-                currentScope_->define(importAlias, ioNs); 
-            }
-            else
+            if (namespaceParts.empty())
+                return nullptr;
+
+            Ref<Symbol> resolvedNamespace = currentScope_->resolve(namespaceParts.front());
+            if (!resolvedNamespace || resolvedNamespace->kind != SymbolKind::Namespace)
+                return nullptr;
+
+            for (size_t i = 1; i < namespaceParts.size(); ++i)
             {
-                WIO_LOG_ADD_ERROR(node.location(), "Unknown standard library module: 'std::{}'", node.modulePath);
+                if (!resolvedNamespace->innerScope)
+                    return nullptr;
+
+                resolvedNamespace = resolvedNamespace->innerScope->resolve(namespaceParts[i]);
+                if (!resolvedNamespace || resolvedNamespace->kind != SymbolKind::Namespace)
+                    return nullptr;
             }
+
+            return resolvedNamespace;
+        };
+
+        if (node.aliasName.empty())
+            return;
+
+        if (auto importedNamespace = resolveImportedNamespace())
+        {
+            if (auto existingAlias = currentScope_->resolveLocally(node.aliasName))
+            {
+                if (existingAlias == importedNamespace)
+                    return;
+
+                WIO_LOG_ADD_ERROR(node.location(), "Symbol '{}' already exists and cannot be used as an import alias.", node.aliasName);
+                return;
+            }
+
+            currentScope_->define(node.aliasName, importedNamespace);
+            return;
         }
-        else
+
+        if (node.isStdLib)
         {
-            if (node.aliasName.empty())
-                return;
+            WIO_LOG_ADD_ERROR(node.location(), "Standard library module 'std::{}' could not be resolved after merge.", node.modulePath);
+            return;
+        }
 
-            std::vector<Ref<Symbol>> importedSymbols;
-            importedSymbols.reserve(node.importedSymbols.size());
+        std::vector<Ref<Symbol>> importedSymbols;
+        importedSymbols.reserve(node.importedSymbols.size());
 
-            for (const auto& importedName : node.importedSymbols)
+        for (const auto& importedName : node.importedSymbols)
+        {
+            auto importedSymbol = currentScope_->resolveLocally(importedName);
+            if (!importedSymbol)
             {
-                auto importedSymbol = currentScope_->resolveLocally(importedName);
-                if (!importedSymbol)
-                {
-                    WIO_LOG_ADD_ERROR(node.location(), "Imported symbol '{}' from module '{}' could not be resolved after merge.", importedName, node.modulePath);
-                    continue;
-                }
-
-                importedSymbols.push_back(importedSymbol);
+                WIO_LOG_ADD_ERROR(node.location(), "Imported symbol '{}' from module '{}' could not be resolved after merge.", importedName, node.modulePath);
+                continue;
             }
 
-            Ref<Symbol> aliasNamespace = getOrCreateNamespace(currentScope_, node.aliasName);
-            if (!aliasNamespace || !aliasNamespace->innerScope)
-                return;
+            importedSymbols.push_back(importedSymbol);
+        }
 
-            for (const auto& importedSymbol : importedSymbols)
-            {
-                if (!importedSymbol)
-                    continue;
+        Ref<Symbol> aliasNamespace = getOrCreateNamespace(currentScope_, node.aliasName);
+        if (!aliasNamespace || !aliasNamespace->innerScope)
+            return;
 
-                if (aliasNamespace->innerScope->resolveLocally(importedSymbol->name))
-                    continue;
+        for (const auto& importedSymbol : importedSymbols)
+        {
+            if (!importedSymbol)
+                continue;
 
-                aliasNamespace->innerScope->define(importedSymbol->name, importedSymbol);
-            }
+            if (aliasNamespace->innerScope->resolveLocally(importedSymbol->name))
+                continue;
+
+            aliasNamespace->innerScope->define(importedSymbol->name, importedSymbol);
         }
     }
 }

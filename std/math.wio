@@ -1,0 +1,127 @@
+realm std {
+    realm math {
+        fn Min(left: i32, right: i32) -> i32 {
+            if (left < right) {
+                return left;
+            }
+            return right;
+        }
+
+        fn Min(left: i64, right: i64) -> i64 {
+            if (left < right) {
+                return left;
+            }
+            return right;
+        }
+
+        fn Min(left: f32, right: f32) -> f32 {
+            if (left < right) {
+                return left;
+            }
+            return right;
+        }
+
+        fn Min(left: f64, right: f64) -> f64 {
+            if (left < right) {
+                return left;
+            }
+            return right;
+        }
+
+        fn Max(left: i32, right: i32) -> i32 {
+            if (left > right) {
+                return left;
+            }
+            return right;
+        }
+
+        fn Max(left: i64, right: i64) -> i64 {
+            if (left > right) {
+                return left;
+            }
+            return right;
+        }
+
+        fn Max(left: f32, right: f32) -> f32 {
+            if (left > right) {
+                return left;
+            }
+            return right;
+        }
+
+        fn Max(left: f64, right: f64) -> f64 {
+            if (left > right) {
+                return left;
+            }
+            return right;
+        }
+
+        fn Clamp(value: i32, minValue: i32, maxValue: i32) -> i32 {
+            if (value < minValue) {
+                return minValue;
+            }
+            if (value > maxValue) {
+                return maxValue;
+            }
+            return value;
+        }
+
+        fn Clamp(value: i64, minValue: i64, maxValue: i64) -> i64 {
+            if (value < minValue) {
+                return minValue;
+            }
+            if (value > maxValue) {
+                return maxValue;
+            }
+            return value;
+        }
+
+        fn Clamp(value: f32, minValue: f32, maxValue: f32) -> f32 {
+            if (value < minValue) {
+                return minValue;
+            }
+            if (value > maxValue) {
+                return maxValue;
+            }
+            return value;
+        }
+
+        fn Clamp(value: f64, minValue: f64, maxValue: f64) -> f64 {
+            if (value < minValue) {
+                return minValue;
+            }
+            if (value > maxValue) {
+                return maxValue;
+            }
+            return value;
+        }
+
+        fn Abs(value: i32) -> i32 {
+            if (value < 0) {
+                return -value;
+            }
+            return value;
+        }
+
+        fn Abs(value: i64) -> i64 {
+            if (value < 0) {
+                return -value;
+            }
+            return value;
+        }
+
+        fn Abs(value: f32) -> f32 {
+            if (value < 0.0f) {
+                return -value;
+            }
+            return value;
+        }
+
+        fn Abs(value: f64) -> f64 {
+            if (value < 0.0) {
+                return -value;
+            }
+            return value;
+        }
+    }
+}

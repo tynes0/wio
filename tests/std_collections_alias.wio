@@ -1,0 +1,22 @@
+use std::io as console;
+use std::collections as collections;
+
+fn Entry(args: string[]) -> i32 {
+    let values: collections::DynArray<i32> = [2, 4, 6];
+    let scores: collections::Map<string, i32> = {
+        "hp": 7,
+        "mana": 3
+    };
+
+    mut total = 0;
+    for value in values {
+        total += value;
+    }
+
+    for key | value in scores {
+        total += value;
+    }
+
+    console::Print($"Std collections: ${total}");
+    return 0;
+}

@@ -1,0 +1,11 @@
+@Export
+@CppName(WioEcho)
+@Instantiate(i32)
+fn Echo<T>(value: T) -> T {
+    return value;
+}
+
+fn Entry() -> i32 {
+    let value = Echo(true);
+    return 0;
+}

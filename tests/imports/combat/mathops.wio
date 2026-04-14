@@ -1,0 +1,5 @@
+use support::scalars as scalars;
+
+fn ComputeThreat(baseValue: i32, bonusValue: i32) -> i32 {
+    return baseValue * 10 + scalars::ClampBonus(bonusValue);
+}

@@ -1,17 +1,7 @@
 use std::io as console;
+use std::math as Math;
 
-object Box<T> 
-{
-    public value: T;
-
-    public fn Get() -> T 
-    {
-        return self.value;
-    }
-}
 fn Entry() -> i32
 {
-    let numberBox = Box(12);
-    let textBox = Box("wio");
-    console::Print($"Generic ctor deduction: ${numberBox.Get()}, ${textBox.Get()}");
+    console::Print($"Max: ${std::math::Max(12, 14)}");
 }

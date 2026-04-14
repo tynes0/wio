@@ -1,0 +1,7 @@
+use std::io as console;
+use combat::mathops as mathops;
+
+fn Entry(args: string[]) -> i32 {
+    console::Print($"Import path threat: ${mathops::ComputeThreat(4, 9)}");
+    return 0;
+}

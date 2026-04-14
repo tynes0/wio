@@ -19,7 +19,7 @@ namespace wio::sema
         t_u32 = makeType<PrimitiveType>("u32");
         t_u64 = makeType<PrimitiveType>("u64");
 
-        t_isize = makeType<PrimitiveType>("size");
+        t_isize = makeType<PrimitiveType>("isize");
         t_usize = makeType<PrimitiveType>("usize");
         
         t_f32 = makeType<PrimitiveType>("f32");

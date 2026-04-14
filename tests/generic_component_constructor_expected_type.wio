@@ -1,0 +1,31 @@
+use std::io as console;
+
+component Pair<T, U> {
+    public left: T;
+    public right: U;
+
+    OnConstruct() {
+    }
+}
+
+fn MakePair() -> Pair<i32, i32> {
+    return Pair();
+}
+
+fn Entry() -> i32 {
+    mut pair: Pair<i32, i32> = Pair();
+    pair.left = 4;
+    pair.right = 5;
+
+    mut assigned: Pair<i32, i32> = MakePair();
+    assigned = Pair();
+    assigned.left = 6;
+    assigned.right = 7;
+
+    mut made: Pair<i32, i32> = MakePair();
+    made.left = 8;
+    made.right = 9;
+
+    console::Print($"Generic component expected type: ${pair.left}/${pair.right}, ${assigned.left}/${assigned.right}, ${made.left}/${made.right}");
+    return 0;
+}

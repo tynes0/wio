@@ -22,7 +22,9 @@ namespace wio::sema
     private:
         std::vector<Ref<Scope>> scopes_;
         std::vector<Ref<Symbol>> symbols_;
+        std::unordered_map<const Symbol*, const FunctionDeclaration*> functionDeclarationsBySymbol_;
         Ref<Scope> currentScope_ = nullptr;
+        Ref<Type> currentExpectedExpressionType_ = nullptr;
         Ref<Type> currentFunctionReturnType_ = nullptr;
         Ref<Type> currentStructType_ = nullptr;
         Ref<Type> currentBaseStructType_ = nullptr;

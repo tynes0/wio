@@ -1,0 +1,7 @@
+realm std {
+    realm collections {
+        type DynArray<T> = T[];
+        type Map<K, V> = Dict<K, V>;
+        type OrderedMap<K, V> = Tree<K, V>;
+    }
+}

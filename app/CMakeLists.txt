@@ -1,9 +1,12 @@
 file(GLOB_RECURSE WIO_TEST_FILES "${CMAKE_SOURCE_DIR}/tests/*.wio")
+file(GLOB_RECURSE WIO_STD_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/std/*.wio")
 
 source_group("tests" FILES ${WIO_TEST_FILES})
+source_group("std" FILES ${WIO_STD_FILES})
 
 add_executable(wio_app
     main.cpp
+    ${WIO_STD_FILES}
     ${WIO_TEST_FILES}
 )
 
@@ -316,6 +319,15 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_import_path_module_dir_run
+        "${CMAKE_SOURCE_DIR}/tests/import_path_root.wio"
+        "Import path threat: 45"
+        --run
+        --module-dir
+        "${CMAKE_SOURCE_DIR}/tests/imports"
+    )
+
+    add_wio_output_test(
         wio_test_realm_merge_across_modules_run
         "${CMAKE_SOURCE_DIR}/tests/modules/realm_merge_root.wio"
         "Merged realm sum: 3"
@@ -517,6 +529,15 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/native"
     )
 
+    add_wio_output_test(
+        wio_test_native_generic_pair_bridge_run
+        "${CMAKE_SOURCE_DIR}/tests/native/native_generic_pair_bridge.wio"
+        "Generic native pair: 42"
+        --run
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
+    )
+
     add_wio_host_interop_test(
         wio_test_static_export_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/exported_library.wio"
@@ -535,7 +556,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_generic_export_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/generic_exported_library.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/generic_export_host.cpp"
-        "Generic export instantiate: table=1 exports=2 i32=41 bool=true"
+        "Generic export instantiate: table=1 exports=3 i32=41 f32=.* bool=false"
     )
 
     add_wio_shared_host_interop_test(
@@ -571,6 +592,27 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_std_io_direct_run
+        "${CMAKE_SOURCE_DIR}/tests/std_io_direct.wio"
+        "Std direct: hello\nStd direct value: 7"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_std_math_run
+        "${CMAKE_SOURCE_DIR}/tests/std_math_run.wio"
+        "Std math: 3/10/4/2.5"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_std_collections_alias_run
+        "${CMAKE_SOURCE_DIR}/tests/std_collections_alias.wio"
+        "Std collections: 22"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_generic_function_identity_run
         "${CMAKE_SOURCE_DIR}/tests/generic_function_identity.wio"
         "Generic values: 42, wio"
@@ -602,6 +644,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_generic_overload_prefers_specialized_generic_run
         "${CMAKE_SOURCE_DIR}/tests/generic_overload_prefers_specialized_generic.wio"
         "Generic specialized overloads: same, mixed"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_generic_overload_prefers_generic_over_numeric_conversion_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_overload_prefers_generic_over_numeric_conversion.wio"
+        "Generic numeric preference: generic"
         --run
     )
 
@@ -648,6 +697,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_generic_component_constructor_expected_type_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_component_constructor_expected_type.wio"
+        "Generic component expected type: 4/5, 6/7, 8/9"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_generic_object_box_run
         "${CMAKE_SOURCE_DIR}/tests/generic_object_box.wio"
         "Generic object: 7, 7"
@@ -665,6 +721,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_generic_object_constructor_deduction_run
         "${CMAKE_SOURCE_DIR}/tests/generic_object_constructor_deduction.wio"
         "Generic ctor deduction: 7, wio"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_generic_object_constructor_expected_type_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_object_constructor_expected_type.wio"
+        "Generic ctor expected type: 7, 9, 11"
         --run
     )
 
@@ -875,6 +938,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_failure_test(
+        wio_invalid_generic_component_method_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_component_method_not_supported.wio"
+        "Generic methods are currently supported only on object methods"
+    )
+
+    add_wio_failure_test(
         wio_invalid_generic_explicit_argument_count_mismatch
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_explicit_argument_count_mismatch.wio"
         "No matching function/constructor overload found"
@@ -920,6 +989,26 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_generic_export_instantiate_non_abi_safe
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_export_instantiate_non_abi_safe.wio"
         "@Export instantiated with 'string' produces a non-C-ABI-safe parameter 0 of type 'string'\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_native_call_not_instantiated
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_native_call_not_instantiated.wio"
+        "Generic interop function 'DoubleValue' does not declare @Instantiate<string>\\."
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_export_call_not_instantiated
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_export_call_not_instantiated.wio"
+        "Generic interop function 'Echo' does not declare @Instantiate<bool>\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_object_constructor_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_object_constructor_not_supported.wio"
+        "Generic constructors and destructors are not supported yet"
     )
 
     add_wio_failure_test(

@@ -1,0 +1,15 @@
+use std::io as console;
+
+realm ffi {
+    @Native
+    @CppHeader("native_generic_pair.h")
+    @CppName(native_generic::PickLeft)
+    @Instantiate(i32, bool)
+    fn PickLeft<T, U>(left: T, right: U) -> T;
+}
+
+fn Entry() -> i32 {
+    let result = ffi::PickLeft(42, true);
+    console::Print($"Generic native pair: ${result}");
+    return 0;
+}

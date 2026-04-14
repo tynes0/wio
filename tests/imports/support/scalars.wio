@@ -1,0 +1,11 @@
+fn ClampBonus(value: i32) -> i32 {
+    if (value < 0) {
+        return 0;
+    }
+
+    if (value > 5) {
+        return 5;
+    }
+
+    return value;
+}

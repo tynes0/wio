@@ -1,0 +1,83 @@
+realm std {
+    realm io {
+        @Native
+        @CppHeader("std_io.h")
+        @CppName(wio::runtime::std_io::PrintString)
+        fn Print(value: string) -> i32;
+
+        @Native
+        @CppHeader("std_io.h")
+        @CppName(wio::runtime::std_io::PrintBool)
+        fn Print(value: bool) -> i32;
+
+        @Native
+        @CppHeader("std_io.h")
+        @CppName(wio::runtime::std_io::PrintChar)
+        fn Print(value: char) -> i32;
+
+        @Native
+        @CppHeader("std_io.h")
+        @CppName(wio::runtime::std_io::PrintI8)
+        fn Print(value: i8) -> i32;
+
+        @Native
+        @CppHeader("std_io.h")
+        @CppName(wio::runtime::std_io::PrintI16)
+        fn Print(value: i16) -> i32;
+
+        @Native
+        @CppHeader("std_io.h")
+        @CppName(wio::runtime::std_io::PrintI32)
+        fn Print(value: i32) -> i32;
+
+        @Native
+        @CppHeader("std_io.h")
+        @CppName(wio::runtime::std_io::PrintI64)
+        fn Print(value: i64) -> i32;
+
+        @Native
+        @CppHeader("std_io.h")
+        @CppName(wio::runtime::std_io::PrintU8)
+        fn Print(value: u8) -> i32;
+
+        @Native
+        @CppHeader("std_io.h")
+        @CppName(wio::runtime::std_io::PrintU16)
+        fn Print(value: u16) -> i32;
+
+        @Native
+        @CppHeader("std_io.h")
+        @CppName(wio::runtime::std_io::PrintU32)
+        fn Print(value: u32) -> i32;
+
+        @Native
+        @CppHeader("std_io.h")
+        @CppName(wio::runtime::std_io::PrintU64)
+        fn Print(value: u64) -> i32;
+
+        @Native
+        @CppHeader("std_io.h")
+        @CppName(wio::runtime::std_io::PrintISize)
+        fn Print(value: isize) -> i32;
+
+        @Native
+        @CppHeader("std_io.h")
+        @CppName(wio::runtime::std_io::PrintUSize)
+        fn Print(value: usize) -> i32;
+
+        @Native
+        @CppHeader("std_io.h")
+        @CppName(wio::runtime::std_io::PrintF32)
+        fn Print(value: f32) -> i32;
+
+        @Native
+        @CppHeader("std_io.h")
+        @CppName(wio::runtime::std_io::PrintF64)
+        fn Print(value: f64) -> i32;
+
+        fn PrintLine(value: string) -> i32 {
+            Print(value);
+            return Print("\n");
+        }
+    }
+}

@@ -1645,23 +1645,32 @@ namespace wio::codegen
     {
         if (auto sym = node.referencedSymbol.Lock())
         {
-            if (sym->kind == sema::SymbolKind::Namespace && node.token.value == "std")
-            {
-                emit("wio::runtime");
-                return;
-            }
-            
-            if (sym->flags.get_isStd() && (sym->kind == sema::SymbolKind::Function || sym->kind == sema::SymbolKind::FunctionGroup))
-            {
-                emit("b" + node.token.value);
-                return;
-            }
-
             if (sym->kind == sema::SymbolKind::Function)
             {
                 auto funcType = sym->type.AsFast<sema::FunctionType>();
                 emit(Mangler::mangleFunction(sym->name, funcType->paramTypes, sym->scopePath));
                 return;
+            }
+
+            if (sym->kind == sema::SymbolKind::FunctionGroup)
+            {
+                auto selectedType = node.refType.Lock();
+                if (!selectedType || selectedType->kind() != sema::TypeKind::Function)
+                {
+                    if (!sym->overloads.empty())
+                        selectedType = sym->overloads.front()->type;
+                }
+
+                std::string scopePath = sym->scopePath;
+                if (scopePath.empty() && !sym->overloads.empty())
+                    scopePath = sym->overloads.front()->scopePath;
+
+                if (selectedType && selectedType->kind() == sema::TypeKind::Function)
+                {
+                    auto funcType = selectedType.AsFast<sema::FunctionType>();
+                    emit(Mangler::mangleFunction(sym->name, funcType->paramTypes, scopePath));
+                    return;
+                }
             }
             
             if (sym->kind == sema::SymbolKind::Variable && sym->flags.get_isGlobal())
@@ -1715,20 +1724,82 @@ namespace wio::codegen
                 return;
             }
 
+            if (auto memberSym = node.member->referencedSymbol.Lock();
+                memberSym && memberSym->kind == sema::SymbolKind::FunctionGroup)
+            {
+                auto selectedType = node.refType.Lock();
+                if (!selectedType || selectedType->kind() != sema::TypeKind::Function)
+                    selectedType = node.member->refType.Lock();
+                if (!selectedType || selectedType->kind() != sema::TypeKind::Function)
+                {
+                    if (!memberSym->overloads.empty())
+                        selectedType = memberSym->overloads.front()->type;
+                }
+
+                std::string scopePath = memberSym->scopePath;
+                if (scopePath.empty() && !memberSym->overloads.empty())
+                    scopePath = memberSym->overloads.front()->scopePath;
+
+                if (selectedType && selectedType->kind() == sema::TypeKind::Function)
+                {
+                    auto funcType = selectedType.AsFast<sema::FunctionType>();
+                    emit(Mangler::mangleFunction(memberSym->name, funcType->paramTypes));
+                    return;
+                }
+            }
+
+            if (auto memberSym = node.member->referencedSymbol.Lock();
+                memberSym && memberSym->kind == sema::SymbolKind::Struct)
+            {
+                emit(Mangler::mangleStruct(memberSym->name, memberSym->scopePath));
+                return;
+            }
+
             node.member->accept(*this);
         };
 
         if (auto objSym = node.object->referencedSymbol.Lock();
-            objSym && objSym->kind == sema::SymbolKind::Namespace && objSym->flags.get_isStd())
+            objSym && objSym->kind == sema::SymbolKind::Namespace)
         {
-            emit("wio::runtime::io::");
-            node.member->accept(*this);
-            return;
-        }
+            if (auto memberSym = node.member->referencedSymbol.Lock())
+            {
+                if (memberSym->kind == sema::SymbolKind::Function)
+                {
+                    auto funcType = node.refType.Lock();
+                    if (!funcType || funcType->kind() != sema::TypeKind::Function)
+                        funcType = memberSym->type;
 
-        if (auto objSym = node.object->referencedSymbol.Lock();
-            objSym && objSym->kind == sema::SymbolKind::Namespace && objSym->name != "std")
-        {
+                    if (funcType && funcType->kind() == sema::TypeKind::Function)
+                    {
+                        emit(Mangler::mangleFunction(memberSym->name, funcType.AsFast<sema::FunctionType>()->paramTypes, memberSym->scopePath));
+                        return;
+                    }
+                }
+                else if (memberSym->kind == sema::SymbolKind::FunctionGroup)
+                {
+                    auto selectedType = node.refType.Lock();
+                    if (!selectedType || selectedType->kind() != sema::TypeKind::Function)
+                        selectedType = node.member->refType.Lock();
+                    if ((!selectedType || selectedType->kind() != sema::TypeKind::Function) && !memberSym->overloads.empty())
+                        selectedType = memberSym->overloads.front()->type;
+
+                    std::string scopePath = memberSym->scopePath;
+                    if (scopePath.empty() && !memberSym->overloads.empty())
+                        scopePath = memberSym->overloads.front()->scopePath;
+
+                    if (selectedType && selectedType->kind() == sema::TypeKind::Function)
+                    {
+                        emit(Mangler::mangleFunction(memberSym->name, selectedType.AsFast<sema::FunctionType>()->paramTypes, scopePath));
+                        return;
+                    }
+                }
+                else if (memberSym->kind == sema::SymbolKind::Struct)
+                {
+                    emit(Mangler::mangleStruct(memberSym->name, memberSym->scopePath));
+                    return;
+                }
+            }
+
             node.member->accept(*this);
             return;
         }
@@ -1824,6 +1895,7 @@ namespace wio::codegen
     void CppGenerator::visit(FunctionCallExpression& node)
     {
         auto calleeType = node.callee->refType.Lock();
+        auto calleeSym = node.callee->referencedSymbol.Lock();
         
         if (calleeType && calleeType->kind() == sema::TypeKind::Struct)
         {
@@ -1852,8 +1924,7 @@ namespace wio::codegen
         {
             functionType = calleeType.AsFast<sema::FunctionType>();
         }
-        else if (auto calleeSym = node.callee->referencedSymbol.Lock();
-                 calleeSym && calleeSym->type && calleeSym->type->kind() == sema::TypeKind::Function)
+        else if (calleeSym && calleeSym->type && calleeSym->type->kind() == sema::TypeKind::Function)
         {
             functionType = calleeSym->type.AsFast<sema::FunctionType>();
         }
@@ -1894,7 +1965,51 @@ namespace wio::codegen
             argument->accept(*this);
         };
 
-        node.callee->accept(*this);
+        bool shouldEmitDirectFunctionCallee = false;
+        if (calleeSym &&
+            (calleeSym->kind == sema::SymbolKind::Function || calleeSym->kind == sema::SymbolKind::FunctionGroup) &&
+            functionType)
+        {
+            if (node.callee->is<Identifier>())
+            {
+                shouldEmitDirectFunctionCallee = true;
+            }
+            else if (const auto* memberAccess = node.callee->as<MemberAccessExpression>())
+            {
+                if (auto objectSym = memberAccess->object->referencedSymbol.Lock();
+                    objectSym && objectSym->kind == sema::SymbolKind::Namespace)
+                {
+                    shouldEmitDirectFunctionCallee = true;
+                }
+            }
+        }
+
+        if (shouldEmitDirectFunctionCallee)
+        {
+            std::string scopePath = calleeSym->scopePath;
+            if (scopePath.empty() && calleeSym->kind == sema::SymbolKind::FunctionGroup && !calleeSym->overloads.empty())
+                scopePath = calleeSym->overloads.front()->scopePath;
+
+            Ref<sema::FunctionType> mangledFunctionType = functionType;
+            if (!calleeSym->genericParameterNames.empty())
+            {
+                Ref<sema::Type> declarationType = calleeSym->type;
+                if ((!declarationType || declarationType->kind() != sema::TypeKind::Function) &&
+                    calleeSym->kind == sema::SymbolKind::FunctionGroup && !calleeSym->overloads.empty())
+                {
+                    declarationType = calleeSym->overloads.front()->type;
+                }
+
+                if (declarationType && declarationType->kind() == sema::TypeKind::Function)
+                    mangledFunctionType = declarationType.AsFast<sema::FunctionType>();
+            }
+
+            emit(Mangler::mangleFunction(calleeSym->name, mangledFunctionType->paramTypes, scopePath));
+        }
+        else
+        {
+            node.callee->accept(*this);
+        }
         if (!node.explicitTypeArguments.empty())
         {
             emit("<");
@@ -3543,12 +3658,6 @@ namespace wio::codegen
 
     void CppGenerator::visit(UseStatement& node)
     {
-        if (node.isStdLib)
-        {
-            if (node.modulePath == "io")
-            {
-                emitHeaderLine("#include \"io.h\"");
-            }
-        }
+        WIO_UNUSED(node);
     }
 }

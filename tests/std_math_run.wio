@@ -1,0 +1,14 @@
+use std::io as console;
+use std::math as math;
+
+fn Entry(args: string[]) -> i32 {
+    let floatLeft: f32 = 1.5f;
+    let floatRight: f32 = 2.5f;
+    let minValue = math::Min(7, 3);
+    let clampValue = math::Clamp(15, 0, 10);
+    let absValue = math::Abs(-4);
+    let floatMax = math::Max(floatLeft, floatRight);
+
+    console::Print($"Std math: ${minValue}/${clampValue}/${absValue}/${floatMax}");
+    return 0;
+}

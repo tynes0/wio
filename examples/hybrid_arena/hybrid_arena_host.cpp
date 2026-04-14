@@ -346,19 +346,18 @@ int main(int argc, char** argv)
     apiB->unload();
 
     std::cout
-        << "Hybrid arena summary: start=" << startState.health << "/" << startState.shield << "/" << startState.rage << "/" << startState.phase
-        << " afterTickA=" << afterTickA.health << "/" << afterTickA.shield << "/" << afterTickA.rage << "/" << afterTickA.phase
-        << " pulseA=" << afterTickA.pulse
-        << " afterHitA=" << afterHitAHealth
-        << " restore=" << restoreResult
-        << " afterTickB=" << afterTickB.health << "/" << afterTickB.shield << "/" << afterTickB.rage << "/" << afterTickB.phase
-        << " pulseB=" << afterTickB.pulse
-        << " final=" << finalHealth << "/" << finalState.shield << "/" << finalState.rage << "/" << finalState.phase
-        << " threat=" << threat
-        << " alive=" << alive
-        << " v" << version
-        << " load=" << loadResultA
-        << '\n';
+        << "Hybrid arena summary:\nstart=" << startState.health << "/" << startState.shield << "/" << startState.rage << "/" << startState.phase << '\n'
+        << "afterTickA=" << afterTickA.health << "/" << afterTickA.shield << "/" << afterTickA.rage << "/" << afterTickA.phase << '\n'
+        << "pulseA=" << afterTickA.pulse << '\n'
+        << "afterHitA=" << afterHitAHealth << '\n'
+        << "restore=" << restoreResult << '\n'
+        << "afterTickB=" << afterTickB.health << "/" << afterTickB.shield << "/" << afterTickB.rage << "/" << afterTickB.phase << '\n'
+        << "pulseB=" << afterTickB.pulse << '\n'
+        << "final=" << finalHealth << "/" << finalState.shield << "/" << finalState.rage << "/" << finalState.phase << '\n'
+        << "threat=" << threat << '\n'
+        << "alive=" << alive << '\n'
+        << "v" << version << '\n'
+        << "load=" << loadResultA << '\n';
 
     closeModule(moduleB);
     return EXIT_SUCCESS;

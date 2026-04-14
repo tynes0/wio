@@ -185,8 +185,10 @@ The language reference now exists, but it still needs to become a true spec.
       front-end monomorphization.
 - [x] Add initial end-to-end tests for generic value passing, generic
       references, mismatch diagnostics, and unsupported generic methods.
-- [ ] Design generic type declarations for `object`, `component`, `interface`,
-      `enum`, and aliases.
+  - [~] Freeze the v1 generic type-declaration surface.
+    - [x] Support generic `object`, `component`, `interface`, and alias
+          declarations.
+    - [x] Keep generic `enum`, `flagset`, and `flag` declarations out of v1.
 - [x] Broaden the first generic type-declaration slice beyond aliases:
       generic `component`, generic `object`, and generic `interface`
       declarations with explicit type arguments at use sites.
@@ -201,31 +203,30 @@ The language reference now exists, but it still needs to become a true spec.
   - [x] Allow constructor-based deduction for generic `component`
         construction when `OnConstruct(...)` parameters fully determine all
         generic slots.
-  - [ ] Decide whether zero-argument constructors may ever infer from expected
-        type context, or must stay explicit.
-- [ ] Define runtime type identity for generic objects/interfaces so
-      specialization-aware `is`, `fit`, export metadata, and hot-reload lookup
-      stay sound.
-- [ ] Extend generic functions with explicit type arguments at call sites when
-      inference is insufficient.
-- [~] Support generic methods after object/component/interface method lowering
-      rules are clear.
-  - [x] Allow generic methods on `object` declarations.
-  - [ ] Decide whether `component` generic methods should exist at all.
-  - [ ] Keep generic `interface` methods unsupported unless the lowering model
-        stops depending on C++ virtual templates.
-  - [ ] Keep generic constructors/destructors unsupported until constructor
-        deduction and specialization rules are explicit.
-- [ ] Decide whether Wio should ever support front-end monomorphization in
-      addition to backend C++ template lowering.
-- [ ] Define generic constraint syntax, if any, before exposing advanced type
-      relations.
-- [~] Broaden overload resolution tests for generic-vs-concrete preference,
-      ambiguous generic overloads, and mixed namespace/module calls.
-  - [x] Cover concrete-vs-generic preference.
-  - [x] Cover specialized-generic-vs-broad-generic preference.
-  - [x] Cover explicit type-argument calls preferring the generic overload.
-  - [ ] Add broader mixed realm/module and conversion-heavy overload cases.
+  - [x] Allow zero-argument generic constructors to infer from expected type
+        context in variable initialization, assignment, and return positions.
+  - [x] Treat generic specializations as distinct runtime types so
+        specialization-aware `is`, `fit`, export metadata, and hot-reload lookup
+        stay sound.
+  - [x] Support explicit type arguments at generic function call sites when
+        inference is insufficient.
+  - [~] Support generic methods after object/component/interface method lowering
+        rules are clear.
+    - [x] Allow generic methods on `object` declarations.
+    - [x] Keep `component` generic methods out of v1.
+    - [x] Keep generic `interface` methods unsupported in v1 unless the
+          lowering model stops depending on C++ virtual templates.
+    - [x] Keep generic constructors/destructors unsupported in v1.
+  - [x] Keep v1 generic lowering backend-template-based only; no front-end
+        monomorphization.
+  - [x] Keep v1 free of generic constraint syntax.
+  - [~] Broaden overload resolution tests for generic-vs-concrete preference,
+        ambiguous generic overloads, and mixed namespace/module calls.
+    - [x] Cover concrete-vs-generic preference.
+    - [x] Cover specialized-generic-vs-broad-generic preference.
+    - [x] Cover explicit type-argument calls preferring the generic overload.
+    - [x] Cover broader generic preference over pure numeric conversion.
+    - [ ] Add broader mixed realm/module and conversion-heavy overload cases.
 - [x] Allow generic `@Native` functions only through explicit concrete
       `@Instantiate(...)` instance lists.
 - [x] Allow generic `@Export` functions only through explicit concrete
@@ -236,17 +237,24 @@ The language reference now exists, but it still needs to become a true spec.
       `@Instantiate(...)` specialization.
 - [x] Validate each generic `@Export` instantiation against the primitive C ABI
       surface before codegen.
+- [x] Treat `@Instantiate(...)` as a hard call-site whitelist for generic
+      `@Native` / `@Export` functions, so undeclared specializations are
+      rejected during semantic analysis.
 - [x] Require generic exported instances to derive concrete C ABI symbol names
       from the base export symbol plus concrete type mangling.
-- [ ] Decide whether the long-term explicit-instantiation syntax should stay
-      attribute-based or evolve into dedicated `instantiate` declarations.
-- [ ] Decide whether generic native bridging should assume header-only template
-      definitions, or grow a stronger model for separately compiled template
-      instantiations.
-- [ ] Define long-term ABI stability/versioning rules for exported generic
-      instances, including what hosts may rely on in symbol names.
-- [ ] Decide whether generic defaults and partial specialization will ever
-      exist.
+  - [x] Keep v1 explicit instantiation attribute-based via `@Instantiate(...)`,
+        including multi-parameter specialization lists such as
+        `@Instantiate(i32, bool)`.
+  - [ ] Decide whether the long-term explicit-instantiation syntax should stay
+        attribute-based or evolve into dedicated `instantiate` declarations.
+  - [x] Assume header-only template definitions for v1 generic native bridging.
+  - [ ] Design a stronger model for separately compiled template instantiations
+        in v2+.
+  - [ ] Define long-term ABI stability/versioning rules for exported generic
+        instances, including what hosts may rely on in symbol names.
+  - [x] Keep generic defaults and partial specialization out of v1.
+  - [ ] Decide whether generic defaults and partial specialization will ever
+        exist in later versions.
 - [ ] Add end-to-end examples such as `Array<T>`, `Result<T>`, `Pair<K, V>`,
       generic utility functions, and container-oriented generic loops once the
       rest of the surface is frozen.

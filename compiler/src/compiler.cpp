@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <filesystem>
+#include <optional>
 #include <string_view>
 #include <sstream>
 #include <unordered_map>
@@ -37,6 +38,15 @@ namespace wio
         {
 #ifdef WIO_RUNTIME_INCLUDE_DIR
             return std::filesystem::path(WIO_RUNTIME_INCLUDE_DIR);
+#else
+            return {};
+#endif
+        }
+
+        std::filesystem::path getStdSourceDir()
+        {
+#ifdef WIO_STD_SOURCE_DIR
+            return std::filesystem::path(WIO_STD_SOURCE_DIR);
 #else
             return {};
 #endif
@@ -260,6 +270,77 @@ namespace wio
 
             return exportedSymbols;
         }
+
+        std::vector<std::filesystem::path> getUserModuleSearchDirs()
+        {
+            std::vector<std::filesystem::path> searchDirs;
+            std::vector<std::string> configuredDirs = gAppData.argParser.GetValuesOf<std::string>("MODULE-DIR");
+            searchDirs.reserve(configuredDirs.size());
+
+            for (const auto& configuredDir : configuredDirs)
+            {
+                if (configuredDir.empty())
+                    continue;
+
+                searchDirs.push_back(std::filesystem::absolute(std::filesystem::path(configuredDir)).make_preferred());
+            }
+
+            return searchDirs;
+        }
+
+        std::vector<std::filesystem::path> buildModuleSearchRoots(bool isStdLib, const std::filesystem::path& currentDir)
+        {
+            std::vector<std::filesystem::path> roots;
+
+            if (isStdLib)
+            {
+                std::filesystem::path stdSourceDir = getStdSourceDir();
+                if (!stdSourceDir.empty())
+                    roots.push_back(std::filesystem::absolute(stdSourceDir).make_preferred());
+
+                return roots;
+            }
+
+            roots.push_back(std::filesystem::absolute(currentDir).make_preferred());
+
+            for (const auto& searchDir : getUserModuleSearchDirs())
+            {
+                if (std::ranges::find(roots, searchDir) == roots.end())
+                    roots.push_back(searchDir);
+            }
+
+            return roots;
+        }
+
+        std::optional<std::filesystem::path> resolveModuleSourcePath(const std::string& modulePath, bool isStdLib, const std::filesystem::path& currentDir)
+        {
+            const std::filesystem::path relativeModulePath = std::filesystem::path(modulePath + ".wio").make_preferred();
+
+            for (const auto& searchRoot : buildModuleSearchRoots(isStdLib, currentDir))
+            {
+                std::filesystem::path candidatePath = (searchRoot / relativeModulePath).make_preferred();
+                std::error_code ec;
+                if (std::filesystem::exists(candidatePath, ec) && !ec)
+                    return std::filesystem::absolute(candidatePath).make_preferred();
+            }
+
+            return std::nullopt;
+        }
+
+        std::string formatModuleSearchRoots(bool isStdLib, const std::filesystem::path& currentDir)
+        {
+            std::string formattedRoots;
+            const auto roots = buildModuleSearchRoots(isStdLib, currentDir);
+
+            for (size_t i = 0; i < roots.size(); ++i)
+            {
+                formattedRoots += roots[i].string();
+                if (i + 1 < roots.size())
+                    formattedRoots += ", ";
+            }
+
+            return formattedRoots;
+        }
     }
     
     Compiler::Compiler()
@@ -336,6 +417,12 @@ namespace wio
                     .AddAlias("--include-dir")
                     .MultiValue()
                     .SetDescription("Adds an extra include directory for the backend C++ compiler.")
+            )
+            .Add(
+                Argonaut::Argument("MODULE-DIR")
+                    .AddAlias("--module-dir")
+                    .MultiValue()
+                    .SetDescription("Adds an extra Wio module search directory for user imports.")
             )
             .Add(
                 Argonaut::Argument("LINK-DIR")
@@ -482,7 +569,16 @@ namespace wio
                     {
                         if (!gAppData.flags.get_NoBuiltin())
                         {
-                            finalStatements.push_back(std::move(stmt));
+                            std::vector<std::string> importedSymbols;
+                            auto moduleProg = parseAndMerge(useStmt->modulePath, true, sourcePath.parent_path(), &importedSymbols);
+                            for (auto& modStmt : moduleProg->statements)
+                                finalStatements.push_back(std::move(modStmt));
+
+                            if (!useStmt->aliasName.empty())
+                            {
+                                useStmt->importedSymbols = std::move(importedSymbols);
+                                finalStatements.push_back(std::move(stmt));
+                            }
                         }
                     }
                     else
@@ -728,15 +824,22 @@ namespace wio
 
     Ref<Program> Compiler::parseAndMerge(const std::string& modulePath, bool isStdLib, const std::filesystem::path& currentDir, std::vector<std::string>* exportedSymbols)
     {
-        if (isStdLib)
+        std::optional<std::filesystem::path> resolvedModulePath = resolveModuleSourcePath(modulePath, isStdLib, currentDir);
+        if (!resolvedModulePath.has_value())
         {
+            WIO_LOG_ERROR(
+                "Module file was not found: {}.wio (searched in: {})",
+                modulePath,
+                formatModuleSearchRoots(isStdLib, currentDir)
+            );
+
             if (exportedSymbols)
                 exportedSymbols->clear();
             return makeNodePtr<Program>(std::vector<NodePtr<Statement>>{});
         }
 
-        std::filesystem::path actualPath = currentDir / (modulePath + ".wio");
-        std::string absolutePath = std::filesystem::absolute(actualPath).string();
+        std::filesystem::path actualPath = filesystem::getCanonicalPath(*resolvedModulePath).make_preferred();
+        std::string absolutePath = actualPath.string();
 
         if (gAppData.loadedModules.contains(absolutePath))
         {
