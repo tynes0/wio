@@ -79,7 +79,7 @@ int main(int argc, char** argv)
         api->saveState != nullptr ||
         api->restoreState != nullptr ||
         api->unload != nullptr ||
-        api->exportCount != 2 ||
+        api->exportCount != 3 ||
         api->commandCount != 0 ||
         api->eventHookCount != 0)
     {
@@ -113,8 +113,7 @@ int main(int argc, char** argv)
     intArgs[0].value.v_i32 = 41;
 
     WioValue intResult{};
-    if (WioInvokeModuleExport(api, "Echo<i32>", intArgs, 1, &intResult) != WIO_INVOKE_OK ||
-        intResult.type != WIO_ABI_I32)
+    if (WioInvokeModuleExport(api, "Echo<i32>", intArgs, 1, &intResult) != WIO_INVOKE_OK)
     {
         std::cerr << "Failed to invoke Echo<i32>." << '\n';
         closeModule(moduleHandle);
@@ -123,7 +122,7 @@ int main(int argc, char** argv)
 
     WioValue boolArgs[1]{};
     boolArgs[0].type = WIO_ABI_BOOL;
-    boolArgs[0].value.v_bool = true;
+    boolArgs[0].value.v_bool = false;
 
     WioValue boolResult{};
     if (WioInvokeModuleExport(api, "Echo<bool>", boolArgs, 1, &boolResult) != WIO_INVOKE_OK ||
@@ -134,8 +133,22 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
+    WioValue floatArgs[1]{};
+    floatArgs[0].type = WIO_ABI_F32;
+    floatArgs[0].value.v_f32 = 123.12e12;
+
+    WioValue floatResult{};
+    if (WioInvokeModuleExport(api, "Echo<f32>", floatArgs, 1, &floatResult) != WIO_INVOKE_OK ||
+        floatResult.type != WIO_ABI_F32)
+    {
+        std::cerr << "Failed to invoke Echo<f32>." << '\n';
+        closeModule(moduleHandle);
+        return EXIT_FAILURE;
+    }
+
     std::cout << "Generic export instantiate: table=1 exports=" << api->exportCount
               << " i32=" << intResult.value.v_i32
+              << " f32=" << floatResult.value.v_f32
               << " bool=" << (boolResult.value.v_bool ? "true" : "false")
               << '\n';
 

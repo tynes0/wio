@@ -79,8 +79,6 @@ namespace wio
 
     FrenumClassInNamespace(wio, Attribute ,uint8_t,
         Unknown,
-        CppNamespaceStart,
-        CppNamespaceEnd,
         ReadOnly,
         Default,
         NoDefaultCtor,

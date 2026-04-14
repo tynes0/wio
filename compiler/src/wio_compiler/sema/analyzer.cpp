@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <optional>
+#include <ranges>
 #include <unordered_set>
 
 #include "wio/common/exception.h"
@@ -131,6 +132,7 @@ namespace wio::sema
             if (!current)
                 return false;
 
+            // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
             switch (current->kind())
             {
             case TypeKind::GenericParameter:
@@ -183,6 +185,7 @@ namespace wio::sema
             if (!current)
                 return false;
 
+            // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
             switch (current->kind())
             {
             case TypeKind::GenericParameter:
@@ -270,7 +273,8 @@ namespace wio::sema
                 return nullptr;
 
             auto& ctx = Compiler::get().getTypeContext();
-
+            
+            // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
             switch (current->kind())
             {
             case TypeKind::GenericParameter:
@@ -750,6 +754,7 @@ namespace wio::sema
 
         const char* getModuleLifecycleAttributeName(Attribute attribute)
         {
+            // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
             switch (attribute)
             {
             case Attribute::ModuleApiVersion: return "@ModuleApiVersion";
@@ -948,9 +953,9 @@ namespace wio::sema
             node.name.type == TokenType::identifier &&
             node.name.value.find("::") == std::string::npos)
         {
-            for (auto it = genericTypeParameterScopes_.rbegin(); it != genericTypeParameterScopes_.rend(); ++it)
+            for (auto& genericTypeParameterScope : std::ranges::reverse_view(genericTypeParameterScopes_))
             {
-                if (auto genericTypeIt = it->find(node.name.value); genericTypeIt != it->end())
+                if (auto genericTypeIt = genericTypeParameterScope.find(node.name.value); genericTypeIt != genericTypeParameterScope.end())
                 {
                     type = genericTypeIt->second;
                     break;
@@ -1903,7 +1908,12 @@ namespace wio::sema
                         isGenericCandidate,
                         activeGenericParameterNames.size()
                     ); score.has_value())
-                    return ResolvedFunctionCandidate{ overload, resolvedFunctionType, *score, bindings };
+                    return ResolvedFunctionCandidate{
+                        .symbol = overload,
+                        .functionType = resolvedFunctionType,
+                        .score = *score,
+                        .genericBindings = bindings
+                    };
 
                 return std::nullopt;
             };
@@ -2623,7 +2633,8 @@ namespace wio::sema
         {
             Attribute lifecycleAttribute = moduleLifecycleAttributes.front();
             bool* seenLifecycleFlag = nullptr;
-
+            
+            // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
             switch (lifecycleAttribute)
             {
             case Attribute::ModuleApiVersion: seenLifecycleFlag = &seenModuleApiVersion_; break;
@@ -2702,6 +2713,7 @@ namespace wio::sema
                 );
             }
 
+            // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
             switch (lifecycleAttribute)
             {
             case Attribute::ModuleApiVersion:
@@ -2842,9 +2854,8 @@ namespace wio::sema
                 bool isValidInstantiation = true;
                 std::string instantiationSignature;
 
-                for (size_t i = 0; i < instantiateAttribute->typeArgs.size(); ++i)
+                for (const auto& typeSpecifier : instantiateAttribute->typeArgs)
                 {
-                    auto typeSpecifier = instantiateAttribute->typeArgs[i];
                     if (!typeSpecifier)
                     {
                         WIO_LOG_ADD_ERROR(node.location(), "@Instantiate expects concrete type arguments, not raw tokens.");
@@ -3435,7 +3446,7 @@ namespace wio::sema
             {
                 if (auto baseType = resolveBaseType(baseArg))
                 {
-                    structType->baseTypes.push_back(baseType);
+                    structType->baseTypes.emplace_back(baseType);
                     resolvedBaseTypes.push_back(baseType);
                     
                     if (!baseType->isInterface)
@@ -3989,7 +4000,7 @@ namespace wio::sema
                     }
                     else
                     {
-                        node.bindingAccessors.push_back("__index__");
+                        node.bindingAccessors.emplace_back("__index__");
                         createBindingSymbol(node.bindings[0], indexType, getBindingMode(0));
 
                         for (size_t i = 1; i < node.bindings.size(); ++i)

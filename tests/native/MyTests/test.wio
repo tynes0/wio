@@ -1,0 +1,3 @@
+use std::io as console;
+
+@Export

@@ -164,7 +164,8 @@ namespace wio::codegen
                 return nullptr;
 
             auto& ctx = Compiler::get().getTypeContext();
-
+            
+            // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
             switch (current->kind())
             {
             case sema::TypeKind::GenericParameter:
@@ -442,6 +443,7 @@ namespace wio::codegen
                 if (!attr)
                     continue;
 
+                // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
                 switch (attr->attribute)
                 {
                 case Attribute::ModuleApiVersion:
@@ -471,6 +473,7 @@ namespace wio::codegen
         {
             if (std::optional<Attribute> lifecycleAttribute = getModuleLifecycleAttribute(node); lifecycleAttribute.has_value())
             {
+                // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
                 switch (*lifecycleAttribute)
                 {
                 case Attribute::ModuleApiVersion: return "WioModuleApiVersion";
@@ -599,6 +602,7 @@ namespace wio::codegen
 
                 if (std::optional<Attribute> lifecycleAttribute = getModuleLifecycleAttribute(*fnDecl); lifecycleAttribute.has_value())
                 {
+                    // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
                     switch (*lifecycleAttribute)
                     {
                     case Attribute::ModuleApiVersion: setLifecycleFunctionIfEmpty(lifecycleFunctions.apiVersion, fnDecl); break;
@@ -1001,6 +1005,7 @@ namespace wio::codegen
                     : ("WIO_EXPORT_PARAM_TYPES_" + std::to_string(i));
                 std::string suffix = (i + 1 < exportedFunctions.size()) ? "," : "";
 
+                // TODO: USE FORMAT
                 emitLine(
                     "{ \"" + common::wioStringToEscapedCppString(exportInfo.logicalName) +
                     "\", \"" + common::wioStringToEscapedCppString(exportInfo.symbolName) +
@@ -1234,35 +1239,35 @@ namespace wio::codegen
 
         emitPhase(emitPhase, statements, [&](const auto& stmt)
         {
-            if (stmt->is<UseStatement>())
+            if (stmt->template is<UseStatement>())
                 stmt->accept(*this);
         });
 
         emitPhase(emitPhase, statements, [&](const auto& stmt)
         {
-            if (stmt->is<EnumDeclaration>() || stmt->is<FlagsetDeclaration>() || stmt->is<FlagDeclaration>())
+            if (stmt->template is<EnumDeclaration>() || stmt->template is<FlagsetDeclaration>() || stmt->template is<FlagDeclaration>())
                 stmt->accept(*this);
         });
 
         emitPhase(emitPhase, statements, [&](const auto& stmt)
         {
-            if (stmt->is<ComponentDeclaration>())
+            if (stmt->template is<ComponentDeclaration>())
             {
-                auto declaration = stmt->as<ComponentDeclaration>();
+                auto declaration = stmt->template as<ComponentDeclaration>();
                 auto sym = declaration->name->referencedSymbol.Lock();
                 emitTemplateForwardDeclarationPrefix(declaration->genericParameters);
                 emitLine(std::format("struct {};", Mangler::mangleStruct(declaration->name->token.value, sym ? sym->scopePath : "")));
             }
-            else if (stmt->is<ObjectDeclaration>())
+            else if (stmt->template is<ObjectDeclaration>())
             {
-                auto declaration = stmt->as<ObjectDeclaration>();
+                auto declaration = stmt->template as<ObjectDeclaration>();
                 auto sym = declaration->name->referencedSymbol.Lock();
                 emitTemplateForwardDeclarationPrefix(declaration->genericParameters);
                 emitLine(std::format("struct {};", Mangler::mangleStruct(declaration->name->token.value, sym ? sym->scopePath : "")));
             }
-            else if (stmt->is<InterfaceDeclaration>())
+            else if (stmt->template is<InterfaceDeclaration>())
             {
-                auto declaration = stmt->as<InterfaceDeclaration>();
+                auto declaration = stmt->template as<InterfaceDeclaration>();
                 auto sym = declaration->name->referencedSymbol.Lock();
                 emitTemplateForwardDeclarationPrefix(declaration->genericParameters);
                 emitLine(std::format("struct {};", Mangler::mangleInterface(declaration->name->token.value, sym ? sym->scopePath : "")));
@@ -1271,27 +1276,27 @@ namespace wio::codegen
 
         emitPhase(emitPhase, statements, [&](const auto& stmt)
         {
-            if (stmt->is<InterfaceDeclaration>() || stmt->is<ComponentDeclaration>() || stmt->is<ObjectDeclaration>())
+            if (stmt->template is<InterfaceDeclaration>() || stmt->template is<ComponentDeclaration>() || stmt->template is<ObjectDeclaration>())
                 stmt->accept(*this);
         });
 
         emitPhase(emitPhase, statements, [&](const auto& stmt)
         {
-            if (stmt->is<VariableDeclaration>())
+            if (stmt->template is<VariableDeclaration>())
                 stmt->accept(*this);
         });
 
         isEmittingPrototypes_ = true;
         emitPhase(emitPhase, statements, [&](const auto& stmt)
         {
-            if (stmt->is<FunctionDeclaration>())
+            if (stmt->template is<FunctionDeclaration>())
                 stmt->accept(*this);
         });
         isEmittingPrototypes_ = false;
 
         emitPhase(emitPhase, statements, [&](const auto& stmt)
         {
-            if (stmt->is<FunctionDeclaration>())
+            if (stmt->template is<FunctionDeclaration>())
                 stmt->accept(*this);
         });
     }
@@ -1364,8 +1369,7 @@ namespace wio::codegen
             node.left->accept(*this);
             
             bool isFatPointer = false;
-            const auto& lhsType = node.left->refType.Lock();
-            if (lhsType)
+            if (const auto& lhsType = node.left->refType.Lock())
             {
                 auto baseType = lhsType;
                 while (baseType && baseType->kind() == sema::TypeKind::Alias)
@@ -2000,18 +2004,9 @@ namespace wio::codegen
         if (srcType->isNumeric() && destType->isNumeric())
         {
             std::string cppDestType = destType->toCppString();
-            if (isFloatingPointType(srcType) || isFloatingPointType(destType))
-            {
-                emit("wio::FitNumeric<" + cppDestType + ">(");
-                node.operand->accept(*this);
-                emit(")");
-            }
-            else
-            {
-                emit("wio::FitNumeric<" + cppDestType + ">(");
-                node.operand->accept(*this);
-                emit(")");
-            }
+            emit("wio::FitNumeric<" + cppDestType + ">(");
+            node.operand->accept(*this);
+            emit(")");
         }
         else
         {
@@ -3351,8 +3346,7 @@ namespace wio::codegen
         };
 
         const bool explicitIndexBinding = !node.bindingAccessors.empty() && node.bindingAccessors.front() == "__index__";
-        const bool usesIndexedArrayLoop = isArrayIterable() && (explicitIndexBinding || node.step != nullptr);
-        if (usesIndexedArrayLoop)
+        if (isArrayIterable() && (explicitIndexBinding || node.step != nullptr))
         {
             emitLine("{");
             indent();
