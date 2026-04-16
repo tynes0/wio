@@ -4351,6 +4351,7 @@ namespace wio::sema
     void SemanticAnalyzer::visit(UseStatement& node)
     {
         if (!isDeclarationPass_) return;
+        if (node.isCppHeader) return;
         
         auto getOrCreateNamespace = [&](const Ref<Scope>& targetScope, const std::string& name) -> Ref<Symbol>
         {

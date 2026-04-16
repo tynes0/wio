@@ -768,8 +768,9 @@ namespace wio
         std::string aliasName;
         std::vector<std::string> importedSymbols;
         bool isStdLib = false;
+        bool isCppHeader = false;
         
-        explicit UseStatement(std::string _moduleName, std::string _modulePath, std::string _aliasName, bool _isStdLib, common::Location _loc = common::Location::invalid());
+        explicit UseStatement(std::string _moduleName, std::string _modulePath, std::string _aliasName, bool _isStdLib, bool _isCppHeader, common::Location _loc = common::Location::invalid());
         ~UseStatement() override;
     };
 

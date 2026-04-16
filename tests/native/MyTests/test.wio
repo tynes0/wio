@@ -1,3 +1,11 @@
-use std::io as console;
+use std::io2 as console;
+use @CppHeader("test.h");
 
-@Export
+@Native
+@CppName(Math::Pow)
+fn Pow(x: f32, y: f32) -> f32;
+
+fn Entry() -> i32
+{
+    console::Print($"Value: ${ Pow(5, 2) }");
+}

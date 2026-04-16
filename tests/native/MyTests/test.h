@@ -1,7 +1,9 @@
 #include <cmath>
 
-template <class T>
-T MYADD(T b, T e)
+namespace Math
 {
-    return b + e;
+    float Pow(float x, float y)
+    {
+        return ::pow(x, y);
+    }
 }

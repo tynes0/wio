@@ -1,0 +1,27 @@
+realm std {
+    realm io2 {
+        @Native
+        @CppHeader("std_io.h")
+        @CppName(wio::runtime::std_io::WriteValue)
+        @Instantiate(string)
+        @Instantiate(bool)
+        @Instantiate(char)
+        @Instantiate(i8)
+        @Instantiate(i16)
+        @Instantiate(i32)
+        @Instantiate(i64)
+        @Instantiate(u8)
+        @Instantiate(u16)
+        @Instantiate(u32)
+        @Instantiate(u64)
+        @Instantiate(f32)
+        @Instantiate(f64)
+        fn Print<T>(value: T) -> i32;
+
+        fn PrintLine<T>(value: T) -> i32 {
+            let result = Print<T>(value);
+            Print("\n");
+            return result;
+        }
+    }
+}

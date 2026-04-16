@@ -354,8 +354,8 @@ namespace wio
 
     ReturnStatement::~ReturnStatement() = default;
 
-    UseStatement::UseStatement(std::string _moduleName, std::string _modulePath, std::string _aliasName, bool _isStdLib, common::Location _loc)
-        : Statement(_loc), moduleName(std::move(_moduleName)), modulePath(std::move(_modulePath)), aliasName(std::move(_aliasName)), isStdLib(_isStdLib)
+    UseStatement::UseStatement(std::string _moduleName, std::string _modulePath, std::string _aliasName, bool _isStdLib, bool _isCppHeader, common::Location _loc)
+        : Statement(_loc), moduleName(std::move(_moduleName)), modulePath(std::move(_modulePath)), aliasName(std::move(_aliasName)), isStdLib(_isStdLib), isCppHeader(_isCppHeader)
     {
     }
 

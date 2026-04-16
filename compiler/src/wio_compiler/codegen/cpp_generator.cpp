@@ -709,6 +709,16 @@ namespace wio::codegen
                     continue;
                 }
 
+                if (const auto* useStmt = statement->as<UseStatement>())
+                {
+                    if (useStmt->isCppHeader)
+                    {
+                        if (seenHeaders.insert(useStmt->modulePath).second)
+                            orderedHeaders.push_back(useStmt->modulePath);
+                        continue;
+                    }
+                }
+
                 const auto* fnDecl = statement->as<FunctionDeclaration>();
                 if (!fnDecl || !isNativeFunction(*fnDecl))
                     continue;

@@ -7,7 +7,6 @@
 #include <optional>
 #include <string_view>
 #include <sstream>
-#include <unordered_map>
 #include <unordered_set>
 #include <argonaut.h>
 
@@ -37,7 +36,7 @@ namespace wio
         std::filesystem::path getRuntimeIncludeDir()
         {
 #ifdef WIO_RUNTIME_INCLUDE_DIR
-            return std::filesystem::path(WIO_RUNTIME_INCLUDE_DIR);
+            return { WIO_RUNTIME_INCLUDE_DIR };
 #else
             return {};
 #endif
@@ -46,7 +45,7 @@ namespace wio
         std::filesystem::path getStdSourceDir()
         {
 #ifdef WIO_STD_SOURCE_DIR
-            return std::filesystem::path(WIO_STD_SOURCE_DIR);
+            return { WIO_STD_SOURCE_DIR };
 #else
             return {};
 #endif
@@ -554,7 +553,7 @@ namespace wio
             // 2. Parser
             Parser parser(std::move(tokens));
             auto program = parser.parseProgram();
-
+            
             gAppData.loadedModules.clear();
             gAppData.loadedModules.insert(std::filesystem::absolute(sourcePath).string());
 
@@ -585,17 +584,24 @@ namespace wio
                     {
                         if (!gAppData.flags.get_SingleFile())
                         {
-                            std::vector<std::string> importedSymbols;
-                            auto moduleProg = parseAndMerge(useStmt->modulePath, useStmt->isStdLib, sourcePath.parent_path(), &importedSymbols);
-                            for (auto& modStmt : moduleProg->statements)
+                            if (useStmt->isCppHeader)
                             {
-                                finalStatements.push_back(std::move(modStmt));
-                            }
-
-                            if (!useStmt->aliasName.empty())
-                            {
-                                useStmt->importedSymbols = std::move(importedSymbols);
                                 finalStatements.push_back(std::move(stmt));
+                            }
+                            else
+                            {
+                                std::vector<std::string> importedSymbols;
+                                auto moduleProg = parseAndMerge(useStmt->modulePath, useStmt->isStdLib, sourcePath.parent_path(), &importedSymbols);
+                                for (auto& modStmt : moduleProg->statements)
+                                {
+                                    finalStatements.push_back(std::move(modStmt));
+                                }
+
+                                if (!useStmt->aliasName.empty())
+                                {
+                                    useStmt->importedSymbols = std::move(importedSymbols);
+                                    finalStatements.push_back(std::move(stmt));
+                                }
                             }
                         }
                     }
@@ -776,8 +782,8 @@ namespace wio
                 WIO_LOG_INFO("Running {} ...", outputPath.filename().string());
                 
                 std::stringstream runCmd;
-                
-                std::filesystem::path finalExePath = outputPath;
+
+                const std::filesystem::path& finalExePath = outputPath;
                 
                 runCmd << "\"" << finalExePath.string() << "\"";
                 
@@ -811,6 +817,7 @@ namespace wio
         return gAppData.flags;
     }
 
+    // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
     BuildTarget Compiler::getBuildTarget() const
     {
         return gAppData.buildTarget;

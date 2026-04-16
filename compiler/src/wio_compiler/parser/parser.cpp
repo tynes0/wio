@@ -1442,8 +1442,9 @@ namespace wio
             if (matchOneOf({ TokenType::kwLet, TokenType::kwMut, TokenType::kwConst }))
             {
                 Token startTok = advance();
-                Mutability mutability = Mutability::Immutable;
+                Mutability mutability;
 
+                // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
                 switch (startTok.type)
                 {
                 case TokenType::kwLet:   mutability = Mutability::Immutable; break;
@@ -1537,8 +1538,23 @@ namespace wio
         Token startTok = consume(TokenType::kwUse);
         Location startLoc = startTok.loc;
 
-        std::vector<std::string> moduleParts;
         bool isStdLib = false;
+
+        if (match(TokenType::atSign))
+        {
+            NodePtr<AttributeStatement> stmt = parseAttributeStatement();
+            if (stmt->attribute != Attribute::CppHeader)
+                utError("Use statement only accepts @CppHeader attribute.", startLoc);
+
+            if (stmt->args.size() != 1 || stmt->args[0].type != TokenType::stringLiteral)
+                utError("@CppHeader attribute needs 1 filepath parameter.", startLoc);
+
+            consume(TokenType::semicolon);
+
+            return makeNodePtr<UseStatement>("", std::move(stmt->args.front().value), "", false, true, startLoc);
+        }
+        
+        std::vector<std::string> moduleParts;
         
         while (matchOneOf({TokenType::kwSuper, TokenType::kwSelf, TokenType::identifier}))
         {
@@ -1593,7 +1609,7 @@ namespace wio
 
         consume(TokenType::semicolon);
         
-        return makeNodePtr<UseStatement>(std::move(moduleName), std::move(modulePath), std::move(aliasName), isStdLib, startLoc);
+        return makeNodePtr<UseStatement>(std::move(moduleName), std::move(modulePath), std::move(aliasName), isStdLib, false, startLoc);
     }
 
     NodePtr<Statement> Parser::parseRealmDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
