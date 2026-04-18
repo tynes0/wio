@@ -1,0 +1,5 @@
+@Export
+@CppName("bad-symbol")
+fn WriteValue() -> i32 {
+    return 0;
+}

@@ -1,0 +1,11 @@
+@Export
+@CppName(WioEcho)
+fn First() -> i32 {
+    return 1;
+}
+
+@Export
+@CppName(WioEcho)
+fn Second() -> i32 {
+    return 2;
+}

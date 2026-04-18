@@ -1,0 +1,10 @@
+@ModuleLoad
+fn Load() -> i32 {
+    return 0;
+}
+
+@Export
+@CppName(WioModuleLoad)
+fn ShadowLoad() -> i32 {
+    return 0;
+}

@@ -1,10 +1,12 @@
 ﻿#include "wio/sema/analyzer.h"
 
+#include <cctype>
 #include <functional>
 #include <optional>
 #include <ranges>
 #include <unordered_set>
 
+#include "wio/codegen/mangler.h"
 #include "wio/common/exception.h"
 #include "wio/common/logger.h"
 #include "wio/common/utility.h"
@@ -14,6 +16,115 @@ namespace wio::sema
 {
     namespace
     {
+        const Token* getFirstAttributeArg(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr);
+        std::vector<Attribute> getModuleLifecycleAttributes(const std::vector<NodePtr<AttributeStatement>>& attributes);
+
+        const std::unordered_set<std::string>& getCppReservedIdentifiers()
+        {
+            static const std::unordered_set<std::string> keywords = {
+                "alignas", "alignof", "and", "and_eq", "asm", "auto", "bitand", "bitor", "bool", "break",
+                "case", "catch", "char", "char8_t", "char16_t", "char32_t", "class", "compl", "concept",
+                "const", "consteval", "constexpr", "constinit", "const_cast", "continue", "co_await",
+                "co_return", "co_yield", "decltype", "default", "delete", "do", "double", "dynamic_cast",
+                "else", "enum", "explicit", "export", "extern", "false", "float", "for", "friend", "goto",
+                "if", "inline", "int", "long", "mutable", "namespace", "new", "noexcept", "not", "not_eq",
+                "nullptr", "operator", "or", "or_eq", "private", "protected", "public", "reflexpr",
+                "register", "reinterpret_cast", "requires", "return", "short", "signed", "sizeof", "static",
+                "static_assert", "static_cast", "struct", "switch", "template", "this", "thread_local", "throw",
+                "true", "try", "typedef", "typeid", "typename", "union", "unsigned", "using", "virtual",
+                "void", "volatile", "wchar_t", "while", "xor", "xor_eq"
+            };
+
+            return keywords;
+        }
+
+        bool isValidCppIdentifier(std::string_view identifier)
+        {
+            if (identifier.empty())
+                return false;
+
+            const unsigned char first = static_cast<unsigned char>(identifier.front());
+            if (!(std::isalpha(first) || identifier.front() == '_'))
+                return false;
+
+            for (char ch : identifier)
+            {
+                const unsigned char uch = static_cast<unsigned char>(ch);
+                if (!(std::isalnum(uch) || ch == '_'))
+                    return false;
+            }
+
+            return !getCppReservedIdentifiers().contains(std::string(identifier));
+        }
+
+        bool isValidCppSymbolPath(std::string_view symbolPath, bool allowQualified)
+        {
+            if (symbolPath.empty())
+                return false;
+
+            if (!allowQualified && symbolPath.find("::") != std::string_view::npos)
+                return false;
+
+            size_t start = 0;
+            while (start <= symbolPath.size())
+            {
+                const size_t separator = symbolPath.find("::", start);
+                const size_t count = separator == std::string_view::npos ? symbolPath.size() - start : separator - start;
+                const std::string_view segment = symbolPath.substr(start, count);
+                if (!isValidCppIdentifier(segment))
+                    return false;
+
+                if (separator == std::string_view::npos)
+                    break;
+
+                start = separator + 2;
+            }
+
+            return true;
+        }
+
+        std::string getModuleLifecycleExportSymbol(Attribute lifecycleAttribute)
+        {
+            switch (lifecycleAttribute)
+            {
+            case Attribute::ModuleApiVersion: return "WioModuleApiVersion";
+            case Attribute::ModuleLoad: return "WioModuleLoad";
+            case Attribute::ModuleUpdate: return "WioModuleUpdate";
+            case Attribute::ModuleUnload: return "WioModuleUnload";
+            case Attribute::ModuleSaveState: return "WioModuleSaveState";
+            case Attribute::ModuleRestoreState: return "WioModuleRestoreState";
+            default: return {};
+            }
+        }
+
+        std::string getDeclaredExportSymbolName(const FunctionDeclaration& node, bool hasModuleLifecycle)
+        {
+            if (hasModuleLifecycle)
+            {
+                std::vector<Attribute> lifecycleAttributes = getModuleLifecycleAttributes(node.attributes);
+                if (!lifecycleAttributes.empty())
+                    return getModuleLifecycleExportSymbol(lifecycleAttributes.front());
+            }
+
+            if (const Token* cppNameArg = getFirstAttributeArg(node.attributes, Attribute::CppName); cppNameArg)
+                return cppNameArg->value;
+
+            return node.name ? node.name->token.value : "";
+        }
+
+        std::string formatInstantiatedExportSymbolName(const std::string& baseName, const std::vector<Ref<Type>>& instantiationTypes)
+        {
+            std::string result = baseName;
+            for (const auto& instantiationType : instantiationTypes)
+            {
+                result += "__";
+                std::string fragment = codegen::Mangler::mangleType(instantiationType);
+                std::ranges::replace(fragment, ':', '_');
+                result += fragment;
+            }
+            return result;
+        }
+
         std::vector<std::string> splitModulePath(std::string_view modulePath)
         {
             std::vector<std::string> parts;
@@ -816,6 +927,7 @@ namespace wio::sema
         scopes_.clear();
         symbols_.clear();
         functionDeclarationsBySymbol_.clear();
+        exportedCppSymbolLocations_.clear();
         currentScope_ = nullptr;
         currentExpectedExpressionType_ = nullptr;
         currentNamespacePath_.clear();
@@ -3000,9 +3112,14 @@ namespace wio::sema
                 {
                     WIO_LOG_ADD_ERROR(node.location(), "@CppName expects an identifier path like foo::bar or a string literal.");
                 }
-                else if (isExported && cppNameArg->value.find("::") != std::string::npos)
+                else if (!isValidCppSymbolPath(cppNameArg->value, isNative))
                 {
-                    WIO_LOG_ADD_ERROR(node.location(), "@CppName on @Export must be a plain symbol name, not a qualified path.");
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        isNative
+                            ? "@CppName for @Native must be a valid C++ identifier path like foo::bar."
+                            : "@CppName for @Export must be a plain C/C++ symbol name like FooBar."
+                    );
                 }
             }
         }
@@ -3113,6 +3230,67 @@ namespace wio::sema
                         );
                     }
                 }
+            }
+        }
+
+        std::unordered_set<std::string> localExportSymbols;
+        auto registerExportedSymbol = [&](const std::string& symbolName)
+        {
+            if (symbolName.empty() || !localExportSymbols.insert(symbolName).second)
+                return;
+
+            auto [it, inserted] = exportedCppSymbolLocations_.emplace(symbolName, node.location());
+            if (!inserted)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Exported C++ symbol '{}' is already declared by another @Export or module lifecycle function.",
+                    symbolName
+                );
+            }
+        };
+
+        if (hasModuleLifecycle || isExported)
+        {
+            const std::string baseExportSymbolName = getDeclaredExportSymbolName(node, hasModuleLifecycle);
+            if (!node.genericParameters.empty() && isExported)
+            {
+                for (const auto* instantiateAttribute : instantiateAttributes)
+                {
+                    if (!instantiateAttribute || instantiateAttribute->typeArgs.size() != node.genericParameters.size())
+                        continue;
+
+                    std::vector<Ref<Type>> instantiationTypes;
+                    bool isValidInstantiation = true;
+                    instantiationTypes.reserve(instantiateAttribute->typeArgs.size());
+
+                    for (const auto& typeSpecifier : instantiateAttribute->typeArgs)
+                    {
+                        if (!typeSpecifier)
+                        {
+                            isValidInstantiation = false;
+                            break;
+                        }
+
+                        Ref<Type> instantiationType = typeSpecifier->refType.Lock();
+                        if (!instantiationType || instantiationType->isUnknown() || containsGenericParameterType(instantiationType))
+                        {
+                            isValidInstantiation = false;
+                            break;
+                        }
+
+                        instantiationTypes.push_back(instantiationType);
+                    }
+
+                    if (!isValidInstantiation)
+                        continue;
+
+                    registerExportedSymbol(formatInstantiatedExportSymbolName(baseExportSymbolName, instantiationTypes));
+                }
+            }
+            else
+            {
+                registerExportedSymbol(baseExportSymbolName);
             }
         }
         

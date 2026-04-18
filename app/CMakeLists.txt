@@ -851,9 +851,77 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_failure_test(
+        wio_invalid_cpp_name_native_invalid_symbol
+        "${CMAKE_SOURCE_DIR}/tests/invalid/cpp_name_native_invalid_symbol.wio"
+        "@CppName for @Native must be a valid C\\+\\+ identifier path like foo::bar\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_cpp_name_export_invalid_symbol
+        "${CMAKE_SOURCE_DIR}/tests/invalid/cpp_name_export_invalid_symbol.wio"
+        "@CppName for @Export must be a plain C/C\\+\\+ symbol name like FooBar\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_missing_module_dir_arg
+        "${CMAKE_SOURCE_DIR}/tests/import_path_root.wio"
+        "Module search directory '.*missing_module_dir.*' was not found or is not a directory"
+        --module-dir
+        "${CMAKE_SOURCE_DIR}/tests/missing_module_dir"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_missing_include_dir_arg
+        "${CMAKE_SOURCE_DIR}/tests/native/native_bridge.wio"
+        "Include directory '.*missing_include_dir.*' was not found or is not a directory"
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/missing_include_dir"
+        --backend-arg
+        "${CMAKE_SOURCE_DIR}/tests/native/native_math.cpp"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_missing_link_dir_arg
+        "${CMAKE_SOURCE_DIR}/tests/std_io_direct.wio"
+        "Link directory '.*missing_link_dir.*' was not found or is not a directory"
+        --link-dir
+        "${CMAKE_SOURCE_DIR}/tests/missing_link_dir"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_missing_backend_source_arg
+        "${CMAKE_SOURCE_DIR}/tests/native/native_bridge.wio"
+        "Backend source file '.*missing_backend_source\\.cpp' was not found"
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
+        --backend-arg
+        "${CMAKE_SOURCE_DIR}/tests/native/missing_backend_source.cpp"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_missing_link_library_file_arg
+        "${CMAKE_SOURCE_DIR}/tests/std_io_direct.wio"
+        "Linked library file '.*missing_link_library\\.lib' was not found"
+        --link-lib
+        "${CMAKE_SOURCE_DIR}/tests/native/missing_link_library.lib"
+    )
+
+    add_wio_failure_test(
         wio_invalid_export_string_return_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/export_string_return_not_supported.wio"
         "@Export currently supports only primitive or void return types"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_duplicate_export_cpp_name
+        "${CMAKE_SOURCE_DIR}/tests/invalid/duplicate_export_cpp_name.wio"
+        "Exported C\\+\\+ symbol 'WioEcho' is already declared by another @Export or module lifecycle function\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_duplicate_export_module_symbol
+        "${CMAKE_SOURCE_DIR}/tests/invalid/duplicate_export_module_symbol.wio"
+        "Exported C\\+\\+ symbol 'WioModuleLoad' is already declared by another @Export or module lifecycle function\\."
     )
 
     add_wio_failure_test(

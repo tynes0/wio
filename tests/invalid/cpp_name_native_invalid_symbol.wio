@@ -1,0 +1,8 @@
+@Native
+@CppHeader("std_io.h")
+@CppName("wio::runtime::std_io::Write-Value")
+fn WriteValue(value: i32) -> i32;
+
+fn Entry() -> i32 {
+    return 0;
+}

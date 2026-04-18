@@ -418,6 +418,92 @@ namespace wio
             return isValid;
         }
 
+        bool validateSearchDirectories(const std::vector<std::string>& paths,
+                                       std::string_view label)
+        {
+            bool isValid = true;
+
+            for (const auto& rawPath : paths)
+            {
+                if (rawPath.empty())
+                    continue;
+
+                std::filesystem::path resolvedPath = std::filesystem::absolute(std::filesystem::path(rawPath)).make_preferred();
+                std::error_code ec;
+                const bool exists = std::filesystem::exists(resolvedPath, ec) && !ec;
+                const bool isDirectory = exists && std::filesystem::is_directory(resolvedPath, ec) && !ec;
+
+                if (!exists || !isDirectory)
+                {
+                    Logger::get().addError("{} '{}' was not found or is not a directory.", label, resolvedPath.string());
+                    isValid = false;
+                }
+            }
+
+            return isValid;
+        }
+
+        bool validateBackendFileInputs(const std::vector<std::string>& backendArgs,
+                                       const std::vector<std::string>& linkLibraries)
+        {
+            bool isValid = true;
+
+            for (const auto& backendArg : backendArgs)
+            {
+                if (!isSourceFilePath(backendArg))
+                    continue;
+
+                std::filesystem::path resolvedPath = std::filesystem::absolute(std::filesystem::path(backendArg)).make_preferred();
+                std::error_code ec;
+                const bool exists = std::filesystem::exists(resolvedPath, ec) && !ec;
+                const bool isRegularFile = exists && std::filesystem::is_regular_file(resolvedPath, ec) && !ec;
+
+                if (!exists || !isRegularFile)
+                {
+                    Logger::get().addError("Backend source file '{}' was not found.", resolvedPath.string());
+                    isValid = false;
+                }
+            }
+
+            for (const auto& linkLibrary : linkLibraries)
+            {
+                if (!isLibraryFilePath(linkLibrary) || linkLibrary.starts_with("-"))
+                    continue;
+
+                std::filesystem::path resolvedPath = std::filesystem::absolute(std::filesystem::path(linkLibrary)).make_preferred();
+                std::error_code ec;
+                const bool exists = std::filesystem::exists(resolvedPath, ec) && !ec;
+                const bool isRegularFile = exists && std::filesystem::is_regular_file(resolvedPath, ec) && !ec;
+
+                if (!exists || !isRegularFile)
+                {
+                    Logger::get().addError("Linked library file '{}' was not found.", resolvedPath.string());
+                    isValid = false;
+                }
+            }
+
+            return isValid;
+        }
+
+        bool validateBackendConfiguration(const Ref<Program>& program,
+                                          const std::filesystem::path& sourceDir,
+                                          const std::filesystem::path& runtimePath)
+        {
+            std::vector<std::string> moduleDirs = gAppData.argParser.GetValuesOf<std::string>("MODULE-DIR");
+            std::vector<std::string> includeDirs = gAppData.argParser.GetValuesOf<std::string>("INCLUDE-DIR");
+            std::vector<std::string> linkDirs = gAppData.argParser.GetValuesOf<std::string>("LINK-DIR");
+            std::vector<std::string> linkLibraries = gAppData.argParser.GetValuesOf<std::string>("LINK-LIB");
+            std::vector<std::string> backendArgs = gAppData.argParser.GetValuesOf<std::string>("BACKEND-ARG");
+
+            bool isValid = true;
+            isValid = validateSearchDirectories(moduleDirs, "Module search directory") && isValid;
+            isValid = validateSearchDirectories(includeDirs, "Include directory") && isValid;
+            isValid = validateSearchDirectories(linkDirs, "Link directory") && isValid;
+            isValid = validateBackendFileInputs(backendArgs, linkLibraries) && isValid;
+            isValid = validateRequiredCppHeaders(program, sourceDir, runtimePath, includeDirs) && isValid;
+            return isValid;
+        }
+
         std::vector<std::filesystem::path> getUserModuleSearchDirs()
         {
             std::vector<std::filesystem::path> searchDirs;
@@ -767,9 +853,7 @@ namespace wio
             analyzer.analyze(program);
 
             std::filesystem::path runtimePath = getRuntimeIncludeDir();
-            std::vector<std::string> includeDirs = gAppData.argParser.GetValuesOf<std::string>("INCLUDE-DIR");
-
-            validateRequiredCppHeaders(program, sourcePath.parent_path(), runtimePath, includeDirs);
+            validateBackendConfiguration(program, sourcePath.parent_path(), runtimePath);
 
             WIO_LOG_PROCESS_WARNINGS();
             WIO_LOG_PROCESS_ERRORS(CompilationError);
@@ -810,6 +894,7 @@ namespace wio
             std::vector<std::string> linkLibraries = gAppData.argParser.GetValuesOf<std::string>("LINK-LIB");
             std::vector<std::string> backendArgs = gAppData.argParser.GetValuesOf<std::string>("BACKEND-ARG");
             std::vector<std::string> outputPaths = gAppData.argParser.GetValuesOf<std::string>("OUTPUT");
+            std::vector<std::string> includeDirs = gAppData.argParser.GetValuesOf<std::string>("INCLUDE-DIR");
 
             std::filesystem::path outputPath =
                 outputPaths.empty()
