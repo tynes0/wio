@@ -270,6 +270,154 @@ namespace wio
             return exportedSymbols;
         }
 
+        struct RequiredCppHeader
+        {
+            std::string header;
+            common::Location location;
+        };
+
+        bool hasAttribute(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute attribute)
+        {
+            return std::ranges::any_of(attributes, [attribute](const NodePtr<AttributeStatement>& stmt)
+            {
+                return stmt && stmt->attribute == attribute;
+            });
+        }
+
+        std::optional<std::string> getCppHeaderAttributeValue(const std::vector<NodePtr<AttributeStatement>>& attributes)
+        {
+            for (const auto& attribute : attributes)
+            {
+                if (!attribute || attribute->attribute != Attribute::CppHeader)
+                    continue;
+
+                if (attribute->args.size() == 1 && attribute->args.front().type == TokenType::stringLiteral)
+                    return attribute->args.front().value;
+
+                return std::nullopt;
+            }
+
+            return std::nullopt;
+        }
+
+        void collectRequiredCppHeaders(const std::vector<NodePtr<Statement>>& statements, std::vector<RequiredCppHeader>& headers)
+        {
+            for (const auto& statement : statements)
+            {
+                if (!statement)
+                    continue;
+
+                if (const auto* realmDecl = statement->as<RealmDeclaration>())
+                {
+                    collectRequiredCppHeaders(realmDecl->statements, headers);
+                    continue;
+                }
+
+                if (const auto* useStmt = statement->as<UseStatement>())
+                {
+                    if (useStmt->isCppHeader && !useStmt->modulePath.empty())
+                        headers.push_back({ useStmt->modulePath, useStmt->location() });
+                    continue;
+                }
+
+                if (const auto* fnDecl = statement->as<FunctionDeclaration>())
+                {
+                    if (!hasAttribute(fnDecl->attributes, Attribute::Native))
+                        continue;
+
+                    if (auto headerValue = getCppHeaderAttributeValue(fnDecl->attributes); headerValue.has_value())
+                        headers.push_back({ *headerValue, fnDecl->location() });
+                }
+            }
+        }
+
+        std::vector<std::filesystem::path> buildHeaderSearchRoots(const std::filesystem::path& sourceDir,
+                                                                  const std::filesystem::path& runtimePath,
+                                                                  const std::vector<std::string>& includeDirs)
+        {
+            std::vector<std::filesystem::path> roots;
+
+            auto appendRoot = [&](const std::filesystem::path& root)
+            {
+                if (root.empty())
+                    return;
+
+                std::filesystem::path absoluteRoot = std::filesystem::absolute(root).make_preferred();
+                if (std::ranges::find(roots, absoluteRoot) == roots.end())
+                    roots.push_back(std::move(absoluteRoot));
+            };
+
+            appendRoot(sourceDir);
+            appendRoot(runtimePath);
+
+            for (const auto& includeDir : includeDirs)
+                appendRoot(includeDir);
+
+            return roots;
+        }
+
+        std::string formatSearchRoots(const std::vector<std::filesystem::path>& roots)
+        {
+            std::string formattedRoots;
+            for (size_t i = 0; i < roots.size(); ++i)
+            {
+                formattedRoots += roots[i].string();
+                if (i + 1 < roots.size())
+                    formattedRoots += ", ";
+            }
+            return formattedRoots;
+        }
+
+        bool canResolveCppHeader(const std::string& header, const std::vector<std::filesystem::path>& searchRoots)
+        {
+            std::filesystem::path headerPath(header);
+            std::error_code ec;
+
+            if (headerPath.is_absolute())
+                return std::filesystem::exists(headerPath, ec) && !ec;
+
+            for (const auto& root : searchRoots)
+            {
+                std::filesystem::path candidate = (root / headerPath).make_preferred();
+                if (std::filesystem::exists(candidate, ec) && !ec)
+                    return true;
+            }
+
+            return false;
+        }
+
+        bool validateRequiredCppHeaders(const Ref<Program>& program,
+                                        const std::filesystem::path& sourceDir,
+                                        const std::filesystem::path& runtimePath,
+                                        const std::vector<std::string>& includeDirs)
+        {
+            std::vector<RequiredCppHeader> headers;
+            collectRequiredCppHeaders(program->statements, headers);
+
+            if (headers.empty())
+                return true;
+
+            const auto searchRoots = buildHeaderSearchRoots(sourceDir, runtimePath, includeDirs);
+            const std::string formattedRoots = formatSearchRoots(searchRoots);
+            bool isValid = true;
+
+            for (const auto& header : headers)
+            {
+                if (canResolveCppHeader(header.header, searchRoots))
+                    continue;
+
+                WIO_LOG_ADD_ERROR(
+                    header.location,
+                    "Native C++ header '{}' was not found in include search paths: {}",
+                    header.header,
+                    formattedRoots
+                );
+                isValid = false;
+            }
+
+            return isValid;
+        }
+
         std::vector<std::filesystem::path> getUserModuleSearchDirs()
         {
             std::vector<std::filesystem::path> searchDirs;
@@ -618,6 +766,11 @@ namespace wio
             sema::SemanticAnalyzer analyzer;
             analyzer.analyze(program);
 
+            std::filesystem::path runtimePath = getRuntimeIncludeDir();
+            std::vector<std::string> includeDirs = gAppData.argParser.GetValuesOf<std::string>("INCLUDE-DIR");
+
+            validateRequiredCppHeaders(program, sourcePath.parent_path(), runtimePath, includeDirs);
+
             WIO_LOG_PROCESS_WARNINGS();
             WIO_LOG_PROCESS_ERRORS(CompilationError);
 
@@ -641,7 +794,6 @@ namespace wio
                 return EXIT_FAILURE;
             }
             
-            std::filesystem::path runtimePath = getRuntimeIncludeDir();
             if (runtimePath.empty() || !std::filesystem::exists(runtimePath))
             {
                 WIO_LOG_FATAL("Runtime headers were not found. Expected directory: {}", runtimePath.string());
@@ -654,7 +806,6 @@ namespace wio
                 return EXIT_FAILURE;
             }
 
-            std::vector<std::string> includeDirs = gAppData.argParser.GetValuesOf<std::string>("INCLUDE-DIR");
             std::vector<std::string> linkDirs = gAppData.argParser.GetValuesOf<std::string>("LINK-DIR");
             std::vector<std::string> linkLibraries = gAppData.argParser.GetValuesOf<std::string>("LINK-LIB");
             std::vector<std::string> backendArgs = gAppData.argParser.GetValuesOf<std::string>("BACKEND-ARG");
@@ -888,17 +1039,24 @@ namespace wio
                 {
                     if (!gAppData.flags.get_SingleFile())
                     {
-                        std::vector<std::string> childExportedSymbols;
-                        auto childProgram = parseAndMerge(useStmt->modulePath, useStmt->isStdLib, actualPath.parent_path(), &childExportedSymbols);
-                        for (auto& childStmt : childProgram->statements)
+                        if (useStmt->isCppHeader)
                         {
-                            mergedStatements.push_back(std::move(childStmt));
-                        }
-
-                        if (!useStmt->aliasName.empty())
-                        {
-                            useStmt->importedSymbols = std::move(childExportedSymbols);
                             mergedStatements.push_back(std::move(stmt));
+                        }
+                        else
+                        {
+                            std::vector<std::string> childExportedSymbols;
+                            auto childProgram = parseAndMerge(useStmt->modulePath, useStmt->isStdLib, actualPath.parent_path(), &childExportedSymbols);
+                            for (auto& childStmt : childProgram->statements)
+                            {
+                                mergedStatements.push_back(std::move(childStmt));
+                            }
+
+                            if (!useStmt->aliasName.empty())
+                            {
+                                useStmt->importedSymbols = std::move(childExportedSymbols);
+                                mergedStatements.push_back(std::move(stmt));
+                            }
                         }
                     }
                 }

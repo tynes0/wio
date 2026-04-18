@@ -1551,7 +1551,7 @@ namespace wio
 
             consume(TokenType::semicolon);
 
-            return makeNodePtr<UseStatement>("", std::move(stmt->args.front().value), "", false, true, startLoc);
+            return makeNodePtr<UseStatement>("", stmt->args.front().value, "", false, true, startLoc);
         }
         
         std::vector<std::string> moduleParts;

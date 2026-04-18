@@ -1,0 +1,11 @@
+use @CppHeader("missing_cpp_header_use_test.h");
+
+realm ffi {
+    @Native
+    @CppName(fake::Invoke)
+    fn Invoke(value: i32) -> i32;
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

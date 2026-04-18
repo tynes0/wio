@@ -1857,6 +1857,14 @@ namespace wio::sema
                     resolvedBindingTypes.push_back(foundBinding->second);
                 }
 
+                if (std::ranges::any_of(resolvedBindingTypes, [](const Ref<Type>& bindingType)
+                {
+                    return containsGenericParameterType(bindingType);
+                }))
+                {
+                    return true;
+                }
+
                 for (const auto* instantiateAttribute : instantiateAttributes)
                 {
                     if (!instantiateAttribute || instantiateAttribute->typeArgs.size() != resolvedBindingTypes.size())
@@ -2044,14 +2052,14 @@ namespace wio::sema
                     for (const auto& paramType : declaredFunctionType->paramTypes)
                     {
                         Ref<Type> instantiatedType = instantiateGenericType(paramType, bindings);
-                        if (!instantiatedType || containsNamedGenericParameterType(instantiatedType, activeGenericParameterNames))
+                        if (!instantiatedType)
                             return std::nullopt;
 
                         instantiatedParamTypes.push_back(instantiatedType);
                     }
 
                     Ref<Type> instantiatedReturnType = instantiateGenericType(declaredFunctionType->returnType, bindings);
-                    if (!instantiatedReturnType || containsNamedGenericParameterType(instantiatedReturnType, activeGenericParameterNames))
+                    if (!instantiatedReturnType)
                         return std::nullopt;
 
                     resolvedFunctionType = Compiler::get().getTypeContext().getOrCreateFunctionType(

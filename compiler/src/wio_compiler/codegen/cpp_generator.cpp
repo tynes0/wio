@@ -1284,6 +1284,14 @@ namespace wio::codegen
             }
         });
 
+        isEmittingPrototypes_ = true;
+        emitPhase(emitPhase, statements, [&](const auto& stmt)
+        {
+            if (stmt->template is<FunctionDeclaration>())
+                stmt->accept(*this);
+        });
+        isEmittingPrototypes_ = false;
+
         emitPhase(emitPhase, statements, [&](const auto& stmt)
         {
             if (stmt->template is<InterfaceDeclaration>() || stmt->template is<ComponentDeclaration>() || stmt->template is<ObjectDeclaration>())
@@ -1295,14 +1303,6 @@ namespace wio::codegen
             if (stmt->template is<VariableDeclaration>())
                 stmt->accept(*this);
         });
-
-        isEmittingPrototypes_ = true;
-        emitPhase(emitPhase, statements, [&](const auto& stmt)
-        {
-            if (stmt->template is<FunctionDeclaration>())
-                stmt->accept(*this);
-        });
-        isEmittingPrototypes_ = false;
 
         emitPhase(emitPhase, statements, [&](const auto& stmt)
         {

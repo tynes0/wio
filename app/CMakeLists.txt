@@ -577,7 +577,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_hybrid_arena_demo
         "${CMAKE_SOURCE_DIR}/examples/hybrid_arena/arena_module.wio"
         "${CMAKE_SOURCE_DIR}/examples/hybrid_arena/hybrid_arena_host.cpp"
-        "Hybrid arena summary: start=240/35/12/1 afterTickA=240/40/18/1 pulseA=1 afterHitA=207 restore=0 afterTickB=207/5/28/1 pulseB=2 final=78/0/38/2 threat=2380 alive=1 v1 load=0"
+        "Hybrid arena summary:[ \t\r\n]*start=240/35/12/1[ \t\r\n]*afterTickA=240/40/18/1[ \t\r\n]*pulseA=1[ \t\r\n]*afterHitA=207[ \t\r\n]*restore=0[ \t\r\n]*afterTickB=207/5/28/1[ \t\r\n]*pulseB=2[ \t\r\n]*final=78/0/38/2[ \t\r\n]*threat=2380[ \t\r\n]*alive=1[ \t\r\n]*v1[ \t\r\n]*load=0"
         --include-dir
         "${CMAKE_SOURCE_DIR}/examples/hybrid_arena"
         --backend-arg
@@ -596,6 +596,15 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/std_io_direct.wio"
         "Std direct: hello\nStd direct value: 7"
         --run
+    )
+
+    add_wio_output_test(
+        wio_test_cpp_header_use_statement_run
+        "${CMAKE_SOURCE_DIR}/tests/cpp_header_use_statement.wio"
+        "CppHeader use: 42"
+        --run
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
     )
 
     add_wio_output_test(
@@ -827,6 +836,18 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_native_method_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/native_method_not_supported.wio"
         "@Native is currently supported only for top-level functions"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_missing_cpp_header_use
+        "${CMAKE_SOURCE_DIR}/tests/invalid/missing_cpp_header_use.wio"
+        "Native C\\+\\+ header 'missing_cpp_header_use_test.h' was not found"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_missing_cpp_header_native_attr
+        "${CMAKE_SOURCE_DIR}/tests/invalid/missing_cpp_header_native_attr.wio"
+        "Native C\\+\\+ header 'missing_cpp_header_attr_test.h' was not found"
     )
 
     add_wio_failure_test(

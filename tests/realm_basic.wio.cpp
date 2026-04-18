@@ -44,52 +44,12 @@ namespace wio
 #include "std_io.h"
 
 
-int32_t _WF_std_io_Print_string(wio::String value);
+template <typename T>
+int32_t _WF_std_io_Print_T(T value);
 
 
-int32_t _WF_std_io_Print_bool(bool value);
-
-
-int32_t _WF_std_io_Print_char(char value);
-
-
-int32_t _WF_std_io_Print_i8(int8_t value);
-
-
-int32_t _WF_std_io_Print_i16(int16_t value);
-
-
-int32_t _WF_std_io_Print_i32(int32_t value);
-
-
-int32_t _WF_std_io_Print_i64(int64_t value);
-
-
-int32_t _WF_std_io_Print_u8(uint8_t value);
-
-
-int32_t _WF_std_io_Print_u16(uint16_t value);
-
-
-int32_t _WF_std_io_Print_u32(uint32_t value);
-
-
-int32_t _WF_std_io_Print_u64(uint64_t value);
-
-
-int32_t _WF_std_io_Print_isize(ptrdiff_t value);
-
-
-int32_t _WF_std_io_Print_usize(size_t value);
-
-
-int32_t _WF_std_io_Print_f32(float value);
-
-
-int32_t _WF_std_io_Print_f64(double value);
-
-
-int32_t _WF_std_io_PrintLine_string(wio::String value);
+template <typename T>
+int32_t _WF_std_io_PrintLine_T(T value);
 
 
 int32_t _WF_alpha_Value();
@@ -98,85 +58,32 @@ int32_t _WF_alpha_Value();
 int32_t _WF_beta_Value();
 
 
-int32_t _WF_std_io_Print_string(wio::String value)
+template <typename T>
+int32_t _WF_std_io_Print_T(T value)
 {
-    return wio::runtime::std_io::PrintString(value);
+    return wio::runtime::std_io::WriteValue(value);
 }
 
-int32_t _WF_std_io_Print_bool(bool value)
-{
-    return wio::runtime::std_io::PrintBool(value);
-}
+template int32_t _WF_std_io_Print_T<wio::String>(wio::String);
+template int32_t _WF_std_io_Print_T<bool>(bool);
+template int32_t _WF_std_io_Print_T<char>(char);
+template int32_t _WF_std_io_Print_T<int8_t>(int8_t);
+template int32_t _WF_std_io_Print_T<int16_t>(int16_t);
+template int32_t _WF_std_io_Print_T<int32_t>(int32_t);
+template int32_t _WF_std_io_Print_T<int64_t>(int64_t);
+template int32_t _WF_std_io_Print_T<uint8_t>(uint8_t);
+template int32_t _WF_std_io_Print_T<uint16_t>(uint16_t);
+template int32_t _WF_std_io_Print_T<uint32_t>(uint32_t);
+template int32_t _WF_std_io_Print_T<uint64_t>(uint64_t);
+template int32_t _WF_std_io_Print_T<float>(float);
+template int32_t _WF_std_io_Print_T<double>(double);
 
-int32_t _WF_std_io_Print_char(char value)
+template <typename T>
+int32_t _WF_std_io_PrintLine_T(T value)
 {
-    return wio::runtime::std_io::PrintChar(value);
-}
-
-int32_t _WF_std_io_Print_i8(int8_t value)
-{
-    return wio::runtime::std_io::PrintI8(value);
-}
-
-int32_t _WF_std_io_Print_i16(int16_t value)
-{
-    return wio::runtime::std_io::PrintI16(value);
-}
-
-int32_t _WF_std_io_Print_i32(int32_t value)
-{
-    return wio::runtime::std_io::PrintI32(value);
-}
-
-int32_t _WF_std_io_Print_i64(int64_t value)
-{
-    return wio::runtime::std_io::PrintI64(value);
-}
-
-int32_t _WF_std_io_Print_u8(uint8_t value)
-{
-    return wio::runtime::std_io::PrintU8(value);
-}
-
-int32_t _WF_std_io_Print_u16(uint16_t value)
-{
-    return wio::runtime::std_io::PrintU16(value);
-}
-
-int32_t _WF_std_io_Print_u32(uint32_t value)
-{
-    return wio::runtime::std_io::PrintU32(value);
-}
-
-int32_t _WF_std_io_Print_u64(uint64_t value)
-{
-    return wio::runtime::std_io::PrintU64(value);
-}
-
-int32_t _WF_std_io_Print_isize(ptrdiff_t value)
-{
-    return wio::runtime::std_io::PrintISize(value);
-}
-
-int32_t _WF_std_io_Print_usize(size_t value)
-{
-    return wio::runtime::std_io::PrintUSize(value);
-}
-
-int32_t _WF_std_io_Print_f32(float value)
-{
-    return wio::runtime::std_io::PrintF32(value);
-}
-
-int32_t _WF_std_io_Print_f64(double value)
-{
-    return wio::runtime::std_io::PrintF64(value);
-}
-
-int32_t _WF_std_io_PrintLine_string(wio::String value)
-{
-    _WF_std_io_Print_string(value);
-    return _WF_std_io_Print_string("\n");
+    _WF_std_io_Print_T(value);
+    _WF_std_io_Print_T("\n");
+    return 0;
 }
 
 int32_t _WF_alpha_Value()
@@ -197,7 +104,7 @@ int main(int argc, char** argv) {
     }
     
     try {
-        _WF_std_io_Print_string(std::format("Realm sum: {}", (_WF_alpha_Value() + _WF_beta_Value())));
+        _WF_std_io_Print_T(std::format("Realm sum: {}", (_WF_alpha_Value() + _WF_beta_Value())));
         return 0;
     }
     catch (const wio::runtime::RuntimeException& ex)

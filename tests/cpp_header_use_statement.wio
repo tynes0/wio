@@ -1,0 +1,15 @@
+use std::io as console;
+use @CppHeader("native_generic_math.h");
+
+realm ffi {
+    @Native
+    @CppName(native_generic::DoubleValue)
+    @Instantiate(i32)
+    fn DoubleValue<T>(value: T) -> T;
+}
+
+fn Entry() -> i32 {
+    let result = ffi::DoubleValue(21);
+    console::Print($"CppHeader use: ${result}");
+    return 0;
+}
