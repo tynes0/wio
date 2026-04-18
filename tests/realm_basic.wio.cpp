@@ -48,8 +48,14 @@ template <typename T>
 int32_t _WF_std_io_Print_T(T value);
 
 
+int32_t _WF_std_io_PrintLine();
+
+
 template <typename T>
 int32_t _WF_std_io_PrintLine_T(T value);
+
+
+int32_t _WF_std_io_PrintSpace();
 
 
 int32_t _WF_alpha_Value();
@@ -78,12 +84,21 @@ template int32_t _WF_std_io_Print_T<uint64_t>(uint64_t);
 template int32_t _WF_std_io_Print_T<float>(float);
 template int32_t _WF_std_io_Print_T<double>(double);
 
+int32_t _WF_std_io_PrintLine()
+{
+    return _WF_std_io_Print_T("\n");
+}
+
 template <typename T>
 int32_t _WF_std_io_PrintLine_T(T value)
 {
     _WF_std_io_Print_T(value);
-    _WF_std_io_Print_T("\n");
-    return 0;
+    return _WF_std_io_Print_T("\n");
+}
+
+int32_t _WF_std_io_PrintSpace()
+{
+    return _WF_std_io_Print_T(" ");
 }
 
 int32_t _WF_alpha_Value()

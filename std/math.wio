@@ -123,5 +123,85 @@ realm std {
             }
             return value;
         }
+
+        fn Square(value: i32) -> i32 {
+            return value * value;
+        }
+
+        fn Square(value: i64) -> i64 {
+            return value * value;
+        }
+
+        fn Square(value: f32) -> f32 {
+            return value * value;
+        }
+
+        fn Square(value: f64) -> f64 {
+            return value * value;
+        }
+
+        fn Sign(value: i32) -> i32 {
+            if (value < 0) {
+                return -1;
+            }
+            if (value > 0) {
+                return 1;
+            }
+            return 0;
+        }
+
+        fn Sign(value: i64) -> i64 {
+            if (value < 0) {
+                return -1 fit i64;
+            }
+            if (value > 0) {
+                return 1 fit i64;
+            }
+            return 0 fit i64;
+        }
+
+        fn Sign(value: f32) -> i32 {
+            if (value < 0.0f) {
+                return -1;
+            }
+            if (value > 0.0f) {
+                return 1;
+            }
+            return 0;
+        }
+
+        fn Sign(value: f64) -> i32 {
+            if (value < 0.0) {
+                return -1;
+            }
+            if (value > 0.0) {
+                return 1;
+            }
+            return 0;
+        }
+
+        fn Lerp(start: f32, finish: f32, t: f32) -> f32 {
+            return start + ((finish - start) * t);
+        }
+
+        fn Lerp(start: f64, finish: f64, t: f64) -> f64 {
+            return start + ((finish - start) * t);
+        }
+
+        fn InRangeInclusive(value: i32, minValue: i32, maxValue: i32) -> bool {
+            return value >= minValue and value <= maxValue;
+        }
+
+        fn InRangeInclusive(value: i64, minValue: i64, maxValue: i64) -> bool {
+            return value >= minValue and value <= maxValue;
+        }
+
+        fn InRangeInclusive(value: f32, minValue: f32, maxValue: f32) -> bool {
+            return value >= minValue and value <= maxValue;
+        }
+
+        fn InRangeInclusive(value: f64, minValue: f64, maxValue: f64) -> bool {
+            return value >= minValue and value <= maxValue;
+        }
     }
 }

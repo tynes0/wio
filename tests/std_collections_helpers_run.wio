@@ -1,0 +1,22 @@
+use std::io as console;
+use std::collections as collections;
+
+fn Entry(args: string[]) -> i32 {
+    let scores: collections::Map<string, i32> = {
+        "hp": 7,
+        "mana": 3
+    };
+
+    let hpKey: string = "hp";
+    let armorKey: string = "armor";
+    let manaKey: string = "mana";
+
+    let hasHp = collections::ContainsKey(scores, hpKey);
+    let hasArmor = collections::ContainsKey(scores, armorKey);
+    let mana = collections::GetOr(scores, manaKey, -1);
+    let armor = collections::GetOr(scores, armorKey, -1);
+    let hasSeven = collections::ContainsValue(scores, 7);
+
+    console::Print($"Std collections helpers: ${hasHp}/${hasArmor}/${mana}/${armor}/${hasSeven}");
+    return 0;
+}

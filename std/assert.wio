@@ -1,0 +1,55 @@
+realm std {
+    realm assert {
+        use @CppHeader("std_assert.h");
+
+        @Native
+        @CppName(wio::runtime::std_assert::Fail)
+        fn Fail(message: string);
+
+        @Native
+        @CppName(wio::runtime::std_assert::Require)
+        fn Require(condition: bool, message: string);
+
+        @Native
+        @CppName(wio::runtime::std_assert::Unreachable)
+        fn Unreachable(message: string);
+
+        fn That(condition: bool, message: string) {
+            Require(condition, message);
+        }
+
+        fn FailIf(condition: bool, message: string) {
+            if (condition) {
+                Fail(message);
+            }
+        }
+
+        fn Equal<T>(left: T, right: T, message: string) {
+            if (left != right) {
+                Fail(message);
+            }
+        }
+
+        fn NotEqual<T>(left: T, right: T, message: string) {
+            if (left == right) {
+                Fail(message);
+            }
+        }
+
+        fn InRangeInclusive(value: i32, minValue: i32, maxValue: i32, message: string) {
+            if (value < minValue or value > maxValue) {
+                Fail(message);
+            }
+        }
+
+        fn InRangeInclusive(value: i64, minValue: i64, maxValue: i64, message: string) {
+            if (value < minValue or value > maxValue) {
+                Fail(message);
+            }
+        }
+
+        fn Todo(message: string) {
+            Fail($"TODO: ${message}");
+        }
+    }
+}

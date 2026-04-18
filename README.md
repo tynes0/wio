@@ -167,6 +167,40 @@ Current status:
 This is intentionally still an alpha bridge, but it already lets Wio call into
 existing C++ code with a real end-to-end workflow.
 
+### Source-Based `std`
+
+Wio's public standard-library surface is now moving toward source-based `.wio`
+modules under [`std/`](/C:/Users/cihan/RiderProjects/wio/std).
+
+Current modules include:
+
+- `std::io`
+- `std::math`
+- `std::collections`
+- `std::algorithms`
+
+Example:
+
+```wio
+use std::io as console;
+use std::algorithms as algorithms;
+
+fn Entry(args: string[]) -> i32 {
+    let values: i32[] = [2, 4, 6, 8];
+    let flags: bool[] = [true, true, false];
+
+    console::Print($"first=${algorithms::FirstOr(values, 99)}");
+    console::PrintSpace();
+    console::Print($"any=${algorithms::Any(flags)}");
+    console::PrintLine();
+    return 0;
+}
+```
+
+This keeps the user-facing library in Wio itself while still allowing
+low-level runtime-backed pieces such as `std::io` to bridge into C++ through
+`@Native`.
+
 ### Experimental Library Mode
 
 Wio now also has an early distinction between executable and library outputs:
@@ -249,6 +283,48 @@ fn RestoreState(snapshot: i32) -> i32 {
     return 0;
 }
 ```
+
+### Host SDK
+
+The runtime include directory now also exposes a higher-level C++ host SDK in
+[`compiler/include/runtime/wio_sdk.h`](/C:/Users/cihan/RiderProjects/wio/compiler/include/runtime/wio_sdk.h).
+
+It sits on top of `module_api.h` and is designed to make host-side usage much
+shorter:
+
+```cpp
+#include <wio_sdk.h>
+
+auto module = wio::sdk::Module::load("gameplay.dll");
+auto getCounter = module.load_command<std::function<std::int32_t()>>("counter.get");
+auto addCounter = wio_load_function<std::int32_t(std::int32_t)>(module, "counter.add");
+auto onTick = module.load_event<void(float)>("game.tick");
+
+std::int32_t before = getCounter();
+std::int32_t afterAdd = addCounter(3);
+onTick(5.0f);
+```
+
+If you already have a raw `const WioModuleApi*`, you can also bind directly:
+
+```cpp
+auto addNumbers = wio_load_function<std::function<std::int32_t(std::int32_t, std::int32_t)>>(api, "AddNumbers");
+```
+
+For hot reload, use `wio::sdk::HotReloadModule`:
+
+```cpp
+auto module = wio::sdk::HotReloadModule::load("gameplay.dll");
+module.enable_auto_reload();
+
+auto getCounter = module.load_command<std::int32_t()>("counter.get");
+auto onTick = module.load_event<void(float)>("game.tick");
+```
+
+The wrapper stages DLL copies internally, preserves state when
+`@ModuleSaveState`/`@ModuleRestoreState` are available, and can either reload
+manually with `reload()` / `reload_from(...)` or lazily through
+`reload_if_changed()` when auto-reload is enabled.
 
 ### Backend Compiler
 

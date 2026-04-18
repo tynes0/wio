@@ -1,0 +1,57 @@
+realm std {
+    realm algorithms {
+        fn FirstOr<T>(values: T[], fallback: T) -> T {
+            for value in values {
+                return value;
+            }
+            return fallback;
+        }
+
+        fn IsEmpty<T>(values: T[]) -> bool {
+            for value in values {
+                return false;
+            }
+            return true;
+        }
+
+        fn Any(values: bool[]) -> bool {
+            for value in values {
+                if (value) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        fn All(values: bool[]) -> bool {
+            for value in values {
+                if (not value) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        fn None(values: bool[]) -> bool {
+            return not Any(values);
+        }
+
+        fn Contains<T>(values: T[], target: T) -> bool {
+            for value in values {
+                if (value == target) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        fn IndexOf<T>(values: T[], target: T) -> i32 {
+            for index | value in values {
+                if (value == target) {
+                    return index;
+                }
+            }
+            return -1;
+        }
+    }
+}

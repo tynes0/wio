@@ -1,0 +1,17 @@
+use std::io as console;
+use std::algorithms as algorithms;
+
+fn Entry(args: string[]) -> i32 {
+    let values: i32[] = [2, 4, 6, 8];
+    let flags: bool[] = [true, true, false];
+
+    let first = algorithms::FirstOr(values, 99);
+    let anyFlag = algorithms::Any(flags);
+    let allFlag = algorithms::All(flags);
+    let isEmpty = algorithms::IsEmpty(values);
+    let hasSix = algorithms::Contains(values, 6);
+    let hasFive = algorithms::Contains(values, 5);
+
+    console::Print($"Std algorithms: ${first}/${anyFlag}/${allFlag}/${isEmpty}/${hasSix}/${hasFive}");
+    return 0;
+}

@@ -1,0 +1,81 @@
+realm std {
+    realm fs {
+        use @CppHeader("std_fs.h");
+
+        @Native
+        @CppName(wio::runtime::std_fs::Exists)
+        fn Exists(path: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_fs::IsFile)
+        fn IsFile(path: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_fs::IsDirectory)
+        fn IsDirectory(path: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_fs::CreateDirectories)
+        fn CreateDirectories(path: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_fs::Remove)
+        fn Remove(path: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_fs::CopyFile)
+        fn CopyFile(source: string, target: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_fs::MoveFile)
+        fn MoveFile(source: string, target: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_fs::CurrentPath)
+        fn CurrentPath() -> string;
+
+        @Native
+        @CppName(wio::runtime::std_fs::ReadText)
+        fn ReadText(path: string) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_fs::WriteText)
+        fn WriteText(path: string, text: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_fs::AppendText)
+        fn AppendText(path: string, text: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_fs::FileSize)
+        fn FileSize(path: string) -> i64;
+
+        fn IsMissing(path: string) -> bool {
+            return not Exists(path);
+        }
+
+        fn EnsureDirectory(path: string) -> bool {
+            if (Exists(path)) {
+                return IsDirectory(path);
+            }
+
+            return CreateDirectories(path);
+        }
+
+        fn ReadTextOr(path: string, fallback: string) -> string {
+            if (Exists(path)) {
+                return ReadText(path);
+            }
+
+            return fallback;
+        }
+
+        fn HasText(path: string) -> bool {
+            if (not Exists(path)) {
+                return false;
+            }
+
+            return FileSize(path) > (0 fit i64);
+        }
+    }
+}

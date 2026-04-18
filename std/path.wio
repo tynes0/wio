@@ -1,0 +1,57 @@
+realm std {
+    realm path {
+        use @CppHeader("std_fs.h");
+
+        @Native
+        @CppName(wio::runtime::std_fs::IsAbsolute)
+        fn IsAbsolute(path: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_fs::FileName)
+        fn FileName(path: string) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_fs::Stem)
+        fn Stem(path: string) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_fs::Extension)
+        fn Extension(path: string) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_fs::ParentPath)
+        fn ParentPath(path: string) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_fs::Normalize)
+        fn Normalize(path: string) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_fs::Join)
+        fn Join(left: string, right: string) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_fs::Join3)
+        fn Join3(first: string, second: string, third: string) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_fs::ChangeExtension)
+        fn ChangeExtension(path: string, extension: string) -> string;
+
+        fn HasParent(path: string) -> bool {
+            return ParentPath(path) != "";
+        }
+
+        fn HasExtension(path: string) -> bool {
+            return Extension(path) != "";
+        }
+
+        fn Join4(first: string, second: string, third: string, fourth: string) -> string {
+            return Join(Join3(first, second, third), fourth);
+        }
+
+        fn FileNameWithoutExtension(path: string) -> string {
+            return Stem(path);
+        }
+    }
+}

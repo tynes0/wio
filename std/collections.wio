@@ -3,5 +3,32 @@ realm std {
         type DynArray<T> = T[];
         type Map<K, V> = Dict<K, V>;
         type OrderedMap<K, V> = Tree<K, V>;
+
+        fn ContainsKey<K, V>(values: Map<K, V>, key: K) -> bool {
+            for existingKey | value in values {
+                if (existingKey == key) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        fn ContainsValue<K, V>(values: Map<K, V>, target: V) -> bool {
+            for key | value in values {
+                if (value == target) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        fn GetOr<K, V>(values: Map<K, V>, key: K, fallback: V) -> V {
+            for existingKey | value in values {
+                if (existingKey == key) {
+                    return value;
+                }
+            }
+            return fallback;
+        }
     }
 }

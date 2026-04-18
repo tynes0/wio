@@ -19,10 +19,17 @@ realm std {
         @Instantiate(f64)
         fn Print<T>(value: T) -> i32;
 
+        fn PrintLine() -> i32 {
+            return Print("\n");
+        }
+
         fn PrintLine<T>(value: T) -> i32 {
             Print(value);
-            Print("\n");
-            return 0;
+            return Print("\n");
+        }
+
+        fn PrintSpace() -> i32 {
+            return Print(" ");
         }
     }
 }

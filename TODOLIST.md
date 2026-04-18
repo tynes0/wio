@@ -411,6 +411,10 @@ This is one of the language-defining features and needs to be extremely solid.
 - [ ] Define what methods arrays should expose.
 - [ ] Define what methods dictionaries should expose.
 - [ ] Decide whether methods are language-provided, stdlib-provided, or both.
+- [ ] Make arrays and dictionaries eventually feel class-like at call sites
+      (for example `values.len()`, `values.contains(x)`, `map.get(key)`),
+      even if the first implementation is lowered through stdlib helpers or
+      compiler sugar.
 - [ ] Define `len`, `contains`, `push`, `remove`, `clear`, `keys`, `values`,
       and iterator access.
 

@@ -1,0 +1,15 @@
+use std::io as console;
+use std::algorithms as algorithms;
+
+fn Entry(args: string[]) -> i32 {
+    let values: i32[] = [4, 6, 8];
+    let flags: bool[] = [false, false, false];
+
+    let hasSix = algorithms::Contains(values, 6);
+    let indexEight = algorithms::IndexOf(values, 8);
+    let indexFive = algorithms::IndexOf(values, 5);
+    let noneFlag = algorithms::None(flags);
+
+    console::Print($"Std algorithms extended: ${hasSix}/${indexEight}/${indexFive}/${noneFlag}");
+    return 0;
+}

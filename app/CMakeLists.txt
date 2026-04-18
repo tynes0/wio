@@ -545,6 +545,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "Static export sum: 42"
     )
 
+    add_wio_host_interop_test(
+        wio_test_sdk_static_api_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/exported_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_static_api_host.cpp"
+        "SDK static: 42"
+    )
+
     add_wio_shared_host_interop_test(
         wio_test_shared_export_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/exported_library.wio"
@@ -566,11 +573,25 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "Module lifecycle: table=1 caps=15 schema=0 exports=4 commands=2 events=2 v1 load=0 counter=48 add=51"
     )
 
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_module_easy_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/module_lifecycle.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_module_easy_host.cpp"
+        "SDK easy: before=42 afterAdd=45 afterTick=51 exports=4 commands=2 events=2"
+    )
+
     add_wio_shared_reload_interop_test(
         wio_test_module_reload_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/module_reload.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/module_reload_host.cpp"
         "Module reload: table=1 caps=63 schema=1 exports=4 commands=2 events=2 v1 load=0 restore=0 before=42 after=42 tick=48 add=51"
+    )
+
+    add_wio_shared_reload_interop_test(
+        wio_test_sdk_module_hot_reload_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/module_reload.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_module_hot_reload_host.cpp"
+        "SDK reload: before=40 afterAdd=43 afterReload=43 afterTick=49 generation=2"
     )
 
     add_wio_shared_reload_interop_test(
@@ -615,9 +636,37 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_std_math_extended_run
+        "${CMAKE_SOURCE_DIR}/tests/std_math_extended_run.wio"
+        "Std math extended: 49/-1/3/true"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_std_collections_alias_run
         "${CMAKE_SOURCE_DIR}/tests/std_collections_alias.wio"
         "Std collections: 22"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_std_collections_helpers_run
+        "${CMAKE_SOURCE_DIR}/tests/std_collections_helpers_run.wio"
+        "Std collections helpers: true/false/3/-1/true"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_std_algorithms_run
+        "${CMAKE_SOURCE_DIR}/tests/std_algorithms_run.wio"
+        "Std algorithms: 2/true/false/false/true/false"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_std_algorithms_extended_run
+        "${CMAKE_SOURCE_DIR}/tests/std_algorithms_extended_run.wio"
+        "Std algorithms extended: true/2/-1/true"
         --run
     )
 

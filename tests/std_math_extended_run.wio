@@ -1,0 +1,12 @@
+use std::io as console;
+use std::math as math;
+
+fn Entry(args: string[]) -> i32 {
+    let squared = math::Square(7);
+    let sign = math::Sign(-5);
+    let lerped = math::Lerp(2.0f, 6.0f, 0.25f);
+    let inRange = math::InRangeInclusive(7, 0, 10);
+
+    console::Print($"Std math extended: ${squared}/${sign}/${lerped}/${inRange}");
+    return 0;
+}
