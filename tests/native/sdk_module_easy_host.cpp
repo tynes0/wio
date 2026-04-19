@@ -17,7 +17,7 @@ int main(int argc, char** argv)
         module.update(2.0f);
 
         auto getCounter = module.load_command<std::function<std::int32_t()>>("counter.get");
-        auto addCounter = wio_load_function<std::int32_t(std::int32_t)>(module, "counter.add");
+        auto addCounter = module.load_function<std::int32_t(std::int32_t)>("counter.add");
         auto broadcastTick = module.load_event<std::function<void(float)>>("game.tick");
 
         const std::int32_t before = getCounter();

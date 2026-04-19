@@ -1,0 +1,67 @@
+realm std {
+    realm console {
+        use @CppHeader("std_console.h");
+
+        @Native
+        @CppName(wio::runtime::std_console::WriteValue)
+        @Instantiate(string)
+        @Instantiate(bool)
+        @Instantiate(char)
+        @Instantiate(i8)
+        @Instantiate(i16)
+        @Instantiate(i32)
+        @Instantiate(i64)
+        @Instantiate(u8)
+        @Instantiate(u16)
+        @Instantiate(u32)
+        @Instantiate(u64)
+        @Instantiate(f32)
+        @Instantiate(f64)
+        fn Print<T>(value: T) -> i32;
+
+        fn PrintLine() -> i32 {
+            return Print("\n");
+        }
+
+        fn PrintLine<T>(value: T) -> i32 {
+            Print(value);
+            return Print("\n");
+        }
+
+        fn PrintSpace() -> i32 {
+            return Print(" ");
+        }
+        
+        @Native
+        @CppName(wio::runtime::std_console::Input)
+        fn Input(prompt: string) -> string;
+        
+        @Native
+        @CppName(wio::runtime::std_console::Input)
+        fn Input() -> string;
+                
+        @Native
+        @CppName(wio::runtime::std_console::InputN)
+        fn InputN(count: usize) -> string;
+        
+        @Native
+        @CppName(wio::runtime::std_console::InputChar)
+        fn InputChar(isHidden: bool) -> char;
+        
+        @Native
+        @CppName(wio::runtime::std_console::InputChar)
+        fn InputChar() -> char;
+        
+        @Native
+        @CppName(wio::runtime::std_console::InputWord)
+        fn InputWord() -> string;
+        
+        @Native
+        @CppName(wio::runtime::std_console::InputUntil)
+        fn InputUntil(delimeter: char, includeDelimeter: bool) -> string;
+        
+        @Native
+        @CppName(wio::runtime::std_console::InputUntil)
+        fn InputUntil(delimeter: char) -> string;
+    }
+}

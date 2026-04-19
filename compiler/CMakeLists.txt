@@ -44,6 +44,7 @@ target_compile_definitions(wio_compiler
         WIO_STD_SOURCE_DIR="${WIO_STD_SOURCE_DIR}"
         WIO_BACKEND_CXX_COMPILER="${WIO_BACKEND_CXX_COMPILER}"
         WIO_BACKEND_AR="${WIO_BACKEND_AR}"
+        _CRT_SECURE_NO_WARNINGS
 )
 
 # Warning options

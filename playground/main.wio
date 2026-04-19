@@ -1,7 +1,7 @@
-use std::io as console;
+use std::console as Console;
 use std::math as Math;
 
 fn Entry() -> i32
 {
-    console::Print($"Max: ${std::math::Max(12, 14)}");
+    Console.Print(Console.Input(">>> "));
 }

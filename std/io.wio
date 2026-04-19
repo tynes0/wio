@@ -1,9 +1,9 @@
 realm std {
     realm io {
-        use @CppHeader("std_io.h");
+        use @CppHeader("std_console.h");
 
         @Native
-        @CppName(wio::runtime::std_io::WriteValue)
+        @CppName(wio::runtime::std_console::WriteValue)
         @Instantiate(string)
         @Instantiate(bool)
         @Instantiate(char)
