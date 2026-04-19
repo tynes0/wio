@@ -1,0 +1,23 @@
+realm std {
+    realm strings {
+        fn IsEmpty(value: string) -> bool {
+            return value.Empty();
+        }
+
+        fn IsNullOrWhiteSpace(value: string) -> bool {
+            return value.Trim().Empty();
+        }
+
+        fn Join(values: string[], separator: string) -> string {
+            return values.Join(separator);
+        }
+
+        fn Concat(values: string[]) -> string {
+            return values.Join("");
+        }
+
+        fn Lines(value: string) -> string[] {
+            return value.Lines();
+        }
+    }
+}

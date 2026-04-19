@@ -381,6 +381,203 @@ namespace wio::codegen
             return primitiveName == "f32" || primitiveName == "f64";
         }
 
+        std::string_view getIntrinsicHelperName(const IntrinsicMember member)
+        {
+            switch (member)
+            {
+            case IntrinsicMember::ArrayCount:
+            case IntrinsicMember::DictCount:
+            case IntrinsicMember::StringCount:
+                return "Count";
+            case IntrinsicMember::ArrayEmpty:
+            case IntrinsicMember::DictEmpty:
+            case IntrinsicMember::StringEmpty:
+                return "Empty";
+            case IntrinsicMember::ArrayCapacity:
+                return "ArrayCapacity";
+            case IntrinsicMember::ArrayContains:
+                return "ArrayContains";
+            case IntrinsicMember::ArrayIndexOf:
+                return "ArrayIndexOf";
+            case IntrinsicMember::ArrayLastIndexOf:
+                return "ArrayLastIndexOf";
+            case IntrinsicMember::ArrayFirst:
+                return "ArrayFirst";
+            case IntrinsicMember::ArrayLast:
+                return "ArrayLast";
+            case IntrinsicMember::ArrayGetOr:
+                return "ArrayGetOr";
+            case IntrinsicMember::ArrayClone:
+                return "ArrayClone";
+            case IntrinsicMember::ArraySlice:
+                return "ArraySlice";
+            case IntrinsicMember::ArrayTake:
+                return "ArrayTake";
+            case IntrinsicMember::ArraySkip:
+                return "ArraySkip";
+            case IntrinsicMember::ArrayConcat:
+                return "ArrayConcat";
+            case IntrinsicMember::ArrayReversed:
+                return "ArrayReversed";
+            case IntrinsicMember::ArrayJoin:
+                return "ArrayJoin";
+            case IntrinsicMember::ArrayPush:
+                return "ArrayPush";
+            case IntrinsicMember::ArrayPushFront:
+                return "ArrayPushFront";
+            case IntrinsicMember::ArrayPop:
+                return "ArrayPop";
+            case IntrinsicMember::ArrayPopFront:
+                return "ArrayPopFront";
+            case IntrinsicMember::ArrayInsert:
+                return "ArrayInsert";
+            case IntrinsicMember::ArrayClear:
+                return "ArrayClear";
+            case IntrinsicMember::ArrayRemoveAt:
+                return "ArrayRemoveAt";
+            case IntrinsicMember::ArrayRemove:
+                return "ArrayRemove";
+            case IntrinsicMember::ArrayExtend:
+                return "ArrayExtend";
+            case IntrinsicMember::ArrayReserve:
+                return "ArrayReserve";
+            case IntrinsicMember::ArrayShrinkToFit:
+                return "ArrayShrinkToFit";
+            case IntrinsicMember::ArrayFill:
+                return "ArrayFill";
+            case IntrinsicMember::ArrayReverse:
+                return "ArrayReverse";
+            case IntrinsicMember::ArraySort:
+                return "ArraySort";
+            case IntrinsicMember::ArraySorted:
+                return "ArraySorted";
+            case IntrinsicMember::DictContainsKey:
+                return "DictContainsKey";
+            case IntrinsicMember::DictContainsValue:
+                return "DictContainsValue";
+            case IntrinsicMember::DictGet:
+                return "DictGet";
+            case IntrinsicMember::DictGetOr:
+                return "DictGetOr";
+            case IntrinsicMember::DictTryGet:
+                return "DictTryGet";
+            case IntrinsicMember::DictSet:
+                return "DictSet";
+            case IntrinsicMember::DictGetOrAdd:
+                return "DictGetOrAdd";
+            case IntrinsicMember::DictKeys:
+                return "DictKeys";
+            case IntrinsicMember::DictValues:
+                return "DictValues";
+            case IntrinsicMember::DictClone:
+                return "DictClone";
+            case IntrinsicMember::DictMerge:
+                return "DictMerge";
+            case IntrinsicMember::DictExtend:
+                return "DictExtend";
+            case IntrinsicMember::DictClear:
+                return "DictClear";
+            case IntrinsicMember::DictRemove:
+                return "DictRemove";
+            case IntrinsicMember::TreeFirstKey:
+                return "TreeFirstKey";
+            case IntrinsicMember::TreeFirstValue:
+                return "TreeFirstValue";
+            case IntrinsicMember::TreeLastKey:
+                return "TreeLastKey";
+            case IntrinsicMember::TreeLastValue:
+                return "TreeLastValue";
+            case IntrinsicMember::TreeFloorKeyOr:
+                return "TreeFloorKeyOr";
+            case IntrinsicMember::TreeCeilKeyOr:
+                return "TreeCeilKeyOr";
+            case IntrinsicMember::StringContains:
+                return "StringContains";
+            case IntrinsicMember::StringContainsChar:
+                return "StringContainsChar";
+            case IntrinsicMember::StringStartsWith:
+                return "StringStartsWith";
+            case IntrinsicMember::StringEndsWith:
+                return "StringEndsWith";
+            case IntrinsicMember::StringIndexOf:
+                return "StringIndexOf";
+            case IntrinsicMember::StringLastIndexOf:
+                return "StringLastIndexOf";
+            case IntrinsicMember::StringIndexOfChar:
+                return "StringIndexOfChar";
+            case IntrinsicMember::StringLastIndexOfChar:
+                return "StringLastIndexOfChar";
+            case IntrinsicMember::StringFirst:
+                return "StringFirst";
+            case IntrinsicMember::StringLast:
+                return "StringLast";
+            case IntrinsicMember::StringGetOr:
+                return "StringGetOr";
+            case IntrinsicMember::StringSlice:
+                return "StringSlice";
+            case IntrinsicMember::StringSliceFrom:
+                return "StringSliceFrom";
+            case IntrinsicMember::StringTake:
+                return "StringTake";
+            case IntrinsicMember::StringSkip:
+                return "StringSkip";
+            case IntrinsicMember::StringLeft:
+                return "StringLeft";
+            case IntrinsicMember::StringRight:
+                return "StringRight";
+            case IntrinsicMember::StringTrim:
+                return "StringTrim";
+            case IntrinsicMember::StringTrimStart:
+                return "StringTrimStart";
+            case IntrinsicMember::StringTrimEnd:
+                return "StringTrimEnd";
+            case IntrinsicMember::StringToLower:
+                return "StringToLower";
+            case IntrinsicMember::StringToUpper:
+                return "StringToUpper";
+            case IntrinsicMember::StringReplace:
+                return "StringReplace";
+            case IntrinsicMember::StringReplaceFirst:
+                return "StringReplaceFirst";
+            case IntrinsicMember::StringRepeat:
+                return "StringRepeat";
+            case IntrinsicMember::StringSplit:
+                return "StringSplit";
+            case IntrinsicMember::StringLines:
+                return "StringLines";
+            case IntrinsicMember::StringPadLeft:
+                return "StringPadLeft";
+            case IntrinsicMember::StringPadRight:
+                return "StringPadRight";
+            case IntrinsicMember::StringReversed:
+                return "StringReversed";
+            case IntrinsicMember::StringAppend:
+                return "StringAppend";
+            case IntrinsicMember::StringPush:
+                return "StringPush";
+            case IntrinsicMember::StringInsert:
+                return "StringInsert";
+            case IntrinsicMember::StringErase:
+                return "StringErase";
+            case IntrinsicMember::StringClear:
+                return "StringClear";
+            case IntrinsicMember::StringReverse:
+                return "StringReverse";
+            case IntrinsicMember::StringReplaceInPlace:
+                return "StringReplaceInPlace";
+            case IntrinsicMember::StringTrimInPlace:
+                return "StringTrimInPlace";
+            case IntrinsicMember::StringToLowerInPlace:
+                return "StringToLowerInPlace";
+            case IntrinsicMember::StringToUpperInPlace:
+                return "StringToUpperInPlace";
+            case IntrinsicMember::None:
+                return {};
+            }
+
+            return {};
+        }
+
         std::vector<std::string> getBaseInterfaces(const std::vector<NodePtr<AttributeStatement>>& attributes)
         {
             std::vector<std::string> bases;
@@ -859,8 +1056,11 @@ namespace wio::codegen
     {
         header_.str("");
         emitHeaderLine("#include <cstdint>");
+        emitHeaderLine("#include <cstddef>");
+        emitHeaderLine("#include <algorithm>");
         emitHeaderLine("#include <limits>");
         emitHeaderLine("#include <string>");
+        emitHeaderLine("#include <utility>");
         emitHeaderLine("#include <vector>");
         emitHeaderLine("#include <array>");
         emitHeaderLine("#include <format>");
@@ -871,6 +1071,7 @@ namespace wio::codegen
         emitHeaderLine("#include <unordered_map>");
         emitHeaderLine("#include <exception.h>");
         emitHeaderLine("#include <fit.h>");
+        emitHeaderLine("#include <intrinsics.h>");
         emitHeaderLine("#include <module_api.h>");
         emitHeaderLine("#include <ref.h>");
         emitHeaderLine("");
@@ -908,6 +1109,7 @@ namespace wio::codegen
         dedent();
         emitHeaderLine("}");
         emitHeaderLine("");
+
     }
 
     void CppGenerator::emitModuleApiTable(const Ref<Program>& program)
@@ -1721,9 +1923,89 @@ namespace wio::codegen
         node.index->accept(*this);
         emit("]");
     }
-    
+
+    bool CppGenerator::emitIntrinsicMemberAccess(MemberAccessExpression& node)
+    {
+        if (node.intrinsicMember == IntrinsicMember::None)
+            return false;
+
+        auto functionType = node.refType.Lock();
+        if (!functionType || functionType->kind() != sema::TypeKind::Function)
+            return false;
+
+        std::size_t referenceDepth = 0;
+        Ref<sema::Type> receiverType = node.object->refType.Lock();
+        while (receiverType && receiverType->kind() == sema::TypeKind::Alias)
+            receiverType = receiverType.AsFast<sema::AliasType>()->aliasedType;
+        while (receiverType && receiverType->kind() == sema::TypeKind::Reference)
+        {
+            ++referenceDepth;
+            receiverType = receiverType.AsFast<sema::ReferenceType>()->referredType;
+            while (receiverType && receiverType->kind() == sema::TypeKind::Alias)
+                receiverType = receiverType.AsFast<sema::AliasType>()->aliasedType;
+        }
+
+        auto emitReceiver = [&]()
+        {
+            if (referenceDepth == 0)
+            {
+                node.object->accept(*this);
+                return;
+            }
+
+            emit("(");
+            for (std::size_t i = 0; i < referenceDepth; ++i)
+                emit("*");
+            emit("(");
+            node.object->accept(*this);
+            emit("))");
+        };
+
+        auto emitArgumentName = [&](std::size_t index)
+        {
+            emit("_wio_arg" + std::to_string(index));
+        };
+
+        auto intrinsicFunctionType = functionType.AsFast<sema::FunctionType>();
+        const std::string_view helperName = getIntrinsicHelperName(node.intrinsicMember);
+        if (helperName.empty())
+            return false;
+
+        emit("([&](");
+        for (size_t i = 0; i < intrinsicFunctionType->paramTypes.size(); ++i)
+        {
+            emit(toCppType(intrinsicFunctionType->paramTypes[i]));
+            emit(" _wio_arg" + std::to_string(i));
+            if (i + 1 < intrinsicFunctionType->paramTypes.size())
+                emit(", ");
+        }
+        emit(") -> ");
+        emit(toCppType(intrinsicFunctionType->returnType));
+        emit(" { ");
+
+        if (intrinsicFunctionType->returnType && !intrinsicFunctionType->returnType->isVoid())
+            emit("return ");
+
+        emit("wio::intrinsics::");
+        emit(std::string(helperName));
+        emit("(");
+        emitReceiver();
+
+        for (size_t i = 0; i < intrinsicFunctionType->paramTypes.size(); ++i)
+        {
+            emit(", ");
+            emitArgumentName(i);
+        }
+        emit(")");
+        emit("; })");
+        return true;
+    }
+
     void CppGenerator::visit(MemberAccessExpression& node)
     {
+        if (emitIntrinsicMemberAccess(node))
+            return;
+
         auto emitMemberName = [&]()
         {
             if (auto memberSym = node.member->referencedSymbol.Lock();

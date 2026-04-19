@@ -1,0 +1,51 @@
+use std::io as console;
+
+fn Entry() -> i32 {
+    mut scores: Dict<string, i32> = {
+        "hp": 7,
+        "mana": 3
+    };
+    let ordered: Tree<i32, i32> = {< 1: 10, 3: 30, 5: 50 >};
+
+    let hasHp = scores.ContainsKey("hp");
+    let hasValueThree = scores.ContainsValue(3);
+    let hp = scores.Get("hp");
+    let missing = scores.GetOr("armor", -1);
+
+    mut foundHp = 0;
+    let tryHp = scores.TryGet("hp", ref foundHp);
+
+    scores.Set("armor", 9);
+    let rage = scores.GetOrAdd("rage", 11);
+
+    let keys = scores.Keys();
+    let values = scores.Values();
+    let clone = scores.Clone();
+    let keysHaveArmor = keys.Contains("armor");
+    let valuesHaveRage = values.Contains(11);
+    let cloneHasMana = clone.ContainsKey("mana");
+
+    let bonus: Dict<string, i32> = {
+        "shield": 5
+    };
+
+    let merged = scores.Merge(bonus);
+    let mergedHasShield = merged.ContainsKey("shield");
+    scores.Extend(bonus);
+    let afterExtendCount: i32 = scores.Count() fit i32;
+    let removed = scores.Remove("mana");
+    let afterRemoveCount: i32 = scores.Count() fit i32;
+
+    let firstKey = ordered.FirstKey();
+    let firstValue = ordered.FirstValue();
+    let lastKey = ordered.LastKey();
+    let lastValue = ordered.LastValue();
+    let floorKey = ordered.FloorKeyOr(4, -1);
+    let ceilKey = ordered.CeilKeyOr(4, -1);
+
+    scores.Clear();
+    let isEmpty = scores.Empty();
+
+    console::Print($"Dict members: ${hasHp}/${hasValueThree}/${hp}/${missing}/${tryHp}/${foundHp}/${rage}/${keys.Count() fit i32}/${keysHaveArmor}/${valuesHaveRage}/${cloneHasMana}/${mergedHasShield}/${afterExtendCount}/${removed}/${afterRemoveCount}/${firstKey}/${firstValue}/${lastKey}/${lastValue}/${floorKey}/${ceilKey}/${isEmpty}");
+    return 0;
+}

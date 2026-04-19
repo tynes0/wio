@@ -1,0 +1,8 @@
+fn Entry() -> i32 {
+    let values: Dict<string, i32> = {
+        "hp": 7
+    };
+
+    values.Remove("hp");
+    return 0;
+}

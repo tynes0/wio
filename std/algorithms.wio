@@ -1,17 +1,11 @@
 realm std {
     realm algorithms {
         fn FirstOr<T>(values: T[], fallback: T) -> T {
-            for value in values {
-                return value;
-            }
-            return fallback;
+            return values.GetOr(0, fallback);
         }
 
         fn IsEmpty<T>(values: T[]) -> bool {
-            for value in values {
-                return false;
-            }
-            return true;
+            return values.Empty();
         }
 
         fn Any(values: bool[]) -> bool {
@@ -37,21 +31,11 @@ realm std {
         }
 
         fn Contains<T>(values: T[], target: T) -> bool {
-            for value in values {
-                if (value == target) {
-                    return true;
-                }
-            }
-            return false;
+            return values.Contains(target);
         }
 
         fn IndexOf<T>(values: T[], target: T) -> i32 {
-            for index | value in values {
-                if (value == target) {
-                    return index;
-                }
-            }
-            return -1;
+            return values.IndexOf(target) fit i32;
         }
     }
 }

@@ -1,0 +1,48 @@
+use std::io as console;
+
+fn Entry() -> i32 {
+    mut values: i32[] = [5, 2, 9, 2];
+    let fixed: [i32; 4] = [5, 2, 9, 2];
+    mut sortable: [i32; 4] = [5, 2, 9, 2];
+    mut fillable: [i32; 3] = [1, 2, 3];
+    let words: string[] = ["wi", "o", "arena"];
+
+    let count: i32 = values.Count() fit i32;
+    let firstIndex: i32 = values.IndexOf(2) fit i32;
+    let lastIndex: i32 = values.LastIndexOf(2) fit i32;
+    let first = values.First();
+    let last = values.Last();
+    let fallback = values.GetOr(20, -1);
+
+    let slice = values.Slice(1, 2);
+    let taken = values.Take(2);
+    let skipped = values.Skip(2);
+    let concat = fixed.Concat(fixed);
+    let reversed = fixed.Reversed();
+
+    sortable.Sort();
+    sortable.Reverse();
+    fillable.Fill(7);
+
+    let joinedText = words.Join("-");
+
+    values.Push(4);
+    values.PushFront(1);
+    let popValue = values.Pop();
+    values.Insert(2, 8);
+    let removedTwo = values.Remove(2);
+    values.RemoveAt(0);
+
+    let extra: i32[] = [7, 6];
+    values.Extend(extra);
+    values.Reserve(20);
+    let reserveOkay = values.Capacity() >= 20;
+    let popFrontValue = values.PopFront();
+    let afterOpsCount: i32 = values.Count() fit i32;
+
+    values.Clear();
+    let isEmpty = values.Empty();
+
+    console::Print($"Array members: ${count}/${firstIndex}/${lastIndex}/${first}/${last}/${fallback}/${slice.Count() fit i32}/${slice.First()}/${taken.Last()}/${skipped.First()}/${concat.Count() fit i32}/${reversed.First()}/${sortable.First()}/${sortable.Last()}/${fillable.First() == 7 and fillable.Last() == 7}/${joinedText}/${popValue}/${removedTwo}/${reserveOkay}/${popFrontValue}/${afterOpsCount}/${isEmpty}");
+    return 0;
+}

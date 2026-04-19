@@ -4,31 +4,44 @@ realm std {
         type Map<K, V> = Dict<K, V>;
         type OrderedMap<K, V> = Tree<K, V>;
 
+        fn Count<T>(values: DynArray<T>) -> usize {
+            return values.Count();
+        }
+
+        fn Contains<T>(values: DynArray<T>, target: T) -> bool {
+            return values.Contains(target);
+        }
+
         fn ContainsKey<K, V>(values: Map<K, V>, key: K) -> bool {
-            for existingKey | value in values {
-                if (existingKey == key) {
-                    return true;
-                }
-            }
-            return false;
+            return values.ContainsKey(key);
         }
 
         fn ContainsValue<K, V>(values: Map<K, V>, target: V) -> bool {
-            for key | value in values {
-                if (value == target) {
-                    return true;
-                }
-            }
-            return false;
+            return values.ContainsValue(target);
         }
 
         fn GetOr<K, V>(values: Map<K, V>, key: K, fallback: V) -> V {
-            for existingKey | value in values {
-                if (existingKey == key) {
-                    return value;
-                }
-            }
-            return fallback;
+            return values.GetOr(key, fallback);
+        }
+
+        fn Keys<K, V>(values: Map<K, V>) -> K[] {
+            return values.Keys();
+        }
+
+        fn Values<K, V>(values: Map<K, V>) -> V[] {
+            return values.Values();
+        }
+
+        fn Merge<K, V>(left: Map<K, V>, right: Map<K, V>) -> Map<K, V> {
+            return left.Merge(right);
+        }
+
+        fn FirstKey<K, V>(values: OrderedMap<K, V>) -> K {
+            return values.FirstKey();
+        }
+
+        fn LastKey<K, V>(values: OrderedMap<K, V>) -> K {
+            return values.LastKey();
         }
     }
 }

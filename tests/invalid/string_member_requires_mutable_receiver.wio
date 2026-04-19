@@ -1,0 +1,5 @@
+fn Entry() -> i32 {
+    let text = "wio";
+    text.Append("!");
+    return 0;
+}

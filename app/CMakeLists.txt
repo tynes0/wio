@@ -651,6 +651,27 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_array_member_methods_run
+        "${CMAKE_SOURCE_DIR}/tests/array_member_methods.wio"
+        "Array members: 4/1/3/5/2/-1/2/2/2/9/8/2/9/2/true/wi-o-arena/4/true/true/5/5/true"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_dictionary_member_methods_run
+        "${CMAKE_SOURCE_DIR}/tests/dictionary_member_methods.wio"
+        "Dict members: true/true/7/-1/true/7/11/4/true/true/true/true/5/true/4/1/10/5/50/3/5/true"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_string_member_methods_run
+        "${CMAKE_SOURCE_DIR}/tests/string_member_methods.wio"
+        "String members: 9/true/true/true/true/4/8/W/a/\\?/Arena/Arena/Wio/Arena/Wio/Arena/wio arena/WIO ARENA/Wio World/Wio wio/xoxoxo/2/Arena/3/c/007/700/cba/!DLROWOIW/hi/true"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_std_collections_helpers_run
         "${CMAKE_SOURCE_DIR}/tests/std_collections_helpers_run.wio"
         "Std collections helpers: true/false/3/-1/true"
@@ -1014,6 +1035,30 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_for_array_step_requires_integer
         "${CMAKE_SOURCE_DIR}/tests/invalid/for_array_step_requires_integer.wio"
         "Array step expressions must be integer values"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_array_member_requires_mutable_receiver
+        "${CMAKE_SOURCE_DIR}/tests/invalid/array_member_requires_mutable_receiver.wio"
+        "Container member 'Push' requires a mutable receiver"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_static_array_mutating_member_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/static_array_mutating_member_not_supported.wio"
+        "Static arrays do not support member 'Push'. Use a dynamic array instead"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_dictionary_member_requires_mutable_receiver
+        "${CMAKE_SOURCE_DIR}/tests/invalid/dictionary_member_requires_mutable_receiver.wio"
+        "Container member 'Remove' requires a mutable receiver"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_string_member_requires_mutable_receiver
+        "${CMAKE_SOURCE_DIR}/tests/invalid/string_member_requires_mutable_receiver.wio"
+        "Container member 'Append' requires a mutable receiver"
     )
 
     add_wio_failure_test(

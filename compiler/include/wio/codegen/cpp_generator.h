@@ -30,6 +30,7 @@ namespace wio::codegen
 
         void emitStatements(const std::vector<NodePtr<Statement>>& statements);
         void generateHeader();
+        bool emitIntrinsicMemberAccess(MemberAccessExpression& node);
 
         void emit(const std::string& str);
         void emitLine(const std::string& str = "");

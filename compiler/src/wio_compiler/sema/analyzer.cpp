@@ -10,6 +10,7 @@
 #include "wio/common/exception.h"
 #include "wio/common/logger.h"
 #include "wio/common/utility.h"
+#include "wio/sema/intrinsic_member_resolver.h"
 
 #include "compiler.h"
 namespace wio::sema
@@ -153,6 +154,62 @@ namespace wio::sema
                 type = type.AsFast<AliasType>()->aliasedType;
 
             return type;
+        }
+
+        bool canMutateIntrinsicReceiver(const NodePtr<Expression>& expression)
+        {
+            if (!expression)
+                return false;
+
+            if (auto receiverSymbol = expression->referencedSymbol.Lock(); receiverSymbol)
+            {
+                if (receiverSymbol->flags.get_isMutable())
+                    return true;
+            }
+
+            Ref<Type> receiverType = unwrapAliasType(expression->refType.Lock());
+            while (receiverType && receiverType->kind() == TypeKind::Reference)
+            {
+                auto referenceType = receiverType.AsFast<ReferenceType>();
+                if (!referenceType->isMutable)
+                    return false;
+
+                receiverType = unwrapAliasType(referenceType->referredType);
+            }
+
+            return false;
+        }
+
+        bool isUnsupportedStaticArrayMember(const Ref<Type>& type, std::string_view memberName)
+        {
+            Ref<Type> resolvedType = unwrapAliasType(type);
+            if (!resolvedType || resolvedType->kind() != TypeKind::Array)
+                return false;
+
+            auto arrayType = resolvedType.AsFast<ArrayType>();
+            if (arrayType->arrayKind != ArrayType::ArrayKind::Static)
+                return false;
+
+            return isDynamicArrayOnlyIntrinsicMemberName(memberName);
+        }
+
+        bool isStringType(const Ref<Type>& type)
+        {
+            Ref<Type> resolvedType = unwrapAliasType(type);
+            return resolvedType &&
+                   resolvedType->kind() == TypeKind::Primitive &&
+                   resolvedType.AsFast<PrimitiveType>()->name == "string";
+        }
+
+        bool isIntrinsicReceiverType(const Ref<Type>& type)
+        {
+            Ref<Type> resolvedType = unwrapAliasType(type);
+            if (!resolvedType)
+                return false;
+
+            return resolvedType->kind() == TypeKind::Array ||
+                   resolvedType->kind() == TypeKind::Dictionary ||
+                   isStringType(resolvedType);
         }
 
         bool shouldAutoReadReferenceType(const Ref<Type>& type)
@@ -1568,13 +1625,20 @@ namespace wio::sema
     {
         node.object->accept(*this);
         Ref<Type> objType = node.object->refType.Lock();
+        Ref<Type> resolvedObjType = unwrapAliasType(objType);
 
         node.index->accept(*this);
         Ref<Type> idxType = node.index->refType.Lock();
 
-        if (objType->kind() != TypeKind::Array)
+        if (!resolvedObjType)
         {
-            WIO_LOG_ADD_ERROR(node.object->location(), "Type '{}' is not an array and cannot be indexed.", objType->toString());
+            node.refType = Compiler::get().getTypeContext().getUnknown();
+            return;
+        }
+
+        if (resolvedObjType->kind() != TypeKind::Array && !isStringType(resolvedObjType))
+        {
+            WIO_LOG_ADD_ERROR(node.object->location(), "Type '{}' is not an array or string and cannot be indexed.", objType->toString());
             node.refType = Compiler::get().getTypeContext().getUnknown();
             return;
         }
@@ -1584,13 +1648,20 @@ namespace wio::sema
             WIO_LOG_ADD_ERROR(node.index->location(), "Array index must be an integer.");
         }
         
-        auto arrType = objType.AsFast<ArrayType>();
-        node.refType = arrType->elementType;
+        if (resolvedObjType->kind() == TypeKind::Array)
+        {
+            auto arrType = resolvedObjType.AsFast<ArrayType>();
+            node.refType = arrType->elementType;
+            return;
+        }
+
+        node.refType = Compiler::get().getTypeContext().getChar();
     }
     
     void SemanticAnalyzer::visit(MemberAccessExpression& node)
     {
         node.object->accept(*this);
+        node.intrinsicMember = IntrinsicMember::None;
 
         Ref<Symbol> leftSymbol = node.object->referencedSymbol.Lock();
         Ref<Type> leftType = nullptr;
@@ -1628,6 +1699,38 @@ namespace wio::sema
         };
 
         Ref<Type> actualStructType = nullptr;
+        auto resolveIntrinsicMemberOnType = [&](const Ref<Type>& candidateType) -> bool
+        {
+            if (auto resolution = resolveIntrinsicMember(Compiler::get().getTypeContext(), candidateType, node.member->token.value);
+                resolution.has_value())
+            {
+                node.intrinsicMember = resolution->member;
+                node.refType = resolution->memberType;
+
+                if (resolution->requiresMutableReceiver && !canMutateIntrinsicReceiver(node.object))
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "Container member '{}' requires a mutable receiver.", node.member->token.value);
+                }
+
+                if (auto memberId = node.member.Get(); memberId)
+                    memberId->refType = resolution->memberType;
+
+                return true;
+            }
+
+            if (isUnsupportedStaticArrayMember(candidateType, node.member->token.value))
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.member->location(),
+                    "Static arrays do not support member '{}'. Use a dynamic array instead.",
+                    node.member->token.value
+                );
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return true;
+            }
+
+            return false;
+        };
         
         if (leftSymbol && leftSymbol->kind == SymbolKind::Namespace)
         {
@@ -1656,6 +1759,11 @@ namespace wio::sema
                 actualStructType = baseType;
                 foundMember = findMemberInHierarchy(actualStructType, node.member->token.value);
             }
+            else if (isIntrinsicReceiverType(baseType))
+            {
+                if (resolveIntrinsicMemberOnType(baseType))
+                    return;
+            }
             else if (baseType->kind() == TypeKind::Reference)
             {
                 Ref<Type> referredType = baseType.AsFast<ReferenceType>()->referredType;
@@ -1679,10 +1787,15 @@ namespace wio::sema
                     actualStructType = referredType;
                     foundMember = findMemberInHierarchy(actualStructType, node.member->token.value);
                 }
+                else if (referredType && isIntrinsicReceiverType(referredType))
+                {
+                    if (resolveIntrinsicMemberOnType(referredType))
+                        return;
+                }
                 else
                 {
                     WIO_LOG_ADD_ERROR(node.member->location(), 
-                        "Cannot access member '{}'. Reference points to '{}', which is not a struct.", 
+                        "Cannot access member '{}'. Reference points to '{}', which is not a struct, array, dictionary, or string.", 
                         node.member->token.value, 
                         referredType ? referredType->toString() : "Unknown");
                     node.refType = Compiler::get().getTypeContext().getUnknown();
@@ -2277,14 +2390,14 @@ namespace wio::sema
             return; 
         }
 
-        if (!calleeSym)
+        Ref<Type> calleeType = node.callee->refType.Lock();
+        if (!calleeSym && (!calleeType || calleeType->kind() != TypeKind::Function))
         {
             WIO_LOG_ADD_ERROR(node.location(), "Called expression is undefined.");
             node.refType = Compiler::get().getTypeContext().getUnknown();
             return;
         }
 
-        Ref<Type> calleeType = node.callee->refType.Lock();
         if (!calleeType || calleeType->kind() != TypeKind::Function)
             calleeType = calleeSym->type;
         if (!constructorGenericBindings.empty())

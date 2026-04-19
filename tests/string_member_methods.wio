@@ -1,0 +1,54 @@
+use std::io as console;
+
+fn Entry() -> i32 {
+    let text = "  Wio Arena  ";
+    let trimmed = text.Trim();
+
+    let count: i32 = trimmed.Count() fit i32;
+    let containsArena = trimmed.Contains("Arena");
+    let containsUpperA = trimmed.ContainsChar('A');
+    let starts = trimmed.StartsWith("Wio");
+    let ends = trimmed.EndsWith("Arena");
+    let arenaIndex: i32 = trimmed.IndexOf("Arena") fit i32;
+    let lastAIndex: i32 = trimmed.LastIndexOfChar('a') fit i32;
+    let first = trimmed.First();
+    let last = trimmed.Last();
+    let fallback = trimmed.GetOr(100, '?');
+
+    let slice = trimmed.Slice(4, 5);
+    let sliceFrom = trimmed.SliceFrom(4);
+    let take = trimmed.Take(3);
+    let skip = trimmed.Skip(4);
+    let left = trimmed.Left(3);
+    let right = trimmed.Right(5);
+
+    let lower = trimmed.ToLower();
+    let upper = trimmed.ToUpper();
+    let replaced = trimmed.Replace("Arena", "World");
+    let replacedFirst = "wio wio".ReplaceFirst("wio", "Wio");
+    let repeated = "xo".Repeat(3);
+
+    let split = trimmed.Split(" ");
+    let lines = "a\nb\r\nc".Lines();
+    let padLeft = "7".PadLeft(3, '0');
+    let padRight = "7".PadRight(3, '0');
+    let reversed = "abc".Reversed();
+
+    mut build = "Wi";
+    build.Append("o");
+    build.Push('!');
+    build.Insert(3, " Arena");
+    build.Erase(3, 1);
+    build.ReplaceInPlace("Arena", "World");
+    build.ToLowerInPlace();
+    build.ToUpperInPlace();
+    build.Reverse();
+
+    mut spaced = "  hi  ";
+    spaced.TrimInPlace();
+
+    let isWhiteSpace = "   ".Trim().Empty();
+
+    console::Print($"String members: ${count}/${containsArena}/${containsUpperA}/${starts}/${ends}/${arenaIndex}/${lastAIndex}/${first}/${last}/${fallback}/${slice}/${sliceFrom}/${take}/${skip}/${left}/${right}/${lower}/${upper}/${replaced}/${replacedFirst}/${repeated}/${split.Count() fit i32}/${split.Last()}/${lines.Count() fit i32}/${lines.Last()}/${padLeft}/${padRight}/${reversed}/${build}/${spaced}/${isWhiteSpace}");
+    return 0;
+}
