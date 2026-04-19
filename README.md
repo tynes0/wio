@@ -236,7 +236,7 @@ Current status:
 - Lifecycle-capable modules now also export a single `WioModuleGetApi()` entry
   that returns a function-pointer table for host integration.
 - The shared host ABI now lives in a reusable runtime header:
-  `compiler/include/runtime/module_api.h`.
+  `sdk/include/module_api.h`.
 - `WioModuleGetApi()` now also exposes an export registry, so hosts can
   discover Wio-callable entrypoints by logical name and inspect their primitive
   ABI metadata before resolving symbols.
@@ -249,7 +249,7 @@ Current status:
   `WioFindModuleEventHook(...)`, `WioCountModuleEventHooksForEvent(...)`,
   `WioBroadcastModuleEvent(...)`, and `WioInvokeModuleEventHook(...)`.
 - Numeric `fit` lowering now goes through a runtime helper in
-  `compiler/include/runtime/fit.h`, which avoids the mixed signed/unsigned
+  `runtime/include/fit.h`, which avoids the mixed signed/unsigned
   clamp crash seen in earlier generated code.
 
 Example:
@@ -286,8 +286,8 @@ fn RestoreState(snapshot: i32) -> i32 {
 
 ### Host SDK
 
-The runtime include directory now also exposes a higher-level C++ host SDK in
-[`compiler/include/runtime/wio_sdk.h`](/C:/Users/cihan/RiderProjects/wio/compiler/include/runtime/wio_sdk.h).
+The public SDK now lives in
+[`sdk/include/wio_sdk.h`](/C:/Users/cihan/RiderProjects/wio/sdk/include/wio_sdk.h).
 
 It sits on top of `module_api.h` and is designed to make host-side usage much
 shorter:

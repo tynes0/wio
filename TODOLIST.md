@@ -258,6 +258,12 @@ The language reference now exists, but it still needs to become a true spec.
 - [ ] Add end-to-end examples such as `Array<T>`, `Result<T>`, `Pair<K, V>`,
       generic utility functions, and container-oriented generic loops once the
       rest of the surface is frozen.
+- [ ] Design variadic generics / generic packs for future versions, including a
+      source-level spelling for forms like `Foo<Args...>(args: Args...)`.
+- [ ] Decide whether the variadic-generic design also applies to generic
+      `object` / `component` / `interface` declarations.
+- [ ] Design how variadic generic expansion should interact with overload
+      resolution, backend template lowering, and future constraint systems.
 
 ---
 
@@ -450,6 +456,12 @@ This is one of the language-defining features and needs to be extremely solid.
 - [ ] Define how `ref` and `view` participate in overload resolution.
 - [ ] Define ambiguity diagnostics.
 - [ ] Define whether default arguments will ever exist.
+- [ ] If default arguments are accepted, design a first source surface such as
+      `fn Foo(x: i32, y: i32 = 0)` and specify:
+  - call-site omission rules,
+  - interaction with overload resolution,
+  - interaction with named/defaulted later parameters,
+  - and lowering into generated C++.
 
 ### 9.3 Lambdas
 
@@ -654,6 +666,13 @@ contract.
       type-aware parsing where needed.
 - [ ] Decide where attributes are legal.
 - [ ] Decide attribute ordering and duplicate-attribute rules.
+- [ ] Design generic-filtering attributes for future versions, including:
+  - `@Apply(...)` to restrict a generic declaration to an explicit set of
+    allowed concrete types,
+  - and `@ApplyIf(...)` to gate application on compile-time boolean predicates
+    such as future type-trait style checks.
+- [ ] Decide whether `@Apply` / `@ApplyIf` remain attribute-based or evolve
+      into a more explicit generic-constraint syntax later.
 
 ### 14.2 `@From`
 
@@ -844,6 +863,10 @@ This is currently one of the biggest blockers to real multi-file projects.
       shipping a giant all-in-one runtime surface.
 - [ ] Prefer pure Wio implementations for higher-level algorithms, helpers,
       and utilities once the language surface is stable enough.
+- [ ] Grow the standard library toward richer object/component-based domains
+      where it makes sense, rather than only free-function helpers.
+- [ ] Design a future math/vector library with `Vec2`, `Vec3`, and `Vec4`
+      component types plus companion helper/object APIs.
 
 ### 17.4 Collections Library
 
@@ -879,10 +902,24 @@ This is currently one of the biggest blockers to real multi-file projects.
 
 - [x] Plan a user-facing host/bridge SDK as a separate public surface instead
       of exposing compiler internals directly.
+- [ ] Move runtime/std implementation code out of compiler-owned header-only
+      internals where practical and into a separate packaged static library
+      project.
+- [ ] Make the compiler/backend link against that packaged Wio runtime/std
+      library instead of embedding most implementation details directly through
+      headers.
+- [ ] Keep user-facing packaged distributions focused on compiled/linkable
+      runtime artifacts rather than exposing all implementation details in the
+      compiler project tree.
 - [ ] Package the project conceptually as:
   - `wio.exe` for compilation,
   - a small runtime support layer,
   - and a public host/embedding SDK for C++ integration.
+- [ ] Clarify the long-term packaging split between:
+  - compiler toolchain,
+  - low-level runtime library,
+  - std implementation library,
+  - and public host SDK headers/libs.
 - [ ] Define the public host SDK around embedding/interop concerns only:
   - module loading,
   - export discovery,

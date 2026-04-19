@@ -103,12 +103,21 @@ $hostCompileArgs = @(
     "g++",
     "-std=c++20",
     "-I",
-    (Join-Path $repoRoot "compiler\\include\\runtime"),
+    (Join-Path $repoRoot "sdk\\include"),
     $resolvedHostSource
 )
 
 if ($Target -eq "static") {
     $hostCompileArgs += $libraryOutput
+
+    $runtimeLibrary = Join-Path $repoRoot "$BuildDir\\runtime\\backend\\libwio_runtime.a"
+    if (-not (Test-Path -LiteralPath $runtimeLibrary)) {
+        $runtimeLibrary = Join-Path $repoRoot "$BuildDir\\runtime\\libwio_runtime.a"
+    }
+
+    if (Test-Path -LiteralPath $runtimeLibrary) {
+        $hostCompileArgs += $runtimeLibrary
+    }
 }
 
 $hostCompileArgs += @("-o", $hostOutput)

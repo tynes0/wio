@@ -42,6 +42,15 @@ namespace wio
 #endif
         }
 
+        std::filesystem::path getSdkIncludeDir()
+        {
+#ifdef WIO_SDK_INCLUDE_DIR
+            return { WIO_SDK_INCLUDE_DIR };
+#else
+            return {};
+#endif
+        }
+
         std::filesystem::path getStdSourceDir()
         {
 #ifdef WIO_STD_SOURCE_DIR
@@ -67,6 +76,30 @@ namespace wio
 #else
             return "ar";
 #endif
+        }
+
+        std::filesystem::path getRuntimeLibraryFile()
+        {
+#ifdef WIO_RUNTIME_LIBRARY_FILE
+            return { WIO_RUNTIME_LIBRARY_FILE };
+#else
+            return {};
+#endif
+        }
+
+        std::vector<std::filesystem::path> getBackendSystemIncludeDirs(const std::filesystem::path& runtimeIncludeDir,
+                                                                       const std::filesystem::path& sdkIncludeDir)
+        {
+            std::vector<std::filesystem::path> includeDirs;
+            includeDirs.reserve(2);
+
+            if (!runtimeIncludeDir.empty())
+                includeDirs.push_back(runtimeIncludeDir);
+
+            if (!sdkIncludeDir.empty())
+                includeDirs.push_back(sdkIncludeDir);
+
+            return includeDirs;
         }
 
         std::string normalizeLowercase(std::string value)
@@ -167,6 +200,14 @@ namespace wio
         }
 
         void appendIncludeDirectories(std::stringstream& cmd, const std::vector<std::string>& includeDirs)
+        {
+            for (const auto& includeDir : includeDirs)
+            {
+                cmd << " -I" << quotePath(includeDir);
+            }
+        }
+
+        void appendIncludeDirectories(std::stringstream& cmd, const std::vector<std::filesystem::path>& includeDirs)
         {
             for (const auto& includeDir : includeDirs)
             {
@@ -332,7 +373,7 @@ namespace wio
         }
 
         std::vector<std::filesystem::path> buildHeaderSearchRoots(const std::filesystem::path& sourceDir,
-                                                                  const std::filesystem::path& runtimePath,
+                                                                  const std::vector<std::filesystem::path>& systemIncludeDirs,
                                                                   const std::vector<std::string>& includeDirs)
         {
             std::vector<std::filesystem::path> roots;
@@ -348,7 +389,9 @@ namespace wio
             };
 
             appendRoot(sourceDir);
-            appendRoot(runtimePath);
+
+            for (const auto& systemIncludeDir : systemIncludeDirs)
+                appendRoot(systemIncludeDir);
 
             for (const auto& includeDir : includeDirs)
                 appendRoot(includeDir);
@@ -388,7 +431,7 @@ namespace wio
 
         bool validateRequiredCppHeaders(const Ref<Program>& program,
                                         const std::filesystem::path& sourceDir,
-                                        const std::filesystem::path& runtimePath,
+                                        const std::vector<std::filesystem::path>& systemIncludeDirs,
                                         const std::vector<std::string>& includeDirs)
         {
             std::vector<RequiredCppHeader> headers;
@@ -397,7 +440,7 @@ namespace wio
             if (headers.empty())
                 return true;
 
-            const auto searchRoots = buildHeaderSearchRoots(sourceDir, runtimePath, includeDirs);
+            const auto searchRoots = buildHeaderSearchRoots(sourceDir, systemIncludeDirs, includeDirs);
             const std::string formattedRoots = formatSearchRoots(searchRoots);
             bool isValid = true;
 
@@ -413,6 +456,33 @@ namespace wio
                     formattedRoots
                 );
                 isValid = false;
+            }
+
+            return isValid;
+        }
+
+        bool validateRequiredSystemIncludeDirectories(const std::vector<std::filesystem::path>& systemIncludeDirs)
+        {
+            bool isValid = true;
+
+            for (const auto& includeDir : systemIncludeDirs)
+            {
+                if (includeDir.empty())
+                    continue;
+
+                std::filesystem::path resolvedPath = std::filesystem::absolute(includeDir).make_preferred();
+                std::error_code ec;
+                const bool exists = std::filesystem::exists(resolvedPath, ec) && !ec;
+                const bool isDirectory = exists && std::filesystem::is_directory(resolvedPath, ec) && !ec;
+
+                if (!exists || !isDirectory)
+                {
+                    Logger::get().addError(
+                        "Required backend include directory '{}' was not found or is not a directory.",
+                        resolvedPath.string()
+                    );
+                    isValid = false;
+                }
             }
 
             return isValid;
@@ -487,7 +557,7 @@ namespace wio
 
         bool validateBackendConfiguration(const Ref<Program>& program,
                                           const std::filesystem::path& sourceDir,
-                                          const std::filesystem::path& runtimePath)
+                                          const std::vector<std::filesystem::path>& systemIncludeDirs)
         {
             std::vector<std::string> moduleDirs = gAppData.argParser.GetValuesOf<std::string>("MODULE-DIR");
             std::vector<std::string> includeDirs = gAppData.argParser.GetValuesOf<std::string>("INCLUDE-DIR");
@@ -496,11 +566,12 @@ namespace wio
             std::vector<std::string> backendArgs = gAppData.argParser.GetValuesOf<std::string>("BACKEND-ARG");
 
             bool isValid = true;
+            isValid = validateRequiredSystemIncludeDirectories(systemIncludeDirs) && isValid;
             isValid = validateSearchDirectories(moduleDirs, "Module search directory") && isValid;
             isValid = validateSearchDirectories(includeDirs, "Include directory") && isValid;
             isValid = validateSearchDirectories(linkDirs, "Link directory") && isValid;
             isValid = validateBackendFileInputs(backendArgs, linkLibraries) && isValid;
-            isValid = validateRequiredCppHeaders(program, sourceDir, runtimePath, includeDirs) && isValid;
+            isValid = validateRequiredCppHeaders(program, sourceDir, systemIncludeDirs, includeDirs) && isValid;
             return isValid;
         }
 
@@ -852,8 +923,11 @@ namespace wio
             sema::SemanticAnalyzer analyzer;
             analyzer.analyze(program);
 
-            std::filesystem::path runtimePath = getRuntimeIncludeDir();
-            validateBackendConfiguration(program, sourcePath.parent_path(), runtimePath);
+            std::filesystem::path runtimeIncludeDir = getRuntimeIncludeDir();
+            std::filesystem::path sdkIncludeDir = getSdkIncludeDir();
+            const std::vector<std::filesystem::path> systemIncludeDirs =
+                getBackendSystemIncludeDirs(runtimeIncludeDir, sdkIncludeDir);
+            validateBackendConfiguration(program, sourcePath.parent_path(), systemIncludeDirs);
 
             WIO_LOG_PROCESS_WARNINGS();
             WIO_LOG_PROCESS_ERRORS(CompilationError);
@@ -878,9 +952,23 @@ namespace wio
                 return EXIT_FAILURE;
             }
             
-            if (runtimePath.empty() || !std::filesystem::exists(runtimePath))
+            if (runtimeIncludeDir.empty() || !std::filesystem::exists(runtimeIncludeDir))
             {
-                WIO_LOG_FATAL("Runtime headers were not found. Expected directory: {}", runtimePath.string());
+                WIO_LOG_FATAL("Runtime headers were not found. Expected directory: {}", runtimeIncludeDir.string());
+                return EXIT_FAILURE;
+            }
+
+            if (sdkIncludeDir.empty() || !std::filesystem::exists(sdkIncludeDir))
+            {
+                WIO_LOG_FATAL("SDK headers were not found. Expected directory: {}", sdkIncludeDir.string());
+                return EXIT_FAILURE;
+            }
+
+            std::filesystem::path runtimeLibraryPath = getRuntimeLibraryFile();
+            if ((gAppData.buildTarget == BuildTarget::Executable || gAppData.buildTarget == BuildTarget::SharedLibrary) &&
+                (runtimeLibraryPath.empty() || !std::filesystem::exists(runtimeLibraryPath)))
+            {
+                WIO_LOG_FATAL("Runtime library was not found. Expected file: {}", runtimeLibraryPath.string());
                 return EXIT_FAILURE;
             }
 
@@ -939,7 +1027,7 @@ namespace wio
                     compileCmd << quoteCommand(backendCompiler);
                     compileCmd << " -std=c++20 -c ";
                     compileCmd << quotePath(inputPath);
-                    compileCmd << " -I" << quotePath(runtimePath);
+                    appendIncludeDirectories(compileCmd, systemIncludeDirs);
                     appendIncludeDirectories(compileCmd, includeDirs);
                     appendBackendArguments(compileCmd, backendCompilerArgs);
                     compileCmd << " -o " << quotePath(objectPath);
@@ -994,11 +1082,12 @@ namespace wio
                 }
 
                 cmd << quotePath(cppPath);
-                cmd << " -I" << quotePath(runtimePath);
+                appendIncludeDirectories(cmd, systemIncludeDirs);
                 appendIncludeDirectories(cmd, includeDirs);
                 appendBackendArguments(cmd, backendArgs);
                 appendLinkDirectories(cmd, linkDirs);
                 appendLinkLibraries(cmd, linkLibraries);
+                cmd << " " << quotePath(runtimeLibraryPath);
                 cmd << " -o " << quotePath(outputPath);
                 
                 // NOLINTNEXTLINE(concurrency-mt-unsafe)

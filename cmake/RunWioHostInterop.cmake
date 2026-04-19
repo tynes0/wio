@@ -42,6 +42,10 @@ if(NOT DEFINED WIO_HOST_LINK_ARGS OR WIO_HOST_LINK_ARGS STREQUAL "")
     set(WIO_HOST_LINK_ARGS)
 endif()
 
+if(NOT DEFINED WIO_RUNTIME_LIBRARY OR WIO_RUNTIME_LIBRARY STREQUAL "")
+    set(WIO_RUNTIME_LIBRARY)
+endif()
+
 get_filename_component(wio_output_dir "${WIO_OUTPUT}" DIRECTORY)
 file(MAKE_DIRECTORY "${wio_output_dir}")
 
@@ -79,12 +83,16 @@ set(host_build_command
     "${WIO_HOST_CXX}"
     -std=c++20
     -I
-    "${CMAKE_SOURCE_DIR}/compiler/include/runtime"
+    "${CMAKE_SOURCE_DIR}/sdk/include"
     "${WIO_HOST_SOURCE}"
 )
 
 if(WIO_HOST_LINK_WITH_WIO_OUTPUT)
     list(APPEND host_build_command "${WIO_OUTPUT}")
+endif()
+
+if(WIO_TARGET STREQUAL "static" AND WIO_RUNTIME_LIBRARY)
+    list(APPEND host_build_command "${WIO_RUNTIME_LIBRARY}")
 endif()
 
 if(WIO_HOST_LINK_ARGS)

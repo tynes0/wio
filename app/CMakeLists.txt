@@ -201,6 +201,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
                 -DWIO_OUTPUT=${wio_host_output}
                 -DWIO_HOST_SOURCE=${host_source}
                 -DWIO_HOST_CXX=${WIO_BACKEND_CXX_COMPILER}
+                -DWIO_RUNTIME_LIBRARY=${WIO_BACKEND_RUNTIME_LIBRARY}
                 -DWIO_TARGET=static
                 -DWIO_EXPECT=${expected_output}
                 "-DWIO_ARGS=${wio_host_args_serialized}"

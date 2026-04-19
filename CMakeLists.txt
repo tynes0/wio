@@ -11,6 +11,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+set(WIO_BACKEND_CXX_COMPILER "g++" CACHE STRING "C++ compiler used for generated Wio output.")
+set(WIO_BACKEND_AR "ar" CACHE STRING "Archiver used for generated Wio static libraries.")
+
 if (MSVC)
     add_compile_options(/Zc:__cplusplus)
 endif()
@@ -30,6 +33,8 @@ add_subdirectory(libs/coco)
 add_subdirectory(libs/frenum)
 
 # --- Main Project ---
+add_subdirectory(sdk)
+add_subdirectory(runtime)
 add_subdirectory(compiler)
 if (WIO_BUILD_APP)
     add_subdirectory(app)

@@ -1,23 +1,19 @@
-#pragma once
-
-#include <string>
-
-#include "exception.h"
+#include "std_assert.h"
 
 namespace wio::runtime::std_assert
 {
-    [[noreturn]] inline void Fail(const std::string& message)
+    [[noreturn]] void Fail(const std::string& message)
     {
         throw RuntimeException("Assertion failed: " + message);
     }
 
-    inline void Require(bool condition, const std::string& message)
+    void Require(bool condition, const std::string& message)
     {
         if (!condition)
             Fail(message);
     }
 
-    [[noreturn]] inline void Unreachable(const std::string& message)
+    [[noreturn]] void Unreachable(const std::string& message)
     {
         throw RuntimeException("Unreachable code reached: " + message);
     }
