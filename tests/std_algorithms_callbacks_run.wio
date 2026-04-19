@@ -1,0 +1,13 @@
+use std::algorithms as algo;
+use std::io as console;
+
+fn Entry() -> i32 {
+    let values: i32[] = [2, 4, 7, 9];
+
+    let anyBig = algo::AnyBy(values, (value: i32) => value > 6);
+    let allPositive = algo::AllBy(values, (value: i32) => value > 0);
+    let noneNegative = algo::NoneBy(values, (value: i32) => value < 0);
+    let found = algo::FindOr(values, (value: i32) => value == 7, -1);
+    console::Print($"Callback std: ${anyBig}/${allPositive}/${noneNegative}/${found}");
+    return 0;
+}

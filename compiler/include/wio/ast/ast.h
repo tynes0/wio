@@ -503,6 +503,8 @@ namespace wio
         NodePtr<Identifier> member;
         TokenType opType;
         IntrinsicMember intrinsicMember = IntrinsicMember::None;
+        std::vector<IntrinsicMember> intrinsicOverloadMembers;
+        std::vector<WeakRef<sema::Type>> intrinsicOverloadTypes;
 
         MemberAccessExpression(NodePtr<Expression> _object, NodePtr<Identifier> _member, TokenType _opType, common::Location _loc = common::Location::invalid());
         ~MemberAccessExpression() override;

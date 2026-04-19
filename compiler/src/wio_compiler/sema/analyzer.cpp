@@ -1537,9 +1537,23 @@ namespace wio::sema
     {
         if (node.elements.empty())
         {
-            // Todo: Empty array: We can make the type Unknown array for now, or we can expect a generic one.
-            // Let's call it [Unknown] for now.
-            node.refType = Compiler::get().getTypeContext().getOrCreateArrayType(Compiler::get().getTypeContext().getUnknown(), ArrayType::ArrayKind::Static, 0);
+            if (currentExpectedExpressionType_)
+            {
+                Ref<Type> expectedType = unwrapAliasType(currentExpectedExpressionType_);
+                if (expectedType && expectedType->kind() == TypeKind::Array)
+                {
+                    node.refType = expectedType;
+                    return;
+                }
+            }
+
+            // Fall back to an empty unknown array when no surrounding context can
+            // provide the intended element type.
+            node.refType = Compiler::get().getTypeContext().getOrCreateArrayType(
+                Compiler::get().getTypeContext().getUnknown(),
+                ArrayType::ArrayKind::Static,
+                0
+            );
             return;
         }
 
@@ -1662,6 +1676,8 @@ namespace wio::sema
     {
         node.object->accept(*this);
         node.intrinsicMember = IntrinsicMember::None;
+        node.intrinsicOverloadMembers.clear();
+        node.intrinsicOverloadTypes.clear();
 
         Ref<Symbol> leftSymbol = node.object->referencedSymbol.Lock();
         Ref<Type> leftType = nullptr;
@@ -1701,19 +1717,39 @@ namespace wio::sema
         Ref<Type> actualStructType = nullptr;
         auto resolveIntrinsicMemberOnType = [&](const Ref<Type>& candidateType) -> bool
         {
-            if (auto resolution = resolveIntrinsicMember(Compiler::get().getTypeContext(), candidateType, node.member->token.value);
-                resolution.has_value())
+            auto overloads = resolveIntrinsicMemberOverloads(Compiler::get().getTypeContext(), candidateType, node.member->token.value);
+            if (!overloads.empty())
             {
-                node.intrinsicMember = resolution->member;
-                node.refType = resolution->memberType;
-
-                if (resolution->requiresMutableReceiver && !canMutateIntrinsicReceiver(node.object))
+                if (overloads.size() == 1)
                 {
-                    WIO_LOG_ADD_ERROR(node.location(), "Container member '{}' requires a mutable receiver.", node.member->token.value);
-                }
+                    const auto& resolution = overloads.front();
+                    node.intrinsicMember = resolution.member;
+                    node.refType = resolution.memberType;
 
-                if (auto memberId = node.member.Get(); memberId)
-                    memberId->refType = resolution->memberType;
+                    if (resolution.requiresMutableReceiver && !canMutateIntrinsicReceiver(node.object))
+                    {
+                        WIO_LOG_ADD_ERROR(node.location(), "Container member '{}' requires a mutable receiver.", node.member->token.value);
+                    }
+
+                    if (auto memberId = node.member.Get(); memberId)
+                        memberId->refType = resolution.memberType;
+                }
+                else
+                {
+                    node.refType = Compiler::get().getTypeContext().getUnknown();
+                    node.intrinsicMember = IntrinsicMember::None;
+                    node.intrinsicOverloadMembers.reserve(overloads.size());
+                    node.intrinsicOverloadTypes.reserve(overloads.size());
+
+                    for (const auto& overload : overloads)
+                    {
+                        node.intrinsicOverloadMembers.push_back(overload.member);
+                        node.intrinsicOverloadTypes.emplace_back(overload.memberType);
+                    }
+
+                    if (auto memberId = node.member.Get(); memberId)
+                        memberId->refType = Compiler::get().getTypeContext().getUnknown();
+                }
 
                 return true;
             }
@@ -2391,6 +2427,114 @@ namespace wio::sema
         }
 
         Ref<Type> calleeType = node.callee->refType.Lock();
+        if (auto* memberAccess = node.callee->as<MemberAccessExpression>();
+            memberAccess && !memberAccess->intrinsicOverloadMembers.empty())
+        {
+            auto scoreIntrinsicOverload = [&](const Ref<FunctionType>& functionType) -> std::optional<int>
+            {
+                if (!functionType || functionType->paramTypes.size() != argTypes.size())
+                    return std::nullopt;
+
+                int currentScore = 0;
+                for (size_t i = 0; i < argTypes.size(); ++i)
+                {
+                    auto dest = functionType->paramTypes[i];
+                    const auto& src = argTypes[i];
+
+                    if (dest->isCompatibleWith(src) || (dest->isNumeric() && src->isNumeric()))
+                    {
+                        if (dest->kind() == TypeKind::Primitive && src->kind() == TypeKind::Primitive &&
+                            dest.AsFast<PrimitiveType>()->name == src.AsFast<PrimitiveType>()->name)
+                        {
+                            currentScore += 1000;
+                        }
+                        else if (dest->kind() == TypeKind::Primitive && src->kind() == TypeKind::Primitive)
+                        {
+                            currentScore += 100;
+                        }
+                        else
+                        {
+                            currentScore += 10;
+                        }
+                    }
+                    else if (isImplicitObjectViewBridge(dest, src))
+                    {
+                        currentScore += 9;
+                    }
+                    else if (isSafeRefCast(dest, src))
+                    {
+                        currentScore += 5;
+                    }
+                    else
+                    {
+                        return std::nullopt;
+                    }
+                }
+
+                return currentScore;
+            };
+
+            std::optional<size_t> bestIndex;
+            std::optional<int> bestScore;
+            bool isAmbiguous = false;
+
+            for (size_t i = 0; i < memberAccess->intrinsicOverloadTypes.size(); ++i)
+            {
+                Ref<Type> overloadType = memberAccess->intrinsicOverloadTypes[i].Lock();
+                if (!overloadType || overloadType->kind() != TypeKind::Function)
+                    continue;
+
+                auto score = scoreIntrinsicOverload(overloadType.AsFast<FunctionType>());
+                if (!score.has_value())
+                    continue;
+
+                if (!bestIndex.has_value() || *score > *bestScore)
+                {
+                    bestIndex = i;
+                    bestScore = *score;
+                    isAmbiguous = false;
+                }
+                else if (*score == *bestScore)
+                {
+                    isAmbiguous = true;
+                }
+            }
+
+            if (isAmbiguous)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Ambiguous function call to intrinsic member '{}'.", memberAccess->member->token.value);
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+
+            if (!bestIndex.has_value())
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "No matching function/constructor overload found.");
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+
+            memberAccess->intrinsicMember = memberAccess->intrinsicOverloadMembers[*bestIndex];
+            memberAccess->refType = memberAccess->intrinsicOverloadTypes[*bestIndex].Lock();
+            node.callee->refType = memberAccess->refType;
+            calleeType = memberAccess->refType.Lock();
+
+            if (isMutatingIntrinsicMember(memberAccess->intrinsicMember) && !canMutateIntrinsicReceiver(memberAccess->object))
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Container member '{}' requires a mutable receiver.", memberAccess->member->token.value);
+            }
+
+            if (!calleeType || calleeType->kind() != TypeKind::Function)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Called expression is undefined.");
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+
+            node.refType = calleeType.AsFast<FunctionType>()->returnType;
+            return;
+        }
+
         if (!calleeSym && (!calleeType || calleeType->kind() != TypeKind::Function))
         {
             WIO_LOG_ADD_ERROR(node.location(), "Called expression is undefined.");

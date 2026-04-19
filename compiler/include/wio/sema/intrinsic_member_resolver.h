@@ -21,6 +21,12 @@ namespace wio::sema
         std::string_view memberName
     );
 
+    std::vector<IntrinsicMemberResolution> resolveIntrinsicMemberOverloads(
+        TypeContext& typeContext,
+        const Ref<Type>& ownerType,
+        std::string_view memberName
+    );
+
     bool isDynamicArrayOnlyIntrinsicMemberName(std::string_view memberName) noexcept;
     bool isMutatingIntrinsicMember(IntrinsicMember member) noexcept;
 }

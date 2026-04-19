@@ -37,5 +37,42 @@ realm std {
         fn IndexOf<T>(values: T[], target: T) -> i32 {
             return values.IndexOf(target) fit i32;
         }
+
+        fn AnyBy<T>(values: T[], predicate: fn(T) -> bool) -> bool {
+            for value in values {
+                if (predicate(value)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        fn AllBy<T>(values: T[], predicate: fn(T) -> bool) -> bool {
+            for value in values {
+                if (not predicate(value)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        fn NoneBy<T>(values: T[], predicate: fn(T) -> bool) -> bool {
+            return not AnyBy(values, predicate);
+        }
+
+        fn FindOr<T>(values: T[], predicate: fn(T) -> bool, fallback: T) -> T {
+            for value in values {
+                if (predicate(value)) {
+                    return value;
+                }
+            }
+            return fallback;
+        }
+
+        fn ForEach<T>(values: T[], action: fn(T)) {
+            for value in values {
+                action(value);
+            }
+        }
     }
 }

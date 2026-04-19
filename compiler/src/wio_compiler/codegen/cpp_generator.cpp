@@ -2227,6 +2227,18 @@ namespace wio::codegen
             auto resolvedExpected = unwrapAliasType(expectedType);
             auto resolvedActual = unwrapAliasType(actualType);
 
+            if (resolvedExpected &&
+                resolvedExpected->kind() == sema::TypeKind::Function &&
+                argument &&
+                argument->is<LambdaExpression>())
+            {
+                emit(toCppType(expectedType));
+                emit("(");
+                argument->accept(*this);
+                emit(")");
+                return;
+            }
+
             if (resolvedExpected && resolvedActual &&
                 resolvedExpected->kind() == sema::TypeKind::Reference &&
                 !resolvedExpected->isCompatibleWith(resolvedActual))

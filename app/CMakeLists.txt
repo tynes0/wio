@@ -672,6 +672,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_intrinsic_member_overloads_run
+        "${CMAKE_SOURCE_DIR}/tests/intrinsic_member_overloads.wio"
+        "Intrinsic overloads: true/true/4/4/8/Arena/Arena/  7/7  /2/3/3"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_std_algorithms_callbacks_run
+        "${CMAKE_SOURCE_DIR}/tests/std_algorithms_callbacks_run.wio"
+        "Callback std: true/true/true/7"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_std_collections_helpers_run
         "${CMAKE_SOURCE_DIR}/tests/std_collections_helpers_run.wio"
         "Std collections helpers: true/false/3/-1/true"

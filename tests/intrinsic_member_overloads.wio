@@ -1,0 +1,21 @@
+use std::io as console;
+
+fn Entry() -> i32 {
+    let text = "Wio Arena";
+    let containsWord = text.Contains("Arena");
+    let containsChar = text.Contains('A');
+    let indexWord: i32 = text.IndexOf("Arena") fit i32;
+    let indexChar: i32 = text.IndexOf('A') fit i32;
+    let lastChar: i32 = text.LastIndexOf('a') fit i32;
+    let sliceOne = text.Slice(4);
+    let sliceTwo = text.Slice(4, 5);
+    let padLeft = "7".PadLeft(3);
+    let padRight = "7".PadRight(3);
+
+    let values: i32[] = [1, 2, 3, 4];
+    let tail = values.Slice(2);
+    let middle = values.Slice(1, 2);
+
+    console::Print($"Intrinsic overloads: ${containsWord}/${containsChar}/${indexWord}/${indexChar}/${lastChar}/${sliceOne}/${sliceTwo}/${padLeft}/${padRight}/${tail.Count() fit i32}/${tail.First()}/${middle.Last()}");
+    return 0;
+}

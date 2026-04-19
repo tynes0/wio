@@ -93,12 +93,23 @@ namespace wio::sema
             return typeContext.getOrCreateArrayType(elementType, ArrayType::ArrayKind::Dynamic);
         }
 
-        std::optional<IntrinsicMemberResolution> resolveArrayIntrinsicMember(TypeContext& typeContext,
-                                                                             const Ref<ArrayType>& arrayType,
-                                                                             const std::string_view memberName)
+        void appendMethodResolution(std::vector<IntrinsicMemberResolution>& overloads,
+                                    IntrinsicMember member,
+                                    const Ref<Type>& returnType,
+                                    std::vector<Ref<Type>> paramTypes,
+                                    TypeContext& typeContext,
+                                    const bool requiresMutableReceiver)
         {
+            overloads.push_back(makeMethodResolution(member, returnType, std::move(paramTypes), typeContext, requiresMutableReceiver));
+        }
+
+        std::vector<IntrinsicMemberResolution> resolveArrayIntrinsicMember(TypeContext& typeContext,
+                                                                           const Ref<ArrayType>& arrayType,
+                                                                           const std::string_view memberName)
+        {
+            std::vector<IntrinsicMemberResolution> overloads;
             if (!arrayType)
-                return std::nullopt;
+                return overloads;
 
             const Ref<Type> ownerType = arrayType;
             const Ref<Type> elementType = arrayType->elementType;
@@ -108,77 +119,81 @@ namespace wio::sema
             const bool supportsOrdering = supportsIntrinsicOrdering(elementType);
 
             if (memberName == "Count")
-                return makeMethodResolution(IntrinsicMember::ArrayCount, typeContext.getUSize(), {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayCount, typeContext.getUSize(), {}, typeContext, false);
             if (memberName == "Empty")
-                return makeMethodResolution(IntrinsicMember::ArrayEmpty, typeContext.getBool(), {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayEmpty, typeContext.getBool(), {}, typeContext, false);
             if (memberName == "Capacity")
-                return makeMethodResolution(IntrinsicMember::ArrayCapacity, typeContext.getUSize(), {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayCapacity, typeContext.getUSize(), {}, typeContext, false);
             if (memberName == "Contains" && supportsEquality)
-                return makeMethodResolution(IntrinsicMember::ArrayContains, typeContext.getBool(), { elementType }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayContains, typeContext.getBool(), { elementType }, typeContext, false);
             if (memberName == "IndexOf" && supportsEquality)
-                return makeMethodResolution(IntrinsicMember::ArrayIndexOf, typeContext.getISize(), { elementType }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayIndexOf, typeContext.getISize(), { elementType }, typeContext, false);
             if (memberName == "LastIndexOf" && supportsEquality)
-                return makeMethodResolution(IntrinsicMember::ArrayLastIndexOf, typeContext.getISize(), { elementType }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayLastIndexOf, typeContext.getISize(), { elementType }, typeContext, false);
             if (memberName == "First")
-                return makeMethodResolution(IntrinsicMember::ArrayFirst, elementType, {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayFirst, elementType, {}, typeContext, false);
             if (memberName == "Last")
-                return makeMethodResolution(IntrinsicMember::ArrayLast, elementType, {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayLast, elementType, {}, typeContext, false);
             if (memberName == "GetOr")
-                return makeMethodResolution(IntrinsicMember::ArrayGetOr, elementType, { typeContext.getUSize(), elementType }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayGetOr, elementType, { typeContext.getUSize(), elementType }, typeContext, false);
             if (memberName == "Clone")
-                return makeMethodResolution(IntrinsicMember::ArrayClone, ownerType, {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayClone, ownerType, {}, typeContext, false);
             if (memberName == "Slice")
-                return makeMethodResolution(IntrinsicMember::ArraySlice, dynamicArrayType, { typeContext.getUSize(), typeContext.getUSize() }, typeContext, false);
+            {
+                appendMethodResolution(overloads, IntrinsicMember::ArraySlice, dynamicArrayType, { typeContext.getUSize() }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::ArraySlice, dynamicArrayType, { typeContext.getUSize(), typeContext.getUSize() }, typeContext, false);
+            }
             if (memberName == "Take")
-                return makeMethodResolution(IntrinsicMember::ArrayTake, dynamicArrayType, { typeContext.getUSize() }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayTake, dynamicArrayType, { typeContext.getUSize() }, typeContext, false);
             if (memberName == "Skip")
-                return makeMethodResolution(IntrinsicMember::ArraySkip, dynamicArrayType, { typeContext.getUSize() }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::ArraySkip, dynamicArrayType, { typeContext.getUSize() }, typeContext, false);
             if (memberName == "Concat")
-                return makeMethodResolution(IntrinsicMember::ArrayConcat, dynamicArrayType, { ownerType }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayConcat, dynamicArrayType, { ownerType }, typeContext, false);
             if (memberName == "Reversed")
-                return makeMethodResolution(IntrinsicMember::ArrayReversed, ownerType, {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayReversed, ownerType, {}, typeContext, false);
             if (memberName == "Join" && isStringType(elementType))
-                return makeMethodResolution(IntrinsicMember::ArrayJoin, typeContext.getString(), { typeContext.getString() }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayJoin, typeContext.getString(), { typeContext.getString() }, typeContext, false);
             if (memberName == "Push" && supportsResizableMutation)
-                return makeMethodResolution(IntrinsicMember::ArrayPush, typeContext.getVoid(), { elementType }, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayPush, typeContext.getVoid(), { elementType }, typeContext, true);
             if (memberName == "PushFront" && supportsResizableMutation)
-                return makeMethodResolution(IntrinsicMember::ArrayPushFront, typeContext.getVoid(), { elementType }, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayPushFront, typeContext.getVoid(), { elementType }, typeContext, true);
             if (memberName == "Pop" && supportsResizableMutation)
-                return makeMethodResolution(IntrinsicMember::ArrayPop, elementType, {}, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayPop, elementType, {}, typeContext, true);
             if (memberName == "PopFront" && supportsResizableMutation)
-                return makeMethodResolution(IntrinsicMember::ArrayPopFront, elementType, {}, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayPopFront, elementType, {}, typeContext, true);
             if (memberName == "Insert" && supportsResizableMutation)
-                return makeMethodResolution(IntrinsicMember::ArrayInsert, typeContext.getVoid(), { typeContext.getUSize(), elementType }, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayInsert, typeContext.getVoid(), { typeContext.getUSize(), elementType }, typeContext, true);
             if (memberName == "RemoveAt" && supportsResizableMutation)
-                return makeMethodResolution(IntrinsicMember::ArrayRemoveAt, typeContext.getVoid(), { typeContext.getUSize() }, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayRemoveAt, typeContext.getVoid(), { typeContext.getUSize() }, typeContext, true);
             if (memberName == "Remove" && supportsResizableMutation && supportsEquality)
-                return makeMethodResolution(IntrinsicMember::ArrayRemove, typeContext.getBool(), { elementType }, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayRemove, typeContext.getBool(), { elementType }, typeContext, true);
             if (memberName == "Clear" && supportsResizableMutation)
-                return makeMethodResolution(IntrinsicMember::ArrayClear, typeContext.getVoid(), {}, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayClear, typeContext.getVoid(), {}, typeContext, true);
             if (memberName == "Extend" && supportsResizableMutation)
-                return makeMethodResolution(IntrinsicMember::ArrayExtend, typeContext.getVoid(), { dynamicArrayType }, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayExtend, typeContext.getVoid(), { dynamicArrayType }, typeContext, true);
             if (memberName == "Reserve" && supportsResizableMutation)
-                return makeMethodResolution(IntrinsicMember::ArrayReserve, typeContext.getVoid(), { typeContext.getUSize() }, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayReserve, typeContext.getVoid(), { typeContext.getUSize() }, typeContext, true);
             if (memberName == "ShrinkToFit" && supportsResizableMutation)
-                return makeMethodResolution(IntrinsicMember::ArrayShrinkToFit, typeContext.getVoid(), {}, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayShrinkToFit, typeContext.getVoid(), {}, typeContext, true);
             if (memberName == "Fill")
-                return makeMethodResolution(IntrinsicMember::ArrayFill, typeContext.getVoid(), { elementType }, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayFill, typeContext.getVoid(), { elementType }, typeContext, true);
             if (memberName == "Reverse")
-                return makeMethodResolution(IntrinsicMember::ArrayReverse, typeContext.getVoid(), {}, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayReverse, typeContext.getVoid(), {}, typeContext, true);
             if (memberName == "Sort" && supportsOrdering)
-                return makeMethodResolution(IntrinsicMember::ArraySort, typeContext.getVoid(), {}, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::ArraySort, typeContext.getVoid(), {}, typeContext, true);
             if (memberName == "Sorted" && supportsOrdering)
-                return makeMethodResolution(IntrinsicMember::ArraySorted, ownerType, {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::ArraySorted, ownerType, {}, typeContext, false);
 
-            return std::nullopt;
+            return overloads;
         }
 
-        std::optional<IntrinsicMemberResolution> resolveDictionaryIntrinsicMember(TypeContext& typeContext,
-                                                                                  const Ref<DictionaryType>& dictType,
-                                                                                  const std::string_view memberName)
+        std::vector<IntrinsicMemberResolution> resolveDictionaryIntrinsicMember(TypeContext& typeContext,
+                                                                                const Ref<DictionaryType>& dictType,
+                                                                                const std::string_view memberName)
         {
+            std::vector<IntrinsicMemberResolution> overloads;
             if (!dictType)
-                return std::nullopt;
+                return overloads;
 
             const Ref<Type> ownerType = dictType;
             const Ref<Type> keyType = dictType->keyType;
@@ -189,150 +204,189 @@ namespace wio::sema
             const bool supportsValueEquality = supportsIntrinsicEquality(valueType);
 
             if (memberName == "Count")
-                return makeMethodResolution(IntrinsicMember::DictCount, typeContext.getUSize(), {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::DictCount, typeContext.getUSize(), {}, typeContext, false);
             if (memberName == "Empty")
-                return makeMethodResolution(IntrinsicMember::DictEmpty, typeContext.getBool(), {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::DictEmpty, typeContext.getBool(), {}, typeContext, false);
             if (memberName == "ContainsKey")
-                return makeMethodResolution(IntrinsicMember::DictContainsKey, typeContext.getBool(), { keyType }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::DictContainsKey, typeContext.getBool(), { keyType }, typeContext, false);
             if (memberName == "ContainsValue" && supportsValueEquality)
-                return makeMethodResolution(IntrinsicMember::DictContainsValue, typeContext.getBool(), { valueType }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::DictContainsValue, typeContext.getBool(), { valueType }, typeContext, false);
             if (memberName == "Get")
-                return makeMethodResolution(IntrinsicMember::DictGet, valueType, { keyType }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::DictGet, valueType, { keyType }, typeContext, false);
             if (memberName == "GetOr")
-                return makeMethodResolution(IntrinsicMember::DictGetOr, valueType, { keyType, valueType }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::DictGetOr, valueType, { keyType, valueType }, typeContext, false);
             if (memberName == "TryGet")
-                return makeMethodResolution(IntrinsicMember::DictTryGet, typeContext.getBool(), { keyType, outValueRefType }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::DictTryGet, typeContext.getBool(), { keyType, outValueRefType }, typeContext, false);
             if (memberName == "Set")
-                return makeMethodResolution(IntrinsicMember::DictSet, typeContext.getVoid(), { keyType, valueType }, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::DictSet, typeContext.getVoid(), { keyType, valueType }, typeContext, true);
             if (memberName == "GetOrAdd")
-                return makeMethodResolution(IntrinsicMember::DictGetOrAdd, valueType, { keyType, valueType }, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::DictGetOrAdd, valueType, { keyType, valueType }, typeContext, true);
             if (memberName == "Keys")
-                return makeMethodResolution(IntrinsicMember::DictKeys, keyArrayType, {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::DictKeys, keyArrayType, {}, typeContext, false);
             if (memberName == "Values")
-                return makeMethodResolution(IntrinsicMember::DictValues, valueArrayType, {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::DictValues, valueArrayType, {}, typeContext, false);
             if (memberName == "Clone")
-                return makeMethodResolution(IntrinsicMember::DictClone, ownerType, {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::DictClone, ownerType, {}, typeContext, false);
             if (memberName == "Merge")
-                return makeMethodResolution(IntrinsicMember::DictMerge, ownerType, { ownerType }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::DictMerge, ownerType, { ownerType }, typeContext, false);
             if (memberName == "Extend")
-                return makeMethodResolution(IntrinsicMember::DictExtend, typeContext.getVoid(), { ownerType }, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::DictExtend, typeContext.getVoid(), { ownerType }, typeContext, true);
             if (memberName == "Clear")
-                return makeMethodResolution(IntrinsicMember::DictClear, typeContext.getVoid(), {}, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::DictClear, typeContext.getVoid(), {}, typeContext, true);
             if (memberName == "Remove")
-                return makeMethodResolution(IntrinsicMember::DictRemove, typeContext.getBool(), { keyType }, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::DictRemove, typeContext.getBool(), { keyType }, typeContext, true);
 
             if (!dictType->isOrdered)
-                return std::nullopt;
+                return overloads;
 
             if (memberName == "FirstKey")
-                return makeMethodResolution(IntrinsicMember::TreeFirstKey, keyType, {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::TreeFirstKey, keyType, {}, typeContext, false);
             if (memberName == "FirstValue")
-                return makeMethodResolution(IntrinsicMember::TreeFirstValue, valueType, {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::TreeFirstValue, valueType, {}, typeContext, false);
             if (memberName == "LastKey")
-                return makeMethodResolution(IntrinsicMember::TreeLastKey, keyType, {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::TreeLastKey, keyType, {}, typeContext, false);
             if (memberName == "LastValue")
-                return makeMethodResolution(IntrinsicMember::TreeLastValue, valueType, {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::TreeLastValue, valueType, {}, typeContext, false);
             if (memberName == "FloorKeyOr")
-                return makeMethodResolution(IntrinsicMember::TreeFloorKeyOr, keyType, { keyType, keyType }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::TreeFloorKeyOr, keyType, { keyType, keyType }, typeContext, false);
             if (memberName == "CeilKeyOr")
-                return makeMethodResolution(IntrinsicMember::TreeCeilKeyOr, keyType, { keyType, keyType }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::TreeCeilKeyOr, keyType, { keyType, keyType }, typeContext, false);
 
-            return std::nullopt;
+            return overloads;
         }
 
-        std::optional<IntrinsicMemberResolution> resolveStringIntrinsicMember(TypeContext& typeContext,
-                                                                              const std::string_view memberName)
+        std::vector<IntrinsicMemberResolution> resolveStringIntrinsicMember(TypeContext& typeContext,
+                                                                            const std::string_view memberName)
         {
+            std::vector<IntrinsicMemberResolution> overloads;
             const Ref<Type> stringType = typeContext.getString();
             const Ref<Type> stringArrayType = makeDynamicArrayType(typeContext, stringType);
 
             if (memberName == "Count")
-                return makeMethodResolution(IntrinsicMember::StringCount, typeContext.getUSize(), {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringCount, typeContext.getUSize(), {}, typeContext, false);
             if (memberName == "Empty")
-                return makeMethodResolution(IntrinsicMember::StringEmpty, typeContext.getBool(), {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringEmpty, typeContext.getBool(), {}, typeContext, false);
             if (memberName == "Contains")
-                return makeMethodResolution(IntrinsicMember::StringContains, typeContext.getBool(), { stringType }, typeContext, false);
+            {
+                appendMethodResolution(overloads, IntrinsicMember::StringContains, typeContext.getBool(), { stringType }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringContains, typeContext.getBool(), { typeContext.getChar() }, typeContext, false);
+            }
             if (memberName == "ContainsChar")
-                return makeMethodResolution(IntrinsicMember::StringContainsChar, typeContext.getBool(), { typeContext.getChar() }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringContainsChar, typeContext.getBool(), { typeContext.getChar() }, typeContext, false);
             if (memberName == "StartsWith")
-                return makeMethodResolution(IntrinsicMember::StringStartsWith, typeContext.getBool(), { stringType }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringStartsWith, typeContext.getBool(), { stringType }, typeContext, false);
             if (memberName == "EndsWith")
-                return makeMethodResolution(IntrinsicMember::StringEndsWith, typeContext.getBool(), { stringType }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringEndsWith, typeContext.getBool(), { stringType }, typeContext, false);
             if (memberName == "IndexOf")
-                return makeMethodResolution(IntrinsicMember::StringIndexOf, typeContext.getISize(), { stringType }, typeContext, false);
+            {
+                appendMethodResolution(overloads, IntrinsicMember::StringIndexOf, typeContext.getISize(), { stringType }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringIndexOf, typeContext.getISize(), { typeContext.getChar() }, typeContext, false);
+            }
             if (memberName == "LastIndexOf")
-                return makeMethodResolution(IntrinsicMember::StringLastIndexOf, typeContext.getISize(), { stringType }, typeContext, false);
+            {
+                appendMethodResolution(overloads, IntrinsicMember::StringLastIndexOf, typeContext.getISize(), { stringType }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringLastIndexOf, typeContext.getISize(), { typeContext.getChar() }, typeContext, false);
+            }
             if (memberName == "IndexOfChar")
-                return makeMethodResolution(IntrinsicMember::StringIndexOfChar, typeContext.getISize(), { typeContext.getChar() }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringIndexOfChar, typeContext.getISize(), { typeContext.getChar() }, typeContext, false);
             if (memberName == "LastIndexOfChar")
-                return makeMethodResolution(IntrinsicMember::StringLastIndexOfChar, typeContext.getISize(), { typeContext.getChar() }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringLastIndexOfChar, typeContext.getISize(), { typeContext.getChar() }, typeContext, false);
             if (memberName == "First")
-                return makeMethodResolution(IntrinsicMember::StringFirst, typeContext.getChar(), {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringFirst, typeContext.getChar(), {}, typeContext, false);
             if (memberName == "Last")
-                return makeMethodResolution(IntrinsicMember::StringLast, typeContext.getChar(), {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringLast, typeContext.getChar(), {}, typeContext, false);
             if (memberName == "GetOr")
-                return makeMethodResolution(IntrinsicMember::StringGetOr, typeContext.getChar(), { typeContext.getUSize(), typeContext.getChar() }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringGetOr, typeContext.getChar(), { typeContext.getUSize(), typeContext.getChar() }, typeContext, false);
             if (memberName == "Slice")
-                return makeMethodResolution(IntrinsicMember::StringSlice, stringType, { typeContext.getUSize(), typeContext.getUSize() }, typeContext, false);
+            {
+                appendMethodResolution(overloads, IntrinsicMember::StringSlice, stringType, { typeContext.getUSize() }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringSlice, stringType, { typeContext.getUSize(), typeContext.getUSize() }, typeContext, false);
+            }
             if (memberName == "SliceFrom")
-                return makeMethodResolution(IntrinsicMember::StringSliceFrom, stringType, { typeContext.getUSize() }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringSliceFrom, stringType, { typeContext.getUSize() }, typeContext, false);
             if (memberName == "Take")
-                return makeMethodResolution(IntrinsicMember::StringTake, stringType, { typeContext.getUSize() }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringTake, stringType, { typeContext.getUSize() }, typeContext, false);
             if (memberName == "Skip")
-                return makeMethodResolution(IntrinsicMember::StringSkip, stringType, { typeContext.getUSize() }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringSkip, stringType, { typeContext.getUSize() }, typeContext, false);
             if (memberName == "Left")
-                return makeMethodResolution(IntrinsicMember::StringLeft, stringType, { typeContext.getUSize() }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringLeft, stringType, { typeContext.getUSize() }, typeContext, false);
             if (memberName == "Right")
-                return makeMethodResolution(IntrinsicMember::StringRight, stringType, { typeContext.getUSize() }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringRight, stringType, { typeContext.getUSize() }, typeContext, false);
             if (memberName == "Trim")
-                return makeMethodResolution(IntrinsicMember::StringTrim, stringType, {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringTrim, stringType, {}, typeContext, false);
             if (memberName == "TrimStart")
-                return makeMethodResolution(IntrinsicMember::StringTrimStart, stringType, {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringTrimStart, stringType, {}, typeContext, false);
             if (memberName == "TrimEnd")
-                return makeMethodResolution(IntrinsicMember::StringTrimEnd, stringType, {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringTrimEnd, stringType, {}, typeContext, false);
             if (memberName == "ToLower")
-                return makeMethodResolution(IntrinsicMember::StringToLower, stringType, {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringToLower, stringType, {}, typeContext, false);
             if (memberName == "ToUpper")
-                return makeMethodResolution(IntrinsicMember::StringToUpper, stringType, {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringToUpper, stringType, {}, typeContext, false);
             if (memberName == "Replace")
-                return makeMethodResolution(IntrinsicMember::StringReplace, stringType, { stringType, stringType }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringReplace, stringType, { stringType, stringType }, typeContext, false);
             if (memberName == "ReplaceFirst")
-                return makeMethodResolution(IntrinsicMember::StringReplaceFirst, stringType, { stringType, stringType }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringReplaceFirst, stringType, { stringType, stringType }, typeContext, false);
             if (memberName == "Repeat")
-                return makeMethodResolution(IntrinsicMember::StringRepeat, stringType, { typeContext.getUSize() }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringRepeat, stringType, { typeContext.getUSize() }, typeContext, false);
             if (memberName == "Split")
-                return makeMethodResolution(IntrinsicMember::StringSplit, stringArrayType, { stringType }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringSplit, stringArrayType, { stringType }, typeContext, false);
             if (memberName == "Lines")
-                return makeMethodResolution(IntrinsicMember::StringLines, stringArrayType, {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringLines, stringArrayType, {}, typeContext, false);
             if (memberName == "PadLeft")
-                return makeMethodResolution(IntrinsicMember::StringPadLeft, stringType, { typeContext.getUSize(), typeContext.getChar() }, typeContext, false);
+            {
+                appendMethodResolution(overloads, IntrinsicMember::StringPadLeft, stringType, { typeContext.getUSize() }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringPadLeft, stringType, { typeContext.getUSize(), typeContext.getChar() }, typeContext, false);
+            }
             if (memberName == "PadRight")
-                return makeMethodResolution(IntrinsicMember::StringPadRight, stringType, { typeContext.getUSize(), typeContext.getChar() }, typeContext, false);
+            {
+                appendMethodResolution(overloads, IntrinsicMember::StringPadRight, stringType, { typeContext.getUSize() }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringPadRight, stringType, { typeContext.getUSize(), typeContext.getChar() }, typeContext, false);
+            }
             if (memberName == "Reversed")
-                return makeMethodResolution(IntrinsicMember::StringReversed, stringType, {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringReversed, stringType, {}, typeContext, false);
             if (memberName == "Append")
-                return makeMethodResolution(IntrinsicMember::StringAppend, typeContext.getVoid(), { stringType }, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::StringAppend, typeContext.getVoid(), { stringType }, typeContext, true);
             if (memberName == "Push")
-                return makeMethodResolution(IntrinsicMember::StringPush, typeContext.getVoid(), { typeContext.getChar() }, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::StringPush, typeContext.getVoid(), { typeContext.getChar() }, typeContext, true);
             if (memberName == "Insert")
-                return makeMethodResolution(IntrinsicMember::StringInsert, typeContext.getVoid(), { typeContext.getUSize(), stringType }, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::StringInsert, typeContext.getVoid(), { typeContext.getUSize(), stringType }, typeContext, true);
             if (memberName == "Erase")
-                return makeMethodResolution(IntrinsicMember::StringErase, typeContext.getVoid(), { typeContext.getUSize(), typeContext.getUSize() }, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::StringErase, typeContext.getVoid(), { typeContext.getUSize(), typeContext.getUSize() }, typeContext, true);
             if (memberName == "Clear")
-                return makeMethodResolution(IntrinsicMember::StringClear, typeContext.getVoid(), {}, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::StringClear, typeContext.getVoid(), {}, typeContext, true);
             if (memberName == "Reverse")
-                return makeMethodResolution(IntrinsicMember::StringReverse, typeContext.getVoid(), {}, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::StringReverse, typeContext.getVoid(), {}, typeContext, true);
             if (memberName == "ReplaceInPlace")
-                return makeMethodResolution(IntrinsicMember::StringReplaceInPlace, typeContext.getVoid(), { stringType, stringType }, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::StringReplaceInPlace, typeContext.getVoid(), { stringType, stringType }, typeContext, true);
             if (memberName == "TrimInPlace")
-                return makeMethodResolution(IntrinsicMember::StringTrimInPlace, typeContext.getVoid(), {}, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::StringTrimInPlace, typeContext.getVoid(), {}, typeContext, true);
             if (memberName == "ToLowerInPlace")
-                return makeMethodResolution(IntrinsicMember::StringToLowerInPlace, typeContext.getVoid(), {}, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::StringToLowerInPlace, typeContext.getVoid(), {}, typeContext, true);
             if (memberName == "ToUpperInPlace")
-                return makeMethodResolution(IntrinsicMember::StringToUpperInPlace, typeContext.getVoid(), {}, typeContext, true);
+                appendMethodResolution(overloads, IntrinsicMember::StringToUpperInPlace, typeContext.getVoid(), {}, typeContext, true);
 
-            return std::nullopt;
+            return overloads;
         }
+    }
+
+    std::vector<IntrinsicMemberResolution> resolveIntrinsicMemberOverloads(TypeContext& typeContext,
+                                                                           const Ref<Type>& ownerType,
+                                                                           const std::string_view memberName)
+    {
+        Ref<Type> resolvedOwnerType = unwrapAliasType(ownerType);
+        if (!resolvedOwnerType)
+            return {};
+
+        if (resolvedOwnerType->kind() == TypeKind::Array)
+            return resolveArrayIntrinsicMember(typeContext, resolvedOwnerType.AsFast<ArrayType>(), memberName);
+
+        if (resolvedOwnerType->kind() == TypeKind::Dictionary)
+            return resolveDictionaryIntrinsicMember(typeContext, resolvedOwnerType.AsFast<DictionaryType>(), memberName);
+
+        if (isStringType(resolvedOwnerType))
+            return resolveStringIntrinsicMember(typeContext, memberName);
+
+        return {};
     }
 
     bool isDynamicArrayOnlyIntrinsicMemberName(const std::string_view memberName) noexcept
@@ -393,19 +447,9 @@ namespace wio::sema
                                                                     const Ref<Type>& ownerType,
                                                                     const std::string_view memberName)
     {
-        Ref<Type> resolvedOwnerType = unwrapAliasType(ownerType);
-        if (!resolvedOwnerType)
-            return std::nullopt;
-
-        if (resolvedOwnerType->kind() == TypeKind::Array)
-            return resolveArrayIntrinsicMember(typeContext, resolvedOwnerType.AsFast<ArrayType>(), memberName);
-
-        if (resolvedOwnerType->kind() == TypeKind::Dictionary)
-            return resolveDictionaryIntrinsicMember(typeContext, resolvedOwnerType.AsFast<DictionaryType>(), memberName);
-
-        if (isStringType(resolvedOwnerType))
-            return resolveStringIntrinsicMember(typeContext, memberName);
-
+        auto overloads = resolveIntrinsicMemberOverloads(typeContext, ownerType, memberName);
+        if (overloads.size() == 1)
+            return overloads.front();
         return std::nullopt;
     }
 }

@@ -229,6 +229,16 @@ namespace wio::intrinsics
         );
     }
 
+    template <typename TContainer, typename TIndex>
+    inline auto ArraySlice(const TContainer& container, const TIndex start) -> std::vector<typename TContainer::value_type>
+    {
+        const std::size_t normalizedStart = detail::clampSliceStart(container, static_cast<std::size_t>(start));
+        return std::vector<typename TContainer::value_type>(
+            container.begin() + static_cast<typename TContainer::difference_type>(normalizedStart),
+            container.end()
+        );
+    }
+
     template <typename TContainer, typename TCount>
     inline auto ArrayTake(const TContainer& container, const TCount count) -> std::vector<typename TContainer::value_type>
     {
@@ -566,6 +576,11 @@ namespace wio::intrinsics
         return value.find(needle) != std::string::npos;
     }
 
+    inline bool StringContains(const std::string& value, const char needle)
+    {
+        return value.find(needle) != std::string::npos;
+    }
+
     inline bool StringContainsChar(const std::string& value, const char needle)
     {
         return value.find(needle) != std::string::npos;
@@ -588,7 +603,21 @@ namespace wio::intrinsics
         return -1;
     }
 
+    inline std::ptrdiff_t StringIndexOf(const std::string& value, const char needle)
+    {
+        if (const auto position = value.find(needle); position != std::string::npos)
+            return detail::toSignedIndex(position);
+        return -1;
+    }
+
     inline std::ptrdiff_t StringLastIndexOf(const std::string& value, const std::string& needle)
+    {
+        if (const auto position = value.rfind(needle); position != std::string::npos)
+            return detail::toSignedIndex(position);
+        return -1;
+    }
+
+    inline std::ptrdiff_t StringLastIndexOf(const std::string& value, const char needle)
     {
         if (const auto position = value.rfind(needle); position != std::string::npos)
             return detail::toSignedIndex(position);
@@ -633,6 +662,12 @@ namespace wio::intrinsics
         const std::size_t normalizedStart = detail::clampSliceStart(value, start);
         const std::size_t normalizedCount = detail::clampSliceCount(value, normalizedStart, count);
         return value.substr(normalizedStart, normalizedCount);
+    }
+
+    inline std::string StringSlice(const std::string& value, const std::size_t start)
+    {
+        const std::size_t normalizedStart = detail::clampSliceStart(value, start);
+        return value.substr(normalizedStart);
     }
 
     inline std::string StringSliceFrom(const std::string& value, const std::size_t start)
@@ -770,11 +805,21 @@ namespace wio::intrinsics
         return std::string(totalWidth - value.size(), fill) + value;
     }
 
+    inline std::string StringPadLeft(const std::string& value, const std::size_t totalWidth)
+    {
+        return StringPadLeft(value, totalWidth, ' ');
+    }
+
     inline std::string StringPadRight(const std::string& value, const std::size_t totalWidth, const char fill)
     {
         if (value.size() >= totalWidth)
             return value;
         return value + std::string(totalWidth - value.size(), fill);
+    }
+
+    inline std::string StringPadRight(const std::string& value, const std::size_t totalWidth)
+    {
+        return StringPadRight(value, totalWidth, ' ');
     }
 
     inline std::string StringReversed(std::string value)
