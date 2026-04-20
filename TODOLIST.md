@@ -398,6 +398,11 @@ This is one of the language-defining features and needs to be extremely solid.
 - [ ] Require integer compile-time sizes only.
 - [ ] Define zero-sized array policy.
 - [ ] Define implicit conversion rules between static and dynamic arrays.
+- [ ] Allow non-`ref`, non-`view` dynamic-array parameters such as `T[]` to
+      accept static-array arguments such as `[T; N]` through a well-defined
+      value-copy or temporary conversion path.
+- [ ] Keep `ref T[]` / `view T[]` parameter passing strict unless a separate
+      borrow/view model for static arrays is designed explicitly.
 
 ### 8.3 Dictionaries
 
@@ -873,6 +878,15 @@ This is currently one of the biggest blockers to real multi-file projects.
 - [ ] Expose array helpers.
 - [ ] Expose dictionary/tree helpers.
 - [ ] Expose pair/iterator concepts if loops depend on them.
+- [ ] Land a second wave of generic callback-oriented std helpers such as
+      `CountBy`, `Filter`, `Map`, and `Reduce` only on top of a clean
+      foundation, not ad-hoc workarounds.
+- [ ] Teach generic std-heavy code paths to handle callback-centric local state
+      cleanly:
+  - generic local variable typing,
+  - empty collection literals under expected-type context,
+  - lambda-to-function parameter lowering,
+  - and callback-heavy generic body analysis.
 
 ### 17.5 Reflection Runtime
 
@@ -926,6 +940,27 @@ This is currently one of the biggest blockers to real multi-file projects.
   - command/event invocation,
   - reload helpers,
   - and runtime/result/error helpers.
+- [ ] Expand `@Export` beyond top-level functions so exported `object` and
+      `component` declarations can expose public members to C++ hosts.
+- [ ] Define the exact surface for exported public fields on `@Export`
+      `object` / `component` types:
+  - getter generation,
+  - setter generation,
+  - naming conventions,
+  - and rules for unsupported field kinds.
+- [ ] Decide how `private`, `protected`, `@ReadOnly`, `ref`, `view`, arrays,
+      dictionaries, strings, nested components, and object references behave
+      when exported as field properties.
+- [ ] Add automatic getter/setter bridge generation for exportable public
+      fields so hosts do not need handwritten binding code for simple property
+      access.
+- [ ] Design high-level `WioObject` and `WioComponent` helper types in the
+      public `wio_sdk` so hosts can bind/export public methods and public
+      variables through a small, ergonomic API instead of raw ABI calls.
+- [ ] Define whether `WioObject` / `WioComponent` are static registration
+      helpers, runtime reflection wrappers, or both.
+- [ ] Define host-side lifetime, ownership, and instance-handle semantics for
+      exported objects/components, especially under shared-library reload.
 - [ ] Keep AST, parser, sema, and codegen internals out of the public SDK.
 - [ ] Decide which `runtime/*` headers stay internal and which become official,
       documented SDK headers.
@@ -1015,6 +1050,22 @@ This is currently one of the biggest blockers to real multi-file projects.
 - [ ] Clean up CMake options and document them.
 - [ ] Make app/library/test targets predictable.
 - [ ] Ensure tests are runnable from a fresh checkout.
+- [ ] Design a first-class Wio project model/generator for mixed Wio + C++
+      projects so users do not need long handwritten compiler/link commands.
+- [ ] Decide whether the project manifest should be JSON, YAML, TOML, or a
+      Wio-specific declarative format tailored to C++/Wio interop.
+- [ ] Decide whether the generator emits CMake, owns the build graph directly,
+      or supports both a generated-native and generated-CMake workflow.
+- [ ] Ensure the project model can describe:
+  - Wio source roots,
+  - C++ source roots,
+  - include paths,
+  - library links,
+  - module/shared-library builds,
+  - runtime/std packaging,
+  - and hot-reload-friendly targets.
+- [ ] Keep the project generator focused on user convenience first, especially
+      for game-scripting style projects that mix host C++ and Wio modules.
 
 ### 19.3 Example Programs
 
@@ -1155,8 +1206,11 @@ The best next sequence is probably:
 3. Finish module/import semantics.
 4. Freeze `ref` / `view` / `fit` / `match` / ctor generation behavior.
 5. Finish loops and collections.
-6. Expand stdlib and examples.
-7. Revisit advanced/reserved features only after the above is solid.
+6. Finish the current stdlib cleanup and make callback/collection helpers solid.
+7. Land exported `object` / `component` interop plus ergonomic `wio_sdk`
+   wrappers such as `WioObject` / `WioComponent`.
+8. Build the first real project generator/model for mixed C++ + Wio projects.
+9. Revisit advanced/reserved features only after the above is solid.
 
 ---
 
@@ -1173,6 +1227,11 @@ If we want a realistic next milestone, it should include only these:
 - [ ] Finish semantic enforcement for `@Trust`, `@Final`, and `@ReadOnly`.
 - [ ] Add a serious invalid-program test suite.
 - [ ] Expand docs with more examples and more formal rules.
+- [ ] After the current stdlib cleanup, prioritize exported
+      `object` / `component` support and the user-facing `wio_sdk`
+      object/component bridge.
+- [ ] Immediately after that, prioritize a mixed C++ + Wio project generator
+      and manifest format so host integration is easy by default.
 
 This should be enough to move Wio from "interesting prototype" to
 "internally credible alpha language."
