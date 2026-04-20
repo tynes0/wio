@@ -101,3 +101,11 @@ add_custom_target(wio_runtime_backend ALL
 )
 
 set(WIO_BACKEND_RUNTIME_LIBRARY "${WIO_BACKEND_RUNTIME_LIB}" CACHE INTERNAL "Backend-compatible Wio runtime library")
+
+install(DIRECTORY "${WIO_RUNTIME_INCLUDE_DIR}/"
+    DESTINATION runtime/include
+)
+
+install(FILES "${WIO_BACKEND_RUNTIME_LIB}"
+    DESTINATION runtime/lib
+)

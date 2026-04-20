@@ -518,9 +518,84 @@ That is the intentional current tradeoff.
 
 ---
 
-## 8. How Wio And C++ See Each Other
+## 8. Packaged Wio Layout
 
-### 8.1 From C++ Into Wio
+The packaged distribution is meant to look like a real user-facing toolchain, not like a source checkout.
+
+Expected layout:
+
+```text
+<WIO_ROOT>/
+  bin/
+    wio.exe
+  cmake/
+    WioProject.cmake
+  docs/
+    WIO_PROJECT_SYSTEM.md
+  runtime/
+    include/
+    lib/
+      libwio_runtime.a
+  sdk/
+    include/
+  scripts/
+    Invoke-WioProject.ps1
+    Invoke-WithSanitizedPath.ps1
+    New-WioProject.ps1
+  std/
+```
+
+Important points:
+
+- users should think in terms of `wio` or `bin/wio`, not `wio_app`
+- the packaged compiler resolves `runtime/include`, `sdk/include`, `std`, and the runtime archive from the toolchain root
+- `Invoke-WioProject.ps1` supports both layouts:
+  - source checkout with a build tree
+  - packaged distribution with a prebuilt `bin/wio`
+
+### 8.1 Building A Package From The Source Tree
+
+After configuring the Wio repo build once, you can produce a packaged layout with:
+
+```powershell
+cmake --build .\build --target wio_dist --config Debug
+```
+
+By default this writes the package to:
+
+- `build/dist`
+
+You can override that path with the CMake cache variable:
+
+- `WIO_DIST_DIR`
+
+### 8.2 Using The Package
+
+Point `WIO_ROOT` to the package root:
+
+```powershell
+$env:WIO_ROOT = "C:\Wio\dist"
+```
+
+Then all of these work:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\Wio\dist\scripts\New-WioProject.ps1 -Name MyGame -OutputDir C:\Projects
+powershell -ExecutionPolicy Bypass -File C:\Wio\dist\scripts\Invoke-WioProject.ps1 -Project C:\Projects\MyGame
+```
+
+And inside CMake:
+
+```cmake
+set(WIO_ROOT "C:/Wio/dist" CACHE PATH "Path to packaged Wio")
+include("${WIO_ROOT}/cmake/WioProject.cmake")
+```
+
+---
+
+## 9. How Wio And C++ See Each Other
+
+### 9.1 From C++ Into Wio
 
 Host code uses:
 
@@ -533,7 +608,7 @@ The project runner and the imported CMake targets expose:
 
 - `<WIO_ROOT>/sdk/include`
 
-### 8.2 From Wio Into Native C++
+### 9.2 From Wio Into Native C++
 
 Wio code uses:
 
@@ -553,7 +628,7 @@ The default user-owned place is:
 
 ---
 
-## 9. Practical Build Commands
+## 10. Practical Build Commands
 
 ### 9.1 Build From A Project Root
 
@@ -577,7 +652,27 @@ This prints normalized JSON metadata that other tooling, especially CMake, can c
 
 ---
 
-## 10. Design Intent
+## 11. Example Project
+
+A complete static-link example lives under:
+
+- `examples/static_cmake_consumer`
+
+It demonstrates:
+
+- `wio.makewio`
+- `wio_add_project_targets(...)`
+- `wio_target_link_project(...)`
+- a native C++ executable consuming the generated static Wio library
+
+The same example works against:
+
+- the source checkout as `WIO_ROOT`
+- a packaged distribution produced by `wio_dist`
+
+---
+
+## 12. Design Intent
 
 The project system is opinionated where it helps and permissive where it matters.
 

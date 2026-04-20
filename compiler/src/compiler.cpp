@@ -4,11 +4,21 @@
 #include <cctype>
 #include <cstdlib>
 #include <filesystem>
+#include <system_error>
 #include <optional>
 #include <string_view>
 #include <sstream>
 #include <unordered_set>
 #include <argonaut.h>
+
+#if defined(_WIN32)
+#include <windows.h>
+#elif defined(__APPLE__)
+#include <mach-o/dyld.h>
+#include <unistd.h>
+#else
+#include <unistd.h>
+#endif
 
 #include "wio/codegen/cpp_generator.h"
 #include "wio/common/filesystem/filesystem.h"
@@ -22,6 +32,7 @@ namespace wio
     struct AppData
     {
         std::filesystem::path basePath;
+        std::filesystem::path executablePath;
         CompilerFlags flags;
         Argonaut::Parser argParser;
         sema::TypeContext typeContext_;
@@ -33,31 +44,225 @@ namespace wio
     {
         AppData gAppData;
 
-        std::filesystem::path getRuntimeIncludeDir()
+        std::filesystem::path getCompileTimeDefaultRootDir()
         {
-#ifdef WIO_RUNTIME_INCLUDE_DIR
-            return { WIO_RUNTIME_INCLUDE_DIR };
+#ifdef WIO_DEFAULT_ROOT_DIR
+            return { WIO_DEFAULT_ROOT_DIR };
 #else
             return {};
 #endif
+        }
+
+        std::optional<std::filesystem::path> tryGetEnvironmentToolchainRoot()
+        {
+            const char* envNames[] = { "WIO_ROOT", "WIO_HOME" };
+            for (const char* envName : envNames)
+            {
+                const char* rawValue = std::getenv(envName);
+                if (rawValue == nullptr || *rawValue == '\0')
+                    continue;
+
+                std::filesystem::path candidate = std::filesystem::absolute(std::filesystem::path(rawValue)).make_preferred();
+                std::error_code ec;
+                if (std::filesystem::exists(candidate, ec) && !ec)
+                    return candidate;
+            }
+
+            return std::nullopt;
+        }
+
+        std::optional<std::filesystem::path> tryGetExecutablePathFromSystem()
+        {
+#if defined(_WIN32)
+            std::wstring buffer(MAX_PATH, L'\0');
+            for (;;)
+            {
+                const DWORD copiedLength = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+                if (copiedLength == 0)
+                    return std::nullopt;
+
+                if (copiedLength < buffer.size())
+                {
+                    buffer.resize(copiedLength);
+                    return std::filesystem::path(buffer).make_preferred();
+                }
+
+                buffer.resize(buffer.size() * 2);
+            }
+#elif defined(__APPLE__)
+            std::uint32_t bufferSize = 0;
+            if (_NSGetExecutablePath(nullptr, &bufferSize) != -1 || bufferSize == 0)
+                return std::nullopt;
+
+            std::string buffer(bufferSize, '\0');
+            if (_NSGetExecutablePath(buffer.data(), &bufferSize) != 0)
+                return std::nullopt;
+
+            return std::filesystem::weakly_canonical(std::filesystem::path(buffer.c_str())).make_preferred();
+#else
+            std::vector<char> buffer(1024, '\0');
+            for (;;)
+            {
+                const ssize_t copiedLength = ::readlink("/proc/self/exe", buffer.data(), buffer.size() - 1);
+                if (copiedLength < 0)
+                    return std::nullopt;
+
+                if (static_cast<size_t>(copiedLength) < buffer.size() - 1)
+                {
+                    buffer[static_cast<size_t>(copiedLength)] = '\0';
+                    return std::filesystem::path(buffer.data()).make_preferred();
+                }
+
+                buffer.resize(buffer.size() * 2);
+            }
+#endif
+        }
+
+        std::filesystem::path getExecutablePath()
+        {
+            if (!gAppData.executablePath.empty())
+                return gAppData.executablePath;
+
+            if (auto detectedPath = tryGetExecutablePathFromSystem(); detectedPath.has_value())
+                return detectedPath->make_preferred();
+
+            return {};
+        }
+
+        std::vector<std::filesystem::path> getToolchainRootCandidates()
+        {
+            std::vector<std::filesystem::path> candidates;
+
+            auto appendCandidate = [&](const std::filesystem::path& candidate)
+            {
+                if (candidate.empty())
+                    return;
+
+                std::filesystem::path absoluteCandidate = std::filesystem::absolute(candidate).make_preferred();
+                if (std::ranges::find(candidates, absoluteCandidate) == candidates.end())
+                    candidates.push_back(std::move(absoluteCandidate));
+            };
+
+            if (auto envRoot = tryGetEnvironmentToolchainRoot(); envRoot.has_value())
+                appendCandidate(*envRoot);
+
+            if (const std::filesystem::path executablePath = getExecutablePath(); !executablePath.empty())
+            {
+                const std::filesystem::path executableDir = executablePath.parent_path();
+                appendCandidate(executableDir);
+                appendCandidate(executableDir.parent_path());
+            }
+
+            appendCandidate(getCompileTimeDefaultRootDir());
+            return candidates;
+        }
+
+        std::filesystem::path resolveToolchainDirectory(const std::filesystem::path& compiledPath,
+                                                        std::initializer_list<std::filesystem::path> relativeCandidates)
+        {
+            auto tryCandidate = [](const std::filesystem::path& candidate) -> std::optional<std::filesystem::path>
+            {
+                if (candidate.empty())
+                    return std::nullopt;
+
+                std::error_code ec;
+                if (std::filesystem::exists(candidate, ec) && !ec &&
+                    std::filesystem::is_directory(candidate, ec) && !ec)
+                {
+                    return std::filesystem::absolute(candidate).make_preferred();
+                }
+
+                return std::nullopt;
+            };
+
+            for (const auto& rootCandidate : getToolchainRootCandidates())
+            {
+                for (const auto& relativeCandidate : relativeCandidates)
+                {
+                    if (auto resolved = tryCandidate((rootCandidate / relativeCandidate).make_preferred()); resolved.has_value())
+                        return *resolved;
+                }
+            }
+
+            if (auto resolved = tryCandidate(compiledPath); resolved.has_value())
+                return *resolved;
+
+            return {};
+        }
+
+        std::filesystem::path resolveToolchainFile(const std::filesystem::path& compiledPath,
+                                                   std::initializer_list<std::filesystem::path> relativeCandidates)
+        {
+            auto tryCandidate = [](const std::filesystem::path& candidate) -> std::optional<std::filesystem::path>
+            {
+                if (candidate.empty())
+                    return std::nullopt;
+
+                std::error_code ec;
+                if (std::filesystem::exists(candidate, ec) && !ec &&
+                    std::filesystem::is_regular_file(candidate, ec) && !ec)
+                {
+                    return std::filesystem::absolute(candidate).make_preferred();
+                }
+
+                return std::nullopt;
+            };
+
+            for (const auto& rootCandidate : getToolchainRootCandidates())
+            {
+                for (const auto& relativeCandidate : relativeCandidates)
+                {
+                    if (auto resolved = tryCandidate((rootCandidate / relativeCandidate).make_preferred()); resolved.has_value())
+                        return *resolved;
+                }
+            }
+
+            if (auto resolved = tryCandidate(compiledPath); resolved.has_value())
+                return *resolved;
+
+            return {};
+        }
+
+        std::filesystem::path getRuntimeIncludeDir()
+        {
+            return resolveToolchainDirectory(
+#ifdef WIO_RUNTIME_INCLUDE_DIR
+                std::filesystem::path{ WIO_RUNTIME_INCLUDE_DIR },
+#else
+                std::filesystem::path{},
+#endif
+                {
+                    std::filesystem::path("runtime") / "include"
+                }
+            );
         }
 
         std::filesystem::path getSdkIncludeDir()
         {
+            return resolveToolchainDirectory(
 #ifdef WIO_SDK_INCLUDE_DIR
-            return { WIO_SDK_INCLUDE_DIR };
+                std::filesystem::path{ WIO_SDK_INCLUDE_DIR },
 #else
-            return {};
+                std::filesystem::path{},
 #endif
+                {
+                    std::filesystem::path("sdk") / "include"
+                }
+            );
         }
 
         std::filesystem::path getStdSourceDir()
         {
+            return resolveToolchainDirectory(
 #ifdef WIO_STD_SOURCE_DIR
-            return { WIO_STD_SOURCE_DIR };
+                std::filesystem::path{ WIO_STD_SOURCE_DIR },
 #else
-            return {};
+                std::filesystem::path{},
 #endif
+                {
+                    "std"
+                }
+            );
         }
 
         std::string getBackendCompiler()
@@ -80,11 +285,19 @@ namespace wio
 
         std::filesystem::path getRuntimeLibraryFile()
         {
+            return resolveToolchainFile(
 #ifdef WIO_RUNTIME_LIBRARY_FILE
-            return { WIO_RUNTIME_LIBRARY_FILE };
+                std::filesystem::path{ WIO_RUNTIME_LIBRARY_FILE },
 #else
-            return {};
+                std::filesystem::path{},
 #endif
+                {
+                    std::filesystem::path("runtime") / "lib" / "libwio_runtime.a",
+                    std::filesystem::path("lib") / "libwio_runtime.a",
+                    std::filesystem::path("build") / "runtime" / "backend" / "libwio_runtime.a",
+                    std::filesystem::path("build") / "runtime" / "libwio_runtime.a"
+                }
+            );
         }
 
         std::vector<std::filesystem::path> getBackendSystemIncludeDirs(const std::filesystem::path& runtimeIncludeDir,
@@ -756,6 +969,17 @@ namespace wio
     {
         try
         {
+            gAppData.executablePath.clear();
+            if (argc > 0 && argv != nullptr && argv[0] != nullptr && argv[0][0] != '\0')
+            {
+                std::error_code ec;
+                gAppData.executablePath = std::filesystem::weakly_canonical(std::filesystem::absolute(std::filesystem::path(argv[0])), ec);
+                if (ec)
+                    gAppData.executablePath = std::filesystem::absolute(std::filesystem::path(argv[0])).make_preferred();
+                else
+                    gAppData.executablePath = gAppData.executablePath.make_preferred();
+            }
+
             gAppData.flags.setAll(false);
             gAppData.argParser.Parse(argc, argv);
         }

@@ -1,0 +1,35 @@
+schemaVersion = 1
+name = "StaticCMakeConsumer"
+template = "wio-module"
+
+[toolchain]
+buildDir = "build"
+config = "Debug"
+
+[wio]
+entry = "wio/module.wio"
+target = "static"
+sourceRoots = ["wio"]
+includeDirs = []
+linkDirs = []
+linkLibraries = []
+nativeSources = []
+backendArgs = []
+
+[host]
+enabled = false
+
+[build]
+buildDir = ".wio-build"
+config = "Debug"
+
+[outputs]
+directory = ".wio-build/interop"
+baseName = "example_math"
+wioName = "example_math"
+hostName = "example_math.host"
+
+[run]
+passLibraryPath = false
+args = []
+workingDirectory = "."

@@ -139,6 +139,13 @@ function(wio_add_project_targets name)
     string(JSON _wio_host_enabled GET "${_wio_info}" host enabled)
     string(JSON _wio_host_output GET "${_wio_info}" host output)
 
+    file(TO_CMAKE_PATH "${_wio_output}" _wio_output)
+    file(TO_CMAKE_PATH "${_wio_runtime_static}" _wio_runtime_static)
+    file(TO_CMAKE_PATH "${_wio_host_output}" _wio_host_output)
+    get_filename_component(_wio_output "${_wio_output}" ABSOLUTE)
+    get_filename_component(_wio_runtime_static "${_wio_runtime_static}" ABSOLUTE)
+    get_filename_component(_wio_host_output "${_wio_host_output}" ABSOLUTE)
+
     _wio_ensure_sdk_targets("${_wio_root}" "${_wio_runtime_static}")
 
     add_custom_target(${name}_build

@@ -10,6 +10,10 @@ add_executable(wio_app
     ${WIO_TEST_FILES}
 )
 
+set_target_properties(wio_app PROPERTIES
+    OUTPUT_NAME "wio"
+)
+
 target_link_libraries(wio_app
     PRIVATE
         wio_compiler
@@ -18,6 +22,10 @@ target_link_libraries(wio_app
 target_include_directories(wio_app
     PRIVATE
         ${CMAKE_SOURCE_DIR}/compiler/include
+)
+
+install(TARGETS wio_app
+    RUNTIME DESTINATION bin
 )
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/tests")

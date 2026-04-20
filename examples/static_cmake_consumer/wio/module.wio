@@ -1,0 +1,12 @@
+@Export
+@CppName(WioAddNumbers)
+fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
+    return lhs + rhs;
+}
+
+@Export
+@Command("math.weighted")
+@CppName(WioWeightedScore)
+fn WeightedScore(base: i32, bonus: i32) -> i32 {
+    return base * 2 + bonus;
+}

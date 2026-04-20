@@ -755,6 +755,8 @@ function Get-RuntimeStaticLibraryPath {
     )
 
     $candidates = @(
+        (Join-Path $RepoRoot "runtime\lib\libwio_runtime.a"),
+        (Join-Path $RepoRoot "lib\libwio_runtime.a"),
         (Join-Path $RepoRoot "$ToolchainBuildDir\runtime\backend\libwio_runtime.a"),
         (Join-Path $RepoRoot "$ToolchainBuildDir\runtime\libwio_runtime.a")
     )
@@ -795,8 +797,16 @@ function Get-WioCompilerExecutablePath {
     )
 
     $candidates = @(
+        (Join-Path $RepoRoot "bin\wio.exe"),
+        (Join-Path $RepoRoot "bin\wio"),
+        (Join-Path $RepoRoot "wio.exe"),
+        (Join-Path $RepoRoot "wio"),
+        (Join-Path $RepoRoot "$ToolchainBuildDir\app\$ToolchainConfig\wio.exe"),
+        (Join-Path $RepoRoot "$ToolchainBuildDir\app\wio.exe"),
         (Join-Path $RepoRoot "$ToolchainBuildDir\app\$ToolchainConfig\wio_app.exe"),
         (Join-Path $RepoRoot "$ToolchainBuildDir\app\wio_app.exe"),
+        (Join-Path $RepoRoot "$ToolchainBuildDir\app\$ToolchainConfig\wio"),
+        (Join-Path $RepoRoot "$ToolchainBuildDir\app\wio"),
         (Join-Path $RepoRoot "$ToolchainBuildDir\app\$ToolchainConfig\wio_app"),
         (Join-Path $RepoRoot "$ToolchainBuildDir\app\wio_app")
     )
@@ -808,6 +818,28 @@ function Get-WioCompilerExecutablePath {
     }
 
     return $null
+}
+
+function Test-PackagedWioToolchain {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot
+    )
+
+    $compilerCandidates = @(
+        (Join-Path $RepoRoot "bin\wio.exe"),
+        (Join-Path $RepoRoot "bin\wio"),
+        (Join-Path $RepoRoot "wio.exe"),
+        (Join-Path $RepoRoot "wio")
+    )
+
+    foreach ($candidate in $compilerCandidates) {
+        if (Test-Path -LiteralPath $candidate) {
+            return $true
+        }
+    }
+
+    return $false
 }
 
 $projectFile = Resolve-ProjectManifestFile -Value $Project
@@ -1041,26 +1073,37 @@ if ($Describe) {
 }
 
 New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
+$isPackagedToolchain = Test-PackagedWioToolchain -RepoRoot $repoRoot
+$wioExe = $null
 
-$buildArgs = @(
-    "-ExecutionPolicy", "Bypass",
-    "-File", $buildScript,
-    "-BuildDir", $toolchainBuildDir,
-    "-Config", $toolchainConfig
-)
+if ($isPackagedToolchain) {
+    $wioExe = Get-WioCompilerExecutablePath -RepoRoot $repoRoot -ToolchainBuildDir $toolchainBuildDir -ToolchainConfig $toolchainConfig
+}
+elseif (Test-Path -LiteralPath $buildScript) {
+    $buildArgs = @(
+        "-ExecutionPolicy", "Bypass",
+        "-File", $buildScript,
+        "-BuildDir", $toolchainBuildDir,
+        "-Config", $toolchainConfig
+    )
 
-if ($Configure) {
-    $buildArgs += "-Configure"
+    if ($Configure) {
+        $buildArgs += "-Configure"
+    }
+
+    & powershell @buildArgs
+    if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
+    }
+
+    $wioExe = Get-WioCompilerExecutablePath -RepoRoot $repoRoot -ToolchainBuildDir $toolchainBuildDir -ToolchainConfig $toolchainConfig
+}
+else {
+    $wioExe = Get-WioCompilerExecutablePath -RepoRoot $repoRoot -ToolchainBuildDir $toolchainBuildDir -ToolchainConfig $toolchainConfig
 }
 
-& powershell @buildArgs
-if ($LASTEXITCODE -ne 0) {
-    exit $LASTEXITCODE
-}
-
-$wioExe = Get-WioCompilerExecutablePath -RepoRoot $repoRoot -ToolchainBuildDir $toolchainBuildDir -ToolchainConfig $toolchainConfig
 if ([string]::IsNullOrWhiteSpace($wioExe)) {
-    throw "Compiled wio_app executable was not found under '$repoRoot\$toolchainBuildDir'."
+    throw "A usable Wio compiler executable was not found under '$repoRoot'. Expected either a packaged 'wio' binary or a built toolchain output."
 }
 
 $wioCommand = @(
@@ -1104,7 +1147,7 @@ $runtimeStaticLibrary = $null
 if ($wioTarget -eq "static") {
     $runtimeStaticLibrary = Get-RuntimeStaticLibraryPath -RepoRoot $repoRoot -ToolchainBuildDir $toolchainBuildDir
     if ([string]::IsNullOrWhiteSpace($runtimeStaticLibrary)) {
-        throw "The runtime static library was not found under '$repoRoot\$toolchainBuildDir\runtime'."
+        throw "The runtime static library was not found under '$repoRoot'. Expected either a packaged runtime library or a built toolchain runtime archive."
     }
 }
 

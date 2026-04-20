@@ -6,6 +6,7 @@ project(wio_lang
 )
 
 include(CTest)
+include(GNUInstallDirs)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -19,6 +20,7 @@ if (MSVC)
 endif()
 
 option(WIO_BUILD_APP "Build application" ON)
+set(WIO_DIST_DIR "${CMAKE_BINARY_DIR}/dist" CACHE PATH "Default packaged Wio distribution directory.")
 
 # If the project is added to someone else's project, let's set the app to OFF by default.
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
@@ -38,4 +40,36 @@ add_subdirectory(runtime)
 add_subdirectory(compiler)
 if (WIO_BUILD_APP)
     add_subdirectory(app)
+endif()
+
+install(FILES
+    "${CMAKE_SOURCE_DIR}/cmake/WioProject.cmake"
+    DESTINATION cmake
+)
+
+install(FILES
+    "${CMAKE_SOURCE_DIR}/scripts/Invoke-WioProject.ps1"
+    "${CMAKE_SOURCE_DIR}/scripts/Invoke-WithSanitizedPath.ps1"
+    "${CMAKE_SOURCE_DIR}/scripts/New-WioProject.ps1"
+    "${CMAKE_SOURCE_DIR}/scripts/Pack-Wio.ps1"
+    DESTINATION scripts
+)
+
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/std/"
+    DESTINATION std
+    FILES_MATCHING PATTERN "*.wio"
+)
+
+install(FILES
+    "${CMAKE_SOURCE_DIR}/docs/WIO_PROJECT_SYSTEM.md"
+    DESTINATION docs
+)
+
+if (WIO_BUILD_APP)
+    add_custom_target(wio_dist
+        COMMAND ${CMAKE_COMMAND} --install "${CMAKE_BINARY_DIR}" --config $<IF:$<BOOL:$<CONFIG>>,$<CONFIG>,Debug> --prefix "${WIO_DIST_DIR}"
+        DEPENDS wio_app wio_runtime_backend
+        USES_TERMINAL
+        VERBATIM
+    )
 endif()

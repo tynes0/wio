@@ -13,10 +13,10 @@ cmake --build build
 ### Run
 
 ```powershell
-build\app\Debug\wio_app.exe tests\test1.wio
-build\app\Debug\wio_app.exe tests\test1.wio --run
-build\app\Debug\wio_app.exe tests\native\exported_library.wio --target static --output build\interop\exported_library.a
-build\app\Debug\wio_app.exe tests\native\exported_library.wio --target shared --output build\interop\exported_library.dll
+build\app\Debug\wio.exe tests\test1.wio
+build\app\Debug\wio.exe tests\test1.wio --run
+build\app\Debug\wio.exe tests\native\exported_library.wio --target static --output build\interop\exported_library.a
+build\app\Debug\wio.exe tests\native\exported_library.wio --target shared --output build\interop\exported_library.dll
 ```
 
 `--dry-run` validates the source through semantic analysis without generating or
@@ -35,6 +35,27 @@ For a one-command build + test pass on Windows:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Test-Wio.ps1
+```
+
+### Package
+
+To produce a packaged Wio distribution quickly:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Pack-Wio.ps1
+```
+
+That script:
+
+- configures the repo build if needed,
+- builds the `wio_dist` target,
+- stages a versioned package folder under `artifacts\packages`,
+- and also creates a zip archive by default.
+
+Example with an explicit configuration:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Pack-Wio.ps1 -Config Debug
 ```
 
 ### IDE and Playground
@@ -56,7 +77,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Run-WioFile.ps1 -File .\playg
 Supported modes are `run`, `check`, `tokens`, and `ast`.
 
 Any extra arguments after the script parameters are forwarded directly to
-`wio_app.exe`, which is useful for experimental interop and backend tuning:
+`wio.exe`, which is useful for experimental interop and backend tuning:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Run-WioFile.ps1 -File .\tests\native\native_bridge.wio -Mode run --include-dir .\tests\native --backend-arg .\tests\native\native_math.cpp
