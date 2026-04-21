@@ -95,8 +95,8 @@ namespace wio
 #define WIO_RUNTIME_LOG_ERROR(...) ::wio::Logger::get().getLogger().error(__VA_ARGS__)
 #define WIO_RUNTIME_LOG_FATAL(...) ::wio::Logger::get().getLogger().critical(__VA_ARGS__)
 
-#define WIO_LOG_ADD_WARN(loc, ...) ::wio::Logger::get().addWarning("Warning [Line {}, Col {}]: {}", loc.line, loc.column, common::formatString(__VA_ARGS__))
-#define WIO_LOG_ADD_ERROR(loc, ...) ::wio::Logger::get().addError("Error [Line {}, Col {}]: {}", loc.line, loc.column, common::formatString(__VA_ARGS__))
+#define WIO_LOG_ADD_WARN(loc, ...) ::wio::Logger::get().addWarning("Warning [{}]: {}", (loc).toDiagnosticString(), common::formatString(__VA_ARGS__))
+#define WIO_LOG_ADD_ERROR(loc, ...) ::wio::Logger::get().addError("Error [{}]: {}", (loc).toDiagnosticString(), common::formatString(__VA_ARGS__))
 
 #define WIO_LOG_PROCESS_WARNINGS() ::wio::Logger::get().processTheWarnings()
 #define WIO_LOG_PROCESS_ERRORS(T) ::wio::Logger::get().processTheErrors<T>()

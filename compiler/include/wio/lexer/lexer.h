@@ -15,7 +15,7 @@ namespace wio
     class Lexer
     {
     public:
-        explicit Lexer(std::string source);
+        explicit Lexer(std::string source, std::string sourceName = {});
         std::vector<Token> lex();
         [[nodiscard]] std::string toString() const;
     private:

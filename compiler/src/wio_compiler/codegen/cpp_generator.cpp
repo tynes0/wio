@@ -1720,6 +1720,8 @@ namespace wio::codegen
         if (!program)
             return;
 
+        emitGeneratedDirective();
+
         ModuleLifecycleFunctions lifecycleFunctions;
         collectModuleLifecycleFunctions(program->statements, lifecycleFunctions);
         std::vector<ExportedFunctionInfo> exportedFunctions;
@@ -2124,6 +2126,19 @@ namespace wio::codegen
         header_ << str << "\n";
     }
 
+    void CppGenerator::emitSourceDirective(const common::Location& loc)
+    {
+        if (!loc.hasSourceContext())
+            return;
+
+        emitLine("#line " + std::to_string(loc.line) + " \"" + common::wioStringToEscapedCppString(loc.file) + "\"");
+    }
+
+    void CppGenerator::emitGeneratedDirective()
+    {
+        emitLine("#line 1 \"<wio-generated>\"");
+    }
+
     void CppGenerator::emitMain(FunctionDeclaration& node)
     {
         auto lockedRefType = node.returnType->refType.Lock();
@@ -2136,7 +2151,8 @@ namespace wio::codegen
         {
             throw MissedEntryBody("The Entry function must have a body.", node.location());
         }
-        
+
+        emitGeneratedDirective();
         emitLine();
         
         std::string paramName;
@@ -3375,6 +3391,7 @@ namespace wio::codegen
 
     void CppGenerator::visit(ExpressionStatement& node)
     {
+        emitSourceDirective(node.location());
         EMIT_TABS();
         node.expression->accept(*this);
         buffer_ << ";\n";
@@ -3387,6 +3404,7 @@ namespace wio::codegen
 
     void CppGenerator::visit(VariableDeclaration& node)
     {
+        emitSourceDirective(node.location());
         auto sym = node.name->referencedSymbol.Lock();
 
         Ref<sema::Type> varType = (sym && sym->type) ? sym->type : node.name->refType.Lock();
@@ -3428,6 +3446,7 @@ namespace wio::codegen
 
     void CppGenerator::visit(TypeAliasDeclaration& node)
     {
+        emitSourceDirective(node.location());
         auto sym = node.name->referencedSymbol.Lock();
         const std::string aliasName = sym ? Mangler::mangleStruct(sym->name, sym->scopePath) : node.name->token.value;
 
@@ -3476,6 +3495,7 @@ namespace wio::codegen
             return;
         }
 
+        emitSourceDirective(node.location());
         emitLine();
 
         auto instantiateFunctionTypeForCodegen = [&](const std::vector<Ref<sema::Type>>& instantiationTypes)
@@ -3640,6 +3660,7 @@ namespace wio::codegen
 
         if (emitsExportWrapper && !isEmittingPrototypes_ && currentClassName_.empty() && node.body)
         {
+            emitGeneratedDirective();
             std::string internalSymbol = Mangler::mangleFunction(funcName, funcType->paramTypes, sym ? sym->scopePath : "");
             if (!node.genericParameters.empty() && !instantiationTypeLists.empty())
             {
@@ -3723,6 +3744,7 @@ namespace wio::codegen
 
         if (!isEmittingPrototypes_ && currentClassName_.empty() && !node.genericParameters.empty() && !instantiationTypeLists.empty() && (isNative || isExported))
         {
+            emitGeneratedDirective();
             emitLine();
             for (const auto& instantiationTypes : instantiationTypeLists)
                 emitExplicitInstantiationDeclaration(instantiationTypes);
@@ -3736,6 +3758,7 @@ namespace wio::codegen
 
     void CppGenerator::visit(InterfaceDeclaration& node)
     {
+        emitSourceDirective(node.location());
         auto interfaceType = getStructTypeFromSymbol(node.name->referencedSymbol.Lock());
         if (!node.genericParameters.empty())
         {
@@ -3780,6 +3803,7 @@ namespace wio::codegen
 
     void CppGenerator::visit(ComponentDeclaration& node)
         {
+        emitSourceDirective(node.location());
         auto componentSym = node.name->referencedSymbol.Lock();
         auto componentType = getStructTypeFromSymbol(componentSym);
         auto enclosingScope = componentSym && componentSym->innerScope ? componentSym->innerScope->getParent().Lock() : nullptr;
@@ -3968,6 +3992,7 @@ namespace wio::codegen
     
     void CppGenerator::visit(ObjectDeclaration& node)
     {
+        emitSourceDirective(node.location());
         auto symb = node.name->referencedSymbol.Lock();
         auto objectType = getStructTypeFromSymbol(symb);
         if (!node.genericParameters.empty())
@@ -4209,6 +4234,7 @@ namespace wio::codegen
 
     void CppGenerator::visit(FlagDeclaration& node)
     {
+        emitSourceDirective(node.location());
         auto flagType = getStructTypeFromSymbol(node.name->referencedSymbol.Lock());
         std::string structName = mangleStructTypeName(flagType);
         emitLine(common::formatString("struct {0} {{ explicit {0}() = default; };\n", structName));
@@ -4216,6 +4242,7 @@ namespace wio::codegen
 
     void CppGenerator::visit(EnumDeclaration& node)
     {
+        emitSourceDirective(node.location());
         auto enumType = getStructTypeFromSymbol(node.name->referencedSymbol.Lock());
         std::string enumName = mangleStructTypeName(enumType);
         std::string underType = "int32_t";
@@ -4261,6 +4288,7 @@ namespace wio::codegen
 
     void CppGenerator::visit(FlagsetDeclaration& node)
     {
+        emitSourceDirective(node.location());
         auto flagsetType = getStructTypeFromSymbol(node.name->referencedSymbol.Lock());
         std::string enumName = mangleStructTypeName(flagsetType);
         std::string underType = "uint32_t";
@@ -4324,6 +4352,7 @@ namespace wio::codegen
 
     void CppGenerator::visit(IfStatement& node)
     {
+        emitSourceDirective(node.location());
         if (node.matchVar.isValid() && node.condition->is<BinaryExpression>())
         {
             auto binExpr = node.condition->as<BinaryExpression>();
@@ -4391,6 +4420,7 @@ namespace wio::codegen
     
     void CppGenerator::visit(WhileStatement& node)
     {
+        emitSourceDirective(node.location());
         EMIT_TABS();
         buffer_ << "while (";
         node.condition->accept(*this);
@@ -4401,6 +4431,7 @@ namespace wio::codegen
 
     void CppGenerator::visit(ForInStatement& node)
     {
+        emitSourceDirective(node.location());
         auto emitLoopBodyStatements = [&](const NodePtr<Statement>& body)
         {
             if (!body)
@@ -4715,6 +4746,7 @@ namespace wio::codegen
 
     void CppGenerator::visit(CForStatement& node)
     {
+        emitSourceDirective(node.location());
         emitLine("{");
         indent();
 
@@ -4741,18 +4773,19 @@ namespace wio::codegen
 
     void CppGenerator::visit(BreakStatement& node)
     {
-        WIO_UNUSED(node);
+        emitSourceDirective(node.location());
         emitLine("break;");
     }
 
     void CppGenerator::visit(ContinueStatement& node)
     {
-        WIO_UNUSED(node);
+        emitSourceDirective(node.location());
         emitLine("continue;");
     }
 
     void CppGenerator::visit(ReturnStatement& node)
     {
+        emitSourceDirective(node.location());
         EMIT_TABS();
         
         buffer_ << "return";

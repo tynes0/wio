@@ -1,0 +1,7 @@
+@Native
+@CppName(definitely_missing_namespace::MissingCall)
+fn MissingCall() -> i32;
+
+fn Entry() -> i32 {
+    return MissingCall();
+}

@@ -194,6 +194,28 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         )
     endfunction()
 
+    function(add_wio_backend_failure_test test_name source_file expected_output)
+        set(wio_failure_args ${ARGN})
+        list(JOIN wio_failure_args ";" wio_failure_args_serialized)
+
+        add_test(
+            NAME ${test_name}
+            COMMAND
+                ${CMAKE_COMMAND}
+                -DWIO_EXE=$<TARGET_FILE:wio_app>
+                -DWIO_SOURCE=${source_file}
+                -DWIO_EXPECT=${expected_output}
+                "-DWIO_ARGS=${wio_failure_args_serialized}"
+                -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExpectFailure.cmake"
+        )
+
+        set_tests_properties(
+            ${test_name}
+            PROPERTIES
+                WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        )
+    endfunction()
+
     function(add_wio_host_interop_test test_name source_file host_source expected_output)
         set(wio_host_args ${ARGN})
         list(JOIN wio_host_args ";" wio_host_args_serialized)
@@ -1017,6 +1039,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_missing_cpp_header_std_import
         "${CMAKE_SOURCE_DIR}/tests/invalid/missing_cpp_header_std_import.wio"
         "Native C\\+\\+ header 'missing_std_header_for_test.h' referenced by use @CppHeader in '.*std[\\\\/]testing[\\\\/]missing_cpp_header\\.wio' was not found"
+    )
+
+    add_wio_backend_failure_test(
+        wio_invalid_backend_cpp_line_mapping_native_name
+        "${CMAKE_SOURCE_DIR}/tests/invalid/backend_cpp_line_mapping_native_name.wio"
+        "backend_cpp_line_mapping_native_name\\.wio(:|\\()"
+        --run
     )
 
     add_wio_failure_test(

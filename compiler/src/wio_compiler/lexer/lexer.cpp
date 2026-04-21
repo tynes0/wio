@@ -8,17 +8,17 @@ namespace wio
 {
     using namespace common;
     
-    Lexer::Lexer(std::string source)
-        : source_(std::move(source)), position_(0), location_ { .line = 0, .column = 0 }
+    Lexer::Lexer(std::string source, std::string sourceName)
+        : source_(std::move(source)), position_(0), location_ { .file = std::move(sourceName), .line = 0, .column = 0 }
     {
     }
 
     std::vector<Token> Lexer::lex()
     {
-        location_ = {
-            .line = 1,
-            .column = 1
-        };
+        position_ = 0;
+        tokens_.clear();
+        location_.line = 1;
+        location_.column = 1;
         
         
         while (!isAtEnd())

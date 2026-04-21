@@ -1092,7 +1092,8 @@ namespace wio
             filesystem::stripBOM(source);
 
             // 1. Lexer
-            Lexer lexer(source);
+            const std::string sourceDisplayPath = std::filesystem::absolute(sourcePath).make_preferred().string();
+            Lexer lexer(source, sourceDisplayPath);
             auto tokens = lexer.lex();
 
             if (gAppData.flags.get_ShowTokens())
@@ -1106,8 +1107,8 @@ namespace wio
             
             gAppData.loadedModules.clear();
             gAppData.requiredCppHeaders.clear();
-            gAppData.loadedModules.insert(std::filesystem::absolute(sourcePath).string());
-            collectRequiredCppHeaders(program->statements, std::filesystem::absolute(sourcePath).make_preferred(), gAppData.requiredCppHeaders);
+            gAppData.loadedModules.insert(sourceDisplayPath);
+            collectRequiredCppHeaders(program->statements, std::filesystem::path(sourceDisplayPath), gAppData.requiredCppHeaders);
 
             std::vector<NodePtr<Statement>> finalStatements;
 
@@ -1434,7 +1435,7 @@ namespace wio
         }
         filesystem::stripBOM(source);
 
-        Lexer lexer(source);
+        Lexer lexer(source, actualPath.string());
         Parser parser(lexer.lex());
         auto subProgram = parser.parseProgram();
         collectRequiredCppHeaders(subProgram->statements, actualPath, gAppData.requiredCppHeaders);

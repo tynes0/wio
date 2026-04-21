@@ -36,6 +36,8 @@ namespace wio::codegen
         void emitLine(const std::string& str = "");
         void emitHeader(const std::string& str);
         void emitHeaderLine(const std::string& str = "");
+        void emitSourceDirective(const common::Location& loc);
+        void emitGeneratedDirective();
         void emitMain(FunctionDeclaration& node);
         void emitModuleApiTable(const Ref<Program>& program);
         void indent();
