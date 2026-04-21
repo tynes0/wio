@@ -1,0 +1,11 @@
+use std::console as console;
+
+fn ApplyTwice(value: i32, transform: fn(i32) -> i32) -> i32 {
+    return transform(transform(value));
+}
+
+fn Entry() -> i32 {
+    let result = ApplyTwice(5, (value) => value + 1);
+    console::Print($"Function value chain: ${result}");
+    return 0;
+}

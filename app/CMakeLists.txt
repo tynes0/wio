@@ -736,6 +736,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_function_value_nested_call_run
+        "${CMAKE_SOURCE_DIR}/tests/function_value_nested_call_run.wio"
+        "Function value chain: 7"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_factory_chain_call_run
+        "${CMAKE_SOURCE_DIR}/tests/factory_chain_call_run.wio"
+        "Factory chain: 0/0/0"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_generic_function_identity_run
         "${CMAKE_SOURCE_DIR}/tests/generic_function_identity.wio"
         "Generic values: 42, wio"

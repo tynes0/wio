@@ -1,0 +1,22 @@
+use std::console as console;
+
+fn BuildCount(factory: fn() -> Dict<string, i32>) -> i32 {
+    return factory().Count() fit i32;
+}
+
+fn BuildArrayCount(factory: fn() -> i32[]) -> i32 {
+    return factory().Count() fit i32;
+}
+
+fn BuildTreeCount(factory: fn() -> Tree<i32, i32>) -> i32 {
+    return factory().Count() fit i32;
+}
+
+fn Entry() -> i32 {
+    let mapCount = BuildCount(() => ({}));
+    let arrayCount = BuildArrayCount(() => []);
+    let treeCount = BuildTreeCount(() => ({< >}));
+
+    console::Print($"Factory chain: ${mapCount}/${arrayCount}/${treeCount}");
+    return 0;
+}
