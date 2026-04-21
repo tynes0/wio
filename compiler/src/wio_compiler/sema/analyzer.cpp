@@ -1588,6 +1588,38 @@ namespace wio::sema
     {
         if (node.pairs.empty())
         {
+            if (currentExpectedExpressionType_)
+            {
+                Ref<Type> expectedType = unwrapAliasType(currentExpectedExpressionType_);
+                if (expectedType && expectedType->kind() == TypeKind::Dictionary)
+                {
+                    auto expectedDictionaryType = expectedType.AsFast<DictionaryType>();
+                    if (expectedDictionaryType->isOrdered != node.isOrdered)
+                    {
+                        if (node.isOrdered)
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                node.location(),
+                                "Ordered dictionary literal '{< >}' cannot initialize unordered dictionary type '{}'.",
+                                expectedType->toString()
+                            );
+                        }
+                        else
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                node.location(),
+                                "Unordered dictionary literal '{}' cannot initialize ordered dictionary type '{}'. Use '{< >}' syntax instead.",
+                                "{}",
+                                expectedType->toString()
+                            );
+                        }
+                    }
+
+                    node.refType = expectedType;
+                    return;
+                }
+            }
+
             node.refType = Compiler::get().getTypeContext().getUnknown();
             return;
         }
@@ -2600,16 +2632,33 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(LambdaExpression& node)
     {
+        Ref<FunctionType> expectedFunctionType = nullptr;
+        if (currentExpectedExpressionType_)
+        {
+            Ref<Type> expectedType = unwrapAliasType(currentExpectedExpressionType_);
+            if (expectedType && expectedType->kind() == TypeKind::Function)
+                expectedFunctionType = expectedType.AsFast<FunctionType>();
+        }
+
+        if (expectedFunctionType && expectedFunctionType->paramTypes.size() != node.parameters.size())
+            expectedFunctionType = nullptr;
+
         enterScope(ScopeKind::Function);
+        Ref<Type> previousFunctionReturnType = currentFunctionReturnType_;
 
         std::vector<Ref<Type>> paramTypes;
-        for (auto& param : node.parameters)
+        for (size_t i = 0; i < node.parameters.size(); ++i)
         {
+            auto& param = node.parameters[i];
             Ref<Type> pType = Compiler::get().getTypeContext().getUnknown();
             if (param.type)
             {
                 param.type->accept(*this);
                 pType = param.type->refType.Lock();
+            }
+            else if (expectedFunctionType && i < expectedFunctionType->paramTypes.size())
+            {
+                pType = expectedFunctionType->paramTypes[i];
             }
             else
             {
@@ -2629,12 +2678,23 @@ namespace wio::sema
             node.returnType->accept(*this);
             retType = node.returnType->refType.Lock();
         }
+        else if (expectedFunctionType)
+        {
+            retType = expectedFunctionType->returnType;
+        }
+
+        currentFunctionReturnType_ = retType;
 
         if (node.body)
         {
+            Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
+            if (node.body->is<ExpressionStatement>())
+                currentExpectedExpressionType_ = retType;
+
             node.body->accept(*this);
+            currentExpectedExpressionType_ = previousExpectedExpressionType;
             
-            if (!node.returnType)
+            if (!node.returnType && !expectedFunctionType)
             {
                 if (node.body->is<ExpressionStatement>())
                 {
@@ -2657,9 +2717,25 @@ namespace wio::sema
                     }
                 }
             }
+            else if (!node.returnType && expectedFunctionType && node.body->is<ExpressionStatement>())
+            {
+                Ref<Type> actualReturnType = node.body->as<ExpressionStatement>()->expression->refType.Lock();
+                if (actualReturnType &&
+                    !retType->isCompatibleWith(actualReturnType) &&
+                    !(retType->isNumeric() && actualReturnType->isNumeric()))
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "Lambda return type mismatch! Expected '{}', but got '{}'.",
+                        retType->toString(),
+                        actualReturnType->toString()
+                    );
+                }
+            }
         }
 
         exitScope();
+        currentFunctionReturnType_ = previousFunctionReturnType;
 
         node.refType = Compiler::get().getTypeContext().getOrCreateFunctionType(retType, paramTypes);
     }
@@ -3629,7 +3705,24 @@ namespace wio::sema
         currentNamespacePath_.push_back(node.name->token.value);
 
         for (auto& statement : node.statements)
-            statement->accept(*this);
+        {
+            if (isStructResolutionPass_)
+            {
+                if (statement->is<ComponentDeclaration>() ||
+                    statement->is<ObjectDeclaration>() ||
+                    statement->is<EnumDeclaration>() ||
+                    statement->is<FlagsetDeclaration>() ||
+                    statement->is<FlagDeclaration>() ||
+                    statement->is<RealmDeclaration>())
+                {
+                    statement->accept(*this);
+                }
+            }
+            else
+            {
+                statement->accept(*this);
+            }
+        }
 
         currentNamespacePath_.pop_back();
         currentScope_ = prevScope;

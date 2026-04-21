@@ -2341,12 +2341,21 @@ namespace wio::codegen
 
     void CppGenerator::visit(LambdaExpression& node)
     {
+        auto functionType = node.refType.Lock().AsFast<sema::FunctionType>();
         emit("[&](");
         
         for (size_t i = 0; i < node.parameters.size(); ++i)
         {
-            if (node.parameters[i].type)
-                emit(toCppType(node.parameters[i].type->refType.Lock()));
+            Ref<sema::Type> parameterType = nullptr;
+            if (functionType && i < functionType->paramTypes.size())
+                parameterType = functionType->paramTypes[i];
+            else if (node.parameters[i].type)
+                parameterType = node.parameters[i].type->refType.Lock();
+            else if (node.parameters[i].name)
+                parameterType = node.parameters[i].name->refType.Lock();
+
+            if (parameterType && !parameterType->isUnknown())
+                emit(toCppType(parameterType));
             else
                 emit("auto"); 
             emit(" ");
@@ -2356,10 +2365,10 @@ namespace wio::codegen
         }
         emit(")");
 
-        if (node.returnType)
+        if (functionType && functionType->returnType && !functionType->returnType->isUnknown())
         {
             emit(" -> ");
-            node.returnType->accept(*this);
+            emit(toCppType(functionType->returnType));
         }
 
         emit(" {\n");

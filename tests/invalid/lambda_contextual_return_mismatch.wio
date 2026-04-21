@@ -1,0 +1,7 @@
+fn Entry() -> i32 {
+    let reducer: fn(i32, i32) -> i32 = (acc, value) => {
+        return true;
+    };
+
+    return 0;
+}

@@ -1,0 +1,15 @@
+use std::io as console;
+
+fn Entry() -> i32 {
+    let isPositive: fn(i32) -> bool = (value) => value > 0;
+    let buildArray: fn() -> i32[] = () => [];
+    let buildMap: fn() -> Dict<string, i32> = () => ({});
+    let buildTree: fn() -> Tree<i32, i32> = () => ({< >});
+
+    let numbers = buildArray();
+    let scores = buildMap();
+    let ordered = buildTree();
+
+    console::Print($"Lambda context: ${isPositive(4)}/${numbers.Count() fit i32}/${scores.Count() fit i32}/${ordered.Count() fit i32}");
+    return 0;
+}

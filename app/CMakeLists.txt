@@ -715,6 +715,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_std_algorithms_callback_wave_run
+        "${CMAKE_SOURCE_DIR}/tests/std_algorithms_callback_wave_run.wio"
+        "Callback wave: 3/2/6/2/12/3/21/2/2/2"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_lambda_contextual_typing_run
+        "${CMAKE_SOURCE_DIR}/tests/lambda_contextual_typing_run.wio"
+        "Lambda context: true/0/0/0"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_generic_function_identity_run
         "${CMAKE_SOURCE_DIR}/tests/generic_function_identity.wio"
         "Generic values: 42, wio"
@@ -1257,5 +1271,11 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_generic_from_missing_arguments
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_from_missing_arguments.wio"
         "Generic type 'Reader' expects 1 generic arguments, but got 0"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_lambda_contextual_return_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/lambda_contextual_return_mismatch.wio"
+        "Return type mismatch"
     )
 endif()

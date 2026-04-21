@@ -74,5 +74,57 @@ realm std {
                 action(value);
             }
         }
+
+        fn CountBy<T>(values: T[], predicate: fn(T) -> bool) -> usize {
+            mut count: usize = 0 fit usize;
+            for value in values {
+                if (predicate(value)) {
+                    count += 1 fit usize;
+                }
+            }
+            return count;
+        }
+
+        fn Filter<T>(values: T[], predicate: fn(T) -> bool) -> T[] {
+            mut result: T[] = [];
+            result.Reserve(values.Count());
+
+            for value in values {
+                if (predicate(value)) {
+                    result.Push(value);
+                }
+            }
+
+            return result;
+        }
+
+        fn Map<T, U>(values: T[], transform: fn(T) -> U) -> U[] {
+            mut result: U[] = [];
+            result.Reserve(values.Count());
+
+            for value in values {
+                result.Push(transform(value));
+            }
+
+            return result;
+        }
+
+        fn Reduce<T, U>(values: T[], seed: U, reducer: fn(U, T) -> U) -> U {
+            mut current = seed;
+            for value in values {
+                current = reducer(current, value);
+            }
+            return current;
+        }
+
+        fn GroupCountBy<T, K>(values: T[], keySelector: fn(T) -> K) -> Dict<K, usize> {
+            mut counts: Dict<K, usize> = {};
+            for value in values {
+                let key = keySelector(value);
+                let nextCount = counts.GetOr(key, 0 fit usize) + 1 fit usize;
+                counts.Set(key, nextCount);
+            }
+            return counts;
+        }
     }
 }
