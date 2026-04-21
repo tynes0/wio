@@ -4255,6 +4255,108 @@ namespace wio::sema
                     currentScope_->define("OnConstruct", copySym);
                 }
             }
+
+            if (hasAttribute(node.attributes, Attribute::Export))
+            {
+                if (!node.genericParameters.empty())
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "@Export is not yet supported for generic components.");
+                }
+
+                bool hasHostCallableConstructor = false;
+
+                for (const auto& member : node.members)
+                {
+                    if (!member.declaration || !member.declaration->is<FunctionDeclaration>())
+                        continue;
+
+                    auto functionDecl = member.declaration->as<FunctionDeclaration>();
+                    if (!functionDecl || functionDecl->name->token.value != "OnConstruct")
+                        continue;
+
+                    auto functionSymbol = functionDecl->name ? functionDecl->name->referencedSymbol.Lock() : nullptr;
+                    auto functionType = functionSymbol && functionSymbol->type ? functionSymbol->type.AsFast<FunctionType>() : nullptr;
+                    if (!functionType)
+                        continue;
+
+                    const bool isCopyCtor =
+                        functionType->paramTypes.size() == 1 &&
+                        functionType->paramTypes[0]->kind() == TypeKind::Reference &&
+                        functionType->paramTypes[0].AsFast<ReferenceType>()->referredType == structType;
+                    if (isCopyCtor)
+                        continue;
+
+                    bool allParametersAbiSafe = true;
+                    for (size_t parameterIndex = 0; parameterIndex < functionType->paramTypes.size(); ++parameterIndex)
+                    {
+                        if (isCAbiSafeExportType(functionType->paramTypes[parameterIndex]))
+                            continue;
+
+                        allParametersAbiSafe = false;
+                        WIO_LOG_ADD_ERROR(
+                            functionDecl->location(),
+                            "@Export component '{}' constructor parameter {} uses non-C-ABI-safe type '{}'.",
+                            node.name->token.value,
+                            parameterIndex,
+                            functionType->paramTypes[parameterIndex] ? functionType->paramTypes[parameterIndex]->toString() : "<unknown>"
+                        );
+                    }
+
+                    if (member.access == AccessModifier::Public && allParametersAbiSafe)
+                        hasHostCallableConstructor = true;
+                }
+
+                if ((!hasCustomCtor && !hasNoDefaultCtor) || forceGenerateCtors)
+                {
+                    if (!hasEmptyCtor)
+                        hasHostCallableConstructor = true;
+
+                    if (!hasMemberCtor && !memberTypes.empty())
+                    {
+                        bool memberCtorAbiSafe = true;
+                        for (const auto& memberType : memberTypes)
+                        {
+                            if (isCAbiSafeExportType(memberType))
+                                continue;
+
+                            memberCtorAbiSafe = false;
+                            break;
+                        }
+
+                        if (memberCtorAbiSafe)
+                            hasHostCallableConstructor = true;
+                    }
+                }
+
+                if (!hasHostCallableConstructor)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "@Export component '{}' must expose at least one public host-callable constructor with only C-ABI-safe parameters.",
+                        node.name->token.value
+                    );
+                }
+
+                for (const auto& member : node.members)
+                {
+                    if (member.access != AccessModifier::Public || !member.declaration || !member.declaration->is<VariableDeclaration>())
+                        continue;
+
+                    auto variableDecl = member.declaration->as<VariableDeclaration>();
+                    auto variableSymbol = variableDecl->name ? variableDecl->name->referencedSymbol.Lock() : nullptr;
+                    Ref<Type> fieldType = variableSymbol && variableSymbol->type ? variableSymbol->type : variableDecl->name->refType.Lock();
+                    if (!isCAbiSafeExportType(fieldType))
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            variableDecl->location(),
+                            "@Export component '{}' exposes public field '{}' with non-C-ABI-safe type '{}'.",
+                            node.name->token.value,
+                            variableDecl->name->token.value,
+                            fieldType ? fieldType->toString() : "<unknown>"
+                        );
+                    }
+                }
+            }
             
             genericTypeParameterScopes_.pop_back();
             currentScope_ = prevScope;
@@ -4582,6 +4684,163 @@ namespace wio::sema
                     auto copyCtorType = Compiler::get().getTypeContext().getOrCreateFunctionType(voidType, { copyParamType });
                     Ref<Symbol> copySym = createSymbol("OnConstruct", copyCtorType, SymbolKind::Function, node.location());
                     currentScope_->define("OnConstruct", copySym);
+                }
+            }
+
+            if (hasAttribute(node.attributes, Attribute::Export))
+            {
+                if (!node.genericParameters.empty())
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "@Export is not yet supported for generic objects.");
+                }
+
+                bool hasHostCallableConstructor = false;
+
+                for (const auto& member : node.members)
+                {
+                    if (!member.declaration || !member.declaration->is<FunctionDeclaration>())
+                        continue;
+
+                    auto functionDecl = member.declaration->as<FunctionDeclaration>();
+                    if (!functionDecl || functionDecl->name->token.value != "OnConstruct")
+                        continue;
+
+                    auto functionSymbol = functionDecl->name ? functionDecl->name->referencedSymbol.Lock() : nullptr;
+                    auto functionType = functionSymbol && functionSymbol->type ? functionSymbol->type.AsFast<FunctionType>() : nullptr;
+                    if (!functionType)
+                        continue;
+
+                    const bool isCopyCtor =
+                        functionType->paramTypes.size() == 1 &&
+                        functionType->paramTypes[0]->kind() == TypeKind::Reference &&
+                        functionType->paramTypes[0].AsFast<ReferenceType>()->referredType == structType;
+                    if (isCopyCtor)
+                        continue;
+
+                    bool allParametersAbiSafe = true;
+                    for (size_t parameterIndex = 0; parameterIndex < functionType->paramTypes.size(); ++parameterIndex)
+                    {
+                        if (isCAbiSafeExportType(functionType->paramTypes[parameterIndex]))
+                            continue;
+
+                        allParametersAbiSafe = false;
+                        WIO_LOG_ADD_ERROR(
+                            functionDecl->location(),
+                            "@Export object '{}' constructor parameter {} uses non-C-ABI-safe type '{}'.",
+                            node.name->token.value,
+                            parameterIndex,
+                            functionType->paramTypes[parameterIndex] ? functionType->paramTypes[parameterIndex]->toString() : "<unknown>"
+                        );
+                    }
+
+                    if (allParametersAbiSafe)
+                        hasHostCallableConstructor = true;
+                }
+
+                if ((!hasCustomCtor && !hasNoDefaultCtor) || forceGenerateCtors)
+                {
+                    if (!hasEmptyCtor)
+                        hasHostCallableConstructor = true;
+
+                    if (!hasMemberCtor && !memberTypes.empty())
+                    {
+                        bool memberCtorAbiSafe = true;
+                        for (const auto& memberType : memberTypes)
+                        {
+                            if (isCAbiSafeExportType(memberType))
+                                continue;
+
+                            memberCtorAbiSafe = false;
+                            break;
+                        }
+
+                        if (memberCtorAbiSafe)
+                            hasHostCallableConstructor = true;
+                    }
+                }
+
+                if (!hasHostCallableConstructor)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "@Export object '{}' must expose at least one host-callable constructor with only C-ABI-safe parameters.",
+                        node.name->token.value
+                    );
+                }
+
+                for (const auto& member : node.members)
+                {
+                    if (member.access != AccessModifier::Public || !member.declaration)
+                        continue;
+
+                    if (member.declaration->is<VariableDeclaration>())
+                    {
+                        auto variableDecl = member.declaration->as<VariableDeclaration>();
+                        auto variableSymbol = variableDecl->name ? variableDecl->name->referencedSymbol.Lock() : nullptr;
+                        Ref<Type> fieldType = variableSymbol && variableSymbol->type ? variableSymbol->type : variableDecl->name->refType.Lock();
+                        if (!isCAbiSafeExportType(fieldType))
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                variableDecl->location(),
+                                "@Export object '{}' exposes public field '{}' with non-C-ABI-safe type '{}'.",
+                                node.name->token.value,
+                                variableDecl->name->token.value,
+                                fieldType ? fieldType->toString() : "<unknown>"
+                            );
+                        }
+
+                        continue;
+                    }
+
+                    if (!member.declaration->is<FunctionDeclaration>())
+                        continue;
+
+                    auto functionDecl = member.declaration->as<FunctionDeclaration>();
+                    const std::string& functionName = functionDecl->name->token.value;
+                    if (functionName == "OnConstruct" || functionName == "OnDestruct")
+                        continue;
+
+                    if (!functionDecl->genericParameters.empty())
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            functionDecl->location(),
+                            "@Export object '{}' public method '{}' cannot be generic yet.",
+                            node.name->token.value,
+                            functionName
+                        );
+                        continue;
+                    }
+
+                    auto functionSymbol = functionDecl->name ? functionDecl->name->referencedSymbol.Lock() : nullptr;
+                    auto functionType = functionSymbol && functionSymbol->type ? functionSymbol->type.AsFast<FunctionType>() : nullptr;
+                    if (!functionType)
+                        continue;
+
+                    for (size_t parameterIndex = 0; parameterIndex < functionType->paramTypes.size(); ++parameterIndex)
+                    {
+                        if (!isCAbiSafeExportType(functionType->paramTypes[parameterIndex]))
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                functionDecl->location(),
+                                "@Export object '{}' public method '{}' parameter {} uses non-C-ABI-safe type '{}'.",
+                                node.name->token.value,
+                                functionName,
+                                parameterIndex,
+                                functionType->paramTypes[parameterIndex] ? functionType->paramTypes[parameterIndex]->toString() : "<unknown>"
+                            );
+                        }
+                    }
+
+                    if (!isCAbiSafeExportType(functionType->returnType))
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            functionDecl->location(),
+                            "@Export object '{}' public method '{}' returns non-C-ABI-safe type '{}'.",
+                            node.name->token.value,
+                            functionName,
+                            functionType->returnType ? functionType->returnType->toString() : "<unknown>"
+                        );
+                    }
                 }
             }
             

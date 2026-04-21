@@ -633,6 +633,16 @@ namespace wio::codegen
             return hasAttribute(node.attributes, Attribute::Event);
         }
 
+        bool isExportedComponent(const ComponentDeclaration& node)
+        {
+            return hasAttribute(node.attributes, Attribute::Export);
+        }
+
+        bool isExportedObject(const ObjectDeclaration& node)
+        {
+            return hasAttribute(node.attributes, Attribute::Export);
+        }
+
         std::optional<Attribute> getModuleLifecycleAttribute(const FunctionDeclaration& node)
         {
             for (const auto& attr : node.attributes)
@@ -720,7 +730,55 @@ namespace wio::codegen
             std::vector<Ref<sema::Type>> templateArguments;
             std::optional<std::string> commandName;
             std::optional<std::string> eventName;
+            enum class SyntheticKind : uint8_t
+            {
+                None,
+                TypeConstruct,
+                TypeDestroy,
+                TypeFieldGet,
+                TypeFieldSet,
+                TypeMethod
+            } syntheticKind = SyntheticKind::None;
+            std::string ownerCppTypeName;
+            std::string memberCppName;
+            bool ownerIsObject = false;
         };
+
+        struct ExportedFieldInfo
+        {
+            std::string fieldName;
+            Ref<sema::Type> fieldType = nullptr;
+            bool isReadOnly = false;
+            size_t getterExportIndex = 0;
+            std::optional<size_t> setterExportIndex;
+        };
+
+        struct ExportedMethodInfo
+        {
+            std::string methodName;
+            size_t exportIndex = 0;
+        };
+
+        struct ExportedConstructorInfo
+        {
+            size_t exportIndex = 0;
+        };
+
+        struct ExportedTypeInfo
+        {
+            std::string logicalName;
+            std::string symbolName;
+            std::string cppTypeName;
+            bool isObject = false;
+            std::optional<size_t> createExportIndex;
+            size_t destroyExportIndex = 0;
+            std::vector<ExportedConstructorInfo> constructors;
+            std::vector<ExportedFieldInfo> fields;
+            std::vector<ExportedMethodInfo> methods;
+        };
+
+        Ref<sema::StructType> getStructTypeFromSymbol(const Ref<sema::Symbol>& symbol);
+        std::string mangleStructTypeName(const Ref<sema::StructType>& type);
 
         std::string getAbiTypeEnumName(const Ref<sema::Type>& type)
         {
@@ -890,6 +948,436 @@ namespace wio::codegen
                 info.internalSymbol = internalSymbol;
                 appendCommandAndEventMetadata(info);
                 exportedFunctions.push_back(std::move(info));
+            }
+        }
+
+        void collectExportedTypes(const std::vector<NodePtr<Statement>>& statements,
+                                  std::vector<ExportedFunctionInfo>& exportedFunctions,
+                                  std::vector<ExportedTypeInfo>& exportedTypes)
+        {
+            auto& typeContext = Compiler::get().getTypeContext();
+            auto isAbiSafeType = [&](const Ref<sema::Type>& type)
+            {
+                return getAbiTypeEnumName(type) != "WIO_ABI_UNKNOWN";
+            };
+
+            auto isExactType = [&](const Ref<sema::Type>& lhs, const Ref<sema::Type>& rhs)
+            {
+                Ref<sema::Type> left = unwrapAliasType(lhs);
+                Ref<sema::Type> right = unwrapAliasType(rhs);
+                return left && right && left->isCompatibleWith(right) && right->isCompatibleWith(left);
+            };
+
+            auto isCopyConstructorSignature = [&](const Ref<sema::StructType>& selfType,
+                                                  const Ref<sema::FunctionType>& functionType)
+            {
+                if (!selfType || !functionType || functionType->paramTypes.size() != 1)
+                    return false;
+
+                Ref<sema::Type> parameterType = unwrapAliasType(functionType->paramTypes[0]);
+                if (!parameterType || parameterType->kind() != sema::TypeKind::Reference)
+                    return false;
+
+                auto referenceType = parameterType.AsFast<sema::ReferenceType>();
+                return isExactType(referenceType->referredType, selfType);
+            };
+
+            auto formatConstructorLogicalName = [&](const std::string& typeLogicalName,
+                                                    const std::vector<Ref<sema::Type>>& parameterTypes)
+            {
+                if (parameterTypes.empty())
+                    return typeLogicalName + ".__create";
+
+                std::string result = typeLogicalName + ".__create(";
+                for (size_t i = 0; i < parameterTypes.size(); ++i)
+                {
+                    result += parameterTypes[i] ? parameterTypes[i]->toString() : "unknown";
+                    if (i + 1 < parameterTypes.size())
+                        result += ", ";
+                }
+                result += ")";
+                return result;
+            };
+
+            auto formatConstructorSymbolName = [&](const std::string& typeSymbolName,
+                                                   const std::vector<Ref<sema::Type>>& parameterTypes)
+            {
+                std::string result = "WioCreateType__" + typeSymbolName;
+                if (parameterTypes.empty())
+                    return result;
+
+                for (const auto& parameterType : parameterTypes)
+                {
+                    result += "__";
+                    std::string fragment = Mangler::mangleType(parameterType);
+                    std::ranges::replace(fragment, ':', '_');
+                    result += fragment;
+                }
+
+                return result;
+            };
+
+            for (const auto& statement : statements)
+            {
+                if (!statement)
+                    continue;
+
+                if (const auto* realmDecl = statement->as<RealmDeclaration>())
+                {
+                    collectExportedTypes(realmDecl->statements, exportedFunctions, exportedTypes);
+                    continue;
+                }
+
+                auto appendExportedField = [&](const auto& exportedMember,
+                                               ExportedTypeInfo& typeInfo,
+                                               bool isObjectType)
+                {
+                    auto* variableDecl = exportedMember.declaration->template as<VariableDeclaration>();
+                    if (!variableDecl)
+                        return;
+
+                    auto variableSymbol = variableDecl->name ? variableDecl->name->referencedSymbol.Lock() : nullptr;
+                    Ref<sema::Type> fieldType = variableSymbol && variableSymbol->type ? variableSymbol->type : variableDecl->name->refType.Lock();
+                    if (!fieldType || getAbiTypeEnumName(fieldType) == "WIO_ABI_UNKNOWN")
+                        return;
+
+                    ExportedFieldInfo fieldInfo;
+                    fieldInfo.fieldName = variableDecl->name->token.value;
+                    fieldInfo.fieldType = fieldType;
+                    fieldInfo.isReadOnly = variableSymbol && variableSymbol->flags.get_isReadOnly();
+
+                    ExportedFunctionInfo getterExport;
+                    getterExport.functionType = typeContext.getOrCreateFunctionType(fieldType, { typeContext.getUSize() }).AsFast<sema::FunctionType>();
+                    getterExport.logicalName = typeInfo.logicalName + "." + fieldInfo.fieldName + ".get";
+                    getterExport.symbolName = "WioGetField__" + typeInfo.symbolName + "__" + fieldInfo.fieldName;
+                    getterExport.syntheticKind = ExportedFunctionInfo::SyntheticKind::TypeFieldGet;
+                    getterExport.ownerCppTypeName = typeInfo.cppTypeName;
+                    getterExport.memberCppName = sanitizeCppIdentifier(fieldInfo.fieldName);
+                    getterExport.ownerIsObject = isObjectType;
+                    fieldInfo.getterExportIndex = exportedFunctions.size();
+                    exportedFunctions.push_back(std::move(getterExport));
+
+                    if (!fieldInfo.isReadOnly)
+                    {
+                        ExportedFunctionInfo setterExport;
+                        setterExport.functionType = typeContext.getOrCreateFunctionType(typeContext.getVoid(), { typeContext.getUSize(), fieldType }).AsFast<sema::FunctionType>();
+                        setterExport.logicalName = typeInfo.logicalName + "." + fieldInfo.fieldName + ".set";
+                        setterExport.symbolName = "WioSetField__" + typeInfo.symbolName + "__" + fieldInfo.fieldName;
+                        setterExport.syntheticKind = ExportedFunctionInfo::SyntheticKind::TypeFieldSet;
+                        setterExport.ownerCppTypeName = typeInfo.cppTypeName;
+                        setterExport.memberCppName = sanitizeCppIdentifier(fieldInfo.fieldName);
+                        setterExport.ownerIsObject = isObjectType;
+                        fieldInfo.setterExportIndex = exportedFunctions.size();
+                        exportedFunctions.push_back(std::move(setterExport));
+                    }
+
+                    typeInfo.fields.push_back(std::move(fieldInfo));
+                };
+
+                auto appendConstructorExport = [&](ExportedTypeInfo& typeInfo,
+                                                   const std::vector<Ref<sema::Type>>& parameterTypes,
+                                                   bool isObjectType,
+                                                   std::unordered_set<std::string>& seenConstructorSignatures)
+                {
+                    for (const auto& parameterType : parameterTypes)
+                    {
+                        if (!isAbiSafeType(parameterType))
+                            return;
+                    }
+
+                    std::string signatureKey = formatConstructorSymbolName(typeInfo.symbolName, parameterTypes);
+                    if (!seenConstructorSignatures.insert(signatureKey).second)
+                        return;
+
+                    ExportedFunctionInfo constructorExport;
+                    constructorExport.functionType = typeContext.getOrCreateFunctionType(typeContext.getUSize(), parameterTypes).AsFast<sema::FunctionType>();
+                    constructorExport.logicalName = formatConstructorLogicalName(typeInfo.logicalName, parameterTypes);
+                    constructorExport.symbolName = std::move(signatureKey);
+                    constructorExport.syntheticKind = ExportedFunctionInfo::SyntheticKind::TypeConstruct;
+                    constructorExport.ownerCppTypeName = typeInfo.cppTypeName;
+                    constructorExport.ownerIsObject = isObjectType;
+
+                    const size_t exportIndex = exportedFunctions.size();
+                    exportedFunctions.push_back(std::move(constructorExport));
+                    typeInfo.constructors.push_back({ exportIndex });
+
+                    if (parameterTypes.empty() && !typeInfo.createExportIndex.has_value())
+                        typeInfo.createExportIndex = exportIndex;
+                };
+
+                if (const auto* componentDecl = statement->as<ComponentDeclaration>())
+                {
+                    if (!isExportedComponent(*componentDecl) || !componentDecl->name || !componentDecl->genericParameters.empty())
+                        continue;
+
+                    auto componentSymbol = componentDecl->name->referencedSymbol.Lock();
+                    auto componentType = getStructTypeFromSymbol(componentSymbol);
+                    if (!componentType)
+                        continue;
+
+                    ExportedTypeInfo typeInfo;
+                    typeInfo.logicalName = componentType->scopePath.empty()
+                        ? componentType->name
+                        : (componentType->scopePath + "::" + componentType->name);
+                    typeInfo.symbolName = Mangler::mangleStruct(componentType->name, componentType->scopePath);
+                    typeInfo.cppTypeName = mangleStructTypeName(componentType);
+                    typeInfo.isObject = false;
+
+                    ExportedFunctionInfo destroyExport;
+                    destroyExport.functionType = typeContext.getOrCreateFunctionType(typeContext.getVoid(), { typeContext.getUSize() }).AsFast<sema::FunctionType>();
+                    destroyExport.logicalName = typeInfo.logicalName + ".__destroy";
+                    destroyExport.symbolName = "WioDestroyType__" + typeInfo.symbolName;
+                    destroyExport.syntheticKind = ExportedFunctionInfo::SyntheticKind::TypeDestroy;
+                    destroyExport.ownerCppTypeName = typeInfo.cppTypeName;
+                    typeInfo.destroyExportIndex = exportedFunctions.size();
+                    exportedFunctions.push_back(std::move(destroyExport));
+
+                    std::vector<Ref<sema::Type>> memberTypes;
+                    memberTypes.reserve(componentDecl->members.size());
+                    bool hasCustomCtor = false;
+                    bool hasEmptyCtor = false;
+                    bool hasCopyCtor = false;
+                    bool hasMemberCtor = false;
+                    const bool hasNoDefaultCtor = hasAttribute(componentDecl->attributes, Attribute::NoDefaultCtor);
+                    const bool forceGenerateCtors = hasAttribute(componentDecl->attributes, Attribute::GenerateCtors);
+                    std::unordered_set<std::string> seenConstructorSignatures;
+
+                    for (const auto& member : componentDecl->members)
+                    {
+                        if (!member.declaration || !member.declaration->is<VariableDeclaration>())
+                            continue;
+
+                        auto* variableDecl = member.declaration->as<VariableDeclaration>();
+                        auto variableSymbol = variableDecl->name ? variableDecl->name->referencedSymbol.Lock() : nullptr;
+                        Ref<sema::Type> memberType = variableSymbol && variableSymbol->type ? variableSymbol->type : variableDecl->name->refType.Lock();
+                        if (memberType)
+                            memberTypes.push_back(memberType);
+                    }
+
+                    for (const auto& member : componentDecl->members)
+                    {
+                        if (!member.declaration || !member.declaration->is<FunctionDeclaration>())
+                            continue;
+
+                        auto* functionDecl = member.declaration->as<FunctionDeclaration>();
+                        if (!functionDecl || functionDecl->name->token.value != "OnConstruct")
+                            continue;
+
+                        hasCustomCtor = true;
+                        auto functionSymbol = functionDecl->name ? functionDecl->name->referencedSymbol.Lock() : nullptr;
+                        auto functionType = functionSymbol && functionSymbol->type ? functionSymbol->type.AsFast<sema::FunctionType>() : nullptr;
+                        if (!functionType)
+                            continue;
+
+                        const bool isCopyCtor = isCopyConstructorSignature(componentType, functionType);
+                        if (functionType->paramTypes.empty())
+                            hasEmptyCtor = true;
+                        if (isCopyCtor)
+                            hasCopyCtor = true;
+
+                        if (!isCopyCtor && functionType->paramTypes.size() == memberTypes.size())
+                        {
+                            bool isMemberCtor = true;
+                            for (size_t i = 0; i < memberTypes.size(); ++i)
+                            {
+                                if (!isExactType(functionType->paramTypes[i], memberTypes[i]))
+                                {
+                                    isMemberCtor = false;
+                                    break;
+                                }
+                            }
+
+                            if (isMemberCtor)
+                                hasMemberCtor = true;
+                        }
+
+                        if (!isCopyCtor && member.access == AccessModifier::Public)
+                            appendConstructorExport(typeInfo, functionType->paramTypes, /*isObjectType=*/false, seenConstructorSignatures);
+                    }
+
+                    if ((!hasCustomCtor && !hasNoDefaultCtor) || forceGenerateCtors)
+                    {
+                        if (!hasEmptyCtor)
+                            appendConstructorExport(typeInfo, {}, /*isObjectType=*/false, seenConstructorSignatures);
+
+                        if (!hasMemberCtor && !memberTypes.empty())
+                            appendConstructorExport(typeInfo, memberTypes, /*isObjectType=*/false, seenConstructorSignatures);
+                    }
+
+                    for (const auto& member : componentDecl->members)
+                    {
+                        if (member.access != AccessModifier::Public || !member.declaration || !member.declaration->is<VariableDeclaration>())
+                            continue;
+
+                        appendExportedField(member, typeInfo, false);
+                    }
+
+                    exportedTypes.push_back(std::move(typeInfo));
+                    continue;
+                }
+
+                const auto* objectDecl = statement->as<ObjectDeclaration>();
+                if (!objectDecl || !isExportedObject(*objectDecl) || !objectDecl->name || !objectDecl->genericParameters.empty())
+                    continue;
+
+                auto objectSymbol = objectDecl->name->referencedSymbol.Lock();
+                auto objectType = getStructTypeFromSymbol(objectSymbol);
+                if (!objectType)
+                    continue;
+
+                ExportedTypeInfo typeInfo;
+                typeInfo.logicalName = objectType->scopePath.empty()
+                    ? objectType->name
+                    : (objectType->scopePath + "::" + objectType->name);
+                typeInfo.symbolName = Mangler::mangleStruct(objectType->name, objectType->scopePath);
+                typeInfo.cppTypeName = mangleStructTypeName(objectType);
+                typeInfo.isObject = true;
+
+                ExportedFunctionInfo destroyExport;
+                destroyExport.functionType = typeContext.getOrCreateFunctionType(typeContext.getVoid(), { typeContext.getUSize() }).AsFast<sema::FunctionType>();
+                destroyExport.logicalName = typeInfo.logicalName + ".__destroy";
+                destroyExport.symbolName = "WioDestroyType__" + typeInfo.symbolName;
+                destroyExport.syntheticKind = ExportedFunctionInfo::SyntheticKind::TypeDestroy;
+                destroyExport.ownerCppTypeName = typeInfo.cppTypeName;
+                destroyExport.ownerIsObject = true;
+                typeInfo.destroyExportIndex = exportedFunctions.size();
+                exportedFunctions.push_back(std::move(destroyExport));
+
+                std::vector<Ref<sema::Type>> memberTypes;
+                memberTypes.reserve(objectDecl->members.size());
+                bool hasCustomCtor = false;
+                bool hasEmptyCtor = false;
+                bool hasCopyCtor = false;
+                bool hasMemberCtor = false;
+                const bool hasNoDefaultCtor = hasAttribute(objectDecl->attributes, Attribute::NoDefaultCtor);
+                const bool forceGenerateCtors = hasAttribute(objectDecl->attributes, Attribute::GenerateCtors);
+                std::unordered_set<std::string> seenConstructorSignatures;
+
+                for (const auto& member : objectDecl->members)
+                {
+                    if (!member.declaration || !member.declaration->is<VariableDeclaration>())
+                        continue;
+
+                    auto* variableDecl = member.declaration->as<VariableDeclaration>();
+                    auto variableSymbol = variableDecl->name ? variableDecl->name->referencedSymbol.Lock() : nullptr;
+                    Ref<sema::Type> memberType = variableSymbol && variableSymbol->type ? variableSymbol->type : variableDecl->name->refType.Lock();
+                    if (memberType)
+                        memberTypes.push_back(memberType);
+                }
+
+                for (const auto& member : objectDecl->members)
+                {
+                    if (!member.declaration || !member.declaration->is<FunctionDeclaration>())
+                        continue;
+
+                    auto* functionDecl = member.declaration->as<FunctionDeclaration>();
+                    if (!functionDecl || functionDecl->name->token.value != "OnConstruct")
+                        continue;
+
+                    hasCustomCtor = true;
+                    auto functionSymbol = functionDecl->name ? functionDecl->name->referencedSymbol.Lock() : nullptr;
+                    auto functionType = functionSymbol && functionSymbol->type ? functionSymbol->type.AsFast<sema::FunctionType>() : nullptr;
+                    if (!functionType)
+                        continue;
+
+                    const bool isCopyCtor = isCopyConstructorSignature(objectType, functionType);
+                    if (functionType->paramTypes.empty())
+                        hasEmptyCtor = true;
+                    if (isCopyCtor)
+                        hasCopyCtor = true;
+
+                    if (!isCopyCtor && functionType->paramTypes.size() == memberTypes.size())
+                    {
+                        bool isMemberCtor = true;
+                        for (size_t i = 0; i < memberTypes.size(); ++i)
+                        {
+                            if (!isExactType(functionType->paramTypes[i], memberTypes[i]))
+                            {
+                                isMemberCtor = false;
+                                break;
+                            }
+                        }
+
+                        if (isMemberCtor)
+                            hasMemberCtor = true;
+                    }
+
+                    if (!isCopyCtor)
+                        appendConstructorExport(typeInfo, functionType->paramTypes, /*isObjectType=*/true, seenConstructorSignatures);
+                }
+
+                if ((!hasCustomCtor && !hasNoDefaultCtor) || forceGenerateCtors)
+                {
+                    if (!hasEmptyCtor)
+                        appendConstructorExport(typeInfo, {}, /*isObjectType=*/true, seenConstructorSignatures);
+
+                    if (!hasMemberCtor && !memberTypes.empty())
+                        appendConstructorExport(typeInfo, memberTypes, /*isObjectType=*/true, seenConstructorSignatures);
+                }
+
+                for (const auto& member : objectDecl->members)
+                {
+                    if (member.access != AccessModifier::Public || !member.declaration)
+                        continue;
+
+                    if (member.declaration->is<VariableDeclaration>())
+                    {
+                        appendExportedField(member, typeInfo, true);
+                        continue;
+                    }
+
+                    if (!member.declaration->is<FunctionDeclaration>())
+                        continue;
+
+                    auto* functionDecl = member.declaration->as<FunctionDeclaration>();
+                    if (!functionDecl || functionDecl->genericParameters.size() > 0)
+                        continue;
+
+                    const std::string functionName = functionDecl->name->token.value;
+                    if (functionName == "OnConstruct" || functionName == "OnDestruct")
+                        continue;
+
+                    auto functionSymbol = functionDecl->name ? functionDecl->name->referencedSymbol.Lock() : nullptr;
+                    auto functionType = functionSymbol && functionSymbol->type ? functionSymbol->type.AsFast<sema::FunctionType>() : nullptr;
+                    if (!functionType || getAbiTypeEnumName(functionType->returnType) == "WIO_ABI_UNKNOWN")
+                        continue;
+
+                    bool allParametersAbiSafe = true;
+                    std::vector<Ref<sema::Type>> exportedParameterTypes;
+                    exportedParameterTypes.reserve(functionType->paramTypes.size() + 1);
+                    exportedParameterTypes.push_back(typeContext.getUSize());
+
+                    for (const auto& parameterType : functionType->paramTypes)
+                    {
+                        if (getAbiTypeEnumName(parameterType) == "WIO_ABI_UNKNOWN")
+                        {
+                            allParametersAbiSafe = false;
+                            break;
+                        }
+
+                        exportedParameterTypes.push_back(parameterType);
+                    }
+
+                    if (!allParametersAbiSafe)
+                        continue;
+
+                    ExportedFunctionInfo methodExport;
+                    methodExport.functionType = typeContext.getOrCreateFunctionType(functionType->returnType, exportedParameterTypes).AsFast<sema::FunctionType>();
+                    methodExport.logicalName = typeInfo.logicalName + "." + functionName;
+                    methodExport.symbolName = "WioMethod__" + typeInfo.symbolName + "__" + functionName;
+                    methodExport.syntheticKind = ExportedFunctionInfo::SyntheticKind::TypeMethod;
+                    methodExport.ownerCppTypeName = typeInfo.cppTypeName;
+                    methodExport.memberCppName = Mangler::mangleFunction(functionName, functionType->paramTypes);
+                    methodExport.ownerIsObject = true;
+
+                    ExportedMethodInfo methodInfo;
+                    methodInfo.methodName = functionName;
+                    methodInfo.exportIndex = exportedFunctions.size();
+                    exportedFunctions.push_back(std::move(methodExport));
+                    typeInfo.methods.push_back(std::move(methodInfo));
+                }
+
+                exportedTypes.push_back(std::move(typeInfo));
             }
         }
 
@@ -1121,6 +1609,8 @@ namespace wio::codegen
         collectModuleLifecycleFunctions(program->statements, lifecycleFunctions);
         std::vector<ExportedFunctionInfo> exportedFunctions;
         collectExportedFunctions(program->statements, exportedFunctions);
+        std::vector<ExportedTypeInfo> exportedTypes;
+        collectExportedTypes(program->statements, exportedFunctions, exportedTypes);
 
         if (!lifecycleFunctions.hasAny() && exportedFunctions.empty())
             return;
@@ -1159,29 +1649,111 @@ namespace wio::codegen
             if (!exportFunctionType->returnType->isVoid())
                 emitLine("if (outResult == nullptr) return WIO_INVOKE_RESULT_REQUIRED;");
 
-            std::string callExpression = exportInfo.internalSymbol;
-            if (!exportInfo.templateArguments.empty())
-                callExpression += formatTemplateArgumentList(exportInfo.templateArguments);
-            callExpression += "(";
-            for (size_t paramIndex = 0; paramIndex < exportFunctionType->paramTypes.size(); ++paramIndex)
+            switch (exportInfo.syntheticKind)
             {
-                if (paramIndex > 0)
-                    callExpression += ", ";
+            case ExportedFunctionInfo::SyntheticKind::None:
+            {
+                std::string callExpression = exportInfo.internalSymbol;
+                if (!exportInfo.templateArguments.empty())
+                    callExpression += formatTemplateArgumentList(exportInfo.templateArguments);
+                callExpression += "(";
+                for (size_t paramIndex = 0; paramIndex < exportFunctionType->paramTypes.size(); ++paramIndex)
+                {
+                    if (paramIndex > 0)
+                        callExpression += ", ";
 
-                callExpression += "args[" + std::to_string(paramIndex) + "].value." + getAbiValueFieldName(exportFunctionType->paramTypes[paramIndex]);
+                    callExpression += "args[" + std::to_string(paramIndex) + "].value." + getAbiValueFieldName(exportFunctionType->paramTypes[paramIndex]);
+                }
+                callExpression += ")";
+
+                if (exportFunctionType->returnType->isVoid())
+                {
+                    emitLine(callExpression + ";");
+                    emitLine("if (outResult != nullptr) outResult->type = WIO_ABI_VOID;");
+                }
+                else
+                {
+                    emitLine("auto result = " + callExpression + ";");
+                    emitLine("outResult->type = " + getAbiTypeEnumName(exportFunctionType->returnType) + ";");
+                    emitLine("outResult->value." + getAbiValueFieldName(exportFunctionType->returnType) + " = result;");
+                }
+                break;
             }
-            callExpression += ")";
-
-            if (exportFunctionType->returnType->isVoid())
+            case ExportedFunctionInfo::SyntheticKind::TypeConstruct:
             {
-                emitLine(callExpression + ";");
+                std::string constructorArguments;
+                for (size_t paramIndex = 0; paramIndex < exportFunctionType->paramTypes.size(); ++paramIndex)
+                {
+                    if (paramIndex > 0)
+                        constructorArguments += ", ";
+
+                    constructorArguments += "args[" + std::to_string(paramIndex) + "].value." + getAbiValueFieldName(exportFunctionType->paramTypes[paramIndex]);
+                }
+
+                if (exportInfo.ownerIsObject)
+                    emitLine("auto* instance = wio::runtime::Ref<" + exportInfo.ownerCppTypeName + ">::Create(" + constructorArguments + ").Detach();");
+                else
+                    emitLine("auto* instance = new " + exportInfo.ownerCppTypeName + "(" + constructorArguments + ");");
+                emitLine("outResult->type = WIO_ABI_USIZE;");
+                emitLine("outResult->value.v_usize = reinterpret_cast<std::uintptr_t>(instance);");
+                break;
+            }
+            case ExportedFunctionInfo::SyntheticKind::TypeDestroy:
+            {
+                emitLine("auto* instance = reinterpret_cast<" + exportInfo.ownerCppTypeName + "*>(args[0].value.v_usize);");
+                emitLine("if (instance == nullptr) return WIO_INVOKE_BAD_ARGUMENTS;");
+                if (exportInfo.ownerIsObject)
+                    emitLine("wio::runtime::RefDeleter<" + exportInfo.ownerCppTypeName + ">::Execute(instance);");
+                else
+                    emitLine("delete instance;");
                 emitLine("if (outResult != nullptr) outResult->type = WIO_ABI_VOID;");
+                break;
             }
-            else
+            case ExportedFunctionInfo::SyntheticKind::TypeFieldGet:
             {
-                emitLine("auto result = " + callExpression + ";");
+                emitLine("auto* instance = reinterpret_cast<" + exportInfo.ownerCppTypeName + "*>(args[0].value.v_usize);");
+                emitLine("if (instance == nullptr) return WIO_INVOKE_BAD_ARGUMENTS;");
+                emitLine("auto result = instance->" + exportInfo.memberCppName + ";");
                 emitLine("outResult->type = " + getAbiTypeEnumName(exportFunctionType->returnType) + ";");
                 emitLine("outResult->value." + getAbiValueFieldName(exportFunctionType->returnType) + " = result;");
+                break;
+            }
+            case ExportedFunctionInfo::SyntheticKind::TypeFieldSet:
+            {
+                emitLine("auto* instance = reinterpret_cast<" + exportInfo.ownerCppTypeName + "*>(args[0].value.v_usize);");
+                emitLine("if (instance == nullptr) return WIO_INVOKE_BAD_ARGUMENTS;");
+                emitLine("instance->" + exportInfo.memberCppName + " = args[1].value." + getAbiValueFieldName(exportFunctionType->paramTypes[1]) + ";");
+                emitLine("if (outResult != nullptr) outResult->type = WIO_ABI_VOID;");
+                break;
+            }
+            case ExportedFunctionInfo::SyntheticKind::TypeMethod:
+            {
+                emitLine("auto* instance = reinterpret_cast<" + exportInfo.ownerCppTypeName + "*>(args[0].value.v_usize);");
+                emitLine("if (instance == nullptr) return WIO_INVOKE_BAD_ARGUMENTS;");
+
+                std::string callExpression = "instance->" + exportInfo.memberCppName + "(";
+                for (size_t paramIndex = 1; paramIndex < exportFunctionType->paramTypes.size(); ++paramIndex)
+                {
+                    if (paramIndex > 1)
+                        callExpression += ", ";
+
+                    callExpression += "args[" + std::to_string(paramIndex) + "].value." + getAbiValueFieldName(exportFunctionType->paramTypes[paramIndex]);
+                }
+                callExpression += ")";
+
+                if (exportFunctionType->returnType->isVoid())
+                {
+                    emitLine(callExpression + ";");
+                    emitLine("if (outResult != nullptr) outResult->type = WIO_ABI_VOID;");
+                }
+                else
+                {
+                    emitLine("auto result = " + callExpression + ";");
+                    emitLine("outResult->type = " + getAbiTypeEnumName(exportFunctionType->returnType) + ";");
+                    emitLine("outResult->value." + getAbiValueFieldName(exportFunctionType->returnType) + " = result;");
+                }
+                break;
+            }
             }
 
             emitLine("return WIO_INVOKE_OK;");
@@ -1277,6 +1849,109 @@ namespace wio::codegen
             emitLine("};");
         }
 
+        for (size_t typeIndex = 0; typeIndex < exportedTypes.size(); ++typeIndex)
+        {
+            const auto& exportedType = exportedTypes[typeIndex];
+
+            if (!exportedType.constructors.empty())
+            {
+                emitLine("static const WioModuleConstructor WIO_MODULE_TYPE_CONSTRUCTORS_" + std::to_string(typeIndex) + "[] =");
+                emitLine("{");
+                indent();
+                for (size_t constructorIndex = 0; constructorIndex < exportedType.constructors.size(); ++constructorIndex)
+                {
+                    const auto& constructor = exportedType.constructors[constructorIndex];
+                    const std::string suffix = (constructorIndex + 1 < exportedType.constructors.size()) ? "," : "";
+                    emitLine(
+                        "{ &WIO_MODULE_EXPORTS[" + std::to_string(constructor.exportIndex) + "] }" + suffix
+                    );
+                }
+                dedent();
+                emitLine("};");
+            }
+
+            if (!exportedType.fields.empty())
+            {
+                emitLine("static const WioModuleField WIO_MODULE_TYPE_FIELDS_" + std::to_string(typeIndex) + "[] =");
+                emitLine("{");
+                indent();
+                for (size_t fieldIndex = 0; fieldIndex < exportedType.fields.size(); ++fieldIndex)
+                {
+                    const auto& field = exportedType.fields[fieldIndex];
+                    const std::uint32_t flags = 1u | (field.isReadOnly ? 4u : 2u);
+                    const std::string suffix = (fieldIndex + 1 < exportedType.fields.size()) ? "," : "";
+                    const std::string setterExportExpr = field.setterExportIndex.has_value()
+                        ? ("&WIO_MODULE_EXPORTS[" + std::to_string(*field.setterExportIndex) + "]")
+                        : "nullptr";
+
+                    emitLine(
+                        "{ \"" + common::wioStringToEscapedCppString(field.fieldName) +
+                        "\", " + getAbiTypeEnumName(field.fieldType) +
+                        ", " + std::to_string(flags) + "u, &WIO_MODULE_EXPORTS[" + std::to_string(field.getterExportIndex) +
+                        "], " + setterExportExpr + " }" + suffix
+                    );
+                }
+                dedent();
+                emitLine("};");
+            }
+
+            if (!exportedType.methods.empty())
+            {
+                emitLine("static const WioModuleMethod WIO_MODULE_TYPE_METHODS_" + std::to_string(typeIndex) + "[] =");
+                emitLine("{");
+                indent();
+                for (size_t methodIndex = 0; methodIndex < exportedType.methods.size(); ++methodIndex)
+                {
+                    const auto& method = exportedType.methods[methodIndex];
+                    const std::string suffix = (methodIndex + 1 < exportedType.methods.size()) ? "," : "";
+                    emitLine(
+                        "{ \"" + common::wioStringToEscapedCppString(method.methodName) +
+                        "\", &WIO_MODULE_EXPORTS[" + std::to_string(method.exportIndex) + "] }" + suffix
+                    );
+                }
+                dedent();
+                emitLine("};");
+            }
+        }
+
+        if (!exportedTypes.empty())
+        {
+            emitLine("static const WioModuleType WIO_MODULE_TYPES[] =");
+            emitLine("{");
+            indent();
+            for (size_t typeIndex = 0; typeIndex < exportedTypes.size(); ++typeIndex)
+            {
+                const auto& exportedType = exportedTypes[typeIndex];
+                const std::string suffix = (typeIndex + 1 < exportedTypes.size()) ? "," : "";
+                const std::string typeKind = exportedType.isObject ? "WIO_MODULE_TYPE_OBJECT" : "WIO_MODULE_TYPE_COMPONENT";
+                const std::string createExportExpr = exportedType.createExportIndex.has_value()
+                    ? ("&WIO_MODULE_EXPORTS[" + std::to_string(*exportedType.createExportIndex) + "]")
+                    : "nullptr";
+                const std::string constructorArrayExpr = exportedType.constructors.empty()
+                    ? "nullptr"
+                    : ("WIO_MODULE_TYPE_CONSTRUCTORS_" + std::to_string(typeIndex));
+                const std::string fieldArrayExpr = exportedType.fields.empty()
+                    ? "nullptr"
+                    : ("WIO_MODULE_TYPE_FIELDS_" + std::to_string(typeIndex));
+                const std::string methodArrayExpr = exportedType.methods.empty()
+                    ? "nullptr"
+                    : ("WIO_MODULE_TYPE_METHODS_" + std::to_string(typeIndex));
+
+                emitLine(
+                    "{ \"" + common::wioStringToEscapedCppString(exportedType.logicalName) +
+                    "\", \"" + common::wioStringToEscapedCppString(exportedType.symbolName) +
+                    "\", " + typeKind +
+                    ", " + createExportExpr +
+                    ", &WIO_MODULE_EXPORTS[" + std::to_string(exportedType.destroyExportIndex) +
+                    "], " + std::to_string(exportedType.constructors.size()) + "u, " + constructorArrayExpr +
+                    ", " + std::to_string(exportedType.fields.size()) + "u, " + fieldArrayExpr +
+                    ", " + std::to_string(exportedType.methods.size()) + "u, " + methodArrayExpr + " }" + suffix
+                );
+            }
+            dedent();
+            emitLine("};");
+        }
+
         emitLine("extern \"C\" WIO_EXPORT const WioModuleApi* WioModuleGetApi()");
         emitLine("{");
         indent();
@@ -1299,7 +1974,9 @@ namespace wio::codegen
         emitLine(std::to_string(commandExportIndices.size()) + "u,");
         emitLine(commandExportIndices.empty() ? "nullptr," : "WIO_MODULE_COMMANDS,");
         emitLine(std::to_string(eventExportIndices.size()) + "u,");
-        emitLine(eventExportIndices.empty() ? "nullptr" : "WIO_MODULE_EVENT_HOOKS");
+        emitLine(eventExportIndices.empty() ? "nullptr," : "WIO_MODULE_EVENT_HOOKS,");
+        emitLine(std::to_string(exportedTypes.size()) + "u,");
+        emitLine(exportedTypes.empty() ? "nullptr" : "WIO_MODULE_TYPES");
         dedent();
         emitLine("};");
         emitLine("return &API;");

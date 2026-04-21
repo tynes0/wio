@@ -1,0 +1,9 @@
+@Default(private)
+@Export
+component HiddenStats {
+    public hp: i32;
+
+    OnConstruct(value: i32) {
+        self.hp = value;
+    }
+}

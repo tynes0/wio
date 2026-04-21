@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <cstring>
 
-inline constexpr std::uint32_t WIO_MODULE_API_DESCRIPTOR_VERSION = 1u;
+inline constexpr std::uint32_t WIO_MODULE_API_DESCRIPTOR_VERSION = 3u;
 
 enum WioModuleCapability : std::uint32_t
 {
@@ -101,6 +101,54 @@ struct WioModuleEventHook
     const WioModuleExport* exportEntry;
 };
 
+enum WioModuleFieldFlag : std::uint32_t
+{
+    WIO_MODULE_FIELD_READABLE = 1u << 0,
+    WIO_MODULE_FIELD_WRITABLE = 1u << 1,
+    WIO_MODULE_FIELD_READONLY = 1u << 2
+};
+
+enum WioModuleTypeKind : std::uint32_t
+{
+    WIO_MODULE_TYPE_COMPONENT = 1u,
+    WIO_MODULE_TYPE_OBJECT = 2u
+};
+
+struct WioModuleField
+{
+    const char* fieldName;
+    WioAbiType fieldType;
+    std::uint32_t flags;
+    const WioModuleExport* getterExport;
+    const WioModuleExport* setterExport;
+};
+
+struct WioModuleMethod
+{
+    const char* methodName;
+    const WioModuleExport* exportEntry;
+};
+
+struct WioModuleConstructor
+{
+    const WioModuleExport* exportEntry;
+};
+
+struct WioModuleType
+{
+    const char* logicalName;
+    const char* symbolName;
+    WioModuleTypeKind kind;
+    const WioModuleExport* createExport;
+    const WioModuleExport* destroyExport;
+    std::uint32_t constructorCount;
+    const WioModuleConstructor* constructors;
+    std::uint32_t fieldCount;
+    const WioModuleField* fields;
+    std::uint32_t methodCount;
+    const WioModuleMethod* methods;
+};
+
 struct WioModuleApi
 {
     std::uint32_t descriptorVersion;
@@ -119,6 +167,8 @@ struct WioModuleApi
     const WioModuleCommand* commands;
     std::uint32_t eventHookCount;
     const WioModuleEventHook* eventHooks;
+    std::uint32_t typeCount;
+    const WioModuleType* types;
 };
 
 using WioModuleGetApiFn = const WioModuleApi*(*)();
@@ -259,4 +309,97 @@ inline std::int32_t WioInvokeModuleEventHook(const WioModuleApi* api, const char
         return WIO_INVOKE_NOT_CALLABLE;
 
     return hookEntry->exportEntry->invoke(args, argCount, outResult);
+}
+
+inline const WioModuleType* WioFindModuleType(const WioModuleApi* api, const char* logicalName)
+{
+    if (api == nullptr || logicalName == nullptr || api->types == nullptr)
+        return nullptr;
+
+    for (std::uint32_t i = 0; i < api->typeCount; ++i)
+    {
+        const WioModuleType& typeEntry = api->types[i];
+        if (typeEntry.logicalName != nullptr && std::strcmp(typeEntry.logicalName, logicalName) == 0)
+            return &typeEntry;
+    }
+
+    return nullptr;
+}
+
+inline const WioModuleField* WioFindModuleField(const WioModuleType* typeEntry, const char* fieldName)
+{
+    if (typeEntry == nullptr || fieldName == nullptr || typeEntry->fields == nullptr)
+        return nullptr;
+
+    for (std::uint32_t i = 0; i < typeEntry->fieldCount; ++i)
+    {
+        const WioModuleField& fieldEntry = typeEntry->fields[i];
+        if (fieldEntry.fieldName != nullptr && std::strcmp(fieldEntry.fieldName, fieldName) == 0)
+            return &fieldEntry;
+    }
+
+    return nullptr;
+}
+
+inline const WioModuleField* WioFindModuleField(const WioModuleApi* api, const char* logicalTypeName, const char* fieldName)
+{
+    return WioFindModuleField(WioFindModuleType(api, logicalTypeName), fieldName);
+}
+
+inline const WioModuleMethod* WioFindModuleMethod(const WioModuleType* typeEntry, const char* methodName)
+{
+    if (typeEntry == nullptr || methodName == nullptr || typeEntry->methods == nullptr)
+        return nullptr;
+
+    for (std::uint32_t i = 0; i < typeEntry->methodCount; ++i)
+    {
+        const WioModuleMethod& methodEntry = typeEntry->methods[i];
+        if (methodEntry.methodName != nullptr && std::strcmp(methodEntry.methodName, methodName) == 0)
+            return &methodEntry;
+    }
+
+    return nullptr;
+}
+
+inline const WioModuleMethod* WioFindModuleMethod(const WioModuleApi* api, const char* logicalTypeName, const char* methodName)
+{
+    return WioFindModuleMethod(WioFindModuleType(api, logicalTypeName), methodName);
+}
+
+inline const WioModuleConstructor* WioFindModuleConstructor(const WioModuleType* typeEntry,
+                                                            std::uint32_t parameterCount,
+                                                            const WioAbiType* parameterTypes)
+{
+    if (typeEntry == nullptr || typeEntry->constructors == nullptr)
+        return nullptr;
+
+    for (std::uint32_t i = 0; i < typeEntry->constructorCount; ++i)
+    {
+        const WioModuleConstructor& constructorEntry = typeEntry->constructors[i];
+        const WioModuleExport* exportEntry = constructorEntry.exportEntry;
+        if (exportEntry == nullptr || exportEntry->invoke == nullptr)
+            continue;
+
+        if (exportEntry->parameterCount != parameterCount)
+            continue;
+
+        bool matches = true;
+        for (std::uint32_t parameterIndex = 0; parameterIndex < parameterCount; ++parameterIndex)
+        {
+            const WioAbiType actualType = exportEntry->parameterTypes != nullptr
+                ? exportEntry->parameterTypes[parameterIndex]
+                : WIO_ABI_UNKNOWN;
+
+            if (parameterTypes == nullptr || actualType != parameterTypes[parameterIndex])
+            {
+                matches = false;
+                break;
+            }
+        }
+
+        if (matches)
+            return &constructorEntry;
+    }
+
+    return nullptr;
 }

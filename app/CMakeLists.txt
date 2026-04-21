@@ -589,6 +589,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "SDK easy: before=42 afterAdd=45 afterTick=51 exports=4 commands=2 events=2"
     )
 
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_exported_types_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/exported_types_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_exported_types_host.cpp"
+        "SDK exported types: exports=14 types=2 objectFields=3 objectMethods=2 start=7 afterAdd=25 mixed=41 componentFields=2 hp=100 hpAfter=135 maxHp=150"
+    )
+
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_exported_ctor_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/exported_ctor_types_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_exported_ctor_host.cpp"
+        "SDK ctor exported types: exports=11 types=2 enemy=15 afterDamage=11 point=4,9 ctorCount=1/1"
+    )
+
     add_wio_shared_reload_interop_test(
         wio_test_module_reload_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/module_reload.wio"
@@ -1298,5 +1312,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_lambda_contextual_return_mismatch
         "${CMAKE_SOURCE_DIR}/tests/invalid/lambda_contextual_return_mismatch.wio"
         "Return type mismatch"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_exported_object_non_abi_field
+        "${CMAKE_SOURCE_DIR}/tests/invalid/exported_object_non_abi_field.wio"
+        "@Export object 'BadProfile' exposes public field 'name' with non-C-ABI-safe type 'string'\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_exported_component_requires_host_ctor
+        "${CMAKE_SOURCE_DIR}/tests/invalid/exported_component_requires_host_ctor.wio"
+        "@Export component 'HiddenStats' must expose at least one public host-callable constructor with only C-ABI-safe parameters\\."
     )
 endif()

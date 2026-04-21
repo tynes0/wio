@@ -1,0 +1,34 @@
+@Export
+object Counter {
+    public value: i32;
+    public bonus: i32;
+    @ReadOnly
+    public seed: i32;
+
+    OnConstruct() {
+        self.value = 7;
+        self.bonus = 3;
+        self.seed = 11;
+    }
+
+    public fn Add(delta: i32) -> i32 {
+        self.value += delta;
+        return self.value;
+    }
+
+    public fn Mix(extra: i32) -> i32 {
+        return self.value + self.bonus + self.seed + extra;
+    }
+}
+
+@Export
+component Stats {
+    public hp: i32;
+    @ReadOnly
+    public maxHp: i32;
+
+    OnConstruct() {
+        self.hp = 100;
+        self.maxHp = 150;
+    }
+}

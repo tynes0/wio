@@ -1,0 +1,24 @@
+@Export
+object Enemy {
+    public hp: i32;
+
+    OnConstruct(base: i32, bonus: i32) {
+        self.hp = base + bonus;
+    }
+
+    public fn Damage(delta: i32) -> i32 {
+        self.hp -= delta;
+        return self.hp;
+    }
+}
+
+@Export
+component SpawnPoint {
+    public x: i32;
+    public y: i32;
+
+    OnConstruct(px: i32, py: i32) {
+        self.x = px;
+        self.y = py;
+    }
+}
