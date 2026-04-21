@@ -1,47 +1,254 @@
 realm std {
     realm collections {
+        type Array<T> = T[];
         type DynArray<T> = T[];
+        type Dictionary<K, V> = Dict<K, V>;
         type Map<K, V> = Dict<K, V>;
+        type OrderedDictionary<K, V> = Tree<K, V>;
         type OrderedMap<K, V> = Tree<K, V>;
+        type TreeMap<K, V> = Tree<K, V>;
 
-        fn Count<T>(values: DynArray<T>) -> usize {
+        fn Count<T>(values: T[]) -> usize {
             return values.Count();
         }
 
-        fn Contains<T>(values: DynArray<T>, target: T) -> bool {
+        fn Count<K, V>(values: Dict<K, V>) -> usize {
+            return values.Count();
+        }
+
+        fn Count<K, V>(values: Tree<K, V>) -> usize {
+            return values.Count();
+        }
+
+        fn Empty<T>(values: T[]) -> bool {
+            return values.Empty();
+        }
+
+        fn Empty<K, V>(values: Dict<K, V>) -> bool {
+            return values.Empty();
+        }
+
+        fn Empty<K, V>(values: Tree<K, V>) -> bool {
+            return values.Empty();
+        }
+
+        fn Capacity<T>(values: T[]) -> usize {
+            return values.Capacity();
+        }
+
+        fn Contains<T>(values: T[], target: T) -> bool {
             return values.Contains(target);
         }
 
-        fn ContainsKey<K, V>(values: Map<K, V>, key: K) -> bool {
+        fn Contains(values: string[], target: string) -> bool {
+            return values.Contains(target);
+        }
+
+        fn IndexOf<T>(values: T[], target: T) -> usize {
+            return values.IndexOf(target);
+        }
+
+        fn LastIndexOf<T>(values: T[], target: T) -> usize {
+            return values.LastIndexOf(target);
+        }
+
+        fn FirstOr<T>(values: T[], fallback: T) -> T {
+            return values.GetOr(0 fit usize, fallback);
+        }
+
+        fn LastOr<T>(values: T[], fallback: T) -> T {
+            if (values.Empty()) {
+                return fallback;
+            }
+            return values.Last();
+        }
+
+        fn GetOr<T>(values: T[], index: usize, fallback: T) -> T {
+            return values.GetOr(index, fallback);
+        }
+
+        fn Clone<T>(values: T[]) -> T[] {
+            return values.Clone();
+        }
+
+        fn Slice<T>(values: T[], start: usize) -> T[] {
+            return values.Slice(start);
+        }
+
+        fn Slice<T>(values: T[], start: usize, count: usize) -> T[] {
+            return values.Slice(start, count);
+        }
+
+        fn Take<T>(values: T[], count: usize) -> T[] {
+            return values.Take(count);
+        }
+
+        fn Skip<T>(values: T[], count: usize) -> T[] {
+            return values.Skip(count);
+        }
+
+        fn Concat<T>(left: T[], right: T[]) -> T[] {
+            return left.Concat(right);
+        }
+
+        fn Reversed<T>(values: T[]) -> T[] {
+            return values.Reversed();
+        }
+
+        fn Join(values: string[], separator: string) -> string {
+            return values.Join(separator);
+        }
+
+        fn Pushed<T>(values: T[], value: T) -> T[] {
+            mut current = values;
+            current.Push(value);
+            return current;
+        }
+
+        fn PushedFront<T>(values: T[], value: T) -> T[] {
+            mut current = values;
+            current.PushFront(value);
+            return current;
+        }
+
+        fn Inserted<T>(values: T[], index: usize, value: T) -> T[] {
+            mut current = values;
+            current.Insert(index, value);
+            return current;
+        }
+
+        fn Cleared<T>(values: T[]) -> T[] {
+            mut current = values;
+            current.Clear();
+            return current;
+        }
+
+        fn RemovedAt<T>(values: T[], index: usize) -> T[] {
+            mut current = values;
+            current.RemoveAt(index);
+            return current;
+        }
+
+        fn Removed<T>(values: T[], value: T) -> T[] {
+            mut current = values;
+            current.Remove(value);
+            return current;
+        }
+
+        fn Extended<T>(values: T[], extra: T[]) -> T[] {
+            mut current = values;
+            current.Extend(extra);
+            return current;
+        }
+
+        fn Filled<T>(values: T[], value: T) -> T[] {
+            mut current = values;
+            current.Fill(value);
+            return current;
+        }
+
+        fn Sorted<T>(values: T[]) -> T[] {
+            return values.Sorted();
+        }
+
+        fn ContainsKey<K, V>(values: Dict<K, V>, key: K) -> bool {
             return values.ContainsKey(key);
         }
 
-        fn ContainsValue<K, V>(values: Map<K, V>, target: V) -> bool {
+        fn ContainsKey<V>(values: Dict<string, V>, key: string) -> bool {
+            return values.ContainsKey(key);
+        }
+
+        fn ContainsValue<K, V>(values: Dict<K, V>, target: V) -> bool {
             return values.ContainsValue(target);
         }
 
-        fn GetOr<K, V>(values: Map<K, V>, key: K, fallback: V) -> V {
+        fn Get<K, V>(values: Dict<K, V>, key: K) -> V {
+            return values.Get(key);
+        }
+
+        fn GetOr<K, V>(values: Dict<K, V>, key: K, fallback: V) -> V {
             return values.GetOr(key, fallback);
         }
 
-        fn Keys<K, V>(values: Map<K, V>) -> K[] {
+        fn TryGet<K, V>(values: Dict<K, V>, key: K, outValue: ref V) -> bool {
+            return values.TryGet(key, outValue);
+        }
+
+        fn Keys<K, V>(values: Dict<K, V>) -> K[] {
             return values.Keys();
         }
 
-        fn Values<K, V>(values: Map<K, V>) -> V[] {
+        fn Values<K, V>(values: Dict<K, V>) -> V[] {
             return values.Values();
         }
 
-        fn Merge<K, V>(left: Map<K, V>, right: Map<K, V>) -> Map<K, V> {
+        fn Clone<K, V>(values: Dict<K, V>) -> Dict<K, V> {
+            return values.Clone();
+        }
+
+        fn Merge<K, V>(left: Dict<K, V>, right: Dict<K, V>) -> Dict<K, V> {
             return left.Merge(right);
         }
 
-        fn FirstKey<K, V>(values: OrderedMap<K, V>) -> K {
+        fn With<K, V>(values: Dict<K, V>, key: K, value: V) -> Dict<K, V> {
+            mut current = values;
+            current.Set(key, value);
+            return current;
+        }
+
+        fn With<V>(values: Dict<string, V>, key: string, value: V) -> Dict<string, V> {
+            mut current = values;
+            current.Set(key, value);
+            return current;
+        }
+
+        fn Extended<K, V>(values: Dict<K, V>, extra: Dict<K, V>) -> Dict<K, V> {
+            mut current = values;
+            current.Extend(extra);
+            return current;
+        }
+
+        fn Cleared<K, V>(values: Dict<K, V>) -> Dict<K, V> {
+            mut current = values;
+            current.Clear();
+            return current;
+        }
+
+        fn Without<K, V>(values: Dict<K, V>, key: K) -> Dict<K, V> {
+            mut current = values;
+            current.Remove(key);
+            return current;
+        }
+
+        fn Without<V>(values: Dict<string, V>, key: string) -> Dict<string, V> {
+            mut current = values;
+            current.Remove(key);
+            return current;
+        }
+
+        fn FirstKey<K, V>(values: Tree<K, V>) -> K {
             return values.FirstKey();
         }
 
-        fn LastKey<K, V>(values: OrderedMap<K, V>) -> K {
+        fn FirstValue<K, V>(values: Tree<K, V>) -> V {
+            return values.FirstValue();
+        }
+
+        fn LastKey<K, V>(values: Tree<K, V>) -> K {
             return values.LastKey();
+        }
+
+        fn LastValue<K, V>(values: Tree<K, V>) -> V {
+            return values.LastValue();
+        }
+
+        fn FloorKeyOr<K, V>(values: Tree<K, V>, key: K, fallback: K) -> K {
+            return values.FloorKeyOr(key, fallback);
+        }
+
+        fn CeilKeyOr<K, V>(values: Tree<K, V>, key: K, fallback: K) -> K {
+            return values.CeilKeyOr(key, fallback);
         }
     }
 }

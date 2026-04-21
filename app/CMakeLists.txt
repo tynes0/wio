@@ -753,6 +753,27 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_std_collections_surface_run
+        "${CMAKE_SOURCE_DIR}/tests/std_collections_surface_run.wio"
+        "Std collections surface: true/3/9/7/5/1/4/a:b:c/true/3/true/2/3/3"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_std_strings_surface_run
+        "${CMAKE_SOURCE_DIR}/tests/std_strings_surface_run.wio"
+        "Std strings surface: 9/true/4/Arena/Arena/cba/007/!DLROWOIW/hi/true"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_std_path_fs_surface_run
+        "${CMAKE_SOURCE_DIR}/tests/std_path_fs_surface_run.wio"
+        "Std path/fs surface: true/true/true/3/gamma/true/true/logs/final\\.log/final\\.log/2/logs/true/alpha\\|beta\\|gamma/true"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_std_algorithms_run
         "${CMAKE_SOURCE_DIR}/tests/std_algorithms_run.wio"
         "Std algorithms: 2/true/false/false/true/false"

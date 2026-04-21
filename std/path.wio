@@ -19,12 +19,32 @@ realm std {
         fn Extension(path: string) -> string;
 
         @Native
+        @CppName(wio::runtime::std_fs::RootName)
+        fn RootName(path: string) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_fs::RootPath)
+        fn RootPath(path: string) -> string;
+
+        @Native
         @CppName(wio::runtime::std_fs::ParentPath)
         fn ParentPath(path: string) -> string;
 
         @Native
         @CppName(wio::runtime::std_fs::Normalize)
         fn Normalize(path: string) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_fs::Absolute)
+        fn Absolute(path: string) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_fs::Relative)
+        fn Relative(path: string, base: string) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_fs::Equivalent)
+        fn Equivalent(left: string, right: string) -> bool;
 
         @Native
         @CppName(wio::runtime::std_fs::Join)
@@ -38,6 +58,10 @@ realm std {
         @CppName(wio::runtime::std_fs::ChangeExtension)
         fn ChangeExtension(path: string, extension: string) -> string;
 
+        fn IsRelative(path: string) -> bool {
+            return not IsAbsolute(path);
+        }
+
         fn HasParent(path: string) -> bool {
             return ParentPath(path) != "";
         }
@@ -46,12 +70,122 @@ realm std {
             return Extension(path) != "";
         }
 
+        fn HasRoot(path: string) -> bool {
+            return RootPath(path) != "";
+        }
+
+        fn HasFileName(path: string) -> bool {
+            return FileName(path) != "";
+        }
+
         fn Join4(first: string, second: string, third: string, fourth: string) -> string {
             return Join(Join3(first, second, third), fourth);
         }
 
+        fn Join5(first: string, second: string, third: string, fourth: string, fifth: string) -> string {
+            return Join(Join4(first, second, third, fourth), fifth);
+        }
+
+        fn JoinAll(parts: string[]) -> string {
+            if (parts.Empty()) {
+                return "";
+            }
+
+            mut current = parts.First();
+            mut index: usize = 1 fit usize;
+            while (index < parts.Count()) {
+                current = Join(current, parts[index]);
+                index += 1 fit usize;
+            }
+
+            return current;
+        }
+
         fn FileNameWithoutExtension(path: string) -> string {
             return Stem(path);
+        }
+
+        fn DirectoryName(path: string) -> string {
+            return ParentPath(path);
+        }
+
+        fn BaseName(path: string) -> string {
+            return FileName(path);
+        }
+
+        fn RemoveExtension(path: string) -> string {
+            return ChangeExtension(path, "");
+        }
+
+        fn EnsureExtension(path: string, extension: string) -> string {
+            if (HasExtension(path)) {
+                return path;
+            }
+
+            return ChangeExtension(path, extension);
+        }
+
+        fn ReplaceFileName(path: string, fileName: string) -> string {
+            let parent = ParentPath(path);
+            if (parent == "") {
+                return Normalize(fileName);
+            }
+
+            return Join(parent, fileName);
+        }
+
+        fn ReplaceStem(path: string, stem: string) -> string {
+            return ReplaceFileName(path, stem + Extension(path));
+        }
+
+        fn AbsoluteFrom(base: string, value: string) -> string {
+            if (IsAbsolute(value)) {
+                return Normalize(value);
+            }
+
+            return Absolute(Join(base, value));
+        }
+
+        fn RelativeTo(path: string, base: string) -> string {
+            return Relative(path, base);
+        }
+
+        fn Segments(path: string) -> string[] {
+            let normalized = Normalize(path);
+            if (normalized == "" or normalized == ".") {
+                return [];
+            }
+
+            let root = RootPath(normalized);
+            mut trimmed = normalized;
+            if (root != "") {
+                trimmed = trimmed.Slice(root.Count());
+            }
+
+            while (trimmed.StartsWith("/")) {
+                trimmed = trimmed.Slice(1 fit usize);
+            }
+
+            if (trimmed == "" or trimmed == ".") {
+                return [];
+            }
+
+            return trimmed.Split("/");
+        }
+
+        fn Depth(path: string) -> usize {
+            return Segments(path).Count();
+        }
+
+        fn Ancestor(path: string, levels: usize) -> string {
+            mut current = Normalize(path);
+            mut remaining = levels;
+            while (remaining > (0 fit usize) and current != "") {
+                current = ParentPath(current);
+                remaining -= 1 fit usize;
+            }
+
+            return current;
         }
     }
 }

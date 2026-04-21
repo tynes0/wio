@@ -1,0 +1,42 @@
+use std::console as console;
+use std::strings as strings;
+
+fn Entry() -> i32 {
+    let text = "  Wio Arena  ";
+    let trimmed = strings::Trim(text);
+    let count: i32 = strings::Count(trimmed) fit i32;
+    let hasArena = strings::Contains(trimmed, "Arena");
+    let arenaIndex: i32 = strings::IndexOf(trimmed, "Arena") fit i32;
+    let slice = strings::Slice(trimmed, 4 fit usize, 5 fit usize);
+    let lastWord = strings::Split(trimmed, " ").Last();
+    let reversed = strings::Reversed("abc");
+    let padded = strings::PadLeft("7", 3 fit usize, '0');
+
+    let build = strings::Reversed(
+        strings::Replace(
+            strings::ToUpper(
+                strings::Erased(
+                    strings::Inserted(
+                        strings::Pushed(
+                            strings::Appended("Wi", "o"),
+                            '!'
+                        ),
+                        3 fit usize,
+                        " Arena"
+                    ),
+                    3 fit usize,
+                    1 fit usize
+                )
+            ),
+            "ARENA",
+            "WORLD"
+        )
+    );
+
+    let spaced = strings::Trim("  hi  ");
+
+    let blank = strings::IsNullOrWhiteSpace("   ");
+
+    console::Print($"Std strings surface: ${count}/${hasArena}/${arenaIndex}/${slice}/${lastWord}/${reversed}/${padded}/${build}/${spaced}/${blank}");
+    return 0;
+}

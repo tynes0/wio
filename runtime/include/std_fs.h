@@ -26,8 +26,13 @@ namespace wio::runtime::std_fs
     std::string FileName(const std::string& path);
     std::string Stem(const std::string& path);
     std::string Extension(const std::string& path);
+    std::string RootName(const std::string& path);
+    std::string RootPath(const std::string& path);
     std::string ParentPath(const std::string& path);
     std::string Normalize(const std::string& path);
+    std::string Absolute(const std::string& path);
+    std::string Relative(const std::string& path, const std::string& base);
+    bool Equivalent(const std::string& left, const std::string& right);
     std::string Join(const std::string& left, const std::string& right);
     std::string Join3(const std::string& first, const std::string& second, const std::string& third);
     std::string ChangeExtension(const std::string& path, const std::string& extension);

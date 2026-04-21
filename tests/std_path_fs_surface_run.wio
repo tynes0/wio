@@ -1,0 +1,39 @@
+use std::collections as collections;
+use std::console as console;
+use std::fs as fs;
+use std::path as path;
+
+fn Entry() -> i32 {
+    let base = path::Join4("build", "wio_std", "path_fs", "surface");
+    let sourcePath = path::Join3(base, "data", "note.txt");
+
+    let ensured = fs::EnsureParentDirectory(sourcePath);
+    let wrote = fs::WriteTextEnsured(sourcePath, "alpha\nbeta");
+    let appended = fs::AppendLine(sourcePath, "gamma");
+    let lines = fs::ReadLines(sourcePath);
+    let lineCount: i32 = lines.Count() fit i32;
+    let empty: string = "";
+    let lastLine = collections::LastOr(lines, empty);
+
+    let copiedPath = path::ChangeExtension(sourcePath, ".log");
+    let copied = fs::CopyFileEnsured(sourcePath, copiedPath);
+
+    let movedPath = path::Join3(base, "logs", "final.log");
+    let moved = fs::MoveFileEnsured(copiedPath, movedPath);
+
+    let absoluteBase = path::Absolute(base);
+    let absoluteMoved = path::Absolute(movedPath);
+    let relative = path::RelativeTo(absoluteMoved, absoluteBase);
+    let segments = path::Segments(relative);
+    let lastSegment = collections::LastOr(segments, empty);
+    let depth: i32 = path::Depth(relative) fit i32;
+    let parentName = path::FileName(path::Ancestor(absoluteMoved, 1 fit usize));
+    let rebuilt = path::AbsoluteFrom(absoluteBase, relative);
+    let same = path::Equivalent(absoluteMoved, rebuilt);
+
+    let summary = fs::ReadTextTrimmed(movedPath).Replace("\n", "|");
+    let deleted = fs::DeleteIfExists(sourcePath) and fs::DeleteIfExists(movedPath);
+
+    console::Print($"Std path/fs surface: ${ensured}/${wrote}/${appended}/${lineCount}/${lastLine}/${copied}/${moved}/${relative}/${lastSegment}/${depth}/${parentName}/${same}/${summary}/${deleted}");
+    return 0;
+}

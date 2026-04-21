@@ -54,6 +54,10 @@ realm std {
             return not Exists(path);
         }
 
+        fn CurrentDirectory() -> string {
+            return CurrentPath();
+        }
+
         fn EnsureDirectory(path: string) -> bool {
             if (Exists(path)) {
                 return IsDirectory(path);
@@ -68,6 +72,114 @@ realm std {
             }
 
             return fallback;
+        }
+
+        fn ReadTextOrEmpty(path: string) -> string {
+            return ReadTextOr(path, "");
+        }
+
+        fn ReadTextTrimmed(path: string) -> string {
+            return ReadTextOrEmpty(path).Trim();
+        }
+
+        fn EnsureParentDirectory(filePath: string) -> bool {
+            let parent = std::path::ParentPath(filePath);
+            if (parent == "") {
+                return true;
+            }
+
+            return EnsureDirectory(parent);
+        }
+
+        fn DeleteIfExists(path: string) -> bool {
+            if (Exists(path)) {
+                return Remove(path);
+            }
+
+            return true;
+        }
+
+        fn WriteTextEnsured(filePath: string, text: string) -> bool {
+            if (not EnsureParentDirectory(filePath)) {
+                return false;
+            }
+
+            return WriteText(filePath, text);
+        }
+
+        fn AppendTextEnsured(filePath: string, text: string) -> bool {
+            if (not EnsureParentDirectory(filePath)) {
+                return false;
+            }
+
+            return AppendText(filePath, text);
+        }
+
+        fn AppendLine(filePath: string, line: string) -> bool {
+            if (not EnsureParentDirectory(filePath)) {
+                return false;
+            }
+
+            mut prefix = "";
+            if (HasText(filePath)) {
+                let current = ReadText(filePath);
+                if (not current.EndsWith("\n") and not current.EndsWith("\r")) {
+                    prefix = "\n";
+                }
+            }
+
+            let payload = prefix + line + "\n";
+            return AppendText(filePath, payload);
+        }
+
+        fn Touch(filePath: string) -> bool {
+            if (Exists(filePath)) {
+                return true;
+            }
+
+            return WriteTextEnsured(filePath, "");
+        }
+
+        fn ReadLines(path: string) -> string[] {
+            let text = ReadTextOrEmpty(path).Replace("\r\n", "\n").Replace("\r", "\n");
+            if (text == "") {
+                return [];
+            }
+
+            let lines = text.Split("\n");
+            if (text.EndsWith("\n") and not lines.Empty()) {
+                return lines.Slice(0 fit usize, lines.Count() - (1 fit usize));
+            }
+
+            return lines;
+        }
+
+        fn WriteLines(path: string, lines: string[]) -> bool {
+            return WriteText(path, lines.Join("\n"));
+        }
+
+        fn WriteLinesEnsured(path: string, lines: string[]) -> bool {
+            if (not EnsureParentDirectory(path)) {
+                return false;
+            }
+
+            return WriteLines(path, lines);
+        }
+
+        fn CopyFileEnsured(source: string, target: string) -> bool {
+            if (not EnsureParentDirectory(target)) {
+                return false;
+            }
+
+            return CopyFile(source, target);
+        }
+
+        fn MoveFileEnsured(source: string, target: string) -> bool {
+            if (not EnsureParentDirectory(target)) {
+                return false;
+            }
+
+            return MoveFile(source, target);
         }
 
         fn HasText(path: string) -> bool {

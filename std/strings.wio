@@ -1,11 +1,146 @@
 realm std {
     realm strings {
+        fn Count(value: string) -> usize {
+            return value.Count();
+        }
+
+        fn Empty(value: string) -> bool {
+            return value.Empty();
+        }
+
         fn IsEmpty(value: string) -> bool {
             return value.Empty();
         }
 
         fn IsNullOrWhiteSpace(value: string) -> bool {
             return value.Trim().Empty();
+        }
+
+        fn Contains(value: string, target: string) -> bool {
+            return value.Contains(target);
+        }
+
+        fn ContainsChar(value: string, target: char) -> bool {
+            return value.ContainsChar(target);
+        }
+
+        fn StartsWith(value: string, prefix: string) -> bool {
+            return value.StartsWith(prefix);
+        }
+
+        fn EndsWith(value: string, suffix: string) -> bool {
+            return value.EndsWith(suffix);
+        }
+
+        fn IndexOf(value: string, target: string) -> usize {
+            return value.IndexOf(target);
+        }
+
+        fn LastIndexOf(value: string, target: string) -> usize {
+            return value.LastIndexOf(target);
+        }
+
+        fn IndexOfChar(value: string, target: char) -> usize {
+            return value.IndexOfChar(target);
+        }
+
+        fn LastIndexOfChar(value: string, target: char) -> usize {
+            return value.LastIndexOfChar(target);
+        }
+
+        fn FirstOr(value: string, fallback: char) -> char {
+            return value.GetOr(0 fit usize, fallback);
+        }
+
+        fn LastOr(value: string, fallback: char) -> char {
+            if (value.Empty()) {
+                return fallback;
+            }
+            return value.Last();
+        }
+
+        fn GetOr(value: string, index: usize, fallback: char) -> char {
+            return value.GetOr(index, fallback);
+        }
+
+        fn Slice(value: string, start: usize) -> string {
+            return value.Slice(start);
+        }
+
+        fn Slice(value: string, start: usize, count: usize) -> string {
+            return value.Slice(start, count);
+        }
+
+        fn SliceFrom(value: string, start: usize) -> string {
+            return value.SliceFrom(start);
+        }
+
+        fn Take(value: string, count: usize) -> string {
+            return value.Take(count);
+        }
+
+        fn Skip(value: string, count: usize) -> string {
+            return value.Skip(count);
+        }
+
+        fn Left(value: string, count: usize) -> string {
+            return value.Left(count);
+        }
+
+        fn Right(value: string, count: usize) -> string {
+            return value.Right(count);
+        }
+
+        fn Trim(value: string) -> string {
+            return value.Trim();
+        }
+
+        fn TrimStart(value: string) -> string {
+            return value.TrimStart();
+        }
+
+        fn TrimEnd(value: string) -> string {
+            return value.TrimEnd();
+        }
+
+        fn ToLower(value: string) -> string {
+            return value.ToLower();
+        }
+
+        fn ToUpper(value: string) -> string {
+            return value.ToUpper();
+        }
+
+        fn Replace(value: string, needle: string, replacement: string) -> string {
+            return value.Replace(needle, replacement);
+        }
+
+        fn ReplaceFirst(value: string, needle: string, replacement: string) -> string {
+            return value.ReplaceFirst(needle, replacement);
+        }
+
+        fn Repeat(value: string, count: usize) -> string {
+            return value.Repeat(count);
+        }
+
+        fn Split(value: string, separator: string) -> string[] {
+            return value.Split(separator);
+        }
+
+        fn Lines(value: string) -> string[] {
+            return value.Lines();
+        }
+
+        fn PadLeft(value: string, width: usize, fill: char) -> string {
+            return value.PadLeft(width, fill);
+        }
+
+        fn PadRight(value: string, width: usize, fill: char) -> string {
+            return value.PadRight(width, fill);
+        }
+
+        fn Reversed(value: string) -> string {
+            return value.Reversed();
         }
 
         fn Join(values: string[], separator: string) -> string {
@@ -16,8 +151,28 @@ realm std {
             return values.Join("");
         }
 
-        fn Lines(value: string) -> string[] {
-            return value.Lines();
+        fn Appended(target: string, value: string) -> string {
+            mut current = target;
+            current.Append(value);
+            return current;
+        }
+
+        fn Pushed(target: string, value: char) -> string {
+            mut current = target;
+            current.Push(value);
+            return current;
+        }
+
+        fn Inserted(target: string, index: usize, value: string) -> string {
+            mut current = target;
+            current.Insert(index, value);
+            return current;
+        }
+
+        fn Erased(target: string, index: usize, count: usize) -> string {
+            mut current = target;
+            current.Erase(index, count);
+            return current;
         }
     }
 }

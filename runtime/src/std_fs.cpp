@@ -157,6 +157,16 @@ namespace wio::runtime::std_fs
         return toPath(path).extension().generic_string();
     }
 
+    std::string RootName(const std::string& path)
+    {
+        return toPath(path).root_name().generic_string();
+    }
+
+    std::string RootPath(const std::string& path)
+    {
+        return toPath(path).root_path().generic_string();
+    }
+
     std::string ParentPath(const std::string& path)
     {
         return toPath(path).parent_path().generic_string();
@@ -165,6 +175,57 @@ namespace wio::runtime::std_fs
     std::string Normalize(const std::string& path)
     {
         return toPath(path).lexically_normal().generic_string();
+    }
+
+    std::string Absolute(const std::string& path)
+    {
+        std::error_code ec;
+        const std::filesystem::path absolutePath = std::filesystem::absolute(toPath(path), ec);
+        if (ec)
+            throwFileError("Failed to resolve absolute path for: " + path + " (" + ec.message() + ")");
+
+        return toGenericString(absolutePath.lexically_normal());
+    }
+
+    std::string Relative(const std::string& path, const std::string& base)
+    {
+        std::error_code ec;
+        std::filesystem::path relativePath = std::filesystem::relative(toPath(path), toPath(base), ec);
+        if (!ec)
+            return toGenericString(relativePath.lexically_normal());
+
+        ec.clear();
+        const std::filesystem::path absolutePath = std::filesystem::absolute(toPath(path), ec);
+        if (ec)
+            throwFileError("Failed to resolve path for relative conversion: " + path + " (" + ec.message() + ")");
+
+        ec.clear();
+        const std::filesystem::path absoluteBase = std::filesystem::absolute(toPath(base), ec);
+        if (ec)
+            throwFileError("Failed to resolve base path for relative conversion: " + base + " (" + ec.message() + ")");
+
+        relativePath = absolutePath.lexically_relative(absoluteBase);
+        return toGenericString(relativePath.lexically_normal());
+    }
+
+    bool Equivalent(const std::string& left, const std::string& right)
+    {
+        std::error_code ec;
+        const bool sameFile = std::filesystem::equivalent(toPath(left), toPath(right), ec);
+        if (!ec)
+            return sameFile;
+
+        ec.clear();
+        const std::filesystem::path absoluteLeft = std::filesystem::absolute(toPath(left), ec);
+        if (ec)
+            return false;
+
+        ec.clear();
+        const std::filesystem::path absoluteRight = std::filesystem::absolute(toPath(right), ec);
+        if (ec)
+            return false;
+
+        return absoluteLeft.lexically_normal() == absoluteRight.lexically_normal();
     }
 
     std::string Join(const std::string& left, const std::string& right)
