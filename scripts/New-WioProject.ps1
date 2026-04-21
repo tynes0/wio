@@ -380,8 +380,18 @@ param(
 
 `$ErrorActionPreference = "Stop"
 `$wioRoot = if (-not [string]::IsNullOrWhiteSpace(`$env:WIO_ROOT)) { `$env:WIO_ROOT } else { "$repoRoot" }
+`$invokeScript = Join-Path `$wioRoot "scripts\Invoke-WioProject.ps1"
+`$invokeParams = @{
+    Project = `$PSScriptRoot
+    NoRun = `$true
+    Config = `$Config
+}
 
-& powershell -ExecutionPolicy Bypass -File (Join-Path `$wioRoot "scripts\Invoke-WioProject.ps1") -Project `$PSScriptRoot -NoRun -Configure:`$Configure -Config `$Config
+if (`$Configure) {
+    `$invokeParams.Configure = `$true
+}
+
+& `$invokeScript @invokeParams
 exit `$LASTEXITCODE
 "@
 
@@ -393,8 +403,17 @@ param(
 
 `$ErrorActionPreference = "Stop"
 `$wioRoot = if (-not [string]::IsNullOrWhiteSpace(`$env:WIO_ROOT)) { `$env:WIO_ROOT } else { "$repoRoot" }
+`$invokeScript = Join-Path `$wioRoot "scripts\Invoke-WioProject.ps1"
+`$invokeParams = @{
+    Project = `$PSScriptRoot
+    Config = `$Config
+}
 
-& powershell -ExecutionPolicy Bypass -File (Join-Path `$wioRoot "scripts\Invoke-WioProject.ps1") -Project `$PSScriptRoot -Configure:`$Configure -Config `$Config
+if (`$Configure) {
+    `$invokeParams.Configure = `$true
+}
+
+& `$invokeScript @invokeParams
 exit `$LASTEXITCODE
 "@
 
