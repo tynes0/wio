@@ -1,0 +1,8 @@
+@Export
+object HiddenFactory {
+    public value: i32;
+
+    OnConstruct(seed: i32) {
+        self.value = seed;
+    }
+}

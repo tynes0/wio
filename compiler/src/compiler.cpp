@@ -29,6 +29,14 @@
 
 namespace wio
 {
+    struct RequiredCppHeader
+    {
+        std::string header;
+        common::Location location;
+        std::filesystem::path sourcePath;
+        std::string origin;
+    };
+
     struct AppData
     {
         std::filesystem::path basePath;
@@ -37,6 +45,7 @@ namespace wio
         Argonaut::Parser argParser;
         sema::TypeContext typeContext_;
         std::unordered_set<std::string> loadedModules;
+        std::vector<RequiredCppHeader> requiredCppHeaders;
         BuildTarget buildTarget = BuildTarget::Executable;
     };
     
@@ -524,12 +533,6 @@ namespace wio
             return exportedSymbols;
         }
 
-        struct RequiredCppHeader
-        {
-            std::string header;
-            common::Location location;
-        };
-
         bool hasAttribute(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute attribute)
         {
             return std::ranges::any_of(attributes, [attribute](const NodePtr<AttributeStatement>& stmt)
@@ -554,7 +557,9 @@ namespace wio
             return std::nullopt;
         }
 
-        void collectRequiredCppHeaders(const std::vector<NodePtr<Statement>>& statements, std::vector<RequiredCppHeader>& headers)
+        void collectRequiredCppHeaders(const std::vector<NodePtr<Statement>>& statements,
+                                       const std::filesystem::path& sourcePath,
+                                       std::vector<RequiredCppHeader>& headers)
         {
             for (const auto& statement : statements)
             {
@@ -563,14 +568,21 @@ namespace wio
 
                 if (const auto* realmDecl = statement->as<RealmDeclaration>())
                 {
-                    collectRequiredCppHeaders(realmDecl->statements, headers);
+                    collectRequiredCppHeaders(realmDecl->statements, sourcePath, headers);
                     continue;
                 }
 
                 if (const auto* useStmt = statement->as<UseStatement>())
                 {
                     if (useStmt->isCppHeader && !useStmt->modulePath.empty())
-                        headers.push_back({ useStmt->modulePath, useStmt->location() });
+                    {
+                        headers.push_back({
+                            .header = useStmt->modulePath,
+                            .location = useStmt->location(),
+                            .sourcePath = sourcePath,
+                            .origin = "use @CppHeader"
+                        });
+                    }
                     continue;
                 }
 
@@ -580,7 +592,17 @@ namespace wio
                         continue;
 
                     if (auto headerValue = getCppHeaderAttributeValue(fnDecl->attributes); headerValue.has_value())
-                        headers.push_back({ *headerValue, fnDecl->location() });
+                    {
+                        headers.push_back({
+                            .header = *headerValue,
+                            .location = fnDecl->location(),
+                            .sourcePath = sourcePath,
+                            .origin = common::formatString(
+                                "@CppHeader on native function '{}'",
+                                fnDecl->name ? fnDecl->name->token.value : "<anonymous>"
+                            )
+                        });
+                    }
                 }
             }
         }
@@ -642,14 +664,11 @@ namespace wio
             return false;
         }
 
-        bool validateRequiredCppHeaders(const Ref<Program>& program,
+        bool validateRequiredCppHeaders(const std::vector<RequiredCppHeader>& headers,
                                         const std::filesystem::path& sourceDir,
                                         const std::vector<std::filesystem::path>& systemIncludeDirs,
                                         const std::vector<std::string>& includeDirs)
         {
-            std::vector<RequiredCppHeader> headers;
-            collectRequiredCppHeaders(program->statements, headers);
-
             if (headers.empty())
                 return true;
 
@@ -664,8 +683,10 @@ namespace wio
 
                 WIO_LOG_ADD_ERROR(
                     header.location,
-                    "Native C++ header '{}' was not found in include search paths: {}",
+                    "Native C++ header '{}' referenced by {} in '{}' was not found in include search paths: {}",
                     header.header,
+                    header.origin.empty() ? "@CppHeader" : header.origin,
+                    header.sourcePath.empty() ? "<unknown>" : header.sourcePath.string(),
                     formattedRoots
                 );
                 isValid = false;
@@ -768,7 +789,7 @@ namespace wio
             return isValid;
         }
 
-        bool validateBackendConfiguration(const Ref<Program>& program,
+        bool validateBackendConfiguration(const std::vector<RequiredCppHeader>& requiredCppHeaders,
                                           const std::filesystem::path& sourceDir,
                                           const std::vector<std::filesystem::path>& systemIncludeDirs)
         {
@@ -784,7 +805,7 @@ namespace wio
             isValid = validateSearchDirectories(includeDirs, "Include directory") && isValid;
             isValid = validateSearchDirectories(linkDirs, "Link directory") && isValid;
             isValid = validateBackendFileInputs(backendArgs, linkLibraries) && isValid;
-            isValid = validateRequiredCppHeaders(program, sourceDir, systemIncludeDirs, includeDirs) && isValid;
+            isValid = validateRequiredCppHeaders(requiredCppHeaders, sourceDir, systemIncludeDirs, includeDirs) && isValid;
             return isValid;
         }
 
@@ -1084,7 +1105,9 @@ namespace wio
             auto program = parser.parseProgram();
             
             gAppData.loadedModules.clear();
+            gAppData.requiredCppHeaders.clear();
             gAppData.loadedModules.insert(std::filesystem::absolute(sourcePath).string());
+            collectRequiredCppHeaders(program->statements, std::filesystem::absolute(sourcePath).make_preferred(), gAppData.requiredCppHeaders);
 
             std::vector<NodePtr<Statement>> finalStatements;
 
@@ -1151,7 +1174,7 @@ namespace wio
             std::filesystem::path sdkIncludeDir = getSdkIncludeDir();
             const std::vector<std::filesystem::path> systemIncludeDirs =
                 getBackendSystemIncludeDirs(runtimeIncludeDir, sdkIncludeDir);
-            validateBackendConfiguration(program, sourcePath.parent_path(), systemIncludeDirs);
+            validateBackendConfiguration(gAppData.requiredCppHeaders, sourcePath.parent_path(), systemIncludeDirs);
 
             WIO_LOG_PROCESS_WARNINGS();
             WIO_LOG_PROCESS_ERRORS(CompilationError);
@@ -1414,6 +1437,7 @@ namespace wio
         Lexer lexer(source);
         Parser parser(lexer.lex());
         auto subProgram = parser.parseProgram();
+        collectRequiredCppHeaders(subProgram->statements, actualPath, gAppData.requiredCppHeaders);
 
         std::vector<std::string> moduleExportedSymbols = collectExportedSymbols(subProgram->statements);
         if (exportedSymbols)

@@ -1,0 +1,5 @@
+use std::testing::missing_cpp_header;
+
+fn Entry() -> i32 {
+    return 0;
+}

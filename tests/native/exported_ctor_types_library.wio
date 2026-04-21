@@ -2,7 +2,7 @@
 object Enemy {
     public hp: i32;
 
-    OnConstruct(base: i32, bonus: i32) {
+    public OnConstruct(base: i32, bonus: i32) {
         self.hp = base + bonus;
     }
 

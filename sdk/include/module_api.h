@@ -366,6 +366,63 @@ inline const WioModuleMethod* WioFindModuleMethod(const WioModuleApi* api, const
     return WioFindModuleMethod(WioFindModuleType(api, logicalTypeName), methodName);
 }
 
+inline const WioModuleMethod* WioFindModuleMethodOverload(const WioModuleType* typeEntry,
+                                                          const char* methodName,
+                                                          WioAbiType returnType,
+                                                          std::uint32_t parameterCount,
+                                                          const WioAbiType* parameterTypes)
+{
+    if (typeEntry == nullptr || methodName == nullptr || typeEntry->methods == nullptr)
+        return nullptr;
+
+    for (std::uint32_t i = 0; i < typeEntry->methodCount; ++i)
+    {
+        const WioModuleMethod& methodEntry = typeEntry->methods[i];
+        const WioModuleExport* exportEntry = methodEntry.exportEntry;
+        if (methodEntry.methodName == nullptr || std::strcmp(methodEntry.methodName, methodName) != 0)
+            continue;
+        if (exportEntry == nullptr || exportEntry->invoke == nullptr)
+            continue;
+        if (exportEntry->returnType != returnType || exportEntry->parameterCount != parameterCount)
+            continue;
+
+        bool matches = true;
+        for (std::uint32_t parameterIndex = 0; parameterIndex < parameterCount; ++parameterIndex)
+        {
+            const WioAbiType actualType = exportEntry->parameterTypes != nullptr
+                ? exportEntry->parameterTypes[parameterIndex]
+                : WIO_ABI_UNKNOWN;
+
+            if (parameterTypes == nullptr || actualType != parameterTypes[parameterIndex])
+            {
+                matches = false;
+                break;
+            }
+        }
+
+        if (matches)
+            return &methodEntry;
+    }
+
+    return nullptr;
+}
+
+inline const WioModuleMethod* WioFindModuleMethodOverload(const WioModuleApi* api,
+                                                          const char* logicalTypeName,
+                                                          const char* methodName,
+                                                          WioAbiType returnType,
+                                                          std::uint32_t parameterCount,
+                                                          const WioAbiType* parameterTypes)
+{
+    return WioFindModuleMethodOverload(
+        WioFindModuleType(api, logicalTypeName),
+        methodName,
+        returnType,
+        parameterCount,
+        parameterTypes
+    );
+}
+
 inline const WioModuleConstructor* WioFindModuleConstructor(const WioModuleType* typeEntry,
                                                             std::uint32_t parameterCount,
                                                             const WioAbiType* parameterTypes)

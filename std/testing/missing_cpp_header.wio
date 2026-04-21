@@ -1,0 +1,9 @@
+realm std {
+    realm testing {
+        use @CppHeader("missing_std_header_for_test.h");
+
+        fn Touch() -> i32 {
+            return 1;
+        }
+    }
+}

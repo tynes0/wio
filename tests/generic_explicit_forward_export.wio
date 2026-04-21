@@ -1,0 +1,17 @@
+@Export
+@CppName(WioEcho)
+@Instantiate(i32)
+@Instantiate(bool)
+fn Echo<T>(value: T) -> T {
+    return value;
+}
+
+fn Forward<T>(value: T) -> T {
+    return Echo<T>(value);
+}
+
+fn Entry() -> i32 {
+    let a = Forward<i32>(12);
+    let b = Forward<bool>(true);
+    return a fit i32;
+}

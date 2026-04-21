@@ -5,7 +5,7 @@ object Counter {
     @ReadOnly
     public seed: i32;
 
-    OnConstruct() {
+    public OnConstruct() {
         self.value = 7;
         self.bonus = 3;
         self.seed = 11;

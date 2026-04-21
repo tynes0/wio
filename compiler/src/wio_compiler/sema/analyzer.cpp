@@ -4286,6 +4286,15 @@ namespace wio::sema
                     if (isCopyCtor)
                         continue;
 
+                    if (member.access != AccessModifier::Public)
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            functionDecl->location(),
+                            "@Export component '{}' constructor must be public to be host-callable.",
+                            node.name->token.value
+                        );
+                    }
+
                     bool allParametersAbiSafe = true;
                     for (size_t parameterIndex = 0; parameterIndex < functionType->paramTypes.size(); ++parameterIndex)
                     {
@@ -4717,6 +4726,15 @@ namespace wio::sema
                     if (isCopyCtor)
                         continue;
 
+                    if (member.access != AccessModifier::Public)
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            functionDecl->location(),
+                            "@Export object '{}' constructor must be public to be host-callable.",
+                            node.name->token.value
+                        );
+                    }
+
                     bool allParametersAbiSafe = true;
                     for (size_t parameterIndex = 0; parameterIndex < functionType->paramTypes.size(); ++parameterIndex)
                     {
@@ -4733,7 +4751,7 @@ namespace wio::sema
                         );
                     }
 
-                    if (allParametersAbiSafe)
+                    if (member.access == AccessModifier::Public && allParametersAbiSafe)
                         hasHostCallableConstructor = true;
                 }
 
@@ -4763,7 +4781,7 @@ namespace wio::sema
                 {
                     WIO_LOG_ADD_ERROR(
                         node.location(),
-                        "@Export object '{}' must expose at least one host-callable constructor with only C-ABI-safe parameters.",
+                        "@Export object '{}' must expose at least one public host-callable constructor with only C-ABI-safe parameters.",
                         node.name->token.value
                     );
                 }

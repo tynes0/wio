@@ -24,7 +24,7 @@ realm std {
         }
 
         fn PrintLine<T>(value: T) -> i32 {
-            Print(value);
+            Print<T>(value);
             return Print("\n");
         }
 

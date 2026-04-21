@@ -539,6 +539,15 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_generic_native_forward_bridge_run
+        "${CMAKE_SOURCE_DIR}/tests/native/generic_native_forward_bridge.wio"
+        "Generic native forward: 42, 42"
+        --run
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
+    )
+
+    add_wio_output_test(
         wio_test_native_generic_pair_bridge_run
         "${CMAKE_SOURCE_DIR}/tests/native/native_generic_pair_bridge.wio"
         "Generic native pair: 42"
@@ -601,6 +610,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/native/exported_ctor_types_library.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_exported_ctor_host.cpp"
         "SDK ctor exported types: exports=11 types=2 enemy=15 afterDamage=11 point=4,9 ctorCount=1/1"
+    )
+
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_exported_inherited_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/exported_inherited_types_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_exported_inherited_host.cpp"
+        "SDK inherited exported types: exports=13 types=1 fields=3 methods=5 hp=40 id=2 phase=3 score0=42 score1=47 enrage=5 heal=49 score2=59"
     )
 
     add_wio_shared_reload_interop_test(
@@ -908,6 +924,11 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/generic_interface_declaration.wio"
     )
 
+    add_wio_success_test(
+        wio_test_generic_explicit_forward_export_dry_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_explicit_forward_export.wio"
+    )
+
     add_wio_output_test(
         wio_show_tokens_alias_stream
         "${CMAKE_SOURCE_DIR}/tests/test_use_alias.wio"
@@ -983,13 +1004,19 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_missing_cpp_header_use
         "${CMAKE_SOURCE_DIR}/tests/invalid/missing_cpp_header_use.wio"
-        "Native C\\+\\+ header 'missing_cpp_header_use_test.h' was not found"
+        "Native C\\+\\+ header 'missing_cpp_header_use_test.h' referenced by use @CppHeader in '.*missing_cpp_header_use\\.wio' was not found"
     )
 
     add_wio_failure_test(
         wio_invalid_missing_cpp_header_native_attr
         "${CMAKE_SOURCE_DIR}/tests/invalid/missing_cpp_header_native_attr.wio"
-        "Native C\\+\\+ header 'missing_cpp_header_attr_test.h' was not found"
+        "Native C\\+\\+ header 'missing_cpp_header_attr_test.h' referenced by @CppHeader on native function 'Invoke' in '.*missing_cpp_header_native_attr\\.wio' was not found"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_missing_cpp_header_std_import
+        "${CMAKE_SOURCE_DIR}/tests/invalid/missing_cpp_header_std_import.wio"
+        "Native C\\+\\+ header 'missing_std_header_for_test.h' referenced by use @CppHeader in '.*std[\\\\/]testing[\\\\/]missing_cpp_header\\.wio' was not found"
     )
 
     add_wio_failure_test(
@@ -1324,5 +1351,11 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_exported_component_requires_host_ctor
         "${CMAKE_SOURCE_DIR}/tests/invalid/exported_component_requires_host_ctor.wio"
         "@Export component 'HiddenStats' must expose at least one public host-callable constructor with only C-ABI-safe parameters\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_exported_object_private_ctor
+        "${CMAKE_SOURCE_DIR}/tests/invalid/exported_object_private_ctor.wio"
+        "@Export object 'HiddenFactory' constructor must be public to be host-callable\\."
     )
 endif()

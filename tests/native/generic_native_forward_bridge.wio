@@ -1,0 +1,21 @@
+use std::console;
+
+realm ffi {
+    @Native
+    @CppHeader("native_generic_math.h")
+    @CppName(native_generic::DoubleValue)
+    @Instantiate(i32)
+    @Instantiate(i64)
+    fn DoubleValue<T>(value: T) -> T;
+}
+
+fn Forward<T>(value: T) -> T {
+    return ffi::DoubleValue<T>(value);
+}
+
+fn Entry() -> i32 {
+    let small = Forward<i32>(21);
+    let large = Forward<i64>(21);
+    std::console::Print($"Generic native forward: ${small}, ${large}");
+    return 0;
+}

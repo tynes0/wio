@@ -654,26 +654,6 @@ namespace wio::sdk
             return fieldEntry;
         }
 
-        inline const WioModuleMethod* requireTypeMethod(const WioModuleType* typeEntry,
-                                                        std::string_view methodName,
-                                                        std::string_view bindingKind)
-        {
-            if (typeEntry == nullptr)
-                throw Error(ErrorCode::TypeNotFound, "Wio SDK expected a valid exported type descriptor.");
-
-            const std::string ownedMethodName(methodName);
-            const WioModuleMethod* methodEntry = WioFindModuleMethod(typeEntry, ownedMethodName.c_str());
-            if (methodEntry == nullptr)
-            {
-                std::ostringstream message;
-                message << "Wio SDK could not find " << bindingKind << " method '" << ownedMethodName
-                        << "' on exported type '" << (typeEntry->logicalName ? typeEntry->logicalName : "<unknown>") << "'.";
-                throw Error(ErrorCode::MethodNotFound, message.str());
-            }
-
-            return methodEntry;
-        }
-
         inline std::uintptr_t createModuleInstance(const WioModuleType* typeEntry, std::string_view bindingKind)
         {
             if (typeEntry == nullptr || typeEntry->createExport == nullptr || typeEntry->createExport->invoke == nullptr)
@@ -871,7 +851,31 @@ namespace wio::sdk
                              std::index_sequence<Indices...>) -> typename FunctionTraits<Signature>::StdFunction
         {
             using Traits = FunctionTraits<Signature>;
-            const WioModuleMethod* methodEntry = requireTypeMethod(typeEntry, methodName, bindingKind);
+            if (typeEntry == nullptr)
+                throw Error(ErrorCode::TypeNotFound, "Wio SDK expected a valid exported type descriptor.");
+
+            const WioAbiType expectedReturnType = getAbiType<typename Traits::ReturnType>();
+            const std::array<WioAbiType, Traits::Arity + 1> expectedParameterTypes = {
+                WIO_ABI_USIZE,
+                getAbiType<typename Traits::template Argument<Indices>>()...
+            };
+
+            const WioModuleMethod* methodEntry = WioFindModuleMethodOverload(
+                typeEntry,
+                methodName.c_str(),
+                expectedReturnType,
+                static_cast<std::uint32_t>(expectedParameterTypes.size()),
+                expectedParameterTypes.data()
+            );
+
+            if (methodEntry == nullptr)
+            {
+                std::ostringstream message;
+                message << "Wio SDK could not find " << bindingKind << " method overload '" << methodName
+                        << "' on exported type '" << (typeEntry->logicalName ? typeEntry->logicalName : "<unknown>") << "'.";
+                throw Error(ErrorCode::MethodNotFound, message.str());
+            }
+
             const WioModuleExport* exportEntry = methodEntry ? methodEntry->exportEntry : nullptr;
 
             if (exportEntry == nullptr || exportEntry->invoke == nullptr)
@@ -899,7 +903,6 @@ namespace wio::sdk
                 throw Error(ErrorCode::SignatureMismatch, message.str());
             }
 
-            const WioAbiType expectedReturnType = getAbiType<typename Traits::ReturnType>();
             if (exportEntry->returnType != expectedReturnType)
             {
                 std::ostringstream message;
@@ -909,18 +912,14 @@ namespace wio::sdk
                 throw Error(ErrorCode::SignatureMismatch, message.str());
             }
 
-            const std::array<WioAbiType, Traits::Arity> expectedParameterTypes = {
-                getAbiType<typename Traits::template Argument<Indices>>()...
-            };
-
-            for (size_t i = 0; i < expectedParameterTypes.size(); ++i)
+            for (size_t i = 0; i < Traits::Arity; ++i)
             {
                 const WioAbiType actualType = exportEntry->parameterTypes[i + 1];
-                if (actualType != expectedParameterTypes[i])
+                if (actualType != expectedParameterTypes[i + 1])
                 {
                     std::ostringstream message;
                     message << "Wio SDK signature mismatch for " << bindingKind << " method '" << methodName
-                            << "': parameter " << i << " expected '" << abiTypeName(expectedParameterTypes[i])
+                            << "': parameter " << i << " expected '" << abiTypeName(expectedParameterTypes[i + 1])
                             << "' but module exports '" << abiTypeName(actualType) << "'.";
                     throw Error(ErrorCode::SignatureMismatch, message.str());
                 }

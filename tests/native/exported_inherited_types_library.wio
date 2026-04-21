@@ -1,0 +1,47 @@
+object Actor {
+    public hp: i32;
+    public id: i32;
+
+    public OnConstruct() {
+        self.hp = 10;
+        self.id = 1;
+    }
+
+    public fn Score() -> i32 {
+        return self.hp + self.id;
+    }
+
+    public fn Score(extra: i32) -> i32 {
+        return self.hp + self.id + extra;
+    }
+
+    public fn Heal(amount: i32) -> i32 {
+        self.hp += amount;
+        return self.hp;
+    }
+}
+
+@Export
+@From(Actor)
+object Boss {
+    public phase: i32;
+
+    public OnConstruct() {
+        self.hp = 40;
+        self.id = 2;
+        self.phase = 3;
+    }
+
+    public fn Heal(amount: i32) -> i32 {
+        return super.Heal(amount + self.phase);
+    }
+
+    public fn Score(extra: i32, bonus: i32) -> i32 {
+        return self.hp + self.id + self.phase + extra + bonus;
+    }
+
+    public fn Enrage(extra: i32) -> i32 {
+        self.phase += extra;
+        return self.phase;
+    }
+}
