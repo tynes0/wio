@@ -148,7 +148,7 @@ realm std {
 
             let lines = text.Split("\n");
             if (text.EndsWith("\n") and not lines.Empty()) {
-                return lines.Slice(0 fit usize, lines.Count() - (1 fit usize));
+            return lines.Slice(0usize, lines.Count() - 1usize);
             }
 
             return lines;
@@ -187,7 +187,7 @@ realm std {
                 return false;
             }
 
-            return FileSize(path) > (0 fit i64);
+            return FileSize(path) > 0i64;
         }
     }
 }

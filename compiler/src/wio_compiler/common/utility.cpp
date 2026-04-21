@@ -1,11 +1,349 @@
 #include "wio/common/utility.h"
 #include "wio/common/exception.h"
 
+#include <array>
+#include <cerrno>
 #include <charconv>
-
+#include <cstdlib>
+#include <cstring>
+#include <limits>
+#include <optional>
 
 namespace wio::common
 {
+    namespace
+    {
+        struct IntegerSuffixEntry
+        {
+            std::string_view suffix;
+            IntegerType type;
+        };
+
+        struct FloatSuffixEntry
+        {
+            std::string_view suffix;
+            FloatType type;
+        };
+
+        constexpr std::array<IntegerSuffixEntry, 14> kIntegerLiteralSuffixes = {{
+            {"isize", IntegerType::isize},
+            {"usize", IntegerType::usize},
+            {"i64", IntegerType::i64},
+            {"u64", IntegerType::u64},
+            {"i32", IntegerType::i32},
+            {"u32", IntegerType::u32},
+            {"i16", IntegerType::i16},
+            {"u16", IntegerType::u16},
+            {"isz", IntegerType::isize},
+            {"usz", IntegerType::usize},
+            {"i8", IntegerType::i8},
+            {"u8", IntegerType::u8},
+            {"i", IntegerType::i32},
+            {"u", IntegerType::u32}
+        }};
+
+        constexpr std::array<FloatSuffixEntry, 3> kFloatLiteralSuffixes = {{
+            {"f32", FloatType::f32},
+            {"f64", FloatType::f64},
+            {"f", FloatType::f32}
+        }};
+
+        [[nodiscard]] auto splitIntegerLiteralSuffix(std::string_view data) -> std::pair<std::string_view, IntegerType>
+        {
+            for (const auto& entry : kIntegerLiteralSuffixes)
+            {
+                if (data.ends_with(entry.suffix))
+                    return {data.substr(0, data.size() - entry.suffix.size()), entry.type};
+            }
+
+            return {data, IntegerType::Unknown};
+        }
+
+        [[nodiscard]] auto splitFloatLiteralSuffix(std::string_view data) -> std::pair<std::string_view, FloatType>
+        {
+            for (const auto& entry : kFloatLiteralSuffixes)
+            {
+                if (data.ends_with(entry.suffix))
+                    return {data.substr(0, data.size() - entry.suffix.size()), entry.type};
+            }
+
+            return {data, FloatType::Unknown};
+        }
+
+        [[nodiscard]] IntegerResult invalidIntegerResult()
+        {
+            IntegerResult result{};
+            result.type = IntegerType::Unknown;
+            result.isValid = false;
+            return result;
+        }
+
+        [[nodiscard]] FloatResult invalidFloatResult()
+        {
+            FloatResult result{};
+            result.type = FloatType::Unknown;
+            result.isValid = false;
+            std::memset(&result.value, 0, sizeof(result.value));
+            return result;
+        }
+
+        bool parseIntegerLiteralBody(std::string_view rawLiteral,
+                                     bool& isNegative,
+                                     int64_t& signedVal,
+                                     uint64_t& unsignedVal)
+        {
+            if (rawLiteral.empty())
+                return false;
+
+            std::string_view rawNumStr = rawLiteral;
+            signedVal = 0;
+            unsignedVal = 0;
+            isNegative = !rawNumStr.empty() && rawNumStr.front() == '-';
+
+            if (isNegative)
+                rawNumStr.remove_prefix(1);
+
+            int base = 10;
+            if (rawNumStr.starts_with("0x") || rawNumStr.starts_with("0X"))
+            {
+                base = 16;
+                rawNumStr.remove_prefix(2);
+            }
+            else if (rawNumStr.starts_with("0b") || rawNumStr.starts_with("0B"))
+            {
+                base = 2;
+                rawNumStr.remove_prefix(2);
+            }
+            else if (rawNumStr.starts_with("0o") || rawNumStr.starts_with("0O"))
+            {
+                base = 8;
+                rawNumStr.remove_prefix(2);
+            }
+
+            if (rawNumStr.empty())
+                return false;
+
+            if (isNegative)
+            {
+                auto res = std::from_chars(rawNumStr.data(), rawNumStr.data() + rawNumStr.size(), signedVal, base);
+                return res.ec == std::errc() && res.ptr == rawNumStr.data() + rawNumStr.size();
+            }
+
+            auto res = std::from_chars(rawNumStr.data(), rawNumStr.data() + rawNumStr.size(), unsignedVal, base);
+            if (res.ec != std::errc() || res.ptr != rawNumStr.data() + rawNumStr.size())
+                return false;
+
+            if (unsignedVal <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+                signedVal = static_cast<int64_t>(unsignedVal);
+
+            return true;
+        }
+
+        void setIntegerResultForType(IntegerType targetType,
+                                     bool isNegative,
+                                     int64_t signedVal,
+                                     uint64_t unsignedVal,
+                                     IntegerResult& result)
+        {
+            if (isNegative && (targetType == IntegerType::u8 || targetType == IntegerType::u16 ||
+                               targetType == IntegerType::u32 || targetType == IntegerType::u64 ||
+                               targetType == IntegerType::usize))
+            {
+                return;
+            }
+
+            auto checkAndSetSigned = [&]<typename Dest, typename Value>(Value value, Value minValue, Value maxValue, Dest& destination)
+            {
+                if (value < minValue || value > maxValue)
+                    return;
+
+                destination = static_cast<Dest>(value);
+                result.type = targetType;
+                result.isValid = true;
+            };
+
+            auto checkAndSetUnsigned = [&]<typename Dest, typename Value>(Value value, Value maxValue, Dest& destination)
+            {
+                if (value > maxValue)
+                    return;
+
+                destination = static_cast<Dest>(value);
+                result.type = targetType;
+                result.isValid = true;
+            };
+
+            switch (targetType)
+            {
+            case IntegerType::i8:
+                checkAndSetSigned(static_cast<int64_t>(signedVal),
+                                  static_cast<int64_t>(std::numeric_limits<int8_t>::min()),
+                                  static_cast<int64_t>(std::numeric_limits<int8_t>::max()),
+                                  result.value.v_i8);
+                break;
+            case IntegerType::i16:
+                checkAndSetSigned(static_cast<int64_t>(signedVal),
+                                  static_cast<int64_t>(std::numeric_limits<int16_t>::min()),
+                                  static_cast<int64_t>(std::numeric_limits<int16_t>::max()),
+                                  result.value.v_i16);
+                break;
+            case IntegerType::i32:
+                checkAndSetSigned(static_cast<int64_t>(signedVal),
+                                  static_cast<int64_t>(std::numeric_limits<int32_t>::min()),
+                                  static_cast<int64_t>(std::numeric_limits<int32_t>::max()),
+                                  result.value.v_i32);
+                break;
+            case IntegerType::i64:
+                result.value.v_i64 = signedVal;
+                result.type = IntegerType::i64;
+                result.isValid = true;
+                break;
+            case IntegerType::u8:
+                checkAndSetUnsigned(static_cast<uint64_t>(unsignedVal),
+                                    static_cast<uint64_t>(std::numeric_limits<uint8_t>::max()),
+                                    result.value.v_u8);
+                break;
+            case IntegerType::u16:
+                checkAndSetUnsigned(static_cast<uint64_t>(unsignedVal),
+                                    static_cast<uint64_t>(std::numeric_limits<uint16_t>::max()),
+                                    result.value.v_u16);
+                break;
+            case IntegerType::u32:
+                checkAndSetUnsigned(static_cast<uint64_t>(unsignedVal),
+                                    static_cast<uint64_t>(std::numeric_limits<uint32_t>::max()),
+                                    result.value.v_u32);
+                break;
+            case IntegerType::u64:
+                result.value.v_u64 = unsignedVal;
+                result.type = IntegerType::u64;
+                result.isValid = true;
+                break;
+            case IntegerType::isize:
+                checkAndSetSigned(static_cast<int64_t>(signedVal),
+                                  static_cast<int64_t>(std::numeric_limits<isize>::min()),
+                                  static_cast<int64_t>(std::numeric_limits<isize>::max()),
+                                  result.value.v_isize);
+                break;
+            case IntegerType::usize:
+                checkAndSetUnsigned(static_cast<uint64_t>(unsignedVal),
+                                    static_cast<uint64_t>(std::numeric_limits<usize>::max()),
+                                    result.value.v_usize);
+                break;
+            case IntegerType::Unknown:
+                break;
+            }
+        }
+
+        [[nodiscard]] IntegerResult parseIntegerLiteral(std::string_view data, std::optional<IntegerType> forcedType)
+        {
+            IntegerResult result = invalidIntegerResult();
+            if (data.empty())
+                return result;
+
+            auto [rawLiteral, detectedType] = splitIntegerLiteralSuffix(data);
+            if (forcedType.has_value())
+            {
+                if (detectedType != IntegerType::Unknown && detectedType != *forcedType)
+                    return result;
+
+                detectedType = *forcedType;
+            }
+
+            int64_t signedVal = 0;
+            uint64_t unsignedVal = 0;
+            bool isNegative = false;
+            if (!parseIntegerLiteralBody(rawLiteral, isNegative, signedVal, unsignedVal))
+                return result;
+
+            if (detectedType != IntegerType::Unknown)
+            {
+                setIntegerResultForType(detectedType, isNegative, signedVal, unsignedVal, result);
+                return result;
+            }
+
+            if (isNegative)
+            {
+                if (signedVal >= std::numeric_limits<int32_t>::min())
+                {
+                    result.type = IntegerType::i32;
+                    result.value.v_i32 = static_cast<int32_t>(signedVal);
+                    result.isValid = true;
+                }
+                else
+                {
+                    result.type = IntegerType::i64;
+                    result.value.v_i64 = signedVal;
+                    result.isValid = true;
+                }
+
+                return result;
+            }
+
+            if (unsignedVal <= static_cast<uint64_t>(std::numeric_limits<int32_t>::max()))
+            {
+                result.type = IntegerType::i32;
+                result.value.v_i32 = static_cast<int32_t>(unsignedVal);
+                result.isValid = true;
+            }
+            else if (unsignedVal <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+            {
+                result.type = IntegerType::i64;
+                result.value.v_i64 = static_cast<int64_t>(unsignedVal);
+                result.isValid = true;
+            }
+            else
+            {
+                result.type = IntegerType::u64;
+                result.value.v_u64 = unsignedVal;
+                result.isValid = true;
+            }
+
+            return result;
+        }
+
+        [[nodiscard]] FloatResult parseFloatLiteral(std::string_view data, std::optional<FloatType> forcedType)
+        {
+            FloatResult result = invalidFloatResult();
+            if (data.empty())
+                return result;
+
+            auto [rawLiteral, detectedType] = splitFloatLiteralSuffix(data);
+            if (forcedType.has_value())
+            {
+                if (detectedType != FloatType::Unknown && detectedType != *forcedType)
+                    return result;
+
+                detectedType = *forcedType;
+            }
+
+            std::string temp(rawLiteral);
+            char* end = nullptr;
+
+            errno = 0;
+            const double value = std::strtod(temp.c_str(), &end);
+            if (errno != 0 || end != temp.c_str() + temp.size())
+                return result;
+
+            if (detectedType == FloatType::Unknown)
+                detectedType = FloatType::f64;
+
+            if (detectedType == FloatType::f32)
+            {
+                if (value < -std::numeric_limits<float>::max() || value > std::numeric_limits<float>::max())
+                    return result;
+
+                result.value.v_f32 = static_cast<float>(value);
+                result.type = FloatType::f32;
+                result.isValid = true;
+                return result;
+            }
+
+            result.value.v_f64 = value;
+            result.type = FloatType::f64;
+            result.isValid = true;
+            return result;
+        }
+    }
+
     bool isNewline(char c)
     {
         return c == '\n' || c == '\r';
@@ -59,239 +397,54 @@ namespace wio::common
         return result;
     }
 
+    bool hasIntegerLiteralTypeSuffix(std::string_view data)
+    {
+        const auto [rawLiteral, detectedType] = splitIntegerLiteralSuffix(data);
+        return detectedType != IntegerType::Unknown && rawLiteral.size() != data.size();
+    }
+
+    bool hasFloatLiteralTypeSuffix(std::string_view data)
+    {
+        const auto [rawLiteral, detectedType] = splitFloatLiteralSuffix(data);
+        return detectedType != FloatType::Unknown && rawLiteral.size() != data.size();
+    }
+
+    std::string stripIntegerLiteralTypeSuffix(std::string_view data)
+    {
+        const auto [rawLiteral, detectedType] = splitIntegerLiteralSuffix(data);
+        if (detectedType == IntegerType::Unknown)
+            return std::string(data);
+
+        return std::string(rawLiteral);
+    }
+
+    std::string stripFloatLiteralTypeSuffix(std::string_view data)
+    {
+        const auto [rawLiteral, detectedType] = splitFloatLiteralSuffix(data);
+        if (detectedType == FloatType::Unknown)
+            return std::string(data);
+
+        return std::string(rawLiteral);
+    }
+
     IntegerResult getInteger(const std::string& data)
     {
-        IntegerResult result;
-        result.type = IntegerType::Unknown;
-        result.isValid = false;
-        
-        std::string_view sv = data;
-        if (sv.empty()) return result;
-    
-        std::string_view rawNumStr = sv;
-        IntegerType detectedType = IntegerType::Unknown;
-    
-        struct SuffixMap
-        {
-            const char* str;
-            IntegerType type;
-        };
-        SuffixMap suffixes[] = {
-            { .str = "isz", .type = IntegerType::isize}, {.str =  "usz", .type = IntegerType::usize},
-            { .str = "i64", .type = IntegerType::i64}, { .str = "u64", .type = IntegerType::u64},
-            { .str = "i32", .type = IntegerType::i32}, { .str = "u32", .type = IntegerType::u32},
-            { .str = "i",   .type = IntegerType::i32}, { .str = "u",   .type = IntegerType::u32},
-            { .str = "i16", .type = IntegerType::i16}, { .str = "u16", .type = IntegerType::u16},
-            { .str = "i8",  .type = IntegerType::i8},  { .str = "u8",  .type = IntegerType::u8}
-        };
-    
-        for (const auto& s : suffixes)
-        {
-            if (sv.ends_with(s.str))
-            {
-                detectedType = s.type;
-                rawNumStr = sv.substr(0, sv.size() - std::char_traits<char>::length(s.str));
-                break;
-            }
-        }
-    
-        int64_t signedVal = 0;
-        uint64_t unsignedVal = 0;
-        bool isNegative = (!rawNumStr.empty() && rawNumStr[0] == '-');
-        bool parseSuccess = false;
+        return parseIntegerLiteral(data, std::nullopt);
+    }
 
-        if (isNegative)
-            rawNumStr.remove_prefix(1);
-
-        int base = 10;
-        if (rawNumStr.starts_with("0x") || rawNumStr.starts_with("0X"))
-        {
-            base = 16;
-            rawNumStr.remove_prefix(2);
-        }
-        else if (rawNumStr.starts_with("0b") || rawNumStr.starts_with("0B"))
-        {
-            base = 2;
-            rawNumStr.remove_prefix(2);
-        }
-        else if (rawNumStr.starts_with("0o") || rawNumStr.starts_with("0O"))
-        {
-            base = 8;
-            rawNumStr.remove_prefix(2);
-        }
-    
-        if (isNegative)
-        {
-            auto res = std::from_chars(rawNumStr.data(), rawNumStr.data() + rawNumStr.size(), signedVal, base);
-            if (res.ec == std::errc() && res.ptr == rawNumStr.data() + rawNumStr.size())
-            {
-                parseSuccess = true;
-            }
-        }
-        else
-        {
-            auto res = std::from_chars(rawNumStr.data(), rawNumStr.data() + rawNumStr.size(), unsignedVal, base);
-            if (res.ec == std::errc() && res.ptr == rawNumStr.data() + rawNumStr.size())
-            {
-                parseSuccess = true;
-                if (unsignedVal <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
-                {
-                    signedVal = static_cast<int64_t>(unsignedVal);
-                }
-                else
-                {
-                    // An unsigned value that doesn't fit in int64 (e.g., a very large u64)
-                    // Using signedVal in this case might be dangerous; we should manage it with a flag.
-                }
-            }
-        }
-    
-        if (!parseSuccess)
-            return result;
-    
-        if (detectedType != IntegerType::Unknown)
-        {
-            if (isNegative && (detectedType == IntegerType::u8 || detectedType == IntegerType::u16 || 
-                               detectedType == IntegerType::u32 || detectedType == IntegerType::u64 || 
-                               detectedType == IntegerType::usize))
-            {
-                return result; 
-            }
-    
-            auto checkAndSet = [&]<typename T, typename VT>(T min, T max, VT val, T& unionMember)
-            {
-                if (static_cast<T>(val) >= min && val <= max) {
-                    unionMember = static_cast<T>(val);
-                    result.type = detectedType;
-                    result.isValid = true;
-                }
-            };
-    
-            switch (detectedType)
-            {
-                case IntegerType::i8:  checkAndSet(std::numeric_limits<int8_t>::min(), std::numeric_limits<int8_t>::max(), signedVal, result.value.v_i8); break;
-                case IntegerType::i16: checkAndSet(std::numeric_limits<int16_t>::min(), std::numeric_limits<int16_t>::max(), signedVal, result.value.v_i16); break;
-                case IntegerType::i32: checkAndSet(std::numeric_limits<int32_t>::min(), std::numeric_limits<int32_t>::max(), signedVal, result.value.v_i32); break;
-                case IntegerType::i64: checkAndSet(std::numeric_limits<int64_t>::min(), std::numeric_limits<int64_t>::max(), signedVal, result.value.v_i64); break;
-                
-                case IntegerType::u8:  checkAndSet(static_cast<uint8_t>(0), std::numeric_limits<uint8_t>::max(), unsignedVal, result.value.v_u8); break;
-                case IntegerType::u16: checkAndSet(static_cast<uint16_t>(0), std::numeric_limits<uint16_t>::max(), unsignedVal, result.value.v_u16); break;
-                case IntegerType::u32: checkAndSet(static_cast<uint32_t>(0), std::numeric_limits<uint32_t>::max(), unsignedVal, result.value.v_u32); break;
-                case IntegerType::u64: 
-                    result.value.v_u64 = unsignedVal; result.type = IntegerType::u64; result.isValid = true; 
-                    break;
-    
-                case IntegerType::isize: checkAndSet(std::numeric_limits<int64_t>::min(), std::numeric_limits<int64_t>::max(), signedVal, result.value.v_isize); break;
-                case IntegerType::usize: 
-                    result.value.v_usize = unsignedVal; result.type = IntegerType::usize; result.isValid = true; 
-                    break;
-                case IntegerType::Unknown:
-                break;
-            }
-        } 
-        else {
-            if (isNegative)
-            {
-                if (signedVal >= std::numeric_limits<int32_t>::min())
-                {
-                    result.type = IntegerType::i32;
-                    result.value.v_i32 = static_cast<int32_t>(signedVal);
-                    result.isValid = true;
-                } else
-                {
-                    result.type = IntegerType::i64;
-                    result.value.v_i64 = signedVal;
-                    result.isValid = true;
-                }
-            }
-            else
-            {
-                if (unsignedVal <= static_cast<uint64_t>(std::numeric_limits<int32_t>::max()))
-                {
-                    result.type = IntegerType::i32;
-                    result.value.v_i32 = static_cast<int32_t>(unsignedVal);
-                    result.isValid = true;
-                } 
-                else if (unsignedVal <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
-                {
-                    result.type = IntegerType::i64;
-                    result.value.v_i64 = static_cast<int64_t>(unsignedVal);
-                    result.isValid = true;
-                } 
-                else
-                {
-                    result.type = IntegerType::u64;
-                    result.value.v_u64 = unsignedVal;
-                    result.isValid = true;
-                }
-            }
-        }
-    
-        return result;
+    IntegerResult getIntegerAsType(std::string_view data, IntegerType type)
+    {
+        return parseIntegerLiteral(data, type);
     }
 
     FloatResult getFloat(const std::string& data)
     {
-        FloatResult result{};
-        result.isValid = false;
-        result.type = FloatType::Unknown;
-        std::memset(&result.value, 0, sizeof(result.value));
+        return parseFloatLiteral(data, std::nullopt);
+    }
 
-        if (data.empty())
-            return result;
-
-        std::string_view sv = data;
-        std::string_view raw = sv;
-        FloatType detectedType = FloatType::Unknown;
-
-        struct Suffix {
-            const char* str;
-            FloatType type;
-        };
-
-        Suffix suffixes[] = {
-            { .str = "f", .type = FloatType::f32 },
-            { .str = "f32", .type = FloatType::f32 },
-            { .str = "f64", .type = FloatType::f64 }
-        };
-
-        for (auto& [str, type] : suffixes)
-        {
-            if (sv.ends_with(str))
-            {
-                detectedType = type;
-                raw = sv.substr(0, sv.size() - std::char_traits<char>::length(str));
-                break;
-            }
-        }
-
-        std::string temp(raw);
-        char* end = nullptr;
-
-        errno = 0;
-        double val = std::strtod(temp.c_str(), &end);
-
-        if (errno != 0 || end != temp.c_str() + temp.size())
-            return result;
-        
-        if (detectedType == FloatType::f32)
-        {
-            if (val < -std::numeric_limits<float>::max() ||
-                val >  std::numeric_limits<float>::max())
-                return result;
-
-            result.value.v_f32 = static_cast<float>(val);
-            result.type = FloatType::f32;
-            result.isValid = true;
-        }
-        else
-        {
-            result.value.v_f64 = val;
-            result.type = FloatType::f64;
-            result.isValid = true;
-        }
-
-        return result;
+    FloatResult getFloatAsType(std::string_view data, FloatType type)
+    {
+        return parseFloatLiteral(data, type);
     }
 
 

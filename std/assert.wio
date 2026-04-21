@@ -189,13 +189,13 @@ realm std {
                 Fail(message);
             }
 
-            mut index: usize = 0 fit usize;
+            mut index: usize = 0usize;
             while (index < left.Count()) {
                 if (left[index] != right[index]) {
                     Fail(message);
                 }
 
-                index += 1 fit usize;
+                index += 1usize;
             }
         }
 

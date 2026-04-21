@@ -2499,17 +2499,7 @@ namespace wio::codegen
 
     void CppGenerator::visit(IntegerLiteral& node)
     {
-        std::string valStr = node.token.value;
-    
-        const char* suffixes[] = { "i", "u", "i8", "u8", "i16", "u16", "i32", "u32", "i64", "u64", "isz", "usz" };
-        for (const auto& suf : suffixes)
-        {
-            if (valStr.ends_with(suf))
-            {
-                valStr.erase(valStr.length() - strlen(suf));
-                break;
-            }
-        }
+        std::string valStr = common::stripIntegerLiteralTypeSuffix(node.token.value);
 
         auto type = node.refType.Lock();
         std::string tName = type ? type->toString() : "i32";
@@ -2528,12 +2518,7 @@ namespace wio::codegen
 
     void CppGenerator::visit(FloatLiteral& node)
     {
-        std::string valStr = node.token.value;
-    
-        if (valStr.ends_with("f32") || valStr.ends_with("f64"))
-            valStr.erase(valStr.length() - 3);
-        else if (valStr.ends_with('f'))
-            valStr.erase(valStr.length() - 1);
+        std::string valStr = common::stripFloatLiteralTypeSuffix(node.token.value);
 
         auto type = node.refType.Lock();
         if (type && type->toString() == "f64")

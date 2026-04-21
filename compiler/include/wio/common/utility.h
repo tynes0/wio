@@ -3,6 +3,7 @@
 #include "general/result_values.h"
 
 #include <dtlog.h>
+#include <string_view>
 
 namespace wio
 {
@@ -11,8 +12,14 @@ namespace wio
         [[nodiscard]] bool isNewline(char c);
         [[nodiscard]] char getEscapeSeq(char ch, Location loc = Location());
         [[nodiscard]] std::string wioStringToEscapedCppString(const std::string& str);
+        [[nodiscard]] bool hasIntegerLiteralTypeSuffix(std::string_view data);
+        [[nodiscard]] bool hasFloatLiteralTypeSuffix(std::string_view data);
+        [[nodiscard]] std::string stripIntegerLiteralTypeSuffix(std::string_view data);
+        [[nodiscard]] std::string stripFloatLiteralTypeSuffix(std::string_view data);
         [[nodiscard]] IntegerResult getInteger(const std::string& data);
+        [[nodiscard]] IntegerResult getIntegerAsType(std::string_view data, IntegerType type);
         [[nodiscard]] FloatResult getFloat(const std::string& data);
+        [[nodiscard]] FloatResult getFloatAsType(std::string_view data, FloatType type);
         [[nodiscard]] std::string wioPrimitiveTypeToCppType(const std::string& wioTypeStr);
         
         [[nodiscard]] constexpr uint64_t fnv1a(const char* str)

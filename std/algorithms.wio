@@ -76,10 +76,10 @@ realm std {
         }
 
         fn CountBy<T>(values: T[], predicate: fn(T) -> bool) -> usize {
-            mut count: usize = 0 fit usize;
+            mut count: usize = 0usize;
             for value in values {
                 if (predicate(value)) {
-                    count += 1 fit usize;
+                count += 1usize;
                 }
             }
             return count;
@@ -121,7 +121,7 @@ realm std {
             mut counts: Dict<K, usize> = {};
             for value in values {
                 let key = keySelector(value);
-                let nextCount = counts.GetOr(key, 0 fit usize) + 1 fit usize;
+            let nextCount = counts.GetOr(key, 0usize) + 1usize;
                 counts.Set(key, nextCount);
             }
             return counts;

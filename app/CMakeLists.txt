@@ -674,6 +674,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_numeric_literal_suffixes_run
+        "${CMAKE_SOURCE_DIR}/tests/numeric_literal_suffixes_run.wio"
+        "Numeric literal suffixes: 16/3/true/true"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_numeric_literal_context_run
+        "${CMAKE_SOURCE_DIR}/tests/numeric_literal_context_run.wio"
+        "Numeric literal context: 0/2/3/5/20"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_std_console_direct_run
         "${CMAKE_SOURCE_DIR}/tests/std_console_direct.wio"
         "Std direct: hello\nStd direct value: 7"
@@ -1074,6 +1088,18 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_missing_cpp_header_std_import
         "${CMAKE_SOURCE_DIR}/tests/invalid/missing_cpp_header_std_import.wio"
         "Native C\\+\\+ header 'missing_std_header_for_test.h' referenced by use @CppHeader in '.*std[\\\\/]assert[\\\\/]missing_cpp_header\\.wio' was not found"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_numeric_literal_context_u8_out_of_range
+        "${CMAKE_SOURCE_DIR}/tests/invalid/numeric_literal_context_u8_out_of_range.wio"
+        "Integer literal '300' does not fit into expected type 'u8'"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_numeric_literal_context_f32_out_of_range
+        "${CMAKE_SOURCE_DIR}/tests/invalid/numeric_literal_context_f32_out_of_range.wio"
+        "Float literal '1\\.0e100' does not fit into expected type 'f32'"
     )
 
     add_wio_backend_failure_test(

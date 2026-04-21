@@ -262,6 +262,47 @@ namespace wio::sema
                    name == "char" || name == "uchar";
         }
 
+        std::optional<IntegerType> tryGetContextualIntegerLiteralType(const Ref<Type>& type)
+        {
+            Ref<Type> resolved = unwrapAliasType(type);
+            if (!resolved || resolved->kind() != TypeKind::Primitive)
+                return std::nullopt;
+
+            const std::string& name = resolved.AsFast<PrimitiveType>()->name;
+            if (name == "i8") return IntegerType::i8;
+            if (name == "i16") return IntegerType::i16;
+            if (name == "i32") return IntegerType::i32;
+            if (name == "i64") return IntegerType::i64;
+            if (name == "u8" || name == "byte") return IntegerType::u8;
+            if (name == "u16") return IntegerType::u16;
+            if (name == "u32") return IntegerType::u32;
+            if (name == "u64") return IntegerType::u64;
+            if (name == "isize") return IntegerType::isize;
+            if (name == "usize") return IntegerType::usize;
+            return std::nullopt;
+        }
+
+        std::optional<FloatType> tryGetContextualFloatLiteralType(const Ref<Type>& type)
+        {
+            Ref<Type> resolved = unwrapAliasType(type);
+            if (!resolved || resolved->kind() != TypeKind::Primitive)
+                return std::nullopt;
+
+            const std::string& name = resolved.AsFast<PrimitiveType>()->name;
+            if (name == "f32") return FloatType::f32;
+            if (name == "f64") return FloatType::f64;
+            return std::nullopt;
+        }
+
+        bool isAssignmentLikeCompatible(const Ref<Type>& destination, const Ref<Type>& source)
+        {
+            if (!destination || !source || source->isUnknown())
+                return false;
+
+            return destination->isCompatibleWith(source) ||
+                   (destination->isNumeric() && source->isNumeric());
+        }
+
         bool isZeroIntegerLiteralExpression(const NodePtr<Expression>& expression)
         {
             if (!expression)
@@ -1510,9 +1551,12 @@ namespace wio::sema
     {
         node.left->accept(*this);
         Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
+        bool previousAllowContextualNumericLiteralTyping = allowContextualNumericLiteralTyping_;
         currentExpectedExpressionType_ = getAutoReadableType(node.left->refType.Lock());
+        allowContextualNumericLiteralTyping_ = true;
         node.right->accept(*this);
         currentExpectedExpressionType_ = previousExpectedExpressionType;
+        allowContextualNumericLiteralTyping_ = previousAllowContextualNumericLiteralTyping;
 
         Ref<Type> lhsType = node.left->refType.Lock();
         Ref<Type> rhsType = node.right->refType.Lock();
@@ -1522,7 +1566,7 @@ namespace wio::sema
 
         if (lhsType && rhsType)
         {
-            isCompatible = lhsType->isCompatibleWith(rhsType);
+            isCompatible = isAssignmentLikeCompatible(lhsType, rhsType);
 
             if (!isCompatible && lhsType->kind() == TypeKind::Reference)
             {
@@ -1535,8 +1579,7 @@ namespace wio::sema
                     
                     if (!rType->isMutable) canMutate = false;
                     
-                    if (rType->referredType->isCompatibleWith(rhsType) || 
-                       (rType->referredType->isNumeric() && rhsType->isNumeric())) // YENİ: Deref atamada sayısal esneklik
+                    if (isAssignmentLikeCompatible(rType->referredType, rhsType))
                     {
                         isAutoDeref = true;
                         if (!canMutate) WIO_LOG_ADD_ERROR(node.op.loc, "Cannot modify data through a read-only reference (view).");
@@ -1548,19 +1591,13 @@ namespace wio::sema
             }
         }
 
-        if (lhsType && rhsType && !isCompatible)
+        if (lhsType && rhsType && !lhsType->isUnknown() && !rhsType->isUnknown() && !isCompatible)
         {
-            if (lhsType->isNumeric() && rhsType->isNumeric())
-            {
-            }
-            else
-            {
-                WIO_LOG_ADD_ERROR(node.op.loc,
-                    "Type mismatch in assignment: Cannot assign '{}' to '{}'.",
-                    rhsType->toString(),
-                    lhsType->toString()
-                );
-            }
+            WIO_LOG_ADD_ERROR(node.op.loc,
+                "Type mismatch in assignment: Cannot assign '{}' to '{}'.",
+                rhsType->toString(),
+                lhsType->toString()
+            );
         }
 
         if (!isAutoDeref)
@@ -1592,24 +1629,86 @@ namespace wio::sema
     
     void SemanticAnalyzer::visit(IntegerLiteral& node)
     {
-        IntegerResult result = common::getInteger(node.token.value);
-        
+        IntegerResult result{};
+        bool usedContextualType = false;
+
+        if (allowContextualNumericLiteralTyping_ &&
+            currentExpectedExpressionType_ &&
+            !common::hasIntegerLiteralTypeSuffix(node.token.value))
+        {
+            if (auto contextualType = tryGetContextualIntegerLiteralType(currentExpectedExpressionType_); contextualType.has_value())
+            {
+                result = common::getIntegerAsType(node.token.value, *contextualType);
+                usedContextualType = true;
+            }
+        }
+
+        if (!usedContextualType)
+            result = common::getInteger(node.token.value);
+
         if (!result.isValid)
-            WIO_LOG_ADD_ERROR(node.location(), "Invalid integer literal or value out of bounds: '{}'", node.token.value);
-        
-        Ref<Type> type = Type::getTypeFromIntegerResult(result);
-        node.refType = type;
+        {
+            if (usedContextualType && currentExpectedExpressionType_)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Integer literal '{}' does not fit into expected type '{}'.",
+                    node.token.value,
+                    currentExpectedExpressionType_->toString()
+                );
+            }
+            else
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Invalid integer literal or value out of bounds: '{}'", node.token.value);
+            }
+
+            node.refType = Compiler::get().getTypeContext().getUnknown();
+            return;
+        }
+
+        node.refType = Type::getTypeFromIntegerResult(result);
     }
     
     void SemanticAnalyzer::visit(FloatLiteral& node)
     {
-        FloatResult result = common::getFloat(node.token.value);
+        FloatResult result{};
+        bool usedContextualType = false;
+
+        if (allowContextualNumericLiteralTyping_ &&
+            currentExpectedExpressionType_ &&
+            !common::hasFloatLiteralTypeSuffix(node.token.value))
+        {
+            if (auto contextualType = tryGetContextualFloatLiteralType(currentExpectedExpressionType_); contextualType.has_value())
+            {
+                result = common::getFloatAsType(node.token.value, *contextualType);
+                usedContextualType = true;
+            }
+        }
+
+        if (!usedContextualType)
+            result = common::getFloat(node.token.value);
 
         if (!result.isValid)
-            WIO_LOG_ADD_ERROR(node.location(), "Invalid float literal or value out of bounds: '{}'", node.token.value);
-        
-        Ref<Type> type = Type::getTypeFromFloatResult(result);
-        node.refType = type;
+        {
+            if (usedContextualType && currentExpectedExpressionType_)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Float literal '{}' does not fit into expected type '{}'.",
+                    node.token.value,
+                    currentExpectedExpressionType_->toString()
+                );
+            }
+            else
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Invalid float literal or value out of bounds: '{}'", node.token.value);
+            }
+
+            node.refType = Compiler::get().getTypeContext().getUnknown();
+            return;
+        }
+
+        node.refType = Type::getTypeFromFloatResult(result);
     }
     
     void SemanticAnalyzer::visit(StringLiteral& node)
@@ -1648,16 +1747,24 @@ namespace wio::sema
     
     void SemanticAnalyzer::visit(ArrayLiteral& node)
     {
+        Ref<Type> expectedArrayLiteralType = nullptr;
+        Ref<ArrayType> expectedArrayType = nullptr;
+        if (currentExpectedExpressionType_)
+        {
+            Ref<Type> expectedType = unwrapAliasType(currentExpectedExpressionType_);
+            if (expectedType && expectedType->kind() == TypeKind::Array)
+            {
+                expectedArrayLiteralType = expectedType;
+                expectedArrayType = expectedType.AsFast<ArrayType>();
+            }
+        }
+
         if (node.elements.empty())
         {
-            if (currentExpectedExpressionType_)
+            if (expectedArrayType)
             {
-                Ref<Type> expectedType = unwrapAliasType(currentExpectedExpressionType_);
-                if (expectedType && expectedType->kind() == TypeKind::Array)
-                {
-                    node.refType = expectedType;
-                    return;
-                }
+                node.refType = expectedArrayLiteralType;
+                return;
             }
 
             // Fall back to an empty unknown array when no surrounding context can
@@ -1670,20 +1777,31 @@ namespace wio::sema
             return;
         }
 
-        node.elements[0]->accept(*this);
-        Ref<Type> baseType = node.elements[0]->refType.Lock();
+        auto analyzeElement = [&](NodePtr<Expression>& element)
+        {
+            Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
+            currentExpectedExpressionType_ = expectedArrayType ? expectedArrayType->elementType : previousExpectedExpressionType;
+            element->accept(*this);
+            currentExpectedExpressionType_ = previousExpectedExpressionType;
+        };
+
+        analyzeElement(node.elements[0]);
+        Ref<Type> baseType = expectedArrayType ? expectedArrayType->elementType : node.elements[0]->refType.Lock();
+        if (!baseType)
+            baseType = node.elements[0]->refType.Lock();
 
         for (size_t i = 1; i < node.elements.size(); ++i)
         {
-            node.elements[i]->accept(*this);
+            analyzeElement(node.elements[i]);
             if (auto lockedType = node.elements[i]->refType.Lock(); lockedType)
             {
-                if (!baseType->isCompatibleWith(lockedType))
+                if (!baseType || (!baseType->isCompatibleWith(lockedType) && !(baseType->isNumeric() && lockedType->isNumeric())))
                 {
+                    const std::string expectedTypeName = baseType ? baseType->toString() : "<unknown>";
                     WIO_LOG_ADD_ERROR(
                         node.elements[i]->location(),
                         "Array elements must be of the same type. Expected '{}', but found '{}'.",
-                        baseType->toString(),
+                        expectedTypeName,
                         lockedType->toString()
                     );
                 }
@@ -1694,67 +1812,141 @@ namespace wio::sema
             }
         }
 
+        if (expectedArrayType)
+        {
+            if (expectedArrayType->arrayKind == ArrayType::ArrayKind::Static &&
+                expectedArrayType->size != node.elements.size())
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Static array expects '{}' elements, but literal provides '{}'.",
+                    expectedArrayType->size,
+                    node.elements.size()
+                );
+            }
+
+            node.refType = expectedArrayLiteralType;
+            return;
+        }
+
         node.refType = Compiler::get().getTypeContext().getOrCreateArrayType(baseType, ArrayType::ArrayKind::Literal, node.elements.size());
     }
     
     void SemanticAnalyzer::visit(DictionaryLiteral& node)
     {
+        Ref<Type> expectedDictionaryLiteralType = nullptr;
+        Ref<DictionaryType> expectedDictionaryType = nullptr;
+        if (currentExpectedExpressionType_)
+        {
+            Ref<Type> expectedType = unwrapAliasType(currentExpectedExpressionType_);
+            if (expectedType && expectedType->kind() == TypeKind::Dictionary)
+            {
+                expectedDictionaryLiteralType = expectedType;
+                expectedDictionaryType = expectedType.AsFast<DictionaryType>();
+            }
+        }
+
         if (node.pairs.empty())
         {
-            if (currentExpectedExpressionType_)
+            if (expectedDictionaryType)
             {
-                Ref<Type> expectedType = unwrapAliasType(currentExpectedExpressionType_);
-                if (expectedType && expectedType->kind() == TypeKind::Dictionary)
+                if (expectedDictionaryType->isOrdered != node.isOrdered)
                 {
-                    auto expectedDictionaryType = expectedType.AsFast<DictionaryType>();
-                    if (expectedDictionaryType->isOrdered != node.isOrdered)
+                    if (node.isOrdered)
                     {
-                        if (node.isOrdered)
-                        {
-                            WIO_LOG_ADD_ERROR(
-                                node.location(),
-                                "Ordered dictionary literal '{< >}' cannot initialize unordered dictionary type '{}'.",
-                                expectedType->toString()
-                            );
-                        }
-                        else
-                        {
-                            WIO_LOG_ADD_ERROR(
-                                node.location(),
-                                "Unordered dictionary literal '{}' cannot initialize ordered dictionary type '{}'. Use '{< >}' syntax instead.",
-                                "{}",
-                                expectedType->toString()
-                            );
-                        }
+                        WIO_LOG_ADD_ERROR(
+                            node.location(),
+                            "Ordered dictionary literal '{< >}' cannot initialize unordered dictionary type '{}'.",
+                            expectedDictionaryType->toString()
+                        );
                     }
-
-                    node.refType = expectedType;
-                    return;
+                    else
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            node.location(),
+                            "Unordered dictionary literal '{}' cannot initialize ordered dictionary type '{}'. Use '{< >}' syntax instead.",
+                            "{}",
+                            expectedDictionaryType->toString()
+                        );
+                    }
                 }
+
+                node.refType = expectedDictionaryLiteralType;
+                return;
             }
 
             node.refType = Compiler::get().getTypeContext().getUnknown();
             return;
         }
 
-        node.pairs[0].first->accept(*this);
-        node.pairs[0].second->accept(*this);
+        if (expectedDictionaryType && expectedDictionaryType->isOrdered != node.isOrdered)
+        {
+            if (node.isOrdered)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Ordered dictionary literal '{< >}' cannot initialize unordered dictionary type '{}'.",
+                    expectedDictionaryType->toString()
+                );
+            }
+            else
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Unordered dictionary literal '{}' cannot initialize ordered dictionary type '{}'. Use '{< >}' syntax instead.",
+                    "{}",
+                    expectedDictionaryType->toString()
+                );
+            }
+        }
 
-        auto keyType = node.pairs[0].first->refType.Lock();
-        auto valType = node.pairs[0].second->refType.Lock();
+        auto analyzeKey = [&](NodePtr<Expression>& expression)
+        {
+            Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
+            currentExpectedExpressionType_ = expectedDictionaryType ? expectedDictionaryType->keyType : previousExpectedExpressionType;
+            expression->accept(*this);
+            currentExpectedExpressionType_ = previousExpectedExpressionType;
+        };
+
+        auto analyzeValue = [&](NodePtr<Expression>& expression)
+        {
+            Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
+            currentExpectedExpressionType_ = expectedDictionaryType ? expectedDictionaryType->valueType : previousExpectedExpressionType;
+            expression->accept(*this);
+            currentExpectedExpressionType_ = previousExpectedExpressionType;
+        };
+
+        analyzeKey(node.pairs[0].first);
+        analyzeValue(node.pairs[0].second);
+
+        auto keyType = expectedDictionaryType ? expectedDictionaryType->keyType : node.pairs[0].first->refType.Lock();
+        auto valType = expectedDictionaryType ? expectedDictionaryType->valueType : node.pairs[0].second->refType.Lock();
+        if (!keyType)
+            keyType = node.pairs[0].first->refType.Lock();
+        if (!valType)
+            valType = node.pairs[0].second->refType.Lock();
 
         for (size_t i = 1; i < node.pairs.size(); ++i)
         {
-            node.pairs[i].first->accept(*this);
-            node.pairs[i].second->accept(*this);
+            analyzeKey(node.pairs[i].first);
+            analyzeValue(node.pairs[i].second);
             
             auto k = node.pairs[i].first->refType.Lock();
             auto v = node.pairs[i].second->refType.Lock();
 
-            if (!keyType->isCompatibleWith(k) || !valType->isCompatibleWith(v))
+            if (!keyType || !valType ||
+                !k || !v ||
+                (!keyType->isCompatibleWith(k) && !(keyType->isNumeric() && k->isNumeric())) ||
+                (!valType->isCompatibleWith(v) && !(valType->isNumeric() && v->isNumeric())))
             {
                 WIO_LOG_ADD_ERROR(node.pairs[i].first->location(), "All keys and values in a dictionary literal must have the same type.");
             }
+        }
+
+        if (expectedDictionaryType)
+        {
+            node.refType = expectedDictionaryLiteralType;
+            return;
         }
 
         node.refType = Compiler::get().getTypeContext().getOrCreateDictionaryType(keyType, valType, node.isOrdered);
@@ -2203,7 +2395,9 @@ namespace wio::sema
                 return std::nullopt;
 
             Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
+            bool previousAllowContextualNumericLiteralTyping = allowContextualNumericLiteralTyping_;
             currentExpectedExpressionType_ = expectedType ? getAutoReadableType(expectedType) : nullptr;
+            allowContextualNumericLiteralTyping_ = !suppressDiagnostics;
 
             if (suppressDiagnostics)
                 Logger::get().beginDiagnosticProbe();
@@ -2212,6 +2406,7 @@ namespace wio::sema
 
             const int32_t suppressedErrors = suppressDiagnostics ? Logger::get().endDiagnosticProbe() : 0;
             currentExpectedExpressionType_ = previousExpectedExpressionType;
+            allowContextualNumericLiteralTyping_ = previousAllowContextualNumericLiteralTyping;
 
             if (suppressDiagnostics && suppressedErrors > 0)
                 return std::nullopt;
@@ -3172,9 +3367,12 @@ namespace wio::sema
         if (node.initializer)
         {
             Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
+            bool previousAllowContextualNumericLiteralTyping = allowContextualNumericLiteralTyping_;
             currentExpectedExpressionType_ = sym->type;
+            allowContextualNumericLiteralTyping_ = true;
             node.initializer->accept(*this);
             currentExpectedExpressionType_ = previousExpectedExpressionType;
+            allowContextualNumericLiteralTyping_ = previousAllowContextualNumericLiteralTyping;
             Ref<Type> initType = node.initializer->refType.Lock();
     
             if (!sym->type || sym->type->isUnknown()) 
@@ -3182,16 +3380,9 @@ namespace wio::sema
                 sym->type = initType;
                 node.name->refType = initType;
             }
-            else if (!sym->type->isCompatibleWith(initType)) 
+            else if (initType && !initType->isUnknown() && !isAssignmentLikeCompatible(sym->type, initType)) 
             {
-                if (sym->type->isNumeric() && initType && initType->isNumeric())
-                {
-                    // No Problem!
-                }
-                else
-                {
-                    WIO_LOG_ADD_ERROR(node.location(), "Type mismatch for '{}'.", node.name->token.value);
-                }
+                WIO_LOG_ADD_ERROR(node.location(), "Type mismatch for '{}'.", node.name->token.value);
             }
         }
     }
@@ -5389,16 +5580,21 @@ namespace wio::sema
         if (node.value)
         {
             Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
+            bool previousAllowContextualNumericLiteralTyping = allowContextualNumericLiteralTyping_;
             currentExpectedExpressionType_ = currentFunctionReturnType_;
+            allowContextualNumericLiteralTyping_ = true;
             node.value->accept(*this);
             currentExpectedExpressionType_ = previousExpectedExpressionType;
+            allowContextualNumericLiteralTyping_ = previousAllowContextualNumericLiteralTyping;
             actualType = node.value->refType.Lock();
         }
 
         if (currentFunctionReturnType_)
         {
             if (!currentFunctionReturnType_->isUnknown() &&
-                !actualType->isCompatibleWith(currentFunctionReturnType_))
+                actualType &&
+                !actualType->isUnknown() &&
+                !isAssignmentLikeCompatible(currentFunctionReturnType_, actualType))
             {
                 WIO_LOG_ADD_ERROR(
                     node.location(),

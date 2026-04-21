@@ -7,7 +7,7 @@ fn Entry() -> i32 {
     console::Write("Std console surface: ");
     console::WriteJoined(numbers, ",");
     console::PrintSpace();
-    console::WriteRepeat("x", 3 fit usize);
+    console::WriteRepeat("x", 3);
     console::PrintSpace();
     console::WriteJoined(letters, "/");
     return 0;

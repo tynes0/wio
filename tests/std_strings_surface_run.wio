@@ -7,10 +7,10 @@ fn Entry() -> i32 {
     let count: i32 = strings::Count(trimmed) fit i32;
     let hasArena = strings::Contains(trimmed, "Arena");
     let arenaIndex: i32 = strings::IndexOf(trimmed, "Arena") fit i32;
-    let slice = strings::Slice(trimmed, 4 fit usize, 5 fit usize);
+    let slice = strings::Slice(trimmed, 4, 5);
     let lastWord = strings::Split(trimmed, " ").Last();
     let reversed = strings::Reversed("abc");
-    let padded = strings::PadLeft("7", 3 fit usize, '0');
+    let padded = strings::PadLeft("7", 3, '0');
 
     let build = strings::Reversed(
         strings::Replace(
@@ -21,11 +21,11 @@ fn Entry() -> i32 {
                             strings::Appended("Wi", "o"),
                             '!'
                         ),
-                        3 fit usize,
+        3,
                         " Arena"
                     ),
-                    3 fit usize,
-                    1 fit usize
+        3,
+        1
                 )
             ),
             "ARENA",

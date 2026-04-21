@@ -92,10 +92,10 @@ realm std {
             }
 
             mut current = parts.First();
-            mut index: usize = 1 fit usize;
+            mut index: usize = 1usize;
             while (index < parts.Count()) {
                 current = Join(current, parts[index]);
-                index += 1 fit usize;
+                index += 1usize;
             }
 
             return current;
@@ -163,7 +163,7 @@ realm std {
             }
 
             while (trimmed.StartsWith("/")) {
-                trimmed = trimmed.Slice(1 fit usize);
+            trimmed = trimmed.Slice(1usize);
             }
 
             if (trimmed == "" or trimmed == ".") {
@@ -180,9 +180,9 @@ realm std {
         fn Ancestor(path: string, levels: usize) -> string {
             mut current = Normalize(path);
             mut remaining = levels;
-            while (remaining > (0 fit usize) and current != "") {
+            while (remaining > 0usize and current != "") {
                 current = ParentPath(current);
-                remaining -= 1 fit usize;
+                remaining -= 1usize;
             }
 
             return current;

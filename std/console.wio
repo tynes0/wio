@@ -41,23 +41,23 @@ realm std {
         }
 
         fn WriteRepeat<T>(value: T, count: usize) -> i32 {
-            mut index: usize = 0 fit usize;
+            mut index: usize = 0usize;
             while (index < count) {
                 let result = Print(value);
                 if (result != 0) {
                     return result;
                 }
 
-                index += 1 fit usize;
+                index += 1usize;
             }
 
             return 0;
         }
 
         fn WriteJoined<T>(values: T[], separator: string) -> i32 {
-            mut index: usize = 0 fit usize;
+            mut index: usize = 0usize;
             while (index < values.Count()) {
-                if (index > (0 fit usize)) {
+                if (index > 0usize) {
                     let separatorResult = Print(separator);
                     if (separatorResult != 0) {
                         return separatorResult;
@@ -69,7 +69,7 @@ realm std {
                     return valueResult;
                 }
 
-                index += 1 fit usize;
+                index += 1usize;
             }
 
             return 0;

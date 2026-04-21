@@ -49,7 +49,7 @@ realm std {
         }
 
         fn FirstOr(value: string, fallback: char) -> char {
-            return value.GetOr(0 fit usize, fallback);
+            return value.GetOr(0usize, fallback);
         }
 
         fn LastOr(value: string, fallback: char) -> char {

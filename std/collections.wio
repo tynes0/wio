@@ -53,7 +53,7 @@ realm std {
         }
 
         fn FirstOr<T>(values: T[], fallback: T) -> T {
-            return values.GetOr(0 fit usize, fallback);
+            return values.GetOr(0usize, fallback);
         }
 
         fn LastOr<T>(values: T[], fallback: T) -> T {

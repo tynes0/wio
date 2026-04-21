@@ -32,13 +32,13 @@ fn Entry() -> i32 {
     assert::ExpectNear(10.0f, 10.05f, 0.1f, "f32 near mismatch");
     assert::ExpectNear(10.0, 10.005, 0.01, "f64 near mismatch");
     assert::ExpectRangeInclusive(7, 1, 9, "i32 range mismatch");
-    assert::ExpectRangeInclusive(7 fit i64, 1 fit i64, 9 fit i64, "i64 range mismatch");
-    assert::ExpectRangeInclusive(1.5f, 1.0f, 2.0f, "f32 range mismatch");
+    assert::ExpectRangeInclusive(7i64, 1i64, 9i64, "i64 range mismatch");
+    assert::ExpectRangeInclusive(1.5f32, 1.0f32, 2.0f32, "f32 range mismatch");
     assert::ExpectRangeInclusive(1.5, 1.0, 2.0, "f64 range mismatch");
 
     assert::ExpectDictHasKey(scores, "hp", "hp should exist");
     assert::ExpectDictMissingKey(scores, "armor", "armor should be missing");
-    assert::ExpectTreeCount(ordered, 2 fit usize, "tree count mismatch");
+    assert::ExpectTreeCount(ordered, 2, "tree count mismatch");
 
     console::Print("Std assert: ok");
     return 0;

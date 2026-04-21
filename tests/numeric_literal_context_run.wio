@@ -1,0 +1,32 @@
+use std::console;
+use std::assert as assert;
+
+fn TakeCount(value: usize) -> usize {
+    return value;
+}
+
+fn TakeWeight(value: f32) -> f32 {
+    return value;
+}
+
+fn Entry() -> i32 {
+    let start: usize = 0;
+    mut next: usize = 1;
+    next = 2;
+
+    let values: usize[] = [1, 2, 3];
+    let scores: Dict<string, usize> = {
+        "hp": 10,
+        "mp": 5
+    };
+    let ordered: Tree<i32, usize> = {< 1: 10, 2: 20 >};
+
+    assert::ExpectEqual(TakeCount(3), 3, "usize argument should use contextual literal typing");
+    assert::ExpectEqual(scores.GetOr("hp", 0), 10, "dictionary fallback should use contextual literal typing");
+    assert::ExpectEqual(ordered.GetOr(2, 0), 20, "tree fallback should use contextual literal typing");
+    assert::ExpectNear(TakeWeight(1.25), 1.25, 0.01, "f32 generic call should use contextual float typing");
+
+    let mp = scores.GetOr("mp", 0);
+    std::console::Print($"Numeric literal context: ${start}/${next}/${values.Count()}/${mp}/${ordered.GetOr(2, 0)}");
+    return 0;
+}

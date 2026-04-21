@@ -1,0 +1,4 @@
+fn Entry() -> i32 {
+    let value: f32 = 1.0e100;
+    return 0;
+}

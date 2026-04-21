@@ -152,12 +152,12 @@ realm std {
 
         fn Sign(value: i64) -> i64 {
             if (value < 0) {
-                return -1 fit i64;
+                return -1i64;
             }
             if (value > 0) {
-                return 1 fit i64;
+                return 1i64;
             }
-            return 0 fit i64;
+            return 0i64;
         }
 
         fn Sign(value: f32) -> i32 {

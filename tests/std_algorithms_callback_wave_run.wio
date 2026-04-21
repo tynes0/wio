@@ -16,9 +16,9 @@ fn Entry() -> i32 {
     let sum = algorithms::Reduce(values, 0, sumReducer);
     let grouped = algorithms::GroupCountBy(values, (value: i32) => value % 3);
 
-    let groupZero: i32 = grouped.GetOr(0, 0 fit usize) fit i32;
-    let groupOne: i32 = grouped.GetOr(1, 0 fit usize) fit i32;
-    let groupTwo: i32 = grouped.GetOr(2, 0 fit usize) fit i32;
+    let groupZero: i32 = grouped.GetOr(0, 0) fit i32;
+    let groupOne: i32 = grouped.GetOr(1, 0) fit i32;
+    let groupTwo: i32 = grouped.GetOr(2, 0) fit i32;
 
     console::Print($"Callback wave: ${evens.Count() fit i32}/${evens.First()}/${evens.Last()}/${doubled.First()}/${doubled.Last()}/${evenCount}/${sum}/${groupZero}/${groupOne}/${groupTwo}");
     return 0;

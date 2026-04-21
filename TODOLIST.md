@@ -264,6 +264,9 @@ The language reference now exists, but it still needs to become a true spec.
       `object` / `component` / `interface` declarations.
 - [ ] Design how variadic generic expansion should interact with overload
       resolution, backend template lowering, and future constraint systems.
+- [ ] Design const-generic / non-type generic parameters for future versions,
+      especially numeric forms such as `Vector<T, N>` and their interaction
+      with static arrays like `[T; N]`.
 
 ---
 

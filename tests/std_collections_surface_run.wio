@@ -2,17 +2,22 @@ use std::collections as collections;
 use std::console as console;
 
 fn Entry() -> i32 {
-    let values: collections::Array<i32> = [3, 1, 4];
+    let values: i32[] = [3, 1, 4];
     let hasFour = collections::Contains(values, 4);
     let first = collections::FirstOr(values, -1);
-    let staged = collections::Inserted(collections::Pushed(values, 2), 1 fit usize, 9);
-    let slice = collections::Slice(staged, 1 fit usize, 2 fit usize);
-    let extended = collections::Extended(staged, [8, 7]);
-    let filled = collections::Filled([1, 2, 3], 5);
-    let sorted = collections::Sorted(values);
-    let joined = collections::Join(["a", "b", "c"], ":");
+    mut staged: i32[] = [3, 1, 4];
+    staged.Push(2);
+    staged.Insert(1, 9);
+    let slice = staged.Slice(1, 2);
+    let extended = staged.Concat([8, 7]);
+    mut filled: i32[] = [1, 2, 3];
+    filled.Fill(5);
+    mut sorted: i32[] = [3, 1, 4];
+    sorted.Sort();
+    let joinedParts: string[] = ["a", "b", "c"];
+    let joined = joinedParts.Join(":");
 
-    let scores: collections::Dictionary<string, i32> = {
+    let scores: Dict<string, i32> = {
         "hp": 7,
         "mana": 3
     };
@@ -21,7 +26,7 @@ fn Entry() -> i32 {
     let keysHaveArmor = collections::Contains(collections::Keys(updatedScores), "armor");
     let scoreCount: i32 = collections::Count(updatedScores) fit i32;
 
-    let bonus: collections::Dictionary<string, i32> = {
+    let bonus: Dict<string, i32> = {
         "shield": 5
     };
 
@@ -30,7 +35,7 @@ fn Entry() -> i32 {
     let trimmedScores = collections::Without(updatedScores, "mana");
     let trimmedCount: i32 = collections::Count(trimmedScores) fit i32;
 
-    let ordered: collections::TreeMap<i32, i32> = {< 1: 10, 3: 30, 5: 50 >};
+    let ordered: Tree<i32, i32> = {< 1: 10, 3: 30, 5: 50 >};
     let floorKey = collections::FloorKeyOr(ordered, 4, -1);
     let orderedCount: i32 = collections::Count(ordered) fit i32;
 

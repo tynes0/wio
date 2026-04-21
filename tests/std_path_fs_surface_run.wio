@@ -27,7 +27,7 @@ fn Entry() -> i32 {
     let segments = path::Segments(relative);
     let lastSegment = collections::LastOr(segments, empty);
     let depth: i32 = path::Depth(relative) fit i32;
-    let parentName = path::FileName(path::Ancestor(absoluteMoved, 1 fit usize));
+    let parentName = path::FileName(path::Ancestor(absoluteMoved, 1));
     let rebuilt = path::AbsoluteFrom(absoluteBase, relative);
     let same = path::Equivalent(absoluteMoved, rebuilt);
 

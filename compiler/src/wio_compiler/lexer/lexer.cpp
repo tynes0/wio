@@ -362,6 +362,7 @@ namespace wio
             }
             else if (suffix == "i8" || suffix == "u8" || suffix == "i16" || suffix == "u16" || 
                      suffix == "i32" || suffix == "u32" || suffix == "i64" || suffix == "u64" || 
+                     suffix == "isize" || suffix == "usize" ||
                      suffix == "isz" || suffix == "usz" || suffix == "i" || suffix == "u")
             {
                 if (isFloat)
