@@ -1048,6 +1048,22 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         --run
     )
 
+    add_wio_backend_failure_test(
+        wio_invalid_backend_linker_missing_symbol
+        "${CMAKE_SOURCE_DIR}/tests/invalid/backend_linker_missing_symbol.wio"
+        "Error \\[backend:linker\\]: Native linker: (undefined reference to|unresolved external symbol|symbol\\(s\\) not found|cannot find)"
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
+    )
+
+    add_wio_backend_failure_test(
+        wio_invalid_backend_compile_error_from_native_source
+        "${CMAKE_SOURCE_DIR}/tests/invalid/backend_compile_error_from_native_source.wio"
+        "Error \\[.*backend_compile_error_source\\.cpp:[0-9]+:[0-9]+\\]: Native C\\+\\+ compiler:"
+        --backend-arg
+        "${CMAKE_SOURCE_DIR}/tests/native/backend_compile_error_source.cpp"
+    )
+
     add_wio_failure_test(
         wio_invalid_cpp_name_native_invalid_symbol
         "${CMAKE_SOURCE_DIR}/tests/invalid/cpp_name_native_invalid_symbol.wio"

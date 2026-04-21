@@ -482,10 +482,20 @@ namespace wio
             Note
         };
 
+        enum class BackendDiagnosticDomain : uint8_t
+        {
+            Unknown,
+            Compiler,
+            Linker,
+            Archiver
+        };
+
         struct BackendDiagnostic
         {
             BackendDiagnosticSeverity severity = BackendDiagnosticSeverity::Error;
+            BackendDiagnosticDomain domain = BackendDiagnosticDomain::Unknown;
             common::Location location;
+            std::string sourceLabel;
             std::string code;
             std::string message;
         };
@@ -535,6 +545,49 @@ namespace wio
             return std::string(value.substr(start, end - start));
         }
 
+        std::string toLowerAscii(std::string_view value)
+        {
+            std::string result(value);
+            std::transform(result.begin(), result.end(), result.begin(), [](unsigned char ch)
+            {
+                return static_cast<char>(std::tolower(ch));
+            });
+            return result;
+        }
+
+        bool looksLikeSourceFilePath(std::string_view value)
+        {
+            if (value.empty())
+                return false;
+
+            const std::string lower = toLowerAscii(trimWhitespace(value));
+            return lower.ends_with(".wio") ||
+                   lower.ends_with(".h") ||
+                   lower.ends_with(".hh") ||
+                   lower.ends_with(".hpp") ||
+                   lower.ends_with(".hxx") ||
+                   lower.ends_with(".c") ||
+                   lower.ends_with(".cc") ||
+                   lower.ends_with(".cpp") ||
+                   lower.ends_with(".cxx") ||
+                   lower.ends_with(".ixx");
+        }
+
+        std::string normalizeDiagnosticFilePath(std::string_view rawPath)
+        {
+            std::string pathText = trimWhitespace(rawPath);
+            if (pathText.empty() || pathText.starts_with("<"))
+                return pathText;
+
+            std::error_code ec;
+            std::filesystem::path path(pathText);
+            std::filesystem::path absolutePath = std::filesystem::absolute(path, ec);
+            if (!ec)
+                return absolutePath.make_preferred().string();
+
+            return path.make_preferred().string();
+        }
+
         std::vector<std::string> splitLines(std::string_view text)
         {
             std::vector<std::string> lines;
@@ -567,11 +620,112 @@ namespace wio
             return BackendDiagnosticSeverity::Error;
         }
 
+        BackendDiagnosticDomain classifyBackendTool(std::string_view toolText)
+        {
+            const std::string lower = toLowerAscii(trimWhitespace(toolText));
+
+            if (lower.find("link") != std::string::npos ||
+                lower.find("collect2") != std::string::npos ||
+                lower.ends_with("ld") ||
+                lower.find("ld.exe") != std::string::npos)
+            {
+                return BackendDiagnosticDomain::Linker;
+            }
+
+            if (lower == "ar" || lower.ends_with("/ar") || lower.ends_with("\\ar") ||
+                lower == "lib" || lower.find("lib.exe") != std::string::npos)
+            {
+                return BackendDiagnosticDomain::Archiver;
+            }
+
+            if (lower.find("clang") != std::string::npos ||
+                lower.find("g++") != std::string::npos ||
+                lower.find("gcc") != std::string::npos ||
+                lower == "cl" || lower.find("cl.exe") != std::string::npos ||
+                looksLikeSourceFilePath(lower))
+            {
+                return BackendDiagnosticDomain::Compiler;
+            }
+
+            return BackendDiagnosticDomain::Unknown;
+        }
+
+        std::string backendDomainLabel(BackendDiagnosticDomain domain)
+        {
+            switch (domain)
+            {
+            case BackendDiagnosticDomain::Compiler:
+                return "backend:compiler";
+            case BackendDiagnosticDomain::Linker:
+                return "backend:linker";
+            case BackendDiagnosticDomain::Archiver:
+                return "backend:archiver";
+            case BackendDiagnosticDomain::Unknown:
+                return "backend";
+            }
+
+            return "backend";
+        }
+
+        std::string backendDomainPrefix(BackendDiagnosticDomain domain)
+        {
+            switch (domain)
+            {
+            case BackendDiagnosticDomain::Compiler:
+                return "Native C++ compiler";
+            case BackendDiagnosticDomain::Linker:
+                return "Native linker";
+            case BackendDiagnosticDomain::Archiver:
+                return "Native archiver";
+            case BackendDiagnosticDomain::Unknown:
+                return "Native backend";
+            }
+
+            return "Native backend";
+        }
+
+        std::string normalizeBackendMessage(BackendDiagnosticDomain domain, std::string_view rawMessage)
+        {
+            std::string message = trimWhitespace(rawMessage);
+
+            if (domain != BackendDiagnosticDomain::Linker)
+                return message;
+
+            static const std::regex linkerPrimaryPatterns[] = {
+                std::regex(R"(^.*?(undefined reference to .*)$)"),
+                std::regex(R"(^.*?(unresolved external symbol .*)$)", std::regex::icase),
+                std::regex(R"(^.*?(multiple definition of .*)$)"),
+                std::regex(R"(^.*?(duplicate symbol .*)$)", std::regex::icase),
+                std::regex(R"(^.*?(cannot find .*)$)", std::regex::icase),
+                std::regex(R"(^.*?(symbol\(s\) not found.*)$)", std::regex::icase)
+            };
+
+            std::smatch match;
+            for (const auto& pattern : linkerPrimaryPatterns)
+            {
+                if (std::regex_match(message, match, pattern))
+                    return trimWhitespace(match[1].str());
+            }
+
+            return message;
+        }
+
+        bool isGenericBackendSummaryMessage(std::string_view message)
+        {
+            const std::string lower = toLowerAscii(trimWhitespace(message));
+            return lower.find("ld returned 1 exit status") != std::string::npos ||
+                   lower.find("linker command failed with exit code") != std::string::npos ||
+                   lower.find("1 unresolved externals") != std::string::npos ||
+                   lower == "compilation terminated.";
+        }
+
         std::optional<BackendDiagnostic> parseBackendDiagnosticLine(std::string_view rawLine)
         {
             static const std::regex gccWithColumnPattern(R"(^(.*):([0-9]+):([0-9]+):\s*(fatal error|error|warning|note):\s*(.*)$)");
             static const std::regex gccWithoutColumnPattern(R"(^(.*):([0-9]+):\s*(fatal error|error|warning|note):\s*(.*)$)");
             static const std::regex msvcPattern(R"(^(.*)\(([0-9]+)(?:,([0-9]+))?\):\s*(fatal error|error|warning|note)(?:\s+([A-Za-z]+[0-9]+))?:\s*(.*)$)");
+            static const std::regex toolSeverityPattern(R"(^(.*?)(?:\s*:\s*|\s+)(fatal error|error|warning|note)(?:\s+([A-Za-z]+[0-9]+))?:\s*(.*)$)");
+            static const std::regex linkerToolPattern(R"(^(.*?(?:ld(?:\.exe)?|collect2|link(?:\.exe)?|LINK))(?:\s*:\s*|\s+)(.*)$)", std::regex::icase);
 
             const std::string line(rawLine);
             std::smatch match;
@@ -579,7 +733,7 @@ namespace wio
             auto buildLocation = [](std::string fileText, const std::string& lineText, const std::string& columnText)
             {
                 common::Location location;
-                location.file = trimWhitespace(fileText);
+                location.file = normalizeDiagnosticFilePath(fileText);
                 location.line = static_cast<uint64_t>(std::stoull(lineText));
                 if (!columnText.empty())
                     location.column = static_cast<uint64_t>(std::stoull(columnText));
@@ -588,29 +742,65 @@ namespace wio
 
             if (std::regex_match(line, match, gccWithColumnPattern))
             {
+                const BackendDiagnosticDomain domain = classifyBackendTool(match[1].str());
                 return BackendDiagnostic{
                     .severity = parseBackendSeverity(match[4].str()),
+                    .domain = domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain,
                     .location = buildLocation(match[1].str(), match[2].str(), match[3].str()),
-                    .message = trimWhitespace(match[5].str())
+                    .message = normalizeBackendMessage(domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain, match[5].str())
                 };
             }
 
             if (std::regex_match(line, match, gccWithoutColumnPattern))
             {
+                const BackendDiagnosticDomain domain = classifyBackendTool(match[1].str());
                 return BackendDiagnostic{
                     .severity = parseBackendSeverity(match[3].str()),
+                    .domain = domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain,
                     .location = buildLocation(match[1].str(), match[2].str(), ""),
-                    .message = trimWhitespace(match[4].str())
+                    .message = normalizeBackendMessage(domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain, match[4].str())
                 };
             }
 
             if (std::regex_match(line, match, msvcPattern))
             {
+                const BackendDiagnosticDomain domain = classifyBackendTool(match[1].str());
                 return BackendDiagnostic{
                     .severity = parseBackendSeverity(match[4].str()),
+                    .domain = domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain,
                     .location = buildLocation(match[1].str(), match[2].str(), match[3].str()),
                     .code = trimWhitespace(match[5].str()),
-                    .message = trimWhitespace(match[6].str())
+                    .message = normalizeBackendMessage(domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain, match[6].str())
+                };
+            }
+
+            if (std::regex_match(line, match, toolSeverityPattern))
+            {
+                const std::string toolText = trimWhitespace(match[1].str());
+                const BackendDiagnosticDomain domain = classifyBackendTool(toolText);
+
+                BackendDiagnostic diagnostic{
+                    .severity = parseBackendSeverity(match[2].str()),
+                    .domain = domain,
+                    .code = trimWhitespace(match[3].str()),
+                    .message = normalizeBackendMessage(domain, match[4].str())
+                };
+
+                if (looksLikeSourceFilePath(toolText))
+                    diagnostic.location.file = normalizeDiagnosticFilePath(toolText);
+                else
+                    diagnostic.sourceLabel = backendDomainLabel(domain);
+
+                return diagnostic;
+            }
+
+            if (std::regex_match(line, match, linkerToolPattern))
+            {
+                return BackendDiagnostic{
+                    .severity = BackendDiagnosticSeverity::Error,
+                    .domain = BackendDiagnosticDomain::Linker,
+                    .sourceLabel = backendDomainLabel(BackendDiagnosticDomain::Linker),
+                    .message = normalizeBackendMessage(BackendDiagnosticDomain::Linker, match[2].str())
                 };
             }
 
@@ -654,37 +844,54 @@ namespace wio
             if (!diagnostic.code.empty())
                 message = diagnostic.code + ": " + message;
 
+            const bool hasLocationLabel = diagnostic.location.hasFile();
+            const std::string label = hasLocationLabel
+                ? diagnostic.location.toDiagnosticString()
+                : (!diagnostic.sourceLabel.empty() ? diagnostic.sourceLabel : backendDomainLabel(diagnostic.domain));
+
             const bool isWioSource = diagnostic.location.file.ends_with(".wio");
-            if (!isWioSource && diagnostic.location.hasFile())
-                message = "Native C++: " + message;
+            if (!isWioSource)
+                message = backendDomainPrefix(diagnostic.domain) + ": " + message;
 
             switch (diagnostic.severity)
             {
             case BackendDiagnosticSeverity::Warning:
-                Logger::get().addWarning("Warning [{}]: {}", diagnostic.location.toDiagnosticString(), message);
+                Logger::get().addWarning("Warning [{}]: {}", label, message);
                 break;
             case BackendDiagnosticSeverity::Note:
-                Logger::get().getLogger().info("Note [{}]: {}", diagnostic.location.toDiagnosticString(), message);
+                Logger::get().getLogger().info("Note [{}]: {}", label, message);
                 break;
             case BackendDiagnosticSeverity::Error:
-                Logger::get().addError("Error [{}]: {}", diagnostic.location.toDiagnosticString(), message);
+                Logger::get().addError("Error [{}]: {}", label, message);
                 break;
             }
         }
 
         void reportBackendCommandFailure(std::string_view summary, int exitCode, const std::string& output)
         {
-            bool emittedStructuredDiagnostics = false;
+            std::vector<BackendDiagnostic> diagnostics;
+            diagnostics.reserve(8);
 
             for (const auto& line : splitLines(output))
             {
                 if (auto diagnostic = parseBackendDiagnosticLine(line); diagnostic.has_value())
-                {
-                    logBackendDiagnostic(*diagnostic);
-                    emittedStructuredDiagnostics = true;
-                }
+                    diagnostics.push_back(std::move(*diagnostic));
             }
 
+            const bool hasSpecificDiagnostics = std::ranges::any_of(diagnostics, [](const BackendDiagnostic& diagnostic)
+            {
+                return !isGenericBackendSummaryMessage(diagnostic.message);
+            });
+
+            for (const auto& diagnostic : diagnostics)
+            {
+                if (hasSpecificDiagnostics && isGenericBackendSummaryMessage(diagnostic.message))
+                    continue;
+
+                logBackendDiagnostic(diagnostic);
+            }
+
+            const bool emittedStructuredDiagnostics = !diagnostics.empty();
             const std::string trimmedOutput = trimWhitespace(output);
             if (!emittedStructuredDiagnostics)
             {

@@ -1,0 +1,9 @@
+use @CppHeader("backend_link_missing_symbol.h");
+
+@Native
+@CppName(backend_link_missing_symbol)
+fn MissingLink() -> i32;
+
+fn Entry() -> i32 {
+    return MissingLink();
+}
