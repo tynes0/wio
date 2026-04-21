@@ -1,4 +1,4 @@
-use std::io as console;
+use std::console as console;
 
 fn Assign<T>(target: ref T, value: T) {
     target = value;

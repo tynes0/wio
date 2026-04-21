@@ -1,5 +1,5 @@
 use std::algorithms as algo;
-use std::io as console;
+use std::console as console;
 
 fn Entry() -> i32 {
     let values: i32[] = [2, 4, 7, 9];

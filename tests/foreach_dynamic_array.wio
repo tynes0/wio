@@ -1,4 +1,4 @@
-use std::io as console;
+use std::console as console;
 
 fn Entry() -> i32 {
     let values = [2, 4, 6];

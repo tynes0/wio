@@ -1,0 +1,8 @@
+use std::console;
+
+fn Entry(args: string[]) -> i32 {
+    std::console::PrintLine("Std direct: hello");
+    std::console::Print("Std direct value: ");
+    std::console::Print(7);
+    return 0;
+}

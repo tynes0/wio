@@ -1,0 +1,14 @@
+use std::console as console;
+
+fn Entry() -> i32 {
+    let numbers: i32[] = [1, 2, 3];
+    let letters: string[] = ["a", "b"];
+
+    console::Write("Std console surface: ");
+    console::WriteJoined(numbers, ",");
+    console::PrintSpace();
+    console::WriteRepeat("x", 3 fit usize);
+    console::PrintSpace();
+    console::WriteJoined(letters, "/");
+    return 0;
+}

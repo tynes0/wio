@@ -1,4 +1,4 @@
-use std::io as console;
+use std::console as console;
 
 type Id<T> = T;
 type Buffer<T> = T[];

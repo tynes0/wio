@@ -1,4 +1,4 @@
-use std::io as console;
+use std::console as console;
 use combat::mathops as mathops;
 
 fn Entry(args: string[]) -> i32 {

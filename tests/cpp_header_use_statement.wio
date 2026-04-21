@@ -1,4 +1,4 @@
-use std::io as console;
+use std::console as console;
 use @CppHeader("native_generic_math.h");
 
 realm ffi {

@@ -1,4 +1,4 @@
-use std::io as console;
+use std::console as console;
 use std::algorithms as algorithms;
 
 fn Entry(args: string[]) -> i32 {

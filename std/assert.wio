@@ -36,6 +36,26 @@ realm std {
             }
         }
 
+        fn Expect(condition: bool, message: string) {
+            Require(condition, message);
+        }
+
+        fn ExpectTrue(condition: bool, message: string) {
+            Expect(condition, message);
+        }
+
+        fn ExpectFalse(condition: bool, message: string) {
+            Expect(not condition, message);
+        }
+
+        fn ExpectEqual<T>(left: T, right: T, message: string) {
+            Equal(left, right, message);
+        }
+
+        fn ExpectNotEqual<T>(left: T, right: T, message: string) {
+            NotEqual(left, right, message);
+        }
+
         fn InRangeInclusive(value: i32, minValue: i32, maxValue: i32, message: string) {
             if (value < minValue or value > maxValue) {
                 Fail(message);
@@ -44,6 +64,167 @@ realm std {
 
         fn InRangeInclusive(value: i64, minValue: i64, maxValue: i64, message: string) {
             if (value < minValue or value > maxValue) {
+                Fail(message);
+            }
+        }
+
+        fn InRangeInclusive(value: f32, minValue: f32, maxValue: f32, message: string) {
+            if (value < minValue or value > maxValue) {
+                Fail(message);
+            }
+        }
+
+        fn InRangeInclusive(value: f64, minValue: f64, maxValue: f64, message: string) {
+            if (value < minValue or value > maxValue) {
+                Fail(message);
+            }
+        }
+
+        fn ExpectRangeInclusive(value: i32, minValue: i32, maxValue: i32, message: string) {
+            InRangeInclusive(value, minValue, maxValue, message);
+        }
+
+        fn ExpectRangeInclusive(value: i64, minValue: i64, maxValue: i64, message: string) {
+            InRangeInclusive(value, minValue, maxValue, message);
+        }
+
+        fn ExpectRangeInclusive(value: f32, minValue: f32, maxValue: f32, message: string) {
+            InRangeInclusive(value, minValue, maxValue, message);
+        }
+
+        fn ExpectRangeInclusive(value: f64, minValue: f64, maxValue: f64, message: string) {
+            InRangeInclusive(value, minValue, maxValue, message);
+        }
+
+        fn ExpectEmpty<T>(values: T[], message: string) {
+            if (not values.Empty()) {
+                Fail(message);
+            }
+        }
+
+        fn ExpectNotEmpty<T>(values: T[], message: string) {
+            if (values.Empty()) {
+                Fail(message);
+            }
+        }
+
+        fn ExpectStringEmpty(value: string, message: string) {
+            if (value != "") {
+                Fail(message);
+            }
+        }
+
+        fn ExpectStringNotEmpty(value: string, message: string) {
+            if (value == "") {
+                Fail(message);
+            }
+        }
+
+        fn ExpectContains<T>(values: T[], target: T, message: string) {
+            if (not values.Contains(target)) {
+                Fail(message);
+            }
+        }
+
+        fn ExpectContains(values: string[], target: string, message: string) {
+            if (not values.Contains(target)) {
+                Fail(message);
+            }
+        }
+
+        fn ExpectNotContains<T>(values: T[], target: T, message: string) {
+            if (values.Contains(target)) {
+                Fail(message);
+            }
+        }
+
+        fn ExpectNotContains(values: string[], target: string, message: string) {
+            if (values.Contains(target)) {
+                Fail(message);
+            }
+        }
+
+        fn ExpectStringContains(value: string, target: string, message: string) {
+            if (not value.Contains(target)) {
+                Fail(message);
+            }
+        }
+
+        fn ExpectStringStartsWith(value: string, prefix: string, message: string) {
+            if (not value.StartsWith(prefix)) {
+                Fail(message);
+            }
+        }
+
+        fn ExpectStringEndsWith(value: string, suffix: string, message: string) {
+            if (not value.EndsWith(suffix)) {
+                Fail(message);
+            }
+        }
+
+        fn ExpectNear(left: f32, right: f32, epsilon: f32, message: string) {
+            mut delta = left - right;
+            if (delta < 0.0f) {
+                delta = -delta;
+            }
+
+            if (delta > epsilon) {
+                Fail(message);
+            }
+        }
+
+        fn ExpectNear(left: f64, right: f64, epsilon: f64, message: string) {
+            mut delta = left - right;
+            if (delta < 0.0) {
+                delta = -delta;
+            }
+
+            if (delta > epsilon) {
+                Fail(message);
+            }
+        }
+
+        fn ExpectSequenceEqual<T>(left: T[], right: T[], message: string) {
+            if (left.Count() != right.Count()) {
+                Fail(message);
+            }
+
+            mut index: usize = 0 fit usize;
+            while (index < left.Count()) {
+                if (left[index] != right[index]) {
+                    Fail(message);
+                }
+
+                index += 1 fit usize;
+            }
+        }
+
+        fn ExpectDictHasKey<K, V>(values: Dict<K, V>, key: K, message: string) {
+            if (not values.ContainsKey(key)) {
+                Fail(message);
+            }
+        }
+
+        fn ExpectDictHasKey<V>(values: Dict<string, V>, key: string, message: string) {
+            if (not values.ContainsKey(key)) {
+                Fail(message);
+            }
+        }
+
+        fn ExpectDictMissingKey<K, V>(values: Dict<K, V>, key: K, message: string) {
+            if (values.ContainsKey(key)) {
+                Fail(message);
+            }
+        }
+
+        fn ExpectDictMissingKey<V>(values: Dict<string, V>, key: string, message: string) {
+            if (values.ContainsKey(key)) {
+                Fail(message);
+            }
+        }
+
+        fn ExpectTreeCount<K, V>(values: Tree<K, V>, expectedCount: usize, message: string) {
+            if (values.Count() != expectedCount) {
                 Fail(message);
             }
         }

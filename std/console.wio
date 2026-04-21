@@ -31,6 +31,60 @@ realm std {
         fn PrintSpace() -> i32 {
             return Print(" ");
         }
+
+        fn Write<T>(value: T) -> i32 {
+            return Print(value);
+        }
+
+        fn WriteLine<T>(value: T) -> i32 {
+            return PrintLine(value);
+        }
+
+        fn WriteRepeat<T>(value: T, count: usize) -> i32 {
+            mut index: usize = 0 fit usize;
+            while (index < count) {
+                let result = Print(value);
+                if (result != 0) {
+                    return result;
+                }
+
+                index += 1 fit usize;
+            }
+
+            return 0;
+        }
+
+        fn WriteJoined<T>(values: T[], separator: string) -> i32 {
+            mut index: usize = 0 fit usize;
+            while (index < values.Count()) {
+                if (index > (0 fit usize)) {
+                    let separatorResult = Print(separator);
+                    if (separatorResult != 0) {
+                        return separatorResult;
+                    }
+                }
+
+                let valueResult = Print(values[index]);
+                if (valueResult != 0) {
+                    return valueResult;
+                }
+
+                index += 1 fit usize;
+            }
+
+            return 0;
+        }
+
+        fn WriteEachLine<T>(values: T[]) -> i32 {
+            for value in values {
+                let result = PrintLine(value);
+                if (result != 0) {
+                    return result;
+                }
+            }
+
+            return 0;
+        }
         
         @Native
         @CppName(wio::runtime::std_console::Input)

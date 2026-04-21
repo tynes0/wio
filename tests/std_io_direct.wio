@@ -1,8 +1,0 @@
-use std::io;
-
-fn Entry(args: string[]) -> i32 {
-    std::io::PrintLine("Std direct: hello");
-    std::io::Print("Std direct value: ");
-    std::io::Print(7);
-    return 0;
-}

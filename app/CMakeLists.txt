@@ -674,8 +674,8 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
-        wio_test_std_io_direct_run
-        "${CMAKE_SOURCE_DIR}/tests/std_io_direct.wio"
+        wio_test_std_console_direct_run
+        "${CMAKE_SOURCE_DIR}/tests/std_console_direct.wio"
         "Std direct: hello\nStd direct value: 7"
         --run
     )
@@ -774,6 +774,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_std_console_surface_run
+        "${CMAKE_SOURCE_DIR}/tests/std_console_surface_run.wio"
+        "Std console surface: 1,2,3 xxx a/b"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_std_algorithms_run
         "${CMAKE_SOURCE_DIR}/tests/std_algorithms_run.wio"
         "Std algorithms: 2/true/false/false/true/false"
@@ -791,6 +798,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_std_algorithms_callback_wave_run
         "${CMAKE_SOURCE_DIR}/tests/std_algorithms_callback_wave_run.wio"
         "Callback wave: 3/2/6/2/12/3/21/2/2/2"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_std_assert_run
+        "${CMAKE_SOURCE_DIR}/tests/std_assert_run.wio"
+        "Std assert: ok"
         --run
     )
 
@@ -1059,7 +1073,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_missing_cpp_header_std_import
         "${CMAKE_SOURCE_DIR}/tests/invalid/missing_cpp_header_std_import.wio"
-        "Native C\\+\\+ header 'missing_std_header_for_test.h' referenced by use @CppHeader in '.*std[\\\\/]testing[\\\\/]missing_cpp_header\\.wio' was not found"
+        "Native C\\+\\+ header 'missing_std_header_for_test.h' referenced by use @CppHeader in '.*std[\\\\/]assert[\\\\/]missing_cpp_header\\.wio' was not found"
     )
 
     add_wio_backend_failure_test(
@@ -1117,7 +1131,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
 
     add_wio_failure_test(
         wio_invalid_missing_link_dir_arg
-        "${CMAKE_SOURCE_DIR}/tests/std_io_direct.wio"
+        "${CMAKE_SOURCE_DIR}/tests/std_console_direct.wio"
         "Link directory '.*missing_link_dir.*' was not found or is not a directory"
         --link-dir
         "${CMAKE_SOURCE_DIR}/tests/missing_link_dir"
@@ -1135,7 +1149,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
 
     add_wio_failure_test(
         wio_invalid_missing_link_library_file_arg
-        "${CMAKE_SOURCE_DIR}/tests/std_io_direct.wio"
+        "${CMAKE_SOURCE_DIR}/tests/std_console_direct.wio"
         "Linked library file '.*missing_link_library\\.lib' was not found"
         --link-lib
         "${CMAKE_SOURCE_DIR}/tests/native/missing_link_library.lib"

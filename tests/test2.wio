@@ -1,4 +1,4 @@
-﻿use std::io;
+use std::console;
 
 interface IDamageable {
     fn TakeDamage(amount: f32);
@@ -25,7 +25,7 @@ component Vector3 {
 @GenerateCtors
 object Entity {
     protected id: i32;
-    protected position: Vector3; // Component, Object'in içinde!
+    protected position: Vector3; // Component, Object'in i�inde!
 
     OnConstruct(id: i32) {
         self.id = id;
@@ -33,7 +33,7 @@ object Entity {
     }
 
     public fn Render() {
-        std::io::Print($"[Entity] Rendering entity ID: ${self.id} at (${self.position.x}, ${self.position.y})");
+        std::console::Print($"[Entity] Rendering entity ID: ${self.id} at (${self.position.x}, ${self.position.y})");
     }
 }
 
@@ -52,12 +52,12 @@ object Boss {
     }
 
     fn Render() {
-        std::io::Print($"[Boss] ${self.name} is looking menacing at (${self.position.x}, ${self.position.y})!");
+        std::console::Print($"[Boss] ${self.name} is looking menacing at (${self.position.x}, ${self.position.y})!");
     }
 
     fn TakeDamage(amount: f32) {
         self.hp -= amount;
-        std::io::Print($"[Boss] ${self.name} took ${amount} damage. Remaining HP: ${self.hp}");
+        std::console::Print($"[Boss] ${self.name} took ${amount} damage. Remaining HP: ${self.hp}");
     }
 
     fn IsDead() -> bool {
@@ -72,22 +72,22 @@ fn ProcessEntity(ent: view Entity) {
 fn ProcessCombat(target: ref IDamageable, dmg: f32) {
     target.TakeDamage(dmg);
     if (target.IsDead()) {
-        std::io::Print("Target is defeated!");
+        std::console::Print("Target is defeated!");
     }
 }
 
 fn Entry(args: string[]) -> i32 {
-    std::io::Print("--- WIO INHERITANCE & REF SYSTEM STRESS TEST ---");
+    std::console::Print("--- WIO INHERITANCE & REF SYSTEM STRESS TEST ---");
 
     mut my_boss = Boss(99, "Gargantua", 1000.0f);
 
-    std::io::Print("1. Direct Virtual Call:");
+    std::console::Print("1. Direct Virtual Call:");
     my_boss.Render(); 
 
-    std::io::Print("\n2. Base Object Polymorphism Call:");
+    std::console::Print("\n2. Base Object Polymorphism Call:");
     ProcessEntity(ref my_boss); 
 
-    std::io::Print("\n3. Interface Polymorphism Call:");
+    std::console::Print("\n3. Interface Polymorphism Call:");
     ProcessCombat(ref my_boss, 350.0f); 
     ProcessCombat(ref my_boss, 700.0f);
 

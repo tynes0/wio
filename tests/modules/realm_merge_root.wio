@@ -1,4 +1,4 @@
-use std::io as console;
+use std::console as console;
 use realm_merge_alpha;
 use realm_merge_beta;
 

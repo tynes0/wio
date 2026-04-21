@@ -1,4 +1,4 @@
-use std::io as console;
+use std::console as console;
 
 type Score = i32;
 type Ordered<K, V> = Tree<K, V>;

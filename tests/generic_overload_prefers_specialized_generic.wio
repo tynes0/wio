@@ -1,4 +1,4 @@
-use std::io as console;
+use std::console as console;
 
 fn Classify<T>(left: T, right: T) -> string {
     return "same";

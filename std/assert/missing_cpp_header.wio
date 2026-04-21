@@ -1,5 +1,5 @@
 realm std {
-    realm testing {
+    realm assert {
         use @CppHeader("missing_std_header_for_test.h");
 
         fn Touch() -> i32 {

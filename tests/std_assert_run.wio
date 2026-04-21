@@ -1,0 +1,45 @@
+use std::console as console;
+use std::assert as assert;
+
+fn Entry() -> i32 {
+    let values: i32[] = [1, 2, 3];
+    let other: i32[] = [1, 2, 3];
+    let empty: i32[] = [];
+
+    let scores: Dict<string, i32> = {
+        "hp": 7,
+        "mana": 3
+    };
+
+    let ordered: Tree<i32, i32> = {< 1: 10, 3: 30 >};
+
+    assert::ExpectTrue(values.Contains(2), "values should contain 2");
+    assert::ExpectFalse(values.Contains(9), "values should not contain 9");
+    assert::ExpectEqual(values.Count() fit i32, 3, "values count mismatch");
+    assert::ExpectNotEqual(values.Count() fit i32, 4, "values count should differ from 4");
+    assert::ExpectContains(values, 3, "values should contain 3");
+    assert::ExpectNotContains(values, 5, "values should not contain 5");
+    assert::ExpectSequenceEqual(values, other, "arrays should match");
+    assert::ExpectEmpty(empty, "empty array should be empty");
+    assert::ExpectNotEmpty(values, "values should not be empty");
+
+    assert::ExpectStringNotEmpty("wio", "string should not be empty");
+    assert::ExpectStringEmpty("", "empty string mismatch");
+    assert::ExpectStringContains("wio arena", "arena", "missing arena");
+    assert::ExpectStringStartsWith("wio arena", "wio", "prefix mismatch");
+    assert::ExpectStringEndsWith("wio arena", "arena", "suffix mismatch");
+
+    assert::ExpectNear(10.0f, 10.05f, 0.1f, "f32 near mismatch");
+    assert::ExpectNear(10.0, 10.005, 0.01, "f64 near mismatch");
+    assert::ExpectRangeInclusive(7, 1, 9, "i32 range mismatch");
+    assert::ExpectRangeInclusive(7 fit i64, 1 fit i64, 9 fit i64, "i64 range mismatch");
+    assert::ExpectRangeInclusive(1.5f, 1.0f, 2.0f, "f32 range mismatch");
+    assert::ExpectRangeInclusive(1.5, 1.0, 2.0, "f64 range mismatch");
+
+    assert::ExpectDictHasKey(scores, "hp", "hp should exist");
+    assert::ExpectDictMissingKey(scores, "armor", "armor should be missing");
+    assert::ExpectTreeCount(ordered, 2 fit usize, "tree count mismatch");
+
+    console::Print("Std assert: ok");
+    return 0;
+}
