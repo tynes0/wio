@@ -2,6 +2,8 @@
 
 #include <dtlog.h>
 
+#include <vector>
+
 #include "general/core.h"
 #include "utility.h"
 
@@ -26,6 +28,10 @@ namespace wio
             {
                 addError(message, std::forward<Args>(args)...);
             }
+            else if (!diagnosticProbeErrorCounts_.empty())
+            {
+                return;
+            }
             else
             {
                 logger_.warning(message, std::forward<Args>(args)...);
@@ -36,6 +42,12 @@ namespace wio
         template <class ...Args>
         void addError(const std::string& message, Args&&... args)
         {
+            if (!diagnosticProbeErrorCounts_.empty())
+            {
+                diagnosticProbeErrorCounts_.back()++;
+                return;
+            }
+
             logger_.error(message, std::forward<Args>(args)...);
             errorCount_++;
         }
@@ -53,6 +65,9 @@ namespace wio
 
         void processTheWarnings();
 
+        void beginDiagnosticProbe();
+        int32_t endDiagnosticProbe();
+
         int32_t getErrorCount() const  { return errorCount_; }
         int32_t getWarningCount() const { return warningCount_; }
     
@@ -62,6 +77,7 @@ namespace wio
         dtlog::logger<> logger_;
         int32_t warningCount_;
         int32_t errorCount_;
+        std::vector<int32_t> diagnosticProbeErrorCounts_;
     };
 }
 

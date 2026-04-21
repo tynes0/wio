@@ -1,0 +1,15 @@
+use std::algorithms as algorithms;
+use std::io as console;
+
+fn Entry() -> i32 {
+    let values: i32[] = [1, 2, 3, 4, 5, 6];
+
+    let evens = algorithms::Filter(values, (value) => value % 2 == 0);
+    let doubled = algorithms::Map(values, (value) => {
+        return value * 2;
+    });
+    let sum = algorithms::Reduce(values, 0, (acc, value) => acc + value);
+
+    console::Print($"Inline callback inference: ${evens.Count() fit i32}/${doubled.Last()}/${sum}");
+    return 0;
+}

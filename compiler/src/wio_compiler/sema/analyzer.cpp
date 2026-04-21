@@ -416,6 +416,119 @@ namespace wio::sema
             }
         }
 
+        void collectGenericParameterInstances(const Ref<Type>& type,
+                                              const std::vector<std::string>& genericParameterNames,
+                                              std::unordered_map<std::string, const Type*>& instances)
+        {
+            Ref<Type> current = unwrapAliasType(type);
+            if (!current)
+                return;
+
+            // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
+            switch (current->kind())
+            {
+            case TypeKind::GenericParameter:
+            {
+                auto genericParam = current.AsFast<GenericParameterType>();
+                if (std::ranges::find(genericParameterNames, genericParam->name) != genericParameterNames.end() &&
+                    !instances.contains(genericParam->name))
+                {
+                    instances.emplace(genericParam->name, current.Get());
+                }
+                return;
+            }
+            case TypeKind::Reference:
+                collectGenericParameterInstances(current.AsFast<ReferenceType>()->referredType, genericParameterNames, instances);
+                return;
+            case TypeKind::Array:
+                collectGenericParameterInstances(current.AsFast<ArrayType>()->elementType, genericParameterNames, instances);
+                return;
+            case TypeKind::Dictionary:
+            {
+                auto dictType = current.AsFast<DictionaryType>();
+                collectGenericParameterInstances(dictType->keyType, genericParameterNames, instances);
+                collectGenericParameterInstances(dictType->valueType, genericParameterNames, instances);
+                return;
+            }
+            case TypeKind::Function:
+            {
+                auto funcType = current.AsFast<FunctionType>();
+                collectGenericParameterInstances(funcType->returnType, genericParameterNames, instances);
+                for (const auto& paramType : funcType->paramTypes)
+                    collectGenericParameterInstances(paramType, genericParameterNames, instances);
+                return;
+            }
+            case TypeKind::Struct:
+            {
+                auto structType = current.AsFast<StructType>();
+                for (const auto& genericArgument : structType->genericArguments)
+                    collectGenericParameterInstances(genericArgument, genericParameterNames, instances);
+                return;
+            }
+            case TypeKind::Alias:
+                collectGenericParameterInstances(current.AsFast<AliasType>()->aliasedType, genericParameterNames, instances);
+                return;
+            default:
+                return;
+            }
+        }
+
+        bool containsGenericParameterInstance(const Ref<Type>& type,
+                                              const std::unordered_map<std::string, const Type*>& instances)
+        {
+            if (instances.empty())
+                return false;
+
+            Ref<Type> current = unwrapAliasType(type);
+            if (!current)
+                return false;
+
+            // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
+            switch (current->kind())
+            {
+            case TypeKind::GenericParameter:
+            {
+                auto genericParam = current.AsFast<GenericParameterType>();
+                if (auto foundInstance = instances.find(genericParam->name); foundInstance != instances.end())
+                    return foundInstance->second == current.Get();
+                return false;
+            }
+            case TypeKind::Reference:
+                return containsGenericParameterInstance(current.AsFast<ReferenceType>()->referredType, instances);
+            case TypeKind::Array:
+                return containsGenericParameterInstance(current.AsFast<ArrayType>()->elementType, instances);
+            case TypeKind::Dictionary:
+            {
+                auto dictType = current.AsFast<DictionaryType>();
+                return containsGenericParameterInstance(dictType->keyType, instances) ||
+                       containsGenericParameterInstance(dictType->valueType, instances);
+            }
+            case TypeKind::Function:
+            {
+                auto funcType = current.AsFast<FunctionType>();
+                if (containsGenericParameterInstance(funcType->returnType, instances))
+                    return true;
+
+                return std::ranges::any_of(funcType->paramTypes, [&](const Ref<Type>& paramType)
+                {
+                    return containsGenericParameterInstance(paramType, instances);
+                });
+            }
+            case TypeKind::Struct:
+            {
+                auto structType = current.AsFast<StructType>();
+                return std::ranges::any_of(structType->genericArguments, [&](const Ref<Type>& genericArgument)
+                {
+                    return containsGenericParameterInstance(genericArgument, instances);
+                });
+            }
+            case TypeKind::Alias:
+                return containsGenericParameterInstance(current.AsFast<AliasType>()->aliasedType, instances);
+            default:
+                return false;
+            }
+        }
+
         Ref<Type> instantiateGenericType(const Ref<Type>& type, const std::unordered_map<std::string, Ref<Type>>& bindings);
 
         Ref<Type> instantiateGenericStructType(const Ref<StructType>& structType,
@@ -2022,13 +2135,6 @@ namespace wio::sema
 
         useExplicitFunctionTypeArguments = !isConstructorCall && !explicitTypeArguments.empty();
 
-        std::vector<Ref<Type>> argTypes;
-        for (auto& arg : node.arguments)
-        {
-            arg->accept(*this);
-            argTypes.push_back(arg->refType.Lock());
-        }
-
         auto isSafeRefCast = [&](const Ref<Type>& dest, const Ref<Type>& src) -> bool
         {
             if (dest && src && dest->kind() == TypeKind::Reference && src->kind() == TypeKind::Reference)
@@ -2070,6 +2176,156 @@ namespace wio::sema
 
             return expectedTarget->isCompatibleWith(resolvedSrc) ||
                    isTypeDerivedFrom(resolvedSrc, expectedTarget);
+        };
+
+        auto isContextSensitiveArgument = [&](const NodePtr<Expression>& argument) -> bool
+        {
+            if (!argument)
+                return false;
+
+            if (argument->is<LambdaExpression>())
+                return true;
+
+            if (auto* arrayLiteral = argument->as<ArrayLiteral>())
+                return arrayLiteral->elements.empty();
+
+            if (auto* dictionaryLiteral = argument->as<DictionaryLiteral>())
+                return dictionaryLiteral->pairs.empty();
+
+            return false;
+        };
+
+        auto analyzeArgumentWithExpectedType = [&](const NodePtr<Expression>& argument,
+                                                   const Ref<Type>& expectedType,
+                                                   bool suppressDiagnostics) -> std::optional<Ref<Type>>
+        {
+            if (!argument)
+                return std::nullopt;
+
+            Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
+            currentExpectedExpressionType_ = expectedType ? getAutoReadableType(expectedType) : nullptr;
+
+            if (suppressDiagnostics)
+                Logger::get().beginDiagnosticProbe();
+
+            argument->accept(*this);
+
+            const int32_t suppressedErrors = suppressDiagnostics ? Logger::get().endDiagnosticProbe() : 0;
+            currentExpectedExpressionType_ = previousExpectedExpressionType;
+
+            if (suppressDiagnostics && suppressedErrors > 0)
+                return std::nullopt;
+
+            Ref<Type> analyzedType = argument->refType.Lock();
+            if (!analyzedType)
+                return std::nullopt;
+
+            if (suppressDiagnostics && analyzedType->isUnknown())
+                return std::nullopt;
+
+            return analyzedType;
+        };
+
+        auto analyzeArgumentsForResolvedFunctionType = [&](const Ref<FunctionType>& functionType,
+                                                           bool suppressDiagnostics,
+                                                           bool requireExactArity) -> std::optional<std::vector<Ref<Type>>>
+        {
+            if (!functionType)
+                return std::nullopt;
+
+            if (requireExactArity && functionType->paramTypes.size() != node.arguments.size())
+                return std::nullopt;
+
+            std::vector<Ref<Type>> resolvedArgumentTypes;
+            resolvedArgumentTypes.reserve(node.arguments.size());
+
+            for (size_t i = 0; i < node.arguments.size(); ++i)
+            {
+                Ref<Type> expectedType = nullptr;
+                if (i < functionType->paramTypes.size())
+                    expectedType = functionType->paramTypes[i];
+
+                auto analyzedType = analyzeArgumentWithExpectedType(node.arguments[i], expectedType, suppressDiagnostics);
+                if (!analyzedType.has_value())
+                    return std::nullopt;
+
+                resolvedArgumentTypes.push_back(*analyzedType);
+            }
+
+            return resolvedArgumentTypes;
+        };
+
+        auto scoreResolvedCall = [&](const Ref<FunctionType>& functionType,
+                                     const std::vector<Ref<Type>>& actualArgumentTypes,
+                                     bool isGenericCandidate,
+                                     size_t genericParameterCount) -> std::optional<int>
+        {
+            if (!functionType || functionType->paramTypes.size() != actualArgumentTypes.size())
+                return std::nullopt;
+
+            int currentScore = 0;
+            for (size_t i = 0; i < actualArgumentTypes.size(); ++i)
+            {
+                auto dest = functionType->paramTypes[i];
+                const auto& src = actualArgumentTypes[i];
+
+                if (dest->isCompatibleWith(src) || (dest->isNumeric() && src->isNumeric()))
+                {
+                    if (dest->kind() == TypeKind::Primitive && src->kind() == TypeKind::Primitive &&
+                        dest.AsFast<PrimitiveType>()->name == src.AsFast<PrimitiveType>()->name)
+                    {
+                        currentScore += 1000;
+                    }
+                    else if (dest->kind() == TypeKind::Primitive && src->kind() == TypeKind::Primitive)
+                    {
+                        currentScore += 100;
+                        auto destName = dest.AsFast<PrimitiveType>()->name;
+                        auto srcName = src.AsFast<PrimitiveType>()->name;
+                        bool destIsUn = destName.starts_with('u');
+                        bool srcIsUn = srcName.starts_with('u');
+                        bool destIsInt = destName.starts_with('i');
+                        bool srcIsInt = srcName.starts_with('i');
+                        bool destIsFlt = destName.starts_with('f');
+                        bool srcIsFlt = srcName.starts_with('f');
+
+                        if ((destIsUn && srcIsUn) || (destIsInt && srcIsInt) || (destIsFlt && srcIsFlt))
+                            currentScore += 50;
+
+                        auto getSize = [](const std::string& s) -> int
+                        {
+                            if (s.ends_with("8")) return 1;
+                            if (s.ends_with("16")) return 2;
+                            if (s.ends_with("32")) return 4;
+                            if (s.ends_with("64") || s == "isize" || s == "usize") return 8;
+                            return 4;
+                        };
+
+                        int sizeDiff = getSize(destName) - getSize(srcName);
+                        if (sizeDiff >= 0) currentScore += (10 - sizeDiff);
+                    }
+                    else
+                    {
+                        currentScore += 10;
+                    }
+                }
+                else if (isImplicitObjectViewBridge(dest, src))
+                {
+                    currentScore += 9;
+                }
+                else if (isSafeRefCast(dest, src))
+                {
+                    currentScore += 5;
+                }
+                else
+                {
+                    return std::nullopt;
+                }
+            }
+
+            if (isGenericCandidate)
+                currentScore -= static_cast<int>(std::max<size_t>(1, genericParameterCount));
+
+            return currentScore;
         };
 
         std::vector<Ref<Symbol>> candidateSymbols;
@@ -2189,75 +2445,6 @@ namespace wio::sema
                 return false;
             };
 
-            auto scoreResolvedCall = [&](const Ref<FunctionType>& functionType, bool isGenericCandidate, size_t genericParameterCount) -> std::optional<int>
-            {
-                if (!functionType || functionType->paramTypes.size() != argTypes.size())
-                    return std::nullopt;
-
-                int currentScore = 0;
-                for (size_t i = 0; i < argTypes.size(); ++i)
-                {
-                    auto dest = functionType->paramTypes[i];
-                    const auto& src = argTypes[i];
-
-                    if (dest->isCompatibleWith(src) || (dest->isNumeric() && src->isNumeric()))
-                    {
-                        if (dest->kind() == TypeKind::Primitive && src->kind() == TypeKind::Primitive && 
-                            dest.AsFast<PrimitiveType>()->name == src.AsFast<PrimitiveType>()->name)
-                        {
-                            currentScore += 1000; 
-                        }
-                        else if (dest->kind() == TypeKind::Primitive && src->kind() == TypeKind::Primitive)
-                        {
-                            currentScore += 100;
-                            auto destName = dest.AsFast<PrimitiveType>()->name;
-                            auto srcName = src.AsFast<PrimitiveType>()->name;
-                            bool destIsUn = destName.starts_with('u');
-                            bool srcIsUn = srcName.starts_with('u');
-                            bool destIsInt = destName.starts_with('i');
-                            bool srcIsInt = srcName.starts_with('i');
-                            bool destIsFlt = destName.starts_with('f');
-                            bool srcIsFlt = srcName.starts_with('f');
-
-                            if ((destIsUn && srcIsUn) || (destIsInt && srcIsInt) || (destIsFlt && srcIsFlt)) currentScore += 50;
-
-                            auto getSize = [](const std::string& s) -> int
-                            {
-                                if (s.ends_with("8")) return 1;
-                                if (s.ends_with("16")) return 2;
-                                if (s.ends_with("32")) return 4;
-                                if (s.ends_with("64") || s == "isize" || s == "usize") return 8;
-                                return 4;
-                            };
-
-                            int sizeDiff = getSize(destName) - getSize(srcName);
-                            if (sizeDiff >= 0) currentScore += (10 - sizeDiff); 
-                        }
-                        else
-                        {
-                            currentScore += 10;
-                        }
-                    }
-                    else if (isImplicitObjectViewBridge(dest, src))
-                    {
-                        currentScore += 9;
-                    }
-                    else if (isSafeRefCast(dest, src)) 
-                    {
-                        currentScore += 5; 
-                    }
-                    else
-                    {
-                        return std::nullopt;
-                    }
-                }
-
-                if (isGenericCandidate)
-                    currentScore -= static_cast<int>(std::max<size_t>(1, genericParameterCount));
-
-                return currentScore;
-            };
-
             bool rejectedByInstantiationWhitelist = false;
             std::string rejectedInstantiationFunctionName;
             std::string rejectedInstantiationSignature;
@@ -2280,13 +2467,22 @@ namespace wio::sema
                     resolvedFunctionType = instantiateGenericType(resolvedFunctionType, constructorGenericBindings);
 
                 auto declaredFunctionType = resolvedFunctionType.AsFast<FunctionType>();
+                if (!declaredFunctionType || declaredFunctionType->paramTypes.size() != node.arguments.size())
+                    return std::nullopt;
+
                 const std::vector<std::string>& activeGenericParameterNames =
                     isConstructorCall ? constructorGenericParameterNames : overload->genericParameterNames;
                 bool isGenericCandidate = containsGenericParameterType(resolvedFunctionType);
                 if (useExplicitFunctionTypeArguments && !isGenericCandidate)
                     return std::nullopt;
 
+                std::unordered_map<std::string, const Type*> activeGenericParameterInstances;
+                if (isGenericCandidate)
+                    collectGenericParameterInstances(resolvedFunctionType, activeGenericParameterNames, activeGenericParameterInstances);
+
                 std::unordered_map<std::string, Ref<Type>> bindings;
+                std::vector<Ref<Type>> candidateArgTypes(node.arguments.size());
+                std::vector<bool> analyzedArguments(node.arguments.size(), false);
 
                 if (isGenericCandidate)
                 {
@@ -2303,21 +2499,72 @@ namespace wio::sema
                             bindings.emplace(activeGenericParameterNames[i], explicitTypeArguments[i]);
                         }
                     }
+                }
 
-                    if (bindings.empty())
+                auto getExpectedParameterType = [&](size_t index) -> Ref<Type>
+                {
+                    Ref<Type> expectedParameterType = declaredFunctionType->paramTypes[index];
+                    if (!bindings.empty())
+                        expectedParameterType = instantiateGenericType(expectedParameterType, bindings);
+                    return expectedParameterType;
+                };
+
+                for (size_t i = 0; i < node.arguments.size(); ++i)
+                {
+                    Ref<Type> expectedParameterType = getExpectedParameterType(i);
+                    bool shouldDeferArgument =
+                        isGenericCandidate &&
+                        isContextSensitiveArgument(node.arguments[i]) &&
+                        containsNamedGenericParameterType(expectedParameterType, activeGenericParameterNames);
+
+                    if (shouldDeferArgument)
+                        continue;
+
+                    auto analyzedType = analyzeArgumentWithExpectedType(node.arguments[i], expectedParameterType, true);
+                    if (!analyzedType.has_value())
+                        return std::nullopt;
+
+                    candidateArgTypes[i] = *analyzedType;
+                    analyzedArguments[i] = true;
+
+                    if (isGenericCandidate &&
+                        !deduceGenericBindings(expectedParameterType, candidateArgTypes[i], bindings))
                     {
-                        for (size_t i = 0; i < argTypes.size(); ++i)
-                        {
-                            if (!deduceGenericBindings(declaredFunctionType->paramTypes[i], argTypes[i], bindings))
-                                return std::nullopt;
-                        }
+                        return std::nullopt;
                     }
+                }
 
+                for (size_t i = 0; i < node.arguments.size(); ++i)
+                {
+                    if (analyzedArguments[i])
+                        continue;
+
+                    Ref<Type> expectedParameterType = getExpectedParameterType(i);
+                    auto analyzedType = analyzeArgumentWithExpectedType(node.arguments[i], expectedParameterType, true);
+                    if (!analyzedType.has_value())
+                        return std::nullopt;
+
+                    candidateArgTypes[i] = *analyzedType;
+                    analyzedArguments[i] = true;
+
+                    if (isGenericCandidate &&
+                        !deduceGenericBindings(expectedParameterType, candidateArgTypes[i], bindings))
+                    {
+                        return std::nullopt;
+                    }
+                }
+
+                if (std::ranges::any_of(analyzedArguments, [](bool analyzed) { return !analyzed; }))
+                    return std::nullopt;
+
+                if (isGenericCandidate)
+                {
                     for (const auto& genericParameterName : activeGenericParameterNames)
                     {
                         if (!bindings.contains(genericParameterName) ||
                             !bindings.at(genericParameterName) ||
-                            bindings.at(genericParameterName)->isUnknown())
+                            bindings.at(genericParameterName)->isUnknown() ||
+                            containsGenericParameterInstance(bindings.at(genericParameterName), activeGenericParameterInstances))
                         {
                             return std::nullopt;
                         }
@@ -2363,6 +2610,7 @@ namespace wio::sema
 
                 if (auto score = scoreResolvedCall(
                         resolvedFunctionType.AsFast<FunctionType>(),
+                        candidateArgTypes,
                         isGenericCandidate,
                         activeGenericParameterNames.size()
                     ); score.has_value())
@@ -2453,7 +2701,17 @@ namespace wio::sema
                 structReturnType = instantiateGenericStructType(constructorStructType, deducedGenericArguments);
                 node.callee->refType = structReturnType;
             }
-            
+
+            if (auto resolvedArgumentTypes = analyzeArgumentsForResolvedFunctionType(
+                    bestMatch->functionType.AsFast<FunctionType>(),
+                    false,
+                    false
+                ); !resolvedArgumentTypes.has_value())
+            {
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+
             node.refType = isConstructorCall ? structReturnType : bestMatch->functionType.AsFast<FunctionType>()->returnType;
             return; 
         }
@@ -2462,50 +2720,6 @@ namespace wio::sema
         if (auto* memberAccess = node.callee->as<MemberAccessExpression>();
             memberAccess && !memberAccess->intrinsicOverloadMembers.empty())
         {
-            auto scoreIntrinsicOverload = [&](const Ref<FunctionType>& functionType) -> std::optional<int>
-            {
-                if (!functionType || functionType->paramTypes.size() != argTypes.size())
-                    return std::nullopt;
-
-                int currentScore = 0;
-                for (size_t i = 0; i < argTypes.size(); ++i)
-                {
-                    auto dest = functionType->paramTypes[i];
-                    const auto& src = argTypes[i];
-
-                    if (dest->isCompatibleWith(src) || (dest->isNumeric() && src->isNumeric()))
-                    {
-                        if (dest->kind() == TypeKind::Primitive && src->kind() == TypeKind::Primitive &&
-                            dest.AsFast<PrimitiveType>()->name == src.AsFast<PrimitiveType>()->name)
-                        {
-                            currentScore += 1000;
-                        }
-                        else if (dest->kind() == TypeKind::Primitive && src->kind() == TypeKind::Primitive)
-                        {
-                            currentScore += 100;
-                        }
-                        else
-                        {
-                            currentScore += 10;
-                        }
-                    }
-                    else if (isImplicitObjectViewBridge(dest, src))
-                    {
-                        currentScore += 9;
-                    }
-                    else if (isSafeRefCast(dest, src))
-                    {
-                        currentScore += 5;
-                    }
-                    else
-                    {
-                        return std::nullopt;
-                    }
-                }
-
-                return currentScore;
-            };
-
             std::optional<size_t> bestIndex;
             std::optional<int> bestScore;
             bool isAmbiguous = false;
@@ -2516,7 +2730,15 @@ namespace wio::sema
                 if (!overloadType || overloadType->kind() != TypeKind::Function)
                     continue;
 
-                auto score = scoreIntrinsicOverload(overloadType.AsFast<FunctionType>());
+                auto overloadArgumentTypes = analyzeArgumentsForResolvedFunctionType(
+                    overloadType.AsFast<FunctionType>(),
+                    true,
+                    true
+                );
+                if (!overloadArgumentTypes.has_value())
+                    continue;
+
+                auto score = scoreResolvedCall(overloadType.AsFast<FunctionType>(), *overloadArgumentTypes, false, 0);
                 if (!score.has_value())
                     continue;
 
@@ -2550,6 +2772,16 @@ namespace wio::sema
             memberAccess->refType = memberAccess->intrinsicOverloadTypes[*bestIndex].Lock();
             node.callee->refType = memberAccess->refType;
             calleeType = memberAccess->refType.Lock();
+
+            if (auto resolvedArgumentTypes = analyzeArgumentsForResolvedFunctionType(
+                    calleeType.AsFast<FunctionType>(),
+                    false,
+                    false
+                ); !resolvedArgumentTypes.has_value())
+            {
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
 
             if (isMutatingIntrinsicMember(memberAccess->intrinsicMember) && !canMutateIntrinsicReceiver(memberAccess->object))
             {
@@ -2587,6 +2819,18 @@ namespace wio::sema
         }
 
         auto funcType = calleeType.AsFast<FunctionType>();
+        std::vector<Ref<Type>> argTypes;
+        if (auto resolvedArgumentTypes = analyzeArgumentsForResolvedFunctionType(funcType, false, false);
+            resolvedArgumentTypes.has_value())
+        {
+            argTypes = std::move(*resolvedArgumentTypes);
+        }
+        else
+        {
+            node.refType = Compiler::get().getTypeContext().getUnknown();
+            return;
+        }
+
         if (argTypes.size() != funcType->paramTypes.size())
             WIO_LOG_ADD_ERROR(node.location(), "Function expects '{}' arguments, but got '{}'.", funcType->paramTypes.size(), argTypes.size());
         
@@ -2643,6 +2887,12 @@ namespace wio::sema
         if (expectedFunctionType && expectedFunctionType->paramTypes.size() != node.parameters.size())
             expectedFunctionType = nullptr;
 
+        const bool shouldEnforceExpectedReturnType =
+            node.returnType ||
+            (expectedFunctionType &&
+             expectedFunctionType->returnType &&
+             !containsGenericParameterType(expectedFunctionType->returnType));
+
         enterScope(ScopeKind::Function);
         Ref<Type> previousFunctionReturnType = currentFunctionReturnType_;
 
@@ -2678,23 +2928,25 @@ namespace wio::sema
             node.returnType->accept(*this);
             retType = node.returnType->refType.Lock();
         }
-        else if (expectedFunctionType)
+        else if (shouldEnforceExpectedReturnType && expectedFunctionType)
         {
             retType = expectedFunctionType->returnType;
         }
 
-        currentFunctionReturnType_ = retType;
+        currentFunctionReturnType_ = shouldEnforceExpectedReturnType
+            ? retType
+            : Compiler::get().getTypeContext().getUnknown();
 
         if (node.body)
         {
             Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
-            if (node.body->is<ExpressionStatement>())
+            if (node.body->is<ExpressionStatement>() && shouldEnforceExpectedReturnType)
                 currentExpectedExpressionType_ = retType;
 
             node.body->accept(*this);
             currentExpectedExpressionType_ = previousExpectedExpressionType;
             
-            if (!node.returnType && !expectedFunctionType)
+            if (!node.returnType && !shouldEnforceExpectedReturnType)
             {
                 if (node.body->is<ExpressionStatement>())
                 {
@@ -2717,7 +2969,7 @@ namespace wio::sema
                     }
                 }
             }
-            else if (!node.returnType && expectedFunctionType && node.body->is<ExpressionStatement>())
+            else if (!node.returnType && shouldEnforceExpectedReturnType && node.body->is<ExpressionStatement>())
             {
                 Ref<Type> actualReturnType = node.body->as<ExpressionStatement>()->expression->refType.Lock();
                 if (actualReturnType &&
@@ -4868,7 +5120,8 @@ namespace wio::sema
 
         if (currentFunctionReturnType_)
         {
-            if (!actualType->isCompatibleWith(currentFunctionReturnType_))
+            if (!currentFunctionReturnType_->isUnknown() &&
+                !actualType->isCompatibleWith(currentFunctionReturnType_))
             {
                 WIO_LOG_ADD_ERROR(
                     node.location(),

@@ -40,6 +40,21 @@ namespace wio
         }
     }
 
+    void Logger::beginDiagnosticProbe()
+    {
+        diagnosticProbeErrorCounts_.push_back(0);
+    }
+
+    int32_t Logger::endDiagnosticProbe()
+    {
+        if (diagnosticProbeErrorCounts_.empty())
+            return 0;
+
+        const int32_t errorCount = diagnosticProbeErrorCounts_.back();
+        diagnosticProbeErrorCounts_.pop_back();
+        return errorCount;
+    }
+
     bool Logger::areTheWarningsBeingTreatedAsErrors()
     {
         return Compiler::get().getFlags().get_WarnAsError();

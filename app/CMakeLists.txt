@@ -729,6 +729,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_inline_callback_inference_run
+        "${CMAKE_SOURCE_DIR}/tests/inline_callback_inference_run.wio"
+        "Inline callback inference: 3/12/21"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_generic_function_identity_run
         "${CMAKE_SOURCE_DIR}/tests/generic_function_identity.wio"
         "Generic values: 42, wio"
