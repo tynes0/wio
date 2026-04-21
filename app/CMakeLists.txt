@@ -1044,7 +1044,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_backend_failure_test(
         wio_invalid_backend_cpp_line_mapping_native_name
         "${CMAKE_SOURCE_DIR}/tests/invalid/backend_cpp_line_mapping_native_name.wio"
-        "backend_cpp_line_mapping_native_name\\.wio(:|\\()"
+        "Error \\[.*backend_cpp_line_mapping_native_name\\.wio:4:12\\]:"
         --run
     )
 
@@ -1257,7 +1257,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_generic_explicit_argument_count_mismatch
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_explicit_argument_count_mismatch.wio"
-        "No matching function/constructor overload found"
+        "Error \\[.*generic_explicit_argument_count_mismatch\\.wio:2:36\\]: No matching function/constructor overload found"
     )
 
     add_wio_failure_test(

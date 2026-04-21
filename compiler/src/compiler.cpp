@@ -3,11 +3,13 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <cstdio>
 #include <filesystem>
-#include <system_error>
 #include <optional>
-#include <string_view>
+#include <regex>
 #include <sstream>
+#include <string_view>
+#include <system_error>
 #include <unordered_set>
 #include <argonaut.h>
 
@@ -17,6 +19,7 @@
 #include <mach-o/dyld.h>
 #include <unistd.h>
 #else
+#include <sys/wait.h>
 #include <unistd.h>
 #endif
 
@@ -464,6 +467,256 @@ namespace wio
                     cmd << "-l" << linkLibrary;
                 }
             }
+        }
+
+        struct CommandResult
+        {
+            int exitCode = EXIT_FAILURE;
+            std::string output;
+        };
+
+        enum class BackendDiagnosticSeverity : uint8_t
+        {
+            Error,
+            Warning,
+            Note
+        };
+
+        struct BackendDiagnostic
+        {
+            BackendDiagnosticSeverity severity = BackendDiagnosticSeverity::Error;
+            common::Location location;
+            std::string code;
+            std::string message;
+        };
+
+        CommandResult runCommandCaptureOutput(const std::string& command)
+        {
+            CommandResult result;
+            const std::string redirectedCommand = command + " 2>&1";
+
+#if defined(_WIN32)
+            FILE* pipe = _popen(redirectedCommand.c_str(), "r");
+#else
+            FILE* pipe = popen(redirectedCommand.c_str(), "r");
+#endif
+            if (pipe == nullptr)
+            {
+                result.output = "Failed to start backend command.";
+                return result;
+            }
+
+            std::string buffer(4096, '\0');
+            while (std::fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr)
+                result.output += buffer.data();
+
+#if defined(_WIN32)
+            result.exitCode = _pclose(pipe);
+#else
+            const int closeResult = pclose(pipe);
+            result.exitCode = closeResult;
+            if (closeResult != -1 && WIFEXITED(closeResult))
+                result.exitCode = WEXITSTATUS(closeResult);
+#endif
+
+            return result;
+        }
+
+        std::string trimWhitespace(std::string_view value)
+        {
+            size_t start = 0;
+            while (start < value.size() && std::isspace(static_cast<unsigned char>(value[start])))
+                ++start;
+
+            size_t end = value.size();
+            while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1])))
+                --end;
+
+            return std::string(value.substr(start, end - start));
+        }
+
+        std::vector<std::string> splitLines(std::string_view text)
+        {
+            std::vector<std::string> lines;
+            size_t start = 0;
+            while (start < text.size())
+            {
+                size_t end = text.find('\n', start);
+                if (end == std::string_view::npos)
+                    end = text.size();
+
+                std::string line(text.substr(start, end - start));
+                if (!line.empty() && line.back() == '\r')
+                    line.pop_back();
+
+                lines.push_back(std::move(line));
+                start = end + 1;
+            }
+
+            return lines;
+        }
+
+        BackendDiagnosticSeverity parseBackendSeverity(const std::string& severityText)
+        {
+            if (severityText == "warning")
+                return BackendDiagnosticSeverity::Warning;
+
+            if (severityText == "note")
+                return BackendDiagnosticSeverity::Note;
+
+            return BackendDiagnosticSeverity::Error;
+        }
+
+        std::optional<BackendDiagnostic> parseBackendDiagnosticLine(std::string_view rawLine)
+        {
+            static const std::regex gccWithColumnPattern(R"(^(.*):([0-9]+):([0-9]+):\s*(fatal error|error|warning|note):\s*(.*)$)");
+            static const std::regex gccWithoutColumnPattern(R"(^(.*):([0-9]+):\s*(fatal error|error|warning|note):\s*(.*)$)");
+            static const std::regex msvcPattern(R"(^(.*)\(([0-9]+)(?:,([0-9]+))?\):\s*(fatal error|error|warning|note)(?:\s+([A-Za-z]+[0-9]+))?:\s*(.*)$)");
+
+            const std::string line(rawLine);
+            std::smatch match;
+
+            auto buildLocation = [](std::string fileText, const std::string& lineText, const std::string& columnText)
+            {
+                common::Location location;
+                location.file = trimWhitespace(fileText);
+                location.line = static_cast<uint64_t>(std::stoull(lineText));
+                if (!columnText.empty())
+                    location.column = static_cast<uint64_t>(std::stoull(columnText));
+                return location;
+            };
+
+            if (std::regex_match(line, match, gccWithColumnPattern))
+            {
+                return BackendDiagnostic{
+                    .severity = parseBackendSeverity(match[4].str()),
+                    .location = buildLocation(match[1].str(), match[2].str(), match[3].str()),
+                    .message = trimWhitespace(match[5].str())
+                };
+            }
+
+            if (std::regex_match(line, match, gccWithoutColumnPattern))
+            {
+                return BackendDiagnostic{
+                    .severity = parseBackendSeverity(match[3].str()),
+                    .location = buildLocation(match[1].str(), match[2].str(), ""),
+                    .message = trimWhitespace(match[4].str())
+                };
+            }
+
+            if (std::regex_match(line, match, msvcPattern))
+            {
+                return BackendDiagnostic{
+                    .severity = parseBackendSeverity(match[4].str()),
+                    .location = buildLocation(match[1].str(), match[2].str(), match[3].str()),
+                    .code = trimWhitespace(match[5].str()),
+                    .message = trimWhitespace(match[6].str())
+                };
+            }
+
+            return std::nullopt;
+        }
+
+        bool isIgnorableBackendOutputLine(std::string_view rawLine)
+        {
+            const std::string line = trimWhitespace(rawLine);
+            if (line.empty())
+                return true;
+
+            if (line.starts_with("^") || line.starts_with("|") || line.starts_with("~"))
+                return true;
+
+            if (const size_t pipePos = line.find('|'); pipePos != std::string::npos)
+            {
+                bool allDigitsBeforePipe = pipePos > 0;
+                for (size_t i = 0; i < pipePos; ++i)
+                {
+                    if (!std::isspace(static_cast<unsigned char>(line[i])) && !std::isdigit(static_cast<unsigned char>(line[i])))
+                    {
+                        allDigitsBeforePipe = false;
+                        break;
+                    }
+                }
+
+                if (allDigitsBeforePipe)
+                    return true;
+            }
+
+            return line.find("In function") != std::string::npos ||
+                   line.find("In member function") != std::string::npos ||
+                   line.find("required from") != std::string::npos ||
+                   line == "compilation terminated.";
+        }
+
+        void logBackendDiagnostic(const BackendDiagnostic& diagnostic)
+        {
+            std::string message = diagnostic.message;
+            if (!diagnostic.code.empty())
+                message = diagnostic.code + ": " + message;
+
+            const bool isWioSource = diagnostic.location.file.ends_with(".wio");
+            if (!isWioSource && diagnostic.location.hasFile())
+                message = "Native C++: " + message;
+
+            switch (diagnostic.severity)
+            {
+            case BackendDiagnosticSeverity::Warning:
+                Logger::get().addWarning("Warning [{}]: {}", diagnostic.location.toDiagnosticString(), message);
+                break;
+            case BackendDiagnosticSeverity::Note:
+                Logger::get().getLogger().info("Note [{}]: {}", diagnostic.location.toDiagnosticString(), message);
+                break;
+            case BackendDiagnosticSeverity::Error:
+                Logger::get().addError("Error [{}]: {}", diagnostic.location.toDiagnosticString(), message);
+                break;
+            }
+        }
+
+        void reportBackendCommandFailure(std::string_view summary, int exitCode, const std::string& output)
+        {
+            bool emittedStructuredDiagnostics = false;
+
+            for (const auto& line : splitLines(output))
+            {
+                if (auto diagnostic = parseBackendDiagnosticLine(line); diagnostic.has_value())
+                {
+                    logBackendDiagnostic(*diagnostic);
+                    emittedStructuredDiagnostics = true;
+                }
+            }
+
+            const std::string trimmedOutput = trimWhitespace(output);
+            if (!emittedStructuredDiagnostics)
+            {
+                if (trimmedOutput.empty())
+                    WIO_LOG_FATAL("{} with code: {}", summary, exitCode);
+                else
+                    WIO_LOG_FATAL("{} with code: {}\n{}", summary, exitCode, trimmedOutput);
+                return;
+            }
+
+            std::vector<std::string> extraLines;
+            for (const auto& line : splitLines(output))
+            {
+                if (parseBackendDiagnosticLine(line).has_value() || isIgnorableBackendOutputLine(line))
+                    continue;
+
+                extraLines.push_back(trimWhitespace(line));
+            }
+
+            if (!extraLines.empty())
+            {
+                std::string extraContext;
+                for (const auto& line : extraLines)
+                {
+                    if (!extraContext.empty())
+                        extraContext += "\n";
+                    extraContext += line;
+                }
+                WIO_LOG_INFO("Backend context:\n{}", extraContext);
+            }
+
+            WIO_LOG_FATAL("{} with code: {}", summary, exitCode);
         }
 
         void dumpTokens(const std::vector<Token>& tokens)
@@ -1266,7 +1519,7 @@ namespace wio
                     return objectPath.make_preferred();
                 };
 
-                auto compileObject = [&](const std::filesystem::path& inputPath, size_t index) -> int
+                auto compileObject = [&](const std::filesystem::path& inputPath, size_t index) -> CommandResult
                 {
                     std::filesystem::path objectPath = buildObjectPath(inputPath, index);
                     objectFiles.push_back(objectPath);
@@ -1280,16 +1533,17 @@ namespace wio
                     appendBackendArguments(compileCmd, backendCompilerArgs);
                     compileCmd << " -o " << quotePath(objectPath);
 
-                    // NOLINTNEXTLINE(concurrency-mt-unsafe)
-                    return std::system(compileCmd.str().c_str());
+                    return runCommandCaptureOutput(compileCmd.str());
                 };
 
-                exitCode = compileObject(std::filesystem::absolute(cppPath).make_preferred(), 0);
+                CommandResult compileResult = compileObject(std::filesystem::absolute(cppPath).make_preferred(), 0);
+                exitCode = compileResult.exitCode;
                 if (exitCode == 0)
                 {
                     for (size_t i = 0; i < backendSourceFiles.size(); ++i)
                     {
-                        exitCode = compileObject(std::filesystem::absolute(backendSourceFiles[i]).make_preferred(), i + 1);
+                        compileResult = compileObject(std::filesystem::absolute(backendSourceFiles[i]).make_preferred(), i + 1);
+                        exitCode = compileResult.exitCode;
                         if (exitCode != 0)
                             break;
                     }
@@ -1297,7 +1551,7 @@ namespace wio
 
                 if (exitCode != 0)
                 {
-                    WIO_LOG_FATAL("Backend object compilation failed with code: {}", exitCode);
+                    reportBackendCommandFailure("Backend object compilation failed", exitCode, compileResult.output);
                     return EXIT_FAILURE;
                 }
 
@@ -1307,11 +1561,11 @@ namespace wio
                 for (const auto& objectFile : objectFiles)
                     archiveCmd << " " << quotePath(objectFile);
 
-                // NOLINTNEXTLINE(concurrency-mt-unsafe)
-                exitCode = std::system(archiveCmd.str().c_str());
+                const CommandResult archiveResult = runCommandCaptureOutput(archiveCmd.str());
+                exitCode = archiveResult.exitCode;
                 if (exitCode != 0)
                 {
-                    WIO_LOG_FATAL("Static library archive creation failed with code: {}", exitCode);
+                    reportBackendCommandFailure("Static library archive creation failed", exitCode, archiveResult.output);
                     return EXIT_FAILURE;
                 }
             }
@@ -1337,13 +1591,13 @@ namespace wio
                 appendLinkLibraries(cmd, linkLibraries);
                 cmd << " " << quotePath(runtimeLibraryPath);
                 cmd << " -o " << quotePath(outputPath);
-                
-                // NOLINTNEXTLINE(concurrency-mt-unsafe)
-                exitCode = std::system(cmd.str().c_str());
+
+                const CommandResult backendResult = runCommandCaptureOutput(cmd.str());
+                exitCode = backendResult.exitCode;
                 
                 if (exitCode != 0)
                 {
-                    WIO_LOG_FATAL("Backend compilation failed with code: {}", exitCode);
+                    reportBackendCommandFailure("Backend compilation failed", exitCode, backendResult.output);
                     return EXIT_FAILURE;
                 }
             }
