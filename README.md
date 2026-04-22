@@ -195,7 +195,7 @@ modules under [`std/`](/C:/Users/cihan/RiderProjects/wio/std).
 
 Current modules include:
 
-- `std::io`
+- `std::console`
 - `std::math`
 - `std::collections`
 - `std::algorithms`
@@ -203,7 +203,7 @@ Current modules include:
 Example:
 
 ```wio
-use std::io as console;
+use std::console;
 use std::algorithms as algorithms;
 
 fn Entry(args: string[]) -> i32 {
@@ -310,6 +310,9 @@ fn RestoreState(snapshot: i32) -> i32 {
 The public SDK now lives in
 [`sdk/include/wio_sdk.h`](/C:/Users/cihan/RiderProjects/wio/sdk/include/wio_sdk.h).
 
+The full host-SDK walkthrough now lives in
+[`docs/WIO_SDK.md`](/C:/Users/cihan/RiderProjects/wio/docs/WIO_SDK.md).
+
 It sits on top of `module_api.h` and is designed to make host-side usage much
 shorter:
 
@@ -346,6 +349,15 @@ The wrapper stages DLL copies internally, preserves state when
 `@ModuleSaveState`/`@ModuleRestoreState` are available, and can either reload
 manually with `reload()` / `reload_from(...)` or lazily through
 `reload_if_changed()` when auto-reload is enabled.
+
+The SDK now also covers exported `object` / `component` reflection, including:
+
+- `WioObjectType` / `WioComponentType`
+- `WioObject` / `WioComponent`
+- `list_fields()` / `field_info(...)`
+- typed field access for primitives, strings, arrays, dicts, trees, functions,
+  nested objects, and nested components
+- dynamic field access through `WioDynamicValue`
 
 ### Backend Compiler
 

@@ -34,27 +34,35 @@ int main(int argc, char** argv)
             titleField.access != wio::sdk::FieldAccess::Public ||
             !titleField.can_read() ||
             !titleField.can_write() ||
+            !titleField.supports_dynamic_value() ||
             !titleField.is_string() ||
             !tagsField.is_array() ||
             !tagsField.is_dynamic_array() ||
+            !tagsField.supports_dynamic_value() ||
             !tagsField.type.has_element_type() ||
             !tagsField.type.element_type().is_string() ||
             !scoresField.is_dict() ||
+            !scoresField.supports_dynamic_value() ||
             !scoresField.type.has_key_type() ||
             !scoresField.type.key_type().is_string() ||
             !scoresField.type.has_value_type() ||
             !scoresField.type.value_type().is_i32() ||
             !orderField.is_tree() ||
+            !orderField.supports_dynamic_value() ||
             !orderField.type.key_type().is_string() ||
             !orderField.type.value_type().is_integer() ||
             !fixedField.is_static_array() ||
+            !fixedField.supports_dynamic_value() ||
             fixedField.type.static_extent() != 3u ||
             !fixedField.type.element_type().is_i32() ||
             !profileField.is_object() ||
+            !profileField.supports_dynamic_value() ||
             profileField.logical_type_name() != "Profile" ||
             !positionField.is_component() ||
+            !positionField.supports_dynamic_value() ||
             positionField.logical_type_name() != "Position" ||
             !callbackField.is_function() ||
+            !callbackField.supports_dynamic_value() ||
             !callbackField.type.has_return_type() ||
             !callbackField.type.return_type().is_i32() ||
             callbackField.type.parameter_count() != 1u ||
@@ -80,9 +88,16 @@ int main(int argc, char** argv)
         auto position = state.get_component("position");
 
         if (!titleAccessor ||
+            !state.owns_handle() ||
+            !profile.is_borrowed() ||
+            !position.is_borrowed() ||
+            state.list_fields().size() != fields.size() ||
             titleAccessor.name() != "title" ||
             !titleAccessor.can_access_as<wio::string>() ||
             titleAccessor.can_access_as<std::int32_t>() ||
+            !titleAccessor.supports_dynamic_value() ||
+            !tagsAccessor.supports_dynamic_value() ||
+            !callbackAccessor.supports_dynamic_value() ||
             titleAccessor.get_string() != "arena" ||
             tagsAccessor.get_array<wio::string>().count() != 3u ||
             !callbackAccessor.can_access_as<std::function<std::int32_t(std::int32_t)>>() ||
@@ -102,6 +117,27 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
 
+        auto dynamicTitle = titleAccessor.get_dynamic();
+        auto dynamicTags = tagsAccessor.get_dynamic();
+        auto dynamicProfile = state.field("profile").get_dynamic();
+        auto dynamicPosition = state.field("position").get_dynamic();
+        auto dynamicCallback = callbackAccessor.get_dynamic();
+
+        if (!dynamicTitle.is_string() ||
+            dynamicTitle.as_string() != "arena" ||
+            !dynamicTags.is_dynamic_array() ||
+            dynamicTags.as_dynamic_array().as_array<wio::string>().count() != 3u ||
+            !dynamicProfile.is_object() ||
+            dynamicProfile.as_object().get<std::int32_t>("level") != 9 ||
+            !dynamicPosition.is_component() ||
+            dynamicPosition.as_component().get<std::int32_t>("y") != 7 ||
+            !dynamicCallback.is_function() ||
+            dynamicCallback.as_dynamic_function().as_function<std::int32_t(std::int32_t)>().valid())
+        {
+            std::cerr << "Dynamic field access did not expose the expected initial values." << '\n';
+            return EXIT_FAILURE;
+        }
+
         bool mismatchedFieldReadRejected = false;
         try
         {
@@ -115,6 +151,22 @@ int main(int argc, char** argv)
         if (!mismatchedFieldReadRejected)
         {
             std::cerr << "Field accessor accepted an invalid host type read." << '\n';
+            return EXIT_FAILURE;
+        }
+
+        bool mismatchedDynamicAssignRejected = false;
+        try
+        {
+            callbackAccessor.set_dynamic(wio::sdk::WioDynamicValue(wio::DArray<wio::string>{ "oops" }));
+        }
+        catch (const wio::sdk::Error& error)
+        {
+            mismatchedDynamicAssignRejected = error.code() == wio::sdk::ErrorCode::SignatureMismatch;
+        }
+
+        if (!mismatchedDynamicAssignRejected)
+        {
+            std::cerr << "Dynamic field assignment accepted an invalid host value kind." << '\n';
             return EXIT_FAILURE;
         }
 
@@ -138,6 +190,48 @@ int main(int argc, char** argv)
         }
 
         auto profileType = module.load_object("Profile");
+        titleAccessor.set_dynamic(wio::sdk::WioDynamicValue(wio::string("captain")));
+        position.field("y").set_dynamic(wio::sdk::WioDynamicValue(std::int32_t{ 13 }));
+        tagsAccessor.set_dynamic(wio::sdk::WioDynamicValue(wio::DArray<wio::string>{ "left", "right" }));
+        state.field("fixed").set_dynamic(wio::sdk::WioDynamicValue(wio::SArray<std::int32_t, 3>{ 6, 7, 8 }));
+        state.field("scores").set_dynamic(wio::sdk::WioDynamicValue(wio::Dict<wio::string, std::int32_t>{ {"hp", 22}, {"mp", 9} }));
+        state.field("order").set_dynamic(wio::sdk::WioDynamicValue(wio::Tree<wio::string, std::int32_t>{ {"iron", 1}, {"steel", 2} }));
+        callbackAccessor.set_dynamic(wio::sdk::WioDynamicValue(std::function<std::int32_t(std::int32_t)>([](const std::int32_t value)
+        {
+            return value + 5;
+        })));
+
+        auto dynamicReplacementProfile = profileType.create();
+        dynamicReplacementProfile.set("level", 55);
+        dynamicReplacementProfile.set("title", wio::string("veteran"));
+        state.field("profile").set_dynamic(wio::sdk::WioDynamicValue(std::move(dynamicReplacementProfile)));
+
+        auto afterDynamicProfile = state.get_object("profile");
+        auto afterDynamicTags = state.field("tags").get_dynamic();
+        auto afterDynamicFixed = state.field("fixed").get_dynamic();
+        auto afterDynamicScores = state.field("scores").get_dynamic();
+        auto afterDynamicOrder = state.field("order").get_dynamic();
+        auto afterDynamicCallback = callbackAccessor.get_dynamic();
+        if (state.get<wio::string>("title") != "captain" ||
+            state.method<std::int32_t(std::int32_t)>("RunCallback")(7) != 12 ||
+            state.get_component("position").get<std::int32_t>("y") != 13 ||
+            !afterDynamicTags.is_dynamic_array() ||
+            afterDynamicTags.as_dynamic_array().as_array<wio::string>().count() != 2u ||
+            !afterDynamicFixed.is_static_array() ||
+            afterDynamicFixed.as_dynamic_static_array().as_array<std::int32_t, 3>()[2] != 8 ||
+            !afterDynamicScores.is_dict() ||
+            afterDynamicScores.as_dynamic_dict().as_dict<wio::string, std::int32_t>().at("hp") != 22 ||
+            !afterDynamicOrder.is_tree() ||
+            afterDynamicOrder.as_dynamic_tree().as_tree<wio::string, std::int32_t>().at("steel") != 2 ||
+            !afterDynamicCallback.is_function() ||
+            afterDynamicCallback.as_dynamic_function().as_function<std::int32_t(std::int32_t)>()(9) != 14 ||
+            afterDynamicProfile.get<std::int32_t>("level") != 55 ||
+            afterDynamicProfile.get<wio::string>("title") != "veteran")
+        {
+            std::cerr << "Dynamic field assignment did not update exported state." << '\n';
+            return EXIT_FAILURE;
+        }
+
         auto replacementProfile = profileType.create();
         replacementProfile.set("level", 77);
         replacementProfile.set("title", wio::string("elite"));

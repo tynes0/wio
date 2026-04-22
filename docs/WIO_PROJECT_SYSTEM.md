@@ -198,7 +198,7 @@ enabled = false
 and:
 
 ```wio
-use std::io as console;
+use std::console;
 
 fn Entry() -> i32 {
     console::Print("Hello from Wio.");
@@ -607,6 +607,9 @@ Host code uses:
 The project runner and the imported CMake targets expose:
 
 - `<WIO_ROOT>/sdk/include`
+
+For the full SDK surface, field reflection contract, and hot-reload helpers, see
+[`WIO_SDK.md`](./WIO_SDK.md).
 
 ### 9.2 From Wio Into Native C++
 

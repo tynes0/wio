@@ -928,52 +928,52 @@ This is currently one of the biggest blockers to real multi-file projects.
 - [ ] Keep user-facing packaged distributions focused on compiled/linkable
       runtime artifacts rather than exposing all implementation details in the
       compiler project tree.
-- [ ] Package the project conceptually as:
+- [x] Package the project conceptually as:
   - `wio.exe` for compilation,
   - a small runtime support layer,
   - and a public host/embedding SDK for C++ integration.
-- [ ] Clarify the long-term packaging split between:
+- [x] Clarify the long-term packaging split between:
   - compiler toolchain,
   - low-level runtime library,
   - std implementation library,
   - and public host SDK headers/libs.
-- [ ] Define the public host SDK around embedding/interop concerns only:
+- [x] Define the public host SDK around embedding/interop concerns only:
   - module loading,
   - export discovery,
   - command/event invocation,
   - reload helpers,
   - and runtime/result/error helpers.
-- [ ] Expand `@Export` beyond top-level functions so exported `object` and
+- [x] Expand `@Export` beyond top-level functions so exported `object` and
       `component` declarations can expose public members to C++ hosts.
-- [ ] Define the exact surface for exported public fields on `@Export`
+- [x] Define the exact surface for exported public fields on `@Export`
       `object` / `component` types:
   - getter generation,
   - setter generation,
   - naming conventions,
   - and rules for unsupported field kinds.
-- [ ] Decide how `private`, `protected`, `@ReadOnly`, `ref`, `view`, arrays,
+- [x] Decide how `private`, `protected`, `@ReadOnly`, `ref`, `view`, arrays,
       dictionaries, strings, nested components, and object references behave
       when exported as field properties.
-- [ ] Add automatic getter/setter bridge generation for exportable public
+- [x] Add automatic getter/setter bridge generation for exportable public
       fields so hosts do not need handwritten binding code for simple property
       access.
-- [ ] Design high-level `WioObject` and `WioComponent` helper types in the
+- [x] Design high-level `WioObject` and `WioComponent` helper types in the
       public `wio_sdk` so hosts can bind/export public methods and public
       variables through a small, ergonomic API instead of raw ABI calls.
-- [ ] Define whether `WioObject` / `WioComponent` are static registration
+- [x] Define whether `WioObject` / `WioComponent` are static registration
       helpers, runtime reflection wrappers, or both.
-- [ ] Define host-side lifetime, ownership, and instance-handle semantics for
+- [x] Define host-side lifetime, ownership, and instance-handle semantics for
       exported objects/components, especially under shared-library reload.
-- [ ] Keep AST, parser, sema, and codegen internals out of the public SDK.
-- [ ] Decide which `runtime/*` headers stay internal and which become official,
+- [x] Keep AST, parser, sema, and codegen internals out of the public SDK.
+- [x] Decide which `runtime/*` headers stay internal and which become official,
       documented SDK headers.
-- [ ] Add end-to-end examples where a C++ app integrates Wio through the
+- [x] Add end-to-end examples where a C++ app integrates Wio through the
       official SDK rather than ad-hoc helper code.
-- [ ] Add a first-class distinction between executable builds and library
+- [x] Add a first-class distinction between executable builds and library
       builds.
-- [ ] Support static library output for embedding Wio-generated code into larger
+- [x] Support static library output for embedding Wio-generated code into larger
       C++ projects.
-- [ ] Support shared/dynamic library output for host-driven scripting workflows.
+- [x] Support shared/dynamic library output for host-driven scripting workflows.
 - [ ] Define a stable host ABI for calling Wio code from C++ and C++ code from
       Wio.
 - [ ] Design native/foreign declarations plus backend link configuration so Wio
@@ -1210,8 +1210,8 @@ The best next sequence is probably:
 4. Freeze `ref` / `view` / `fit` / `match` / ctor generation behavior.
 5. Finish loops and collections.
 6. Finish the current stdlib cleanup and make callback/collection helpers solid.
-7. Land exported `object` / `component` interop plus ergonomic `wio_sdk`
-   wrappers such as `WioObject` / `WioComponent`.
+7. Keep hardening the landed exported `object` / `component` interop plus the
+   ergonomic `wio_sdk` wrappers such as `WioObject` / `WioComponent`.
 8. Build the first real project generator/model for mixed C++ + Wio projects.
 9. Revisit advanced/reserved features only after the above is solid.
 
@@ -1230,7 +1230,7 @@ If we want a realistic next milestone, it should include only these:
 - [ ] Finish semantic enforcement for `@Trust`, `@Final`, and `@ReadOnly`.
 - [ ] Add a serious invalid-program test suite.
 - [ ] Expand docs with more examples and more formal rules.
-- [ ] After the current stdlib cleanup, prioritize exported
+- [x] After the current stdlib cleanup, prioritize exported
       `object` / `component` support and the user-facing `wio_sdk`
       object/component bridge.
 - [ ] Immediately after that, prioritize a mixed C++ + Wio project generator

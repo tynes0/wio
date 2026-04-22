@@ -3,8 +3,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <utility>
 
-inline constexpr std::uint32_t WIO_MODULE_API_DESCRIPTOR_VERSION = 4u;
+inline constexpr std::uint32_t WIO_MODULE_API_DESCRIPTOR_VERSION = 5u;
 
 enum WioModuleCapability : std::uint32_t
 {
@@ -147,6 +148,33 @@ struct WioModuleTypeDescriptor
     const WioModuleTypeDescriptor* const* parameterTypes;
 };
 
+struct WioErasedValue
+{
+    virtual ~WioErasedValue() = default;
+    [[nodiscard]] virtual const WioModuleTypeDescriptor* descriptor() const noexcept = 0;
+};
+
+template <typename TValue>
+struct WioErasedValueModel final : WioErasedValue
+{
+    explicit WioErasedValueModel(const WioModuleTypeDescriptor* descriptorValue, TValue initialValue)
+        : descriptorValue(descriptorValue),
+          value(std::move(initialValue))
+    {
+    }
+
+    [[nodiscard]] const WioModuleTypeDescriptor* descriptor() const noexcept override
+    {
+        return descriptorValue;
+    }
+
+    const WioModuleTypeDescriptor* descriptorValue = nullptr;
+    TValue value;
+};
+
+using WioModuleFieldDynamicGetFn = WioErasedValue*(*)(std::uintptr_t handle);
+using WioModuleFieldDynamicSetFn = std::int32_t(*)(std::uintptr_t handle, const WioErasedValue* value);
+
 enum WioModuleTypeKind : std::uint32_t
 {
     WIO_MODULE_TYPE_COMPONENT = 1u,
@@ -162,6 +190,8 @@ struct WioModuleField
     WioModuleAccessModifier accessModifier;
     const WioModuleExport* getterExport;
     const WioModuleExport* setterExport;
+    WioModuleFieldDynamicGetFn dynamicGetter;
+    WioModuleFieldDynamicSetFn dynamicSetter;
 };
 
 struct WioModuleMethod

@@ -745,6 +745,11 @@ namespace wio::codegen
             Ref<sema::Type> fieldType = nullptr;
             bool isReadOnly = false;
             AccessModifier accessModifier = AccessModifier::Public;
+            std::string memberCppName;
+            std::string memberCppTypeName;
+            ExportedFunctionInfo::FieldAccessorKind accessorKind = ExportedFunctionInfo::FieldAccessorKind::Value;
+            std::optional<std::string> dynamicGetterSymbol;
+            std::optional<std::string> dynamicSetterSymbol;
             size_t getterExportIndex = 0;
             std::optional<size_t> setterExportIndex;
         };
@@ -1103,6 +1108,9 @@ namespace wio::codegen
                     fieldInfo.fieldName = fieldName;
                     fieldInfo.fieldType = fieldType;
                     fieldInfo.isReadOnly = variableSymbol && variableSymbol->flags.get_isReadOnly();
+                    fieldInfo.memberCppName = sanitizeCppIdentifier(fieldInfo.fieldName);
+                    fieldInfo.memberCppTypeName = fieldBridgeCppTypeName;
+                    fieldInfo.accessorKind = accessorKind;
                     if (variableSymbol->flags.get_isProtected())
                         fieldInfo.accessModifier = AccessModifier::Protected;
                     else if (variableSymbol->flags.get_isPrivate())
@@ -1110,16 +1118,27 @@ namespace wio::codegen
                     else
                         fieldInfo.accessModifier = AccessModifier::Public;
 
+                    const bool needsDynamicBridge = resolvedFieldType &&
+                        (resolvedFieldType->kind() == sema::TypeKind::Array ||
+                         resolvedFieldType->kind() == sema::TypeKind::Dictionary ||
+                         resolvedFieldType->kind() == sema::TypeKind::Function);
+                    if (needsDynamicBridge)
+                    {
+                        fieldInfo.dynamicGetterSymbol = common::formatString("WioDynamicGetField__{}__{}", typeInfo.symbolName, fieldInfo.fieldName);
+                        if (!fieldInfo.isReadOnly)
+                            fieldInfo.dynamicSetterSymbol = common::formatString("WioDynamicSetField__{}__{}", typeInfo.symbolName, fieldInfo.fieldName);
+                    }
+
                     ExportedFunctionInfo getterExport;
                     getterExport.functionType = typeContext.getOrCreateFunctionType(accessorBridgeType, { typeContext.getUSize() }).AsFast<sema::FunctionType>();
                     getterExport.logicalName = common::formatString("{}.{}.get", typeInfo.logicalName, fieldInfo.fieldName);
                     getterExport.symbolName = common::formatString("WioGetField__{}__{}", typeInfo.symbolName, fieldInfo.fieldName);
                     getterExport.syntheticKind = ExportedFunctionInfo::SyntheticKind::TypeFieldGet;
                     getterExport.ownerCppTypeName = typeInfo.cppTypeName;
-                    getterExport.memberCppName = sanitizeCppIdentifier(fieldInfo.fieldName);
-                    getterExport.memberCppTypeName = fieldBridgeCppTypeName;
+                    getterExport.memberCppName = fieldInfo.memberCppName;
+                    getterExport.memberCppTypeName = fieldInfo.memberCppTypeName;
                     getterExport.ownerIsObject = isObjectType;
-                    getterExport.fieldAccessorKind = accessorKind;
+                    getterExport.fieldAccessorKind = fieldInfo.accessorKind;
                     fieldInfo.getterExportIndex = exportedFunctions.size();
                     exportedFunctions.push_back(std::move(getterExport));
 
@@ -1131,10 +1150,10 @@ namespace wio::codegen
                         setterExport.symbolName = common::formatString("WioSetField__{}__{}", typeInfo.symbolName, fieldInfo.fieldName);
                         setterExport.syntheticKind = ExportedFunctionInfo::SyntheticKind::TypeFieldSet;
                         setterExport.ownerCppTypeName = typeInfo.cppTypeName;
-                        setterExport.memberCppName = sanitizeCppIdentifier(fieldInfo.fieldName);
-                        setterExport.memberCppTypeName = fieldBridgeCppTypeName;
+                        setterExport.memberCppName = fieldInfo.memberCppName;
+                        setterExport.memberCppTypeName = fieldInfo.memberCppTypeName;
                         setterExport.ownerIsObject = isObjectType;
-                        setterExport.fieldAccessorKind = accessorKind;
+                        setterExport.fieldAccessorKind = fieldInfo.accessorKind;
                         fieldInfo.setterExportIndex = exportedFunctions.size();
                         exportedFunctions.push_back(std::move(setterExport));
                     }
@@ -2245,8 +2264,8 @@ namespace wio::codegen
                 ensureTypeDescriptor(field.fieldType);
         }
 
-        if (!emittedTypeDescriptors.empty())
-        {
+            if (!emittedTypeDescriptors.empty())
+            {
             for (size_t descriptorIndex = 0; descriptorIndex < emittedTypeDescriptors.size(); ++descriptorIndex)
                 emitLine("extern const WioModuleTypeDescriptor WIO_TYPE_DESCRIPTOR_" + std::to_string(descriptorIndex) + ";");
 
@@ -2300,11 +2319,59 @@ namespace wio::codegen
                     elementExpr + ", " + keyExpr + ", " + valueExpr + ", " + returnExpr +
                     ", " + std::to_string(descriptor.parameterIndices.size()) + "u, " + paramExpr + " };"
                 );
+                }
             }
-        }
 
-        for (size_t typeIndex = 0; typeIndex < exportedTypes.size(); ++typeIndex)
-        {
+            for (size_t typeIndex = 0; typeIndex < exportedTypes.size(); ++typeIndex)
+            {
+                const auto& exportedType = exportedTypes[typeIndex];
+                for (const auto& field : exportedType.fields)
+                {
+                    if (!field.dynamicGetterSymbol.has_value())
+                        continue;
+
+                    const size_t descriptorIndex = ensureTypeDescriptor(field.fieldType);
+                    emitLine(
+                        "static WioErasedValue* " + *field.dynamicGetterSymbol + "(std::uintptr_t handle)"
+                    );
+                    emitLine("{");
+                    indent();
+                    emitLine("auto* instance = reinterpret_cast<" + exportedType.cppTypeName + "*>(handle);");
+                    emitLine("if (instance == nullptr) return nullptr;");
+                    emitLine(
+                        "return new WioErasedValueModel<" + field.memberCppTypeName + ">(" +
+                        "&WIO_TYPE_DESCRIPTOR_" + std::to_string(descriptorIndex) +
+                        ", instance->" + field.memberCppName + ");"
+                    );
+                    dedent();
+                    emitLine("}");
+                    emitLine();
+
+                    if (field.dynamicSetterSymbol.has_value())
+                    {
+                        emitLine(
+                            "static std::int32_t " + *field.dynamicSetterSymbol +
+                            "(std::uintptr_t handle, const WioErasedValue* value)"
+                        );
+                        emitLine("{");
+                        indent();
+                        emitLine("auto* instance = reinterpret_cast<" + exportedType.cppTypeName + "*>(handle);");
+                        emitLine("if (instance == nullptr || value == nullptr) return WIO_INVOKE_BAD_ARGUMENTS;");
+                        emitLine(
+                            "auto* typedValue = dynamic_cast<const WioErasedValueModel<" + field.memberCppTypeName + ">*>(value);"
+                        );
+                        emitLine("if (typedValue == nullptr) return WIO_INVOKE_TYPE_MISMATCH;");
+                        emitLine("instance->" + field.memberCppName + " = typedValue->value;");
+                        emitLine("return WIO_INVOKE_OK;");
+                        dedent();
+                        emitLine("}");
+                        emitLine();
+                    }
+                }
+            }
+
+            for (size_t typeIndex = 0; typeIndex < exportedTypes.size(); ++typeIndex)
+            {
             const auto& exportedType = exportedTypes[typeIndex];
 
             if (!exportedType.constructors.empty())
@@ -2341,6 +2408,12 @@ namespace wio::codegen
                     const std::string setterExportExpr = field.setterExportIndex.has_value()
                         ? ("&WIO_MODULE_EXPORTS[" + std::to_string(*field.setterExportIndex) + "]")
                         : "nullptr";
+                    const std::string dynamicGetterExpr = field.dynamicGetterSymbol.has_value()
+                        ? ("&" + *field.dynamicGetterSymbol)
+                        : "nullptr";
+                    const std::string dynamicSetterExpr = field.dynamicSetterSymbol.has_value()
+                        ? ("&" + *field.dynamicSetterSymbol)
+                        : "nullptr";
                     const std::string typeDescriptorExpr = field.fieldType
                         ? ("&WIO_TYPE_DESCRIPTOR_" + std::to_string(ensureTypeDescriptor(field.fieldType)))
                         : "nullptr";
@@ -2351,7 +2424,7 @@ namespace wio::codegen
                         ", " + typeDescriptorExpr +
                         ", " + std::to_string(flags) + "u, " + accessModifierExpr +
                         ", &WIO_MODULE_EXPORTS[" + std::to_string(field.getterExportIndex) +
-                        "], " + setterExportExpr + " }" + suffix
+                        "], " + setterExportExpr + ", " + dynamicGetterExpr + ", " + dynamicSetterExpr + " }" + suffix
                     );
                 }
                 dedent();

@@ -9,6 +9,9 @@ What it shows:
 - a native C++ executable linked against a generated static Wio library
 - runtime access through the public SDK and `WioModuleGetApi()`
 
+For the broader host-SDK contract, see
+[`docs/WIO_SDK.md`](../../docs/WIO_SDK.md).
+
 ## Layout
 
 - `wio.makewio`
