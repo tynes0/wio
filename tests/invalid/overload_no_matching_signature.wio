@@ -1,0 +1,12 @@
+fn Mix(value: i32) -> i32 {
+    return value;
+}
+
+fn Mix(value: string) -> string {
+    return value;
+}
+
+fn Entry() -> i32 {
+    let value = Mix(true);
+    return 0;
+}

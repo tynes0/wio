@@ -355,6 +355,63 @@ namespace wio::sema
             return bindings;
         }
 
+        std::string formatDiagnosticType(const Ref<Type>& type)
+        {
+            if (!type)
+                return "<unresolved>";
+
+            return type->toString();
+        }
+
+        std::string formatDiagnosticTypeList(const std::vector<Ref<Type>>& types)
+        {
+            std::string result = "(";
+            for (size_t i = 0; i < types.size(); ++i)
+            {
+                result += formatDiagnosticType(types[i]);
+                if (i + 1 < types.size())
+                    result += ", ";
+            }
+            result += ")";
+            return result;
+        }
+
+        std::string formatFunctionDiagnosticSignature(std::string_view name,
+                                                      const std::vector<std::string>& genericParameterNames,
+                                                      const Ref<FunctionType>& functionType,
+                                                      bool isConstructor = false)
+        {
+            std::string signature(name);
+
+            if (!genericParameterNames.empty())
+            {
+                signature += "<";
+                for (size_t i = 0; i < genericParameterNames.size(); ++i)
+                {
+                    signature += genericParameterNames[i];
+                    if (i + 1 < genericParameterNames.size())
+                        signature += ", ";
+                }
+                signature += ">";
+            }
+
+            if (!functionType)
+                return signature + "(<invalid>)";
+
+            signature += formatDiagnosticTypeList(functionType->paramTypes);
+            if (!isConstructor)
+                signature += " -> " + formatDiagnosticType(functionType->returnType);
+
+            return signature;
+        }
+
+        template <typename T>
+        void appendUniqueValue(std::vector<T>& values, const T& value)
+        {
+            if (std::ranges::find(values, value) == values.end())
+                values.push_back(value);
+        }
+
         bool containsGenericParameterType(const Ref<Type>& type)
         {
             Ref<Type> current = unwrapAliasType(type);
@@ -2503,6 +2560,48 @@ namespace wio::sema
             return resolvedArgumentTypes;
         };
 
+        auto getCallableDisplayName = [&]() -> std::string
+        {
+            if (isConstructorCall && constructorStructType)
+                return constructorStructType->name;
+
+            if (calleeSym)
+                return calleeSym->name;
+
+            if (auto* memberAccess = node.callee->as<MemberAccessExpression>())
+                return memberAccess->member ? memberAccess->member->token.value : "<member>";
+
+            if (auto* identifier = node.callee->as<Identifier>())
+                return identifier->token.value;
+
+            return "<callable>";
+        };
+
+        std::optional<std::vector<Ref<Type>>> cachedUncontextualizedArgumentTypes;
+        auto getUncontextualizedArgumentTypes = [&]() -> const std::vector<Ref<Type>>&
+        {
+            if (!cachedUncontextualizedArgumentTypes.has_value())
+            {
+                std::vector<Ref<Type>> argumentTypes;
+                argumentTypes.reserve(node.arguments.size());
+
+                for (const auto& argument : node.arguments)
+                {
+                    auto analyzedType = analyzeArgumentWithExpectedType(argument, nullptr, true);
+                    argumentTypes.push_back(analyzedType.has_value() ? *analyzedType : Compiler::get().getTypeContext().getUnknown());
+                }
+
+                cachedUncontextualizedArgumentTypes = std::move(argumentTypes);
+            }
+
+            return *cachedUncontextualizedArgumentTypes;
+        };
+
+        auto formatCallArgumentTypesForDiagnostic = [&]() -> std::string
+        {
+            return formatDiagnosticTypeList(getUncontextualizedArgumentTypes());
+        };
+
         auto scoreResolvedCall = [&](const Ref<FunctionType>& functionType,
                                      const std::vector<Ref<Type>>& actualArgumentTypes,
                                      bool isGenericCandidate,
@@ -2606,6 +2705,67 @@ namespace wio::sema
                 Ref<Type> functionType = nullptr;
                 int score = -1;
                 std::unordered_map<std::string, Ref<Type>> genericBindings;
+            };
+
+            auto formatCandidateSignature = [&](const Ref<Symbol>& overload) -> std::string
+            {
+                if (!overload || !overload->type || overload->type->kind() != TypeKind::Function)
+                    return "<invalid overload>";
+
+                const auto functionType = overload->type.AsFast<FunctionType>();
+                const auto& genericParameterNames =
+                    isConstructorCall ? constructorGenericParameterNames : overload->genericParameterNames;
+
+                return formatFunctionDiagnosticSignature(
+                    isConstructorCall && constructorStructType ? constructorStructType->name : overload->name,
+                    genericParameterNames,
+                    functionType,
+                    isConstructorCall
+                );
+            };
+
+            auto buildCandidateSummary = [&](size_t maxCount = 4) -> std::string
+            {
+                std::vector<std::string> signatures;
+                signatures.reserve(candidateSymbols.size());
+
+                for (const auto& candidate : candidateSymbols)
+                {
+                    std::string signature = formatCandidateSignature(candidate);
+                    appendUniqueValue(signatures, signature);
+                }
+
+                std::string summary;
+                const size_t displayCount = std::min(maxCount, signatures.size());
+                for (size_t i = 0; i < displayCount; ++i)
+                {
+                    summary += signatures[i];
+                    if (i + 1 < displayCount)
+                        summary += "; ";
+                }
+
+                if (signatures.size() > maxCount)
+                    summary += "; ...";
+
+                return summary;
+            };
+
+            auto buildAvailableGenericAritySummary = [&]() -> std::vector<size_t>
+            {
+                std::vector<size_t> arities;
+                for (const auto& candidate : candidateSymbols)
+                {
+                    if (!candidate)
+                        continue;
+
+                    const auto& genericParameterNames =
+                        isConstructorCall ? constructorGenericParameterNames : candidate->genericParameterNames;
+                    if (!genericParameterNames.empty())
+                        appendUniqueValue(arities, genericParameterNames.size());
+                }
+
+                std::ranges::sort(arities);
+                return arities;
             };
 
             auto formatInstantiationSignature = [&](const std::vector<Ref<Type>>& types) -> std::string
@@ -2894,7 +3054,26 @@ namespace wio::sema
 
             if (isAmbiguous)
             {
-                WIO_LOG_ADD_ERROR(node.location(), "Ambiguous function call to '{}'.", calleeSym->name);
+                const std::string candidateSummary = buildCandidateSummary();
+                if (candidateSummary.empty())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "Ambiguous function call to '{}' with arguments {}.",
+                        getCallableDisplayName(),
+                        formatCallArgumentTypesForDiagnostic()
+                    );
+                }
+                else
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "Ambiguous function call to '{}' with arguments {}. Candidates: {}.",
+                        getCallableDisplayName(),
+                        formatCallArgumentTypesForDiagnostic(),
+                        candidateSummary
+                    );
+                }
                 node.refType = Compiler::get().getTypeContext().getUnknown();
                 return;
             }
@@ -2911,7 +3090,65 @@ namespace wio::sema
                 }
                 else
                 {
-                    WIO_LOG_ADD_ERROR(node.location(), "No matching function/constructor overload found.");
+                    const auto availableGenericArities = buildAvailableGenericAritySummary();
+                    const bool providedExplicitTypeArguments = useExplicitFunctionTypeArguments || (isConstructorCall && !explicitTypeArguments.empty());
+
+                    if (providedExplicitTypeArguments &&
+                        !availableGenericArities.empty() &&
+                        std::ranges::find(availableGenericArities, explicitTypeArguments.size()) == availableGenericArities.end())
+                    {
+                        if (availableGenericArities.size() == 1)
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                node.location(),
+                                "Generic call to '{}' expects {} explicit type arguments, but got {}.",
+                                getCallableDisplayName(),
+                                availableGenericArities.front(),
+                                explicitTypeArguments.size()
+                            );
+                        }
+                        else
+                        {
+                            std::string arityList;
+                            for (size_t i = 0; i < availableGenericArities.size(); ++i)
+                            {
+                                arityList += std::to_string(availableGenericArities[i]);
+                                if (i + 1 < availableGenericArities.size())
+                                    arityList += ", ";
+                            }
+
+                            WIO_LOG_ADD_ERROR(
+                                node.location(),
+                                "No overload of '{}' accepts {} explicit type arguments. Available generic arities: {}.",
+                                getCallableDisplayName(),
+                                explicitTypeArguments.size(),
+                                arityList
+                            );
+                        }
+                    }
+                    else
+                    {
+                        const std::string candidateSummary = buildCandidateSummary();
+                        if (candidateSummary.empty())
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                node.location(),
+                                "No matching overload for '{}' with arguments {}.",
+                                getCallableDisplayName(),
+                                formatCallArgumentTypesForDiagnostic()
+                            );
+                        }
+                        else
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                node.location(),
+                                "No matching overload for '{}' with arguments {}. Candidates: {}.",
+                                getCallableDisplayName(),
+                                formatCallArgumentTypesForDiagnostic(),
+                                candidateSummary
+                            );
+                        }
+                    }
                 }
                 node.refType = Compiler::get().getTypeContext().getUnknown();
                 return;
@@ -3004,14 +3241,24 @@ namespace wio::sema
 
             if (isAmbiguous)
             {
-                WIO_LOG_ADD_ERROR(node.location(), "Ambiguous function call to intrinsic member '{}'.", memberAccess->member->token.value);
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Ambiguous function call to intrinsic member '{}' with arguments {}.",
+                    memberAccess->member->token.value,
+                    formatCallArgumentTypesForDiagnostic()
+                );
                 node.refType = Compiler::get().getTypeContext().getUnknown();
                 return;
             }
 
             if (!bestIndex.has_value())
             {
-                WIO_LOG_ADD_ERROR(node.location(), "No matching function/constructor overload found.");
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "No matching overload for intrinsic member '{}' with arguments {}.",
+                    memberAccess->member->token.value,
+                    formatCallArgumentTypesForDiagnostic()
+                );
                 node.refType = Compiler::get().getTypeContext().getUnknown();
                 return;
             }

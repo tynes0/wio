@@ -1395,7 +1395,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_generic_function_argument_mismatch
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_function_argument_mismatch.wio"
-        "No matching function/constructor overload found"
+        "No matching overload for 'PickFirst' with arguments \\(i32, string\\)\\. Candidates: PickFirst<T>\\(T, T\\) -> T\\."
     )
 
     add_wio_failure_test(
@@ -1413,13 +1413,19 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_generic_explicit_argument_count_mismatch
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_explicit_argument_count_mismatch.wio"
-        "Error \\[.*generic_explicit_argument_count_mismatch\\.wio:2:36\\]: No matching function/constructor overload found"
+        "Error \\[.*generic_explicit_argument_count_mismatch\\.wio:2:36\\]: Generic call to 'MakeLabel' expects 2 explicit type arguments, but got 1\\."
     )
 
     add_wio_failure_test(
         wio_invalid_generic_overload_ambiguous
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_overload_ambiguous.wio"
         "Ambiguous function call"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_overload_no_matching_signature
+        "${CMAKE_SOURCE_DIR}/tests/invalid/overload_no_matching_signature.wio"
+        "No matching overload for 'Mix' with arguments \\(bool\\)\\. Candidates: Mix\\(i32\\) -> i32; Mix\\(string\\) -> string\\."
     )
 
     add_wio_failure_test(
