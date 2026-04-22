@@ -67,6 +67,9 @@ int main(int argc, char** argv)
         }
 
         auto state = complexType.create();
+        auto titleAccessor = state.field("title");
+        auto tagsAccessor = state.field("tags");
+        auto callbackAccessor = state.field("callback");
         auto title = state.get<wio::string>("title");
         auto tags = state.get_array<wio::string>("tags");
         auto scores = state.get_dict<wio::string, std::int32_t>("scores");
@@ -76,7 +79,14 @@ int main(int argc, char** argv)
         auto profile = state.get_object("profile");
         auto position = state.get_component("position");
 
-        if (title != "arena" ||
+        if (!titleAccessor ||
+            titleAccessor.name() != "title" ||
+            !titleAccessor.can_access_as<wio::string>() ||
+            titleAccessor.can_access_as<std::int32_t>() ||
+            titleAccessor.get_string() != "arena" ||
+            tagsAccessor.get_array<wio::string>().count() != 3u ||
+            !callbackAccessor.can_access_as<std::function<std::int32_t(std::int32_t)>>() ||
+            title != "arena" ||
             tags.count() != 3u ||
             scores.at("hp") != 10 ||
             scores.at("mp") != 4 ||
@@ -89,6 +99,41 @@ int main(int argc, char** argv)
             position.get<std::int32_t>("x") != 3)
         {
             std::cerr << "Initial complex field values did not round-trip through the SDK." << '\n';
+            return EXIT_FAILURE;
+        }
+
+        bool mismatchedFieldReadRejected = false;
+        try
+        {
+            (void)titleAccessor.get_as<std::int32_t>();
+        }
+        catch (const wio::sdk::Error& error)
+        {
+            mismatchedFieldReadRejected = error.code() == wio::sdk::ErrorCode::SignatureMismatch;
+        }
+
+        if (!mismatchedFieldReadRejected)
+        {
+            std::cerr << "Field accessor accepted an invalid host type read." << '\n';
+            return EXIT_FAILURE;
+        }
+
+        auto positionXAccessor = position.field("x");
+        const WioValue initialPositionX = positionXAccessor.get_scalar_value();
+        if (initialPositionX.type != WIO_ABI_I32 || initialPositionX.value.v_i32 != 3)
+        {
+            std::cerr << "Scalar field accessor did not expose the expected ABI value." << '\n';
+            return EXIT_FAILURE;
+        }
+
+        WioValue adjustedPositionX{};
+        adjustedPositionX.type = WIO_ABI_I32;
+        adjustedPositionX.value.v_i32 = 5;
+        positionXAccessor.set_scalar_value(adjustedPositionX);
+
+        if (position.get<std::int32_t>("x") != 5)
+        {
+            std::cerr << "Scalar field accessor did not update the component field." << '\n';
             return EXIT_FAILURE;
         }
 

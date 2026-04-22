@@ -1346,6 +1346,64 @@ namespace wio::sdk
         constexpr bool AlwaysFalse = false;
 
         template <typename T>
+        struct IsStdVector : std::false_type
+        {
+        };
+
+        template <typename TElement, typename TAllocator>
+        struct IsStdVector<std::vector<TElement, TAllocator>> : std::true_type
+        {
+            using Element = TElement;
+        };
+
+        template <typename T>
+        struct IsStdArray : std::false_type
+        {
+        };
+
+        template <typename TElement, std::size_t TExtent>
+        struct IsStdArray<std::array<TElement, TExtent>> : std::true_type
+        {
+            using Element = TElement;
+            static constexpr std::size_t Extent = TExtent;
+        };
+
+        template <typename T>
+        struct IsStdUnorderedMap : std::false_type
+        {
+        };
+
+        template <typename TKey, typename TValue, typename THash, typename TEqual, typename TAllocator>
+        struct IsStdUnorderedMap<std::unordered_map<TKey, TValue, THash, TEqual, TAllocator>> : std::true_type
+        {
+            using Key = TKey;
+            using Value = TValue;
+        };
+
+        template <typename T>
+        struct IsStdMap : std::false_type
+        {
+        };
+
+        template <typename TKey, typename TValue, typename TCompare, typename TAllocator>
+        struct IsStdMap<std::map<TKey, TValue, TCompare, TAllocator>> : std::true_type
+        {
+            using Key = TKey;
+            using Value = TValue;
+        };
+
+        template <typename T>
+        struct IsStdFunction : std::false_type
+        {
+        };
+
+        template <typename TReturn, typename... TArgs>
+        struct IsStdFunction<std::function<TReturn(TArgs...)>> : std::true_type
+        {
+            using Signature = TReturn(TArgs...);
+        };
+
+        template <typename T>
         constexpr WioAbiType getAbiType()
         {
             using U = Decay<T>;
@@ -1444,6 +1502,187 @@ namespace wio::sdk
             case WIO_ABI_F64: return "f64";
             default: return "unknown";
             }
+        }
+
+        template <typename T>
+        std::string hostFieldTypeName();
+
+        template <typename Signature, size_t... Indices>
+        std::string hostFunctionTypeName(std::index_sequence<Indices...>)
+        {
+            using Traits = FunctionTraits<Signature>;
+
+            std::ostringstream message;
+            message << "fn(";
+            bool first = true;
+            ((message << (std::exchange(first, false) ? "" : ", ")
+                      << hostFieldTypeName<typename Traits::template Argument<Indices>>()), ...);
+            message << ") -> " << hostFieldTypeName<typename Traits::ReturnType>();
+            return message.str();
+        }
+
+        template <typename T>
+        std::string hostFieldTypeName()
+        {
+            using U = Decay<T>;
+
+            if constexpr (std::is_same_v<U, void>)
+            {
+                return "void";
+            }
+            else if constexpr (std::is_same_v<U, wio::string>)
+            {
+                return "string";
+            }
+            else if constexpr (IsAbiScalarType<U>)
+            {
+                return std::string(abiTypeName(getAbiType<U>()));
+            }
+            else if constexpr (IsStdVector<U>::value)
+            {
+                return hostFieldTypeName<typename IsStdVector<U>::Element>() + "[]";
+            }
+            else if constexpr (IsStdArray<U>::value)
+            {
+                std::ostringstream message;
+                message << "[" << hostFieldTypeName<typename IsStdArray<U>::Element>()
+                        << "; " << IsStdArray<U>::Extent << "]";
+                return message.str();
+            }
+            else if constexpr (IsStdUnorderedMap<U>::value)
+            {
+                return "Dict<" + hostFieldTypeName<typename IsStdUnorderedMap<U>::Key>()
+                    + ", " + hostFieldTypeName<typename IsStdUnorderedMap<U>::Value>() + ">";
+            }
+            else if constexpr (IsStdMap<U>::value)
+            {
+                return "Tree<" + hostFieldTypeName<typename IsStdMap<U>::Key>()
+                    + ", " + hostFieldTypeName<typename IsStdMap<U>::Value>() + ">";
+            }
+            else if constexpr (IsStdFunction<U>::value)
+            {
+                return hostFunctionTypeName<typename IsStdFunction<U>::Signature>(
+                    std::make_index_sequence<FunctionTraits<typename IsStdFunction<U>::Signature>::Arity>{}
+                );
+            }
+            else
+            {
+                return "<unsupported host type>";
+            }
+        }
+
+        inline std::string descriptorDisplayName(const TypeDescriptorView& type)
+        {
+            const auto displayName = type.name();
+            if (!displayName.empty())
+                return std::string(displayName);
+
+            if (type.has_abi_type())
+                return std::string(abiTypeName(type.abi_type()));
+
+            return "<unknown>";
+        }
+
+        template <typename T>
+        bool matchesTypeDescriptor(const TypeDescriptorView& type);
+
+        template <typename Signature, size_t... Indices>
+        bool matchesFunctionDescriptor(const TypeDescriptorView& type, std::index_sequence<Indices...>)
+        {
+            using Traits = FunctionTraits<Signature>;
+
+            if (!type.is_function() ||
+                !type.has_return_type() ||
+                type.parameter_count() != static_cast<std::uint32_t>(Traits::Arity))
+            {
+                return false;
+            }
+
+            if (!matchesTypeDescriptor<typename Traits::ReturnType>(type.return_type()))
+                return false;
+
+            return (matchesTypeDescriptor<typename Traits::template Argument<Indices>>(type.parameter_type(static_cast<std::uint32_t>(Indices))) && ...);
+        }
+
+        template <typename T>
+        bool matchesTypeDescriptor(const TypeDescriptorView& type)
+        {
+            using U = Decay<T>;
+
+            if constexpr (std::is_same_v<U, void>)
+            {
+                return type.has_abi_type() && type.abi_type() == WIO_ABI_VOID;
+            }
+            else if constexpr (std::is_same_v<U, wio::string>)
+            {
+                return type.is_string();
+            }
+            else if constexpr (IsAbiScalarType<U>)
+            {
+                return type.is_primitive() && type.abi_type() == getAbiType<U>();
+            }
+            else if constexpr (IsStdVector<U>::value)
+            {
+                return type.is_dynamic_array() &&
+                    type.has_element_type() &&
+                    matchesTypeDescriptor<typename IsStdVector<U>::Element>(type.element_type());
+            }
+            else if constexpr (IsStdArray<U>::value)
+            {
+                return type.is_static_array() &&
+                    type.static_extent() == IsStdArray<U>::Extent &&
+                    type.has_element_type() &&
+                    matchesTypeDescriptor<typename IsStdArray<U>::Element>(type.element_type());
+            }
+            else if constexpr (IsStdUnorderedMap<U>::value)
+            {
+                return type.is_dict() &&
+                    type.has_key_type() &&
+                    type.has_value_type() &&
+                    matchesTypeDescriptor<typename IsStdUnorderedMap<U>::Key>(type.key_type()) &&
+                    matchesTypeDescriptor<typename IsStdUnorderedMap<U>::Value>(type.value_type());
+            }
+            else if constexpr (IsStdMap<U>::value)
+            {
+                return type.is_tree() &&
+                    type.has_key_type() &&
+                    type.has_value_type() &&
+                    matchesTypeDescriptor<typename IsStdMap<U>::Key>(type.key_type()) &&
+                    matchesTypeDescriptor<typename IsStdMap<U>::Value>(type.value_type());
+            }
+            else if constexpr (IsStdFunction<U>::value)
+            {
+                return matchesFunctionDescriptor<typename IsStdFunction<U>::Signature>(
+                    type,
+                    std::make_index_sequence<FunctionTraits<typename IsStdFunction<U>::Signature>::Arity>{}
+                );
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        template <typename T>
+        void validateFieldHostType(const WioModuleType* ownerType,
+                                   const WioModuleField* fieldEntry,
+                                   std::string_view fieldName,
+                                   std::string_view bindingKind)
+        {
+            if (fieldEntry == nullptr)
+                throw Error(ErrorCode::FieldNotFound, "Wio SDK expected a valid field descriptor.");
+
+            const TypeDescriptorView exportedType(fieldEntry->typeDescriptor);
+            if (matchesTypeDescriptor<T>(exportedType))
+                return;
+
+            std::ostringstream message;
+            message << "Wio SDK host type mismatch for " << bindingKind << " field '" << fieldName << "'";
+            if (ownerType != nullptr && ownerType->logicalName != nullptr)
+                message << " on exported type '" << ownerType->logicalName << "'";
+            message << ": field exports '" << descriptorDisplayName(exportedType)
+                    << "' but host requested '" << hostFieldTypeName<T>() << "'.";
+            throw Error(ErrorCode::SignatureMismatch, message.str());
         }
 
         inline const char* invokeStatusName(std::int32_t status) noexcept
@@ -2211,10 +2450,211 @@ namespace wio::sdk
         }
     }
 
+    class WioFieldAccessor;
     class WioObject;
     class WioComponent;
     class WioObjectType;
     class WioComponentType;
+
+    class WioFieldAccessor
+    {
+    public:
+        WioFieldAccessor() = default;
+
+        [[nodiscard]] explicit operator bool() const noexcept
+        {
+            return fieldEntry_ != nullptr;
+        }
+
+        [[nodiscard]] const FieldInfo& info() const noexcept
+        {
+            return info_;
+        }
+
+        [[nodiscard]] std::string_view name() const noexcept
+        {
+            return info_.name;
+        }
+
+        [[nodiscard]] TypeDescriptorView type() const noexcept
+        {
+            return info_.type;
+        }
+
+        [[nodiscard]] FieldAccess access() const noexcept
+        {
+            return info_.access;
+        }
+
+        [[nodiscard]] bool can_read() const noexcept
+        {
+            return info_.can_read();
+        }
+
+        [[nodiscard]] bool can_write() const noexcept
+        {
+            return info_.can_write();
+        }
+
+        [[nodiscard]] bool is_read_only() const noexcept
+        {
+            return info_.is_read_only();
+        }
+
+        template <typename T>
+        [[nodiscard]] bool can_access_as() const noexcept
+        {
+            return detail::matchesTypeDescriptor<T>(info_.type);
+        }
+
+        template <typename T>
+        [[nodiscard]] T get_as() const
+        {
+            detail::validateFieldHostType<T>(type_, fieldEntry_, name(), bindingKind_);
+            return detail::getModuleFieldValue<T>(type_, handle_, name(), bindingKind_);
+        }
+
+        template <typename T>
+        void set_as(T&& value) const
+        {
+            detail::validateFieldHostType<detail::Decay<T>>(type_, fieldEntry_, name(), bindingKind_);
+            detail::setModuleFieldValue(type_, handle_, name(), std::forward<T>(value), bindingKind_);
+        }
+
+        [[nodiscard]] WioValue get_scalar_value() const;
+        void set_scalar_value(const WioValue& value) const;
+
+        [[nodiscard]] wio::string get_string() const
+        {
+            return get_as<wio::string>();
+        }
+
+        void set_string(wio::string value) const
+        {
+            set_as(std::move(value));
+        }
+
+        template <typename T>
+        [[nodiscard]] WioArray<T> get_array() const
+        {
+            return WioArray<T>(get_as<wio::DArray<T>>());
+        }
+
+        template <typename T>
+        void set_array(WioArray<T> value) const
+        {
+            set_as(std::move(value).take());
+        }
+
+        template <typename T>
+        void set_array(wio::DArray<T> value) const
+        {
+            set_as(std::move(value));
+        }
+
+        template <typename T, std::size_t N>
+        [[nodiscard]] WioStaticArray<T, N> get_static_array() const
+        {
+            return WioStaticArray<T, N>(get_as<wio::SArray<T, N>>());
+        }
+
+        template <typename T, std::size_t N>
+        void set_static_array(WioStaticArray<T, N> value) const
+        {
+            set_as(std::move(value).take());
+        }
+
+        template <typename T, std::size_t N>
+        void set_static_array(wio::SArray<T, N> value) const
+        {
+            set_as(std::move(value));
+        }
+
+        template <typename K, typename V>
+        [[nodiscard]] WioDict<K, V> get_dict() const
+        {
+            return WioDict<K, V>(get_as<wio::Dict<K, V>>());
+        }
+
+        template <typename K, typename V>
+        void set_dict(WioDict<K, V> value) const
+        {
+            set_as(std::move(value).take());
+        }
+
+        template <typename K, typename V>
+        void set_dict(wio::Dict<K, V> value) const
+        {
+            set_as(std::move(value));
+        }
+
+        template <typename K, typename V>
+        [[nodiscard]] WioTree<K, V> get_tree() const
+        {
+            return WioTree<K, V>(get_as<wio::Tree<K, V>>());
+        }
+
+        template <typename K, typename V>
+        void set_tree(WioTree<K, V> value) const
+        {
+            set_as(std::move(value).take());
+        }
+
+        template <typename K, typename V>
+        void set_tree(wio::Tree<K, V> value) const
+        {
+            set_as(std::move(value));
+        }
+
+        template <typename Signature>
+        [[nodiscard]] WioFunction<Signature> get_function() const
+        {
+            using RawFunction = typename detail::FunctionTraits<Signature>::StdFunction;
+            return WioFunction<Signature>(get_as<RawFunction>());
+        }
+
+        template <typename Signature>
+        void set_function(WioFunction<Signature> value) const
+        {
+            set_as(std::move(value).take());
+        }
+
+        template <typename Signature>
+        void set_function(typename detail::FunctionTraits<Signature>::StdFunction value) const
+        {
+            set_as(std::move(value));
+        }
+
+        [[nodiscard]] WioObject get_object() const;
+        [[nodiscard]] WioComponent get_component() const;
+        void set_object(const WioObject& value) const;
+        void set_component(const WioComponent& value) const;
+
+    private:
+        friend class WioObject;
+        friend class WioComponent;
+
+        WioFieldAccessor(const WioModuleApi* api,
+                         const WioModuleType* typeEntry,
+                         std::uintptr_t handle,
+                         const WioModuleField* fieldEntry,
+                         std::string_view bindingKind) noexcept
+            : api_(api),
+              type_(typeEntry),
+              handle_(handle),
+              fieldEntry_(fieldEntry),
+              bindingKind_(bindingKind),
+              info_(fieldEntry != nullptr ? detail::makeFieldInfo(*fieldEntry) : FieldInfo{})
+        {
+        }
+
+        const WioModuleApi* api_ = nullptr;
+        const WioModuleType* type_ = nullptr;
+        std::uintptr_t handle_ = 0;
+        const WioModuleField* fieldEntry_ = nullptr;
+        std::string_view bindingKind_{};
+        FieldInfo info_{};
+    };
 
     class WioObject
     {
@@ -2235,10 +2675,12 @@ namespace wio::sdk
         [[nodiscard]] const WioModuleType& descriptor() const;
         [[nodiscard]] std::vector<FieldInfo> list_fields() const;
         [[nodiscard]] FieldInfo field_info(std::string_view fieldName) const;
+        [[nodiscard]] WioFieldAccessor field(std::string_view fieldName) const;
 
         template <typename T>
         T get(std::string_view fieldName) const
         {
+            detail::validateFieldHostType<T>(type_, detail::requireTypeField(type_, fieldName, "object"), fieldName, "object");
             return detail::getModuleFieldValue<T>(type_, handle_, fieldName, "object");
         }
 
@@ -2276,6 +2718,7 @@ namespace wio::sdk
         template <typename T>
         void set(std::string_view fieldName, T&& value) const
         {
+            detail::validateFieldHostType<detail::Decay<T>>(type_, detail::requireTypeField(type_, fieldName, "object"), fieldName, "object");
             detail::setModuleFieldValue(type_, handle_, fieldName, std::forward<T>(value), "object");
         }
 
@@ -2355,6 +2798,7 @@ namespace wio::sdk
     private:
         friend class WioObjectType;
         friend class WioComponent;
+        friend class WioFieldAccessor;
 
         WioObject(const WioModuleApi* api, const WioModuleType* typeEntry, std::uintptr_t instanceHandle, bool ownsHandle) noexcept
             : api_(api),
@@ -2389,10 +2833,12 @@ namespace wio::sdk
         [[nodiscard]] const WioModuleType& descriptor() const;
         [[nodiscard]] std::vector<FieldInfo> list_fields() const;
         [[nodiscard]] FieldInfo field_info(std::string_view fieldName) const;
+        [[nodiscard]] WioFieldAccessor field(std::string_view fieldName) const;
 
         template <typename T>
         T get(std::string_view fieldName) const
         {
+            detail::validateFieldHostType<T>(type_, detail::requireTypeField(type_, fieldName, "component"), fieldName, "component");
             return detail::getModuleFieldValue<T>(type_, handle_, fieldName, "component");
         }
 
@@ -2430,6 +2876,7 @@ namespace wio::sdk
         template <typename T>
         void set(std::string_view fieldName, T&& value) const
         {
+            detail::validateFieldHostType<detail::Decay<T>>(type_, detail::requireTypeField(type_, fieldName, "component"), fieldName, "component");
             detail::setModuleFieldValue(type_, handle_, fieldName, std::forward<T>(value), "component");
         }
 
@@ -2503,6 +2950,7 @@ namespace wio::sdk
     private:
         friend class WioComponentType;
         friend class WioObject;
+        friend class WioFieldAccessor;
 
         WioComponent(const WioModuleApi* api, const WioModuleType* typeEntry, std::uintptr_t instanceHandle, bool ownsHandle) noexcept
             : api_(api),
@@ -2680,6 +3128,11 @@ namespace wio::sdk
         return detail::getTypeFieldInfo(type_, fieldName, "object");
     }
 
+    inline WioFieldAccessor WioObject::field(std::string_view fieldName) const
+    {
+        return WioFieldAccessor(api_, type_, handle_, detail::requireTypeField(type_, fieldName, "object"), "object");
+    }
+
     inline void WioObject::reset() noexcept
     {
         if (ownsHandle_)
@@ -2755,6 +3208,11 @@ namespace wio::sdk
         return detail::getTypeFieldInfo(type_, fieldName, "component");
     }
 
+    inline WioFieldAccessor WioComponent::field(std::string_view fieldName) const
+    {
+        return WioFieldAccessor(api_, type_, handle_, detail::requireTypeField(type_, fieldName, "component"), "component");
+    }
+
     inline void WioComponent::reset() noexcept
     {
         if (ownsHandle_)
@@ -2766,104 +3224,147 @@ namespace wio::sdk
         ownsHandle_ = false;
     }
 
-    inline WioObject WioObject::get_object(std::string_view fieldName) const
+    inline WioValue WioFieldAccessor::get_scalar_value() const
     {
-        const WioModuleField* fieldEntry = detail::requireTypeField(type_, fieldName, "object");
-        const auto* typeDescriptor = fieldEntry->typeDescriptor;
+        if (!info_.is_primitive())
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a primitive field descriptor for scalar access.");
+
+        if (!info_.can_read() || fieldEntry_ == nullptr || fieldEntry_->getterExport == nullptr || fieldEntry_->getterExport->invoke == nullptr)
+            throw Error(ErrorCode::FieldNotFound, "Wio SDK scalar field is not readable.");
+
+        WioValue args[1]{};
+        args[0] = detail::toWioValue(handle_);
+
+        WioValue result{};
+        const std::int32_t status = fieldEntry_->getterExport->invoke(args, 1u, &result);
+        if (status != WIO_INVOKE_OK)
+        {
+            std::ostringstream message;
+            message << "Wio SDK failed to read scalar field '" << name() << "' from exported type '"
+                    << (type_ && type_->logicalName ? type_->logicalName : "<unknown>")
+                    << "': " << detail::invokeStatusName(status) << '.';
+            throw Error(ErrorCode::InvokeFailed, message.str());
+        }
+
+        return result;
+    }
+
+    inline void WioFieldAccessor::set_scalar_value(const WioValue& value) const
+    {
+        if (!info_.is_primitive())
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a primitive field descriptor for scalar access.");
+
+        if (!info_.can_write() || fieldEntry_ == nullptr || fieldEntry_->setterExport == nullptr || fieldEntry_->setterExport->invoke == nullptr)
+            throw Error(ErrorCode::FieldNotWritable, "Wio SDK scalar field is not writable.");
+
+        if (value.type != info_.abi_type())
+        {
+            std::ostringstream message;
+            message << "Wio SDK scalar field '" << name() << "' expected '"
+                    << detail::abiTypeName(info_.abi_type()) << "' but host provided '"
+                    << detail::abiTypeName(value.type) << "'.";
+            throw Error(ErrorCode::SignatureMismatch, message.str());
+        }
+
+        WioValue args[2]{};
+        args[0] = detail::toWioValue(handle_);
+        args[1] = value;
+
+        const std::int32_t status = fieldEntry_->setterExport->invoke(args, 2u, nullptr);
+        if (status != WIO_INVOKE_OK)
+        {
+            std::ostringstream message;
+            message << "Wio SDK failed to write scalar field '" << name() << "' on exported type '"
+                    << (type_ && type_->logicalName ? type_->logicalName : "<unknown>")
+                    << "': " << detail::invokeStatusName(status) << '.';
+            throw Error(ErrorCode::InvokeFailed, message.str());
+        }
+    }
+
+    inline WioObject WioFieldAccessor::get_object() const
+    {
+        const auto* typeDescriptor = fieldEntry_ != nullptr ? fieldEntry_->typeDescriptor : nullptr;
         if (typeDescriptor == nullptr || typeDescriptor->kind != WIO_MODULE_TYPE_DESC_OBJECT)
             throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected an object field descriptor.");
 
         const WioModuleType* nestedType = detail::requireModuleType(api_, typeDescriptor->logicalTypeName, WIO_MODULE_TYPE_OBJECT);
-        const std::uintptr_t nestedHandle = detail::getModuleFieldHandle(type_, handle_, fieldName, "object");
+        const std::uintptr_t nestedHandle = detail::getModuleFieldHandle(type_, handle_, name(), bindingKind_);
         return WioObject(api_, nestedType, nestedHandle, false);
+    }
+
+    inline WioComponent WioFieldAccessor::get_component() const
+    {
+        const auto* typeDescriptor = fieldEntry_ != nullptr ? fieldEntry_->typeDescriptor : nullptr;
+        if (typeDescriptor == nullptr || typeDescriptor->kind != WIO_MODULE_TYPE_DESC_COMPONENT)
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a component field descriptor.");
+
+        const WioModuleType* nestedType = detail::requireModuleType(api_, typeDescriptor->logicalTypeName, WIO_MODULE_TYPE_COMPONENT);
+        const std::uintptr_t nestedHandle = detail::getModuleFieldHandle(type_, handle_, name(), bindingKind_);
+        return WioComponent(api_, nestedType, nestedHandle, false);
+    }
+
+    inline void WioFieldAccessor::set_object(const WioObject& value) const
+    {
+        const auto* typeDescriptor = fieldEntry_ != nullptr ? fieldEntry_->typeDescriptor : nullptr;
+        if (typeDescriptor == nullptr || typeDescriptor->kind != WIO_MODULE_TYPE_DESC_OBJECT)
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected an object field descriptor.");
+
+        if (!value || value.descriptor().logicalName == nullptr || std::string_view(value.descriptor().logicalName) != std::string_view(typeDescriptor->logicalTypeName))
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK object field assignment type mismatch.");
+
+        detail::setModuleFieldValue(type_, handle_, name(), value.handle(), bindingKind_);
+    }
+
+    inline void WioFieldAccessor::set_component(const WioComponent& value) const
+    {
+        const auto* typeDescriptor = fieldEntry_ != nullptr ? fieldEntry_->typeDescriptor : nullptr;
+        if (typeDescriptor == nullptr || typeDescriptor->kind != WIO_MODULE_TYPE_DESC_COMPONENT)
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a component field descriptor.");
+
+        if (!value || value.descriptor().logicalName == nullptr || std::string_view(value.descriptor().logicalName) != std::string_view(typeDescriptor->logicalTypeName))
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK component field assignment type mismatch.");
+
+        detail::setModuleFieldValue(type_, handle_, name(), value.handle(), bindingKind_);
+    }
+
+    inline WioObject WioObject::get_object(std::string_view fieldName) const
+    {
+        return field(fieldName).get_object();
     }
 
     inline WioComponent WioObject::get_component(std::string_view fieldName) const
     {
-        const WioModuleField* fieldEntry = detail::requireTypeField(type_, fieldName, "object");
-        const auto* typeDescriptor = fieldEntry->typeDescriptor;
-        if (typeDescriptor == nullptr || typeDescriptor->kind != WIO_MODULE_TYPE_DESC_COMPONENT)
-            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a component field descriptor.");
-
-        const WioModuleType* nestedType = detail::requireModuleType(api_, typeDescriptor->logicalTypeName, WIO_MODULE_TYPE_COMPONENT);
-        const std::uintptr_t nestedHandle = detail::getModuleFieldHandle(type_, handle_, fieldName, "object");
-        return WioComponent(api_, nestedType, nestedHandle, false);
+        return field(fieldName).get_component();
     }
 
     inline void WioObject::set_object(std::string_view fieldName, const WioObject& value) const
     {
-        const WioModuleField* fieldEntry = detail::requireTypeField(type_, fieldName, "object");
-        const auto* typeDescriptor = fieldEntry->typeDescriptor;
-        if (typeDescriptor == nullptr || typeDescriptor->kind != WIO_MODULE_TYPE_DESC_OBJECT)
-            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected an object field descriptor.");
-
-        if (!value || value.descriptor().logicalName == nullptr || std::string_view(value.descriptor().logicalName) != std::string_view(typeDescriptor->logicalTypeName))
-            throw Error(ErrorCode::SignatureMismatch, "Wio SDK object field assignment type mismatch.");
-
-        detail::setModuleFieldValue(type_, handle_, fieldName, value.handle(), "object");
+        field(fieldName).set_object(value);
     }
 
     inline void WioObject::set_component(std::string_view fieldName, const WioComponent& value) const
     {
-        const WioModuleField* fieldEntry = detail::requireTypeField(type_, fieldName, "object");
-        const auto* typeDescriptor = fieldEntry->typeDescriptor;
-        if (typeDescriptor == nullptr || typeDescriptor->kind != WIO_MODULE_TYPE_DESC_COMPONENT)
-            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a component field descriptor.");
-
-        if (!value || value.descriptor().logicalName == nullptr || std::string_view(value.descriptor().logicalName) != std::string_view(typeDescriptor->logicalTypeName))
-            throw Error(ErrorCode::SignatureMismatch, "Wio SDK component field assignment type mismatch.");
-
-        detail::setModuleFieldValue(type_, handle_, fieldName, value.handle(), "object");
+        field(fieldName).set_component(value);
     }
 
     inline WioObject WioComponent::get_object(std::string_view fieldName) const
     {
-        const WioModuleField* fieldEntry = detail::requireTypeField(type_, fieldName, "component");
-        const auto* typeDescriptor = fieldEntry->typeDescriptor;
-        if (typeDescriptor == nullptr || typeDescriptor->kind != WIO_MODULE_TYPE_DESC_OBJECT)
-            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected an object field descriptor.");
-
-        const WioModuleType* nestedType = detail::requireModuleType(api_, typeDescriptor->logicalTypeName, WIO_MODULE_TYPE_OBJECT);
-        const std::uintptr_t nestedHandle = detail::getModuleFieldHandle(type_, handle_, fieldName, "component");
-        return WioObject(api_, nestedType, nestedHandle, false);
+        return field(fieldName).get_object();
     }
 
     inline WioComponent WioComponent::get_component(std::string_view fieldName) const
     {
-        const WioModuleField* fieldEntry = detail::requireTypeField(type_, fieldName, "component");
-        const auto* typeDescriptor = fieldEntry->typeDescriptor;
-        if (typeDescriptor == nullptr || typeDescriptor->kind != WIO_MODULE_TYPE_DESC_COMPONENT)
-            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a component field descriptor.");
-
-        const WioModuleType* nestedType = detail::requireModuleType(api_, typeDescriptor->logicalTypeName, WIO_MODULE_TYPE_COMPONENT);
-        const std::uintptr_t nestedHandle = detail::getModuleFieldHandle(type_, handle_, fieldName, "component");
-        return WioComponent(api_, nestedType, nestedHandle, false);
+        return field(fieldName).get_component();
     }
 
     inline void WioComponent::set_object(std::string_view fieldName, const WioObject& value) const
     {
-        const WioModuleField* fieldEntry = detail::requireTypeField(type_, fieldName, "component");
-        const auto* typeDescriptor = fieldEntry->typeDescriptor;
-        if (typeDescriptor == nullptr || typeDescriptor->kind != WIO_MODULE_TYPE_DESC_OBJECT)
-            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected an object field descriptor.");
-
-        if (!value || value.descriptor().logicalName == nullptr || std::string_view(value.descriptor().logicalName) != std::string_view(typeDescriptor->logicalTypeName))
-            throw Error(ErrorCode::SignatureMismatch, "Wio SDK object field assignment type mismatch.");
-
-        detail::setModuleFieldValue(type_, handle_, fieldName, value.handle(), "component");
+        field(fieldName).set_object(value);
     }
 
     inline void WioComponent::set_component(std::string_view fieldName, const WioComponent& value) const
     {
-        const WioModuleField* fieldEntry = detail::requireTypeField(type_, fieldName, "component");
-        const auto* typeDescriptor = fieldEntry->typeDescriptor;
-        if (typeDescriptor == nullptr || typeDescriptor->kind != WIO_MODULE_TYPE_DESC_COMPONENT)
-            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a component field descriptor.");
-
-        if (!value || value.descriptor().logicalName == nullptr || std::string_view(value.descriptor().logicalName) != std::string_view(typeDescriptor->logicalTypeName))
-            throw Error(ErrorCode::SignatureMismatch, "Wio SDK component field assignment type mismatch.");
-
-        detail::setModuleFieldValue(type_, handle_, fieldName, value.handle(), "component");
+        field(fieldName).set_component(value);
     }
 
     template <typename Signature>
