@@ -1212,6 +1212,40 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/native"
     )
 
+    add_wio_backend_failure_test(
+        wio_invalid_backend_include_chain_failure
+        "${CMAKE_SOURCE_DIR}/tests/invalid/backend_include_chain_failure.wio"
+        "Note \\[.*backend_include_chain_root\\.h:[0-9]+\\]: Native C\\+\\+ compiler: Included from here"
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
+        --run
+    )
+
+    add_wio_backend_failure_test(
+        wio_invalid_backend_include_chain_generated_note
+        "${CMAKE_SOURCE_DIR}/tests/invalid/backend_include_chain_failure.wio"
+        "Note \\[backend:generated-cpp:[0-9]+\\]: Generated C\\+\\+ wrapper: Included from here"
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
+        --run
+    )
+
+    add_wio_backend_failure_test(
+        wio_invalid_backend_template_context_note
+        "${CMAKE_SOURCE_DIR}/tests/invalid/backend_compile_error_from_native_source.wio"
+        "Note \\[.*backend_template_context_source\\.cpp:[0-9]+:[0-9]+\\]: Native C\\+\\+ compiler: required from here"
+        --backend-arg
+        "${CMAKE_SOURCE_DIR}/tests/native/backend_template_context_source.cpp"
+    )
+
+    add_wio_backend_failure_test(
+        wio_invalid_backend_template_instantiation_note
+        "${CMAKE_SOURCE_DIR}/tests/invalid/backend_compile_error_from_native_source.wio"
+        "Note \\[.*backend_template_context_source\\.cpp\\]: Native C\\+\\+ compiler: In instantiation of 'void backendTemplateContextLeaf\\(\\) \\[with T = int\\]':"
+        --backend-arg
+        "${CMAKE_SOURCE_DIR}/tests/native/backend_template_context_source.cpp"
+    )
+
     add_wio_failure_test(
         wio_invalid_cpp_name_native_invalid_symbol
         "${CMAKE_SOURCE_DIR}/tests/invalid/cpp_name_native_invalid_symbol.wio"

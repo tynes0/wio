@@ -1,0 +1,5 @@
+use @CppHeader("backend_include_chain_root.h");
+
+fn Entry(args: string[]) -> i32 {
+    return 0;
+}

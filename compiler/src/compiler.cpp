@@ -848,6 +848,79 @@ namespace wio
                    lower == "compilation terminated.";
         }
 
+        common::Location buildBackendDiagnosticLocation(std::string fileText,
+                                                       const std::string& lineText,
+                                                       const std::string& columnText)
+        {
+            common::Location location;
+            location.file = normalizeDiagnosticFilePath(fileText);
+            location.line = static_cast<uint64_t>(std::stoull(lineText));
+            if (!columnText.empty())
+                location.column = static_cast<uint64_t>(std::stoull(columnText));
+            return normalizeBackendLocation(std::move(location));
+        }
+
+        std::optional<BackendDiagnostic> parseBackendContextNoteLine(std::string_view rawLine)
+        {
+            static const std::regex includeStackLeadPattern(R"(^In file included from (.*):([0-9]+)(?::([0-9]+))?[,:]?$)");
+            static const std::regex includeStackContinuationPattern(R"(^\s+from (.*):([0-9]+)(?::([0-9]+))?[,:]?$)");
+            static const std::regex locationContextWithColumnPattern(
+                R"(^(.*):([0-9]+):([0-9]+):\s+(required from here|required from .*|instantiated from here|declared here)$)");
+            static const std::regex locationContextWithoutColumnPattern(
+                R"(^(.*):([0-9]+):\s+(required from here|required from .*|instantiated from here|declared here)$)");
+
+            const std::string line(rawLine);
+            std::smatch match;
+
+            auto buildNote = [](std::string fileText,
+                                const std::string& lineText,
+                                const std::string& columnText,
+                                std::string_view message)
+            {
+                return BackendDiagnostic{
+                    .severity = BackendDiagnosticSeverity::Note,
+                    .domain = BackendDiagnosticDomain::Compiler,
+                    .location = buildBackendDiagnosticLocation(std::move(fileText), lineText, columnText),
+                    .message = trimWhitespace(message)
+                };
+            };
+
+            if (std::regex_match(line, match, includeStackLeadPattern))
+                return buildNote(match[1].str(), match[2].str(), match[3].str(), "Included from here");
+
+            if (std::regex_match(line, match, includeStackContinuationPattern))
+                return buildNote(match[1].str(), match[2].str(), match[3].str(), "Included from here");
+
+            if (const size_t fileContextPos = line.find(": In "); fileContextPos != std::string::npos)
+            {
+                const std::string fileText = trimWhitespace(line.substr(0, fileContextPos));
+                if (looksLikeSourceFilePath(fileText))
+                {
+                    BackendDiagnostic diagnostic;
+                    diagnostic.severity = BackendDiagnosticSeverity::Note;
+                    diagnostic.domain = BackendDiagnosticDomain::Compiler;
+                    diagnostic.location.file = normalizeDiagnosticFilePath(fileText);
+                    diagnostic.location = normalizeBackendLocation(std::move(diagnostic.location));
+                    diagnostic.message = trimWhitespace(line.substr(fileContextPos + 2));
+                    return diagnostic;
+                }
+            }
+
+            if (std::regex_match(line, match, locationContextWithColumnPattern) &&
+                looksLikeSourceFilePath(trimWhitespace(match[1].str())))
+            {
+                return buildNote(match[1].str(), match[2].str(), match[3].str(), match[4].str());
+            }
+
+            if (std::regex_match(line, match, locationContextWithoutColumnPattern) &&
+                looksLikeSourceFilePath(trimWhitespace(match[1].str())))
+            {
+                return buildNote(match[1].str(), match[2].str(), "", match[3].str());
+            }
+
+            return std::nullopt;
+        }
+
         std::optional<BackendDiagnostic> parseBackendDiagnosticLine(std::string_view rawLine)
         {
             static const std::regex gccWithColumnPattern(R"(^(.*):([0-9]+):([0-9]+):\s*(fatal error|error|warning|note):\s*(.*)$)");
@@ -859,23 +932,13 @@ namespace wio
             const std::string line(rawLine);
             std::smatch match;
 
-            auto buildLocation = [](std::string fileText, const std::string& lineText, const std::string& columnText)
-            {
-                common::Location location;
-                location.file = normalizeDiagnosticFilePath(fileText);
-                location.line = static_cast<uint64_t>(std::stoull(lineText));
-                if (!columnText.empty())
-                    location.column = static_cast<uint64_t>(std::stoull(columnText));
-                return normalizeBackendLocation(std::move(location));
-            };
-
             if (std::regex_match(line, match, gccWithColumnPattern))
             {
                 const BackendDiagnosticDomain domain = classifyBackendTool(match[1].str());
                 return BackendDiagnostic{
                     .severity = parseBackendSeverity(match[4].str()),
                     .domain = domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain,
-                    .location = buildLocation(match[1].str(), match[2].str(), match[3].str()),
+                    .location = buildBackendDiagnosticLocation(match[1].str(), match[2].str(), match[3].str()),
                     .message = normalizeBackendMessage(domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain, match[5].str())
                 };
             }
@@ -886,7 +949,7 @@ namespace wio
                 return BackendDiagnostic{
                     .severity = parseBackendSeverity(match[3].str()),
                     .domain = domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain,
-                    .location = buildLocation(match[1].str(), match[2].str(), ""),
+                    .location = buildBackendDiagnosticLocation(match[1].str(), match[2].str(), ""),
                     .message = normalizeBackendMessage(domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain, match[4].str())
                 };
             }
@@ -897,11 +960,14 @@ namespace wio
                 return BackendDiagnostic{
                     .severity = parseBackendSeverity(match[4].str()),
                     .domain = domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain,
-                    .location = buildLocation(match[1].str(), match[2].str(), match[3].str()),
+                    .location = buildBackendDiagnosticLocation(match[1].str(), match[2].str(), match[3].str()),
                     .code = trimWhitespace(match[5].str()),
                     .message = normalizeBackendMessage(domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain, match[6].str())
                 };
             }
+
+            if (auto contextNote = parseBackendContextNoteLine(line); contextNote.has_value())
+                return contextNote;
 
             if (std::regex_match(line, match, toolSeverityPattern))
             {
