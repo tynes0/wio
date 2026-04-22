@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <optional>
 #include <regex>
 #include <sstream>
@@ -473,6 +474,7 @@ namespace wio
         {
             int exitCode = EXIT_FAILURE;
             std::string output;
+            std::string command;
         };
 
         enum class BackendDiagnosticSeverity : uint8_t
@@ -503,6 +505,7 @@ namespace wio
         CommandResult runCommandCaptureOutput(const std::string& command)
         {
             CommandResult result;
+            result.command = command;
             const std::string redirectedCommand = command + " 2>&1";
 
 #if defined(_WIN32)
@@ -573,6 +576,26 @@ namespace wio
                    lower.ends_with(".ixx");
         }
 
+        bool isWioSourceFilePath(std::string_view value)
+        {
+            if (value.empty())
+                return false;
+
+            return toLowerAscii(trimWhitespace(value)).ends_with(".wio");
+        }
+
+        bool isGeneratedBackendFilePath(std::string_view value)
+        {
+            if (value.empty())
+                return false;
+
+            const std::string trimmed = trimWhitespace(value);
+            if (trimmed == "<wio-generated>")
+                return true;
+
+            return toLowerAscii(trimmed).ends_with(".wio.cpp");
+        }
+
         std::string normalizeDiagnosticFilePath(std::string_view rawPath)
         {
             std::string pathText = trimWhitespace(rawPath);
@@ -586,6 +609,112 @@ namespace wio
                 return absolutePath.make_preferred().string();
 
             return path.make_preferred().string();
+        }
+
+        std::string unescapeCppLineDirectiveString(std::string_view rawValue)
+        {
+            std::string result;
+            result.reserve(rawValue.size());
+
+            bool isEscaping = false;
+            for (char ch : rawValue)
+            {
+                if (isEscaping)
+                {
+                    switch (ch)
+                    {
+                    case '\\': result.push_back('\\'); break;
+                    case '"': result.push_back('"'); break;
+                    case 'n': result.push_back('\n'); break;
+                    case 'r': result.push_back('\r'); break;
+                    case 't': result.push_back('\t'); break;
+                    default:
+                        result.push_back(ch);
+                        break;
+                    }
+
+                    isEscaping = false;
+                    continue;
+                }
+
+                if (ch == '\\')
+                {
+                    isEscaping = true;
+                    continue;
+                }
+
+                result.push_back(ch);
+            }
+
+            if (isEscaping)
+                result.push_back('\\');
+
+            return result;
+        }
+
+        std::optional<common::Location> remapGeneratedCppLocation(const common::Location& location)
+        {
+            if (location.file.empty() || !toLowerAscii(location.file).ends_with(".wio.cpp") || location.line == 0)
+                return std::nullopt;
+
+            std::ifstream generatedFile(location.file);
+            if (!generatedFile.is_open())
+                return std::nullopt;
+
+            static const std::regex lineDirectivePattern(R"wio(^\s*#line\s+([0-9]+)\s+"(.*)"\s*$)wio");
+
+            std::string currentVirtualFile;
+            uint64_t currentVirtualLine = 0;
+            std::string physicalLineText;
+            uint64_t physicalLine = 0;
+
+            while (std::getline(generatedFile, physicalLineText))
+            {
+                ++physicalLine;
+
+                std::smatch match;
+                if (std::regex_match(physicalLineText, match, lineDirectivePattern))
+                {
+                    currentVirtualFile = normalizeDiagnosticFilePath(unescapeCppLineDirectiveString(match[2].str()));
+                    currentVirtualLine = static_cast<uint64_t>(std::stoull(match[1].str())) - 1;
+
+                    if (physicalLine == location.line)
+                    {
+                        return common::Location{
+                            .file = currentVirtualFile,
+                            .line = currentVirtualLine + 1,
+                            .column = location.column
+                        };
+                    }
+
+                    continue;
+                }
+
+                if (!currentVirtualFile.empty())
+                    ++currentVirtualLine;
+
+                if (physicalLine == location.line)
+                {
+                    if (currentVirtualFile.empty())
+                        return std::nullopt;
+
+                    return common::Location{
+                        .file = currentVirtualFile,
+                        .line = currentVirtualLine,
+                        .column = location.column
+                    };
+                }
+            }
+
+            return std::nullopt;
+        }
+
+        common::Location normalizeBackendLocation(common::Location location)
+        {
+            if (auto remappedLocation = remapGeneratedCppLocation(location); remappedLocation.has_value())
+                return *remappedLocation;
+
+            return location;
         }
 
         std::vector<std::string> splitLines(std::string_view text)
@@ -737,7 +866,7 @@ namespace wio
                 location.line = static_cast<uint64_t>(std::stoull(lineText));
                 if (!columnText.empty())
                     location.column = static_cast<uint64_t>(std::stoull(columnText));
-                return location;
+                return normalizeBackendLocation(std::move(location));
             };
 
             if (std::regex_match(line, match, gccWithColumnPattern))
@@ -787,7 +916,10 @@ namespace wio
                 };
 
                 if (looksLikeSourceFilePath(toolText))
+                {
                     diagnostic.location.file = normalizeDiagnosticFilePath(toolText);
+                    diagnostic.location = normalizeBackendLocation(std::move(diagnostic.location));
+                }
                 else
                     diagnostic.sourceLabel = backendDomainLabel(domain);
 
@@ -845,12 +977,35 @@ namespace wio
                 message = diagnostic.code + ": " + message;
 
             const bool hasLocationLabel = diagnostic.location.hasFile();
-            const std::string label = hasLocationLabel
-                ? diagnostic.location.toDiagnosticString()
-                : (!diagnostic.sourceLabel.empty() ? diagnostic.sourceLabel : backendDomainLabel(diagnostic.domain));
+            const bool isGeneratedSource = isGeneratedBackendFilePath(diagnostic.location.file);
+            const bool isWioSource = isWioSourceFilePath(diagnostic.location.file);
 
-            const bool isWioSource = diagnostic.location.file.ends_with(".wio");
-            if (!isWioSource)
+            std::string label;
+            if (hasLocationLabel)
+            {
+                if (isGeneratedSource)
+                {
+                    label = "backend:generated-cpp";
+                    if (diagnostic.location.line != 0)
+                    {
+                        label += ":" + std::to_string(diagnostic.location.line);
+                        if (diagnostic.location.column != 0)
+                            label += ":" + std::to_string(diagnostic.location.column);
+                    }
+                }
+                else
+                {
+                    label = diagnostic.location.toDiagnosticString();
+                }
+            }
+            else
+            {
+                label = !diagnostic.sourceLabel.empty() ? diagnostic.sourceLabel : backendDomainLabel(diagnostic.domain);
+            }
+
+            if (isGeneratedSource)
+                message = "Generated C++ wrapper: " + message;
+            else if (!isWioSource)
                 message = backendDomainPrefix(diagnostic.domain) + ": " + message;
 
             switch (diagnostic.severity)
@@ -867,7 +1022,59 @@ namespace wio
             }
         }
 
-        void reportBackendCommandFailure(std::string_view summary, int exitCode, const std::string& output)
+        std::string buildBackendFailureSummary(std::string_view fallbackSummary,
+                                               const std::vector<BackendDiagnostic>& diagnostics)
+        {
+            if (diagnostics.empty())
+                return std::string(fallbackSummary);
+
+            bool sawGeneratedCompilerDiagnostic = false;
+            int compilerCount = 0;
+            int linkerCount = 0;
+            int archiverCount = 0;
+
+            for (const auto& diagnostic : diagnostics)
+            {
+                if (diagnostic.severity != BackendDiagnosticSeverity::Error)
+                    continue;
+
+                switch (diagnostic.domain)
+                {
+                case BackendDiagnosticDomain::Compiler:
+                    ++compilerCount;
+                    if (isGeneratedBackendFilePath(diagnostic.location.file))
+                        sawGeneratedCompilerDiagnostic = true;
+                    break;
+                case BackendDiagnosticDomain::Linker:
+                    ++linkerCount;
+                    break;
+                case BackendDiagnosticDomain::Archiver:
+                    ++archiverCount;
+                    break;
+                case BackendDiagnosticDomain::Unknown:
+                    break;
+                }
+            }
+
+            if (sawGeneratedCompilerDiagnostic)
+                return "Generated C++ wrapper compilation failed";
+
+            if (linkerCount > compilerCount && linkerCount >= archiverCount)
+                return "Native linker failed";
+
+            if (archiverCount > 0 && archiverCount >= compilerCount && archiverCount >= linkerCount)
+                return "Native archiver failed";
+
+            if (compilerCount > 0)
+                return "Native C++ compiler failed";
+
+            return std::string(fallbackSummary);
+        }
+
+        void reportBackendCommandFailure(std::string_view summary,
+                                         int exitCode,
+                                         const std::string& output,
+                                         std::string_view command = {})
         {
             std::vector<BackendDiagnostic> diagnostics;
             diagnostics.reserve(8);
@@ -923,7 +1130,10 @@ namespace wio
                 WIO_LOG_INFO("Backend context:\n{}", extraContext);
             }
 
-            WIO_LOG_FATAL("{} with code: {}", summary, exitCode);
+            if (!trimWhitespace(command).empty())
+                WIO_LOG_INFO("Backend command:\n{}", command);
+
+            WIO_LOG_FATAL("{} with code: {}", buildBackendFailureSummary(summary, diagnostics), exitCode);
         }
 
         void dumpTokens(const std::vector<Token>& tokens)
@@ -1758,7 +1968,7 @@ namespace wio
 
                 if (exitCode != 0)
                 {
-                    reportBackendCommandFailure("Backend object compilation failed", exitCode, compileResult.output);
+                    reportBackendCommandFailure("Backend object compilation failed", exitCode, compileResult.output, compileResult.command);
                     return EXIT_FAILURE;
                 }
 
@@ -1772,7 +1982,7 @@ namespace wio
                 exitCode = archiveResult.exitCode;
                 if (exitCode != 0)
                 {
-                    reportBackendCommandFailure("Static library archive creation failed", exitCode, archiveResult.output);
+                    reportBackendCommandFailure("Static library archive creation failed", exitCode, archiveResult.output, archiveResult.command);
                     return EXIT_FAILURE;
                 }
             }
@@ -1804,7 +2014,7 @@ namespace wio
                 
                 if (exitCode != 0)
                 {
-                    reportBackendCommandFailure("Backend compilation failed", exitCode, backendResult.output);
+                    reportBackendCommandFailure("Backend compilation failed", exitCode, backendResult.output, backendResult.command);
                     return EXIT_FAILURE;
                 }
             }

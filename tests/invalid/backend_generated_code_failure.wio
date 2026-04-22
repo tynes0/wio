@@ -1,0 +1,5 @@
+use @CppHeader("backend_generated_wrapper_break.h");
+
+fn Entry(args: string[]) -> i32 {
+    return 0;
+}

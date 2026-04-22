@@ -1204,6 +1204,14 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/native/backend_compile_error_source.cpp"
     )
 
+    add_wio_backend_failure_test(
+        wio_invalid_backend_generated_code_failure
+        "${CMAKE_SOURCE_DIR}/tests/invalid/backend_generated_code_failure.wio"
+        "Error \\[backend:generated-cpp:[0-9]+:[0-9]+\\]: Generated C\\+\\+ wrapper:"
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
+    )
+
     add_wio_failure_test(
         wio_invalid_cpp_name_native_invalid_symbol
         "${CMAKE_SOURCE_DIR}/tests/invalid/cpp_name_native_invalid_symbol.wio"
