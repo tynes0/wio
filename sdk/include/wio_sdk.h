@@ -1,10 +1,13 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <initializer_list>
+#include <map>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -12,6 +15,7 @@
 #include <string_view>
 #include <tuple>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -25,6 +29,7 @@
 
 namespace wio
 {
+    using String = std::string;
     using i8 = std::int8_t;
     using i16 = std::int16_t;
     using i32 = std::int32_t;
@@ -41,10 +46,30 @@ namespace wio
     using byte = std::byte;
     using string = std::string;
     using object_handle = std::uintptr_t;
+
+    template <typename T>
+    using DArray = std::vector<T>;
+
+    template <typename T, std::size_t N>
+    using SArray = std::array<T, N>;
+
+    template <typename K, typename V>
+    using Dict = std::unordered_map<K, V>;
+
+    template <typename K, typename V>
+    using Tree = std::map<K, V>;
 }
 
 namespace wio::sdk
 {
+    enum class FieldAccess
+    {
+        Unknown,
+        Public,
+        Protected,
+        Private
+    };
+
     enum class ErrorCode
     {
         InvalidArgument,
@@ -85,6 +110,1115 @@ namespace wio::sdk
         ErrorCode code_;
     };
 
+    class TypeDescriptorView
+    {
+    public:
+        TypeDescriptorView() = default;
+
+        explicit TypeDescriptorView(const WioModuleTypeDescriptor* descriptor) noexcept
+            : descriptor_(descriptor)
+        {
+        }
+
+        [[nodiscard]] explicit operator bool() const noexcept
+        {
+            return descriptor_ != nullptr;
+        }
+
+        [[nodiscard]] const WioModuleTypeDescriptor* raw() const noexcept
+        {
+            return descriptor_;
+        }
+
+        [[nodiscard]] std::string_view name() const noexcept
+        {
+            return descriptor_ != nullptr && descriptor_->displayName != nullptr
+                ? std::string_view(descriptor_->displayName)
+                : std::string_view{};
+        }
+
+        [[nodiscard]] std::string_view logical_name() const noexcept
+        {
+            return descriptor_ != nullptr && descriptor_->logicalTypeName != nullptr
+                ? std::string_view(descriptor_->logicalTypeName)
+                : std::string_view{};
+        }
+
+        [[nodiscard]] WioModuleTypeDescriptorKind kind() const noexcept
+        {
+            return descriptor_ != nullptr ? descriptor_->kind : WIO_MODULE_TYPE_DESC_UNKNOWN;
+        }
+
+        [[nodiscard]] bool is_known() const noexcept
+        {
+            return descriptor_ != nullptr && descriptor_->kind != WIO_MODULE_TYPE_DESC_UNKNOWN;
+        }
+
+        [[nodiscard]] bool is_primitive() const noexcept
+        {
+            return kind() == WIO_MODULE_TYPE_DESC_PRIMITIVE;
+        }
+
+        [[nodiscard]] bool is_string() const noexcept
+        {
+            return kind() == WIO_MODULE_TYPE_DESC_STRING;
+        }
+
+        [[nodiscard]] bool is_object() const noexcept
+        {
+            return kind() == WIO_MODULE_TYPE_DESC_OBJECT;
+        }
+
+        [[nodiscard]] bool is_component() const noexcept
+        {
+            return kind() == WIO_MODULE_TYPE_DESC_COMPONENT;
+        }
+
+        [[nodiscard]] bool is_dynamic_array() const noexcept
+        {
+            return kind() == WIO_MODULE_TYPE_DESC_DYNAMIC_ARRAY;
+        }
+
+        [[nodiscard]] bool is_static_array() const noexcept
+        {
+            return kind() == WIO_MODULE_TYPE_DESC_STATIC_ARRAY;
+        }
+
+        [[nodiscard]] bool is_array() const noexcept
+        {
+            return is_dynamic_array() || is_static_array();
+        }
+
+        [[nodiscard]] bool is_dict() const noexcept
+        {
+            return kind() == WIO_MODULE_TYPE_DESC_DICT;
+        }
+
+        [[nodiscard]] bool is_tree() const noexcept
+        {
+            return kind() == WIO_MODULE_TYPE_DESC_TREE;
+        }
+
+        [[nodiscard]] bool is_associative_container() const noexcept
+        {
+            return is_dict() || is_tree();
+        }
+
+        [[nodiscard]] bool is_container() const noexcept
+        {
+            return is_array() || is_associative_container();
+        }
+
+        [[nodiscard]] bool is_function() const noexcept
+        {
+            return kind() == WIO_MODULE_TYPE_DESC_FUNCTION;
+        }
+
+        [[nodiscard]] bool is_opaque() const noexcept
+        {
+            return kind() == WIO_MODULE_TYPE_DESC_OPAQUE;
+        }
+
+        [[nodiscard]] WioAbiType abi_type() const noexcept
+        {
+            return descriptor_ != nullptr ? descriptor_->abiType : WIO_ABI_UNKNOWN;
+        }
+
+        [[nodiscard]] bool has_abi_type() const noexcept
+        {
+            return abi_type() != WIO_ABI_UNKNOWN;
+        }
+
+        [[nodiscard]] bool is_void() const noexcept
+        {
+            return abi_type() == WIO_ABI_VOID;
+        }
+
+        [[nodiscard]] bool is_bool() const noexcept
+        {
+            return abi_type() == WIO_ABI_BOOL;
+        }
+
+        [[nodiscard]] bool is_char() const noexcept
+        {
+            return abi_type() == WIO_ABI_CHAR;
+        }
+
+        [[nodiscard]] bool is_uchar() const noexcept
+        {
+            return abi_type() == WIO_ABI_UCHAR;
+        }
+
+        [[nodiscard]] bool is_byte() const noexcept
+        {
+            return abi_type() == WIO_ABI_BYTE;
+        }
+
+        [[nodiscard]] bool is_i8() const noexcept
+        {
+            return abi_type() == WIO_ABI_I8;
+        }
+
+        [[nodiscard]] bool is_i16() const noexcept
+        {
+            return abi_type() == WIO_ABI_I16;
+        }
+
+        [[nodiscard]] bool is_i32() const noexcept
+        {
+            return abi_type() == WIO_ABI_I32;
+        }
+
+        [[nodiscard]] bool is_i64() const noexcept
+        {
+            return abi_type() == WIO_ABI_I64;
+        }
+
+        [[nodiscard]] bool is_u8() const noexcept
+        {
+            return abi_type() == WIO_ABI_U8;
+        }
+
+        [[nodiscard]] bool is_u16() const noexcept
+        {
+            return abi_type() == WIO_ABI_U16;
+        }
+
+        [[nodiscard]] bool is_u32() const noexcept
+        {
+            return abi_type() == WIO_ABI_U32;
+        }
+
+        [[nodiscard]] bool is_u64() const noexcept
+        {
+            return abi_type() == WIO_ABI_U64;
+        }
+
+        [[nodiscard]] bool is_isize() const noexcept
+        {
+            return abi_type() == WIO_ABI_ISIZE;
+        }
+
+        [[nodiscard]] bool is_usize() const noexcept
+        {
+            return abi_type() == WIO_ABI_USIZE;
+        }
+
+        [[nodiscard]] bool is_pointer_sized_integer() const noexcept
+        {
+            return is_isize() || is_usize();
+        }
+
+        [[nodiscard]] bool is_f32() const noexcept
+        {
+            return abi_type() == WIO_ABI_F32;
+        }
+
+        [[nodiscard]] bool is_f64() const noexcept
+        {
+            return abi_type() == WIO_ABI_F64;
+        }
+
+        [[nodiscard]] bool is_signed_integer() const noexcept
+        {
+            return is_i8() || is_i16() || is_i32() || is_i64() || is_isize();
+        }
+
+        [[nodiscard]] bool is_unsigned_integer() const noexcept
+        {
+            return is_u8() || is_u16() || is_u32() || is_u64() || is_usize();
+        }
+
+        [[nodiscard]] bool is_integer() const noexcept
+        {
+            return is_signed_integer() || is_unsigned_integer();
+        }
+
+        [[nodiscard]] bool is_floating_point() const noexcept
+        {
+            return is_f32() || is_f64();
+        }
+
+        [[nodiscard]] bool is_numeric() const noexcept
+        {
+            return is_integer() || is_floating_point();
+        }
+
+        [[nodiscard]] std::uint64_t static_extent() const noexcept
+        {
+            return descriptor_ != nullptr ? descriptor_->staticArraySize : 0u;
+        }
+
+        [[nodiscard]] bool has_element_type() const noexcept
+        {
+            return descriptor_ != nullptr && descriptor_->elementType != nullptr;
+        }
+
+        [[nodiscard]] TypeDescriptorView element_type() const noexcept
+        {
+            return TypeDescriptorView(descriptor_ != nullptr ? descriptor_->elementType : nullptr);
+        }
+
+        [[nodiscard]] bool has_key_type() const noexcept
+        {
+            return descriptor_ != nullptr && descriptor_->keyType != nullptr;
+        }
+
+        [[nodiscard]] TypeDescriptorView key_type() const noexcept
+        {
+            return TypeDescriptorView(descriptor_ != nullptr ? descriptor_->keyType : nullptr);
+        }
+
+        [[nodiscard]] bool has_value_type() const noexcept
+        {
+            return descriptor_ != nullptr && descriptor_->valueType != nullptr;
+        }
+
+        [[nodiscard]] TypeDescriptorView value_type() const noexcept
+        {
+            return TypeDescriptorView(descriptor_ != nullptr ? descriptor_->valueType : nullptr);
+        }
+
+        [[nodiscard]] bool has_return_type() const noexcept
+        {
+            return descriptor_ != nullptr && descriptor_->returnType != nullptr;
+        }
+
+        [[nodiscard]] TypeDescriptorView return_type() const noexcept
+        {
+            return TypeDescriptorView(descriptor_ != nullptr ? descriptor_->returnType : nullptr);
+        }
+
+        [[nodiscard]] std::uint32_t parameter_count() const noexcept
+        {
+            return descriptor_ != nullptr ? descriptor_->parameterCount : 0u;
+        }
+
+        [[nodiscard]] bool has_parameter_types() const noexcept
+        {
+            return descriptor_ != nullptr && descriptor_->parameterCount > 0u && descriptor_->parameterTypes != nullptr;
+        }
+
+        [[nodiscard]] TypeDescriptorView parameter_type(std::uint32_t index) const noexcept
+        {
+            if (descriptor_ == nullptr || descriptor_->parameterTypes == nullptr || index >= descriptor_->parameterCount)
+                return TypeDescriptorView();
+            return TypeDescriptorView(descriptor_->parameterTypes[index]);
+        }
+
+    private:
+        const WioModuleTypeDescriptor* descriptor_ = nullptr;
+    };
+
+    struct FieldInfo
+    {
+        std::string_view name{};
+        FieldAccess access = FieldAccess::Unknown;
+        bool readable = false;
+        bool writable = false;
+        bool readOnly = false;
+        TypeDescriptorView type{};
+        const WioModuleField* descriptor = nullptr;
+
+        [[nodiscard]] std::string_view type_name() const noexcept
+        {
+            return type.name();
+        }
+
+        [[nodiscard]] std::string_view logical_type_name() const noexcept
+        {
+            return type.logical_name();
+        }
+
+        [[nodiscard]] WioModuleTypeDescriptorKind kind() const noexcept
+        {
+            return type.kind();
+        }
+
+        [[nodiscard]] WioAbiType abi_type() const noexcept
+        {
+            return type.abi_type();
+        }
+
+        [[nodiscard]] bool can_read() const noexcept
+        {
+            return readable;
+        }
+
+        [[nodiscard]] bool can_write() const noexcept
+        {
+            return writable;
+        }
+
+        [[nodiscard]] bool is_read_only() const noexcept
+        {
+            return readOnly;
+        }
+
+        [[nodiscard]] bool is_primitive() const noexcept
+        {
+            return type.is_primitive();
+        }
+
+        [[nodiscard]] bool is_string() const noexcept
+        {
+            return type.is_string();
+        }
+
+        [[nodiscard]] bool is_object() const noexcept
+        {
+            return type.is_object();
+        }
+
+        [[nodiscard]] bool is_component() const noexcept
+        {
+            return type.is_component();
+        }
+
+        [[nodiscard]] bool is_dynamic_array() const noexcept
+        {
+            return type.is_dynamic_array();
+        }
+
+        [[nodiscard]] bool is_static_array() const noexcept
+        {
+            return type.is_static_array();
+        }
+
+        [[nodiscard]] bool is_array() const noexcept
+        {
+            return type.is_array();
+        }
+
+        [[nodiscard]] bool is_dict() const noexcept
+        {
+            return type.is_dict();
+        }
+
+        [[nodiscard]] bool is_tree() const noexcept
+        {
+            return type.is_tree();
+        }
+
+        [[nodiscard]] bool is_container() const noexcept
+        {
+            return type.is_container();
+        }
+
+        [[nodiscard]] bool is_function() const noexcept
+        {
+            return type.is_function();
+        }
+
+        [[nodiscard]] bool is_numeric() const noexcept
+        {
+            return type.is_numeric();
+        }
+    };
+
+    template <typename T>
+    class WioArray
+    {
+    public:
+        using value_type = T;
+        using container_type = wio::DArray<T>;
+        using size_type = typename container_type::size_type;
+        using iterator = typename container_type::iterator;
+        using const_iterator = typename container_type::const_iterator;
+
+        WioArray() = default;
+
+        WioArray(container_type values)
+            : values_(std::move(values))
+        {
+        }
+
+        WioArray(std::initializer_list<T> values)
+            : values_(values)
+        {
+        }
+
+        [[nodiscard]] bool empty() const noexcept
+        {
+            return values_.empty();
+        }
+
+        [[nodiscard]] size_type count() const noexcept
+        {
+            return values_.size();
+        }
+
+        [[nodiscard]] size_type size() const noexcept
+        {
+            return values_.size();
+        }
+
+        void clear() noexcept(noexcept(values_.clear()))
+        {
+            values_.clear();
+        }
+
+        void reserve(size_type capacity)
+        {
+            values_.reserve(capacity);
+        }
+
+        void push(const T& value)
+        {
+            values_.push_back(value);
+        }
+
+        void push(T&& value)
+        {
+            values_.push_back(std::move(value));
+        }
+
+        template <typename... TArgs>
+        T& emplace(TArgs&&... args)
+        {
+            return values_.emplace_back(std::forward<TArgs>(args)...);
+        }
+
+        [[nodiscard]] T* data() noexcept
+        {
+            return values_.data();
+        }
+
+        [[nodiscard]] const T* data() const noexcept
+        {
+            return values_.data();
+        }
+
+        [[nodiscard]] T& front()
+        {
+            return values_.front();
+        }
+
+        [[nodiscard]] const T& front() const
+        {
+            return values_.front();
+        }
+
+        [[nodiscard]] T& back()
+        {
+            return values_.back();
+        }
+
+        [[nodiscard]] const T& back() const
+        {
+            return values_.back();
+        }
+
+        [[nodiscard]] T& operator[](const size_type index)
+        {
+            return values_[index];
+        }
+
+        [[nodiscard]] const T& operator[](const size_type index) const
+        {
+            return values_[index];
+        }
+
+        [[nodiscard]] T& at(const size_type index)
+        {
+            return values_.at(index);
+        }
+
+        [[nodiscard]] const T& at(const size_type index) const
+        {
+            return values_.at(index);
+        }
+
+        [[nodiscard]] bool contains(const T& value) const
+        {
+            return std::find(values_.begin(), values_.end(), value) != values_.end();
+        }
+
+        [[nodiscard]] iterator begin() noexcept
+        {
+            return values_.begin();
+        }
+
+        [[nodiscard]] iterator end() noexcept
+        {
+            return values_.end();
+        }
+
+        [[nodiscard]] const_iterator begin() const noexcept
+        {
+            return values_.begin();
+        }
+
+        [[nodiscard]] const_iterator end() const noexcept
+        {
+            return values_.end();
+        }
+
+        [[nodiscard]] const_iterator cbegin() const noexcept
+        {
+            return values_.cbegin();
+        }
+
+        [[nodiscard]] const_iterator cend() const noexcept
+        {
+            return values_.cend();
+        }
+
+        [[nodiscard]] container_type& raw() & noexcept
+        {
+            return values_;
+        }
+
+        [[nodiscard]] const container_type& raw() const & noexcept
+        {
+            return values_;
+        }
+
+        [[nodiscard]] container_type take() &&
+        {
+            return std::move(values_);
+        }
+
+    private:
+        container_type values_{};
+    };
+
+    template <typename T, std::size_t N>
+    class WioStaticArray
+    {
+    public:
+        using value_type = T;
+        using container_type = wio::SArray<T, N>;
+        using size_type = typename container_type::size_type;
+        using iterator = typename container_type::iterator;
+        using const_iterator = typename container_type::const_iterator;
+
+        WioStaticArray() = default;
+
+        WioStaticArray(container_type values)
+            : values_(std::move(values))
+        {
+        }
+
+        WioStaticArray(std::initializer_list<T> values)
+        {
+            if (values.size() != N)
+            {
+                std::ostringstream message;
+                message << "Wio SDK static array expected exactly " << N
+                        << " element(s) but received " << values.size() << '.';
+                throw Error(ErrorCode::InvalidArgument, message.str());
+            }
+
+            std::copy(values.begin(), values.end(), values_.begin());
+        }
+
+        [[nodiscard]] static constexpr size_type count() noexcept
+        {
+            return N;
+        }
+
+        [[nodiscard]] static constexpr size_type size() noexcept
+        {
+            return N;
+        }
+
+        [[nodiscard]] bool empty() const noexcept
+        {
+            return N == 0u;
+        }
+
+        [[nodiscard]] T* data() noexcept
+        {
+            return values_.data();
+        }
+
+        [[nodiscard]] const T* data() const noexcept
+        {
+            return values_.data();
+        }
+
+        [[nodiscard]] T& front()
+        {
+            return values_.front();
+        }
+
+        [[nodiscard]] const T& front() const
+        {
+            return values_.front();
+        }
+
+        [[nodiscard]] T& back()
+        {
+            return values_.back();
+        }
+
+        [[nodiscard]] const T& back() const
+        {
+            return values_.back();
+        }
+
+        [[nodiscard]] T& operator[](const size_type index)
+        {
+            return values_[index];
+        }
+
+        [[nodiscard]] const T& operator[](const size_type index) const
+        {
+            return values_[index];
+        }
+
+        [[nodiscard]] T& at(const size_type index)
+        {
+            return values_.at(index);
+        }
+
+        [[nodiscard]] const T& at(const size_type index) const
+        {
+            return values_.at(index);
+        }
+
+        [[nodiscard]] iterator begin() noexcept
+        {
+            return values_.begin();
+        }
+
+        [[nodiscard]] iterator end() noexcept
+        {
+            return values_.end();
+        }
+
+        [[nodiscard]] const_iterator begin() const noexcept
+        {
+            return values_.begin();
+        }
+
+        [[nodiscard]] const_iterator end() const noexcept
+        {
+            return values_.end();
+        }
+
+        [[nodiscard]] const_iterator cbegin() const noexcept
+        {
+            return values_.cbegin();
+        }
+
+        [[nodiscard]] const_iterator cend() const noexcept
+        {
+            return values_.cend();
+        }
+
+        [[nodiscard]] container_type& raw() & noexcept
+        {
+            return values_;
+        }
+
+        [[nodiscard]] const container_type& raw() const & noexcept
+        {
+            return values_;
+        }
+
+        [[nodiscard]] container_type take() &&
+        {
+            return std::move(values_);
+        }
+
+    private:
+        container_type values_{};
+    };
+
+    template <typename K, typename V>
+    class WioDict
+    {
+    public:
+        using key_type = K;
+        using mapped_type = V;
+        using value_type = typename wio::Dict<K, V>::value_type;
+        using container_type = wio::Dict<K, V>;
+        using size_type = typename container_type::size_type;
+        using iterator = typename container_type::iterator;
+        using const_iterator = typename container_type::const_iterator;
+
+        WioDict() = default;
+
+        WioDict(container_type values)
+            : values_(std::move(values))
+        {
+        }
+
+        WioDict(std::initializer_list<value_type> values)
+            : values_(values)
+        {
+        }
+
+        [[nodiscard]] bool empty() const noexcept
+        {
+            return values_.empty();
+        }
+
+        [[nodiscard]] size_type count() const noexcept
+        {
+            return values_.size();
+        }
+
+        [[nodiscard]] size_type size() const noexcept
+        {
+            return values_.size();
+        }
+
+        void clear() noexcept(noexcept(values_.clear()))
+        {
+            values_.clear();
+        }
+
+        void reserve(const size_type capacity)
+        {
+            values_.reserve(capacity);
+        }
+
+        [[nodiscard]] bool contains_key(const K& key) const
+        {
+            return values_.find(key) != values_.end();
+        }
+
+        [[nodiscard]] std::optional<V> try_get(const K& key) const
+        {
+            const auto iterator = values_.find(key);
+            if (iterator == values_.end())
+                return std::nullopt;
+            return iterator->second;
+        }
+
+        [[nodiscard]] V get_or(const K& key, V defaultValue) const
+        {
+            const auto iterator = values_.find(key);
+            if (iterator == values_.end())
+                return defaultValue;
+            return iterator->second;
+        }
+
+        void set(K key, V value)
+        {
+            values_.insert_or_assign(std::move(key), std::move(value));
+        }
+
+        [[nodiscard]] bool remove(const K& key)
+        {
+            return values_.erase(key) > 0u;
+        }
+
+        [[nodiscard]] V& operator[](const K& key)
+        {
+            return values_[key];
+        }
+
+        [[nodiscard]] const V& at(const K& key) const
+        {
+            return values_.at(key);
+        }
+
+        [[nodiscard]] V& at(const K& key)
+        {
+            return values_.at(key);
+        }
+
+        [[nodiscard]] wio::DArray<K> keys() const
+        {
+            wio::DArray<K> result;
+            result.reserve(values_.size());
+            for (const auto& entry : values_)
+                result.push_back(entry.first);
+            return result;
+        }
+
+        [[nodiscard]] wio::DArray<V> values() const
+        {
+            wio::DArray<V> result;
+            result.reserve(values_.size());
+            for (const auto& entry : values_)
+                result.push_back(entry.second);
+            return result;
+        }
+
+        [[nodiscard]] iterator begin() noexcept
+        {
+            return values_.begin();
+        }
+
+        [[nodiscard]] iterator end() noexcept
+        {
+            return values_.end();
+        }
+
+        [[nodiscard]] const_iterator begin() const noexcept
+        {
+            return values_.begin();
+        }
+
+        [[nodiscard]] const_iterator end() const noexcept
+        {
+            return values_.end();
+        }
+
+        [[nodiscard]] const_iterator cbegin() const noexcept
+        {
+            return values_.cbegin();
+        }
+
+        [[nodiscard]] const_iterator cend() const noexcept
+        {
+            return values_.cend();
+        }
+
+        [[nodiscard]] container_type& raw() & noexcept
+        {
+            return values_;
+        }
+
+        [[nodiscard]] const container_type& raw() const & noexcept
+        {
+            return values_;
+        }
+
+        [[nodiscard]] container_type take() &&
+        {
+            return std::move(values_);
+        }
+
+    private:
+        container_type values_{};
+    };
+
+    template <typename K, typename V>
+    class WioTree
+    {
+    public:
+        using key_type = K;
+        using mapped_type = V;
+        using value_type = typename wio::Tree<K, V>::value_type;
+        using container_type = wio::Tree<K, V>;
+        using size_type = typename container_type::size_type;
+        using iterator = typename container_type::iterator;
+        using const_iterator = typename container_type::const_iterator;
+
+        WioTree() = default;
+
+        WioTree(container_type values)
+            : values_(std::move(values))
+        {
+        }
+
+        WioTree(std::initializer_list<value_type> values)
+            : values_(values)
+        {
+        }
+
+        [[nodiscard]] bool empty() const noexcept
+        {
+            return values_.empty();
+        }
+
+        [[nodiscard]] size_type count() const noexcept
+        {
+            return values_.size();
+        }
+
+        [[nodiscard]] size_type size() const noexcept
+        {
+            return values_.size();
+        }
+
+        void clear() noexcept(noexcept(values_.clear()))
+        {
+            values_.clear();
+        }
+
+        [[nodiscard]] bool contains_key(const K& key) const
+        {
+            return values_.find(key) != values_.end();
+        }
+
+        [[nodiscard]] std::optional<V> try_get(const K& key) const
+        {
+            const auto iterator = values_.find(key);
+            if (iterator == values_.end())
+                return std::nullopt;
+            return iterator->second;
+        }
+
+        [[nodiscard]] V get_or(const K& key, V defaultValue) const
+        {
+            const auto iterator = values_.find(key);
+            if (iterator == values_.end())
+                return defaultValue;
+            return iterator->second;
+        }
+
+        void set(K key, V value)
+        {
+            values_.insert_or_assign(std::move(key), std::move(value));
+        }
+
+        [[nodiscard]] bool remove(const K& key)
+        {
+            return values_.erase(key) > 0u;
+        }
+
+        [[nodiscard]] V& operator[](const K& key)
+        {
+            return values_[key];
+        }
+
+        [[nodiscard]] const V& at(const K& key) const
+        {
+            return values_.at(key);
+        }
+
+        [[nodiscard]] V& at(const K& key)
+        {
+            return values_.at(key);
+        }
+
+        [[nodiscard]] wio::DArray<K> keys() const
+        {
+            wio::DArray<K> result;
+            result.reserve(values_.size());
+            for (const auto& entry : values_)
+                result.push_back(entry.first);
+            return result;
+        }
+
+        [[nodiscard]] wio::DArray<V> values() const
+        {
+            wio::DArray<V> result;
+            result.reserve(values_.size());
+            for (const auto& entry : values_)
+                result.push_back(entry.second);
+            return result;
+        }
+
+        [[nodiscard]] iterator begin() noexcept
+        {
+            return values_.begin();
+        }
+
+        [[nodiscard]] iterator end() noexcept
+        {
+            return values_.end();
+        }
+
+        [[nodiscard]] const_iterator begin() const noexcept
+        {
+            return values_.begin();
+        }
+
+        [[nodiscard]] const_iterator end() const noexcept
+        {
+            return values_.end();
+        }
+
+        [[nodiscard]] const_iterator cbegin() const noexcept
+        {
+            return values_.cbegin();
+        }
+
+        [[nodiscard]] const_iterator cend() const noexcept
+        {
+            return values_.cend();
+        }
+
+        [[nodiscard]] container_type& raw() & noexcept
+        {
+            return values_;
+        }
+
+        [[nodiscard]] const container_type& raw() const & noexcept
+        {
+            return values_;
+        }
+
+        [[nodiscard]] container_type take() &&
+        {
+            return std::move(values_);
+        }
+
+    private:
+        container_type values_{};
+    };
+
+    template <typename Signature>
+    class WioFunction;
+
+    template <typename TReturn, typename... TArgs>
+    class WioFunction<TReturn(TArgs...)>
+    {
+    public:
+        using function_type = std::function<TReturn(TArgs...)>;
+
+        WioFunction() = default;
+
+        WioFunction(function_type value)
+            : value_(std::move(value))
+        {
+        }
+
+        template <typename TCallable,
+                  typename = std::enable_if_t<
+                      !std::is_same_v<std::decay_t<TCallable>, WioFunction> &&
+                      std::is_constructible_v<function_type, TCallable>>>
+        WioFunction(TCallable&& callable)
+            : value_(std::forward<TCallable>(callable))
+        {
+        }
+
+        [[nodiscard]] bool valid() const noexcept
+        {
+            return static_cast<bool>(value_);
+        }
+
+        [[nodiscard]] explicit operator bool() const noexcept
+        {
+            return valid();
+        }
+
+        [[nodiscard]] function_type& raw() & noexcept
+        {
+            return value_;
+        }
+
+        [[nodiscard]] const function_type& raw() const & noexcept
+        {
+            return value_;
+        }
+
+        [[nodiscard]] function_type take() &&
+        {
+            return std::move(value_);
+        }
+
+        TReturn operator()(TArgs... args) const
+        {
+            return value_(std::forward<TArgs>(args)...);
+        }
+
+    private:
+        function_type value_{};
+    };
+
+    template <typename TReturn, typename... TArgs>
+    class WioFunction<TReturn(*)(TArgs...)> : public WioFunction<TReturn(TArgs...)>
+    {
+    public:
+        using WioFunction<TReturn(TArgs...)>::WioFunction;
+    };
+
+    template <typename TReturn, typename... TArgs>
+    class WioFunction<std::function<TReturn(TArgs...)>> : public WioFunction<TReturn(TArgs...)>
+    {
+    public:
+        using WioFunction<TReturn(TArgs...)>::WioFunction;
+    };
+
     namespace detail
     {
 #if defined(_WIN32)
@@ -120,6 +1254,28 @@ namespace wio::sdk
 
         template <typename T>
         using Decay = std::remove_cv_t<std::remove_reference_t<T>>;
+
+        inline FieldAccess toFieldAccess(const WioModuleAccessModifier accessModifier) noexcept
+        {
+            switch (accessModifier)
+            {
+            case WIO_MODULE_ACCESS_PUBLIC: return FieldAccess::Public;
+            case WIO_MODULE_ACCESS_PROTECTED: return FieldAccess::Protected;
+            case WIO_MODULE_ACCESS_PRIVATE: return FieldAccess::Private;
+            default: return FieldAccess::Unknown;
+            }
+        }
+
+        template <typename T>
+        constexpr bool IsAbiScalarType =
+            std::is_same_v<Decay<T>, bool> ||
+            std::is_same_v<Decay<T>, char> ||
+            std::is_same_v<Decay<T>, unsigned char> ||
+            std::is_same_v<Decay<T>, std::byte> ||
+            std::is_same_v<Decay<T>, std::intptr_t> ||
+            std::is_same_v<Decay<T>, std::uintptr_t> ||
+            std::is_floating_point_v<Decay<T>> ||
+            std::is_integral_v<Decay<T>>;
 
         inline std::string dynamicLibraryErrorMessage()
         {
@@ -654,6 +1810,39 @@ namespace wio::sdk
             return fieldEntry;
         }
 
+        inline FieldInfo makeFieldInfo(const WioModuleField& fieldEntry)
+        {
+            return FieldInfo{
+                fieldEntry.fieldName != nullptr ? std::string_view(fieldEntry.fieldName) : std::string_view{},
+                toFieldAccess(fieldEntry.accessModifier),
+                (fieldEntry.flags & WIO_MODULE_FIELD_READABLE) != 0u,
+                (fieldEntry.flags & WIO_MODULE_FIELD_WRITABLE) != 0u,
+                (fieldEntry.flags & WIO_MODULE_FIELD_READONLY) != 0u,
+                TypeDescriptorView(fieldEntry.typeDescriptor),
+                &fieldEntry
+            };
+        }
+
+        inline std::vector<FieldInfo> listTypeFields(const WioModuleType* typeEntry)
+        {
+            std::vector<FieldInfo> fields;
+            if (typeEntry == nullptr || typeEntry->fields == nullptr || typeEntry->fieldCount == 0u)
+                return fields;
+
+            fields.reserve(typeEntry->fieldCount);
+            for (std::uint32_t index = 0; index < typeEntry->fieldCount; ++index)
+                fields.push_back(makeFieldInfo(typeEntry->fields[index]));
+
+            return fields;
+        }
+
+        inline FieldInfo getTypeFieldInfo(const WioModuleType* typeEntry,
+                                          std::string_view fieldName,
+                                          std::string_view bindingKind)
+        {
+            return makeFieldInfo(*requireTypeField(typeEntry, fieldName, bindingKind));
+        }
+
         inline std::uintptr_t createModuleInstance(const WioModuleType* typeEntry, std::string_view bindingKind)
         {
             if (typeEntry == nullptr || typeEntry->createExport == nullptr || typeEntry->createExport->invoke == nullptr)
@@ -785,7 +1974,7 @@ namespace wio::sdk
                               std::string_view bindingKind)
         {
             const WioModuleField* fieldEntry = requireTypeField(typeEntry, fieldName, bindingKind);
-            if ((fieldEntry->flags & WIO_MODULE_FIELD_READABLE) == 0u || fieldEntry->getterExport == nullptr || fieldEntry->getterExport->invoke == nullptr)
+            if ((fieldEntry->flags & WIO_MODULE_FIELD_READABLE) == 0u || fieldEntry->getterExport == nullptr)
             {
                 std::ostringstream message;
                 message << "Wio SDK field '" << fieldName << "' on exported type '"
@@ -794,21 +1983,40 @@ namespace wio::sdk
                 throw Error(ErrorCode::FieldNotFound, message.str());
             }
 
-            WioValue args[1]{};
-            args[0] = toWioValue(handle);
-
-            WioValue result{};
-            const std::int32_t status = fieldEntry->getterExport->invoke(args, 1u, &result);
-            if (status != WIO_INVOKE_OK)
+            if constexpr (IsAbiScalarType<T>)
             {
-                std::ostringstream message;
-                message << "Wio SDK failed to read field '" << fieldName << "' from exported type '"
-                        << (typeEntry && typeEntry->logicalName ? typeEntry->logicalName : "<unknown>")
-                        << "': " << invokeStatusName(status) << '.';
-                throw Error(ErrorCode::InvokeFailed, message.str());
+                if (fieldEntry->getterExport->invoke != nullptr)
+                {
+                    WioValue args[1]{};
+                    args[0] = toWioValue(handle);
+
+                    WioValue result{};
+                    const std::int32_t status = fieldEntry->getterExport->invoke(args, 1u, &result);
+                    if (status != WIO_INVOKE_OK)
+                    {
+                        std::ostringstream message;
+                        message << "Wio SDK failed to read field '" << fieldName << "' from exported type '"
+                                << (typeEntry && typeEntry->logicalName ? typeEntry->logicalName : "<unknown>")
+                                << "': " << invokeStatusName(status) << '.';
+                        throw Error(ErrorCode::InvokeFailed, message.str());
+                    }
+
+                    return fromWioValue<T>(result);
+                }
             }
 
-            return fromWioValue<T>(result);
+            if (fieldEntry->getterExport->rawFunction == nullptr)
+            {
+                std::ostringstream message;
+                message << "Wio SDK field '" << fieldName << "' on exported type '"
+                        << (typeEntry && typeEntry->logicalName ? typeEntry->logicalName : "<unknown>")
+                        << "' does not expose a raw getter bridge for this host type.";
+                throw Error(ErrorCode::SignatureMismatch, message.str());
+            }
+
+            using Getter = T(*)(std::uintptr_t);
+            auto getter = reinterpret_cast<Getter>(const_cast<void*>(fieldEntry->getterExport->rawFunction));
+            return getter(handle);
         }
 
         template <typename T>
@@ -819,7 +2027,7 @@ namespace wio::sdk
                                  std::string_view bindingKind)
         {
             const WioModuleField* fieldEntry = requireTypeField(typeEntry, fieldName, bindingKind);
-            if ((fieldEntry->flags & WIO_MODULE_FIELD_WRITABLE) == 0u || fieldEntry->setterExport == nullptr || fieldEntry->setterExport->invoke == nullptr)
+            if ((fieldEntry->flags & WIO_MODULE_FIELD_WRITABLE) == 0u || fieldEntry->setterExport == nullptr)
             {
                 std::ostringstream message;
                 message << "Wio SDK field '" << fieldName << "' on exported type '"
@@ -828,19 +2036,47 @@ namespace wio::sdk
                 throw Error(ErrorCode::FieldNotWritable, message.str());
             }
 
-            WioValue args[2]{};
-            args[0] = toWioValue(handle);
-            args[1] = toWioValue(std::forward<T>(value));
+            if constexpr (IsAbiScalarType<T>)
+            {
+                if (fieldEntry->setterExport->invoke != nullptr)
+                {
+                    WioValue args[2]{};
+                    args[0] = toWioValue(handle);
+                    args[1] = toWioValue(std::forward<T>(value));
 
-            const std::int32_t status = fieldEntry->setterExport->invoke(args, 2u, nullptr);
-            if (status != WIO_INVOKE_OK)
+                    const std::int32_t status = fieldEntry->setterExport->invoke(args, 2u, nullptr);
+                    if (status != WIO_INVOKE_OK)
+                    {
+                        std::ostringstream message;
+                        message << "Wio SDK failed to write field '" << fieldName << "' on exported type '"
+                                << (typeEntry && typeEntry->logicalName ? typeEntry->logicalName : "<unknown>")
+                                << "': " << invokeStatusName(status) << '.';
+                        throw Error(ErrorCode::InvokeFailed, message.str());
+                    }
+                    return;
+                }
+            }
+
+            if (fieldEntry->setterExport->rawFunction == nullptr)
             {
                 std::ostringstream message;
-                message << "Wio SDK failed to write field '" << fieldName << "' on exported type '"
+                message << "Wio SDK field '" << fieldName << "' on exported type '"
                         << (typeEntry && typeEntry->logicalName ? typeEntry->logicalName : "<unknown>")
-                        << "': " << invokeStatusName(status) << '.';
-                throw Error(ErrorCode::InvokeFailed, message.str());
+                        << "' does not expose a raw setter bridge for this host type.";
+                throw Error(ErrorCode::SignatureMismatch, message.str());
             }
+
+            using Setter = void(*)(std::uintptr_t, Decay<T>);
+            auto setter = reinterpret_cast<Setter>(const_cast<void*>(fieldEntry->setterExport->rawFunction));
+            setter(handle, std::forward<T>(value));
+        }
+
+        inline std::uintptr_t getModuleFieldHandle(const WioModuleType* typeEntry,
+                                                   std::uintptr_t handle,
+                                                   std::string_view fieldName,
+                                                   std::string_view bindingKind)
+        {
+            return getModuleFieldValue<std::uintptr_t>(typeEntry, handle, fieldName, bindingKind);
         }
 
         template <typename Signature, size_t... Indices>
@@ -975,6 +2211,11 @@ namespace wio::sdk
         }
     }
 
+    class WioObject;
+    class WioComponent;
+    class WioObjectType;
+    class WioComponentType;
+
     class WioObject
     {
     public:
@@ -983,45 +2224,17 @@ namespace wio::sdk
         WioObject(const WioObject&) = delete;
         WioObject& operator=(const WioObject&) = delete;
 
-        WioObject(WioObject&& other) noexcept
-        {
-            *this = std::move(other);
-        }
+        WioObject(WioObject&& other) noexcept;
+        WioObject& operator=(WioObject&& other) noexcept;
+        ~WioObject();
 
-        WioObject& operator=(WioObject&& other) noexcept
-        {
-            if (this == &other)
-                return *this;
-
-            reset();
-            type_ = other.type_;
-            handle_ = other.handle_;
-            other.type_ = nullptr;
-            other.handle_ = 0;
-            return *this;
-        }
-
-        ~WioObject()
-        {
-            reset();
-        }
-
-        [[nodiscard]] explicit operator bool() const noexcept
-        {
-            return type_ != nullptr && handle_ != 0;
-        }
-
-        [[nodiscard]] std::uintptr_t handle() const noexcept
-        {
-            return handle_;
-        }
-
-        [[nodiscard]] const WioModuleType& descriptor() const
-        {
-            if (type_ == nullptr)
-                throw Error(ErrorCode::TypeNotFound, "Wio SDK object handle is not bound to an exported object type.");
-            return *type_;
-        }
+        [[nodiscard]] explicit operator bool() const noexcept;
+        [[nodiscard]] std::uintptr_t handle() const noexcept;
+        [[nodiscard]] bool owns_handle() const noexcept;
+        [[nodiscard]] bool is_borrowed() const noexcept;
+        [[nodiscard]] const WioModuleType& descriptor() const;
+        [[nodiscard]] std::vector<FieldInfo> list_fields() const;
+        [[nodiscard]] FieldInfo field_info(std::string_view fieldName) const;
 
         template <typename T>
         T get(std::string_view fieldName) const
@@ -1030,10 +2243,106 @@ namespace wio::sdk
         }
 
         template <typename T>
+        [[nodiscard]] WioArray<T> get_array(std::string_view fieldName) const
+        {
+            return WioArray<T>(get<wio::DArray<T>>(fieldName));
+        }
+
+        template <typename T, std::size_t N>
+        [[nodiscard]] WioStaticArray<T, N> get_static_array(std::string_view fieldName) const
+        {
+            return WioStaticArray<T, N>(get<wio::SArray<T, N>>(fieldName));
+        }
+
+        template <typename K, typename V>
+        [[nodiscard]] WioDict<K, V> get_dict(std::string_view fieldName) const
+        {
+            return WioDict<K, V>(get<wio::Dict<K, V>>(fieldName));
+        }
+
+        template <typename K, typename V>
+        [[nodiscard]] WioTree<K, V> get_tree(std::string_view fieldName) const
+        {
+            return WioTree<K, V>(get<wio::Tree<K, V>>(fieldName));
+        }
+
+        template <typename Signature>
+        [[nodiscard]] WioFunction<Signature> get_function(std::string_view fieldName) const
+        {
+            using RawFunction = typename detail::FunctionTraits<Signature>::StdFunction;
+            return WioFunction<Signature>(get<RawFunction>(fieldName));
+        }
+
+        template <typename T>
         void set(std::string_view fieldName, T&& value) const
         {
             detail::setModuleFieldValue(type_, handle_, fieldName, std::forward<T>(value), "object");
         }
+
+        template <typename T>
+        void set_array(std::string_view fieldName, WioArray<T> value) const
+        {
+            set(fieldName, std::move(value).take());
+        }
+
+        template <typename T>
+        void set_array(std::string_view fieldName, wio::DArray<T> value) const
+        {
+            set(fieldName, std::move(value));
+        }
+
+        template <typename T, std::size_t N>
+        void set_static_array(std::string_view fieldName, WioStaticArray<T, N> value) const
+        {
+            set(fieldName, std::move(value).take());
+        }
+
+        template <typename T, std::size_t N>
+        void set_static_array(std::string_view fieldName, wio::SArray<T, N> value) const
+        {
+            set(fieldName, std::move(value));
+        }
+
+        template <typename K, typename V>
+        void set_dict(std::string_view fieldName, WioDict<K, V> value) const
+        {
+            set(fieldName, std::move(value).take());
+        }
+
+        template <typename K, typename V>
+        void set_dict(std::string_view fieldName, wio::Dict<K, V> value) const
+        {
+            set(fieldName, std::move(value));
+        }
+
+        template <typename K, typename V>
+        void set_tree(std::string_view fieldName, WioTree<K, V> value) const
+        {
+            set(fieldName, std::move(value).take());
+        }
+
+        template <typename K, typename V>
+        void set_tree(std::string_view fieldName, wio::Tree<K, V> value) const
+        {
+            set(fieldName, std::move(value));
+        }
+
+        template <typename Signature>
+        void set_function(std::string_view fieldName, WioFunction<Signature> value) const
+        {
+            set(fieldName, std::move(value).take());
+        }
+
+        template <typename Signature>
+        void set_function(std::string_view fieldName, typename detail::FunctionTraits<Signature>::StdFunction value) const
+        {
+            set(fieldName, std::move(value));
+        }
+
+        [[nodiscard]] WioObject get_object(std::string_view fieldName) const;
+        [[nodiscard]] WioComponent get_component(std::string_view fieldName) const;
+        void set_object(std::string_view fieldName, const WioObject& value) const;
+        void set_component(std::string_view fieldName, const WioComponent& value) const;
 
         template <typename Signature>
         auto method(std::string_view methodName) const -> typename detail::FunctionTraits<Signature>::StdFunction
@@ -1041,24 +2350,24 @@ namespace wio::sdk
             return detail::bindBoundMethod<Signature>(type_, handle_, std::string(methodName), "object");
         }
 
-        void reset() noexcept
-        {
-            detail::destroyModuleInstance(type_, handle_);
-            type_ = nullptr;
-            handle_ = 0;
-        }
+        void reset() noexcept;
 
     private:
         friend class WioObjectType;
+        friend class WioComponent;
 
-        WioObject(const WioModuleType* typeEntry, std::uintptr_t instanceHandle)
-            : type_(typeEntry),
-              handle_(instanceHandle)
+        WioObject(const WioModuleApi* api, const WioModuleType* typeEntry, std::uintptr_t instanceHandle, bool ownsHandle) noexcept
+            : api_(api),
+              type_(typeEntry),
+              handle_(instanceHandle),
+              ownsHandle_(ownsHandle)
         {
         }
 
+        const WioModuleApi* api_ = nullptr;
         const WioModuleType* type_ = nullptr;
         std::uintptr_t handle_ = 0;
+        bool ownsHandle_ = false;
     };
 
     class WioComponent
@@ -1069,45 +2378,17 @@ namespace wio::sdk
         WioComponent(const WioComponent&) = delete;
         WioComponent& operator=(const WioComponent&) = delete;
 
-        WioComponent(WioComponent&& other) noexcept
-        {
-            *this = std::move(other);
-        }
+        WioComponent(WioComponent&& other) noexcept;
+        WioComponent& operator=(WioComponent&& other) noexcept;
+        ~WioComponent();
 
-        WioComponent& operator=(WioComponent&& other) noexcept
-        {
-            if (this == &other)
-                return *this;
-
-            reset();
-            type_ = other.type_;
-            handle_ = other.handle_;
-            other.type_ = nullptr;
-            other.handle_ = 0;
-            return *this;
-        }
-
-        ~WioComponent()
-        {
-            reset();
-        }
-
-        [[nodiscard]] explicit operator bool() const noexcept
-        {
-            return type_ != nullptr && handle_ != 0;
-        }
-
-        [[nodiscard]] std::uintptr_t handle() const noexcept
-        {
-            return handle_;
-        }
-
-        [[nodiscard]] const WioModuleType& descriptor() const
-        {
-            if (type_ == nullptr)
-                throw Error(ErrorCode::TypeNotFound, "Wio SDK component handle is not bound to an exported component type.");
-            return *type_;
-        }
+        [[nodiscard]] explicit operator bool() const noexcept;
+        [[nodiscard]] std::uintptr_t handle() const noexcept;
+        [[nodiscard]] bool owns_handle() const noexcept;
+        [[nodiscard]] bool is_borrowed() const noexcept;
+        [[nodiscard]] const WioModuleType& descriptor() const;
+        [[nodiscard]] std::vector<FieldInfo> list_fields() const;
+        [[nodiscard]] FieldInfo field_info(std::string_view fieldName) const;
 
         template <typename T>
         T get(std::string_view fieldName) const
@@ -1116,29 +2397,125 @@ namespace wio::sdk
         }
 
         template <typename T>
+        [[nodiscard]] WioArray<T> get_array(std::string_view fieldName) const
+        {
+            return WioArray<T>(get<wio::DArray<T>>(fieldName));
+        }
+
+        template <typename T, std::size_t N>
+        [[nodiscard]] WioStaticArray<T, N> get_static_array(std::string_view fieldName) const
+        {
+            return WioStaticArray<T, N>(get<wio::SArray<T, N>>(fieldName));
+        }
+
+        template <typename K, typename V>
+        [[nodiscard]] WioDict<K, V> get_dict(std::string_view fieldName) const
+        {
+            return WioDict<K, V>(get<wio::Dict<K, V>>(fieldName));
+        }
+
+        template <typename K, typename V>
+        [[nodiscard]] WioTree<K, V> get_tree(std::string_view fieldName) const
+        {
+            return WioTree<K, V>(get<wio::Tree<K, V>>(fieldName));
+        }
+
+        template <typename Signature>
+        [[nodiscard]] WioFunction<Signature> get_function(std::string_view fieldName) const
+        {
+            using RawFunction = typename detail::FunctionTraits<Signature>::StdFunction;
+            return WioFunction<Signature>(get<RawFunction>(fieldName));
+        }
+
+        template <typename T>
         void set(std::string_view fieldName, T&& value) const
         {
             detail::setModuleFieldValue(type_, handle_, fieldName, std::forward<T>(value), "component");
         }
 
-        void reset() noexcept
+        template <typename T>
+        void set_array(std::string_view fieldName, WioArray<T> value) const
         {
-            detail::destroyModuleInstance(type_, handle_);
-            type_ = nullptr;
-            handle_ = 0;
+            set(fieldName, std::move(value).take());
         }
+
+        template <typename T>
+        void set_array(std::string_view fieldName, wio::DArray<T> value) const
+        {
+            set(fieldName, std::move(value));
+        }
+
+        template <typename T, std::size_t N>
+        void set_static_array(std::string_view fieldName, WioStaticArray<T, N> value) const
+        {
+            set(fieldName, std::move(value).take());
+        }
+
+        template <typename T, std::size_t N>
+        void set_static_array(std::string_view fieldName, wio::SArray<T, N> value) const
+        {
+            set(fieldName, std::move(value));
+        }
+
+        template <typename K, typename V>
+        void set_dict(std::string_view fieldName, WioDict<K, V> value) const
+        {
+            set(fieldName, std::move(value).take());
+        }
+
+        template <typename K, typename V>
+        void set_dict(std::string_view fieldName, wio::Dict<K, V> value) const
+        {
+            set(fieldName, std::move(value));
+        }
+
+        template <typename K, typename V>
+        void set_tree(std::string_view fieldName, WioTree<K, V> value) const
+        {
+            set(fieldName, std::move(value).take());
+        }
+
+        template <typename K, typename V>
+        void set_tree(std::string_view fieldName, wio::Tree<K, V> value) const
+        {
+            set(fieldName, std::move(value));
+        }
+
+        template <typename Signature>
+        void set_function(std::string_view fieldName, WioFunction<Signature> value) const
+        {
+            set(fieldName, std::move(value).take());
+        }
+
+        template <typename Signature>
+        void set_function(std::string_view fieldName, typename detail::FunctionTraits<Signature>::StdFunction value) const
+        {
+            set(fieldName, std::move(value));
+        }
+
+        [[nodiscard]] WioObject get_object(std::string_view fieldName) const;
+        [[nodiscard]] WioComponent get_component(std::string_view fieldName) const;
+        void set_object(std::string_view fieldName, const WioObject& value) const;
+        void set_component(std::string_view fieldName, const WioComponent& value) const;
+
+        void reset() noexcept;
 
     private:
         friend class WioComponentType;
+        friend class WioObject;
 
-        WioComponent(const WioModuleType* typeEntry, std::uintptr_t instanceHandle)
-            : type_(typeEntry),
-              handle_(instanceHandle)
+        WioComponent(const WioModuleApi* api, const WioModuleType* typeEntry, std::uintptr_t instanceHandle, bool ownsHandle) noexcept
+            : api_(api),
+              type_(typeEntry),
+              handle_(instanceHandle),
+              ownsHandle_(ownsHandle)
         {
         }
 
+        const WioModuleApi* api_ = nullptr;
         const WioModuleType* type_ = nullptr;
         std::uintptr_t handle_ = 0;
+        bool ownsHandle_ = false;
     };
 
     class WioObjectType
@@ -1146,8 +2523,9 @@ namespace wio::sdk
     public:
         WioObjectType() = default;
 
-        explicit WioObjectType(const WioModuleType* typeEntry)
-            : type_(typeEntry)
+        WioObjectType(const WioModuleApi* api, const WioModuleType* typeEntry) noexcept
+            : api_(api),
+              type_(typeEntry)
         {
         }
 
@@ -1163,18 +2541,29 @@ namespace wio::sdk
             return *type_;
         }
 
+        [[nodiscard]] std::vector<FieldInfo> list_fields() const
+        {
+            return detail::listTypeFields(type_);
+        }
+
+        [[nodiscard]] FieldInfo field_info(std::string_view fieldName) const
+        {
+            return detail::getTypeFieldInfo(type_, fieldName, "object");
+        }
+
         [[nodiscard]] WioObject create() const
         {
-            return WioObject(type_, detail::constructModuleInstance(type_, "object"));
+            return WioObject(api_, type_, detail::constructModuleInstance(type_, "object"), true);
         }
 
         template <typename... TArgs>
         [[nodiscard]] WioObject create(TArgs&&... args) const
         {
-            return WioObject(type_, detail::constructModuleInstance(type_, "object", std::forward<TArgs>(args)...));
+            return WioObject(api_, type_, detail::constructModuleInstance(type_, "object", std::forward<TArgs>(args)...), true);
         }
 
     private:
+        const WioModuleApi* api_ = nullptr;
         const WioModuleType* type_ = nullptr;
     };
 
@@ -1183,8 +2572,9 @@ namespace wio::sdk
     public:
         WioComponentType() = default;
 
-        explicit WioComponentType(const WioModuleType* typeEntry)
-            : type_(typeEntry)
+        WioComponentType(const WioModuleApi* api, const WioModuleType* typeEntry) noexcept
+            : api_(api),
+              type_(typeEntry)
         {
         }
 
@@ -1200,20 +2590,281 @@ namespace wio::sdk
             return *type_;
         }
 
+        [[nodiscard]] std::vector<FieldInfo> list_fields() const
+        {
+            return detail::listTypeFields(type_);
+        }
+
+        [[nodiscard]] FieldInfo field_info(std::string_view fieldName) const
+        {
+            return detail::getTypeFieldInfo(type_, fieldName, "component");
+        }
+
         [[nodiscard]] WioComponent create() const
         {
-            return WioComponent(type_, detail::constructModuleInstance(type_, "component"));
+            return WioComponent(api_, type_, detail::constructModuleInstance(type_, "component"), true);
         }
 
         template <typename... TArgs>
         [[nodiscard]] WioComponent create(TArgs&&... args) const
         {
-            return WioComponent(type_, detail::constructModuleInstance(type_, "component", std::forward<TArgs>(args)...));
+            return WioComponent(api_, type_, detail::constructModuleInstance(type_, "component", std::forward<TArgs>(args)...), true);
         }
 
     private:
+        const WioModuleApi* api_ = nullptr;
         const WioModuleType* type_ = nullptr;
     };
+
+    inline WioObject::WioObject(WioObject&& other) noexcept
+    {
+        *this = std::move(other);
+    }
+
+    inline WioObject& WioObject::operator=(WioObject&& other) noexcept
+    {
+        if (this == &other)
+            return *this;
+
+        reset();
+        api_ = other.api_;
+        type_ = other.type_;
+        handle_ = other.handle_;
+        ownsHandle_ = other.ownsHandle_;
+        other.api_ = nullptr;
+        other.type_ = nullptr;
+        other.handle_ = 0;
+        other.ownsHandle_ = false;
+        return *this;
+    }
+
+    inline WioObject::~WioObject()
+    {
+        reset();
+    }
+
+    inline WioObject::operator bool() const noexcept
+    {
+        return type_ != nullptr && handle_ != 0;
+    }
+
+    inline std::uintptr_t WioObject::handle() const noexcept
+    {
+        return handle_;
+    }
+
+    inline bool WioObject::owns_handle() const noexcept
+    {
+        return ownsHandle_;
+    }
+
+    inline bool WioObject::is_borrowed() const noexcept
+    {
+        return *this && !ownsHandle_;
+    }
+
+    inline const WioModuleType& WioObject::descriptor() const
+    {
+        if (type_ == nullptr)
+            throw Error(ErrorCode::TypeNotFound, "Wio SDK object handle is not bound to an exported object type.");
+        return *type_;
+    }
+
+    inline std::vector<FieldInfo> WioObject::list_fields() const
+    {
+        return detail::listTypeFields(type_);
+    }
+
+    inline FieldInfo WioObject::field_info(std::string_view fieldName) const
+    {
+        return detail::getTypeFieldInfo(type_, fieldName, "object");
+    }
+
+    inline void WioObject::reset() noexcept
+    {
+        if (ownsHandle_)
+            detail::destroyModuleInstance(type_, handle_);
+
+        api_ = nullptr;
+        type_ = nullptr;
+        handle_ = 0;
+        ownsHandle_ = false;
+    }
+
+    inline WioComponent::WioComponent(WioComponent&& other) noexcept
+    {
+        *this = std::move(other);
+    }
+
+    inline WioComponent& WioComponent::operator=(WioComponent&& other) noexcept
+    {
+        if (this == &other)
+            return *this;
+
+        reset();
+        api_ = other.api_;
+        type_ = other.type_;
+        handle_ = other.handle_;
+        ownsHandle_ = other.ownsHandle_;
+        other.api_ = nullptr;
+        other.type_ = nullptr;
+        other.handle_ = 0;
+        other.ownsHandle_ = false;
+        return *this;
+    }
+
+    inline WioComponent::~WioComponent()
+    {
+        reset();
+    }
+
+    inline WioComponent::operator bool() const noexcept
+    {
+        return type_ != nullptr && handle_ != 0;
+    }
+
+    inline std::uintptr_t WioComponent::handle() const noexcept
+    {
+        return handle_;
+    }
+
+    inline bool WioComponent::owns_handle() const noexcept
+    {
+        return ownsHandle_;
+    }
+
+    inline bool WioComponent::is_borrowed() const noexcept
+    {
+        return *this && !ownsHandle_;
+    }
+
+    inline const WioModuleType& WioComponent::descriptor() const
+    {
+        if (type_ == nullptr)
+            throw Error(ErrorCode::TypeNotFound, "Wio SDK component handle is not bound to an exported component type.");
+        return *type_;
+    }
+
+    inline std::vector<FieldInfo> WioComponent::list_fields() const
+    {
+        return detail::listTypeFields(type_);
+    }
+
+    inline FieldInfo WioComponent::field_info(std::string_view fieldName) const
+    {
+        return detail::getTypeFieldInfo(type_, fieldName, "component");
+    }
+
+    inline void WioComponent::reset() noexcept
+    {
+        if (ownsHandle_)
+            detail::destroyModuleInstance(type_, handle_);
+
+        api_ = nullptr;
+        type_ = nullptr;
+        handle_ = 0;
+        ownsHandle_ = false;
+    }
+
+    inline WioObject WioObject::get_object(std::string_view fieldName) const
+    {
+        const WioModuleField* fieldEntry = detail::requireTypeField(type_, fieldName, "object");
+        const auto* typeDescriptor = fieldEntry->typeDescriptor;
+        if (typeDescriptor == nullptr || typeDescriptor->kind != WIO_MODULE_TYPE_DESC_OBJECT)
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected an object field descriptor.");
+
+        const WioModuleType* nestedType = detail::requireModuleType(api_, typeDescriptor->logicalTypeName, WIO_MODULE_TYPE_OBJECT);
+        const std::uintptr_t nestedHandle = detail::getModuleFieldHandle(type_, handle_, fieldName, "object");
+        return WioObject(api_, nestedType, nestedHandle, false);
+    }
+
+    inline WioComponent WioObject::get_component(std::string_view fieldName) const
+    {
+        const WioModuleField* fieldEntry = detail::requireTypeField(type_, fieldName, "object");
+        const auto* typeDescriptor = fieldEntry->typeDescriptor;
+        if (typeDescriptor == nullptr || typeDescriptor->kind != WIO_MODULE_TYPE_DESC_COMPONENT)
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a component field descriptor.");
+
+        const WioModuleType* nestedType = detail::requireModuleType(api_, typeDescriptor->logicalTypeName, WIO_MODULE_TYPE_COMPONENT);
+        const std::uintptr_t nestedHandle = detail::getModuleFieldHandle(type_, handle_, fieldName, "object");
+        return WioComponent(api_, nestedType, nestedHandle, false);
+    }
+
+    inline void WioObject::set_object(std::string_view fieldName, const WioObject& value) const
+    {
+        const WioModuleField* fieldEntry = detail::requireTypeField(type_, fieldName, "object");
+        const auto* typeDescriptor = fieldEntry->typeDescriptor;
+        if (typeDescriptor == nullptr || typeDescriptor->kind != WIO_MODULE_TYPE_DESC_OBJECT)
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected an object field descriptor.");
+
+        if (!value || value.descriptor().logicalName == nullptr || std::string_view(value.descriptor().logicalName) != std::string_view(typeDescriptor->logicalTypeName))
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK object field assignment type mismatch.");
+
+        detail::setModuleFieldValue(type_, handle_, fieldName, value.handle(), "object");
+    }
+
+    inline void WioObject::set_component(std::string_view fieldName, const WioComponent& value) const
+    {
+        const WioModuleField* fieldEntry = detail::requireTypeField(type_, fieldName, "object");
+        const auto* typeDescriptor = fieldEntry->typeDescriptor;
+        if (typeDescriptor == nullptr || typeDescriptor->kind != WIO_MODULE_TYPE_DESC_COMPONENT)
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a component field descriptor.");
+
+        if (!value || value.descriptor().logicalName == nullptr || std::string_view(value.descriptor().logicalName) != std::string_view(typeDescriptor->logicalTypeName))
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK component field assignment type mismatch.");
+
+        detail::setModuleFieldValue(type_, handle_, fieldName, value.handle(), "object");
+    }
+
+    inline WioObject WioComponent::get_object(std::string_view fieldName) const
+    {
+        const WioModuleField* fieldEntry = detail::requireTypeField(type_, fieldName, "component");
+        const auto* typeDescriptor = fieldEntry->typeDescriptor;
+        if (typeDescriptor == nullptr || typeDescriptor->kind != WIO_MODULE_TYPE_DESC_OBJECT)
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected an object field descriptor.");
+
+        const WioModuleType* nestedType = detail::requireModuleType(api_, typeDescriptor->logicalTypeName, WIO_MODULE_TYPE_OBJECT);
+        const std::uintptr_t nestedHandle = detail::getModuleFieldHandle(type_, handle_, fieldName, "component");
+        return WioObject(api_, nestedType, nestedHandle, false);
+    }
+
+    inline WioComponent WioComponent::get_component(std::string_view fieldName) const
+    {
+        const WioModuleField* fieldEntry = detail::requireTypeField(type_, fieldName, "component");
+        const auto* typeDescriptor = fieldEntry->typeDescriptor;
+        if (typeDescriptor == nullptr || typeDescriptor->kind != WIO_MODULE_TYPE_DESC_COMPONENT)
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a component field descriptor.");
+
+        const WioModuleType* nestedType = detail::requireModuleType(api_, typeDescriptor->logicalTypeName, WIO_MODULE_TYPE_COMPONENT);
+        const std::uintptr_t nestedHandle = detail::getModuleFieldHandle(type_, handle_, fieldName, "component");
+        return WioComponent(api_, nestedType, nestedHandle, false);
+    }
+
+    inline void WioComponent::set_object(std::string_view fieldName, const WioObject& value) const
+    {
+        const WioModuleField* fieldEntry = detail::requireTypeField(type_, fieldName, "component");
+        const auto* typeDescriptor = fieldEntry->typeDescriptor;
+        if (typeDescriptor == nullptr || typeDescriptor->kind != WIO_MODULE_TYPE_DESC_OBJECT)
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected an object field descriptor.");
+
+        if (!value || value.descriptor().logicalName == nullptr || std::string_view(value.descriptor().logicalName) != std::string_view(typeDescriptor->logicalTypeName))
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK object field assignment type mismatch.");
+
+        detail::setModuleFieldValue(type_, handle_, fieldName, value.handle(), "component");
+    }
+
+    inline void WioComponent::set_component(std::string_view fieldName, const WioComponent& value) const
+    {
+        const WioModuleField* fieldEntry = detail::requireTypeField(type_, fieldName, "component");
+        const auto* typeDescriptor = fieldEntry->typeDescriptor;
+        if (typeDescriptor == nullptr || typeDescriptor->kind != WIO_MODULE_TYPE_DESC_COMPONENT)
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a component field descriptor.");
+
+        if (!value || value.descriptor().logicalName == nullptr || std::string_view(value.descriptor().logicalName) != std::string_view(typeDescriptor->logicalTypeName))
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK component field assignment type mismatch.");
+
+        detail::setModuleFieldValue(type_, handle_, fieldName, value.handle(), "component");
+    }
 
     template <typename Signature>
     auto wio_load_export(const WioModuleApi* api, std::string_view logicalName) -> typename detail::FunctionTraits<Signature>::StdFunction;
@@ -1869,12 +3520,12 @@ namespace wio::sdk
 
     inline WioObjectType wio_load_object(const WioModuleApi* api, std::string_view logicalName)
     {
-        return WioObjectType(detail::requireModuleType(api, logicalName, WIO_MODULE_TYPE_OBJECT));
+        return WioObjectType(api, detail::requireModuleType(api, logicalName, WIO_MODULE_TYPE_OBJECT));
     }
 
     inline WioComponentType wio_load_component(const WioModuleApi* api, std::string_view logicalName)
     {
-        return WioComponentType(detail::requireModuleType(api, logicalName, WIO_MODULE_TYPE_COMPONENT));
+        return WioComponentType(api, detail::requireModuleType(api, logicalName, WIO_MODULE_TYPE_COMPONENT));
     }
 
 }

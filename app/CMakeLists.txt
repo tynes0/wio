@@ -641,6 +641,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "SDK inherited exported types: exports=13 types=1 fields=3 methods=5 hp=40 id=2 phase=3 score0=42 score1=47 enrage=5 heal=49 score2=59"
     )
 
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_exported_complex_fields_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/exported_complex_fields_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_exported_complex_fields_host.cpp"
+        "SDK complex fields: fields=8 title=boss tags=2 hp=30 callback=21 profile=77 position=11 fixedSum=24"
+    )
+
     add_wio_shared_reload_interop_test(
         wio_test_module_reload_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/module_reload.wio"
@@ -1450,7 +1457,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_exported_object_non_abi_field
         "${CMAKE_SOURCE_DIR}/tests/invalid/exported_object_non_abi_field.wio"
-        "@Export object 'BadProfile' exposes public field 'name' with non-C-ABI-safe type 'string'\\."
+        "@Export object 'BadProfile' exposes public field 'worker' with type 'IWorker' that is not yet SDK-exportable\\."
     )
 
     add_wio_failure_test(

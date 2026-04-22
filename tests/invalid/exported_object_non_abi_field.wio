@@ -1,4 +1,8 @@
+interface IWorker {
+    fn Run() -> i32;
+}
+
 @Export
 object BadProfile {
-    public name: string;
+    public worker: IWorker;
 }

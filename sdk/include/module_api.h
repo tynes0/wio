@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <cstring>
 
-inline constexpr std::uint32_t WIO_MODULE_API_DESCRIPTOR_VERSION = 3u;
+inline constexpr std::uint32_t WIO_MODULE_API_DESCRIPTOR_VERSION = 4u;
 
 enum WioModuleCapability : std::uint32_t
 {
@@ -86,6 +86,7 @@ struct WioModuleExport
     std::uint32_t parameterCount;
     const WioAbiType* parameterTypes;
     WioModuleInvokeFn invoke;
+    const void* rawFunction;
 };
 
 struct WioModuleCommand
@@ -108,6 +109,44 @@ enum WioModuleFieldFlag : std::uint32_t
     WIO_MODULE_FIELD_READONLY = 1u << 2
 };
 
+enum WioModuleAccessModifier : std::uint32_t
+{
+    WIO_MODULE_ACCESS_UNKNOWN = 0u,
+    WIO_MODULE_ACCESS_PUBLIC = 1u,
+    WIO_MODULE_ACCESS_PROTECTED = 2u,
+    WIO_MODULE_ACCESS_PRIVATE = 3u
+};
+
+enum WioModuleTypeDescriptorKind : std::uint32_t
+{
+    WIO_MODULE_TYPE_DESC_UNKNOWN = 0u,
+    WIO_MODULE_TYPE_DESC_PRIMITIVE = 1u,
+    WIO_MODULE_TYPE_DESC_STRING = 2u,
+    WIO_MODULE_TYPE_DESC_OBJECT = 3u,
+    WIO_MODULE_TYPE_DESC_COMPONENT = 4u,
+    WIO_MODULE_TYPE_DESC_DYNAMIC_ARRAY = 5u,
+    WIO_MODULE_TYPE_DESC_STATIC_ARRAY = 6u,
+    WIO_MODULE_TYPE_DESC_DICT = 7u,
+    WIO_MODULE_TYPE_DESC_TREE = 8u,
+    WIO_MODULE_TYPE_DESC_FUNCTION = 9u,
+    WIO_MODULE_TYPE_DESC_OPAQUE = 10u
+};
+
+struct WioModuleTypeDescriptor
+{
+    const char* displayName;
+    const char* logicalTypeName;
+    WioModuleTypeDescriptorKind kind;
+    WioAbiType abiType;
+    std::uint64_t staticArraySize;
+    const WioModuleTypeDescriptor* elementType;
+    const WioModuleTypeDescriptor* keyType;
+    const WioModuleTypeDescriptor* valueType;
+    const WioModuleTypeDescriptor* returnType;
+    std::uint32_t parameterCount;
+    const WioModuleTypeDescriptor* const* parameterTypes;
+};
+
 enum WioModuleTypeKind : std::uint32_t
 {
     WIO_MODULE_TYPE_COMPONENT = 1u,
@@ -118,7 +157,9 @@ struct WioModuleField
 {
     const char* fieldName;
     WioAbiType fieldType;
+    const WioModuleTypeDescriptor* typeDescriptor;
     std::uint32_t flags;
+    WioModuleAccessModifier accessModifier;
     const WioModuleExport* getterExport;
     const WioModuleExport* setterExport;
 };

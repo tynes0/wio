@@ -1,0 +1,50 @@
+@Export
+object Profile {
+    public level: i32;
+    public title: string;
+
+    public OnConstruct() {
+        self.level = 9;
+        self.title = "rookie";
+    }
+}
+
+@Export
+component Position {
+    public x: i32;
+    public y: i32;
+
+    OnConstruct() {
+        self.x = 3;
+        self.y = 7;
+    }
+}
+
+@Export
+object ComplexState {
+    public title: string;
+    public tags: string[];
+    public scores: Dict<string, i32>;
+    public order: Tree<string, i32>;
+    public fixed: [i32; 3];
+    public profile: Profile;
+    public position: Position;
+    public callback: fn(i32) -> i32;
+
+    public OnConstruct() {
+        self.title = "arena";
+        self.tags = ["red", "blue", "gold"];
+        self.scores = {
+            "hp": 10,
+            "mp": 4
+        };
+        self.order = {< "bronze": 1, "silver": 2 >};
+        self.fixed = [3, 4, 5];
+        self.profile = Profile();
+        self.position = Position();
+    }
+
+    public fn RunCallback(value: i32) -> i32 {
+        return self.callback(value);
+    }
+}

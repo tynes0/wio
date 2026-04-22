@@ -86,6 +86,7 @@ namespace wio::sema
 
         std::string getModuleLifecycleExportSymbol(Attribute lifecycleAttribute)
         {
+            // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
             switch (lifecycleAttribute)
             {
             case Attribute::ModuleApiVersion: return "WioModuleApiVersion";
@@ -1057,6 +1058,58 @@ namespace wio::sema
 
             const std::string typeName = current->toString();
             return typeName != "string" && typeName != "object";
+        }
+
+        bool isSdkExportableFieldType(const Ref<Type>& type)
+        {
+            Ref<Type> current = type;
+            while (current && current->kind() == TypeKind::Alias)
+                current = current.AsFast<AliasType>()->aliasedType;
+
+            if (!current)
+                return false;
+
+            switch (current->kind())
+            {
+            case TypeKind::Primitive:
+            {
+                const std::string typeName = current->toString();
+                return typeName != "void" && typeName != "object";
+            }
+            case TypeKind::Array:
+            {
+                auto arrayType = current.AsFast<ArrayType>();
+                return arrayType && isSdkExportableFieldType(arrayType->elementType);
+            }
+            case TypeKind::Dictionary:
+            {
+                auto dictType = current.AsFast<DictionaryType>();
+                return dictType &&
+                    isSdkExportableFieldType(dictType->keyType) &&
+                    isSdkExportableFieldType(dictType->valueType);
+            }
+            case TypeKind::Function:
+            {
+                auto functionType = current.AsFast<FunctionType>();
+                if (!functionType || !isSdkExportableFieldType(functionType->returnType))
+                    return false;
+
+                for (const auto& parameterType : functionType->paramTypes)
+                {
+                    if (!isSdkExportableFieldType(parameterType))
+                        return false;
+                }
+
+                return true;
+            }
+            case TypeKind::Struct:
+            {
+                auto structType = current.AsFast<StructType>();
+                return structType && !structType->isInterface;
+            }
+            default:
+                return false;
+            }
         }
 
         bool isExactType(const Ref<Type>& actual, const Ref<Type>& expected)
@@ -4545,11 +4598,11 @@ namespace wio::sema
                     auto variableDecl = member.declaration->as<VariableDeclaration>();
                     auto variableSymbol = variableDecl->name ? variableDecl->name->referencedSymbol.Lock() : nullptr;
                     Ref<Type> fieldType = variableSymbol && variableSymbol->type ? variableSymbol->type : variableDecl->name->refType.Lock();
-                    if (!isCAbiSafeExportType(fieldType))
+                    if (!isSdkExportableFieldType(fieldType))
                     {
                         WIO_LOG_ADD_ERROR(
                             variableDecl->location(),
-                            "@Export component '{}' exposes public field '{}' with non-C-ABI-safe type '{}'.",
+                            "@Export component '{}' exposes public field '{}' with type '{}' that is not yet SDK-exportable.",
                             node.name->token.value,
                             variableDecl->name->token.value,
                             fieldType ? fieldType->toString() : "<unknown>"
@@ -4987,11 +5040,11 @@ namespace wio::sema
                         auto variableDecl = member.declaration->as<VariableDeclaration>();
                         auto variableSymbol = variableDecl->name ? variableDecl->name->referencedSymbol.Lock() : nullptr;
                         Ref<Type> fieldType = variableSymbol && variableSymbol->type ? variableSymbol->type : variableDecl->name->refType.Lock();
-                        if (!isCAbiSafeExportType(fieldType))
+                        if (!isSdkExportableFieldType(fieldType))
                         {
                             WIO_LOG_ADD_ERROR(
                                 variableDecl->location(),
-                                "@Export object '{}' exposes public field '{}' with non-C-ABI-safe type '{}'.",
+                                "@Export object '{}' exposes public field '{}' with type '{}' that is not yet SDK-exportable.",
                                 node.name->token.value,
                                 variableDecl->name->token.value,
                                 fieldType ? fieldType->toString() : "<unknown>"
