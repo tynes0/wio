@@ -1086,8 +1086,7 @@ namespace wio::codegen
 
                     if (resolvedFieldType && resolvedFieldType->kind() == sema::TypeKind::Struct)
                     {
-                        auto structType = resolvedFieldType.AsFast<sema::StructType>();
-                        if (structType)
+                        if (auto structType = resolvedFieldType.AsFast<sema::StructType>(); structType)
                         {
                             if (objectDeclarations.contains(structType.Get()))
                             {
@@ -1716,15 +1715,13 @@ namespace wio::codegen
         emitHeaderLine("#include <intrinsics.h>");
         emitHeaderLine("#include <module_api.h>");
         emitHeaderLine("#include <ref.h>");
-        emitHeaderLine("");
-
+        emitHeaderLine();
         emitHeaderLine("#if defined(_WIN32)");
         emitHeaderLine("#define WIO_EXPORT __declspec(dllexport)");
         emitHeaderLine("#else");
         emitHeaderLine("#define WIO_EXPORT __attribute__((visibility(\"default\")))");
         emitHeaderLine("#endif");
-        emitHeaderLine("");
-
+        emitHeaderLine();
         emitHeaderLine("namespace wio");
         emitHeaderLine("{");
         indent();
@@ -1732,25 +1729,24 @@ namespace wio::codegen
         emitHeaderLine("using WString = std::wstring;");
         dedent();
         emitHeaderLine("}");
-        emitHeaderLine("");
-
+        emitHeaderLine();
         emitHeaderLine("namespace wio");
         emitHeaderLine("{");
         indent();
         emitHeaderLine("template <typename T>");
         emitHeaderLine("using DArray = std::vector<T>;");
-        emitHeaderLine("");
+        emitHeaderLine();
         emitHeaderLine("template <typename T, size_t N>");
         emitHeaderLine("using SArray = std::array<T, N>;");
-        emitHeaderLine("");
+        emitHeaderLine();
         emitHeaderLine("template <typename K, typename V>");
         emitHeaderLine("using Dict = std::unordered_map<K, V>;");
-        emitHeaderLine("");
+        emitHeaderLine();
         emitHeaderLine("template <typename K, typename V>");
         emitHeaderLine("using Tree = std::map<K, V>;");
         dedent();
         emitHeaderLine("}");
-        emitHeaderLine("");
+        emitHeaderLine();
 
     }
 
@@ -1807,11 +1803,20 @@ namespace wio::codegen
             if (!exportFunctionType || exportInfo.syntheticKind == ExportedFunctionInfo::SyntheticKind::None)
                 return;
 
-            emitLine("extern \"C\" WIO_EXPORT " + toCppType(exportFunctionType->returnType) + " " + exportInfo.symbolName + "(");
+            
+            emitLine(common::formatString(
+                "extern \"C\" WIO_EXPORT {} {}(",
+                toCppType(exportFunctionType->returnType),
+                exportInfo.symbolName
+            ));
             for (size_t paramIndex = 0; paramIndex < exportFunctionType->paramTypes.size(); ++paramIndex)
             {
                 EMIT_TABS();
-                emit("    " + toCppType(exportFunctionType->paramTypes[paramIndex]) + " _wio_arg" + std::to_string(paramIndex));
+                emit(common::formatString(
+                    "    {} _wio_arg{}",
+                    toCppType(exportFunctionType->paramTypes[paramIndex]),
+                    paramIndex
+                ));
                 if (paramIndex + 1 < exportFunctionType->paramTypes.size())
                     emit(",");
                 emit("\n");
@@ -1833,9 +1838,21 @@ namespace wio::codegen
                 }
 
                 if (exportInfo.ownerIsObject)
-                    emitLine("auto* instance = wio::runtime::Ref<" + exportInfo.ownerCppTypeName + ">::Create(" + constructorArguments + ").Detach();");
+                {
+                    emitLine(common::formatString(
+                        "auto* instance = wio::runtime::Ref<{}>::Create({}).Detach();",
+                        exportInfo.ownerCppTypeName,
+                        constructorArguments
+                    ));
+                }
                 else
-                    emitLine("auto* instance = new " + exportInfo.ownerCppTypeName + "(" + constructorArguments + ");");
+                {
+                    emitLine(common::formatString(
+                        "auto* instance = new {}({});",
+                        exportInfo.ownerCppTypeName,
+                        constructorArguments
+                    ));
+                }
                 emitLine("return reinterpret_cast<std::uintptr_t>(instance);");
                 break;
             }
@@ -2092,7 +2109,7 @@ namespace wio::codegen
                     common::wioStringToEscapedCppString(exportInfo.logicalName),
                     common::wioStringToEscapedCppString(exportInfo.symbolName),
                     getAbiTypeEnumName(exportFunctionType->returnType),
-                    std::to_string(exportFunctionType->paramTypes.size()),
+                    exportFunctionType->paramTypes.size(),
                     paramTypesExpr,
                     invokeExpr,
                     exportInfo.symbolName,

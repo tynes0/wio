@@ -13,41 +13,82 @@ It is based on:
 The goal is not just to list ideas. The goal is to make the next engineering
 steps obvious.
 
+Status markers used in this file:
+
+- [x] Done foundations already landed in the repo and should not be planned as
+      net-new work again.
+- [~] Partial / hardening work exists in some real form, but the semantics,
+      tests, diagnostics, portability, or docs are not frozen yet.
+- [ ] Open / not started work still needs design or implementation.
+
+This file stays exhaustive. The active, ordered execution roadmap now lives in
+`ORDERED_TODOLIST.md`.
+
 ---
 
 ## 1. Project Priorities
 
-### P0 - Must become stable before the language grows
+This section is the top-level status summary. For the actual phase-by-phase
+execution order, see `ORDERED_TODOLIST.md`.
 
-- [ ] Freeze the core language direction before adding many more keywords.
+### 1.1 Completed Foundations
+
+- [x] Land the first generic slice:
+      generic functions, generic aliases, generic `object` / `component` /
+      `interface`, explicit generic calls, and interop-oriented
+      `@Instantiate(...)`.
+- [x] Land the first loop slice:
+      `for`, `foreach`, `in`, range iteration, dictionary iteration,
+      component-binding iteration, and parenthesized `for (...)` readability.
+- [x] Land the first namespace/import slice:
+      `realm`, basic `use`, basic `use ... as ...`, and initial multi-file user
+      module resolution through configured source roots.
+- [x] Land the first source-based std slice:
+      `std::console`, `std::math`, `std::collections`, `std::strings`,
+      `std::fs`, `std::path`, `std::algorithms`, and `std::assert` /
+      `std::testing`.
+- [x] Land the first interop/runtime/productization slice:
+      `@Native`, `@CppHeader`, `@CppName`, `@Export`, `@Command`, `@Event`,
+      module lifecycle/state ABI, shared/static outputs, packaged Wio
+      distributions, `wio.makewio`, template generation, and the public host
+      SDK.
+- [x] Land the first serious test wave:
+      positive feature tests, invalid-program coverage, and native/shared/
+      static/SDK interop tests.
+
+### 1.2 P0 - Foundation First
+
 - [ ] Make the compiler trustworthy on valid input and graceful on invalid
       input.
 - [ ] Eliminate parser crashes, undefined behavior, and fragile assumptions.
 - [ ] Make semantic analysis stricter than codegen, not weaker than codegen.
 - [ ] Make every documented feature either implemented, clearly partial, or
       removed from user-facing docs until ready.
-- [ ] Stop adding surface syntax faster than the test suite can cover it.
+- [ ] Stop adding new surface syntax faster than the test suite, diagnostics,
+      and spec can keep up.
 
-### P1 - Make Wio usable as a real alpha language
+### 1.3 P1 - Freeze Shipped Semantics
 
-- [ ] Finish the module/import system.
-- [ ] Finish loop support.
-- [ ] Stabilize `ref`, `view`, `fit`, `is`, `match`, attributes, and ctor
-      rules.
-- [ ] Improve diagnostics so language errors feel deliberate and readable.
-- [ ] Make backend generation reproducible and less Windows-specific.
-- [ ] Expand the standard library beyond the current `std::io` bootstrap state.
-- [ ] Keep the compiler/runtime shape compatible with embeddable static/shared
-      libraries, host-driven scripting, and future hot reload.
+- [ ] Harden `use`, `as`, `realm`, and multi-file module behavior.
+- [ ] Freeze `ref`, `view`, `fit`, `is`, `match`, `when`, attribute, and ctor
+      semantics.
+- [ ] Finish the collection-language contract:
+      arrays, static arrays, dictionaries, trees, strings, and iteration
+      behavior.
+- [ ] Make diagnostics deliberate and readable across parser, sema, backend,
+      and runtime-facing failures.
 
-### P2 - Make Wio pleasant to use
+### 1.4 P2 - Productize the Current Alpha
 
-- [ ] Improve CLI ergonomics.
-- [ ] Improve debug output (`tokens`, `AST`, `typed AST`, generated C++).
-- [ ] Write tutorials and example programs, not just a reference manual.
-- [ ] Build confidence with positive and negative test suites.
+- [ ] Stabilize the std/runtime/host ABI contract around the features that
+      already exist.
+- [ ] Improve CLI ergonomics, help output, and debug output
+      (`tokens`, `AST`, typed AST, generated C++).
+- [ ] Harden the current project model, packaged workflow, and examples into a
+      reliable user-facing alpha experience.
+- [ ] Expand docs into a status-marked reference plus focused tutorials.
 
-### P3 - Long-horizon features
+### 1.5 P3 - Long-Horizon Features
 
 - [ ] Reflection for `enum` and `flagset`.
 - [ ] Concurrency model (`async`, `await`, `coroutine`, `yield`, `thread`).
@@ -434,12 +475,19 @@ This is one of the language-defining features and needs to be extremely solid.
 
 ### 8.5 Destructuring and Iteration
 
-- [ ] Design `for` syntax.
-- [ ] Design `foreach` syntax if it remains distinct from `for`.
-- [ ] Decide whether `for (x in arr)` and `foreach (x in arr)` both exist.
-- [ ] Add support for `in` loops over arrays.
-- [ ] Add support for `in` loops over dictionaries.
-- [ ] Design destructuring forms such as:
+- [~] Freeze the first shipped `for` / `foreach` surface.
+  - [x] Support `for` iteration over arrays, static arrays, ranges, and
+        dictionaries.
+  - [x] Support component-binding and index-binding loop forms.
+  - [x] Support the parenthesized readability form `for (...)`.
+  - [x] Keep a first working `foreach` surface in the language.
+  - [ ] Decide whether `for` and `foreach` both remain long-term user-facing
+        keywords.
+  - [ ] Tighten diagnostics and edge-case semantics for all loop variants.
+- [~] Design destructuring/binding policy for iteration.
+  - [x] Ship initial dictionary key/value binding and component field binding.
+  - [ ] Decide which binding forms become permanent syntax versus sugar.
+- [ ] Design further destructuring forms such as:
   - `for (key | value in dict)`,
   - `for (x | y | z in transforms)`.
 - [ ] Decide whether component auto-binding/destructuring is a first-class
@@ -778,49 +826,70 @@ contract.
 
 ## 16. Modules, Imports, and Namespaces
 
-This is currently one of the biggest blockers to real multi-file projects.
+The first `use` / `as` / `realm` slice is now in the repo, but multi-file
+semantics are still one of the biggest hardening gaps.
 
 ### 16.1 `use`
 
-- [ ] Finish semantic resolution for `use`.
+- [~] Finish semantic resolution for `use`.
+  - [x] Support initial std and user-module lookup through configured source
+        roots.
+  - [x] Keep working import execution covered by end-to-end tests.
 - [ ] Guarantee deterministic module lookup behavior.
 - [ ] Define relative vs absolute import semantics.
 - [ ] Define error messages for missing modules and duplicate imports.
 
 ### 16.2 `as`
 
-- [ ] Finish `use ... as ...` aliasing support.
+- [~] Finish `use ... as ...` aliasing support.
+  - [x] Support the first working alias surface for std modules and user
+        modules.
 - [ ] Define shadowing behavior for aliases.
 - [ ] Define whether aliases can rename modules, namespaces, imported types, and
       imported functions.
 
 ### 16.3 Import Path Forms
 
-- [ ] Finalize support for `use std::io;`, `use self::foo;`, `use super::bar;`,
-      and relative multi-segment paths.
+- [~] Finalize support for import-path forms such as `use std::console;`,
+      `use foo::bar;`, `use self::foo;`, `use super::bar;`, and relative
+      multi-segment paths.
+  - [x] Support working root-qualified user module imports.
+  - [x] Support working std-module imports and aliases.
+  - [ ] Define `self` / `super` semantics precisely.
 - [ ] Decide whether wildcard imports will ever exist.
 
 ### 16.4 Multi-File Semantics
 
+- [~] Establish the first real multi-file compilation model.
+  - [x] The current project model already resolves multi-file user code and std
+        modules through source roots and manifests.
+  - [x] Keep end-to-end coverage for root imports, aliasing, module merge, and
+        realm merge.
 - [ ] Decide whether compilation is file-merging, module-compilation, or
       package-based.
 - [ ] Define symbol visibility across files.
 - [ ] Detect and report circular imports cleanly.
 - [ ] Decide how the compiler should cache previously loaded modules.
-- [ ] Add end-to-end tests for multi-file projects.
+- [~] Add end-to-end tests for multi-file projects.
+  - [x] Keep the first user-module / std-module / alias / realm tests alive.
+  - [ ] Broaden that coverage to circularity, shadowing, and larger layouts.
 
 ### 16.5 Realm and Namespace Semantics
 
-- [ ] Treat `realm` as the explicit Wio surface keyword for namespace-like
+- [~] Treat `realm` as the explicit Wio surface keyword for namespace-like
       scopes.
+  - [x] Land the first working `realm` surface.
+  - [x] Cover nested realm lookup and qualified access with tests.
 - [ ] Decide whether modules implicitly create realms, remain flat, or can do
       both.
 - [ ] Clarify how `::` lookup works for realms, std modules, imported modules,
       enums, flagsets, and nested declarations.
 - [ ] Define whether nested `realm` declarations are fully supported and how
       name mangling stays stable across them.
-- [ ] Add positive and negative tests for realm collisions, nested realm lookup,
+- [~] Add positive and negative tests for realm collisions, nested realm lookup,
       and realm-qualified type references.
+  - [x] Cover the first nested and qualified realm cases.
+  - [ ] Add more collision and failure-mode coverage.
 
 ---
 
@@ -829,43 +898,47 @@ This is currently one of the biggest blockers to real multi-file projects.
 ### 17.1 Runtime Foundation
 
 - [ ] Document the runtime ABI expected by generated C++.
-- [ ] Separate runtime concerns from compiler concerns more cleanly.
+- [~] Separate runtime concerns from compiler concerns more cleanly.
+  - [x] Move the public host-facing ABI into `sdk/include`.
+  - [x] Keep the runtime intentionally low-level.
+  - [ ] Continue shrinking compiler-owned implementation detail leakage.
 - [ ] Decide what is guaranteed to exist in every Wio program.
 - [x] Keep `runtime/*` intentionally small and low-level: refcounting,
       exceptions, ABI glue, `fit`, low-level I/O hooks, and host/module support.
 - [x] Treat `runtime/*` as the implementation substrate, not the primary
       user-facing standard library surface.
-- [ ] Define a clean boundary between:
+- [~] Define a clean boundary between:
   - compiler-private internals,
   - mandatory runtime support,
   - public host/embedding SDK,
   - and user-facing `std` modules.
 
-### 17.2 `std::io`
+### 17.2 `std::console`
 
-- [ ] Formalize the API of `std::io`.
-- [ ] Decide whether `Print` is overloaded, variadic, or formatting-based only.
-- [ ] Add tests for string interpolation through `Print`.
-- [ ] Decide what input APIs should exist.
+- [~] Formalize the stable API of `std::console`.
+  - [x] Move the primary user-facing console surface to `std::console`.
+  - [x] Ship output and input helpers through `.wio` + `@Native`.
+  - [x] Cover direct and surface console usage with tests.
+  - [ ] Decide the long-term formatting and input contract precisely.
 
 ### 17.3 Core Library Modules
 
 - [x] Make the public standard-library surface primarily `.wio`-first, with
       `@Native` used where the implementation must drop to runtime/C++.
-- [ ] Move high-level public APIs out of raw `runtime/*.h` exposure and into
+- [~] Move high-level public APIs out of raw `runtime/*.h` exposure and into
       `std/*.wio` declarations/modules.
+  - [x] Ship the first real source-based std modules.
+  - [ ] Keep reducing remaining raw-runtime leakage.
 - [ ] Classify each std module as one of:
   - pure Wio,
   - Wio surface backed by `@Native`,
   - or runtime-only/internal.
-- [ ] Design a minimal `std` layout:
-  - `std::io`
-  - `std::math`
-  - `std::mem`
-  - `std::time`
-  - `std::collections`
-  - `std::strings`
-  - `std::reflect`
+- [~] Freeze the first real `std` layout.
+  - [x] Ship `std::console`, `std::math`, `std::collections`,
+        `std::strings`, `std::fs`, `std::path`, `std::algorithms`,
+        and `std::assert` / `std::testing`.
+  - [ ] Decide whether `std::mem`, `std::time`, and `std::reflect` join the
+        early core set.
 - [ ] Decide which of these are language-critical versus optional.
 - [ ] Keep the early stdlib intentionally small/medium sized rather than
       shipping a giant all-in-one runtime surface.
@@ -878,13 +951,14 @@ This is currently one of the biggest blockers to real multi-file projects.
 
 ### 17.4 Collections Library
 
-- [ ] Expose array helpers.
-- [ ] Expose dictionary/tree helpers.
+- [x] Expose array helpers.
+- [x] Expose dictionary/tree helpers.
 - [ ] Expose pair/iterator concepts if loops depend on them.
-- [ ] Land a second wave of generic callback-oriented std helpers such as
-      `CountBy`, `Filter`, `Map`, and `Reduce` only on top of a clean
-      foundation, not ad-hoc workarounds.
-- [ ] Teach generic std-heavy code paths to handle callback-centric local state
+- [~] Harden the second wave of generic callback-oriented std helpers such as
+      `CountBy`, `Filter`, `Map`, `Reduce`, and `GroupCountBy`.
+  - [x] Ship the first callback-heavy algorithms wave.
+  - [ ] Keep tightening the generic inference and diagnostics around them.
+- [~] Teach generic std-heavy code paths to handle callback-centric local state
       cleanly:
   - generic local variable typing,
   - empty collection literals under expected-type context,
@@ -1050,16 +1124,25 @@ This is currently one of the biggest blockers to real multi-file projects.
 
 ### 19.2 Build System
 
-- [ ] Clean up CMake options and document them.
-- [ ] Make app/library/test targets predictable.
-- [ ] Ensure tests are runnable from a fresh checkout.
-- [ ] Design a first-class Wio project model/generator for mixed Wio + C++
+- [~] Clean up CMake options and document them.
+  - [x] Land the first docs and helper integration.
+  - [ ] Keep tightening option naming and package-facing docs.
+- [~] Make app/library/test targets predictable.
+  - [x] The repo already exposes real app/test/package/project-model flows.
+  - [ ] Keep making target naming and discovery more uniform.
+- [~] Ensure tests are runnable from a fresh checkout.
+  - [x] The current scripts and CTest surface cover the first real path.
+  - [ ] Keep reducing environment-specific assumptions.
+- [x] Design a first-class Wio project model/generator for mixed Wio + C++
       projects so users do not need long handwritten compiler/link commands.
-- [ ] Decide whether the project manifest should be JSON, YAML, TOML, or a
-      Wio-specific declarative format tailored to C++/Wio interop.
-- [ ] Decide whether the generator emits CMake, owns the build graph directly,
+- [x] Decide that the primary manifest is a Wio-specific declarative format:
+      `wio.makewio`, with legacy JSON still accepted for compatibility.
+- [~] Decide whether the generator emits CMake, owns the build graph directly,
       or supports both a generated-native and generated-CMake workflow.
-- [ ] Ensure the project model can describe:
+  - [x] The first slice already supports both a generated CMake path and a
+        direct script-driven path.
+  - [ ] Freeze the long-term contract and polish it.
+- [~] Ensure the project model can describe:
   - Wio source roots,
   - C++ source roots,
   - include paths,
@@ -1067,12 +1150,12 @@ This is currently one of the biggest blockers to real multi-file projects.
   - module/shared-library builds,
   - runtime/std packaging,
   - and hot-reload-friendly targets.
-- [ ] Keep the project generator focused on user convenience first, especially
+- [~] Keep the project generator focused on user convenience first, especially
       for game-scripting style projects that mix host C++ and Wio modules.
 
 ### 19.3 Example Programs
 
-- [ ] Add a curated examples directory:
+- [~] Add a curated examples directory:
   - hello world
   - arrays
   - references
@@ -1081,7 +1164,12 @@ This is currently one of the biggest blockers to real multi-file projects.
   - modules
   - match
   - dictionaries
-- [ ] Ensure every example is compiled in CI/test flows.
+  - [x] Ship the first real examples through `hybrid_arena` and
+        `static_cmake_consumer`.
+  - [ ] Expand the examples set with smaller focused programs.
+- [~] Ensure examples are exercised in automated flows.
+  - [x] Keep `hybrid_arena` alive in the current test/demo flow.
+  - [ ] Bring the whole examples directory under a stricter automated contract.
 
 ### 19.4 Editor Support
 
@@ -1093,7 +1181,9 @@ This is currently one of the biggest blockers to real multi-file projects.
 
 ## 20. Testing Strategy
 
-Wio needs far more tests than new syntax right now.
+Wio still needs more tests than new syntax, but the first serious test wave is
+already in the repo: feature runs, invalid-program coverage, interop coverage,
+and SDK coverage.
 
 ### 20.1 Lexer Tests
 
@@ -1122,12 +1212,16 @@ Wio needs far more tests than new syntax right now.
 ### 20.4 Codegen Tests
 
 - [ ] Snapshot generated C++ for representative programs.
-- [ ] Add behavioral end-to-end tests that compile and run produced executables.
-- [ ] Separate language-failure tests from backend-compiler-failure tests.
+- [x] Add behavioral end-to-end tests that compile and run produced executables.
+- [~] Separate language-failure tests from backend-compiler-failure tests.
+  - [x] Cover the first backend compile-error and link-error cases explicitly.
+  - [ ] Make the separation exhaustive and clearly documented.
 
 ### 20.5 Negative Test Suite
 
-- [ ] Build a dedicated invalid-program corpus.
+- [~] Build a dedicated invalid-program corpus.
+  - [x] Land the first real invalid corpus covering parser/sema/interop/generic/
+        loop/export failures.
 - [ ] Ensure every language rule has at least one failing test.
 - [ ] Ensure diagnostics are asserted, not just failure exit codes.
 
@@ -1202,39 +1296,40 @@ These should stay in the parking lot until the core language is stable.
 
 ## 23. Suggested Execution Order
 
-The best next sequence is probably:
+The active execution order now lives in `ORDERED_TODOLIST.md`.
 
-1. Stabilize parser and semantic analyzer correctness.
-2. Finish diagnostics and negative tests.
-3. Finish module/import semantics.
-4. Freeze `ref` / `view` / `fit` / `match` / ctor generation behavior.
-5. Finish loops and collections.
-6. Finish the current stdlib cleanup and make callback/collection helpers solid.
-7. Keep hardening the landed exported `object` / `component` interop plus the
-   ergonomic `wio_sdk` wrappers such as `WioObject` / `WioComponent`.
-8. Build the first real project generator/model for mixed C++ + Wio projects.
-9. Revisit advanced/reserved features only after the above is solid.
+At a high level, the next sequence is:
+
+1. Truth-audit this backlog against the shipped repo surface.
+2. Stabilize parser/sema correctness and diagnostics.
+3. Freeze the semantics of shipped language features.
+4. Strengthen test coverage and spec-to-test traceability.
+5. Harden std/runtime/host ABI around the features already in the repo.
+6. Improve backend quality, portability, and generated-C++ debuggability.
+7. Harden the project model, packaging, CLI, and examples into a stable alpha.
+8. Expand the docs from draft/reference fragments into a status-marked manual.
+9. Keep future features in the parking lot until the above is solid.
 
 ---
 
 ## 24. Shortlist for the Very Next Milestone
 
-If we want a realistic next milestone, it should include only these:
+The next realistic milestone should be:
 
-- [ ] Finish `use` + `as` for real multi-file code.
-- [ ] Add `for` / `foreach` with `in`.
-- [ ] Finalize dictionary and pair iteration design.
-- [ ] Tighten `ref` / `view` semantics and tests.
-- [ ] Tighten `fit` numeric and object-cast semantics.
-- [ ] Make `match` typing deterministic.
-- [ ] Finish semantic enforcement for `@Trust`, `@Final`, and `@ReadOnly`.
-- [ ] Add a serious invalid-program test suite.
-- [ ] Expand docs with more examples and more formal rules.
-- [x] After the current stdlib cleanup, prioritize exported
-      `object` / `component` support and the user-facing `wio_sdk`
-      object/component bridge.
-- [ ] Immediately after that, prioritize a mixed C++ + Wio project generator
-      and manifest format so host integration is easy by default.
+- [~] Backlog truth audit and roadmap cleanup.
+  - [x] Stop treating already-landed loops, generics, std, SDK, and project
+        model work as untouched backlog.
+  - [ ] Continue cleaning detailed section status markers as the backlog evolves.
+- [ ] Tighten parser/sema correctness and crash-proofing.
+- [ ] Improve diagnostic quality and make invalid-program tests assert the
+      diagnostics themselves.
+- [ ] Finish the first real semantic-freeze pass for:
+      `use`, `as`, `realm`, `ref`, `view`, `fit`, `match`, attributes, and ctor
+      behavior.
+- [ ] Freeze the collection contract around arrays, static arrays, dicts, trees,
+      strings, and iteration.
+- [ ] Keep hardening the landed host/runtime/std/project-model surface rather
+      than jumping to concurrency, reflection, or new headline syntax.
 
-This should be enough to move Wio from "interesting prototype" to
-"internally credible alpha language."
+That should move Wio from "feature-rich prototype" toward a more trustworthy
+and internally coherent alpha.
