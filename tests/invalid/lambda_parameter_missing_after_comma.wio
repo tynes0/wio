@@ -1,0 +1,4 @@
+fn Entry() -> i32 {
+    let project = (x: i32, ) => x;
+    return project(7);
+}

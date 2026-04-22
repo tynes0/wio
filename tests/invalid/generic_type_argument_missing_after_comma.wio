@@ -1,0 +1,6 @@
+type Pair<T, U> = T;
+
+fn Entry() -> i32 {
+    let value: Pair<i32,> = 7;
+    return value;
+}

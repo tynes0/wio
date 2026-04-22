@@ -1,0 +1,4 @@
+fn Entry() -> i32 {
+    let values = [1, ];
+    return values.Length();
+}

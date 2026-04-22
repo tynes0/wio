@@ -1,0 +1,7 @@
+fn Wrap<T>(value: T) -> T {
+    return value;
+}
+
+fn Entry() -> i32 {
+    return Wrap<i32,>(7);
+}

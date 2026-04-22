@@ -1068,6 +1068,78 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_failure_test(
+        wio_invalid_use_path_missing_module_name
+        "${CMAKE_SOURCE_DIR}/tests/invalid/use_path_missing_module_name.wio"
+        "Unfinished use statement\\. Use statements should finish with a module name\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_function_call_missing_argument
+        "${CMAKE_SOURCE_DIR}/tests/invalid/function_call_missing_argument.wio"
+        "Expected function call argument after ','."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_array_literal_missing_element
+        "${CMAKE_SOURCE_DIR}/tests/invalid/array_literal_missing_element.wio"
+        "Expected array element after ','."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_dictionary_literal_missing_entry
+        "${CMAKE_SOURCE_DIR}/tests/invalid/dictionary_literal_missing_entry.wio"
+        "Expected dictionary entry after ','."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_static_array_type_missing_size
+        "${CMAKE_SOURCE_DIR}/tests/invalid/static_array_type_missing_size.wio"
+        "Static array types must declare a size after ';'."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_function_type_missing_parameter
+        "${CMAKE_SOURCE_DIR}/tests/invalid/function_type_missing_parameter.wio"
+        "Expected function type parameter after ','."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_function_parameter_missing_after_comma
+        "${CMAKE_SOURCE_DIR}/tests/invalid/function_parameter_missing_after_comma.wio"
+        "Expected function parameter after ','."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_lambda_parameter_missing_after_comma
+        "${CMAKE_SOURCE_DIR}/tests/invalid/lambda_parameter_missing_after_comma.wio"
+        "Expected lambda parameter after ','."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_parameter_missing_after_comma
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_parameter_missing_after_comma.wio"
+        "Expected generic parameter after ','."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_attribute_argument_missing_after_comma
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_argument_missing_after_comma.wio"
+        "Expected attribute argument after ','."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_explicit_type_argument_missing_after_comma
+        "${CMAKE_SOURCE_DIR}/tests/invalid/explicit_type_argument_missing_after_comma.wio"
+        "Expected explicit type argument after ','."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_type_argument_missing_after_comma
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_type_argument_missing_after_comma.wio"
+        "Expected generic type argument after ','."
+    )
+
+    add_wio_failure_test(
         wio_invalid_native_function_with_body
         "${CMAKE_SOURCE_DIR}/tests/invalid/native_function_with_body.wio"
         "@Native functions cannot define a Wio body"

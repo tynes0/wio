@@ -1,0 +1,4 @@
+fn Entry() -> i32 {
+    let values = { "hp": 10, };
+    return values.Length();
+}

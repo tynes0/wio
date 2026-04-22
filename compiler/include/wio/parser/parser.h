@@ -2,6 +2,8 @@
 
 #include "wio/ast/ast.h"
 
+#include <string_view>
+
 namespace wio
 {
     class Parser
@@ -18,6 +20,7 @@ namespace wio
         size_t currentTokenIndex_;
 
         Token peek(int offset = 0) const;
+        Token previous() const;
         Token advance();
         void multiAdvance(int count);
         bool match(TokenType type, bool consume = false);
@@ -25,6 +28,9 @@ namespace wio
         bool multiMatch(const std::initializer_list<TokenType>& types, bool consume = false);
         bool matchOneOf(const std::initializer_list<TokenType>& types, bool consume = false);
         Token consume(TokenType type, std::string_view value = "");
+        [[nodiscard]] common::Location previousLocation() const;
+        [[nodiscard]] common::Location currentOrPreviousLocation() const;
+        void expectElementAfterComma(TokenType closingType, std::string_view elementDescription);
         void synchronize();
 
         NodePtr<Expression> parseExpression(int minPrecedence = 0, bool stopAtFit = false);
