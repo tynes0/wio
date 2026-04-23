@@ -711,6 +711,7 @@ namespace wio::sema
             instantiatedType->genericParameterNames = structType->genericParameterNames;
             instantiatedType->genericArguments = explicitTypeArguments;
             instantiatedType->fieldNames = structType->fieldNames;
+            instantiatedType->isFinal = structType->isFinal;
 
             instantiatedType->fieldTypes.reserve(structType->fieldTypes.size());
             for (const auto& fieldType : structType->fieldTypes)
@@ -1073,6 +1074,54 @@ namespace wio::sema
                 }
             }
             return allArgs;
+        }
+
+        AccessModifier getDefaultAccessModifier(const std::vector<NodePtr<AttributeStatement>>& attributes,
+                                                AccessModifier fallbackAccess)
+        {
+            AccessModifier resolvedAccess = fallbackAccess;
+            const auto defaultAttributes = getAttributeStatements(attributes, Attribute::Default);
+            if (defaultAttributes.empty())
+                return resolvedAccess;
+
+            if (defaultAttributes.size() > 1)
+            {
+                WIO_LOG_ADD_ERROR(defaultAttributes[1]->location(), "Only one @Default(...) attribute is allowed per declaration.");
+            }
+
+            for (const auto* defaultAttribute : defaultAttributes)
+            {
+                const bool hasExactlyOneRawArg = defaultAttribute->args.size() == 1;
+                const bool hasTypeArg =
+                    !defaultAttribute->typeArgs.empty() &&
+                    defaultAttribute->typeArgs.front() != nullptr;
+
+                if (!hasExactlyOneRawArg || hasTypeArg)
+                {
+                    WIO_LOG_ADD_ERROR(defaultAttribute->location(), "@Default expects exactly one access modifier: public, private, or protected.");
+                    continue;
+                }
+
+                const Token& accessToken = defaultAttribute->args.front();
+                if (accessToken.type == TokenType::kwPublic)
+                {
+                    resolvedAccess = AccessModifier::Public;
+                }
+                else if (accessToken.type == TokenType::kwPrivate)
+                {
+                    resolvedAccess = AccessModifier::Private;
+                }
+                else if (accessToken.type == TokenType::kwProtected)
+                {
+                    resolvedAccess = AccessModifier::Protected;
+                }
+                else
+                {
+                    WIO_LOG_ADD_ERROR(defaultAttribute->location(), "@Default expects exactly one access modifier: public, private, or protected.");
+                }
+            }
+
+            return resolvedAccess;
         }
 
         struct AttributeTypeArgument
@@ -2217,8 +2266,8 @@ namespace wio::sema
             leftType = lockedType;
         }
 
-        std::function<Ref<Symbol>(Ref<Type>, const std::string&)> findMemberInHierarchy = 
-            [&](const Ref<Type>& t, const std::string& name) -> Ref<Symbol> {
+        std::function<Ref<Symbol>(Ref<Type>, const std::string&, Ref<Type>*)> findMemberInHierarchy =
+            [&](const Ref<Type>& t, const std::string& name, Ref<Type>* ownerType) -> Ref<Symbol> {
                 if (!t || t->kind() != TypeKind::Struct)
                     return nullptr;
                 auto sType = t.AsFast<StructType>();
@@ -2226,11 +2275,15 @@ namespace wio::sema
                 if (auto lockedScope = sType->structScope.Lock(); lockedScope)
                 {
                     if (auto found = lockedScope->resolveLocally(name); found)
+                    {
+                        if (ownerType)
+                            *ownerType = t;
                         return found;
+                    }
                 }
                 for (auto& base : sType->baseTypes)
                 {
-                    if (auto found = findMemberInHierarchy(base, name); found)
+                    if (auto found = findMemberInHierarchy(base, name, ownerType); found)
                         return found;
                 }
                 return nullptr;
@@ -2315,7 +2368,7 @@ namespace wio::sema
             if (baseType->kind() == TypeKind::Struct)
             {
                 actualStructType = baseType;
-                foundMember = findMemberInHierarchy(actualStructType, node.member->token.value);
+                foundMember = findMemberInHierarchy(actualStructType, node.member->token.value, &actualStructType);
             }
             else if (isIntrinsicReceiverType(baseType))
             {
@@ -2343,7 +2396,7 @@ namespace wio::sema
                 if (referredType && referredType->kind() == TypeKind::Struct)
                 {
                     actualStructType = referredType;
-                    foundMember = findMemberInHierarchy(actualStructType, node.member->token.value);
+                    foundMember = findMemberInHierarchy(actualStructType, node.member->token.value, &actualStructType);
                 }
                 else if (referredType && isIntrinsicReceiverType(referredType))
                 {
@@ -2380,8 +2433,9 @@ namespace wio::sema
                 isTypeDerivedFrom(actualStructType, currentStructType_))
             {
                 isInsideHierarchy = true;
-                isInsideSameObject = true;
             }
+
+            isInsideSameObject = currentStructType_ == actualStructType;
         }
 
         if (foundMember->flags.get_isPrivate() && !isInsideSameObject)
@@ -4800,6 +4854,7 @@ namespace wio::sema
                 if (genericParameter)
                     structType.AsFast<StructType>()->genericParameterNames.push_back(genericParameter->token.value);
             }
+            structType.AsFast<StructType>()->isFinal = hasAttribute(node.attributes, Attribute::Final);
             Ref<Symbol> compSym = createSymbol(node.name->token.value, structType, SymbolKind::Struct, node.location());
             compSym->innerScope = structScope;
             compSym->genericParameterNames = structType.AsFast<StructType>()->genericParameterNames;
@@ -4855,12 +4910,7 @@ namespace wio::sema
                 WIO_LOG_ADD_ERROR(node.location(), "Components must be POD (Plain Old Data) and cannot inherit from objects or interfaces.");
             }
 
-            AccessModifier defaultAccess = AccessModifier::Public; 
-            std::vector<Token> defaultArgs = getAttributeArgs(node.attributes, Attribute::Default);
-            if (!defaultArgs.empty()) {
-                if (defaultArgs[0].type == TokenType::kwPrivate) defaultAccess = AccessModifier::Private;
-                else if (defaultArgs[0].type == TokenType::kwProtected) defaultAccess = AccessModifier::Protected;
-            }
+            AccessModifier defaultAccess = getDefaultAccessModifier(node.attributes, AccessModifier::Public);
 
             structType->fieldNames.clear();
             structType->fieldTypes.clear();
@@ -4898,6 +4948,14 @@ namespace wio::sema
                     auto funcDecl = member.declaration->as<FunctionDeclaration>();
                     auto memberSym = funcDecl->name->referencedSymbol.Lock();
                     std::string funcName = funcDecl->name->token.value;
+
+                    if (funcName != "OnConstruct" && funcName != "OnDestruct")
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            funcDecl->location(),
+                            "Components cannot define ordinary methods. Use an object for behavior or OnConstruct/OnDestruct for lifecycle."
+                        );
+                    }
                     
                     if (funcName == "OnConstruct")
                     {
@@ -5136,6 +5194,7 @@ namespace wio::sema
                 if (genericParameter)
                     structType.AsFast<StructType>()->genericParameterNames.push_back(genericParameter->token.value);
             }
+            structType.AsFast<StructType>()->isFinal = hasAttribute(node.attributes, Attribute::Final);
             Ref<Symbol> objSym = createSymbol(node.name->token.value, structType, SymbolKind::Struct, node.location());
             objSym->innerScope = structScope;
             objSym->genericParameterNames = structType.AsFast<StructType>()->genericParameterNames;
@@ -5187,15 +5246,7 @@ namespace wio::sema
             bool forceGenerateCtors = hasAttribute(node.attributes, Attribute::GenerateCtors);
             auto baseArgs = getAttributeTypeArgs(node.attributes, Attribute::From);
 
-            AccessModifier defaultAccess = AccessModifier::Private;
-            std::vector<Token> defaultArgs = getAttributeArgs(node.attributes, Attribute::Default);
-            if (!defaultArgs.empty())
-            {
-                if (defaultArgs[0].type == TokenType::kwPublic)
-                    defaultAccess = AccessModifier::Public;
-                else if (defaultArgs[0].type == TokenType::kwProtected)
-                    defaultAccess = AccessModifier::Protected;
-            }
+            AccessModifier defaultAccess = getDefaultAccessModifier(node.attributes, AccessModifier::Private);
 
             auto resolveBaseType = [&](const AttributeTypeArgument& baseArg) -> Ref<StructType>
             {
@@ -5223,6 +5274,8 @@ namespace wio::sema
                 return resolvedType.AsFast<StructType>();
             };
 
+            structType->baseTypes.clear();
+
             std::vector<Ref<StructType>> resolvedBaseTypes;
             resolvedBaseTypes.reserve(baseArgs.size());
             int structBaseCount = 0;
@@ -5230,48 +5283,73 @@ namespace wio::sema
             {
                 if (auto baseType = resolveBaseType(baseArg))
                 {
+                    if (baseType->isInterface)
+                    {
+                        structType->baseTypes.emplace_back(baseType);
+                        resolvedBaseTypes.push_back(baseType);
+                        continue;
+                    }
+
+                    if (!baseType->isObject)
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            node.location(),
+                            "Object '{}' cannot inherit from component '{}'. Objects may inherit from one object and any number of interfaces.",
+                            node.name->token.value,
+                            baseArg.token.value
+                        );
+                        continue;
+                    }
+
+                    if (baseType->isFinal)
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            node.location(),
+                            "Object '{}' cannot inherit from final object '{}'.",
+                            node.name->token.value,
+                            baseArg.token.value
+                        );
+                        continue;
+                    }
+
+                    structBaseCount++;
+                    if (structBaseCount > 1)
+                    {
+                        WIO_LOG_ADD_ERROR(node.location(), "Object '{}' cannot inherit from multiple objects/components. Single object inheritance only!", node.name->token.value);
+                        continue;
+                    }
+
                     structType->baseTypes.emplace_back(baseType);
                     resolvedBaseTypes.push_back(baseType);
-                    
-                    if (!baseType->isInterface)
+
+                    bool hasDefaultCtor = false;
+
+                    if (auto baseScope = baseType->structScope.Lock();
+                        baseScope && baseScope->resolveLocally("OnConstruct"))
                     {
-                        structBaseCount++;
-                        if (structBaseCount > 1)
+                        auto ctorSym = baseScope->resolveLocally("OnConstruct");
+                        if (ctorSym->kind == SymbolKind::FunctionGroup)
                         {
-                            WIO_LOG_ADD_ERROR(node.location(), "Object '{}' cannot inherit from multiple objects/components. Single class inheritance only!", node.name->token.value);
-                        }
-                        else
-                        {
-                            bool hasDefaultCtor = false;
-                            
-                            if (auto baseScope = baseType->structScope.Lock();
-                                baseScope && baseScope->resolveLocally("OnConstruct"))
-                            {
-                                auto ctorSym = baseScope->resolveLocally("OnConstruct");
-                                if (ctorSym->kind == SymbolKind::FunctionGroup) 
-                                {
-                                    for (auto& overload : ctorSym->overloads) {
-                                        if (overload->type && overload->type.AsFast<FunctionType>()->paramTypes.empty()) {
-                                            hasDefaultCtor = true; break;
-                                        }
-                                    }
-                                } 
-                                else if (ctorSym->type && ctorSym->type.AsFast<FunctionType>()->paramTypes.empty()) 
-                                {
-                                    hasDefaultCtor = true;
+                            for (auto& overload : ctorSym->overloads) {
+                                if (overload->type && overload->type.AsFast<FunctionType>()->paramTypes.empty()) {
+                                    hasDefaultCtor = true; break;
                                 }
                             }
-                            else 
-                            {
-                                hasDefaultCtor = true;
-                            }
-                            if (!hasDefaultCtor)
-                            {
-                                WIO_LOG_ADD_ERROR(node.location(), 
-                                    "Base object '{}' lacks a default (parameterless) constructor. Derived object '{}' cannot be instantiated safely. Hint: Add '@GenerateCtors' or an explicit 'OnConstruct() {{}}' to the base object.", 
-                                    baseArg.token.value, node.name->token.value);
-                            }
                         }
+                        else if (ctorSym->type && ctorSym->type.AsFast<FunctionType>()->paramTypes.empty())
+                        {
+                            hasDefaultCtor = true;
+                        }
+                    }
+                    else
+                    {
+                        hasDefaultCtor = true;
+                    }
+                    if (!hasDefaultCtor)
+                    {
+                        WIO_LOG_ADD_ERROR(node.location(),
+                            "Base object '{}' lacks a default (parameterless) constructor. Derived object '{}' cannot be instantiated safely. Hint: Add '@GenerateCtors' or an explicit 'OnConstruct() {{}}' to the base object.",
+                            baseArg.token.value, node.name->token.value);
                     }
                 }
             }

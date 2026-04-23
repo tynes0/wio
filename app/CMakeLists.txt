@@ -454,6 +454,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_object_component_access_semantics_run
+        "${CMAKE_SOURCE_DIR}/tests/object_component_access_semantics.wio"
+        "Object/component access semantics: 17"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_interface_ref_upcast_run
         "${CMAKE_SOURCE_DIR}/tests/interface_ref_upcast.wio"
         "Interface ref hp: 7"
@@ -1219,6 +1226,36 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_component_inheritance
         "${CMAKE_SOURCE_DIR}/tests/invalid/component_inheritance.wio"
         "Components must be POD \\(Plain Old Data\\) and cannot inherit from objects or interfaces"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_component_method_not_allowed
+        "${CMAKE_SOURCE_DIR}/tests/invalid/component_method_not_allowed.wio"
+        "Components cannot define ordinary methods"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_object_inherits_component
+        "${CMAKE_SOURCE_DIR}/tests/invalid/object_inherits_component.wio"
+        "Object 'BadActor' cannot inherit from component 'Position'"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_final_object_inheritance
+        "${CMAKE_SOURCE_DIR}/tests/invalid/final_object_inheritance.wio"
+        "Object 'DerivedFromFinal' cannot inherit from final object 'FinalBase'"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_default_attribute_invalid_access
+        "${CMAKE_SOURCE_DIR}/tests/invalid/default_attribute_invalid_access.wio"
+        "@Default expects exactly one access modifier: public, private, or protected"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_private_base_member_access
+        "${CMAKE_SOURCE_DIR}/tests/invalid/private_base_member_access.wio"
+        "Cannot access private member 'secret' from outside the object"
     )
 
     add_wio_non_dry_failure_test_clean(

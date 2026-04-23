@@ -1,0 +1,11 @@
+@Final
+object FinalBase {
+}
+
+@From(FinalBase)
+object DerivedFromFinal {
+}
+
+fn Entry(args: string[]) -> i32 {
+    return 0;
+}

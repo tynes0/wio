@@ -141,6 +141,7 @@ namespace wio
             std::vector<Ref<Type>> fieldTypes;
             bool isObject;
             bool isInterface;
+            bool isFinal = false;
 
             StructType(std::string name, WeakRef<Scope> structScope, bool isObject = false, bool isInterface = false);
             

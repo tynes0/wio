@@ -1,0 +1,11 @@
+component Position {
+    x: i32 = 0;
+}
+
+@From(Position)
+object BadActor {
+}
+
+fn Entry(args: string[]) -> i32 {
+    return 0;
+}

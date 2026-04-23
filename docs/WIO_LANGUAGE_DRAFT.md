@@ -1892,14 +1892,11 @@ Design rules:
 
 - a component cannot inherit from another type,
 - a component cannot implement interfaces,
-- a component should not define ordinary methods,
+- a component cannot define ordinary methods,
 - a component may define `OnConstruct` and `OnDestruct`.
 
-#### Current Compiler Note
-
-The semantic layer already rejects inheritance on components. However, method
-restriction is still a language intent that deserves stronger compiler-side
-enforcement and tests.
+The compiler reports Wio diagnostics for both component inheritance and ordinary
+component methods before generated C++ is emitted.
 
 ### 17.4 Default Access for Components
 
@@ -1956,7 +1953,7 @@ object Entity {
     }
 
     public fn Render() {
-        std::io::Print($"[Entity] id=${self.id}");
+        std::console::Print($"[Entity] id=${self.id}");
     }
 }
 ```
@@ -1978,13 +1975,17 @@ object Boss {
 Rules:
 
 - one base object maximum,
-- multiple interfaces allowed.
+- multiple interfaces allowed,
+- component bases are rejected,
+- final object bases are rejected.
 
 #### Current Compiler Note
 
 The compiler currently enforces:
 
 - no multiple object inheritance,
+- no object-from-component inheritance,
+- no inheritance from `@Final` objects,
 - base-object default constructor availability for derived instantiation.
 
 ### 18.4 Default Access for Objects
@@ -2197,12 +2198,22 @@ object Boss {
 Rules:
 
 - at most one object base,
-- any number of interface bases in intent,
-- components may not use it.
+- any number of interface bases,
+- component bases are rejected,
+- components may not use `@From(...)`,
+- final object bases are rejected.
 
 ### 20.5 `@Default(...)`
 
 Changes declaration-local default member access.
+
+`@Default(...)` accepts exactly one access modifier:
+
+- `public`
+- `private`
+- `protected`
+
+Any other argument is a Wio diagnostic.
 
 Examples:
 
@@ -2291,9 +2302,10 @@ between design intent and current enforcement.
 
 ### 20.10 `@Final`
 
-Design intent:
+Rules:
 
 - a final object cannot be inherited from.
+- final inheritance is rejected by semantic analysis, not left to generated C++.
 
 Example:
 

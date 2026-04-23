@@ -1,0 +1,28 @@
+use std::console as console;
+
+object BaseAccess {
+    protected power: i32 = 10;
+    private secret: i32 = 2;
+
+    public fn Reveal() -> i32 {
+        return self.secret;
+    }
+}
+
+@From(BaseAccess)
+object DerivedAccess {
+    public fn Boost() -> i32 {
+        return self.power + 5;
+    }
+}
+
+component StatsAccess {
+    hp: i32 = 7;
+}
+
+fn Entry(args: string[]) -> i32 {
+    let unit = DerivedAccess();
+    let stats = StatsAccess();
+    console::Print($"Object/component access semantics: ${unit.Boost() + unit.Reveal() + stats.hp}");
+    return 0;
+}

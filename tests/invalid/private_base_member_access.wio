@@ -1,0 +1,14 @@
+object PrivateBase {
+    private secret: i32 = 7;
+}
+
+@From(PrivateBase)
+object PrivateDerived {
+    public fn Leak() -> i32 {
+        return self.secret;
+    }
+}
+
+fn Entry(args: string[]) -> i32 {
+    return 0;
+}

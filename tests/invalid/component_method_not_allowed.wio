@@ -1,0 +1,9 @@
+component Utility {
+    fn Identity(value: i32) -> i32 {
+        return value;
+    }
+}
+
+fn Entry(args: string[]) -> i32 {
+    return 0;
+}
