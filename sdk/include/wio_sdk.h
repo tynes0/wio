@@ -2209,6 +2209,166 @@ namespace wio::sdk
             }
         }
 
+        inline std::string formatDescriptorOwner(std::string_view ownerKind,
+                                                 std::string_view ownerName)
+        {
+            std::ostringstream label;
+            label << ownerKind;
+            if (!ownerName.empty())
+                label << " '" << ownerName << '\'';
+            return label.str();
+        }
+
+        inline void validateExactExportContract(const WioModuleExport* exportEntry,
+                                                std::string_view context,
+                                                std::string_view ownerKind,
+                                                std::string_view ownerName,
+                                                WioAbiType expectedReturnType,
+                                                std::uint32_t expectedParameterCount,
+                                                const WioAbiType* expectedParameterTypes,
+                                                bool requireInvoke,
+                                                bool requireRaw)
+        {
+            const std::string ownerLabel = formatDescriptorOwner(ownerKind, ownerName);
+            if (exportEntry == nullptr)
+            {
+                std::ostringstream problem;
+                problem << ownerLabel << " is missing its export bridge.";
+                throwInvalidApiDescriptor(context, problem.str());
+            }
+
+            validateExportEntryShape(*exportEntry, context);
+
+            if (requireInvoke && exportEntry->invoke == nullptr)
+            {
+                std::ostringstream problem;
+                problem << ownerLabel << " requires an invoke bridge.";
+                throwInvalidApiDescriptor(context, problem.str());
+            }
+
+            if (requireRaw && exportEntry->rawFunction == nullptr)
+            {
+                std::ostringstream problem;
+                problem << ownerLabel << " requires a raw host bridge.";
+                throwInvalidApiDescriptor(context, problem.str());
+            }
+
+            if (exportEntry->returnType != expectedReturnType)
+            {
+                std::ostringstream problem;
+                problem << ownerLabel << " must return '" << abiTypeName(expectedReturnType)
+                        << "' but exports '" << abiTypeName(exportEntry->returnType) << "'.";
+                throwInvalidApiDescriptor(context, problem.str());
+            }
+
+            if (exportEntry->parameterCount != expectedParameterCount)
+            {
+                std::ostringstream problem;
+                problem << ownerLabel << " must declare " << expectedParameterCount
+                        << " parameter(s) but exports " << exportEntry->parameterCount << '.';
+                throwInvalidApiDescriptor(context, problem.str());
+            }
+
+            if (expectedParameterCount > 0u && exportEntry->parameterTypes == nullptr)
+            {
+                std::ostringstream problem;
+                problem << ownerLabel << " does not provide parameterTypes.";
+                throwInvalidApiDescriptor(context, problem.str());
+            }
+
+            for (std::uint32_t parameterIndex = 0; parameterIndex < expectedParameterCount; ++parameterIndex)
+            {
+                if (exportEntry->parameterTypes[parameterIndex] != expectedParameterTypes[parameterIndex])
+                {
+                    std::ostringstream problem;
+                    problem << ownerLabel << " parameter " << parameterIndex
+                            << " must be '" << abiTypeName(expectedParameterTypes[parameterIndex])
+                            << "' but exports '" << abiTypeName(exportEntry->parameterTypes[parameterIndex]) << "'.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+            }
+        }
+
+        inline void validateConcreteAbiExportContract(const WioModuleExport* exportEntry,
+                                                      std::string_view context,
+                                                      std::string_view ownerKind,
+                                                      std::string_view ownerName,
+                                                      WioAbiType expectedReturnType,
+                                                      bool requireInvoke,
+                                                      bool requireRaw,
+                                                      std::uint32_t expectedLeadingParameterCount = 0u,
+                                                      const WioAbiType* expectedLeadingParameterTypes = nullptr)
+        {
+            const std::string ownerLabel = formatDescriptorOwner(ownerKind, ownerName);
+            if (exportEntry == nullptr)
+            {
+                std::ostringstream problem;
+                problem << ownerLabel << " is missing its export bridge.";
+                throwInvalidApiDescriptor(context, problem.str());
+            }
+
+            validateExportEntryShape(*exportEntry, context);
+
+            if (requireInvoke && exportEntry->invoke == nullptr)
+            {
+                std::ostringstream problem;
+                problem << ownerLabel << " requires an invoke bridge.";
+                throwInvalidApiDescriptor(context, problem.str());
+            }
+
+            if (requireRaw && exportEntry->rawFunction == nullptr)
+            {
+                std::ostringstream problem;
+                problem << ownerLabel << " requires a raw host bridge.";
+                throwInvalidApiDescriptor(context, problem.str());
+            }
+
+            if (exportEntry->returnType != expectedReturnType)
+            {
+                std::ostringstream problem;
+                problem << ownerLabel << " must return '" << abiTypeName(expectedReturnType)
+                        << "' but exports '" << abiTypeName(exportEntry->returnType) << "'.";
+                throwInvalidApiDescriptor(context, problem.str());
+            }
+
+            if (expectedLeadingParameterCount > exportEntry->parameterCount)
+            {
+                std::ostringstream problem;
+                problem << ownerLabel << " must declare at least " << expectedLeadingParameterCount
+                        << " parameter(s) but exports " << exportEntry->parameterCount << '.';
+                throwInvalidApiDescriptor(context, problem.str());
+            }
+
+            if (exportEntry->parameterCount > 0u && exportEntry->parameterTypes == nullptr)
+            {
+                std::ostringstream problem;
+                problem << ownerLabel << " does not provide parameterTypes.";
+                throwInvalidApiDescriptor(context, problem.str());
+            }
+
+            for (std::uint32_t parameterIndex = 0; parameterIndex < exportEntry->parameterCount; ++parameterIndex)
+            {
+                const WioAbiType parameterType = exportEntry->parameterTypes[parameterIndex];
+                if (parameterType == WIO_ABI_UNKNOWN)
+                {
+                    std::ostringstream problem;
+                    problem << ownerLabel << " parameter " << parameterIndex
+                            << " must use a concrete ABI type.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+
+                if (parameterIndex < expectedLeadingParameterCount &&
+                    parameterType != expectedLeadingParameterTypes[parameterIndex])
+                {
+                    std::ostringstream problem;
+                    problem << ownerLabel << " parameter " << parameterIndex
+                            << " must be '" << abiTypeName(expectedLeadingParameterTypes[parameterIndex])
+                            << "' but exports '" << abiTypeName(parameterType) << "'.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+            }
+        }
+
         inline void validateModuleApi(const WioModuleApi* api,
                                       std::string_view context = {})
         {
@@ -2298,9 +2458,35 @@ namespace wio::sdk
                     throwInvalidApiDescriptor(context, problem.str());
                 }
 
+                const WioAbiType handleParameter[] = { WIO_ABI_USIZE };
                 if (typeEntry.createExport != nullptr)
+                {
                     validateExportPointerOwnership(api, typeEntry.createExport, context, "Type constructor", typeEntry.logicalName);
+                    validateExactExportContract(
+                        typeEntry.createExport,
+                        context,
+                        "Type default constructor",
+                        typeEntry.logicalName,
+                        WIO_ABI_USIZE,
+                        0u,
+                        nullptr,
+                        true,
+                        false
+                    );
+                }
+
                 validateExportPointerOwnership(api, typeEntry.destroyExport, context, "Type destructor", typeEntry.logicalName);
+                validateExactExportContract(
+                    typeEntry.destroyExport,
+                    context,
+                    "Type destructor",
+                    typeEntry.logicalName,
+                    WIO_ABI_VOID,
+                    1u,
+                    handleParameter,
+                    true,
+                    false
+                );
 
                 if (typeEntry.constructorCount > 0u && typeEntry.constructors == nullptr)
                 {
@@ -2309,8 +2495,41 @@ namespace wio::sdk
                     throwInvalidApiDescriptor(context, problem.str());
                 }
 
+                bool sawDefaultConstructor = false;
                 for (std::uint32_t constructorIndex = 0; constructorIndex < typeEntry.constructorCount; ++constructorIndex)
-                    validateExportPointerOwnership(api, typeEntry.constructors[constructorIndex].exportEntry, context, "Type constructor", typeEntry.logicalName);
+                {
+                    const WioModuleExport* constructorExport = typeEntry.constructors[constructorIndex].exportEntry;
+                    validateExportPointerOwnership(api, constructorExport, context, "Type constructor", typeEntry.logicalName);
+                    validateConcreteAbiExportContract(
+                        constructorExport,
+                        context,
+                        "Type constructor",
+                        typeEntry.logicalName,
+                        WIO_ABI_USIZE,
+                        true,
+                        false
+                    );
+
+                    if (constructorExport != nullptr && constructorExport->parameterCount == 0u)
+                    {
+                        sawDefaultConstructor = true;
+                        if (typeEntry.createExport != nullptr && constructorExport != typeEntry.createExport)
+                        {
+                            std::ostringstream problem;
+                            problem << "Type default constructor '" << typeEntry.logicalName
+                                    << "' must reuse the same export entry referenced by createExport.";
+                            throwInvalidApiDescriptor(context, problem.str());
+                        }
+                    }
+                }
+
+                if (typeEntry.createExport != nullptr && !sawDefaultConstructor)
+                {
+                    std::ostringstream problem;
+                    problem << "Exported type '" << typeEntry.logicalName
+                            << "' provides createExport but does not expose a matching zero-argument constructor entry.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
 
                 if (typeEntry.fieldCount > 0u && typeEntry.fields == nullptr)
                 {
@@ -2345,6 +2564,14 @@ namespace wio::sdk
                     }
 
                     validateTypeDescriptor(fieldEntry.typeDescriptor, context, visitedDescriptors);
+
+                    if (fieldEntry.accessModifier == WIO_MODULE_ACCESS_UNKNOWN)
+                    {
+                        std::ostringstream problem;
+                        problem << "Field '" << fieldEntry.fieldName << "' on exported type '" << typeEntry.logicalName
+                                << "' is missing access modifier metadata.";
+                        throwInvalidApiDescriptor(context, problem.str());
+                    }
 
                     const std::uint32_t allowedFlags = WIO_MODULE_FIELD_READABLE | WIO_MODULE_FIELD_WRITABLE | WIO_MODULE_FIELD_READONLY;
                     if ((fieldEntry.flags & ~allowedFlags) != 0u)
@@ -2396,6 +2623,97 @@ namespace wio::sdk
                         problem << "Field '" << fieldEntry.fieldName << "' on exported type '" << typeEntry.logicalName << "' must use WIO_ABI_UNKNOWN for non-primitive field metadata.";
                         throwInvalidApiDescriptor(context, problem.str());
                     }
+
+                    if (fieldType.is_object() || fieldType.is_component())
+                    {
+                        if (!hasText(fieldEntry.typeDescriptor->logicalTypeName))
+                        {
+                            std::ostringstream problem;
+                            problem << "Field '" << fieldEntry.fieldName << "' on exported type '" << typeEntry.logicalName
+                                    << "' is missing nested logical type metadata.";
+                            throwInvalidApiDescriptor(context, problem.str());
+                        }
+
+                        const WioModuleType* nestedType = WioFindModuleType(api, fieldEntry.typeDescriptor->logicalTypeName);
+                        if (nestedType == nullptr)
+                        {
+                            std::ostringstream problem;
+                            problem << "Field '" << fieldEntry.fieldName << "' on exported type '" << typeEntry.logicalName
+                                    << "' refers to unknown exported type '" << fieldEntry.typeDescriptor->logicalTypeName << "'.";
+                            throwInvalidApiDescriptor(context, problem.str());
+                        }
+
+                        const WioModuleTypeKind expectedNestedKind = fieldType.is_object()
+                            ? WIO_MODULE_TYPE_OBJECT
+                            : WIO_MODULE_TYPE_COMPONENT;
+                        if (nestedType->kind != expectedNestedKind)
+                        {
+                            std::ostringstream problem;
+                            problem << "Field '" << fieldEntry.fieldName << "' on exported type '" << typeEntry.logicalName
+                                    << "' points to exported type '" << fieldEntry.typeDescriptor->logicalTypeName
+                                    << "' with the wrong type kind.";
+                            throwInvalidApiDescriptor(context, problem.str());
+                        }
+                    }
+
+                    const WioAbiType fieldGetterParameters[] = { WIO_ABI_USIZE };
+                    const WioAbiType fieldSetterPrimitiveParameters[] = { WIO_ABI_USIZE, fieldEntry.fieldType };
+                    const WioAbiType fieldSetterHandleParameters[] = { WIO_ABI_USIZE, WIO_ABI_USIZE };
+                    const WioAbiType fieldSetterOpaqueParameters[] = { WIO_ABI_USIZE, WIO_ABI_UNKNOWN };
+
+                    if ((fieldEntry.flags & WIO_MODULE_FIELD_READABLE) != 0u)
+                    {
+                        if (fieldType.is_primitive())
+                        {
+                            validateExactExportContract(fieldEntry.getterExport, context, "Field getter", fieldEntry.fieldName, fieldEntry.fieldType, 1u, fieldGetterParameters, true, false);
+                        }
+                        else if (fieldType.is_object() || fieldType.is_component())
+                        {
+                            validateExactExportContract(fieldEntry.getterExport, context, "Field getter", fieldEntry.fieldName, WIO_ABI_USIZE, 1u, fieldGetterParameters, true, false);
+                        }
+                        else if (fieldType.is_string() || fieldType.is_dynamic_array() || fieldType.is_static_array() ||
+                                 fieldType.is_dict() || fieldType.is_tree() || fieldType.is_function())
+                        {
+                            validateExactExportContract(fieldEntry.getterExport, context, "Field getter", fieldEntry.fieldName, WIO_ABI_UNKNOWN, 1u, fieldGetterParameters, false, true);
+                        }
+                    }
+
+                    if ((fieldEntry.flags & WIO_MODULE_FIELD_WRITABLE) != 0u)
+                    {
+                        if (fieldType.is_primitive())
+                        {
+                            validateExactExportContract(fieldEntry.setterExport, context, "Field setter", fieldEntry.fieldName, WIO_ABI_VOID, 2u, fieldSetterPrimitiveParameters, true, false);
+                        }
+                        else if (fieldType.is_object() || fieldType.is_component())
+                        {
+                            validateExactExportContract(fieldEntry.setterExport, context, "Field setter", fieldEntry.fieldName, WIO_ABI_VOID, 2u, fieldSetterHandleParameters, true, false);
+                        }
+                        else if (fieldType.is_string() || fieldType.is_dynamic_array() || fieldType.is_static_array() ||
+                                 fieldType.is_dict() || fieldType.is_tree() || fieldType.is_function())
+                        {
+                            validateExactExportContract(fieldEntry.setterExport, context, "Field setter", fieldEntry.fieldName, WIO_ABI_VOID, 2u, fieldSetterOpaqueParameters, false, true);
+                        }
+                    }
+
+                    if (fieldType.is_dynamic_array() || fieldType.is_static_array() || fieldType.is_dict() ||
+                        fieldType.is_tree() || fieldType.is_function())
+                    {
+                        if ((fieldEntry.flags & WIO_MODULE_FIELD_READABLE) != 0u && fieldEntry.dynamicGetter == nullptr)
+                        {
+                            std::ostringstream problem;
+                            problem << "Field '" << fieldEntry.fieldName << "' on exported type '" << typeEntry.logicalName
+                                    << "' requires a dynamicGetter bridge.";
+                            throwInvalidApiDescriptor(context, problem.str());
+                        }
+
+                        if ((fieldEntry.flags & WIO_MODULE_FIELD_WRITABLE) != 0u && fieldEntry.dynamicSetter == nullptr)
+                        {
+                            std::ostringstream problem;
+                            problem << "Field '" << fieldEntry.fieldName << "' on exported type '" << typeEntry.logicalName
+                                    << "' requires a dynamicSetter bridge.";
+                            throwInvalidApiDescriptor(context, problem.str());
+                        }
+                    }
                 }
 
                 if (typeEntry.methodCount > 0u && typeEntry.methods == nullptr)
@@ -2405,6 +2723,7 @@ namespace wio::sdk
                     throwInvalidApiDescriptor(context, problem.str());
                 }
 
+                std::unordered_set<std::string> methodNames;
                 for (std::uint32_t methodIndex = 0; methodIndex < typeEntry.methodCount; ++methodIndex)
                 {
                     const WioModuleMethod& methodEntry = typeEntry.methods[methodIndex];
@@ -2415,7 +2734,34 @@ namespace wio::sdk
                         throwInvalidApiDescriptor(context, problem.str());
                     }
 
+                    if (!methodNames.insert(methodEntry.methodName).second)
+                    {
+                        std::ostringstream problem;
+                        problem << "Exported type '" << typeEntry.logicalName
+                                << "' declares method '" << methodEntry.methodName << "' more than once.";
+                        throwInvalidApiDescriptor(context, problem.str());
+                    }
+
                     validateExportPointerOwnership(api, methodEntry.exportEntry, context, "Method", methodEntry.methodName);
+                    validateConcreteAbiExportContract(
+                        methodEntry.exportEntry,
+                        context,
+                        "Method",
+                        methodEntry.methodName,
+                        methodEntry.exportEntry != nullptr ? methodEntry.exportEntry->returnType : WIO_ABI_UNKNOWN,
+                        true,
+                        false,
+                        1u,
+                        handleParameter
+                    );
+
+                    if (methodEntry.exportEntry != nullptr && methodEntry.exportEntry->returnType == WIO_ABI_UNKNOWN)
+                    {
+                        std::ostringstream problem;
+                        problem << "Method '" << methodEntry.methodName << "' on exported type '" << typeEntry.logicalName
+                                << "' must return a concrete ABI type or void.";
+                        throwInvalidApiDescriptor(context, problem.str());
+                    }
                 }
             }
         }

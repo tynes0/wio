@@ -231,6 +231,26 @@ These wrappers support:
 - typed field access through `get<T>(...)`, `set(...)`, and the collection helpers
 - field accessor objects through `field(...)`
 
+### 6.1 Exported Type ABI Validation
+
+Before the SDK binds an exported `object` or `component`, it now validates the
+host-visible ABI shape of the type metadata. In v1 that validation includes:
+
+- `createExport` must be a zero-argument bridge returning `usize`
+- `destroyExport` must be a one-argument bridge taking `usize` and returning `void`
+- constructor entries must return `usize`
+- if `createExport` exists, one constructor entry must reuse that same zero-argument export
+- readable primitive fields must expose `getter(handle) -> value`
+- writable primitive fields must expose `setter(handle, value) -> void`
+- readable `object` and `component` fields must expose `getter(handle) -> usize`
+- writable `object` and `component` fields must expose `setter(handle, usize) -> void`
+- readable and writable dynamic/container/function fields must expose raw bridges plus `dynamicGetter` / `dynamicSetter`
+- methods must reserve parameter `0` for the instance handle as `usize`
+- methods must return a concrete ABI type or `void`
+
+This means malformed exported-type descriptors fail fast as SDK diagnostics
+instead of surfacing later as undefined host behavior.
+
 ---
 
 ## 7. Field Export Contract In v1
