@@ -91,6 +91,7 @@ namespace wio::sdk
         SignatureMismatch,
         InvokeFailed,
         LifecycleFailed,
+        StaleBinding,
         ReloadFailed,
         IoFailure
     };
@@ -1926,6 +1927,12 @@ namespace wio::sdk
             );
         }
 
+        struct BindingState;
+        void requireLiveBinding(const std::shared_ptr<BindingState>& state,
+                                std::uint64_t expectedGeneration,
+                                std::string_view bindingKind,
+                                std::string_view bindingName);
+
         template <typename Signature, size_t... Indices>
         auto bindExport(const WioModuleExport* exportEntry,
                         std::string name,
@@ -1983,6 +1990,74 @@ namespace wio::sdk
         }
 
         template <typename Signature, size_t... Indices>
+        auto bindExport(const WioModuleExport* exportEntry,
+                        std::string name,
+                        std::string bindingKind,
+                        std::shared_ptr<BindingState> bindingState,
+                        std::uint64_t bindingGeneration,
+                        std::index_sequence<Indices...>) -> typename FunctionTraits<Signature>::StdFunction
+        {
+            using Traits = FunctionTraits<Signature>;
+            validateExportSignature<Signature>(exportEntry, name, bindingKind);
+
+            return typename Traits::StdFunction(
+                [exportEntry,
+                 bindingState = std::move(bindingState),
+                 bindingGeneration,
+                 name = std::move(name),
+                 bindingKind = std::move(bindingKind)](typename Traits::template Argument<Indices>... args) -> typename Traits::ReturnType
+                {
+                    requireLiveBinding(bindingState, bindingGeneration, bindingKind, name);
+
+                    constexpr size_t argCount = Traits::Arity;
+                    std::array<WioValue, argCount> wioArgs{ toWioValue(args)... };
+                    WioValue result{};
+
+                    const std::int32_t status = exportEntry->invoke(
+                        argCount > 0 ? wioArgs.data() : nullptr,
+                        static_cast<std::uint32_t>(argCount),
+                        std::is_void_v<typename Traits::ReturnType> ? nullptr : &result
+                    );
+
+                    if (status != WIO_INVOKE_OK)
+                    {
+                        std::ostringstream message;
+                        message << "Wio SDK invoke failure for " << bindingKind << " '" << name
+                                << "': " << invokeStatusName(status) << '.';
+                        throw Error(ErrorCode::InvokeFailed, message.str());
+                    }
+
+                    if constexpr (std::is_void_v<typename Traits::ReturnType>)
+                    {
+                        return;
+                    }
+                    else
+                    {
+                        return fromWioValue<typename Traits::ReturnType>(result);
+                    }
+                }
+            );
+        }
+
+        template <typename Signature>
+        auto bindExport(const WioModuleExport* exportEntry,
+                        std::string name,
+                        std::string bindingKind,
+                        std::shared_ptr<BindingState> bindingState,
+                        std::uint64_t bindingGeneration) -> typename FunctionTraits<Signature>::StdFunction
+        {
+            using Traits = FunctionTraits<Signature>;
+            return bindExport<Signature>(
+                exportEntry,
+                std::move(name),
+                std::move(bindingKind),
+                std::move(bindingState),
+                bindingGeneration,
+                std::make_index_sequence<Traits::Arity>{}
+            );
+        }
+
+        template <typename Signature, size_t... Indices>
         auto bindReloadable(std::function<typename FunctionTraits<Signature>::StdFunction(std::string_view)> resolver,
                             std::string name,
                             std::index_sequence<Indices...>) -> typename FunctionTraits<Signature>::StdFunction
@@ -2015,6 +2090,83 @@ namespace wio::sdk
                 std::move(name),
                 std::make_index_sequence<Traits::Arity>{}
             );
+        }
+
+        struct BindingState
+        {
+            const WioModuleApi* api = nullptr;
+            std::uint64_t generation = 0;
+            bool active = false;
+            std::string ownerLabel{};
+        };
+
+        inline void publishBindingState(const std::shared_ptr<BindingState>& state,
+                                        const WioModuleApi* api,
+                                        std::string_view ownerLabel = {}) noexcept
+        {
+            if (!state)
+                return;
+
+            if (state->generation == 0 || !state->active || state->api != api)
+                ++state->generation;
+
+            state->api = api;
+            state->active = api != nullptr;
+
+            if (!ownerLabel.empty())
+                state->ownerLabel = ownerLabel;
+        }
+
+        inline void retireBindingState(const std::shared_ptr<BindingState>& state) noexcept
+        {
+            if (!state)
+                return;
+
+            if (state->active || state->api != nullptr)
+                ++state->generation;
+
+            state->api = nullptr;
+            state->active = false;
+        }
+
+        [[nodiscard]] inline std::uint64_t currentBindingGeneration(const std::shared_ptr<BindingState>& state) noexcept
+        {
+            return state ? state->generation : 0u;
+        }
+
+        [[nodiscard]] inline bool isBindingStale(const std::shared_ptr<BindingState>& state,
+                                                 std::uint64_t expectedGeneration) noexcept
+        {
+            if (!state)
+                return false;
+
+            return !state->active || state->api == nullptr || state->generation != expectedGeneration;
+        }
+
+        [[noreturn]] inline void throwStaleBinding(std::string_view bindingKind,
+                                                   std::string_view bindingName)
+        {
+            std::ostringstream message;
+            message << "Wio SDK " << bindingKind;
+            if (!bindingName.empty())
+                message << " '" << bindingName << '\'';
+            message << " is stale after module reload, unload, or close. Reacquire it from the current module generation before using it.";
+            throw Error(ErrorCode::StaleBinding, message.str());
+        }
+
+        inline void requireLiveBinding(const std::shared_ptr<BindingState>& state,
+                                       std::uint64_t expectedGeneration,
+                                       std::string_view bindingKind,
+                                       std::string_view bindingName)
+        {
+            if (isBindingStale(state, expectedGeneration))
+                throwStaleBinding(bindingKind, bindingName);
+        }
+
+        [[nodiscard]] inline bool canDestroyThroughBinding(const std::shared_ptr<BindingState>& state,
+                                                           std::uint64_t expectedGeneration) noexcept
+        {
+            return !isBindingStale(state, expectedGeneration);
         }
 
         inline bool hasText(const char* text) noexcept
@@ -3195,6 +3347,154 @@ namespace wio::sdk
             );
         }
 
+        template <typename Signature, size_t... Indices>
+        auto bindBoundMethod(const WioModuleType* typeEntry,
+                             std::uintptr_t handle,
+                             std::string methodName,
+                             std::string bindingKind,
+                             std::shared_ptr<BindingState> bindingState,
+                             std::uint64_t bindingGeneration,
+                             std::index_sequence<Indices...>) -> typename FunctionTraits<Signature>::StdFunction
+        {
+            using Traits = FunctionTraits<Signature>;
+            const std::string staleBindingKind = bindingKind + " method";
+            requireLiveBinding(bindingState, bindingGeneration, staleBindingKind, methodName);
+
+            if (typeEntry == nullptr)
+                throw Error(ErrorCode::TypeNotFound, "Wio SDK expected a valid exported type descriptor.");
+
+            const WioAbiType expectedReturnType = getAbiType<typename Traits::ReturnType>();
+            const std::array<WioAbiType, Traits::Arity + 1> expectedParameterTypes = {
+                WIO_ABI_USIZE,
+                getAbiType<typename Traits::template Argument<Indices>>()...
+            };
+
+            const WioModuleMethod* methodEntry = WioFindModuleMethodOverload(
+                typeEntry,
+                methodName.c_str(),
+                expectedReturnType,
+                static_cast<std::uint32_t>(expectedParameterTypes.size()),
+                expectedParameterTypes.data()
+            );
+
+            if (methodEntry == nullptr)
+            {
+                std::ostringstream message;
+                message << "Wio SDK could not find " << bindingKind << " method overload '" << methodName
+                        << "' on exported type '" << (typeEntry->logicalName ? typeEntry->logicalName : "<unknown>") << "'.";
+                throw Error(ErrorCode::MethodNotFound, message.str());
+            }
+
+            const WioModuleExport* exportEntry = methodEntry ? methodEntry->exportEntry : nullptr;
+
+            if (exportEntry == nullptr || exportEntry->invoke == nullptr)
+            {
+                std::ostringstream message;
+                message << "Wio SDK could not bind " << bindingKind << " method '" << methodName << "'.";
+                throw Error(ErrorCode::MethodNotFound, message.str());
+            }
+
+            constexpr std::uint32_t expectedCount = static_cast<std::uint32_t>(Traits::Arity + 1);
+            if (exportEntry->parameterCount != expectedCount)
+            {
+                std::ostringstream message;
+                message << "Wio SDK signature mismatch for " << bindingKind << " method '" << methodName
+                        << "': expected " << expectedCount << " parameters including the instance handle but module exports "
+                        << exportEntry->parameterCount << '.';
+                throw Error(ErrorCode::SignatureMismatch, message.str());
+            }
+
+            if (exportEntry->parameterTypes == nullptr || exportEntry->parameterTypes[0] != WIO_ABI_USIZE)
+            {
+                std::ostringstream message;
+                message << "Wio SDK signature mismatch for " << bindingKind << " method '" << methodName
+                        << "': first parameter must be an exported instance handle.";
+                throw Error(ErrorCode::SignatureMismatch, message.str());
+            }
+
+            if (exportEntry->returnType != expectedReturnType)
+            {
+                std::ostringstream message;
+                message << "Wio SDK signature mismatch for " << bindingKind << " method '" << methodName
+                        << "': expected return type '" << abiTypeName(expectedReturnType)
+                        << "' but module exports '" << abiTypeName(exportEntry->returnType) << "'.";
+                throw Error(ErrorCode::SignatureMismatch, message.str());
+            }
+
+            for (size_t i = 0; i < Traits::Arity; ++i)
+            {
+                const WioAbiType actualType = exportEntry->parameterTypes[i + 1];
+                if (actualType != expectedParameterTypes[i + 1])
+                {
+                    std::ostringstream message;
+                    message << "Wio SDK signature mismatch for " << bindingKind << " method '" << methodName
+                            << "': parameter " << i << " expected '" << abiTypeName(expectedParameterTypes[i + 1])
+                            << "' but module exports '" << abiTypeName(actualType) << "'.";
+                    throw Error(ErrorCode::SignatureMismatch, message.str());
+                }
+            }
+
+            return typename Traits::StdFunction(
+                [exportEntry,
+                 bindingState = std::move(bindingState),
+                 bindingGeneration,
+                 handle,
+                 methodName = std::move(methodName),
+                 bindingKind = std::move(bindingKind),
+                 staleBindingKind = std::move(staleBindingKind)](typename Traits::template Argument<Indices>... args) -> typename Traits::ReturnType
+                {
+                    requireLiveBinding(bindingState, bindingGeneration, staleBindingKind, methodName);
+
+                    constexpr size_t argCount = Traits::Arity + 1;
+                    std::array<WioValue, argCount> wioArgs{ toWioValue(handle), toWioValue(args)... };
+                    WioValue result{};
+
+                    const std::int32_t status = exportEntry->invoke(
+                        wioArgs.data(),
+                        static_cast<std::uint32_t>(argCount),
+                        std::is_void_v<typename Traits::ReturnType> ? nullptr : &result
+                    );
+
+                    if (status != WIO_INVOKE_OK)
+                    {
+                        std::ostringstream message;
+                        message << "Wio SDK invoke failure for " << bindingKind << " method '" << methodName
+                                << "': " << invokeStatusName(status) << '.';
+                        throw Error(ErrorCode::InvokeFailed, message.str());
+                    }
+
+                    if constexpr (std::is_void_v<typename Traits::ReturnType>)
+                    {
+                        return;
+                    }
+                    else
+                    {
+                        return fromWioValue<typename Traits::ReturnType>(result);
+                    }
+                }
+            );
+        }
+
+        template <typename Signature>
+        auto bindBoundMethod(const WioModuleType* typeEntry,
+                             std::uintptr_t handle,
+                             std::string methodName,
+                             std::string bindingKind,
+                             std::shared_ptr<BindingState> bindingState,
+                             std::uint64_t bindingGeneration) -> typename FunctionTraits<Signature>::StdFunction
+        {
+            using Traits = FunctionTraits<Signature>;
+            return bindBoundMethod<Signature>(
+                typeEntry,
+                handle,
+                std::move(methodName),
+                std::move(bindingKind),
+                std::move(bindingState),
+                bindingGeneration,
+                std::make_index_sequence<Traits::Arity>{}
+            );
+        }
+
         template <typename Signature>
         auto bindBoundMethod(const WioModuleType* typeEntry,
                              std::uintptr_t handle,
@@ -3229,18 +3529,30 @@ namespace wio::sdk
             return fieldEntry_ != nullptr;
         }
 
-        [[nodiscard]] const FieldInfo& info() const noexcept
+        [[nodiscard]] bool is_stale() const noexcept
         {
+            return detail::isBindingStale(bindingState_, bindingGeneration_);
+        }
+
+        [[nodiscard]] std::uint64_t bound_generation() const noexcept
+        {
+            return bindingGeneration_;
+        }
+
+        [[nodiscard]] const FieldInfo& info() const
+        {
+            ensure_live();
             return info_;
         }
 
         [[nodiscard]] std::string_view name() const noexcept
         {
-            return info_.name;
+            return fieldName_;
         }
 
-        [[nodiscard]] TypeDescriptorView type() const noexcept
+        [[nodiscard]] TypeDescriptorView type() const
         {
+            ensure_live();
             return info_.type;
         }
 
@@ -3264,20 +3576,23 @@ namespace wio::sdk
             return info_.is_read_only();
         }
 
-        [[nodiscard]] bool supports_dynamic_value() const noexcept
+        [[nodiscard]] bool supports_dynamic_value() const
         {
+            ensure_live();
             return info_.supports_dynamic_value();
         }
 
         template <typename T>
-        [[nodiscard]] bool can_access_as() const noexcept
+        [[nodiscard]] bool can_access_as() const
         {
+            ensure_live();
             return detail::matchesTypeDescriptor<T>(info_.type);
         }
 
         template <typename T>
         [[nodiscard]] T get_as() const
         {
+            ensure_live();
             detail::validateFieldHostType<T>(type_, fieldEntry_, name(), bindingKind_);
             return detail::getModuleFieldValue<T>(type_, handle_, name(), bindingKind_);
         }
@@ -3285,6 +3600,7 @@ namespace wio::sdk
         template <typename T>
         void set_as(T&& value) const
         {
+            ensure_live();
             detail::validateFieldHostType<detail::Decay<T>>(type_, fieldEntry_, name(), bindingKind_);
             detail::setModuleFieldValue(type_, handle_, name(), std::forward<T>(value), bindingKind_);
         }
@@ -3408,7 +3724,9 @@ namespace wio::sdk
                          const WioModuleType* typeEntry,
                          std::uintptr_t handle,
                          const WioModuleField* fieldEntry,
-                         std::string_view bindingKind) noexcept
+                         std::string_view bindingKind,
+                         std::shared_ptr<detail::BindingState> bindingState = {},
+                         std::uint64_t bindingGeneration = 0u) noexcept
             : api_(api),
               type_(typeEntry),
               handle_(handle),
@@ -3416,6 +3734,16 @@ namespace wio::sdk
               bindingKind_(bindingKind),
               info_(fieldEntry != nullptr ? detail::makeFieldInfo(*fieldEntry) : FieldInfo{})
         {
+            bindingState_ = std::move(bindingState);
+            bindingGeneration_ = bindingGeneration;
+            if (fieldEntry != nullptr && fieldEntry->fieldName != nullptr)
+                fieldName_ = fieldEntry->fieldName;
+            info_.name = fieldName_;
+        }
+
+        void ensure_live() const
+        {
+            detail::requireLiveBinding(bindingState_, bindingGeneration_, bindingKind_ == "component" ? "component field" : "object field", fieldName_);
         }
 
         const WioModuleApi* api_ = nullptr;
@@ -3424,6 +3752,9 @@ namespace wio::sdk
         const WioModuleField* fieldEntry_ = nullptr;
         std::string_view bindingKind_{};
         FieldInfo info_{};
+        std::shared_ptr<detail::BindingState> bindingState_{};
+        std::uint64_t bindingGeneration_ = 0u;
+        std::string fieldName_{};
     };
 
     class WioObject
@@ -3439,6 +3770,14 @@ namespace wio::sdk
         ~WioObject();
 
         [[nodiscard]] explicit operator bool() const noexcept;
+        [[nodiscard]] bool is_stale() const noexcept
+        {
+            return detail::isBindingStale(bindingState_, bindingGeneration_);
+        }
+        [[nodiscard]] std::uint64_t bound_generation() const noexcept
+        {
+            return bindingGeneration_;
+        }
         [[nodiscard]] std::uintptr_t handle() const noexcept;
         [[nodiscard]] bool owns_handle() const noexcept;
         [[nodiscard]] bool is_borrowed() const noexcept;
@@ -3450,6 +3789,7 @@ namespace wio::sdk
         template <typename T>
         T get(std::string_view fieldName) const
         {
+            ensure_live();
             detail::validateFieldHostType<T>(type_, detail::requireTypeField(type_, fieldName, "object"), fieldName, "object");
             return detail::getModuleFieldValue<T>(type_, handle_, fieldName, "object");
         }
@@ -3488,6 +3828,7 @@ namespace wio::sdk
         template <typename T>
         void set(std::string_view fieldName, T&& value) const
         {
+            ensure_live();
             detail::validateFieldHostType<detail::Decay<T>>(type_, detail::requireTypeField(type_, fieldName, "object"), fieldName, "object");
             detail::setModuleFieldValue(type_, handle_, fieldName, std::forward<T>(value), "object");
         }
@@ -3560,7 +3901,8 @@ namespace wio::sdk
         template <typename Signature>
         auto method(std::string_view methodName) const -> typename detail::FunctionTraits<Signature>::StdFunction
         {
-            return detail::bindBoundMethod<Signature>(type_, handle_, std::string(methodName), "object");
+            ensure_live();
+            return detail::bindBoundMethod<Signature>(type_, handle_, std::string(methodName), "object", bindingState_, bindingGeneration_);
         }
 
         void reset() noexcept;
@@ -3570,11 +3912,24 @@ namespace wio::sdk
         friend class WioComponent;
         friend class WioFieldAccessor;
 
-        WioObject(const WioModuleApi* api, const WioModuleType* typeEntry, std::uintptr_t instanceHandle, bool ownsHandle) noexcept
+        void ensure_live() const
+        {
+            detail::requireLiveBinding(bindingState_, bindingGeneration_, "object", typeName_);
+        }
+
+        WioObject(const WioModuleApi* api,
+                  const WioModuleType* typeEntry,
+                  std::uintptr_t instanceHandle,
+                  bool ownsHandle,
+                  std::shared_ptr<detail::BindingState> bindingState = {},
+                  std::uint64_t bindingGeneration = 0u) noexcept
             : api_(api),
               type_(typeEntry),
               handle_(instanceHandle),
-              ownsHandle_(ownsHandle)
+              ownsHandle_(ownsHandle),
+              bindingState_(std::move(bindingState)),
+              bindingGeneration_(bindingGeneration),
+              typeName_(typeEntry != nullptr && typeEntry->logicalName != nullptr ? typeEntry->logicalName : "")
         {
         }
 
@@ -3582,6 +3937,9 @@ namespace wio::sdk
         const WioModuleType* type_ = nullptr;
         std::uintptr_t handle_ = 0;
         bool ownsHandle_ = false;
+        std::shared_ptr<detail::BindingState> bindingState_{};
+        std::uint64_t bindingGeneration_ = 0u;
+        std::string typeName_{};
     };
 
     class WioComponent
@@ -3597,6 +3955,14 @@ namespace wio::sdk
         ~WioComponent();
 
         [[nodiscard]] explicit operator bool() const noexcept;
+        [[nodiscard]] bool is_stale() const noexcept
+        {
+            return detail::isBindingStale(bindingState_, bindingGeneration_);
+        }
+        [[nodiscard]] std::uint64_t bound_generation() const noexcept
+        {
+            return bindingGeneration_;
+        }
         [[nodiscard]] std::uintptr_t handle() const noexcept;
         [[nodiscard]] bool owns_handle() const noexcept;
         [[nodiscard]] bool is_borrowed() const noexcept;
@@ -3608,6 +3974,7 @@ namespace wio::sdk
         template <typename T>
         T get(std::string_view fieldName) const
         {
+            ensure_live();
             detail::validateFieldHostType<T>(type_, detail::requireTypeField(type_, fieldName, "component"), fieldName, "component");
             return detail::getModuleFieldValue<T>(type_, handle_, fieldName, "component");
         }
@@ -3646,6 +4013,7 @@ namespace wio::sdk
         template <typename T>
         void set(std::string_view fieldName, T&& value) const
         {
+            ensure_live();
             detail::validateFieldHostType<detail::Decay<T>>(type_, detail::requireTypeField(type_, fieldName, "component"), fieldName, "component");
             detail::setModuleFieldValue(type_, handle_, fieldName, std::forward<T>(value), "component");
         }
@@ -3722,11 +4090,24 @@ namespace wio::sdk
         friend class WioObject;
         friend class WioFieldAccessor;
 
-        WioComponent(const WioModuleApi* api, const WioModuleType* typeEntry, std::uintptr_t instanceHandle, bool ownsHandle) noexcept
+        void ensure_live() const
+        {
+            detail::requireLiveBinding(bindingState_, bindingGeneration_, "component", typeName_);
+        }
+
+        WioComponent(const WioModuleApi* api,
+                     const WioModuleType* typeEntry,
+                     std::uintptr_t instanceHandle,
+                     bool ownsHandle,
+                     std::shared_ptr<detail::BindingState> bindingState = {},
+                     std::uint64_t bindingGeneration = 0u) noexcept
             : api_(api),
               type_(typeEntry),
               handle_(instanceHandle),
-              ownsHandle_(ownsHandle)
+              ownsHandle_(ownsHandle),
+              bindingState_(std::move(bindingState)),
+              bindingGeneration_(bindingGeneration),
+              typeName_(typeEntry != nullptr && typeEntry->logicalName != nullptr ? typeEntry->logicalName : "")
         {
         }
 
@@ -3734,6 +4115,9 @@ namespace wio::sdk
         const WioModuleType* type_ = nullptr;
         std::uintptr_t handle_ = 0;
         bool ownsHandle_ = false;
+        std::shared_ptr<detail::BindingState> bindingState_{};
+        std::uint64_t bindingGeneration_ = 0u;
+        std::string typeName_{};
     };
 
     class WioDynamicArray
@@ -4371,9 +4755,15 @@ namespace wio::sdk
     public:
         WioObjectType() = default;
 
-        WioObjectType(const WioModuleApi* api, const WioModuleType* typeEntry) noexcept
+        WioObjectType(const WioModuleApi* api,
+                      const WioModuleType* typeEntry,
+                      std::shared_ptr<detail::BindingState> bindingState = {},
+                      std::uint64_t bindingGeneration = 0u) noexcept
             : api_(api),
-              type_(typeEntry)
+              type_(typeEntry),
+              bindingState_(std::move(bindingState)),
+              bindingGeneration_(bindingGeneration),
+              typeName_(typeEntry != nullptr && typeEntry->logicalName != nullptr ? typeEntry->logicalName : "")
         {
         }
 
@@ -4382,8 +4772,19 @@ namespace wio::sdk
             return type_ != nullptr;
         }
 
+        [[nodiscard]] bool is_stale() const noexcept
+        {
+            return detail::isBindingStale(bindingState_, bindingGeneration_);
+        }
+
+        [[nodiscard]] std::uint64_t bound_generation() const noexcept
+        {
+            return bindingGeneration_;
+        }
+
         [[nodiscard]] const WioModuleType& descriptor() const
         {
+            ensure_live();
             if (type_ == nullptr)
                 throw Error(ErrorCode::TypeNotFound, "Wio SDK object type descriptor is not available.");
             return *type_;
@@ -4391,28 +4792,40 @@ namespace wio::sdk
 
         [[nodiscard]] std::vector<FieldInfo> list_fields() const
         {
+            ensure_live();
             return detail::listTypeFields(type_);
         }
 
         [[nodiscard]] FieldInfo field_info(std::string_view fieldName) const
         {
+            ensure_live();
             return detail::getTypeFieldInfo(type_, fieldName, "object");
         }
 
         [[nodiscard]] WioObject create() const
         {
-            return WioObject(api_, type_, detail::constructModuleInstance(type_, "object"), true);
+            ensure_live();
+            return WioObject(api_, type_, detail::constructModuleInstance(type_, "object"), true, bindingState_, bindingGeneration_);
         }
 
         template <typename... TArgs>
         [[nodiscard]] WioObject create(TArgs&&... args) const
         {
-            return WioObject(api_, type_, detail::constructModuleInstance(type_, "object", std::forward<TArgs>(args)...), true);
+            ensure_live();
+            return WioObject(api_, type_, detail::constructModuleInstance(type_, "object", std::forward<TArgs>(args)...), true, bindingState_, bindingGeneration_);
         }
 
     private:
+        void ensure_live() const
+        {
+            detail::requireLiveBinding(bindingState_, bindingGeneration_, "object type", typeName_);
+        }
+
         const WioModuleApi* api_ = nullptr;
         const WioModuleType* type_ = nullptr;
+        std::shared_ptr<detail::BindingState> bindingState_{};
+        std::uint64_t bindingGeneration_ = 0u;
+        std::string typeName_{};
     };
 
     class WioComponentType
@@ -4420,9 +4833,15 @@ namespace wio::sdk
     public:
         WioComponentType() = default;
 
-        WioComponentType(const WioModuleApi* api, const WioModuleType* typeEntry) noexcept
+        WioComponentType(const WioModuleApi* api,
+                         const WioModuleType* typeEntry,
+                         std::shared_ptr<detail::BindingState> bindingState = {},
+                         std::uint64_t bindingGeneration = 0u) noexcept
             : api_(api),
-              type_(typeEntry)
+              type_(typeEntry),
+              bindingState_(std::move(bindingState)),
+              bindingGeneration_(bindingGeneration),
+              typeName_(typeEntry != nullptr && typeEntry->logicalName != nullptr ? typeEntry->logicalName : "")
         {
         }
 
@@ -4431,8 +4850,19 @@ namespace wio::sdk
             return type_ != nullptr;
         }
 
+        [[nodiscard]] bool is_stale() const noexcept
+        {
+            return detail::isBindingStale(bindingState_, bindingGeneration_);
+        }
+
+        [[nodiscard]] std::uint64_t bound_generation() const noexcept
+        {
+            return bindingGeneration_;
+        }
+
         [[nodiscard]] const WioModuleType& descriptor() const
         {
+            ensure_live();
             if (type_ == nullptr)
                 throw Error(ErrorCode::TypeNotFound, "Wio SDK component type descriptor is not available.");
             return *type_;
@@ -4440,28 +4870,40 @@ namespace wio::sdk
 
         [[nodiscard]] std::vector<FieldInfo> list_fields() const
         {
+            ensure_live();
             return detail::listTypeFields(type_);
         }
 
         [[nodiscard]] FieldInfo field_info(std::string_view fieldName) const
         {
+            ensure_live();
             return detail::getTypeFieldInfo(type_, fieldName, "component");
         }
 
         [[nodiscard]] WioComponent create() const
         {
-            return WioComponent(api_, type_, detail::constructModuleInstance(type_, "component"), true);
+            ensure_live();
+            return WioComponent(api_, type_, detail::constructModuleInstance(type_, "component"), true, bindingState_, bindingGeneration_);
         }
 
         template <typename... TArgs>
         [[nodiscard]] WioComponent create(TArgs&&... args) const
         {
-            return WioComponent(api_, type_, detail::constructModuleInstance(type_, "component", std::forward<TArgs>(args)...), true);
+            ensure_live();
+            return WioComponent(api_, type_, detail::constructModuleInstance(type_, "component", std::forward<TArgs>(args)...), true, bindingState_, bindingGeneration_);
         }
 
     private:
+        void ensure_live() const
+        {
+            detail::requireLiveBinding(bindingState_, bindingGeneration_, "component type", typeName_);
+        }
+
         const WioModuleApi* api_ = nullptr;
         const WioModuleType* type_ = nullptr;
+        std::shared_ptr<detail::BindingState> bindingState_{};
+        std::uint64_t bindingGeneration_ = 0u;
+        std::string typeName_{};
     };
 
     inline WioObject::WioObject(WioObject&& other) noexcept
@@ -4479,10 +4921,14 @@ namespace wio::sdk
         type_ = other.type_;
         handle_ = other.handle_;
         ownsHandle_ = other.ownsHandle_;
+        bindingState_ = std::move(other.bindingState_);
+        bindingGeneration_ = other.bindingGeneration_;
+        typeName_ = std::move(other.typeName_);
         other.api_ = nullptr;
         other.type_ = nullptr;
         other.handle_ = 0;
         other.ownsHandle_ = false;
+        other.bindingGeneration_ = 0u;
         return *this;
     }
 
@@ -4513,6 +4959,7 @@ namespace wio::sdk
 
     inline const WioModuleType& WioObject::descriptor() const
     {
+        ensure_live();
         if (type_ == nullptr)
             throw Error(ErrorCode::TypeNotFound, "Wio SDK object handle is not bound to an exported object type.");
         return *type_;
@@ -4520,28 +4967,42 @@ namespace wio::sdk
 
     inline std::vector<FieldInfo> WioObject::list_fields() const
     {
+        ensure_live();
         return detail::listTypeFields(type_);
     }
 
     inline FieldInfo WioObject::field_info(std::string_view fieldName) const
     {
+        ensure_live();
         return detail::getTypeFieldInfo(type_, fieldName, "object");
     }
 
     inline WioFieldAccessor WioObject::field(std::string_view fieldName) const
     {
-        return WioFieldAccessor(api_, type_, handle_, detail::requireTypeField(type_, fieldName, "object"), "object");
+        ensure_live();
+        return WioFieldAccessor(
+            api_,
+            type_,
+            handle_,
+            detail::requireTypeField(type_, fieldName, "object"),
+            "object",
+            bindingState_,
+            bindingGeneration_
+        );
     }
 
     inline void WioObject::reset() noexcept
     {
-        if (ownsHandle_)
+        if (ownsHandle_ && detail::canDestroyThroughBinding(bindingState_, bindingGeneration_))
             detail::destroyModuleInstance(type_, handle_);
 
         api_ = nullptr;
         type_ = nullptr;
         handle_ = 0;
         ownsHandle_ = false;
+        bindingState_.reset();
+        bindingGeneration_ = 0u;
+        typeName_.clear();
     }
 
     inline WioComponent::WioComponent(WioComponent&& other) noexcept
@@ -4559,10 +5020,14 @@ namespace wio::sdk
         type_ = other.type_;
         handle_ = other.handle_;
         ownsHandle_ = other.ownsHandle_;
+        bindingState_ = std::move(other.bindingState_);
+        bindingGeneration_ = other.bindingGeneration_;
+        typeName_ = std::move(other.typeName_);
         other.api_ = nullptr;
         other.type_ = nullptr;
         other.handle_ = 0;
         other.ownsHandle_ = false;
+        other.bindingGeneration_ = 0u;
         return *this;
     }
 
@@ -4593,6 +5058,7 @@ namespace wio::sdk
 
     inline const WioModuleType& WioComponent::descriptor() const
     {
+        ensure_live();
         if (type_ == nullptr)
             throw Error(ErrorCode::TypeNotFound, "Wio SDK component handle is not bound to an exported component type.");
         return *type_;
@@ -4600,32 +5066,47 @@ namespace wio::sdk
 
     inline std::vector<FieldInfo> WioComponent::list_fields() const
     {
+        ensure_live();
         return detail::listTypeFields(type_);
     }
 
     inline FieldInfo WioComponent::field_info(std::string_view fieldName) const
     {
+        ensure_live();
         return detail::getTypeFieldInfo(type_, fieldName, "component");
     }
 
     inline WioFieldAccessor WioComponent::field(std::string_view fieldName) const
     {
-        return WioFieldAccessor(api_, type_, handle_, detail::requireTypeField(type_, fieldName, "component"), "component");
+        ensure_live();
+        return WioFieldAccessor(
+            api_,
+            type_,
+            handle_,
+            detail::requireTypeField(type_, fieldName, "component"),
+            "component",
+            bindingState_,
+            bindingGeneration_
+        );
     }
 
     inline void WioComponent::reset() noexcept
     {
-        if (ownsHandle_)
+        if (ownsHandle_ && detail::canDestroyThroughBinding(bindingState_, bindingGeneration_))
             detail::destroyModuleInstance(type_, handle_);
 
         api_ = nullptr;
         type_ = nullptr;
         handle_ = 0;
         ownsHandle_ = false;
+        bindingState_.reset();
+        bindingGeneration_ = 0u;
+        typeName_.clear();
     }
 
     inline WioValue WioFieldAccessor::get_scalar_value() const
     {
+        ensure_live();
         if (!info_.is_primitive())
             throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a primitive field descriptor for scalar access.");
 
@@ -4651,6 +5132,7 @@ namespace wio::sdk
 
     inline void WioFieldAccessor::set_scalar_value(const WioValue& value) const
     {
+        ensure_live();
         if (!info_.is_primitive())
             throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a primitive field descriptor for scalar access.");
 
@@ -4683,6 +5165,7 @@ namespace wio::sdk
 
     inline WioDynamicValue WioFieldAccessor::get_dynamic() const
     {
+        ensure_live();
         if (info_.is_primitive())
             return WioDynamicValue(get_scalar_value());
         if (info_.is_string())
@@ -4730,6 +5213,7 @@ namespace wio::sdk
 
     inline void WioFieldAccessor::set_dynamic(WioDynamicValue value) const
     {
+        ensure_live();
         if (!supports_dynamic_value())
         {
             std::ostringstream message;
@@ -4808,28 +5292,31 @@ namespace wio::sdk
 
     inline WioObject WioFieldAccessor::get_object() const
     {
+        ensure_live();
         const auto* typeDescriptor = fieldEntry_ != nullptr ? fieldEntry_->typeDescriptor : nullptr;
         if (typeDescriptor == nullptr || typeDescriptor->kind != WIO_MODULE_TYPE_DESC_OBJECT)
             throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected an object field descriptor.");
 
         const WioModuleType* nestedType = detail::requireModuleType(api_, typeDescriptor->logicalTypeName, WIO_MODULE_TYPE_OBJECT);
         const std::uintptr_t nestedHandle = detail::getModuleFieldHandle(type_, handle_, name(), bindingKind_);
-        return WioObject(api_, nestedType, nestedHandle, false);
+        return WioObject(api_, nestedType, nestedHandle, false, bindingState_, bindingGeneration_);
     }
 
     inline WioComponent WioFieldAccessor::get_component() const
     {
+        ensure_live();
         const auto* typeDescriptor = fieldEntry_ != nullptr ? fieldEntry_->typeDescriptor : nullptr;
         if (typeDescriptor == nullptr || typeDescriptor->kind != WIO_MODULE_TYPE_DESC_COMPONENT)
             throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a component field descriptor.");
 
         const WioModuleType* nestedType = detail::requireModuleType(api_, typeDescriptor->logicalTypeName, WIO_MODULE_TYPE_COMPONENT);
         const std::uintptr_t nestedHandle = detail::getModuleFieldHandle(type_, handle_, name(), bindingKind_);
-        return WioComponent(api_, nestedType, nestedHandle, false);
+        return WioComponent(api_, nestedType, nestedHandle, false, bindingState_, bindingGeneration_);
     }
 
     inline void WioFieldAccessor::set_object(const WioObject& value) const
     {
+        ensure_live();
         const auto* typeDescriptor = fieldEntry_ != nullptr ? fieldEntry_->typeDescriptor : nullptr;
         if (typeDescriptor == nullptr || typeDescriptor->kind != WIO_MODULE_TYPE_DESC_OBJECT)
             throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected an object field descriptor.");
@@ -4842,6 +5329,7 @@ namespace wio::sdk
 
     inline void WioFieldAccessor::set_component(const WioComponent& value) const
     {
+        ensure_live();
         const auto* typeDescriptor = fieldEntry_ != nullptr ? fieldEntry_->typeDescriptor : nullptr;
         if (typeDescriptor == nullptr || typeDescriptor->kind != WIO_MODULE_TYPE_DESC_COMPONENT)
             throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a component field descriptor.");
@@ -4933,6 +5421,7 @@ namespace wio::sdk
             api_ = other.api_;
             path_ = std::move(other.path_);
             started_ = other.started_;
+            bindingState_ = std::move(other.bindingState_);
 
             other.handle_ = nullptr;
             other.api_ = nullptr;
@@ -4987,6 +5476,8 @@ namespace wio::sdk
             }
 
             detail::validateModuleApi(module.api_, absolutePath.string());
+            module.bindingState_ = std::make_shared<detail::BindingState>();
+            detail::publishBindingState(module.bindingState_, module.api_, absolutePath.string());
 
             return module;
         }
@@ -5003,6 +5494,9 @@ namespace wio::sdk
             if (started_)
                 return;
 
+            if (api_ == nullptr)
+                throw Error(ErrorCode::ApiUnavailable, "Wio SDK module API is not available.");
+
             if (api_ != nullptr && api_->load != nullptr)
             {
                 const std::int32_t status = api_->load();
@@ -5015,6 +5509,7 @@ namespace wio::sdk
                 }
             }
 
+            detail::publishBindingState(bindingState_, api_, path_.string());
             started_ = true;
         }
 
@@ -5026,12 +5521,14 @@ namespace wio::sdk
             if (api_ != nullptr && api_->unload != nullptr)
                 api_->unload();
 
+            detail::retireBindingState(bindingState_);
             started_ = false;
         }
 
         void close() noexcept
         {
             unload();
+            detail::retireBindingState(bindingState_);
             detail::closeLibrary(handle_);
             handle_ = nullptr;
             api_ = nullptr;
@@ -5107,48 +5604,222 @@ namespace wio::sdk
         template <typename Signature>
         auto load_export(std::string_view logicalName) const -> typename detail::FunctionTraits<Signature>::StdFunction
         {
-            return wio::sdk::wio_load_export<Signature>(api_, logicalName);
+            ensure_binding_live();
+
+            const std::string ownedName(logicalName);
+            const WioModuleExport* exportEntry = WioFindModuleExport(api_, ownedName.c_str());
+            if (exportEntry == nullptr)
+            {
+                std::ostringstream message;
+                message << "Wio SDK could not find export '" << ownedName << "'.";
+                throw Error(ErrorCode::ExportNotFound, message.str());
+            }
+
+            return detail::bindExport<Signature>(
+                exportEntry,
+                ownedName,
+                "export",
+                bindingState_,
+                current_binding_generation()
+            );
         }
 
         template <typename Signature>
         auto load_command(std::string_view commandName) const -> typename detail::FunctionTraits<Signature>::StdFunction
         {
-            return wio::sdk::wio_load_command<Signature>(api_, commandName);
+            ensure_binding_live();
+
+            const std::string ownedName(commandName);
+            const WioModuleCommand* commandEntry = WioFindModuleCommand(api_, ownedName.c_str());
+            if (commandEntry == nullptr || commandEntry->exportEntry == nullptr)
+            {
+                std::ostringstream message;
+                message << "Wio SDK could not find command '" << ownedName << "'.";
+                throw Error(ErrorCode::CommandNotFound, message.str());
+            }
+
+            return detail::bindExport<Signature>(
+                commandEntry->exportEntry,
+                ownedName,
+                "command",
+                bindingState_,
+                current_binding_generation()
+            );
         }
 
         template <typename Signature>
         auto load_event_hook(std::string_view hookName) const -> typename detail::FunctionTraits<Signature>::StdFunction
         {
-            return wio::sdk::wio_load_event_hook<Signature>(api_, hookName);
+            ensure_binding_live();
+
+            const std::string ownedName(hookName);
+            const WioModuleEventHook* hookEntry = WioFindModuleEventHook(api_, ownedName.c_str());
+            if (hookEntry == nullptr || hookEntry->exportEntry == nullptr)
+            {
+                std::ostringstream message;
+                message << "Wio SDK could not find event hook '" << ownedName << "'.";
+                throw Error(ErrorCode::EventHookNotFound, message.str());
+            }
+
+            return detail::bindExport<Signature>(
+                hookEntry->exportEntry,
+                ownedName,
+                "event hook",
+                bindingState_,
+                current_binding_generation()
+            );
         }
 
         template <typename Signature>
         auto load_event(std::string_view eventName) const -> typename detail::FunctionTraits<Signature>::StdFunction
         {
-            return wio::sdk::wio_load_event<Signature>(api_, eventName);
+            using Traits = detail::FunctionTraits<Signature>;
+            if constexpr (!std::is_void_v<typename Traits::ReturnType>)
+            {
+                throw Error(ErrorCode::SignatureMismatch, "Wio SDK event broadcasters currently require a void return type.");
+            }
+
+            ensure_binding_live();
+
+            const std::string ownedName(eventName);
+            bool foundAny = false;
+            if (api_->eventHooks != nullptr)
+            {
+                for (std::uint32_t i = 0; i < api_->eventHookCount; ++i)
+                {
+                    const WioModuleEventHook& hook = api_->eventHooks[i];
+                    if (hook.eventName == nullptr || std::strcmp(hook.eventName, ownedName.c_str()) != 0)
+                        continue;
+
+                    foundAny = true;
+                    detail::validateExportSignature<Signature>(hook.exportEntry, ownedName, "event hook");
+                }
+            }
+
+            if (!foundAny)
+            {
+                std::ostringstream message;
+                message << "Wio SDK could not find any event hooks for event '" << ownedName << "'.";
+                throw Error(ErrorCode::EventNotFound, message.str());
+            }
+
+            const std::uint64_t bindingGeneration = current_binding_generation();
+            return typename Traits::StdFunction(
+                [api = api_,
+                 bindingState = bindingState_,
+                 bindingGeneration,
+                 ownedName](auto... args) -> void
+                {
+                    detail::requireLiveBinding(bindingState, bindingGeneration, "event", ownedName);
+
+                    std::array<WioValue, sizeof...(args)> wioArgs{ detail::toWioValue(args)... };
+                    const std::int32_t status = WioBroadcastModuleEvent(
+                        api,
+                        ownedName.c_str(),
+                        sizeof...(args) > 0 ? wioArgs.data() : nullptr,
+                        static_cast<std::uint32_t>(sizeof...(args))
+                    );
+
+                    if (status != WIO_INVOKE_OK)
+                    {
+                        std::ostringstream message;
+                        message << "Wio SDK failed to broadcast event '" << ownedName
+                                << "': " << detail::invokeStatusName(status) << '.';
+                        throw Error(ErrorCode::InvokeFailed, message.str());
+                    }
+                }
+            );
         }
 
         template <typename Signature>
         auto load_function(std::string_view name) const -> typename detail::FunctionTraits<Signature>::StdFunction
         {
-            return wio::sdk::wio_load_function<Signature>(api_, name);
+            ensure_binding_live();
+
+            const std::string ownedName(name);
+            const std::uint64_t bindingGeneration = current_binding_generation();
+
+            if (const WioModuleExport* exportEntry = WioFindModuleExport(api_, ownedName.c_str()); exportEntry != nullptr)
+            {
+                return detail::bindExport<Signature>(
+                    exportEntry,
+                    ownedName,
+                    "export",
+                    bindingState_,
+                    bindingGeneration
+                );
+            }
+
+            if (const WioModuleCommand* commandEntry = WioFindModuleCommand(api_, ownedName.c_str());
+                commandEntry != nullptr && commandEntry->exportEntry != nullptr)
+            {
+                return detail::bindExport<Signature>(
+                    commandEntry->exportEntry,
+                    ownedName,
+                    "command",
+                    bindingState_,
+                    bindingGeneration
+                );
+            }
+
+            if (const WioModuleEventHook* hookEntry = WioFindModuleEventHook(api_, ownedName.c_str());
+                hookEntry != nullptr && hookEntry->exportEntry != nullptr)
+            {
+                return detail::bindExport<Signature>(
+                    hookEntry->exportEntry,
+                    ownedName,
+                    "event hook",
+                    bindingState_,
+                    bindingGeneration
+                );
+            }
+
+            std::ostringstream message;
+            message << "Wio SDK could not resolve function '" << ownedName
+                    << "' as an export, command, or event hook.";
+            throw Error(ErrorCode::ExportNotFound, message.str());
         }
 
         [[nodiscard]] WioObjectType load_object(std::string_view logicalName) const
         {
-            return wio::sdk::wio_load_object(api_, logicalName);
+            ensure_binding_live();
+            return WioObjectType(
+                api_,
+                detail::requireModuleType(api_, logicalName, WIO_MODULE_TYPE_OBJECT),
+                bindingState_,
+                current_binding_generation()
+            );
         }
 
         [[nodiscard]] WioComponentType load_component(std::string_view logicalName) const
         {
-            return wio::sdk::wio_load_component(api_, logicalName);
+            ensure_binding_live();
+            return WioComponentType(
+                api_,
+                detail::requireModuleType(api_, logicalName, WIO_MODULE_TYPE_COMPONENT),
+                bindingState_,
+                current_binding_generation()
+            );
         }
 
     private:
+        void ensure_binding_live() const
+        {
+            if (api_ == nullptr)
+                throw Error(ErrorCode::ApiUnavailable, "Wio SDK module API is not available.");
+            detail::requireLiveBinding(bindingState_, detail::currentBindingGeneration(bindingState_), "module", path_.string());
+        }
+
+        [[nodiscard]] std::uint64_t current_binding_generation() const noexcept
+        {
+            return detail::currentBindingGeneration(bindingState_);
+        }
+
         detail::LibraryHandle handle_ = nullptr;
         const WioModuleApi* api_ = nullptr;
         std::filesystem::path path_;
         bool started_ = false;
+        std::shared_ptr<detail::BindingState> bindingState_{};
     };
 
     struct HotReloadOptions
@@ -5319,6 +5990,18 @@ namespace wio::sdk
                     return module_.template load_function<Signature>(logicalName);
                 };
             return detail::bindReloadable<Signature>(std::move(resolver), std::string(name));
+        }
+
+        [[nodiscard]] WioObjectType load_object(std::string_view logicalName)
+        {
+            maybeAutoReload();
+            return module_.load_object(logicalName);
+        }
+
+        [[nodiscard]] WioComponentType load_component(std::string_view logicalName)
+        {
+            maybeAutoReload();
+            return module_.load_component(logicalName);
         }
 
     private:
@@ -5597,9 +6280,24 @@ inline wio::sdk::WioObjectType wio_load_object(const wio::sdk::Module& module, s
     return module.load_object(logicalName);
 }
 
+inline wio::sdk::WioObjectType wio_load_object(wio::sdk::HotReloadModule& module, std::string_view logicalName)
+{
+    return module.load_object(logicalName);
+}
+
 inline wio::sdk::WioComponentType wio_load_component(const WioModuleApi* api, std::string_view logicalName)
 {
     return wio::sdk::wio_load_component(api, logicalName);
+}
+
+inline wio::sdk::WioComponentType wio_load_component(const wio::sdk::Module& module, std::string_view logicalName)
+{
+    return module.load_component(logicalName);
+}
+
+inline wio::sdk::WioComponentType wio_load_component(wio::sdk::HotReloadModule& module, std::string_view logicalName)
+{
+    return module.load_component(logicalName);
 }
 
 inline void wio_validate_module_api(const WioModuleApi* api)
@@ -5615,11 +6313,6 @@ inline void wio_validate_module_api(const wio::sdk::Module& module)
 inline void wio_validate_module_api(const wio::sdk::HotReloadModule& module)
 {
     wio::sdk::validate_module_api(module);
-}
-
-inline wio::sdk::WioComponentType wio_load_component(const wio::sdk::Module& module, std::string_view logicalName)
-{
-    return module.load_component(logicalName);
 }
 
 template <typename Signature>

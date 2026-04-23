@@ -775,6 +775,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_shared_reload_interop_test(
+        wio_test_sdk_hot_reload_stale_wrappers_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/exported_types_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_hot_reload_stale_wrappers_host.cpp"
+        "SDK reload stale wrappers: start=7 afterAdd=12 hp=100 stale=6 fresh=17 freshHp=100 generation=2"
+    )
+
+    add_wio_shared_reload_interop_test(
         wio_test_hybrid_arena_demo
         "${CMAKE_SOURCE_DIR}/examples/hybrid_arena/arena_module.wio"
         "${CMAKE_SOURCE_DIR}/examples/hybrid_arena/hybrid_arena_host.cpp"

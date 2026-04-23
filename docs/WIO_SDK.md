@@ -434,6 +434,10 @@ Current hot-reload behavior:
 - stages a private copy of the source DLL before loading it
 - can preserve module state when `@ModuleSaveState` and `@ModuleRestoreState` are available
 - can reload manually or lazily through `reload_if_changed()`
+- top-level `load_export`, `load_command`, `load_event_hook`, and `load_event` bindings loaded from `HotReloadModule` reacquire the current generation automatically
+- exported `object`, `component`, field-accessor, and bound-method wrappers are generation-bound; after `reload()`, `reload_from(...)`, `unload()`, or `close()`, reacquire them from the current module generation
+- stale wrappers throw `ErrorCode::StaleBinding` instead of calling through unloaded code
+- owned stale wrappers skip their destroy bridge during reset/destruction so the SDK does not invoke unloaded module code while cleaning up old handles
 
 ---
 
@@ -454,6 +458,7 @@ Important error categories include:
 - `SignatureMismatch`
 - `InvokeFailed`
 - `LifecycleFailed`
+- `StaleBinding`
 
 The goal of the SDK layer is that host mistakes are surfaced as Wio SDK errors
 rather than as obscure backend-only failures.
