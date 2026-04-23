@@ -776,6 +776,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_const_scalar_expressions_run
+        "${CMAKE_SOURCE_DIR}/tests/const_scalar_expressions.wio"
+        "Const scalar: 11, 12, true, x"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_numeric_literal_suffixes_run
         "${CMAKE_SOURCE_DIR}/tests/numeric_literal_suffixes_run.wio"
         "Numeric literal suffixes: 16/3/true/true"
@@ -1368,6 +1375,30 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_c_style_for_initializer_without_initializer
         "${CMAKE_SOURCE_DIR}/tests/invalid/c_style_for_initializer_without_initializer.wio"
         "Ordinary variable declarations must be initialized."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_const_string_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/const_string_not_supported.wio"
+        "Const declarations currently support only scalar primitive types. Got 'string'."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_const_from_non_const_identifier
+        "${CMAKE_SOURCE_DIR}/tests/invalid/const_from_non_const_identifier.wio"
+        "Const initializer must be a compile-time scalar expression and may reference only other const declarations."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_const_function_call_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/const_function_call_not_supported.wio"
+        "Const initializer must be a compile-time scalar expression and may reference only other const declarations."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_const_array_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/const_array_not_supported.wio"
+        "Const declarations currently support only scalar primitive types. Got 'i32\\[\\]'."
     )
 
     add_wio_failure_test(

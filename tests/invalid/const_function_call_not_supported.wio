@@ -1,0 +1,8 @@
+fn Add(x: i32, y: i32) -> i32 {
+    return x + y;
+}
+
+fn Entry(args: string[]) -> i32 {
+    const value: i32 = Add(1, 2);
+    return 0;
+}

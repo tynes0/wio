@@ -1,0 +1,4 @@
+fn Entry(args: string[]) -> i32 {
+    const values: i32[] = [1, 2, 3];
+    return 0;
+}

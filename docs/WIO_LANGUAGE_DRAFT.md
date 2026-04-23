@@ -723,7 +723,13 @@ hp -= 10;
 
 ### 6.3 `const`
 
-`const` is intended to map to `constexpr` in C++.
+`const` is the compile-time constant form of variable declaration.
+
+In the current v1 freeze, the language model is:
+
+- Wio `const` is not just an immutable variable,
+- Wio `const` requires a compile-time-valid initializer,
+- the backend lowers it as C++ `constexpr`.
 
 Examples:
 
@@ -734,10 +740,16 @@ const Pi: f64 = 3.141592653589793;
 
 #### Current Compiler Note
 
-The backend emits `constexpr` for `const` declarations, but the semantic layer
-does not yet fully enforce C++-level constexpr restrictions. That means some
-forms may parse and analyze successfully but still be problematic in generated
-C++ if the initializer is not actually constexpr-compatible.
+The semantic layer now enforces a deliberately small and safe subset:
+
+- only scalar primitive types are supported,
+- the initializer must be a compile-time scalar expression,
+- such expressions may reference only other `const` declarations.
+
+Supported value categories currently include numeric, `bool`, `char`, `uchar`,
+and `byte`-like scalar primitives. Runtime containers, objects, dictionaries,
+arrays, function calls, and ordinary `let`/`mut` variables are not allowed in
+`const` initializers yet.
 
 ### 6.4 Type Inference
 
@@ -2647,7 +2659,29 @@ mut y: i32;
 If you need typed storage without an initializer, use a member field inside an
 `object` or `component`, not an ordinary local/global declaration.
 
-### 24.8 Use `@Trust` Only With Object/Component/Interface Types
+### 24.8 Keep `const` Initializers Compile-Time and Scalar
+
+Recommended:
+
+```wio
+const Base: i32 = 4;
+const Mask: i32 = (Base << 1) + 3;
+```
+
+Not currently supported:
+
+```wio
+let base: i32 = 4;
+const Value: i32 = base + 1;
+```
+
+or:
+
+```wio
+const Names: string[] = ["wio"];
+```
+
+### 24.9 Use `@Trust` Only With Object/Component/Interface Types
 
 `@Trust(...)` is semantically enforced and expects only object/component/interface
 type names.

@@ -9,7 +9,7 @@
 
 namespace wio::sema
 {
-#define SYMBOL_FLAGS(X) X(isMutable) X(isShadowed) X(isStd) X(isGlobal) X(isPublic) X(isPrivate) X(isProtected) \
+#define SYMBOL_FLAGS(X) X(isMutable) X(isConst) X(isShadowed) X(isStd) X(isGlobal) X(isPublic) X(isPrivate) X(isProtected) \
     X(isReadOnly) X(isOverride) X(isInterface) X(isEnum) X(isFlagset) X(isFlag)
     DEFINE_FLAGS(SymbolFlags, SYMBOL_FLAGS);
 #undef SYMBOL_FLAGS

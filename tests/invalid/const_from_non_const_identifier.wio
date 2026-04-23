@@ -1,0 +1,5 @@
+fn Entry(args: string[]) -> i32 {
+    let base: i32 = 7;
+    const value: i32 = base + 1;
+    return 0;
+}

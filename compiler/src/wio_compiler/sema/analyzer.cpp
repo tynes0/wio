@@ -332,6 +332,129 @@ namespace wio::sema
                     symbol->kind == SymbolKind::Parameter);
         }
 
+        bool isConstScalarType(const Ref<Type>& type)
+        {
+            Ref<Type> resolved = unwrapAliasType(type);
+            if (!resolved || resolved->kind() != TypeKind::Primitive)
+                return false;
+
+            const std::string& name = resolved.AsFast<PrimitiveType>()->name;
+            return name == "bool" ||
+                   name == "char" ||
+                   name == "uchar" ||
+                   name == "byte" ||
+                   name == "i8" ||
+                   name == "i16" ||
+                   name == "i32" ||
+                   name == "i64" ||
+                   name == "u8" ||
+                   name == "u16" ||
+                   name == "u32" ||
+                   name == "u64" ||
+                   name == "f32" ||
+                   name == "f64" ||
+                   name == "isize" ||
+                   name == "usize";
+        }
+
+        bool isAllowedConstBinaryOperator(TokenType op)
+        {
+            return op == TokenType::opPlus ||
+                   op == TokenType::opMinus ||
+                   op == TokenType::opStar ||
+                   op == TokenType::opSlash ||
+                   op == TokenType::opPercent ||
+                   op == TokenType::opBitAnd ||
+                   op == TokenType::opBitOr ||
+                   op == TokenType::opBitXor ||
+                   op == TokenType::opShiftLeft ||
+                   op == TokenType::opShiftRight ||
+                   op == TokenType::opLogicalAnd ||
+                   op == TokenType::opLogicalOr ||
+                   op == TokenType::kwAnd ||
+                   op == TokenType::kwOr ||
+                   op == TokenType::opEqual ||
+                   op == TokenType::opNotEqual ||
+                   op == TokenType::opLess ||
+                   op == TokenType::opLessEqual ||
+                   op == TokenType::opGreater ||
+                   op == TokenType::opGreaterEqual;
+        }
+
+        bool isAllowedConstUnaryOperator(TokenType op)
+        {
+            return op == TokenType::opPlus ||
+                   op == TokenType::opMinus ||
+                   op == TokenType::opBitNot ||
+                   op == TokenType::opLogicalNot ||
+                   op == TokenType::kwNot;
+        }
+
+        bool isConstEvaluableExpression(const NodePtr<Expression>& expression)
+        {
+            if (!expression)
+                return false;
+
+            if (expression->is<IntegerLiteral>() ||
+                expression->is<FloatLiteral>() ||
+                expression->is<BoolLiteral>() ||
+                expression->is<CharLiteral>() ||
+                expression->is<ByteLiteral>())
+            {
+                return true;
+            }
+
+            if (expression->is<StringLiteral>() ||
+                expression->is<InterpolatedStringLiteral>() ||
+                expression->is<ArrayLiteral>() ||
+                expression->is<DictionaryLiteral>() ||
+                expression->is<NullExpression>() ||
+                expression->is<LambdaExpression>() ||
+                expression->is<RefExpression>() ||
+                expression->is<SelfExpression>() ||
+                expression->is<SuperExpression>() ||
+                expression->is<RangeExpression>() ||
+                expression->is<MatchExpression>() ||
+                expression->is<AssignmentExpression>() ||
+                expression->is<ArrayAccessExpression>() ||
+                expression->is<MemberAccessExpression>() ||
+                expression->is<FunctionCallExpression>())
+            {
+                return false;
+            }
+
+            if (const auto* identifier = expression->as<Identifier>())
+            {
+                auto symbol = identifier->referencedSymbol.Lock();
+                return symbol && symbol->flags.get_isConst();
+            }
+
+            if (const auto* unary = expression->as<UnaryExpression>())
+            {
+                return isAllowedConstUnaryOperator(unary->op.type) &&
+                       isConstEvaluableExpression(unary->operand);
+            }
+
+            if (const auto* binary = expression->as<BinaryExpression>())
+            {
+                return isAllowedConstBinaryOperator(binary->op.type) &&
+                       isConstEvaluableExpression(binary->left) &&
+                       isConstEvaluableExpression(binary->right);
+            }
+
+            if (const auto* fit = expression->as<FitExpression>())
+            {
+                Ref<Type> operandType = unwrapAliasType(fit->operand->refType.Lock());
+                Ref<Type> targetType = fit->targetType ? unwrapAliasType(fit->targetType->refType.Lock()) : nullptr;
+                return isConstEvaluableExpression(fit->operand) &&
+                       operandType && targetType &&
+                       operandType->isNumeric() &&
+                       targetType->isNumeric();
+            }
+
+            return false;
+        }
+
         bool isAddressableRefOperand(const NodePtr<Expression>& expression)
         {
             if (!expression)
@@ -3927,6 +4050,7 @@ namespace wio::sema
             
             SymbolFlags flags = SymbolFlags::createAllFalse();
             if (node.mutability == Mutability::Mutable) flags.set_isMutable(true);
+            if (node.mutability == Mutability::Const) flags.set_isConst(true);
             if (currentScope_->getKind() == ScopeKind::Global) flags.set_isGlobal(true);
     
             Ref<Symbol> sym = createSymbol(node.name->token.value, declaredType, SymbolKind::Variable, node.location(), flags);
@@ -3949,6 +4073,7 @@ namespace wio::sema
             
             SymbolFlags flags = SymbolFlags::createAllFalse();
             if (node.mutability == Mutability::Mutable) flags.set_isMutable(true);
+            if (node.mutability == Mutability::Const) flags.set_isConst(true);
             
             sym = createSymbol(node.name->token.value, declaredType, SymbolKind::Variable, node.location(), flags);
             currentScope_->define(node.name->token.value, sym);
@@ -3974,6 +4099,26 @@ namespace wio::sema
             else if (initType && !initType->isUnknown() && !isAssignmentLikeCompatible(sym->type, initType)) 
             {
                 WIO_LOG_ADD_ERROR(node.location(), "Type mismatch for '{}'.", node.name->token.value);
+            }
+
+            if (node.mutability == Mutability::Const)
+            {
+                if (!isConstScalarType(sym->type))
+                {
+                    const std::string actualType = sym->type ? sym->type->toString() : "<unknown>";
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "Const declarations currently support only scalar primitive types. Got '{}'.",
+                        actualType
+                    );
+                }
+                else if (!isConstEvaluableExpression(node.initializer))
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.initializer->location(),
+                        "Const initializer must be a compile-time scalar expression and may reference only other const declarations."
+                    );
+                }
             }
         }
     }

@@ -1,0 +1,12 @@
+use std::console as console;
+
+fn Entry(args: string[]) -> i32 {
+    const Base: i32 = 5;
+    const Twice: i32 = Base * 2 + 1;
+    const Shifted: u32 = (3 fit u32) << 2;
+    const Flag: bool = (Twice > Base) and true;
+    const Letter: char = 'x';
+
+    console::Print($"Const scalar: ${Twice}, ${Shifted}, ${Flag}, ${Letter}");
+    return 0;
+}
