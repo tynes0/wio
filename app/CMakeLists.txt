@@ -733,6 +733,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_shared_host_interop_test(
+        wio_test_sdk_module_stale_bindings_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/module_stale_bindings.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_module_stale_bindings_host.cpp"
+        "SDK module stale: before=5 afterAdd=12 stale=5 restarted=5"
+    )
+
+    add_wio_shared_host_interop_test(
         wio_test_sdk_exported_types_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/exported_types_library.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_exported_types_host.cpp"

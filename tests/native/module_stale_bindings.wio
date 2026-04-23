@@ -1,0 +1,32 @@
+mut gCounter: i32 = 0;
+
+@ModuleLoad
+fn BootModule() -> i32 {
+    gCounter = 5;
+    return 0;
+}
+
+@ModuleUnload
+fn StopModule() {
+    gCounter = -1;
+}
+
+@Export
+@Command("counter.get")
+fn GetCounter() -> i32 {
+    return gCounter;
+}
+
+@Export
+object Counter {
+    public value: i32;
+
+    public OnConstruct() {
+        self.value = 9;
+    }
+
+    public fn Add(delta: i32) -> i32 {
+        self.value += delta;
+        return self.value;
+    }
+}

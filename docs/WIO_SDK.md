@@ -323,6 +323,8 @@ The ownership model in the current SDK is intentionally simple:
 - nested `object` and `component` fields returned from another instance are borrowed wrappers
 - `WioObject::owns_handle()` and `WioComponent::owns_handle()` tell you whether the wrapper owns destruction
 - `is_borrowed()` reports the inverse of owned wrapper handles
+- `WioObjectType`, `WioComponentType`, `WioObject`, `WioComponent`, `WioFieldAccessor`, and bound methods are valid only for the module generation they came from
+- after `Module::unload()` or `Module::close()`, old wrappers stay stale even if the same `Module` is started again; reacquire fresh wrappers from the new generation
 
 This keeps normal host usage predictable while avoiding implicit deep copies of
 nested exported state.
@@ -438,6 +440,13 @@ Current hot-reload behavior:
 - exported `object`, `component`, field-accessor, and bound-method wrappers are generation-bound; after `reload()`, `reload_from(...)`, `unload()`, or `close()`, reacquire them from the current module generation
 - stale wrappers throw `ErrorCode::StaleBinding` instead of calling through unloaded code
 - owned stale wrappers skip their destroy bridge during reset/destruction so the SDK does not invoke unloaded module code while cleaning up old handles
+
+Current lifetime and handoff rule:
+
+- Wio owns the exported runtime objects behind module handles
+- the host owns SDK wrapper objects and cached callables
+- when code changes across reload, the host must decide how to reacquire and reinterpret state from the new generation
+- the SDK guarantees fail-fast stale-binding diagnostics and optional module save/restore handoff, but it does not try to make old object wrappers semantically valid against new code automatically
 
 ---
 
