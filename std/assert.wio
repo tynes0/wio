@@ -30,7 +30,19 @@ realm std {
             }
         }
 
+        fn Equal(left: string, right: string, message: string) {
+            if (left != right) {
+                Fail(message);
+            }
+        }
+
         fn NotEqual<T>(left: T, right: T, message: string) {
+            if (left == right) {
+                Fail(message);
+            }
+        }
+
+        fn NotEqual(left: string, right: string, message: string) {
             if (left == right) {
                 Fail(message);
             }
@@ -52,7 +64,15 @@ realm std {
             Equal(left, right, message);
         }
 
+        fn ExpectEqual(left: string, right: string, message: string) {
+            Equal(left, right, message);
+        }
+
         fn ExpectNotEqual<T>(left: T, right: T, message: string) {
+            NotEqual(left, right, message);
+        }
+
+        fn ExpectNotEqual(left: string, right: string, message: string) {
             NotEqual(left, right, message);
         }
 

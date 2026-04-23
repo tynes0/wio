@@ -28,6 +28,9 @@ fn Entry() -> i32 {
     assert::ExpectStringContains("wio arena", "arena", "missing arena");
     assert::ExpectStringStartsWith("wio arena", "wio", "prefix mismatch");
     assert::ExpectStringEndsWith("wio arena", "arena", "suffix mismatch");
+    let label = "wio arena";
+    assert::ExpectEqual(label, "wio arena", "string literal equality mismatch");
+    assert::ExpectNotEqual(label, "other arena", "string literal inequality mismatch");
 
     assert::ExpectNear(10.0f, 10.05f, 0.1f, "f32 near mismatch");
     assert::ExpectNear(10.0, 10.005, 0.01, "f64 near mismatch");

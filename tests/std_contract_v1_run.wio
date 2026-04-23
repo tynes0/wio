@@ -29,15 +29,13 @@ fn Entry() -> i32 {
     let empty: string = "";
     let lastSegment = collections::LastOr(segments, empty);
     let deleted = fs::DeleteIfExists(targetPath);
-    let expectedRoundTrip = "WIO-STD-V1";
-    let expectedFileName = "surface.txt";
 
     assert::ExpectTrue(anyLarge, "expected a value larger than four");
     assert::ExpectEqual(positiveCount, 5, "positive count mismatch");
     assert::ExpectEqual(clamped, 9, "clamp mismatch");
     assert::ExpectTrue(ensured and wrote, "file setup mismatch");
-    assert::ExpectEqual(readBack, expectedRoundTrip, "file round-trip mismatch");
-    assert::ExpectEqual(lastSegment, expectedFileName, "path contract mismatch");
+    assert::ExpectEqual(readBack, "WIO-STD-V1", "file round-trip mismatch");
+    assert::ExpectEqual(lastSegment, "surface.txt", "path contract mismatch");
     assert::ExpectTrue(deleted, "cleanup mismatch");
 
     console::Print($"Std contract v1: ${anyLarge}/${positiveCount}/${clamped}/${lastSegment}/${readBack}/${deleted}");
