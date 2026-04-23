@@ -358,6 +358,68 @@ Examples:
 
 This matters when you want total manual control.
 
+### 4.11 Compiler Backend Resolution
+
+When the standalone `wio` compiler needs its bundled runtime, SDK, std sources, or runtime archive, it resolves the toolchain root in this order:
+
+1. `WIO_ROOT` or `WIO_HOME`
+2. the directory that contains the packaged `wio` executable
+3. the parent of that executable directory
+4. the compile-time fallback baked into the binary
+
+From that root, the compiler resolves:
+
+- `runtime/include`
+- `sdk/include`
+- `std`
+- the packaged runtime archive
+
+This lookup is intentionally independent from the current working directory.
+
+### 4.12 Backend Argument Normalization
+
+Before the backend C++ compiler is invoked, Wio normalizes user-provided filesystem inputs to absolute paths.
+
+This includes:
+
+- `--include-dir`
+- `--link-dir`
+- source-file style `--backend-arg` values such as `native/src/foo.cpp`
+- file-style `--link-lib` values such as `native/lib/foo.lib`
+
+The goal is:
+
+- stable behavior from any caller working directory
+- deterministic backend command construction
+- cleaner diagnostics when native compilation fails
+
+### 4.13 Backend Debug Helpers
+
+The standalone compiler exposes two debug-oriented switches:
+
+```powershell
+wio .\wio\main.wio --show-backend-info --dry-run
+wio .\wio\main.wio --emit-cpp
+```
+
+`--show-backend-info` prints the resolved backend contract:
+
+- target kind
+- source path
+- generated C++ path
+- backend output path
+- toolchain roots considered
+- runtime / SDK / std paths
+- normalized include dirs, link dirs, backend args, and link libraries
+
+`--emit-cpp` writes `<source>.wio.cpp` and stops before native compilation.
+
+Rules:
+
+- `--emit-cpp` is incompatible with `--dry-run`
+- `--emit-cpp` is incompatible with `--run`
+- generated C++ includes a readable preamble and keeps `#line` mapping back to `.wio` files
+
 ---
 
 ## 5. Full Override Example
@@ -633,19 +695,19 @@ The default user-owned place is:
 
 ## 10. Practical Build Commands
 
-### 9.1 Build From A Project Root
+### 10.1 Build From A Project Root
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File C:\Wio\scripts\Invoke-WioProject.ps1 -Project C:\Projects\MyGame -NoRun
 ```
 
-### 9.2 Build And Run From A Project Root
+### 10.2 Build And Run From A Project Root
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File C:\Wio\scripts\Invoke-WioProject.ps1 -Project C:\Projects\MyGame
 ```
 
-### 9.3 Ask Wio What It Thinks The Project Is
+### 10.3 Ask Wio What It Thinks The Project Is
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File C:\Wio\scripts\Invoke-WioProject.ps1 -Project C:\Projects\MyGame -Describe

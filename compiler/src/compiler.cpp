@@ -359,6 +359,21 @@ namespace wio
             throw std::invalid_argument("Unknown build target: " + value + ". Expected one of: exe, static, shared.");
         }
 
+        std::string buildTargetToString(BuildTarget target)
+        {
+            switch (target)
+            {
+            case BuildTarget::Executable:
+                return "exe";
+            case BuildTarget::StaticLibrary:
+                return "static";
+            case BuildTarget::SharedLibrary:
+                return "shared";
+            }
+
+            return "unknown";
+        }
+
         std::filesystem::path makeDefaultOutputPath(const std::filesystem::path& sourcePath, BuildTarget target)
         {
             std::filesystem::path outputPath = sourcePath.parent_path() / sourcePath.stem();
@@ -392,6 +407,14 @@ namespace wio
             return "\"" + path.string() + "\"";
         }
 
+        std::string pathToDisplayString(const std::filesystem::path& path)
+        {
+            if (path.empty())
+                return "<not-found>";
+
+            return path.generic_string();
+        }
+
         std::string quoteCommand(const std::string& value)
         {
             if (value.find_first_of(" \t") == std::string::npos)
@@ -416,6 +439,132 @@ namespace wio
                    libraryValue.ends_with(".dylib") ||
                    libraryValue.ends_with(".o") ||
                    libraryValue.ends_with(".obj");
+        }
+
+        std::vector<std::string> normalizeDirectoryArguments(const std::vector<std::string>& rawValues)
+        {
+            std::vector<std::string> normalizedValues;
+            normalizedValues.reserve(rawValues.size());
+
+            for (const auto& rawValue : rawValues)
+            {
+                if (rawValue.empty())
+                    continue;
+
+                normalizedValues.push_back(std::filesystem::absolute(std::filesystem::path(rawValue)).make_preferred().string());
+            }
+
+            return normalizedValues;
+        }
+
+        std::vector<std::string> normalizeBackendArguments(const std::vector<std::string>& rawValues)
+        {
+            std::vector<std::string> normalizedValues;
+            normalizedValues.reserve(rawValues.size());
+
+            for (const auto& rawValue : rawValues)
+            {
+                if (rawValue.empty())
+                    continue;
+
+                if (isSourceFilePath(rawValue))
+                    normalizedValues.push_back(std::filesystem::absolute(std::filesystem::path(rawValue)).make_preferred().string());
+                else
+                    normalizedValues.push_back(rawValue);
+            }
+
+            return normalizedValues;
+        }
+
+        std::vector<std::string> normalizeLinkLibraries(const std::vector<std::string>& rawValues)
+        {
+            std::vector<std::string> normalizedValues;
+            normalizedValues.reserve(rawValues.size());
+
+            for (const auto& rawValue : rawValues)
+            {
+                if (rawValue.empty())
+                    continue;
+
+                if (rawValue.starts_with("-") || !isLibraryFilePath(rawValue))
+                {
+                    normalizedValues.push_back(rawValue);
+                    continue;
+                }
+
+                normalizedValues.push_back(std::filesystem::absolute(std::filesystem::path(rawValue)).make_preferred().string());
+            }
+
+            return normalizedValues;
+        }
+
+        std::string formatStringValuesForDisplay(const std::vector<std::string>& values)
+        {
+            if (values.empty())
+                return "<none>";
+
+            std::string formatted;
+            for (size_t i = 0; i < values.size(); ++i)
+            {
+                if (i > 0)
+                    formatted += ", ";
+
+                formatted += std::filesystem::path(values[i]).generic_string();
+            }
+
+            return formatted;
+        }
+
+        std::string formatPathValuesForDisplay(const std::vector<std::filesystem::path>& values)
+        {
+            if (values.empty())
+                return "<none>";
+
+            std::string formatted;
+            for (size_t i = 0; i < values.size(); ++i)
+            {
+                if (i > 0)
+                    formatted += ", ";
+
+                formatted += pathToDisplayString(values[i]);
+            }
+
+            return formatted;
+        }
+
+        void logResolvedBackendInfo(const std::filesystem::path& sourcePath,
+                                    const std::filesystem::path& cppPath,
+                                    const std::filesystem::path& outputPath,
+                                    const std::filesystem::path& runtimeIncludeDir,
+                                    const std::filesystem::path& sdkIncludeDir,
+                                    const std::filesystem::path& stdSourceDir,
+                                    const std::filesystem::path& runtimeLibraryPath,
+                                    const std::vector<std::filesystem::path>& systemIncludeDirs,
+                                    const std::vector<std::string>& includeDirs,
+                                    const std::vector<std::string>& linkDirs,
+                                    const std::vector<std::string>& linkLibraries,
+                                    const std::vector<std::string>& backendArgs)
+        {
+            WIO_LOG_INFO("Resolved backend configuration:");
+            WIO_LOG_INFO("  Target: {}", buildTargetToString(gAppData.buildTarget));
+            WIO_LOG_INFO("  Source: {}", pathToDisplayString(sourcePath));
+            WIO_LOG_INFO("  Generated C++: {}", pathToDisplayString(cppPath));
+            WIO_LOG_INFO("  Backend output: {}", pathToDisplayString(outputPath));
+            WIO_LOG_INFO("  Toolchain roots: {}", formatPathValuesForDisplay(getToolchainRootCandidates()));
+            WIO_LOG_INFO("  Backend compiler: {}", getBackendCompiler());
+
+            if (gAppData.buildTarget == BuildTarget::StaticLibrary)
+                WIO_LOG_INFO("  Backend archiver: {}", getBackendArchiver());
+
+            WIO_LOG_INFO("  Runtime include dir: {}", pathToDisplayString(runtimeIncludeDir));
+            WIO_LOG_INFO("  SDK include dir: {}", pathToDisplayString(sdkIncludeDir));
+            WIO_LOG_INFO("  Std source dir: {}", pathToDisplayString(stdSourceDir));
+            WIO_LOG_INFO("  Runtime library: {}", pathToDisplayString(runtimeLibraryPath));
+            WIO_LOG_INFO("  Backend system include dirs: {}", formatPathValuesForDisplay(systemIncludeDirs));
+            WIO_LOG_INFO("  User include dirs: {}", formatStringValuesForDisplay(includeDirs));
+            WIO_LOG_INFO("  User link dirs: {}", formatStringValuesForDisplay(linkDirs));
+            WIO_LOG_INFO("  Link libraries: {}", formatStringValuesForDisplay(linkLibraries));
+            WIO_LOG_INFO("  Backend args: {}", formatStringValuesForDisplay(backendArgs));
         }
 
         void appendBackendArguments(std::stringstream& cmd, const std::vector<std::string>& backendArgs)
@@ -516,7 +665,9 @@ namespace wio
 #endif
             if (pipe == nullptr)
             {
-                result.output = "Failed to start backend command.";
+                result.output =
+                    "Failed to start backend command. Verify that the backend tool exists on PATH or is configured correctly.\n"
+                    "Command: " + command;
                 return result;
             }
 
@@ -1793,6 +1944,18 @@ namespace wio
                     .SetDescription("Builds the AST but does not execute the program.")
             )
             .Add(
+                Argonaut::Argument("EMIT-CPP")
+                    .AddAlias("--emit-cpp")
+                    .Flag()
+                    .SetDescription("Generates <file>.wio.cpp and stops before native backend compilation.")
+            )
+            .Add(
+                Argonaut::Argument("SHOW-BACKEND-INFO")
+                    .AddAlias("--show-backend-info")
+                    .Flag()
+                    .SetDescription("Prints the resolved backend toolchain, paths, and normalized inputs.")
+            )
+            .Add(
                 Argonaut::Argument("NO-BUILTIN")
                     .AddAlias("-B")
                     .AddAlias("--no-builtin")
@@ -1919,6 +2082,8 @@ namespace wio
             DEFINE_FLAG_VALUE("SHOW-TOKENS", ShowTokens);
             DEFINE_FLAG_VALUE("SHOW-AST", ShowAst);
             DEFINE_FLAG_VALUE("DRY-RUN", DryRun);
+            DEFINE_FLAG_VALUE("EMIT-CPP", EmitCpp);
+            DEFINE_FLAG_VALUE("SHOW-BACKEND-INFO", ShowBackendInfo);
             DEFINE_FLAG_VALUE("NO-BUILTIN", NoBuiltin);
             DEFINE_FLAG_VALUE("WARN-AS-ERROR", WarnAsError);
             DEFINE_FLAG_VALUE("RUN", Run);
@@ -1942,8 +2107,8 @@ namespace wio
         {
             std::vector<std::string> filePaths = gAppData.argParser.GetValuesOf<std::string>("FILE");
             std::string filePathStr = filePaths.at(0);
-            std::filesystem::path sourcePath(filePathStr);
-            gAppData.basePath = std::filesystem::absolute(sourcePath).parent_path();
+            std::filesystem::path sourcePath = std::filesystem::absolute(std::filesystem::path(filePathStr)).make_preferred();
+            gAppData.basePath = sourcePath.parent_path();
             
             std::string source = filesystem::readFile(sourcePath);
             
@@ -2044,8 +2209,62 @@ namespace wio
                 getBackendSystemIncludeDirs(runtimeIncludeDir, sdkIncludeDir);
             validateBackendConfiguration(gAppData.requiredCppHeaders, sourcePath.parent_path(), systemIncludeDirs);
 
+            std::vector<std::string> rawLinkDirs = gAppData.argParser.GetValuesOf<std::string>("LINK-DIR");
+            std::vector<std::string> rawLinkLibraries = gAppData.argParser.GetValuesOf<std::string>("LINK-LIB");
+            std::vector<std::string> rawBackendArgs = gAppData.argParser.GetValuesOf<std::string>("BACKEND-ARG");
+            std::vector<std::string> outputPaths = gAppData.argParser.GetValuesOf<std::string>("OUTPUT");
+            std::vector<std::string> rawIncludeDirs = gAppData.argParser.GetValuesOf<std::string>("INCLUDE-DIR");
+
+            std::vector<std::string> includeDirs = normalizeDirectoryArguments(rawIncludeDirs);
+            std::vector<std::string> linkDirs = normalizeDirectoryArguments(rawLinkDirs);
+            std::vector<std::string> linkLibraries = normalizeLinkLibraries(rawLinkLibraries);
+            std::vector<std::string> backendArgs = normalizeBackendArguments(rawBackendArgs);
+
+            std::filesystem::path outputPath =
+                outputPaths.empty()
+                    ? makeDefaultOutputPath(sourcePath, gAppData.buildTarget)
+                    : std::filesystem::absolute(std::filesystem::path(outputPaths.front())).make_preferred();
+
+            outputPath = std::filesystem::absolute(outputPath).make_preferred();
+
+            auto cppPath = sourcePath;
+            cppPath += ".cpp";
+
+            const std::filesystem::path runtimeLibraryPath = getRuntimeLibraryFile();
+            const std::filesystem::path stdSourceDir = getStdSourceDir();
+
+            if (gAppData.flags.get_DryRun() && gAppData.flags.get_EmitCpp())
+            {
+                WIO_LOG_FATAL("--emit-cpp cannot be combined with --dry-run.");
+                return EXIT_FAILURE;
+            }
+
+            if (gAppData.flags.get_Run() && gAppData.flags.get_EmitCpp())
+            {
+                WIO_LOG_FATAL("--emit-cpp cannot be combined with --run.");
+                return EXIT_FAILURE;
+            }
+
             WIO_LOG_PROCESS_WARNINGS();
             WIO_LOG_PROCESS_ERRORS(CompilationError);
+
+            if (gAppData.flags.get_ShowBackendInfo())
+            {
+                logResolvedBackendInfo(
+                    sourcePath,
+                    cppPath,
+                    outputPath,
+                    runtimeIncludeDir,
+                    sdkIncludeDir,
+                    stdSourceDir,
+                    runtimeLibraryPath,
+                    systemIncludeDirs,
+                    includeDirs,
+                    linkDirs,
+                    linkLibraries,
+                    backendArgs
+                );
+            }
 
             if (gAppData.flags.get_DryRun())
             {
@@ -2057,15 +2276,16 @@ namespace wio
             codegen::CppGenerator generator;
             std::string cppCode = generator.generate(program);
 
-            // main.wio -> main.wio.cpp
-            auto cppPath = sourcePath;
-            cppPath += ".cpp";
-            
             if (!filesystem::writeFilepath(cppCode, cppPath))
             {
                 WIO_LOG_FATAL("Generated C++ output could not be written to: {}", cppPath.string());
                 return EXIT_FAILURE;
             }
+
+            WIO_LOG_INFO("Generated C++ output: {}", pathToDisplayString(cppPath));
+
+            if (gAppData.flags.get_EmitCpp())
+                return EXIT_SUCCESS;
             
             if (runtimeIncludeDir.empty() || !std::filesystem::exists(runtimeIncludeDir))
             {
@@ -2079,7 +2299,6 @@ namespace wio
                 return EXIT_FAILURE;
             }
 
-            std::filesystem::path runtimeLibraryPath = getRuntimeLibraryFile();
             if ((gAppData.buildTarget == BuildTarget::Executable || gAppData.buildTarget == BuildTarget::SharedLibrary) &&
                 (runtimeLibraryPath.empty() || !std::filesystem::exists(runtimeLibraryPath)))
             {
@@ -2093,18 +2312,6 @@ namespace wio
                 return EXIT_FAILURE;
             }
 
-            std::vector<std::string> linkDirs = gAppData.argParser.GetValuesOf<std::string>("LINK-DIR");
-            std::vector<std::string> linkLibraries = gAppData.argParser.GetValuesOf<std::string>("LINK-LIB");
-            std::vector<std::string> backendArgs = gAppData.argParser.GetValuesOf<std::string>("BACKEND-ARG");
-            std::vector<std::string> outputPaths = gAppData.argParser.GetValuesOf<std::string>("OUTPUT");
-            std::vector<std::string> includeDirs = gAppData.argParser.GetValuesOf<std::string>("INCLUDE-DIR");
-
-            std::filesystem::path outputPath =
-                outputPaths.empty()
-                    ? makeDefaultOutputPath(sourcePath, gAppData.buildTarget)
-                    : std::filesystem::path(outputPaths.front());
-
-            outputPath = std::filesystem::absolute(outputPath).make_preferred();
             std::filesystem::create_directories(outputPath.parent_path());
 
             std::string backendCompiler = getBackendCompiler();
@@ -2150,13 +2357,13 @@ namespace wio
                     return runCommandCaptureOutput(compileCmd.str());
                 };
 
-                CommandResult compileResult = compileObject(std::filesystem::absolute(cppPath).make_preferred(), 0);
+                CommandResult compileResult = compileObject(cppPath, 0);
                 exitCode = compileResult.exitCode;
                 if (exitCode == 0)
                 {
                     for (size_t i = 0; i < backendSourceFiles.size(); ++i)
                     {
-                        compileResult = compileObject(std::filesystem::absolute(backendSourceFiles[i]).make_preferred(), i + 1);
+                        compileResult = compileObject(std::filesystem::path(backendSourceFiles[i]), i + 1);
                         exitCode = compileResult.exitCode;
                         if (exitCode != 0)
                             break;
@@ -2216,7 +2423,7 @@ namespace wio
                 }
             }
 
-            WIO_LOG_INFO("Generated backend output: {}", outputPath.filename().string());
+            WIO_LOG_INFO("Generated backend output: {}", pathToDisplayString(outputPath));
 
             if (gAppData.flags.get_Run())
             {
