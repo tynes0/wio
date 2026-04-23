@@ -1,0 +1,8 @@
+object GuardedBase {
+    protected hp: i32 = 10;
+}
+
+fn Entry(args: string[]) -> i32 {
+    let base = GuardedBase();
+    return base.hp;
+}

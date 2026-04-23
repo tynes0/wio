@@ -455,6 +455,14 @@ namespace wio::sema
             return false;
         }
 
+        std::string formatAccessContextType(const Ref<Type>& type)
+        {
+            if (!type)
+                return "<non-object context>";
+
+            return type->toString();
+        }
+
         bool isAddressableRefOperand(const NodePtr<Expression>& expression)
         {
             if (!expression)
@@ -2609,11 +2617,30 @@ namespace wio::sema
             }
         }
 
+        const std::string ownerTypeName = formatAccessContextType(actualStructType);
+        const std::string currentContextTypeName = formatAccessContextType(currentStructType_);
+
         if (foundMember->flags.get_isPrivate() && !isInsideSameObject && !isTrustedAccess)
-            WIO_LOG_ADD_ERROR(node.location(), "Cannot access private member '{}' from outside the object.", foundMember->name);
+        {
+            WIO_LOG_ADD_ERROR(
+                node.location(),
+                "Cannot access private member '{}' declared on '{}' from '{}'.",
+                foundMember->name,
+                ownerTypeName,
+                currentContextTypeName
+            );
+        }
 
         if (foundMember->flags.get_isProtected() && !isInsideHierarchy && !isTrustedAccess)
-            WIO_LOG_ADD_ERROR(node.location(), "Cannot access protected member '{}' from outside the object hierarchy.", foundMember->name);
+        {
+            WIO_LOG_ADD_ERROR(
+                node.location(),
+                "Cannot access protected member '{}' declared on '{}' from '{}'.",
+                foundMember->name,
+                ownerTypeName,
+                currentContextTypeName
+            );
+        }
 
         Ref<Type> memberType = foundMember->type;
         if (auto instantiatedStructType = actualStructType ? actualStructType.AsFast<StructType>() : nullptr;
@@ -4325,6 +4352,41 @@ namespace wio::sema
         else if (hasInstantiate)
         {
             WIO_LOG_ADD_ERROR(node.location(), "@Instantiate can only be used on generic functions.");
+        }
+
+        if (node.name->token.value == "Entry")
+        {
+            auto& typeContext = Compiler::get().getTypeContext();
+            const Ref<Type> expectedArgsType = typeContext.getOrCreateArrayType(typeContext.getString(), ArrayType::ArrayKind::Dynamic);
+
+            if (isStructMethod)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Entry is currently supported only for top-level functions.");
+            }
+
+            if (!node.body)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Entry functions must define a Wio body.");
+            }
+
+            if (!isExactType(funcType->returnType, typeContext.getI32()) &&
+                !isExactType(funcType->returnType, typeContext.getVoid()))
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Entry must return i32 or void.");
+            }
+
+            if (node.parameters.size() > 1)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Entry must declare zero parameters or exactly one string[] parameter.");
+            }
+            else if (node.parameters.size() == 1 && !isExactType(funcType->paramTypes[0], expectedArgsType))
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Entry parameter must be string[] when present. Got '{}'.",
+                    funcType->paramTypes[0] ? funcType->paramTypes[0]->toString() : "<unknown>"
+                );
+            }
         }
 
         if ((isCommand || isEvent) && !isExported)

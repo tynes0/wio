@@ -1689,9 +1689,20 @@ component Vector3 {
 
 The executable entry point must be named `Entry`.
 
-Supported user-facing forms:
+`Entry` is supported only as a top-level function. It must define a Wio body and
+it must return either `i32` or `void`.
+
+Supported forms:
 
 ```wio
+fn Entry() -> i32 {
+    return 0;
+}
+
+fn Entry() {
+    std::console::Print("Hello");
+}
+
 fn Entry(args: string[]) -> i32 {
     return 0;
 }
@@ -1701,14 +1712,7 @@ fn Entry(args: string[]) {
 }
 ```
 
-#### Current Compiler Note
-
-The backend currently expects `Entry` to return either:
-
-- `i32`,
-- or `void`.
-
-It also expects `Entry` to have a body.
+If a parameter is present, it must be exactly `string[]`.
 
 ## 14. `match`
 

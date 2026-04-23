@@ -1,0 +1,9 @@
+object Runner {
+    fn Entry() -> i32 {
+        return 0;
+    }
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

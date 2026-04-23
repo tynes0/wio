@@ -1269,7 +1269,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_private_base_member_access
         "${CMAKE_SOURCE_DIR}/tests/invalid/private_base_member_access.wio"
-        "Cannot access private member 'secret' from outside the object"
+        "Cannot access private member 'secret' declared on 'PrivateBase' from 'PrivateDerived'"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_protected_member_access_outside_hierarchy
+        "${CMAKE_SOURCE_DIR}/tests/invalid/protected_member_access_outside_hierarchy.wio"
+        "Cannot access protected member 'hp' declared on 'GuardedBase' from '<non-object context>'"
     )
 
     add_wio_failure_test(
@@ -1281,7 +1287,35 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_non_dry_failure_test_clean(
         wio_invalid_entry_invalid_parameter_type
         "${CMAKE_SOURCE_DIR}/tests/invalid/entry_invalid_parameter_type.wio"
-        "Error \\[.*entry_invalid_parameter_type\\.wio:1:1\\]: The `Entry` function's parameter type must be `string\\[\\]`"
+        "Error \\[.*entry_invalid_parameter_type\\.wio:1:1\\]: Entry parameter must be string\\[\\] when present\\. Got 'i32'\\."
+        "Compiling failed:"
+    )
+
+    add_wio_non_dry_failure_test_clean(
+        wio_invalid_entry_invalid_return_type
+        "${CMAKE_SOURCE_DIR}/tests/invalid/entry_invalid_return_type.wio"
+        "Error \\[.*entry_invalid_return_type\\.wio:1:1\\]: Entry must return i32 or void\\."
+        "Compiling failed:"
+    )
+
+    add_wio_non_dry_failure_test_clean(
+        wio_invalid_entry_too_many_parameters
+        "${CMAKE_SOURCE_DIR}/tests/invalid/entry_too_many_parameters.wio"
+        "Error \\[.*entry_too_many_parameters\\.wio:1:1\\]: Entry must declare zero parameters or exactly one string\\[\\] parameter\\."
+        "Compiling failed:"
+    )
+
+    add_wio_non_dry_failure_test_clean(
+        wio_invalid_entry_missing_body
+        "${CMAKE_SOURCE_DIR}/tests/invalid/entry_missing_body.wio"
+        "Error \\[.*entry_missing_body\\.wio:1:1\\]: Entry functions must define a Wio body\\."
+        "Compiling failed:"
+    )
+
+    add_wio_non_dry_failure_test_clean(
+        wio_invalid_entry_method_not_top_level
+        "${CMAKE_SOURCE_DIR}/tests/invalid/entry_method_not_top_level.wio"
+        "Error \\[.*entry_method_not_top_level\\.wio:2:5\\]: Entry is currently supported only for top-level functions\\."
         "Compiling failed:"
     )
 
@@ -1824,7 +1858,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_generic_overload_ambiguous
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_overload_ambiguous.wio"
-        "Ambiguous function call"
+        "Ambiguous function call to 'Echo' with arguments \\(i32\\)\\. Candidates: Echo<T>\\(T\\) -> T; Echo<U>\\(U\\) -> U\\."
     )
 
     add_wio_failure_test(
