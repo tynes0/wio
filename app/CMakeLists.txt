@@ -368,6 +368,23 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         )
     endfunction()
 
+    add_executable(wio_sdk_invalid_api_host
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_invalid_api_host.cpp"
+    )
+    target_link_libraries(wio_sdk_invalid_api_host
+        PRIVATE
+            wio_sdk
+    )
+    add_test(
+        NAME wio_test_sdk_invalid_api_contract
+        COMMAND $<TARGET_FILE:wio_sdk_invalid_api_host>
+    )
+    set_tests_properties(
+        wio_test_sdk_invalid_api_contract
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
     add_wio_success_test(
         wio_test1_dry_run
         "${CMAKE_SOURCE_DIR}/tests/test1.wio"

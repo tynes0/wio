@@ -120,7 +120,7 @@ int main()
 
 - opens the dynamic library
 - resolves `WioModuleGetApi`
-- validates the SDK descriptor version
+- validates the SDK descriptor version and the full host-visible ABI descriptor contract
 - invokes `@ModuleLoad` automatically when present
 
 Use `Module::open(...)` if you need the raw module without calling the load
@@ -140,11 +140,21 @@ extern "C" const WioModuleApi* WioModuleGetApi();
 int main()
 {
     const WioModuleApi* api = WioModuleGetApi();
+    wio_validate_module_api(api);
     auto addNumbers = wio_load_export<std::int32_t(std::int32_t, std::int32_t)>(api, "AddNumbers");
     auto weighted = wio_load_function<std::int32_t(std::int32_t, std::int32_t)>(api, "math.weighted");
     return addNumbers(10, 20) == 30 && weighted(3, 4) == 10 ? 0 : 1;
 }
 ```
+
+`wio_validate_module_api(...)` is available both as:
+
+- `wio::sdk::validate_module_api(...)`
+- `wio_validate_module_api(...)`
+
+Use it when you receive a raw `WioModuleApi*` from a statically linked module or
+from a custom host pipeline and want an early ABI sanity check before binding any
+exports, commands, events, objects, or components.
 
 The free helper overloads also accept `wio::sdk::Module` and
 `wio::sdk::HotReloadModule`, so the call sites stay uniform:

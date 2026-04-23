@@ -16,6 +16,7 @@
 #include <string_view>
 #include <tuple>
 #include <type_traits>
+#include <unordered_set>
 #include <unordered_map>
 #include <utility>
 #include <variant>
@@ -2016,12 +2017,414 @@ namespace wio::sdk
             );
         }
 
+        inline bool hasText(const char* text) noexcept
+        {
+            return text != nullptr && text[0] != '\0';
+        }
+
+        [[noreturn]] inline void throwInvalidApiDescriptor(std::string_view context, const std::string& problem)
+        {
+            std::ostringstream message;
+            message << "Wio SDK invalid module API descriptor";
+            if (!context.empty())
+                message << " for '" << context << '\'';
+            message << ": " << problem;
+            throw Error(ErrorCode::InvalidApiDescriptor, message.str());
+        }
+
+        inline bool hasCapability(const WioModuleApi* api, WioModuleCapability capability) noexcept
+        {
+            return api != nullptr && (api->capabilities & static_cast<std::uint32_t>(capability)) != 0u;
+        }
+
+        template <typename TEntry>
+        bool isPointerInsideArray(const TEntry* pointer, const TEntry* base, std::uint32_t count) noexcept
+        {
+            if (pointer == nullptr || base == nullptr || count == 0u)
+                return false;
+
+            const auto begin = reinterpret_cast<std::uintptr_t>(base);
+            const auto current = reinterpret_cast<std::uintptr_t>(pointer);
+            const auto size = static_cast<std::uintptr_t>(sizeof(TEntry)) * static_cast<std::uintptr_t>(count);
+            const auto end = begin + size;
+
+            return current >= begin &&
+                current < end &&
+                ((current - begin) % static_cast<std::uintptr_t>(sizeof(TEntry)) == 0u);
+        }
+
+        inline void validateCapabilityContract(const WioModuleApi* api,
+                                               WioModuleCapability capability,
+                                               const void* functionPointer,
+                                               std::string_view capabilityName,
+                                               std::string_view context)
+        {
+            const bool enabled = hasCapability(api, capability);
+            const bool available = functionPointer != nullptr;
+            if (enabled == available)
+                return;
+
+            std::ostringstream problem;
+            problem << capabilityName << " capability flag and function pointer are out of sync.";
+            throwInvalidApiDescriptor(context, problem.str());
+        }
+
+        inline void validateTypeDescriptor(const WioModuleTypeDescriptor* descriptor,
+                                           std::string_view context,
+                                           std::unordered_set<const WioModuleTypeDescriptor*>& visited)
+        {
+            if (descriptor == nullptr)
+                throwInvalidApiDescriptor(context, "Encountered a null type descriptor.");
+
+            if (!visited.insert(descriptor).second)
+                return;
+
+            if (!hasText(descriptor->displayName))
+                throwInvalidApiDescriptor(context, "A type descriptor is missing displayName.");
+
+            if (descriptor->parameterCount > 0u && descriptor->parameterTypes == nullptr)
+            {
+                std::ostringstream problem;
+                problem << "Type descriptor '" << descriptor->displayName << "' declares parameter types but does not provide a parameter type array.";
+                throwInvalidApiDescriptor(context, problem.str());
+            }
+
+            switch (descriptor->kind)
+            {
+            case WIO_MODULE_TYPE_DESC_PRIMITIVE:
+                if (descriptor->abiType == WIO_ABI_UNKNOWN)
+                {
+                    std::ostringstream problem;
+                    problem << "Primitive type descriptor '" << descriptor->displayName << "' must declare a concrete ABI type.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+                break;
+            case WIO_MODULE_TYPE_DESC_STRING:
+                break;
+            case WIO_MODULE_TYPE_DESC_OBJECT:
+            case WIO_MODULE_TYPE_DESC_COMPONENT:
+                if (!hasText(descriptor->logicalTypeName))
+                {
+                    std::ostringstream problem;
+                    problem << "Type descriptor '" << descriptor->displayName << "' must declare logicalTypeName for exported object/component types.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+                break;
+            case WIO_MODULE_TYPE_DESC_DYNAMIC_ARRAY:
+                if (descriptor->elementType == nullptr)
+                {
+                    std::ostringstream problem;
+                    problem << "Dynamic array type descriptor '" << descriptor->displayName << "' is missing elementType.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+                break;
+            case WIO_MODULE_TYPE_DESC_STATIC_ARRAY:
+                if (descriptor->elementType == nullptr || descriptor->staticArraySize == 0u)
+                {
+                    std::ostringstream problem;
+                    problem << "Static array type descriptor '" << descriptor->displayName << "' must declare elementType and a non-zero staticArraySize.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+                break;
+            case WIO_MODULE_TYPE_DESC_DICT:
+            case WIO_MODULE_TYPE_DESC_TREE:
+                if (descriptor->keyType == nullptr || descriptor->valueType == nullptr)
+                {
+                    std::ostringstream problem;
+                    problem << "Associative container type descriptor '" << descriptor->displayName << "' must declare keyType and valueType.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+                break;
+            case WIO_MODULE_TYPE_DESC_FUNCTION:
+                if (descriptor->returnType == nullptr)
+                {
+                    std::ostringstream problem;
+                    problem << "Function type descriptor '" << descriptor->displayName << "' is missing returnType.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+                break;
+            case WIO_MODULE_TYPE_DESC_OPAQUE:
+                break;
+            case WIO_MODULE_TYPE_DESC_UNKNOWN:
+            default:
+            {
+                std::ostringstream problem;
+                problem << "Type descriptor '" << descriptor->displayName << "' uses an unsupported descriptor kind.";
+                throwInvalidApiDescriptor(context, problem.str());
+            }
+            }
+
+            if (descriptor->elementType != nullptr)
+                validateTypeDescriptor(descriptor->elementType, context, visited);
+            if (descriptor->keyType != nullptr)
+                validateTypeDescriptor(descriptor->keyType, context, visited);
+            if (descriptor->valueType != nullptr)
+                validateTypeDescriptor(descriptor->valueType, context, visited);
+            if (descriptor->returnType != nullptr)
+                validateTypeDescriptor(descriptor->returnType, context, visited);
+
+            for (std::uint32_t parameterIndex = 0; parameterIndex < descriptor->parameterCount; ++parameterIndex)
+                validateTypeDescriptor(descriptor->parameterTypes[parameterIndex], context, visited);
+        }
+
+        inline void validateExportPointerOwnership(const WioModuleApi* api,
+                                                   const WioModuleExport* exportEntry,
+                                                   std::string_view context,
+                                                   std::string_view ownerKind,
+                                                   std::string_view ownerName)
+        {
+            if (isPointerInsideArray(exportEntry, api != nullptr ? api->exports : nullptr, api != nullptr ? api->exportCount : 0u))
+                return;
+
+            std::ostringstream problem;
+            problem << ownerKind << " '" << ownerName << "' points to an export outside the module export table.";
+            throwInvalidApiDescriptor(context, problem.str());
+        }
+
+        inline void validateExportEntryShape(const WioModuleExport& exportEntry,
+                                             std::string_view context)
+        {
+            if (!hasText(exportEntry.logicalName))
+                throwInvalidApiDescriptor(context, "An export entry is missing logicalName.");
+
+            if (!hasText(exportEntry.symbolName))
+            {
+                std::ostringstream problem;
+                problem << "Export '" << exportEntry.logicalName << "' is missing symbolName.";
+                throwInvalidApiDescriptor(context, problem.str());
+            }
+
+            if (exportEntry.parameterCount > 0u && exportEntry.parameterTypes == nullptr)
+            {
+                std::ostringstream problem;
+                problem << "Export '" << exportEntry.logicalName << "' declares parameters but does not provide parameterTypes.";
+                throwInvalidApiDescriptor(context, problem.str());
+            }
+
+            if (exportEntry.invoke == nullptr && exportEntry.rawFunction == nullptr)
+            {
+                std::ostringstream problem;
+                problem << "Export '" << exportEntry.logicalName << "' does not expose an invoke bridge or a raw host bridge.";
+                throwInvalidApiDescriptor(context, problem.str());
+            }
+        }
+
+        inline void validateModuleApi(const WioModuleApi* api,
+                                      std::string_view context = {})
+        {
+            if (api == nullptr)
+                throw Error(ErrorCode::ApiUnavailable, "Wio SDK expected a valid module API pointer.");
+
+            if (api->descriptorVersion != WIO_MODULE_API_DESCRIPTOR_VERSION)
+            {
+                std::ostringstream problem;
+                problem << "descriptor version mismatch: expected " << WIO_MODULE_API_DESCRIPTOR_VERSION
+                        << " but module reports " << api->descriptorVersion << '.';
+                throwInvalidApiDescriptor(context, problem.str());
+            }
+
+            if (api->exportCount > 0u && api->exports == nullptr)
+                throwInvalidApiDescriptor(context, "exportCount is non-zero but exports is null.");
+            if (api->commandCount > 0u && api->commands == nullptr)
+                throwInvalidApiDescriptor(context, "commandCount is non-zero but commands is null.");
+            if (api->eventHookCount > 0u && api->eventHooks == nullptr)
+                throwInvalidApiDescriptor(context, "eventHookCount is non-zero but eventHooks is null.");
+            if (api->typeCount > 0u && api->types == nullptr)
+                throwInvalidApiDescriptor(context, "typeCount is non-zero but types is null.");
+
+            validateCapabilityContract(api, WIO_MODULE_CAP_API_VERSION, reinterpret_cast<const void*>(api->apiVersion), "@ModuleApiVersion", context);
+            validateCapabilityContract(api, WIO_MODULE_CAP_LOAD, reinterpret_cast<const void*>(api->load), "@ModuleLoad", context);
+            validateCapabilityContract(api, WIO_MODULE_CAP_UPDATE, reinterpret_cast<const void*>(api->update), "@ModuleUpdate", context);
+            validateCapabilityContract(api, WIO_MODULE_CAP_UNLOAD, reinterpret_cast<const void*>(api->unload), "@ModuleUnload", context);
+            validateCapabilityContract(api, WIO_MODULE_CAP_SAVE_STATE, reinterpret_cast<const void*>(api->saveState), "@ModuleSaveState", context);
+            validateCapabilityContract(api, WIO_MODULE_CAP_RESTORE_STATE, reinterpret_cast<const void*>(api->restoreState), "@ModuleRestoreState", context);
+
+            for (std::uint32_t exportIndex = 0; exportIndex < api->exportCount; ++exportIndex)
+                validateExportEntryShape(api->exports[exportIndex], context);
+
+            std::unordered_set<std::string> commandNames;
+            for (std::uint32_t commandIndex = 0; commandIndex < api->commandCount; ++commandIndex)
+            {
+                const WioModuleCommand& commandEntry = api->commands[commandIndex];
+                if (!hasText(commandEntry.commandName))
+                    throwInvalidApiDescriptor(context, "A command entry is missing commandName.");
+
+                if (!commandNames.insert(commandEntry.commandName).second)
+                {
+                    std::ostringstream problem;
+                    problem << "Command '" << commandEntry.commandName << "' is declared more than once.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+
+                validateExportPointerOwnership(api, commandEntry.exportEntry, context, "Command", commandEntry.commandName);
+            }
+
+            std::unordered_set<std::string> hookNames;
+            for (std::uint32_t hookIndex = 0; hookIndex < api->eventHookCount; ++hookIndex)
+            {
+                const WioModuleEventHook& hookEntry = api->eventHooks[hookIndex];
+                if (!hasText(hookEntry.hookName) || !hasText(hookEntry.eventName))
+                    throwInvalidApiDescriptor(context, "An event hook entry is missing hookName or eventName.");
+
+                if (!hookNames.insert(hookEntry.hookName).second)
+                {
+                    std::ostringstream problem;
+                    problem << "Event hook '" << hookEntry.hookName << "' is declared more than once.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+
+                validateExportPointerOwnership(api, hookEntry.exportEntry, context, "Event hook", hookEntry.hookName);
+            }
+
+            std::unordered_set<std::string> typeNames;
+            std::unordered_set<const WioModuleTypeDescriptor*> visitedDescriptors;
+            for (std::uint32_t typeIndex = 0; typeIndex < api->typeCount; ++typeIndex)
+            {
+                const WioModuleType& typeEntry = api->types[typeIndex];
+                if (!hasText(typeEntry.logicalName) || !hasText(typeEntry.symbolName))
+                    throwInvalidApiDescriptor(context, "An exported type entry is missing logicalName or symbolName.");
+
+                if (!typeNames.insert(typeEntry.logicalName).second)
+                {
+                    std::ostringstream problem;
+                    problem << "Exported type '" << typeEntry.logicalName << "' is declared more than once.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+
+                if (typeEntry.kind != WIO_MODULE_TYPE_OBJECT && typeEntry.kind != WIO_MODULE_TYPE_COMPONENT)
+                {
+                    std::ostringstream problem;
+                    problem << "Exported type '" << typeEntry.logicalName << "' uses an unsupported type kind.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+
+                if (typeEntry.createExport != nullptr)
+                    validateExportPointerOwnership(api, typeEntry.createExport, context, "Type constructor", typeEntry.logicalName);
+                validateExportPointerOwnership(api, typeEntry.destroyExport, context, "Type destructor", typeEntry.logicalName);
+
+                if (typeEntry.constructorCount > 0u && typeEntry.constructors == nullptr)
+                {
+                    std::ostringstream problem;
+                    problem << "Exported type '" << typeEntry.logicalName << "' has constructorCount but no constructor table.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+
+                for (std::uint32_t constructorIndex = 0; constructorIndex < typeEntry.constructorCount; ++constructorIndex)
+                    validateExportPointerOwnership(api, typeEntry.constructors[constructorIndex].exportEntry, context, "Type constructor", typeEntry.logicalName);
+
+                if (typeEntry.fieldCount > 0u && typeEntry.fields == nullptr)
+                {
+                    std::ostringstream problem;
+                    problem << "Exported type '" << typeEntry.logicalName << "' has fieldCount but no field table.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+
+                std::unordered_set<std::string> fieldNames;
+                for (std::uint32_t fieldIndex = 0; fieldIndex < typeEntry.fieldCount; ++fieldIndex)
+                {
+                    const WioModuleField& fieldEntry = typeEntry.fields[fieldIndex];
+                    if (!hasText(fieldEntry.fieldName))
+                    {
+                        std::ostringstream problem;
+                        problem << "Exported type '" << typeEntry.logicalName << "' contains a field with no fieldName.";
+                        throwInvalidApiDescriptor(context, problem.str());
+                    }
+
+                    if (!fieldNames.insert(fieldEntry.fieldName).second)
+                    {
+                        std::ostringstream problem;
+                        problem << "Exported type '" << typeEntry.logicalName << "' declares field '" << fieldEntry.fieldName << "' more than once.";
+                        throwInvalidApiDescriptor(context, problem.str());
+                    }
+
+                    if (fieldEntry.typeDescriptor == nullptr)
+                    {
+                        std::ostringstream problem;
+                        problem << "Field '" << fieldEntry.fieldName << "' on exported type '" << typeEntry.logicalName << "' is missing a type descriptor.";
+                        throwInvalidApiDescriptor(context, problem.str());
+                    }
+
+                    validateTypeDescriptor(fieldEntry.typeDescriptor, context, visitedDescriptors);
+
+                    const std::uint32_t allowedFlags = WIO_MODULE_FIELD_READABLE | WIO_MODULE_FIELD_WRITABLE | WIO_MODULE_FIELD_READONLY;
+                    if ((fieldEntry.flags & ~allowedFlags) != 0u)
+                    {
+                        std::ostringstream problem;
+                        problem << "Field '" << fieldEntry.fieldName << "' on exported type '" << typeEntry.logicalName << "' uses unknown field flags.";
+                        throwInvalidApiDescriptor(context, problem.str());
+                    }
+
+                    if ((fieldEntry.flags & WIO_MODULE_FIELD_READONLY) != 0u &&
+                        (fieldEntry.flags & WIO_MODULE_FIELD_WRITABLE) != 0u)
+                    {
+                        std::ostringstream problem;
+                        problem << "Field '" << fieldEntry.fieldName << "' on exported type '" << typeEntry.logicalName << "' is marked both read-only and writable.";
+                        throwInvalidApiDescriptor(context, problem.str());
+                    }
+
+                    if ((fieldEntry.flags & WIO_MODULE_FIELD_READABLE) != 0u)
+                        validateExportPointerOwnership(api, fieldEntry.getterExport, context, "Field getter", fieldEntry.fieldName);
+                    else if (fieldEntry.getterExport != nullptr)
+                    {
+                        std::ostringstream problem;
+                        problem << "Field '" << fieldEntry.fieldName << "' on exported type '" << typeEntry.logicalName << "' provides a getter export without the readable flag.";
+                        throwInvalidApiDescriptor(context, problem.str());
+                    }
+
+                    if ((fieldEntry.flags & WIO_MODULE_FIELD_WRITABLE) != 0u)
+                        validateExportPointerOwnership(api, fieldEntry.setterExport, context, "Field setter", fieldEntry.fieldName);
+                    else if (fieldEntry.setterExport != nullptr)
+                    {
+                        std::ostringstream problem;
+                        problem << "Field '" << fieldEntry.fieldName << "' on exported type '" << typeEntry.logicalName << "' provides a setter export without the writable flag.";
+                        throwInvalidApiDescriptor(context, problem.str());
+                    }
+
+                    const TypeDescriptorView fieldType(fieldEntry.typeDescriptor);
+                    if (fieldType.is_primitive())
+                    {
+                        if (fieldEntry.fieldType == WIO_ABI_UNKNOWN || fieldEntry.fieldType != fieldType.abi_type())
+                        {
+                            std::ostringstream problem;
+                            problem << "Field '" << fieldEntry.fieldName << "' on exported type '" << typeEntry.logicalName << "' has a primitive descriptor/ABI mismatch.";
+                            throwInvalidApiDescriptor(context, problem.str());
+                        }
+                    }
+                    else if (fieldEntry.fieldType != WIO_ABI_UNKNOWN)
+                    {
+                        std::ostringstream problem;
+                        problem << "Field '" << fieldEntry.fieldName << "' on exported type '" << typeEntry.logicalName << "' must use WIO_ABI_UNKNOWN for non-primitive field metadata.";
+                        throwInvalidApiDescriptor(context, problem.str());
+                    }
+                }
+
+                if (typeEntry.methodCount > 0u && typeEntry.methods == nullptr)
+                {
+                    std::ostringstream problem;
+                    problem << "Exported type '" << typeEntry.logicalName << "' has methodCount but no method table.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+
+                for (std::uint32_t methodIndex = 0; methodIndex < typeEntry.methodCount; ++methodIndex)
+                {
+                    const WioModuleMethod& methodEntry = typeEntry.methods[methodIndex];
+                    if (!hasText(methodEntry.methodName))
+                    {
+                        std::ostringstream problem;
+                        problem << "Exported type '" << typeEntry.logicalName << "' contains a method with no methodName.";
+                        throwInvalidApiDescriptor(context, problem.str());
+                    }
+
+                    validateExportPointerOwnership(api, methodEntry.exportEntry, context, "Method", methodEntry.methodName);
+                }
+            }
+        }
+
         inline const WioModuleType* requireModuleType(const WioModuleApi* api,
                                                       std::string_view logicalName,
                                                       WioModuleTypeKind expectedKind)
         {
-            if (api == nullptr)
-                throw Error(ErrorCode::ApiUnavailable, "Wio SDK expected a valid module API pointer.");
+            validateModuleApi(api);
 
             const std::string ownedName(logicalName);
             const WioModuleType* typeEntry = WioFindModuleType(api, ownedName.c_str());
@@ -4237,14 +4640,7 @@ namespace wio::sdk
                 throw Error(ErrorCode::ApiUnavailable, message.str());
             }
 
-            if (module.api_->descriptorVersion != WIO_MODULE_API_DESCRIPTOR_VERSION)
-            {
-                std::ostringstream message;
-                message << "Wio SDK descriptor version mismatch for '" << absolutePath.string() << "': expected "
-                        << WIO_MODULE_API_DESCRIPTOR_VERSION << " but module reports "
-                        << module.api_->descriptorVersion << '.';
-                throw Error(ErrorCode::InvalidApiDescriptor, message.str());
-            }
+            detail::validateModuleApi(module.api_, absolutePath.string());
 
             return module;
         }
@@ -4311,6 +4707,11 @@ namespace wio::sdk
         [[nodiscard]] bool has_api() const noexcept
         {
             return api_ != nullptr;
+        }
+
+        void validate_api() const
+        {
+            detail::validateModuleApi(api_, path_.string());
         }
 
         [[nodiscard]] bool started() const noexcept
@@ -4472,6 +4873,11 @@ namespace wio::sdk
         [[nodiscard]] const WioModuleApi* raw_api() const noexcept
         {
             return module_.raw_api();
+        }
+
+        void validate_api() const
+        {
+            module_.validate_api();
         }
 
         bool reload_if_changed()
@@ -4659,8 +5065,7 @@ namespace wio::sdk
     template <typename Signature>
     auto wio_load_export(const WioModuleApi* api, std::string_view logicalName) -> typename detail::FunctionTraits<Signature>::StdFunction
     {
-        if (api == nullptr)
-            throw Error(ErrorCode::ApiUnavailable, "Wio SDK expected a valid module API pointer.");
+        detail::validateModuleApi(api);
 
         const std::string ownedName(logicalName);
         const WioModuleExport* exportEntry = WioFindModuleExport(api, ownedName.c_str());
@@ -4677,8 +5082,7 @@ namespace wio::sdk
     template <typename Signature>
     auto wio_load_command(const WioModuleApi* api, std::string_view commandName) -> typename detail::FunctionTraits<Signature>::StdFunction
     {
-        if (api == nullptr)
-            throw Error(ErrorCode::ApiUnavailable, "Wio SDK expected a valid module API pointer.");
+        detail::validateModuleApi(api);
 
         const std::string ownedName(commandName);
         const WioModuleCommand* commandEntry = WioFindModuleCommand(api, ownedName.c_str());
@@ -4695,8 +5099,7 @@ namespace wio::sdk
     template <typename Signature>
     auto wio_load_event_hook(const WioModuleApi* api, std::string_view hookName) -> typename detail::FunctionTraits<Signature>::StdFunction
     {
-        if (api == nullptr)
-            throw Error(ErrorCode::ApiUnavailable, "Wio SDK expected a valid module API pointer.");
+        detail::validateModuleApi(api);
 
         const std::string ownedName(hookName);
         const WioModuleEventHook* hookEntry = WioFindModuleEventHook(api, ownedName.c_str());
@@ -4719,8 +5122,7 @@ namespace wio::sdk
             throw Error(ErrorCode::SignatureMismatch, "Wio SDK event broadcasters currently require a void return type.");
         }
 
-        if (api == nullptr)
-            throw Error(ErrorCode::ApiUnavailable, "Wio SDK expected a valid module API pointer.");
+        detail::validateModuleApi(api);
 
         const std::string ownedName(eventName);
         bool foundAny = false;
@@ -4769,8 +5171,7 @@ namespace wio::sdk
     template <typename Signature>
     auto wio_load_function(const WioModuleApi* api, std::string_view name) -> typename detail::FunctionTraits<Signature>::StdFunction
     {
-        if (api == nullptr)
-            throw Error(ErrorCode::ApiUnavailable, "Wio SDK expected a valid module API pointer.");
+        detail::validateModuleApi(api);
 
         const std::string ownedName(name);
 
@@ -4803,6 +5204,21 @@ namespace wio::sdk
     inline WioComponentType wio_load_component(const WioModuleApi* api, std::string_view logicalName)
     {
         return WioComponentType(api, detail::requireModuleType(api, logicalName, WIO_MODULE_TYPE_COMPONENT));
+    }
+
+    inline void validate_module_api(const WioModuleApi* api)
+    {
+        detail::validateModuleApi(api);
+    }
+
+    inline void validate_module_api(const Module& module)
+    {
+        module.validate_api();
+    }
+
+    inline void validate_module_api(const HotReloadModule& module)
+    {
+        module.validate_api();
     }
 
 }
@@ -4838,6 +5254,21 @@ inline wio::sdk::WioObjectType wio_load_object(const wio::sdk::Module& module, s
 inline wio::sdk::WioComponentType wio_load_component(const WioModuleApi* api, std::string_view logicalName)
 {
     return wio::sdk::wio_load_component(api, logicalName);
+}
+
+inline void wio_validate_module_api(const WioModuleApi* api)
+{
+    wio::sdk::validate_module_api(api);
+}
+
+inline void wio_validate_module_api(const wio::sdk::Module& module)
+{
+    wio::sdk::validate_module_api(module);
+}
+
+inline void wio_validate_module_api(const wio::sdk::HotReloadModule& module)
+{
+    wio::sdk::validate_module_api(module);
 }
 
 inline wio::sdk::WioComponentType wio_load_component(const wio::sdk::Module& module, std::string_view logicalName)
