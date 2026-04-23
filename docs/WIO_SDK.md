@@ -3,6 +3,9 @@
 This document defines the current public C++ host and embedding surface for Wio.
 It is the SDK contract for the current Wio v1 host integration layer.
 
+For representative host-interop and stale-binding conformance tests, see
+[`WIO_TRACEABILITY.md`](./WIO_TRACEABILITY.md).
+
 Official public headers:
 
 - `sdk/include/module_api.h`

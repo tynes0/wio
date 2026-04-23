@@ -5,6 +5,9 @@ It is intentionally practical: the goal is to make it obvious which modules are
 currently part of the stable user-facing surface, which modules are backed by
 runtime C++ bridges, and which modules are pure Wio source modules.
 
+For representative conformance tests tied to that stable surface, see
+[`WIO_TRACEABILITY.md`](./WIO_TRACEABILITY.md).
+
 ---
 
 ## 1. Design Boundary

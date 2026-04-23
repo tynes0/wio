@@ -16,6 +16,9 @@ The reference deliberately separates three different realities:
 Whenever design intent and current compiler behavior differ, this document says
 so explicitly.
 
+For representative conformance tests tied to the stabilized language surface,
+see [`WIO_TRACEABILITY.md`](./WIO_TRACEABILITY.md).
+
 ## 1. Document Scope and Status
 
 Wio is currently best described as an experimental statically typed language
