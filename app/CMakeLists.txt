@@ -949,6 +949,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_std_contract_v1_run
+        "${CMAKE_SOURCE_DIR}/tests/std_contract_v1_run.wio"
+        "Std contract v1: true/5/9/surface\\.txt/WIO-STD-V1/true"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_lambda_contextual_typing_run
         "${CMAKE_SOURCE_DIR}/tests/lambda_contextual_typing_run.wio"
         "Lambda context: true/0/0/0"

@@ -2418,7 +2418,6 @@ Common current modules include:
 - `std::path`
 - `std::algorithms`
 - `std::assert`
-- `std::testing`
 
 Example:
 
@@ -2453,6 +2452,9 @@ still intentionally narrow:
 That rule keeps packaged toolchains and repository builds aligned: if a `std`
 module compiles in the repo, it should also compile from a packaged Wio install
 without depending on private source layout details.
+
+For the current v1-oriented module contract and the runtime-backed vs pure-Wio
+split, see [`WIO_STD.md`](./WIO_STD.md).
 
 ### 22.3 User Modules
 

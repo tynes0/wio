@@ -1,0 +1,45 @@
+use std::algorithms as algorithms;
+use std::assert as assert;
+use std::collections as collections;
+use std::console as console;
+use std::fs as fs;
+use std::math as math;
+use std::path as path;
+use std::strings as strings;
+
+fn Entry() -> i32 {
+    let values: i32[] = [3, 1, 4, 1, 5];
+    let sorted = collections::Sorted(values);
+    let expected: i32[] = [1, 1, 3, 4, 5];
+
+    assert::ExpectSequenceEqual(sorted, expected, "sorted contract mismatch");
+
+    let anyLarge = algorithms::AnyBy(values, (value: i32) => value > 4);
+    let positiveCount: i32 = algorithms::CountBy(values, (value: i32) => value > 0) fit i32;
+    let joined = strings::Join(["wio", "std", "v1"], "-");
+    let upper = strings::ToUpper(joined);
+    let clamped = math::Clamp(19, 0, 9);
+
+    let targetPath = path::JoinAll(["build", "wio_std", "contract", "surface.txt"]);
+    let ensured = fs::EnsureParentDirectory(targetPath);
+    let wrote = fs::WriteTextEnsured(targetPath, upper);
+    let readBack = fs::ReadText(targetPath);
+    let normalized = path::Normalize(targetPath);
+    let segments = path::Segments(normalized);
+    let empty: string = "";
+    let lastSegment = collections::LastOr(segments, empty);
+    let deleted = fs::DeleteIfExists(targetPath);
+    let expectedRoundTrip = "WIO-STD-V1";
+    let expectedFileName = "surface.txt";
+
+    assert::ExpectTrue(anyLarge, "expected a value larger than four");
+    assert::ExpectEqual(positiveCount, 5, "positive count mismatch");
+    assert::ExpectEqual(clamped, 9, "clamp mismatch");
+    assert::ExpectTrue(ensured and wrote, "file setup mismatch");
+    assert::ExpectEqual(readBack, expectedRoundTrip, "file round-trip mismatch");
+    assert::ExpectEqual(lastSegment, expectedFileName, "path contract mismatch");
+    assert::ExpectTrue(deleted, "cleanup mismatch");
+
+    console::Print($"Std contract v1: ${anyLarge}/${positiveCount}/${clamped}/${lastSegment}/${readBack}/${deleted}");
+    return 0;
+}
