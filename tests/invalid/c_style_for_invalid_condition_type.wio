@@ -1,0 +1,6 @@
+fn Entry(args: string[]) -> i32 {
+    for (mut i: i32 = 0; "nope"; i += 1) {
+    }
+
+    return 0;
+}

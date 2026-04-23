@@ -1,0 +1,20 @@
+use std::console as console;
+
+@Trust(Inspector)
+object SecretBox {
+    private code: i32 = 42;
+    protected shield: i32 = 7;
+}
+
+object Inspector {
+    public fn Inspect(box: view SecretBox) -> i32 {
+        return box.code + box.shield;
+    }
+}
+
+fn Entry(args: string[]) -> i32 {
+    let box = SecretBox();
+    let inspector = Inspector();
+    console::Print($"Trusted access sum: ${inspector.Inspect(box)}");
+    return 0;
+}

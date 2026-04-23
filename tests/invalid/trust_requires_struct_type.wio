@@ -1,0 +1,8 @@
+@Trust(i32)
+object BadTrust {
+    value: i32 = 0;
+}
+
+fn Entry(args: string[]) -> i32 {
+    return 0;
+}

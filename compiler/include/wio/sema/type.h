@@ -139,6 +139,7 @@ namespace wio
             std::vector<Ref<Type>> baseTypes;
             std::vector<std::string> fieldNames;
             std::vector<Ref<Type>> fieldTypes;
+            std::vector<std::string> trustedTypeKeys;
             bool isObject;
             bool isInterface;
             bool isFinal = false;

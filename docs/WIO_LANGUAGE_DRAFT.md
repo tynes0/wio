@@ -1503,6 +1503,9 @@ while (true) {
 
 Both statements are only valid inside loops.
 
+The semantic analyzer rejects both forms when used outside `while`, `for`, or
+`foreach` bodies.
+
 ### 12.6 `return`
 
 Examples:
@@ -2280,7 +2283,7 @@ object Handle {
 
 ### 20.9 `@Trust(...)`
 
-Design intent:
+Semantics:
 
 - equivalent in spirit to C++ `friend`,
 - grants trusted types access to private/protected members.
@@ -2294,11 +2297,11 @@ object SaveData {
 }
 ```
 
-#### Current Compiler Note
+Rules:
 
-The backend already emits friend-like behavior in C++, but semantic access
-control does not yet fully model trusted access. This is an important gap
-between design intent and current enforcement.
+- `@Trust(...)` expects object/component/interface type names,
+- trusted access is checked by semantic analysis,
+- trusted types may access private/protected members of the trusting type.
 
 ### 20.10 `@Final`
 
@@ -2503,6 +2506,15 @@ as a non-realm symbol, the compiler reports a Wio diagnostic.
 
 Implemented in the first loop wave. Remaining work is semantic hardening,
 diagnostic coverage, and final spec wording.
+
+Current enforced behavior includes:
+
+- range iteration rejects `ref` / `view` bindings,
+- range step must be an integer and may not be zero,
+- array step must be an integer and may not be zero,
+- dictionary iteration does not support `step`,
+- C-style `for` conditions currently accept `bool`, numeric, reference, and
+  `null` expressions; other types are rejected.
 
 ### 23.2 `foreach`
 

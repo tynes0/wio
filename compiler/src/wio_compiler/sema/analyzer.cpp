@@ -711,6 +711,7 @@ namespace wio::sema
             instantiatedType->genericParameterNames = structType->genericParameterNames;
             instantiatedType->genericArguments = explicitTypeArguments;
             instantiatedType->fieldNames = structType->fieldNames;
+            instantiatedType->trustedTypeKeys = structType->trustedTypeKeys;
             instantiatedType->isFinal = structType->isFinal;
 
             instantiatedType->fieldTypes.reserve(structType->fieldTypes.size());
@@ -1052,6 +1053,17 @@ namespace wio::sema
             return std::ranges::any_of(attributes, [targetAttr](const auto& attr) { return attr->attribute == targetAttr; });
         }
 
+        std::string getStructIdentityKey(const Ref<StructType>& structType)
+        {
+            if (!structType)
+                return {};
+
+            if (structType->scopePath.empty())
+                return structType->name;
+
+            return structType->scopePath + "::" + structType->name;
+        }
+
         std::vector<const AttributeStatement*> getAttributeStatements(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
         {
             std::vector<const AttributeStatement*> matches;
@@ -1206,6 +1218,33 @@ namespace wio::sema
                 return nullptr;
 
             return resolveQualifiedSymbol(startScope, token.value);
+        }
+
+        Ref<StructType> resolveTrustedStructType(SemanticAnalyzer& analyzer,
+                                                 const Ref<Scope>& startScope,
+                                                 const AttributeTypeArgument& trustArg,
+                                                 common::Location errorLocation)
+        {
+            Ref<Type> trustedType = nullptr;
+
+            if (trustArg.typeSpecifier)
+            {
+                trustArg.typeSpecifier->accept(analyzer);
+                trustedType = trustArg.typeSpecifier->refType.Lock();
+            }
+            else if (auto trustSym = resolveAttributeSymbol(startScope, trustArg.token))
+            {
+                trustedType = trustSym->type;
+            }
+
+            trustedType = unwrapAliasType(trustedType);
+            if (!trustedType || trustedType->kind() != TypeKind::Struct)
+            {
+                WIO_LOG_ADD_ERROR(errorLocation, "@Trust expects object/component/interface type names.");
+                return nullptr;
+            }
+
+            return trustedType.AsFast<StructType>();
         }
 
         bool isCAbiSafeExportType(const Ref<Type>& type)
@@ -2425,6 +2464,7 @@ namespace wio::sema
 
         bool isInsideHierarchy = false;
         bool isInsideSameObject = false;
+        bool isTrustedAccess = false;
 
         if (currentStructType_ && actualStructType)
         {
@@ -2436,12 +2476,20 @@ namespace wio::sema
             }
 
             isInsideSameObject = currentStructType_ == actualStructType;
+
+            if (auto ownerStruct = actualStructType.AsFast<StructType>(); ownerStruct)
+            {
+                const std::string trustedKey = getStructIdentityKey(currentStructType_.AsFast<StructType>());
+                isTrustedAccess =
+                    !trustedKey.empty() &&
+                    std::ranges::find(ownerStruct->trustedTypeKeys, trustedKey) != ownerStruct->trustedTypeKeys.end();
+            }
         }
 
-        if (foundMember->flags.get_isPrivate() && !isInsideSameObject)
+        if (foundMember->flags.get_isPrivate() && !isInsideSameObject && !isTrustedAccess)
             WIO_LOG_ADD_ERROR(node.location(), "Cannot access private member '{}' from outside the object.", foundMember->name);
 
-        if (foundMember->flags.get_isProtected() && !isInsideHierarchy)
+        if (foundMember->flags.get_isProtected() && !isInsideHierarchy && !isTrustedAccess)
             WIO_LOG_ADD_ERROR(node.location(), "Cannot access protected member '{}' from outside the object hierarchy.", foundMember->name);
 
         Ref<Type> memberType = foundMember->type;
@@ -4911,6 +4959,21 @@ namespace wio::sema
             }
 
             AccessModifier defaultAccess = getDefaultAccessModifier(node.attributes, AccessModifier::Public);
+            structType->trustedTypeKeys.clear();
+
+            for (const auto& trustArg : getAttributeTypeArgs(node.attributes, Attribute::Trust))
+            {
+                auto trustedStruct = resolveTrustedStructType(*this, prevScope, trustArg, node.location());
+                if (!trustedStruct)
+                    continue;
+
+                const std::string trustedKey = getStructIdentityKey(trustedStruct);
+                if (!trustedKey.empty() &&
+                    std::ranges::find(structType->trustedTypeKeys, trustedKey) == structType->trustedTypeKeys.end())
+                {
+                    structType->trustedTypeKeys.push_back(trustedKey);
+                }
+            }
 
             structType->fieldNames.clear();
             structType->fieldTypes.clear();
@@ -5247,6 +5310,21 @@ namespace wio::sema
             auto baseArgs = getAttributeTypeArgs(node.attributes, Attribute::From);
 
             AccessModifier defaultAccess = getDefaultAccessModifier(node.attributes, AccessModifier::Private);
+            structType->trustedTypeKeys.clear();
+
+            for (const auto& trustArg : getAttributeTypeArgs(node.attributes, Attribute::Trust))
+            {
+                auto trustedStruct = resolveTrustedStructType(*this, prevScope, trustArg, node.location());
+                if (!trustedStruct)
+                    continue;
+
+                const std::string trustedKey = getStructIdentityKey(trustedStruct);
+                if (!trustedKey.empty() &&
+                    std::ranges::find(structType->trustedTypeKeys, trustedKey) == structType->trustedTypeKeys.end())
+                {
+                    structType->trustedTypeKeys.push_back(trustedKey);
+                }
+            }
 
             auto resolveBaseType = [&](const AttributeTypeArgument& baseArg) -> Ref<StructType>
             {
@@ -6090,7 +6168,7 @@ namespace wio::sema
         else if (iterableType && iterableType->kind() == TypeKind::Dictionary)
         {
             if (node.step)
-                WIO_LOG_ADD_ERROR(node.location(), "Step clauses are currently supported only for range iteration.");
+                WIO_LOG_ADD_ERROR(node.location(), "Step clauses are currently supported only for range or array iteration.");
 
             auto dictType = iterableType.AsFast<DictionaryType>();
             if (node.bindings.size() != 2)

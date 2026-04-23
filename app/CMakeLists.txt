@@ -461,6 +461,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_trusted_access_semantics_run
+        "${CMAKE_SOURCE_DIR}/tests/trusted_access_semantics.wio"
+        "Trusted access sum: 49"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_interface_ref_upcast_run
         "${CMAKE_SOURCE_DIR}/tests/interface_ref_upcast.wio"
         "Interface ref hp: 7"
@@ -1258,6 +1265,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "Cannot access private member 'secret' from outside the object"
     )
 
+    add_wio_failure_test(
+        wio_invalid_trust_requires_struct_type
+        "${CMAKE_SOURCE_DIR}/tests/invalid/trust_requires_struct_type.wio"
+        "@Trust expects object/component/interface type names"
+    )
+
     add_wio_non_dry_failure_test_clean(
         wio_invalid_entry_invalid_parameter_type
         "${CMAKE_SOURCE_DIR}/tests/invalid/entry_invalid_parameter_type.wio"
@@ -1624,7 +1637,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_for_dict_step_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/for_dict_step_not_supported.wio"
-        "Step clauses are currently supported only for range iteration"
+        "Step clauses are currently supported only for range or array iteration"
     )
 
     add_wio_failure_test(
@@ -1673,6 +1686,24 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_for_range_requires_integer_bounds
         "${CMAKE_SOURCE_DIR}/tests/invalid/for_range_requires_integer_bounds.wio"
         "Range iteration currently requires integer bounds"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_break_outside_loop
+        "${CMAKE_SOURCE_DIR}/tests/invalid/break_outside_loop.wio"
+        "'break' statement can only be used inside a loop"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_continue_outside_loop
+        "${CMAKE_SOURCE_DIR}/tests/invalid/continue_outside_loop.wio"
+        "'continue' statement can only be used inside a loop"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_c_style_for_invalid_condition_type
+        "${CMAKE_SOURCE_DIR}/tests/invalid/c_style_for_invalid_condition_type.wio"
+        "For-loop condition must be a boolean, numeric, or reference type. Got: string"
     )
 
     add_wio_failure_test(
