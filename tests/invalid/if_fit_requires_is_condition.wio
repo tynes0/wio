@@ -1,0 +1,7 @@
+fn Entry(args: string[]) -> i32 {
+    if (true fit typed) {
+        return 1;
+    }
+
+    return 0;
+}

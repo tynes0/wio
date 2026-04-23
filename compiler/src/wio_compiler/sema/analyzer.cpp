@@ -304,6 +304,64 @@ namespace wio::sema
                    (destination->isNumeric() && source->isNumeric());
         }
 
+        bool areMatchTypesCompatible(const Ref<Type>& lhs, const Ref<Type>& rhs)
+        {
+            if (!lhs || !rhs || lhs->isUnknown() || rhs->isUnknown())
+                return true;
+
+            return lhs->isCompatibleWith(rhs) ||
+                   rhs->isCompatibleWith(lhs) ||
+                   (lhs->isNumeric() && rhs->isNumeric());
+        }
+
+        bool isGuardConditionTypeAllowed(const Ref<Type>& type)
+        {
+            if (!type || type->isUnknown())
+                return true;
+
+            return type == Compiler::get().getTypeContext().getBool() ||
+                   type->isNumeric() ||
+                   type->kind() == TypeKind::Reference ||
+                   type->kind() == TypeKind::Null;
+        }
+
+        bool isVariableLikeSymbol(const Ref<Symbol>& symbol)
+        {
+            return symbol &&
+                   (symbol->kind == SymbolKind::Variable ||
+                    symbol->kind == SymbolKind::Parameter);
+        }
+
+        bool isAddressableRefOperand(const NodePtr<Expression>& expression)
+        {
+            if (!expression)
+                return false;
+
+            if (expression->is<ArrayAccessExpression>())
+                return true;
+
+            if (expression->is<Identifier>() || expression->is<MemberAccessExpression>())
+                return isVariableLikeSymbol(expression->referencedSymbol.Lock());
+
+            return false;
+        }
+
+        Ref<StructType> getObjectOrInterfaceStructType(const Ref<Type>& type)
+        {
+            Ref<Type> resolved = unwrapAliasType(type);
+            if (resolved && resolved->kind() == TypeKind::Reference)
+                resolved = unwrapAliasType(resolved.AsFast<ReferenceType>()->referredType);
+
+            if (!resolved || resolved->kind() != TypeKind::Struct)
+                return nullptr;
+
+            auto structType = resolved.AsFast<StructType>();
+            if (!structType || (!structType->isObject && !structType->isInterface))
+                return nullptr;
+
+            return structType;
+        }
+
         bool isZeroIntegerLiteralExpression(const NodePtr<Expression>& expression)
         {
             if (!expression)
@@ -1568,10 +1626,27 @@ namespace wio::sema
         if (node.op.type == TokenType::kwIs)
         {
             auto typeSym = node.right->referencedSymbol.Lock();
-            if (!typeSym || typeSym->kind != SymbolKind::Struct)
+            Ref<StructType> targetStruct = (typeSym && typeSym->kind == SymbolKind::Struct)
+                ? getObjectOrInterfaceStructType(typeSym->type)
+                : nullptr;
+
+            if (!targetStruct)
             {
                 WIO_LOG_ADD_ERROR(node.right->location(), "The right side of the 'is' operator must be an object or interface type.");
             }
+
+            if (!getObjectOrInterfaceStructType(node.left->refType.Lock()))
+            {
+                const std::string actualType = node.left->refType.Lock()
+                    ? node.left->refType.Lock()->toString()
+                    : "<unknown>";
+                WIO_LOG_ADD_ERROR(
+                    node.left->location(),
+                    "The left side of the 'is' operator must be an object or interface value/reference. Got '{}'.",
+                    actualType
+                );
+            }
+
             node.refType = Compiler::get().getTypeContext().getBool();
             return;
         }
@@ -3490,6 +3565,14 @@ namespace wio::sema
     void SemanticAnalyzer::visit(RefExpression& node)
     {
         node.operand->accept(*this);
+
+        if (!isAddressableRefOperand(node.operand))
+        {
+            WIO_LOG_ADD_ERROR(
+                node.location(),
+                "The 'ref' operator requires an addressable variable, member, or indexed element."
+            );
+        }
         
         bool isMut; 
 
@@ -3510,27 +3593,30 @@ namespace wio::sema
         auto srcType = node.operand->refType.Lock();
         auto destType = node.targetType->refType.Lock();
 
-        if (srcType && destType)
+        if (srcType && destType && !srcType->isUnknown() && !destType->isUnknown())
         {
-            if (srcType->isNumeric() && destType->isNumeric())
-            {
-                node.refType = destType;
-                return;
-            }
-            
-            bool isSrcObject = (srcType->kind() == TypeKind::Reference || srcType->kind() == TypeKind::Struct);
-            bool isDestObject = (destType->kind() == TypeKind::Reference || destType->kind() == TypeKind::Struct);
+            Ref<Type> resolvedSrcType = unwrapAliasType(srcType);
+            Ref<Type> resolvedDestType = unwrapAliasType(destType);
 
-            if (isSrcObject && isDestObject) 
+            if (resolvedSrcType && resolvedDestType && resolvedSrcType->isNumeric() && resolvedDestType->isNumeric())
             {
                 node.refType = destType;
                 return;
             }
 
-            WIO_LOG_ADD_ERROR(node.location(), "The 'fit' operator can only be used with numeric types or objects/interfaces.");
+            if (getObjectOrInterfaceStructType(srcType) && getObjectOrInterfaceStructType(destType))
+            {
+                node.refType = destType;
+                return;
+            }
+
+            WIO_LOG_ADD_ERROR(
+                node.location(),
+                "The 'fit' operator can only be used with numeric types or object/interface casts."
+            );
         }
 
-        node.refType = destType;
+        node.refType = Compiler::get().getTypeContext().getUnknown();
     }
 
     void SemanticAnalyzer::visit(SelfExpression& node)
@@ -3578,35 +3664,138 @@ namespace wio::sema
     void SemanticAnalyzer::visit(MatchExpression& node)
     {
         node.value->accept(*this);
-        
-        Ref<Type> commonReturnType = nullptr;
-        bool isVoidMatch = false;
 
-        for (auto& matchCase : node.cases)
+        Ref<Type> matchValueType = node.value->refType.Lock();
+        Ref<Type> commonReturnType = currentExpectedExpressionType_;
+        if (commonReturnType && (commonReturnType->isVoid() || commonReturnType->isUnknown()))
+            commonReturnType = nullptr;
+
+        bool allBodiesAreExpressionStatements = true;
+        bool hasAssumedCase = false;
+        size_t assumedCaseCount = 0;
+
+        for (size_t caseIndex = 0; caseIndex < node.cases.size(); ++caseIndex)
         {
+            auto& matchCase = node.cases[caseIndex];
+
+            if (matchCase.matchValues.empty())
+            {
+                hasAssumedCase = true;
+                assumedCaseCount++;
+
+                if (assumedCaseCount > 1)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        matchCase.body ? matchCase.body->location() : node.location(),
+                        "Match expressions can only contain one 'assumed' case."
+                    );
+                }
+
+                if (caseIndex + 1 != node.cases.size())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        matchCase.body ? matchCase.body->location() : node.location(),
+                        "The 'assumed' match case must be the last case."
+                    );
+                }
+            }
+
             for (auto& val : matchCase.matchValues)
             {
+                Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
+                bool previousAllowContextualNumericLiteralTyping = allowContextualNumericLiteralTyping_;
+                currentExpectedExpressionType_ = matchValueType;
+                allowContextualNumericLiteralTyping_ = true;
                 val->accept(*this);
+                currentExpectedExpressionType_ = previousExpectedExpressionType;
+                allowContextualNumericLiteralTyping_ = previousAllowContextualNumericLiteralTyping;
+
+                Ref<Type> caseValueType = val->refType.Lock();
+                if (!matchValueType || matchValueType->isUnknown())
+                    continue;
+
+                if (val->is<RangeExpression>())
+                {
+                    if (!matchValueType->isNumeric())
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            val->location(),
+                            "Range match cases require the matched value to be numeric, but got '{}'.",
+                            matchValueType->toString()
+                        );
+                    }
+
+                    continue;
+                }
+
+                if (!caseValueType || caseValueType->isUnknown())
+                    continue;
+
+                if (!areMatchTypesCompatible(matchValueType, caseValueType))
+                {
+                    WIO_LOG_ADD_ERROR(
+                        val->location(),
+                        "Match case value type '{}' is not compatible with matched value type '{}'.",
+                        caseValueType->toString(),
+                        matchValueType->toString()
+                    );
+                }
             }
+
             matchCase.body->accept(*this);
 
-            if (matchCase.body->is<BlockStatement>())
+            if (!matchCase.body->is<ExpressionStatement>())
             {
-                isVoidMatch = true;
+                allBodiesAreExpressionStatements = false;
             }
-            else if (matchCase.body->is<ExpressionStatement>())
+
+            if (matchCase.body->is<ExpressionStatement>())
             {
                 auto exprStmt = matchCase.body->as<ExpressionStatement>();
                 auto bodyType = exprStmt->expression->refType.Lock();
+                if (!bodyType || bodyType->isUnknown())
+                    continue;
+
                 if (!commonReturnType)
+                {
+                    commonReturnType = bodyType;
+                    continue;
+                }
+
+                if (!areMatchTypesCompatible(commonReturnType, bodyType))
+                {
+                    WIO_LOG_ADD_ERROR(
+                        exprStmt->location(),
+                        "All value-producing match cases must return compatible types. Expected '{}', but got '{}'.",
+                        commonReturnType->toString(),
+                        bodyType->toString()
+                    );
+                    commonReturnType = Compiler::get().getTypeContext().getUnknown();
+                    continue;
+                }
+
+                if (!commonReturnType->isCompatibleWith(bodyType) && bodyType->isCompatibleWith(commonReturnType))
                     commonReturnType = bodyType;
             }
         }
-        
-        if (isVoidMatch)
-            node.refType = Compiler::get().getTypeContext().getVoid();
-        else
-            node.refType = commonReturnType ? commonReturnType : Compiler::get().getTypeContext().getVoid();
+
+        if (allBodiesAreExpressionStatements)
+        {
+            if (!hasAssumedCase)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Value-producing match expressions must include an 'assumed' fallback case."
+                );
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+
+            node.refType = commonReturnType ? commonReturnType : Compiler::get().getTypeContext().getUnknown();
+            return;
+        }
+
+        node.refType = Compiler::get().getTypeContext().getVoid();
     }
     
     void SemanticAnalyzer::visit(ExpressionStatement& node) 
@@ -4386,10 +4575,40 @@ namespace wio::sema
         if (node.whenCondition)
         {
             node.whenCondition->accept(*this);
-            
+
+            if (auto conditionType = node.whenCondition->refType.Lock(); !isGuardConditionTypeAllowed(conditionType))
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.whenCondition->location(),
+                    "When guard condition must be a boolean, numeric, or reference type. Got: {}",
+                    conditionType->toString()
+                );
+            }
+
             if (node.whenFallback)
             {
+                Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
+                bool previousAllowContextualNumericLiteralTyping = allowContextualNumericLiteralTyping_;
+                currentExpectedExpressionType_ = funcType->returnType;
+                allowContextualNumericLiteralTyping_ = true;
                 node.whenFallback->accept(*this);
+                currentExpectedExpressionType_ = previousExpectedExpressionType;
+                allowContextualNumericLiteralTyping_ = previousAllowContextualNumericLiteralTyping;
+
+                Ref<Type> fallbackType = node.whenFallback->refType.Lock();
+                if (funcType->returnType &&
+                    !funcType->returnType->isUnknown() &&
+                    fallbackType &&
+                    !fallbackType->isUnknown() &&
+                    !isAssignmentLikeCompatible(funcType->returnType, fallbackType))
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.whenFallback->location(),
+                        "When guard fallback type mismatch! Expected '{}', but got '{}'.",
+                        funcType->returnType->toString(),
+                        fallbackType->toString()
+                    );
+                }
             }
             else if (funcType->returnType != Compiler::get().getTypeContext().getVoid())
             {
@@ -5550,7 +5769,11 @@ namespace wio::sema
             {
                 auto binExpr = node.condition->as<BinaryExpression>();
                 auto typeSym = binExpr->right->referencedSymbol.Lock();
-                if (binExpr->op.type == TokenType::kwIs && typeSym && typeSym->kind == SymbolKind::Struct)
+                Ref<StructType> targetStruct = (typeSym && typeSym->kind == SymbolKind::Struct)
+                    ? getObjectOrInterfaceStructType(typeSym->type)
+                    : nullptr;
+
+                if (binExpr->op.type == TokenType::kwIs && targetStruct)
                 {
                     auto refType = Compiler::get().getTypeContext().getOrCreateReferenceType(typeSym->type, false);
                     auto varSym = createSymbol(node.matchVar.value, refType, SymbolKind::Variable, node.matchVar.loc);
@@ -5560,6 +5783,10 @@ namespace wio::sema
                 {
                     WIO_LOG_ADD_ERROR(node.matchVar.loc, "Pattern matching 'fit' can only be used with the 'is' operator (e.g., target is Boss fit t).");
                 }
+            }
+            else
+            {
+                WIO_LOG_ADD_ERROR(node.matchVar.loc, "Pattern matching 'fit' can only be used with the 'is' operator (e.g., target is Boss fit t).");
             }
         }
 

@@ -1,0 +1,8 @@
+fn Entry() -> i32 {
+    let value = match (1) {
+        1: 10;
+        2: 20;
+    };
+
+    return value;
+}

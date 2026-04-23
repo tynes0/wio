@@ -1,0 +1,48 @@
+use std::console as console;
+
+interface IDamageable {
+    fn TakeDamage(amount: i32);
+    fn GetHp() -> i32;
+}
+
+@From(IDamageable)
+@Default(public)
+object Boss {
+    hp: i32;
+
+    OnConstruct(hp: i32) {
+        self.hp = hp;
+    }
+
+    fn TakeDamage(amount: i32) {
+        self.hp -= amount;
+    }
+
+    fn GetHp() -> i32 {
+        return self.hp;
+    }
+}
+
+fn ReadHp(target: view Boss) -> i32 {
+    return target.GetHp();
+}
+
+fn ApplyHit(target: ref IDamageable, amount: i32) {
+    target.TakeDamage(amount);
+}
+
+fn Entry(args: string[]) -> i32 {
+    mut boss = Boss(12);
+    ApplyHit(ref boss, 3);
+
+    let damageable = ref boss fit IDamageable;
+    damageable.TakeDamage(2);
+
+    if (ref boss is IDamageable fit typed) {
+        typed.TakeDamage(1);
+    }
+
+    let typedBoss = ref boss fit Boss;
+    console::Print($"Ref/view/fit/is: ${ReadHp(ref boss)}/${boss.GetHp()}/${typedBoss.GetHp()}");
+    return 0;
+}

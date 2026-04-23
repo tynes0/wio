@@ -3733,12 +3733,18 @@ namespace wio::codegen
     void CppGenerator::visit(MatchExpression& node)
     {
         bool producesValue = false;
+        std::string matchReturnType = "void";
         if (auto t = node.refType.Lock(); t)
         {
             producesValue = !t->isVoid() && !t->isUnknown();
+            if (producesValue)
+                matchReturnType = toCppType(t);
         }
 
-        emit("[&]() {\n");
+        emit("[&]()");
+        if (producesValue)
+            emit(" -> " + matchReturnType);
+        emit(" {\n");
         indent();
         EMIT_TABS();
         emit("auto _match_val = (");

@@ -837,6 +837,19 @@ Example:
 let x = ref y;
 ```
 
+The operand of `ref` must be addressable. In current compiler terms, this means
+a variable, object/component member, or indexed element. A temporary expression
+such as `ref (1 + 2)` is rejected before C++ generation.
+
+When `ref` is followed by `fit`, Wio parses it as:
+
+```wio
+(ref value) fit TargetType
+```
+
+This keeps object/interface casts explicit and avoids treating
+`ref value fit TargetType` as a reference to a temporary cast result.
+
 ### 7.2 Read-Only Views
 
 Use `view` in type position to request a read-only reference-like parameter or
@@ -896,7 +909,7 @@ fn Damage(hp: ref i32, amount: i32) {
 }
 
 fn Show(hp: view i32) {
-    std::io::Print($"HP = ${hp}");
+    std::console::Print($"HP = ${hp}");
 }
 ```
 
@@ -989,8 +1002,8 @@ The current backend emits numeric `fit` using `std::clamp(...)` and then
 Examples:
 
 ```wio
-let as_damageable = target fit IDamageable;
-let as_entity = target fit Entity;
+let as_damageable = ref target fit IDamageable;
+let as_entity = ref target fit Entity;
 ```
 
 This is intended to cover:
@@ -998,6 +1011,13 @@ This is intended to cover:
 - upcasts,
 - downcasts,
 - interface casts.
+
+#### Current Compiler Rules
+
+- Object/interface `fit` requires both sides to be object/interface values or
+  references.
+- Component casts are not object/interface casts and are rejected.
+- Non-numeric primitive casts such as `string fit i32` are rejected.
 
 ### 8.5 Conditional Type Binding
 
@@ -1060,6 +1080,12 @@ if (target is IDamageable) {
 
 - objects,
 - interfaces.
+
+#### Current Compiler Rules
+
+- The left side of `is` must be an object/interface value or reference.
+- The right side of `is` must name an object or interface type.
+- Components and primitive values are rejected before generated C++.
 
 ### 9.3 `is` with `fit`
 
@@ -1261,6 +1287,10 @@ The current parser precedence, from higher to lower, is approximately:
 | 2 | `||`, `or` |
 | 1 | `|>`, `<|` |
 | 0 | assignments such as `=`, `+=`, `-=`, `*=`, `/=`, `%=` and bitwise assignment forms |
+
+Special parse rule: `ref value fit Target` is parsed as
+`(ref value) fit Target`, even though `fit` is listed above prefix `ref` in the
+general precedence table. Use parentheses for the opposite meaning.
 
 ### 11.1 Arithmetic Operators
 
@@ -1609,15 +1639,16 @@ fn SafeAdd(x: i32, y: i32) -> i32 when (x < 100) else 100 {
 }
 
 fn LogIfPositive(x: i32) when (x > 0) {
-    std::io::Print("Positive");
+    std::console::Print("Positive");
 }
 ```
 
 #### Edge Cases
 
-- Non-void functions should provide an `else` fallback when a `when` guard is
+- Non-void functions must provide an `else` fallback when a `when` guard is
   present.
-- The current semantic analyzer already enforces that rule.
+- The fallback expression must be compatible with the function return type.
+- The guard condition must be a boolean, numeric, or reference-like condition.
 
 ### 13.6 Lifecycle Functions
 
@@ -1656,7 +1687,7 @@ fn Entry(args: string[]) -> i32 {
 }
 
 fn Entry(args: string[]) {
-    std::io::Print("Hello");
+    std::console::Print("Hello");
 }
 ```
 
@@ -1694,9 +1725,9 @@ Examples:
 
 ```wio
 match (a) {
-    1, 2, 3: std::io::Print("small");
-    4 or 5: std::io::Print("medium");
-    assumed: std::io::Print("other");
+    1, 2, 3: std::console::Print("small");
+    4 or 5: std::console::Print("medium");
+    assumed: std::console::Print("other");
 }
 ```
 
@@ -1708,9 +1739,9 @@ Examples:
 
 ```wio
 match (a) {
-    0...10: std::io::Print("inclusive");
-    10..<20: std::io::Print("exclusive upper bound");
-    assumed: std::io::Print("fallback");
+    0...10: std::console::Print("inclusive");
+    10..<20: std::console::Print("exclusive upper bound");
+    assumed: std::console::Print("fallback");
 }
 ```
 
@@ -1722,17 +1753,15 @@ Example:
 
 ```wio
 match (x) {
-    0: std::io::Print("zero");
-    assumed: std::io::Print("not zero");
+    0: std::console::Print("zero");
+    assumed: std::console::Print("not zero");
 }
 ```
 
-#### Strong Recommendation
+#### Current Compiler Rules
 
-Place `assumed` last.
-
-The parser does not currently enforce its position, but the generated structure
-assumes it is the fallback branch.
+- `assumed` may appear at most once.
+- `assumed` must be the last match arm.
 
 ### 14.6 `match` as an Expression
 
@@ -1768,9 +1797,10 @@ match (x) {
 The current match typing behavior is:
 
 - if any case body is a block, the match is treated as `void`,
-- if all relevant case bodies are expression statements, the match may produce a
-  value,
-- branch-type compatibility is not yet as rigorously checked as it should be.
+- if all case bodies are expression statements, the match produces a value,
+- value-producing matches must include `assumed`,
+- case values must be compatible with the matched value,
+- value-producing arm result types must remain compatible across every arm.
 
 #### Practical Recommendation
 

@@ -1,0 +1,19 @@
+component Position {
+    x: i32;
+
+    OnConstruct(x: i32) {
+        self.x = x;
+    }
+}
+
+object Entity {
+}
+
+fn Entry(args: string[]) -> i32 {
+    mut entity = Entity();
+    if (ref entity is Position) {
+        return 1;
+    }
+
+    return 0;
+}

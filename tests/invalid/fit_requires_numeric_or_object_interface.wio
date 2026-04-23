@@ -1,0 +1,13 @@
+component Position {
+    x: i32;
+
+    OnConstruct(x: i32) {
+        self.x = x;
+    }
+}
+
+fn Entry(args: string[]) -> i32 {
+    mut position = Position(1);
+    let bad = ref position fit Position;
+    return 0;
+}

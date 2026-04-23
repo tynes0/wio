@@ -1,0 +1,9 @@
+fn SetValue(target: ref i32) {
+    target = 10;
+}
+
+fn Entry(args: string[]) -> i32 {
+    let value = 0;
+    SetValue(ref value);
+    return 0;
+}

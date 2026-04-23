@@ -587,6 +587,34 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_match_value_basic_run
+        "${CMAKE_SOURCE_DIR}/tests/match_value_basic.wio"
+        "Match value: zero / small / mid / large"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_match_statement_basic_run
+        "${CMAKE_SOURCE_DIR}/tests/match_statement_basic.wio"
+        "Match statement: 1 / 12 / 100"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_when_guard_fallback_value_run
+        "${CMAKE_SOURCE_DIR}/tests/when_guard_fallback_value.wio"
+        "When guard: 7 / 0"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_ref_view_fit_is_semantics_run
+        "${CMAKE_SOURCE_DIR}/tests/ref_view_fit_is_semantics.wio"
+        "Ref/view/fit/is: 6/6/6"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_native_bridge_run
         "${CMAKE_SOURCE_DIR}/tests/native/native_bridge.wio"
         "Native multiply: 42"
@@ -1075,10 +1103,109 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "Interface methods cannot have a body"
     )
 
-    add_wio_failure_test(
+    add_wio_failure_test_clean(
         wio_invalid_non_void_when_without_else
         "${CMAKE_SOURCE_DIR}/tests/invalid/non_void_when_without_else.wio"
         "Functions with a return value must provide an 'else' fallback for 'when' guards"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_match_value_requires_assumed
+        "${CMAKE_SOURCE_DIR}/tests/invalid/match_value_requires_assumed.wio"
+        "Value-producing match expressions must include an 'assumed' fallback case"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_match_assumed_must_be_last
+        "${CMAKE_SOURCE_DIR}/tests/invalid/match_assumed_must_be_last.wio"
+        "The 'assumed' match case must be the last case"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_match_duplicate_assumed
+        "${CMAKE_SOURCE_DIR}/tests/invalid/match_duplicate_assumed.wio"
+        "Match expressions can only contain one 'assumed' case"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_match_case_type_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/match_case_type_mismatch.wio"
+        "Match case value type 'string' is not compatible with matched value type 'i32'"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_match_range_subject_type_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/match_range_subject_type_mismatch.wio"
+        "Range match cases require the matched value to be numeric, but got 'string'"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_match_return_type_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/match_return_type_mismatch.wio"
+        "All value-producing match cases must return compatible types\\. Expected 'i32', but got 'string'"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_when_fallback_return_type_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/when_fallback_return_type_mismatch.wio"
+        "When guard fallback type mismatch! Expected 'i32', but got 'string'"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_when_condition_type_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/when_condition_type_mismatch.wio"
+        "When guard condition must be a boolean, numeric, or reference type\\. Got: string"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_ref_requires_addressable_operand
+        "${CMAKE_SOURCE_DIR}/tests/invalid/ref_requires_addressable_operand.wio"
+        "The 'ref' operator requires an addressable variable, member, or indexed element"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_ref_immutable_to_mutable_param
+        "${CMAKE_SOURCE_DIR}/tests/invalid/ref_immutable_to_mutable_param.wio"
+        "expects a mutable reference"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_is_left_requires_object_or_interface
+        "${CMAKE_SOURCE_DIR}/tests/invalid/is_left_requires_object_or_interface.wio"
+        "The left side of the 'is' operator must be an object or interface value/reference\\. Got 'i32'"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_is_right_requires_object_or_interface
+        "${CMAKE_SOURCE_DIR}/tests/invalid/is_right_requires_object_or_interface.wio"
+        "The right side of the 'is' operator must be an object or interface type"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_fit_requires_numeric_or_object_interface
+        "${CMAKE_SOURCE_DIR}/tests/invalid/fit_requires_numeric_or_object_interface.wio"
+        "The 'fit' operator can only be used with numeric types or object/interface casts"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_if_fit_requires_is_condition
+        "${CMAKE_SOURCE_DIR}/tests/invalid/if_fit_requires_is_condition.wio"
+        "Pattern matching 'fit' can only be used with the 'is' operator"
+        "Compiling failed:"
     )
 
     add_wio_failure_test(

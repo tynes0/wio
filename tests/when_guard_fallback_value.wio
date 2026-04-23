@@ -1,0 +1,10 @@
+use std::console as console;
+
+fn ClampPositive(x: i32) -> i32 when (x > 0) else 0 {
+    return x;
+}
+
+fn Entry() -> i32 {
+    console::Print($"When guard: ${ClampPositive(7)} / ${ClampPositive(-3)}");
+    return 0;
+}

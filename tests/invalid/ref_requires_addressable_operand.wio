@@ -1,0 +1,4 @@
+fn Entry(args: string[]) -> i32 {
+    let bad = ref (1 + 2);
+    return 0;
+}

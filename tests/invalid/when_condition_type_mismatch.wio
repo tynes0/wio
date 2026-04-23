@@ -1,0 +1,7 @@
+fn ClampPositive(x: i32) -> i32 when ("hello") else 0 {
+    return x;
+}
+
+fn Entry() -> i32 {
+    return ClampPositive(5);
+}

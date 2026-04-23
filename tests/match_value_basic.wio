@@ -1,0 +1,15 @@
+use std::console as console;
+
+fn Describe(value: i32) -> string {
+    return match (value) {
+        0: "zero";
+        1, 2 or 3: "small";
+        4...6: "mid";
+        assumed: "large";
+    };
+}
+
+fn Entry() -> i32 {
+    console::Print($"Match value: ${Describe(0)} / ${Describe(2)} / ${Describe(5)} / ${Describe(9)}");
+    return 0;
+}

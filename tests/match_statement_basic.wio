@@ -1,0 +1,21 @@
+use std::console as console;
+
+fn Score(value: i32) -> i32 {
+    mut total: i32 = 0;
+
+    match (value) {
+        0: total += 1;
+        1 or 2: {
+            total += 10;
+            total += value;
+        }
+        assumed: total += 100;
+    }
+
+    return total;
+}
+
+fn Entry() -> i32 {
+    console::Print($"Match statement: ${Score(0)} / ${Score(2)} / ${Score(7)}");
+    return 0;
+}
