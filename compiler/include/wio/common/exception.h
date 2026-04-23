@@ -29,18 +29,59 @@ namespace wio::common
     class Exception : public std::exception
     {
     public:
-        using std::exception::exception;
+        Exception() = default;
+
+        explicit Exception(const char* message)
+            : message_(message == nullptr ? "" : message) {}
+
+        explicit Exception(std::string message)
+            : message_(std::move(message)) {}
+
+        [[nodiscard]] const char* what() const noexcept override
+        {
+            return message_.c_str();
+        }
+
+        [[nodiscard]] const std::string& message() const noexcept
+        {
+            return message_;
+        }
+
+    private:
+        std::string message_;
     };
 
     class ExceptionWithLocation : public Exception
     {
     public:
-        using Exception::Exception;
+        ExceptionWithLocation() = default;
+
+        explicit ExceptionWithLocation(const char* message)
+            : Exception(message) {}
+
+        explicit ExceptionWithLocation(std::string message)
+            : Exception(std::move(message)) {}
         
         ExceptionWithLocation(const char* message, Location loc)
-            : Exception((message + loc.toString()).c_str())
+            : Exception(message),
+              location_(std::move(loc)) {}
+
+        ExceptionWithLocation(std::string message, Location loc)
+            : Exception(std::move(message)),
+              location_(std::move(loc)) {}
+
+        [[nodiscard]] const Location& location() const noexcept
         {
+            return location_;
         }
+
+        [[nodiscard]] bool hasLocation() const noexcept
+        {
+            return location_.line != 0 || location_.column != 0 || !location_.file.empty();
+        }
+
+    private:
+        Location location_;
     };
 }
 

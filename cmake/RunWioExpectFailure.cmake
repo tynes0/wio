@@ -10,7 +10,7 @@ if(NOT DEFINED WIO_EXPECT)
     message(FATAL_ERROR "WIO_EXPECT was not provided.")
 endif()
 
-if(NOT DEFINED WIO_ARGS OR WIO_ARGS STREQUAL "")
+if(NOT DEFINED WIO_ARGS)
     set(WIO_ARGS --dry-run)
 endif()
 
@@ -38,6 +38,17 @@ if(NOT wio_match)
         "Expected failure output matching '${WIO_EXPECT}' for '${WIO_SOURCE}', but it was not found.\n"
         "Compiler output:\n${wio_output}"
     )
+endif()
+
+if(DEFINED WIO_REJECT AND NOT WIO_REJECT STREQUAL "")
+    string(REGEX MATCH "${WIO_REJECT}" wio_rejected_match "${wio_output}")
+
+    if(wio_rejected_match)
+        message(FATAL_ERROR
+            "Observed rejected failure output matching '${WIO_REJECT}' for '${WIO_SOURCE}'.\n"
+            "Compiler output:\n${wio_output}"
+        )
+    endif()
 endif()
 
 message(STATUS "Observed expected Wio compiler failure for: ${WIO_SOURCE}")

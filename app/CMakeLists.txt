@@ -194,6 +194,52 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         )
     endfunction()
 
+    function(add_wio_failure_test_clean test_name source_file expected_output rejected_output)
+        set(wio_failure_args --dry-run ${ARGN})
+        list(JOIN wio_failure_args ";" wio_failure_args_serialized)
+
+        add_test(
+            NAME ${test_name}
+            COMMAND
+                ${CMAKE_COMMAND}
+                -DWIO_EXE=$<TARGET_FILE:wio_app>
+                -DWIO_SOURCE=${source_file}
+                -DWIO_EXPECT=${expected_output}
+                -DWIO_REJECT=${rejected_output}
+                "-DWIO_ARGS=${wio_failure_args_serialized}"
+                -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExpectFailure.cmake"
+        )
+
+        set_tests_properties(
+            ${test_name}
+            PROPERTIES
+                WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        )
+    endfunction()
+
+    function(add_wio_non_dry_failure_test_clean test_name source_file expected_output rejected_output)
+        set(wio_failure_args ${ARGN})
+        list(JOIN wio_failure_args ";" wio_failure_args_serialized)
+
+        add_test(
+            NAME ${test_name}
+            COMMAND
+                ${CMAKE_COMMAND}
+                -DWIO_EXE=$<TARGET_FILE:wio_app>
+                -DWIO_SOURCE=${source_file}
+                -DWIO_EXPECT=${expected_output}
+                -DWIO_REJECT=${rejected_output}
+                "-DWIO_ARGS=${wio_failure_args_serialized}"
+                -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExpectFailure.cmake"
+        )
+
+        set_tests_properties(
+            ${test_name}
+            PROPERTIES
+                WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        )
+    endfunction()
+
     function(add_wio_backend_failure_test test_name source_file expected_output)
         set(wio_failure_args ${ARGN})
         list(JOIN wio_failure_args ";" wio_failure_args_serialized)
@@ -1041,6 +1087,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "Components must be POD \\(Plain Old Data\\) and cannot inherit from objects or interfaces"
     )
 
+    add_wio_non_dry_failure_test_clean(
+        wio_invalid_entry_invalid_parameter_type
+        "${CMAKE_SOURCE_DIR}/tests/invalid/entry_invalid_parameter_type.wio"
+        "Error \\[.*entry_invalid_parameter_type\\.wio:1:1\\]: The `Entry` function's parameter type must be `string\\[\\]`"
+        "Compiling failed:"
+    )
+
     add_wio_failure_test(
         wio_invalid_multiple_object_inheritance
         "${CMAKE_SOURCE_DIR}/tests/invalid/multiple_object_inheritance.wio"
@@ -1127,6 +1180,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "Expected attribute argument after ','."
     )
 
+    add_wio_failure_test_clean(
+        wio_invalid_lexer_invalid_escape_sequence
+        "${CMAKE_SOURCE_DIR}/tests/invalid/lexer_invalid_escape_sequence.wio"
+        "Error \\[.*lexer_invalid_escape_sequence\\.wio:2:[0-9]+\\]: Invalid escape sequence: \\\\q"
+        "Compiling failed:"
+    )
+
     add_wio_failure_test(
         wio_invalid_explicit_type_argument_missing_after_comma
         "${CMAKE_SOURCE_DIR}/tests/invalid/explicit_type_argument_missing_after_comma.wio"
@@ -1143,6 +1203,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_native_function_with_body
         "${CMAKE_SOURCE_DIR}/tests/invalid/native_function_with_body.wio"
         "@Native functions cannot define a Wio body"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_native_function_with_body_clean
+        "${CMAKE_SOURCE_DIR}/tests/invalid/native_function_with_body.wio"
+        "@Native functions cannot define a Wio body"
+        "Compiling failed:"
     )
 
     add_wio_failure_test(
@@ -1184,7 +1251,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_backend_failure_test(
         wio_invalid_backend_cpp_line_mapping_native_name
         "${CMAKE_SOURCE_DIR}/tests/invalid/backend_cpp_line_mapping_native_name.wio"
-        "Error \\[.*backend_cpp_line_mapping_native_name\\.wio:4:12\\]:"
+        "Error \\[.*backend_cpp_line_mapping_native_name\\.wio:6:12\\]:"
         --run
     )
 
@@ -1292,6 +1359,15 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/native"
         --backend-arg
         "${CMAKE_SOURCE_DIR}/tests/native/missing_backend_source.cpp"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_cli_unknown_build_target
+        "${CMAKE_SOURCE_DIR}/tests/std_console_direct.wio"
+        "Error \\[cli\\]: Unknown build target: nonsense\\. Expected one of: exe, static, shared\\."
+        "Unexpected Error:"
+        --target
+        nonsense
     )
 
     add_wio_failure_test(
@@ -1455,7 +1531,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_generic_explicit_argument_count_mismatch
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_explicit_argument_count_mismatch.wio"
-        "Error \\[.*generic_explicit_argument_count_mismatch\\.wio:2:36\\]: Generic call to 'MakeLabel' expects 2 explicit type arguments, but got 1\\."
+        "Error \\[.*generic_explicit_argument_count_mismatch\\.wio:6:16\\]: Generic call to 'MakeLabel' expects 2 explicit type arguments, but got 1\\."
     )
 
     add_wio_failure_test(

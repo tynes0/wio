@@ -25,6 +25,7 @@
 #endif
 
 #include "wio/codegen/cpp_generator.h"
+#include "wio/common/exception.h"
 #include "wio/common/filesystem/filesystem.h"
 #include "wio/common/logger.h"
 #include "wio/lexer/lexer.h"
@@ -546,6 +547,57 @@ namespace wio
                 --end;
 
             return std::string(value.substr(start, end - start));
+        }
+
+        std::string normalizeUserFacingExceptionMessage(std::string_view rawMessage)
+        {
+            std::string message = trimWhitespace(rawMessage);
+            if (message.empty())
+                return "Unknown compiler error.";
+
+            const size_t colonPos = message.find(':');
+            if (colonPos != std::string::npos)
+            {
+                const std::string prefix = message.substr(0, colonPos);
+                const bool isExceptionPrefix =
+                    !prefix.empty() &&
+                    prefix.size() > 2 &&
+                    prefix.find(' ') == std::string::npos &&
+                    prefix.find('\\') == std::string::npos &&
+                    prefix.find('/') == std::string::npos &&
+                    std::isupper(static_cast<unsigned char>(prefix.front())) != 0;
+
+                if (isExceptionPrefix)
+                    message = trimWhitespace(message.substr(colonPos + 1));
+            }
+
+            return message.empty() ? "Unknown compiler error." : message;
+        }
+
+        void logPlainDiagnosticError(std::string_view label, std::string_view message)
+        {
+            Logger::get().addError("Error [{}]: {}", std::string(label), std::string(message));
+        }
+
+        void logCompilerExceptionDiagnostic(const common::ExceptionWithLocation& exception)
+        {
+            const std::string message = normalizeUserFacingExceptionMessage(exception.what());
+            if (exception.hasLocation())
+                Logger::get().addError("Error [{}]: {}", exception.location().toDiagnosticString(), message);
+            else
+                logPlainDiagnosticError("compiler", message);
+        }
+
+        void logCompilerExceptionDiagnostic(const common::Exception& exception, std::string_view label = "compiler")
+        {
+            logPlainDiagnosticError(label, normalizeUserFacingExceptionMessage(exception.what()));
+        }
+
+        [[noreturn]] void exitWithCliError(std::string_view message)
+        {
+            logPlainDiagnosticError("cli", message);
+            // NOLINTNEXTLINE(concurrency-mt-unsafe)
+            exit(EXIT_FAILURE);
         }
 
         std::string toLowerAscii(std::string_view value)
@@ -1754,27 +1806,19 @@ namespace wio
         }
         catch (const Argonaut::ParsePrepException& e)
         {
-            WIO_LOG_ERROR("Argument parse prep failed: {}", e.what());
-            // NOLINTNEXTLINE(concurrency-mt-unsafe)
-            exit(EXIT_FAILURE);
+            exitWithCliError(common::formatString("Argument parse prep failed: {}", e.what()));
         }
         catch (const Argonaut::ParseException& e)
         {
-            WIO_LOG_ERROR("Argument parsing failed: {}", e.what());
-            // NOLINTNEXTLINE(concurrency-mt-unsafe)
-            exit(EXIT_FAILURE);
+            exitWithCliError(common::formatString("Argument parsing failed: {}", e.what()));
         }
         catch (const std::exception& e)
         {
-            WIO_LOG_ERROR("Unexpected Error: {}", e.what());
-            // NOLINTNEXTLINE(concurrency-mt-unsafe)
-            exit(EXIT_FAILURE);
+            exitWithCliError(normalizeUserFacingExceptionMessage(e.what()));
         }
         catch (...)
         {
-            WIO_LOG_ERROR("Unknown Error!");
-            // NOLINTNEXTLINE(concurrency-mt-unsafe)
-            exit(EXIT_FAILURE);
+            exitWithCliError("Unknown command line error.");
         }
         
         try
@@ -1801,9 +1845,7 @@ namespace wio
         }
         catch (const std::exception& e)
         {
-            WIO_LOG_ERROR("Unexpected Error: {}", e.what());
-            // NOLINTNEXTLINE(concurrency-mt-unsafe)
-            exit(EXIT_FAILURE);
+            exitWithCliError(normalizeUserFacingExceptionMessage(e.what()));
         }
     }
 
@@ -2108,9 +2150,23 @@ namespace wio
 
             return EXIT_SUCCESS;
         }
+        catch (const CompilationError&)
+        {
+            return EXIT_FAILURE;
+        }
+        catch (const common::ExceptionWithLocation& e)
+        {
+            logCompilerExceptionDiagnostic(e);
+            return EXIT_FAILURE;
+        }
+        catch (const common::Exception& e)
+        {
+            logCompilerExceptionDiagnostic(e);
+            return EXIT_FAILURE;
+        }
         catch (const std::exception& e)
         {
-            WIO_LOG_FATAL("Compiling failed: {}", e.what());
+            WIO_LOG_FATAL("Unhandled compiler failure: {}", e.what());
             return EXIT_FAILURE;
         }
     }

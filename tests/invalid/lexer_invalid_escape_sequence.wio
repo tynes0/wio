@@ -1,0 +1,4 @@
+fn Entry(args: string[]) -> i32 {
+    let bad = "\q";
+    return 0;
+}

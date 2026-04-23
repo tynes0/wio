@@ -179,8 +179,8 @@ namespace wio
         while (std::isspace(upeek()))
         {
             result = true;
-            advance();
-            skipNewline();
+            if (!skipNewline())
+                advance();
         }
 
         return result;
