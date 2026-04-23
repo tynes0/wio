@@ -69,6 +69,9 @@ namespace wio
 
         [[nodiscard]] static int getPrecedence(TokenType type);
         [[nodiscard]] bool canParseExplicitTypeArgumentCall() const;
+        static void validateOrdinaryVariableDeclaration(Mutability mutability,
+                                                        bool hasInitializer,
+                                                        common::Location location);
 
         [[noreturn]] static void utError(const std::string& message, common::Location location);
         [[noreturn]] static void ucError(common::Location location);

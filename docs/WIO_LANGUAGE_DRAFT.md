@@ -761,45 +761,40 @@ let static_arr: [i32; 3] = [1, 2, 3];
 
 ### 6.6 Initialization Rules
 
-`const` must be initialized.
+Ordinary local/global variable declarations must be initialized.
 
 Example:
 
 ```wio
+let X: i32 = 10;
+mut Y: i32 = 20;
 const X: i32 = 10;
 ```
 
-This is valid, but:
+These are valid, but:
 
 ```wio
+let X: i32;
+mut Y: i32;
 const X: i32;
 ```
 
-is an error.
+are errors.
 
-#### Current Compiler Note
+For v1 semantic freeze, the rule is intentionally simple:
 
-For `let` and `mut`, the current parser does not strictly forbid declarations
-without both type and initializer:
+- `let` must have an initializer,
+- `mut` must have an initializer,
+- `const` must have an initializer.
 
-```wio
-let x;
-mut y;
-```
-
-Such forms are not meaningfully specified and should be treated as invalid style
-until the language formally decides whether they are legal.
-
-Recommended rule for user code:
-
-- always provide either an explicit type,
-- or an initializer,
-- or both.
+Type inference therefore always happens from an initializer expression. There is
+currently no ordinary local/global declaration form that reserves storage
+without initializing it.
 
 ### 6.7 Member Field Rules vs General Variable Rules
 
-Inside `component` and `object` declarations, member fields are stricter than
-ordinary local/global declarations.
+Inside `component` and `object` declarations, member fields follow a different
+rule than ordinary local/global declarations.
 
 A member field must have:
 
@@ -2640,15 +2635,22 @@ let state = match (hp) {
 };
 ```
 
-### 24.7 Treat `let x;` as Undefined Territory
+### 24.7 Do Not Expect Uninitialized Ordinary Variables
 
-Until the language formalizes uninitialized immutable/mutable declarations, do
-not rely on them.
+This is rejected by the current compiler:
 
-### 24.8 Treat `@Trust` as Design Intent, Not Yet Fully Enforced Semantics
+```wio
+let x: i32;
+mut y: i32;
+```
 
-The idea is good and worth keeping, but compiler enforcement should be completed
-before the feature is treated as fully stable.
+If you need typed storage without an initializer, use a member field inside an
+`object` or `component`, not an ordinary local/global declaration.
+
+### 24.8 Use `@Trust` Only With Object/Component/Interface Types
+
+`@Trust(...)` is semantically enforced and expects only object/component/interface
+type names.
 
 ## 25. Complete Wio Examples
 

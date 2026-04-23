@@ -1341,6 +1341,36 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_failure_test(
+        wio_invalid_let_without_initializer
+        "${CMAKE_SOURCE_DIR}/tests/invalid/let_without_initializer.wio"
+        "Ordinary variable declarations must be initialized."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_mut_without_initializer
+        "${CMAKE_SOURCE_DIR}/tests/invalid/mut_without_initializer.wio"
+        "Ordinary variable declarations must be initialized."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_let_without_type_or_initializer
+        "${CMAKE_SOURCE_DIR}/tests/invalid/let_without_type_or_initializer.wio"
+        "Ordinary variable declarations must be initialized."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_const_without_initializer
+        "${CMAKE_SOURCE_DIR}/tests/invalid/const_without_initializer.wio"
+        "Constants must be initialized."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_c_style_for_initializer_without_initializer
+        "${CMAKE_SOURCE_DIR}/tests/invalid/c_style_for_initializer_without_initializer.wio"
+        "Ordinary variable declarations must be initialized."
+    )
+
+    add_wio_failure_test(
         wio_invalid_array_literal_missing_element
         "${CMAKE_SOURCE_DIR}/tests/invalid/array_literal_missing_element.wio"
         "Expected array element after ','."

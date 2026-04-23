@@ -990,13 +990,12 @@ namespace wio
         {
             initializer = parseExpression();
         }
-        else
-        {
-            if (mutability == Mutability::Const)
-            {
-                ucError(startTok.loc);
-            }
-        }
+
+        validateOrdinaryVariableDeclaration(
+            mutability,
+            initializer != nullptr,
+            startTok.loc
+        );
         
         consume(TokenType::semicolon);
 
@@ -1550,8 +1549,12 @@ namespace wio
                 NodePtr<Expression> value = nullptr;
                 if (match(TokenType::opAssign, true))
                     value = parseExpression();
-                else if (mutability == Mutability::Const)
-                    ucError(startTok.loc);
+
+                validateOrdinaryVariableDeclaration(
+                    mutability,
+                    value != nullptr,
+                    startTok.loc
+                );
 
                 initializer = makeNodePtr<VariableDeclaration>(
                     std::vector<NodePtr<AttributeStatement>>{},
@@ -1861,6 +1864,19 @@ namespace wio
     {
         WIO_LOG_ADD_ERROR(location, message);
         throw UnexpectedTokenError(message.c_str(), location);
+    }
+
+    void Parser::validateOrdinaryVariableDeclaration(Mutability mutability,
+                                                     bool hasInitializer,
+                                                     Location location)
+    {
+        if (hasInitializer)
+            return;
+
+        if (mutability == Mutability::Const)
+            ucError(location);
+
+        utError("Ordinary variable declarations must be initialized.", location);
     }
 
     void Parser::ucError(Location location)
