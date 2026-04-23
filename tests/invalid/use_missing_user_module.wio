@@ -1,0 +1,5 @@
+use missing_gameplay as game;
+
+fn Entry(args: string[]) -> i32 {
+    return 0;
+}

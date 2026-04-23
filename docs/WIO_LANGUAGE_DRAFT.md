@@ -2366,89 +2366,137 @@ signature-based override contract. That area should eventually be tightened.
 
 `use` is the import mechanism.
 
-Current user-facing example:
+Supported user-facing forms:
 
 ```wio
-use std::io;
+use std::console;
+use std::console as console;
+use gameplay::combat;
+use gameplay::combat as combat;
+use @CppHeader("native_bridge.h");
 ```
 
 ### 22.2 Standard Library Module Support
 
-At the moment, the current compiler has a minimal built-in standard module
-loader for:
+The standard library is source-based. `std` modules live under the configured
+standard source directory and are merged before semantic analysis unless
+`--no-builtin` is used.
 
-- `std::io`
+Common current modules include:
 
-This exposes `Print`.
+- `std::console`
+- `std::math`
+- `std::collections`
+- `std::strings`
+- `std::fs`
+- `std::path`
+- `std::algorithms`
+- `std::assert`
+- `std::testing`
 
 Example:
 
 ```wio
-use std::io;
+use std::console as console;
 
 fn Entry(args: string[]) -> i32 {
-    std::io::Print("Hello");
+    console::Print("Hello");
     return 0;
 }
 ```
 
-#### Current Compiler Note
+`use std::name as alias;` creates `alias` as a namespace alias in the current
+scope. If a local symbol already uses the requested alias name, the compiler
+reports a Wio diagnostic.
 
-`use std::io;` also creates a shorter alias in the current scope, so the
-following may work as well:
+Missing standard modules are reported by Wio before semantic analysis continues:
 
 ```wio
-use std::io;
-
-fn Entry(args: string[]) -> i32 {
-    io::Print("Hello");
-    return 0;
-}
+use std::missing_module as missing; // error
 ```
 
 ### 22.3 User Modules
 
-Design intent says Wio should support user-defined modules.
+User modules are `.wio` files resolved from:
 
-The compiler already parses import-like module paths and merges `.wio` files
-recursively at the compiler layer.
+- the importing file's directory,
+- then each configured `--module-dir` search root.
 
-However:
+Module paths use `::` in source and map to path separators during resolution.
 
-- semantic import handling for user modules is not finished,
-- `use`/`as` behavior is still incomplete.
+```wio
+use combat::damage;
+use combat::damage as damage;
+```
+
+User modules are merged recursively before semantic analysis. A non-aliased
+module merge exposes its top-level declarations normally. An aliased import
+creates an alias namespace containing the imported module's top-level exported
+symbols.
+
+If a module file cannot be found or cannot be read, the compiler emits a Wio
+diagnostic and stops instead of falling through to generated C++ errors.
 
 ### 22.4 `self` and `super` in Imports
 
-The current parser understands import path tokens such as:
+The parser accepts relative import prefixes:
 
 - `self`
 - `super`
 
-Examples of intended syntax:
+Examples:
 
 ```wio
 use self::math;
 use super::shared::types;
 ```
 
+`self::x` resolves relative to the current module directory. `super::x` resolves
+through `..` in the module path.
+
 ### 22.5 `as`
 
-The `as` keyword exists in the token set and is intended for import aliasing.
+`as` creates an explicit namespace alias for an imported module.
 
-However, it is not yet fully implemented in source-level module behavior.
+```wio
+use std::console as console;
+use gameplay::inventory as inv;
+```
+
+Alias names are local to the importing scope. Reusing an alias name that already
+belongs to a different symbol is an error.
+
+### 22.6 `realm`
+
+`realm` declares a namespace-like scope.
+
+```wio
+realm gameplay {
+    fn ScoreBonus() -> i32 {
+        return 10;
+    }
+}
+
+fn Entry(args: string[]) -> i32 {
+    return gameplay::ScoreBonus();
+}
+```
+
+Realms with the same name merge across files/modules. If the name already exists
+as a non-realm symbol, the compiler reports a Wio diagnostic.
 
 ## 23. Features Mentioned in Design but Not Yet Fully Supported
 
 ### 23.1 `for`
 
-The token exists, but `for` is not yet a real parsed statement in the current
-compiler front-end.
+Implemented in the first loop wave. Remaining work is semantic hardening,
+diagnostic coverage, and final spec wording.
 
 ### 23.2 `foreach`
 
-This is part of your intended roadmap, especially with `in`-style looping, but
-it is not a current language feature.
+Implemented in the first loop wave for the currently supported iterable
+surfaces. Remaining work is semantic hardening, diagnostic coverage, and final
+spec wording.
 
 ### 23.3 Flow Operators
 
@@ -2461,7 +2509,13 @@ but they are not yet working language features.
 
 ### 23.4 `use as`
 
-Planned, not finished.
+Implemented as the explicit import-alias form:
+
+```wio
+use some::module as alias;
+```
+
+Remaining work is hardening/spec detail rather than first implementation.
 
 ### 23.5 Concurrency and Scheduling Keywords
 

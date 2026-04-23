@@ -1888,6 +1888,9 @@ namespace wio
             gAppData.loadedModules.insert(sourceDisplayPath);
             collectRequiredCppHeaders(program->statements, std::filesystem::path(sourceDisplayPath), gAppData.requiredCppHeaders);
 
+            validateSearchDirectories(gAppData.argParser.GetValuesOf<std::string>("MODULE-DIR"), "Module search directory");
+            WIO_LOG_PROCESS_ERRORS(CompilationError);
+
             std::vector<NodePtr<Statement>> finalStatements;
 
             for (auto& stmt : program->statements)
@@ -2200,14 +2203,12 @@ namespace wio
         std::optional<std::filesystem::path> resolvedModulePath = resolveModuleSourcePath(modulePath, isStdLib, currentDir);
         if (!resolvedModulePath.has_value())
         {
-            WIO_LOG_ERROR(
+            Logger::get().addError(
                 "Module file was not found: {}.wio (searched in: {})",
                 modulePath,
                 formatModuleSearchRoots(isStdLib, currentDir)
             );
-
-            if (exportedSymbols)
-                exportedSymbols->clear();
+            WIO_LOG_PROCESS_ERRORS(CompilationError);
             return makeNodePtr<Program>(std::vector<NodePtr<Statement>>{});
         }
 
@@ -2223,7 +2224,8 @@ namespace wio
         std::string source = filesystem::readFile(actualPath);
         if (source.empty())
         {
-            WIO_LOG_ERROR("Module file is empty or not found: {}", actualPath.string());
+            Logger::get().addError("Module file is empty or not found: {}", actualPath.string());
+            WIO_LOG_PROCESS_ERRORS(CompilationError);
             return makeNodePtr<Program>(std::vector<NodePtr<Statement>>{});
         }
         filesystem::stripBOM(source);

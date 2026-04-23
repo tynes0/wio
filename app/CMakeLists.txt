@@ -412,6 +412,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_relative_module_imports_run
+        "${CMAKE_SOURCE_DIR}/tests/modules/relative/root.wio"
+        "Relative import sum: 50"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_realm_basic_run
         "${CMAKE_SOURCE_DIR}/tests/realm_basic.wio"
         "Realm sum: 3"
@@ -1251,6 +1258,30 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_use_path_missing_module_name
         "${CMAKE_SOURCE_DIR}/tests/invalid/use_path_missing_module_name.wio"
         "Unfinished use statement\\. Use statements should finish with a module name\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_use_missing_user_module
+        "${CMAKE_SOURCE_DIR}/tests/invalid/use_missing_user_module.wio"
+        "Module file was not found: missing_gameplay\\.wio"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_use_missing_std_module
+        "${CMAKE_SOURCE_DIR}/tests/invalid/use_missing_std_module.wio"
+        "Module file was not found: missing_std_module\\.wio"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_use_alias_conflicts_with_symbol
+        "${CMAKE_SOURCE_DIR}/tests/invalid/use_alias_conflicts_with_symbol.wio"
+        "Symbol 'console' already exists and cannot be used as an import alias\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_realm_conflicts_with_symbol
+        "${CMAKE_SOURCE_DIR}/tests/invalid/realm_conflicts_with_symbol.wio"
+        "Symbol 'gameplay' already exists and is not a realm\\."
     )
 
     add_wio_failure_test(

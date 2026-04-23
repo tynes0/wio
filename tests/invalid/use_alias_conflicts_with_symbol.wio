@@ -1,0 +1,9 @@
+fn console() -> i32 {
+    return 0;
+}
+
+use std::console as console;
+
+fn Entry(args: string[]) -> i32 {
+    return 0;
+}

@@ -1,0 +1,8 @@
+use std::console as console;
+use self::local as local;
+use super::helper as helper;
+
+fn Entry(args: string[]) -> i32 {
+    console::Print($"Relative import sum: ${local::LocalValue() + helper::GetValue()}");
+    return 0;
+}
