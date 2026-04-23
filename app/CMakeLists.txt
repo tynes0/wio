@@ -1553,7 +1553,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_missing_cpp_header_std_import
         "${CMAKE_SOURCE_DIR}/tests/invalid/missing_cpp_header_std_import.wio"
-        "Native C\\+\\+ header 'missing_std_header_for_test.h' referenced by use @CppHeader in '.*std[\\\\/]assert[\\\\/]missing_cpp_header\\.wio' was not found"
+        "Builtin std module '.*std[\\\\/]assert[\\\\/]missing_cpp_header\\.wio' references C\\+\\+ header 'missing_std_header_for_test.h' via use @CppHeader but it was not found in toolchain public include paths"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_std_imports_private_runtime_header
+        "${CMAKE_SOURCE_DIR}/tests/invalid/std_imports_private_runtime_header.wio"
+        "Builtin std module '.*std[\\\\/]assert[\\\\/]private_runtime_header\\.wio' references non-public header '\\.\\.[\\\\/]\\.\\.[\\\\/]runtime[\\\\/]src[\\\\/]detail[\\\\/]io_helpers\\.h'"
     )
 
     add_wio_failure_test(

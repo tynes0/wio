@@ -1,0 +1,5 @@
+use std::assert::private_runtime_header;
+
+fn Entry() -> i32 {
+    return 0;
+}

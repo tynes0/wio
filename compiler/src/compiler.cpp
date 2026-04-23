@@ -1434,6 +1434,61 @@ namespace wio
             return formattedRoots;
         }
 
+        std::filesystem::path normalizePathForComparison(const std::filesystem::path& rawPath)
+        {
+            if (rawPath.empty())
+                return {};
+
+            std::error_code ec;
+            std::filesystem::path absolutePath = std::filesystem::absolute(rawPath, ec).make_preferred();
+            if (ec)
+                return rawPath.lexically_normal().make_preferred();
+
+            std::filesystem::path canonicalPath = std::filesystem::weakly_canonical(absolutePath, ec).make_preferred();
+            if (!ec)
+                return canonicalPath;
+
+            return absolutePath.lexically_normal().make_preferred();
+        }
+
+        bool isPathInsideDirectory(const std::filesystem::path& candidatePath,
+                                   const std::filesystem::path& directoryPath)
+        {
+            if (candidatePath.empty() || directoryPath.empty())
+                return false;
+
+            const std::filesystem::path normalizedCandidate = normalizePathForComparison(candidatePath);
+            const std::filesystem::path normalizedDirectory = normalizePathForComparison(directoryPath);
+
+            auto candidateIt = normalizedCandidate.begin();
+            auto directoryIt = normalizedDirectory.begin();
+
+            for (; candidateIt != normalizedCandidate.end() && directoryIt != normalizedDirectory.end(); ++candidateIt, ++directoryIt)
+            {
+                if (*candidateIt != *directoryIt)
+                    return false;
+            }
+
+            return directoryIt == normalizedDirectory.end();
+        }
+
+        bool isBuiltinStdSourcePath(const std::filesystem::path& sourcePath)
+        {
+            const std::filesystem::path stdSourceDir = getStdSourceDir();
+            return !stdSourceDir.empty() && isPathInsideDirectory(sourcePath, stdSourceDir);
+        }
+
+        bool hasParentTraversal(const std::filesystem::path& path)
+        {
+            for (const auto& component : path)
+            {
+                if (component == "..")
+                    return true;
+            }
+
+            return false;
+        }
+
         bool canResolveCppHeader(const std::string& header, const std::vector<std::filesystem::path>& searchRoots)
         {
             std::filesystem::path headerPath(header);
@@ -1462,10 +1517,41 @@ namespace wio
 
             const auto searchRoots = buildHeaderSearchRoots(sourceDir, systemIncludeDirs, includeDirs);
             const std::string formattedRoots = formatSearchRoots(searchRoots);
+            const std::string formattedSystemRoots = formatSearchRoots(systemIncludeDirs);
             bool isValid = true;
 
             for (const auto& header : headers)
             {
+                if (isBuiltinStdSourcePath(header.sourcePath))
+                {
+                    std::filesystem::path headerPath(header.header);
+                    if (headerPath.is_absolute() || hasParentTraversal(headerPath))
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            header.location,
+                            "Builtin std module '{}' references non-public header '{}'. Builtin std modules may only use toolchain public runtime/sdk headers by logical include name.",
+                            header.sourcePath.empty() ? "<unknown>" : header.sourcePath.string(),
+                            header.header
+                        );
+                        isValid = false;
+                        continue;
+                    }
+
+                    if (canResolveCppHeader(header.header, systemIncludeDirs))
+                        continue;
+
+                    WIO_LOG_ADD_ERROR(
+                        header.location,
+                        "Builtin std module '{}' references C++ header '{}' via {} but it was not found in toolchain public include paths: {}",
+                        header.sourcePath.empty() ? "<unknown>" : header.sourcePath.string(),
+                        header.header,
+                        header.origin.empty() ? "@CppHeader" : header.origin,
+                        formattedSystemRoots
+                    );
+                    isValid = false;
+                    continue;
+                }
+
                 if (canResolveCppHeader(header.header, searchRoots))
                     continue;
 

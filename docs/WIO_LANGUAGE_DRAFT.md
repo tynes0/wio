@@ -2441,6 +2441,19 @@ Missing standard modules are reported by Wio before semantic analysis continues:
 use std::missing_module as missing; // error
 ```
 
+Builtin `std` modules are source-based, but their native bridge boundary is
+still intentionally narrow:
+
+- builtin `std` sources may use `@CppHeader(...)`
+- those headers must resolve from the toolchain's public runtime/sdk include surface
+- builtin `std` sources must not depend on user include directories
+- builtin `std` sources must not reach into private implementation files with
+  parent-relative paths such as `../` or `../../`
+
+That rule keeps packaged toolchains and repository builds aligned: if a `std`
+module compiles in the repo, it should also compile from a packaged Wio install
+without depending on private source layout details.
+
 ### 22.3 User Modules
 
 User modules are `.wio` files resolved from:
