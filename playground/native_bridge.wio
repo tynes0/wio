@@ -1,4 +1,4 @@
-use std::io as console;
+use std::console as console;
 
 realm ffi {
     @Native

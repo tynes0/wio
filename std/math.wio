@@ -1,5 +1,17 @@
 realm std {
     realm math {
+        use @CppHeader("std_math.h");
+
+        @Native
+        @CppName(wio::runtime::std_math::Abs)
+        @Instantiate(i8)
+        @Instantiate(i16)
+        @Instantiate(i32)
+        @Instantiate(i64)
+        @Instantiate(f32)
+        @Instantiate(f64)
+        fn Abs<T>(v: T) -> T;
+
         fn Min(left: i32, right: i32) -> i32 {
             if (left < right) {
                 return left;
@@ -92,34 +104,6 @@ realm std {
             }
             if (value > maxValue) {
                 return maxValue;
-            }
-            return value;
-        }
-
-        fn Abs(value: i32) -> i32 {
-            if (value < 0) {
-                return -value;
-            }
-            return value;
-        }
-
-        fn Abs(value: i64) -> i64 {
-            if (value < 0) {
-                return -value;
-            }
-            return value;
-        }
-
-        fn Abs(value: f32) -> f32 {
-            if (value < 0.0f) {
-                return -value;
-            }
-            return value;
-        }
-
-        fn Abs(value: f64) -> f64 {
-            if (value < 0.0) {
-                return -value;
             }
             return value;
         }

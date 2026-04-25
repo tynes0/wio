@@ -2,8 +2,6 @@
 
 #include <string>
 
-#include "exception.h"
-
 namespace wio::runtime::std_assert
 {
     [[noreturn]] void Fail(const std::string& message);

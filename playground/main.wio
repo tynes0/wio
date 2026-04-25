@@ -2,9 +2,9 @@ use std::console as Console;
 use std::math as Math;
 use std::algorithms as Algorithms;
 
+
+
 fn Entry() -> i32
 {
-    mut arr : string[] = ["1", "2", "3", "4", "5"];
-    arr.Push("6");
-    Console.Print(arr.Last());
+    Console::PrintLine(Math::Abs(123123));
 }

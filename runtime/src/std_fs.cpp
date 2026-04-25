@@ -1,5 +1,7 @@
 #include "std_fs.h"
 
+#include "exception.h"
+
 namespace wio::runtime::std_fs
 {
     namespace

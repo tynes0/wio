@@ -6,8 +6,6 @@
 #include <sstream>
 #include <string>
 
-#include "exception.h"
-
 namespace wio::runtime::std_fs
 {
     bool Exists(const std::string& path);

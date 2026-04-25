@@ -1,8 +1,9 @@
 #include "std_console.h"
 
-#include <charconv>
-
+#include "exception.h"
 #include "detail/io_helpers.h"
+
+#include <charconv>
 
 namespace wio::runtime::std_console
 {
