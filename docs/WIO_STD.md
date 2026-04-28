@@ -51,23 +51,30 @@ Current v1 expectation:
 ### 2.2 Mixed Stable Module
 
 - `std::assert`
+- `std::math`
 
 `std::assert` is a mixed module:
 
 - low-level failure primitives are runtime-backed
 - higher-level helpers are implemented in Wio
 
+`std::math` is also mixed:
+
+- the numerically sensitive core is runtime-backed through `std_math.h`
+- higher-level aliases and convenience wrappers such as `Square`,
+  `Clamp01`, and range predicates are implemented in Wio
+
 Current v1 expectation:
 
 - `Fail`, `Require`, and `Unreachable` are the runtime boundary
 - expectation helpers such as `ExpectEqual`, `ExpectNear`, and collection/string
   assertions are part of the stable testing-oriented std surface
+- math convenience wrappers should stay thin over the runtime-backed contract
 - there is no separate stable `std::testing` module in v1; testing helpers live
   in `std::assert`
 
 ### 2.3 Pure-Wio Stable Modules
 
-- `std::math`
 - `std::collections`
 - `std::strings`
 - `std::algorithms`

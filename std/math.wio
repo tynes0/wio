@@ -2,56 +2,437 @@ realm std {
     realm math {
         use @CppHeader("std_math.h");
 
-        @Native
-        @CppName(wio::runtime::std_math::Abs)
-        @Instantiate(i8)
-        @Instantiate(i16)
-        @Instantiate(i32)
-        @Instantiate(i64)
-        @Instantiate(f32)
-        @Instantiate(f64)
-        fn Abs<T>(v: T) -> T;
+        const Pi: f64 = 3.141592653589793;
+        const Tau: f64 = 6.283185307179586;
+        const HalfPi: f64 = 1.5707963267948966;
+        const E: f64 = 2.718281828459045;
+        const Sqrt2: f64 = 1.4142135623730951;
+        const Ln2: f64 = 0.6931471805599453;
+        const Ln10: f64 = 2.302585092994046;
+        const DegToRadFactor: f64 = Pi / 180.0;
+        const RadToDegFactor: f64 = 180.0 / Pi;
 
-        @Native
-        @CppName(wio::runtime::std_math::Min)
-        @Instantiate(i8)
-        @Instantiate(i16)
-        @Instantiate(i32)
-        @Instantiate(i64)
-        @Instantiate(f32)
-        @Instantiate(f64)
-        @Instantiate(u8)
-        @Instantiate(u16)
-        @Instantiate(u32)
-        @Instantiate(u64)
-        fn Min<T>(left: T, right: T) -> T;
+        const Pi32: f32 = Pi fit f32;
+        const Tau32: f32 = Tau fit f32;
+        const HalfPi32: f32 = HalfPi fit f32;
+        const E32: f32 = E fit f32;
+        const Sqrt232: f32 = Sqrt2 fit f32;
+        const Ln232: f32 = Ln2 fit f32;
+        const Ln1032: f32 = Ln10 fit f32;
 
-        @Native
-        @CppName(wio::runtime::std_math::Max)
-        @Instantiate(i8)
-        @Instantiate(i16)
-        @Instantiate(i32)
-        @Instantiate(i64)
-        @Instantiate(f32)
-        @Instantiate(f64)
-        @Instantiate(u8)
-        @Instantiate(u16)
-        @Instantiate(u32)
-        @Instantiate(u64)
-        fn Max<T>(left: T, right: T) -> T;
+        @Native @CppName(wio::runtime::std_math::AbsI8) fn Abs(value: i8) -> i8;
+        @Native @CppName(wio::runtime::std_math::AbsI16) fn Abs(value: i16) -> i16;
+        @Native @CppName(wio::runtime::std_math::AbsI32) fn Abs(value: i32) -> i32;
+        @Native @CppName(wio::runtime::std_math::AbsI64) fn Abs(value: i64) -> i64;
+        @Native @CppName(wio::runtime::std_math::AbsF32) fn Abs(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::AbsF64) fn Abs(value: f64) -> f64;
 
-        @Native
-        @CppName(wio::runtime::std_math::Clamp)
-        @Instantiate(i8)
-        @Instantiate(i16)
-        @Instantiate(i32)
-        @Instantiate(i64)
-        @Instantiate(f32)
-        @Instantiate(f64)
-        @Instantiate(u8)
-        @Instantiate(u16)
-        @Instantiate(u32)
-        @Instantiate(u64)
-        fn Clamp<T>(value: T, low: T, high: T) -> T;
+        fn Abs(value: isize) -> isize {
+            if (value < (0 fit isize)) {
+                return -value;
+            }
+            return value;
+        }
+
+        fn Abs(value: usize) -> usize {
+            return value;
+        }
+
+        @Native @CppName(wio::runtime::std_math::SaturatingAbsI8) fn SaturatingAbs(value: i8) -> i8;
+        @Native @CppName(wio::runtime::std_math::SaturatingAbsI16) fn SaturatingAbs(value: i16) -> i16;
+        @Native @CppName(wio::runtime::std_math::SaturatingAbsI32) fn SaturatingAbs(value: i32) -> i32;
+        @Native @CppName(wio::runtime::std_math::SaturatingAbsI64) fn SaturatingAbs(value: i64) -> i64;
+
+        @Native @CppName(wio::runtime::std_math::MinI8) fn Min(left: i8, right: i8) -> i8;
+        @Native @CppName(wio::runtime::std_math::MinI16) fn Min(left: i16, right: i16) -> i16;
+        @Native @CppName(wio::runtime::std_math::MinI32) fn Min(left: i32, right: i32) -> i32;
+        @Native @CppName(wio::runtime::std_math::MinI64) fn Min(left: i64, right: i64) -> i64;
+        @Native @CppName(wio::runtime::std_math::MinU8) fn Min(left: u8, right: u8) -> u8;
+        @Native @CppName(wio::runtime::std_math::MinU16) fn Min(left: u16, right: u16) -> u16;
+        @Native @CppName(wio::runtime::std_math::MinU32) fn Min(left: u32, right: u32) -> u32;
+        @Native @CppName(wio::runtime::std_math::MinU64) fn Min(left: u64, right: u64) -> u64;
+        @Native @CppName(wio::runtime::std_math::MinF32) fn Min(left: f32, right: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::MinF64) fn Min(left: f64, right: f64) -> f64;
+
+        fn Min(left: isize, right: isize) -> isize {
+            if (left < right) {
+                return left;
+            }
+            return right;
+        }
+
+        fn Min(left: usize, right: usize) -> usize {
+            if (left < right) {
+                return left;
+            }
+            return right;
+        }
+
+        @Native @CppName(wio::runtime::std_math::MaxI8) fn Max(left: i8, right: i8) -> i8;
+        @Native @CppName(wio::runtime::std_math::MaxI16) fn Max(left: i16, right: i16) -> i16;
+        @Native @CppName(wio::runtime::std_math::MaxI32) fn Max(left: i32, right: i32) -> i32;
+        @Native @CppName(wio::runtime::std_math::MaxI64) fn Max(left: i64, right: i64) -> i64;
+        @Native @CppName(wio::runtime::std_math::MaxU8) fn Max(left: u8, right: u8) -> u8;
+        @Native @CppName(wio::runtime::std_math::MaxU16) fn Max(left: u16, right: u16) -> u16;
+        @Native @CppName(wio::runtime::std_math::MaxU32) fn Max(left: u32, right: u32) -> u32;
+        @Native @CppName(wio::runtime::std_math::MaxU64) fn Max(left: u64, right: u64) -> u64;
+        @Native @CppName(wio::runtime::std_math::MaxF32) fn Max(left: f32, right: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::MaxF64) fn Max(left: f64, right: f64) -> f64;
+
+        fn Max(left: isize, right: isize) -> isize {
+            if (left < right) {
+                return right;
+            }
+            return left;
+        }
+
+        fn Max(left: usize, right: usize) -> usize {
+            if (left < right) {
+                return right;
+            }
+            return left;
+        }
+
+        @Native @CppName(wio::runtime::std_math::ClampI8) fn Clamp(value: i8, minValue: i8, maxValue: i8) -> i8;
+        @Native @CppName(wio::runtime::std_math::ClampI16) fn Clamp(value: i16, minValue: i16, maxValue: i16) -> i16;
+        @Native @CppName(wio::runtime::std_math::ClampI32) fn Clamp(value: i32, minValue: i32, maxValue: i32) -> i32;
+        @Native @CppName(wio::runtime::std_math::ClampI64) fn Clamp(value: i64, minValue: i64, maxValue: i64) -> i64;
+        @Native @CppName(wio::runtime::std_math::ClampU8) fn Clamp(value: u8, minValue: u8, maxValue: u8) -> u8;
+        @Native @CppName(wio::runtime::std_math::ClampU16) fn Clamp(value: u16, minValue: u16, maxValue: u16) -> u16;
+        @Native @CppName(wio::runtime::std_math::ClampU32) fn Clamp(value: u32, minValue: u32, maxValue: u32) -> u32;
+        @Native @CppName(wio::runtime::std_math::ClampU64) fn Clamp(value: u64, minValue: u64, maxValue: u64) -> u64;
+        @Native @CppName(wio::runtime::std_math::ClampF32) fn Clamp(value: f32, minValue: f32, maxValue: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::ClampF64) fn Clamp(value: f64, minValue: f64, maxValue: f64) -> f64;
+
+        fn Clamp(value: isize, minValue: isize, maxValue: isize) -> isize {
+            let low = Min(minValue, maxValue);
+            let high = Max(minValue, maxValue);
+            if (value < low) {
+                return low;
+            }
+            if (value > high) {
+                return high;
+            }
+            return value;
+        }
+
+        fn Clamp(value: usize, minValue: usize, maxValue: usize) -> usize {
+            let low = Min(minValue, maxValue);
+            let high = Max(minValue, maxValue);
+            if (value < low) {
+                return low;
+            }
+            if (value > high) {
+                return high;
+            }
+            return value;
+        }
+
+        @Native @CppName(wio::runtime::std_math::SaturateF32) fn Saturate(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::SaturateF64) fn Saturate(value: f64) -> f64;
+
+        fn Clamp01(value: f32) -> f32 {
+            return Saturate(value);
+        }
+
+        fn Clamp01(value: f64) -> f64 {
+            return Saturate(value);
+        }
+
+        @Native @CppName(wio::runtime::std_math::SignI8) fn Sign(value: i8) -> i8;
+        @Native @CppName(wio::runtime::std_math::SignI16) fn Sign(value: i16) -> i16;
+        @Native @CppName(wio::runtime::std_math::SignI32) fn Sign(value: i32) -> i32;
+        @Native @CppName(wio::runtime::std_math::SignI64) fn Sign(value: i64) -> i64;
+        @Native @CppName(wio::runtime::std_math::SignU8) fn Sign(value: u8) -> u8;
+        @Native @CppName(wio::runtime::std_math::SignU16) fn Sign(value: u16) -> u16;
+        @Native @CppName(wio::runtime::std_math::SignU32) fn Sign(value: u32) -> u32;
+        @Native @CppName(wio::runtime::std_math::SignU64) fn Sign(value: u64) -> u64;
+        @Native @CppName(wio::runtime::std_math::SignF32) fn Sign(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::SignF64) fn Sign(value: f64) -> f64;
+
+        fn Sign(value: isize) -> isize {
+            if (value > (0 fit isize)) {
+                return 1 fit isize;
+            }
+            if (value < (0 fit isize)) {
+                return -1 fit isize;
+            }
+            return 0 fit isize;
+        }
+
+        fn Sign(value: usize) -> usize {
+            if (value == 0usize) {
+                return 0usize;
+            }
+            return 1usize;
+        }
+
+        @Native @CppName(wio::runtime::std_math::SignNonZeroF32) fn SignNonZero(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::SignNonZeroF64) fn SignNonZero(value: f64) -> f64;
+
+        fn Square<T>(value: T) -> T {
+            return value * value;
+        }
+
+        fn Cube<T>(value: T) -> T {
+            return value * value * value;
+        }
+
+        fn InRangeInclusive<T>(value: T, minValue: T, maxValue: T) -> bool {
+            if (minValue <= maxValue) {
+                return value >= minValue and value <= maxValue;
+            }
+            return value >= maxValue and value <= minValue;
+        }
+
+        fn InRangeExclusive<T>(value: T, minValue: T, maxValue: T) -> bool {
+            if (minValue <= maxValue) {
+                return value > minValue and value < maxValue;
+            }
+            return value > maxValue and value < minValue;
+        }
+
+        @Native @CppName(wio::runtime::std_math::IsNanF32) fn IsNan(value: f32) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsNanF64) fn IsNan(value: f64) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsInfF32) fn IsInf(value: f32) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsInfF64) fn IsInf(value: f64) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsFiniteF32) fn IsFinite(value: f32) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsFiniteF64) fn IsFinite(value: f64) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsNormalF32) fn IsNormal(value: f32) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsNormalF64) fn IsNormal(value: f64) -> bool;
+        @Native @CppName(wio::runtime::std_math::SignBitF32) fn SignBit(value: f32) -> bool;
+        @Native @CppName(wio::runtime::std_math::SignBitF64) fn SignBit(value: f64) -> bool;
+
+        @Native @CppName(wio::runtime::std_math::ApproxEqF32) fn ApproxEq(value: f32, other: f32, epsilon: f32) -> bool;
+        @Native @CppName(wio::runtime::std_math::ApproxEqF64) fn ApproxEq(value: f64, other: f64, epsilon: f64) -> bool;
+
+        fn ApproxEq(value: f32, other: f32) -> bool {
+            return ApproxEq(value, other, 0.00001f);
+        }
+
+        fn ApproxEq(value: f64, other: f64) -> bool {
+            return ApproxEq(value, other, 0.0000001);
+        }
+
+        @Native @CppName(wio::runtime::std_math::ApproxZeroF32) fn ApproxZero(value: f32) -> bool;
+        @Native @CppName(wio::runtime::std_math::ApproxZeroF64) fn ApproxZero(value: f64) -> bool;
+        @Native @CppName(wio::runtime::std_math::CopySignF32) fn CopySign(value: f32, sign: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::CopySignF64) fn CopySign(value: f64, sign: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::NextAfterF32) fn NextAfter(value: f32, toward: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::NextAfterF64) fn NextAfter(value: f64, toward: f64) -> f64;
+
+        @Native @CppName(wio::runtime::std_math::SinF32) fn Sin(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::SinF64) fn Sin(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::CosF32) fn Cos(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::CosF64) fn Cos(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::TanF32) fn Tan(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::TanF64) fn Tan(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::AsinF32) fn Asin(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::AsinF64) fn Asin(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::AcosF32) fn Acos(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::AcosF64) fn Acos(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::AtanF32) fn Atan(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::AtanF64) fn Atan(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::Atan2F32) fn Atan2(y: f32, x: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::Atan2F64) fn Atan2(y: f64, x: f64) -> f64;
+
+        @Native @CppName(wio::runtime::std_math::ExpF32) fn Exp(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::ExpF64) fn Exp(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::Exp2F32) fn Exp2(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::Exp2F64) fn Exp2(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::Expm1F32) fn Expm1(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::Expm1F64) fn Expm1(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::LogF32) fn Log(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::LogF64) fn Log(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::Log2F32) fn Log2(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::Log2F64) fn Log2(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::Log10F32) fn Log10(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::Log10F64) fn Log10(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::Log1pF32) fn Log1p(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::Log1pF64) fn Log1p(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::PowF32) fn Pow(value: f32, power: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::PowF64) fn Pow(value: f64, power: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::SqrtF32) fn Sqrt(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::SqrtF64) fn Sqrt(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::CbrtF32) fn Cbrt(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::CbrtF64) fn Cbrt(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::HypotF32) fn Hypot(left: f32, right: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::HypotF64) fn Hypot(left: f64, right: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::RsqrtF32) fn Rsqrt(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::RsqrtF64) fn Rsqrt(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::FastRsqrtF32) fn FastRsqrt(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::FastRsqrtF64) fn FastRsqrt(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::FastSqrtF32) fn FastSqrt(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::FastSqrtF64) fn FastSqrt(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::FastCbrtF32) fn FastCbrt(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::FastCbrtF64) fn FastCbrt(value: f64) -> f64;
+
+        @Native @CppName(wio::runtime::std_math::FloorF32) fn Floor(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::FloorF64) fn Floor(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::CeilF32) fn Ceil(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::CeilF64) fn Ceil(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::TruncF32) fn Trunc(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::TruncF64) fn Trunc(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::RoundF32) fn Round(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::RoundF64) fn Round(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::NearbyIntF32) fn NearbyInt(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::NearbyIntF64) fn NearbyInt(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::FmodF32) fn Fmod(left: f32, right: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::FmodF64) fn Fmod(left: f64, right: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::RemainderF32) fn Remainder(left: f32, right: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::RemainderF64) fn Remainder(left: f64, right: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::FdimF32) fn Fdim(left: f32, right: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::FdimF64) fn Fdim(left: f64, right: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::FmaF32) fn Fma(a: f32, b: f32, c: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::FmaF64) fn Fma(a: f64, b: f64, c: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::FractF32) fn Fract(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::FractF64) fn Fract(value: f64) -> f64;
+
+        @Native @CppName(wio::runtime::std_math::LerpF32) fn Lerp(start: f32, endValue: f32, t: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::LerpF64) fn Lerp(start: f64, endValue: f64, t: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::LerpClampedF32) fn LerpClamped(start: f32, endValue: f32, t: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::LerpClampedF64) fn LerpClamped(start: f64, endValue: f64, t: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::InvLerpF32) fn InvLerp(start: f32, endValue: f32, value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::InvLerpF64) fn InvLerp(start: f64, endValue: f64, value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::InvLerpClampedF32) fn InvLerpClamped(start: f32, endValue: f32, value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::InvLerpClampedF64) fn InvLerpClamped(start: f64, endValue: f64, value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::RemapF32) fn Remap(value: f32, inputMin: f32, inputMax: f32, outputMin: f32, outputMax: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::RemapF64) fn Remap(value: f64, inputMin: f64, inputMax: f64, outputMin: f64, outputMax: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::RemapClampedF32) fn RemapClamped(value: f32, inputMin: f32, inputMax: f32, outputMin: f32, outputMax: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::RemapClampedF64) fn RemapClamped(value: f64, inputMin: f64, inputMax: f64, outputMin: f64, outputMax: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::SmoothStepF32) fn SmoothStep(edge0: f32, edge1: f32, value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::SmoothStepF64) fn SmoothStep(edge0: f64, edge1: f64, value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::SmootherStepF32) fn SmootherStep(edge0: f32, edge1: f32, value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::SmootherStepF64) fn SmootherStep(edge0: f64, edge1: f64, value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::StepF32) fn Step(edge: f32, value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::StepF64) fn Step(edge: f64, value: f64) -> f64;
+
+        @Native @CppName(wio::runtime::std_math::DegToRadF32) fn DegToRad(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::DegToRadF64) fn DegToRad(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::RadToDegF32) fn RadToDeg(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::RadToDegF64) fn RadToDeg(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::NormalizeAngleRadF32) fn NormalizeAngleRad(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::NormalizeAngleRadF64) fn NormalizeAngleRad(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::NormalizeAngleDegF32) fn NormalizeAngleDeg(value: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::NormalizeAngleDegF64) fn NormalizeAngleDeg(value: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::DeltaAngleRadF32) fn DeltaAngleRad(fromValue: f32, toValue: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::DeltaAngleRadF64) fn DeltaAngleRad(fromValue: f64, toValue: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::DeltaAngleDegF32) fn DeltaAngleDeg(fromValue: f32, toValue: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::DeltaAngleDegF64) fn DeltaAngleDeg(fromValue: f64, toValue: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::WrapF32) fn Wrap(value: f32, period: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::WrapF64) fn Wrap(value: f64, period: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::RepeatF32) fn Repeat(value: f32, period: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::RepeatF64) fn Repeat(value: f64, period: f64) -> f64;
+        @Native @CppName(wio::runtime::std_math::PingPongF32) fn PingPong(value: f32, length: f32) -> f32;
+        @Native @CppName(wio::runtime::std_math::PingPongF64) fn PingPong(value: f64, length: f64) -> f64;
+
+        @Native @CppName(wio::runtime::std_math::GcdI8) fn Gcd(left: i8, right: i8) -> i8;
+        @Native @CppName(wio::runtime::std_math::GcdI16) fn Gcd(left: i16, right: i16) -> i16;
+        @Native @CppName(wio::runtime::std_math::GcdI32) fn Gcd(left: i32, right: i32) -> i32;
+        @Native @CppName(wio::runtime::std_math::GcdI64) fn Gcd(left: i64, right: i64) -> i64;
+        @Native @CppName(wio::runtime::std_math::GcdU8) fn Gcd(left: u8, right: u8) -> u8;
+        @Native @CppName(wio::runtime::std_math::GcdU16) fn Gcd(left: u16, right: u16) -> u16;
+        @Native @CppName(wio::runtime::std_math::GcdU32) fn Gcd(left: u32, right: u32) -> u32;
+        @Native @CppName(wio::runtime::std_math::GcdU64) fn Gcd(left: u64, right: u64) -> u64;
+        @Native @CppName(wio::runtime::std_math::LcmI8) fn Lcm(left: i8, right: i8) -> i8;
+        @Native @CppName(wio::runtime::std_math::LcmI16) fn Lcm(left: i16, right: i16) -> i16;
+        @Native @CppName(wio::runtime::std_math::LcmI32) fn Lcm(left: i32, right: i32) -> i32;
+        @Native @CppName(wio::runtime::std_math::LcmI64) fn Lcm(left: i64, right: i64) -> i64;
+        @Native @CppName(wio::runtime::std_math::LcmU8) fn Lcm(left: u8, right: u8) -> u8;
+        @Native @CppName(wio::runtime::std_math::LcmU16) fn Lcm(left: u16, right: u16) -> u16;
+        @Native @CppName(wio::runtime::std_math::LcmU32) fn Lcm(left: u32, right: u32) -> u32;
+        @Native @CppName(wio::runtime::std_math::LcmU64) fn Lcm(left: u64, right: u64) -> u64;
+
+        @Native @CppName(wio::runtime::std_math::PopCountU8) fn PopCount(value: u8) -> u8;
+        @Native @CppName(wio::runtime::std_math::PopCountU16) fn PopCount(value: u16) -> u16;
+        @Native @CppName(wio::runtime::std_math::PopCountU32) fn PopCount(value: u32) -> u32;
+        @Native @CppName(wio::runtime::std_math::PopCountU64) fn PopCount(value: u64) -> u64;
+        @Native @CppName(wio::runtime::std_math::CountLeadingZerosU8) fn CountLeadingZeros(value: u8) -> u8;
+        @Native @CppName(wio::runtime::std_math::CountLeadingZerosU16) fn CountLeadingZeros(value: u16) -> u16;
+        @Native @CppName(wio::runtime::std_math::CountLeadingZerosU32) fn CountLeadingZeros(value: u32) -> u32;
+        @Native @CppName(wio::runtime::std_math::CountLeadingZerosU64) fn CountLeadingZeros(value: u64) -> u64;
+        @Native @CppName(wio::runtime::std_math::CountTrailingZerosU8) fn CountTrailingZeros(value: u8) -> u8;
+        @Native @CppName(wio::runtime::std_math::CountTrailingZerosU16) fn CountTrailingZeros(value: u16) -> u16;
+        @Native @CppName(wio::runtime::std_math::CountTrailingZerosU32) fn CountTrailingZeros(value: u32) -> u32;
+        @Native @CppName(wio::runtime::std_math::CountTrailingZerosU64) fn CountTrailingZeros(value: u64) -> u64;
+        @Native @CppName(wio::runtime::std_math::RotateLeftU8) fn RotateLeft(value: u8, amount: u8) -> u8;
+        @Native @CppName(wio::runtime::std_math::RotateLeftU16) fn RotateLeft(value: u16, amount: u16) -> u16;
+        @Native @CppName(wio::runtime::std_math::RotateLeftU32) fn RotateLeft(value: u32, amount: u32) -> u32;
+        @Native @CppName(wio::runtime::std_math::RotateLeftU64) fn RotateLeft(value: u64, amount: u64) -> u64;
+        @Native @CppName(wio::runtime::std_math::RotateRightU8) fn RotateRight(value: u8, amount: u8) -> u8;
+        @Native @CppName(wio::runtime::std_math::RotateRightU16) fn RotateRight(value: u16, amount: u16) -> u16;
+        @Native @CppName(wio::runtime::std_math::RotateRightU32) fn RotateRight(value: u32, amount: u32) -> u32;
+        @Native @CppName(wio::runtime::std_math::RotateRightU64) fn RotateRight(value: u64, amount: u64) -> u64;
+        @Native @CppName(wio::runtime::std_math::NextPowerOfTwoU8) fn NextPowerOfTwo(value: u8) -> u8;
+        @Native @CppName(wio::runtime::std_math::NextPowerOfTwoU16) fn NextPowerOfTwo(value: u16) -> u16;
+        @Native @CppName(wio::runtime::std_math::NextPowerOfTwoU32) fn NextPowerOfTwo(value: u32) -> u32;
+        @Native @CppName(wio::runtime::std_math::NextPowerOfTwoU64) fn NextPowerOfTwo(value: u64) -> u64;
+        @Native @CppName(wio::runtime::std_math::PrevPowerOfTwoU8) fn PrevPowerOfTwo(value: u8) -> u8;
+        @Native @CppName(wio::runtime::std_math::PrevPowerOfTwoU16) fn PrevPowerOfTwo(value: u16) -> u16;
+        @Native @CppName(wio::runtime::std_math::PrevPowerOfTwoU32) fn PrevPowerOfTwo(value: u32) -> u32;
+        @Native @CppName(wio::runtime::std_math::PrevPowerOfTwoU64) fn PrevPowerOfTwo(value: u64) -> u64;
+        @Native @CppName(wio::runtime::std_math::IsPowerOfTwoU8) fn IsPowerOfTwo(value: u8) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsPowerOfTwoU16) fn IsPowerOfTwo(value: u16) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsPowerOfTwoU32) fn IsPowerOfTwo(value: u32) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsPowerOfTwoU64) fn IsPowerOfTwo(value: u64) -> bool;
+
+        @Native @CppName(wio::runtime::std_math::IsEvenI8) fn IsEven(value: i8) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsEvenI16) fn IsEven(value: i16) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsEvenI32) fn IsEven(value: i32) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsEvenI64) fn IsEven(value: i64) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsEvenU8) fn IsEven(value: u8) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsEvenU16) fn IsEven(value: u16) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsEvenU32) fn IsEven(value: u32) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsEvenU64) fn IsEven(value: u64) -> bool;
+
+        fn IsEven(value: isize) -> bool {
+            return (value % (2 fit isize)) == (0 fit isize);
+        }
+
+        fn IsEven(value: usize) -> bool {
+            return (value % 2usize) == 0usize;
+        }
+
+        @Native @CppName(wio::runtime::std_math::IsOddI8) fn IsOdd(value: i8) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsOddI16) fn IsOdd(value: i16) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsOddI32) fn IsOdd(value: i32) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsOddI64) fn IsOdd(value: i64) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsOddU8) fn IsOdd(value: u8) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsOddU16) fn IsOdd(value: u16) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsOddU32) fn IsOdd(value: u32) -> bool;
+        @Native @CppName(wio::runtime::std_math::IsOddU64) fn IsOdd(value: u64) -> bool;
+
+        fn IsOdd(value: isize) -> bool {
+            return not IsEven(value);
+        }
+
+        fn IsOdd(value: usize) -> bool {
+            return not IsEven(value);
+        }
+
+        @Native @CppName(wio::runtime::std_math::SaturatingAddI8) fn SaturatingAdd(left: i8, right: i8) -> i8;
+        @Native @CppName(wio::runtime::std_math::SaturatingAddI16) fn SaturatingAdd(left: i16, right: i16) -> i16;
+        @Native @CppName(wio::runtime::std_math::SaturatingAddI32) fn SaturatingAdd(left: i32, right: i32) -> i32;
+        @Native @CppName(wio::runtime::std_math::SaturatingAddI64) fn SaturatingAdd(left: i64, right: i64) -> i64;
+        @Native @CppName(wio::runtime::std_math::SaturatingAddU8) fn SaturatingAdd(left: u8, right: u8) -> u8;
+        @Native @CppName(wio::runtime::std_math::SaturatingAddU16) fn SaturatingAdd(left: u16, right: u16) -> u16;
+        @Native @CppName(wio::runtime::std_math::SaturatingAddU32) fn SaturatingAdd(left: u32, right: u32) -> u32;
+        @Native @CppName(wio::runtime::std_math::SaturatingAddU64) fn SaturatingAdd(left: u64, right: u64) -> u64;
+        @Native @CppName(wio::runtime::std_math::SaturatingSubI8) fn SaturatingSub(left: i8, right: i8) -> i8;
+        @Native @CppName(wio::runtime::std_math::SaturatingSubI16) fn SaturatingSub(left: i16, right: i16) -> i16;
+        @Native @CppName(wio::runtime::std_math::SaturatingSubI32) fn SaturatingSub(left: i32, right: i32) -> i32;
+        @Native @CppName(wio::runtime::std_math::SaturatingSubI64) fn SaturatingSub(left: i64, right: i64) -> i64;
+        @Native @CppName(wio::runtime::std_math::SaturatingSubU8) fn SaturatingSub(left: u8, right: u8) -> u8;
+        @Native @CppName(wio::runtime::std_math::SaturatingSubU16) fn SaturatingSub(left: u16, right: u16) -> u16;
+        @Native @CppName(wio::runtime::std_math::SaturatingSubU32) fn SaturatingSub(left: u32, right: u32) -> u32;
+        @Native @CppName(wio::runtime::std_math::SaturatingSubU64) fn SaturatingSub(left: u64, right: u64) -> u64;
+        @Native @CppName(wio::runtime::std_math::SaturatingMulI8) fn SaturatingMul(left: i8, right: i8) -> i8;
+        @Native @CppName(wio::runtime::std_math::SaturatingMulI16) fn SaturatingMul(left: i16, right: i16) -> i16;
+        @Native @CppName(wio::runtime::std_math::SaturatingMulI32) fn SaturatingMul(left: i32, right: i32) -> i32;
+        @Native @CppName(wio::runtime::std_math::SaturatingMulI64) fn SaturatingMul(left: i64, right: i64) -> i64;
+        @Native @CppName(wio::runtime::std_math::SaturatingMulU8) fn SaturatingMul(left: u8, right: u8) -> u8;
+        @Native @CppName(wio::runtime::std_math::SaturatingMulU16) fn SaturatingMul(left: u16, right: u16) -> u16;
+        @Native @CppName(wio::runtime::std_math::SaturatingMulU32) fn SaturatingMul(left: u32, right: u32) -> u32;
+        @Native @CppName(wio::runtime::std_math::SaturatingMulU64) fn SaturatingMul(left: u64, right: u64) -> u64;
     }
 }
