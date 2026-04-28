@@ -27,10 +27,7 @@ set(WIO_BACKEND_RUNTIME_OBJ_STD_MATH "${WIO_BACKEND_RUNTIME_DIR}/std_math.o")
 
 file(MAKE_DIRECTORY "${WIO_BACKEND_RUNTIME_DIR}")
 
-add_library(wio_runtime_headers INTERFACE 
-    ${WIO_RUNTIME_SOURCES}
-    ${WIO_RUNTIME_HEADERS}
-)
+add_library(wio_runtime_headers INTERFACE)
 target_include_directories(wio_runtime_headers INTERFACE "${WIO_RUNTIME_INCLUDE_DIR}")
 target_sources(wio_runtime_headers INTERFACE ${WIO_RUNTIME_HEADERS})
 
