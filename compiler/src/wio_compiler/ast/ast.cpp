@@ -163,6 +163,11 @@ namespace wio
 
     FunctionCallExpression::~FunctionCallExpression() = default;
 
+    Parameter::Parameter(NodePtr<Identifier> _name, NodePtr<TypeSpecifier> _type, NodePtr<Expression> _defaultValue)
+        : name(std::move(_name)), type(std::move(_type)), defaultValue(std::move(_defaultValue))
+    {
+    }
+
     LambdaExpression::LambdaExpression(std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType,
         NodePtr<Statement> _body, common::Location _loc)
             : Expression(_loc), parameters(std::move(_params)), returnType(std::move(_retType)), body(std::move(_body))

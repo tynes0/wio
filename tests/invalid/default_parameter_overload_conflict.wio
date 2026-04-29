@@ -1,0 +1,11 @@
+fn Score(x: i32) -> i32 {
+    return 1000 + x;
+}
+
+fn Score(x: i32, bonus: i32 = 1) -> i32 {
+    return x + bonus;
+}
+
+fn Entry() -> i32 {
+    return Score(5);
+}

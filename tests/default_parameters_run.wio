@@ -1,0 +1,33 @@
+use std::console as console;
+use std::assert as assert;
+
+fn Sum3(x: i32, y: i32 = 5, z: i32 = 7) -> i32 {
+    return x + y + z;
+}
+
+object Counter {
+    value: i32;
+
+    public fn OnConstruct(value: i32 = 10) {
+        self.value = value;
+    }
+
+    public fn Add(delta: i32 = 1) -> i32 {
+        self.value += delta;
+        return self.value;
+    }
+}
+
+fn Entry() -> i32 {
+    mut counter = Counter();
+
+    assert::ExpectEqual(Sum3(1), 13, "default tail args failed");
+    assert::ExpectEqual(Sum3(1, 2), 10, "single omitted default failed");
+    assert::ExpectEqual(Sum3(1, 2, 3), 6, "explicit args failed");
+
+    assert::ExpectEqual(counter.Add(), 11, "default method arg failed");
+    assert::ExpectEqual(counter.Add(4), 15, "explicit method arg failed");
+
+    console::Print("Default parameters: ok");
+    return 0;
+}

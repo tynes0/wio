@@ -1,6 +1,7 @@
 use std::console as console;
+use std::traits as traits;
 
-@Apply(IsInteger<T>)
+@Apply(traits::IsInteger<T>)
 fn Twice<T>(value: T) -> T {
     return value + value;
 }

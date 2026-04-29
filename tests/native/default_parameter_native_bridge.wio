@@ -1,0 +1,16 @@
+use std::console as console;
+
+realm ffi {
+    @Native
+    @CppHeader("native_default_args.h")
+    @CppName(native_defaults::Add)
+    fn Add(left: i32, right: i32 = 5) -> i32;
+}
+
+fn Entry() -> i32 {
+    let a = ffi::Add(7);
+    let b = ffi::Add(7, 9);
+
+    console::Print($"Native default parameters: ${a}, ${b}");
+    return 0;
+}

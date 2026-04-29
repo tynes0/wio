@@ -527,6 +527,11 @@ namespace wio
     {
         NodePtr<Identifier> name;
         NodePtr<TypeSpecifier> type;
+        NodePtr<Expression> defaultValue;
+
+        Parameter(NodePtr<Identifier> _name = nullptr,
+            NodePtr<TypeSpecifier> _type = nullptr,
+            NodePtr<Expression> _defaultValue = nullptr);
     };
 
     struct LambdaExpression : Expression

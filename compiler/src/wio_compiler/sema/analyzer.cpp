@@ -1,5 +1,6 @@
 ﻿#include "wio/sema/analyzer.h"
 
+#include <array>
 #include <cctype>
 #include <functional>
 #include <optional>
@@ -112,6 +113,28 @@ namespace wio::sema
                 return cppNameArg->value;
 
             return node.name ? node.name->token.value : "";
+        }
+
+        size_t getRequiredParameterCount(const FunctionDeclaration& node)
+        {
+            size_t requiredCount = node.parameters.size();
+            while (requiredCount > 0 && node.parameters[requiredCount - 1].defaultValue)
+                --requiredCount;
+
+            return requiredCount;
+        }
+
+        size_t getRequiredParameterCount(const FunctionDeclaration* node)
+        {
+            return node ? getRequiredParameterCount(*node) : 0;
+        }
+
+        std::string formatExpectedArgumentCountDescription(size_t requiredCount, size_t totalCount)
+        {
+            if (requiredCount == totalCount)
+                return std::to_string(totalCount);
+
+            return common::formatString("{} to {}", requiredCount, totalCount);
         }
 
         std::string formatInstantiatedExportSymbolName(const std::string& baseName, const std::vector<Ref<Type>>& instantiationTypes)
@@ -1296,32 +1319,6 @@ namespace wio::sema
             return allArgs;
         }
 
-        enum class GenericConstraintPredicateKind : uint8_t
-        {
-            None,
-            IsInteger,
-            IsNumeric
-        };
-
-        std::optional<GenericConstraintPredicateKind> tryGetGenericConstraintPredicateKind(std::string_view name)
-        {
-            if (name == "IsInteger")
-                return GenericConstraintPredicateKind::IsInteger;
-            if (name == "IsNumeric")
-                return GenericConstraintPredicateKind::IsNumeric;
-            return std::nullopt;
-        }
-
-        std::string_view getGenericConstraintPredicateName(GenericConstraintPredicateKind predicateKind)
-        {
-            switch (predicateKind)
-            {
-            case GenericConstraintPredicateKind::IsInteger: return "IsInteger";
-            case GenericConstraintPredicateKind::IsNumeric: return "IsNumeric";
-            default: return "<unknown>";
-            }
-        }
-
         AttributeTypeArgument getAttributeTypeArgument(const AttributeStatement& attribute, size_t index)
         {
             NodePtr<TypeSpecifier> typeSpecifier = nullptr;
@@ -1353,44 +1350,105 @@ namespace wio::sema
                    name == "isize" || name == "usize";
         }
 
-        bool evaluateGenericConstraintPredicate(GenericConstraintPredicateKind predicateKind, const Ref<Type>& type)
+        bool isNumericConstraintType(const Ref<Type>& type)
         {
-            switch (predicateKind)
-            {
-            case GenericConstraintPredicateKind::IsInteger:
-                return isIntegerConstraintType(type);
-            case GenericConstraintPredicateKind::IsNumeric:
-            {
-                Ref<Type> resolved = unwrapAliasType(type);
-                return resolved && resolved->isNumeric();
-            }
-            default:
-                return false;
-            }
+            Ref<Type> resolved = unwrapAliasType(type);
+            return resolved && resolved->isNumeric();
         }
 
-        std::vector<Ref<Type>> getGenericConstraintCandidateTypes(GenericConstraintPredicateKind predicateKind)
+        std::vector<Ref<Type>> getIntegerConstraintCandidateTypes()
         {
             auto& ctx = Compiler::get().getTypeContext();
+            return {
+                ctx.getI8(), ctx.getI16(), ctx.getI32(), ctx.getI64(),
+                ctx.getU8(), ctx.getU16(), ctx.getU32(), ctx.getU64(),
+                ctx.getISize(), ctx.getUSize()
+            };
+        }
 
-            switch (predicateKind)
+        std::vector<Ref<Type>> getNumericConstraintCandidateTypes()
+        {
+            auto candidates = getIntegerConstraintCandidateTypes();
+            auto& ctx = Compiler::get().getTypeContext();
+            candidates.push_back(ctx.getF32());
+            candidates.push_back(ctx.getF64());
+            return candidates;
+        }
+
+        enum class GenericConstraintTraitKind : uint8_t
+        {
+            IsInteger,
+            IsNumeric
+        };
+
+        using GenericConstraintPredicateFn = bool (*)(const Ref<Type>&);
+        using GenericConstraintCandidatesFn = std::vector<Ref<Type>> (*)();
+
+        struct GenericConstraintTraitDescriptor
+        {
+            GenericConstraintTraitKind kind;
+            std::string_view canonicalQualifiedName;
+            std::string_view shortName;
+            GenericConstraintPredicateFn predicate;
+            GenericConstraintCandidatesFn candidateTypes;
+        };
+
+        const std::array<GenericConstraintTraitDescriptor, 2>& getGenericConstraintTraitDescriptors()
+        {
+            static const std::array<GenericConstraintTraitDescriptor, 2> descriptors = {{
+                {
+                    .kind = GenericConstraintTraitKind::IsInteger,
+                    .canonicalQualifiedName = "std::traits::IsInteger",
+                    .shortName = "IsInteger",
+                    .predicate = isIntegerConstraintType,
+                    .candidateTypes = getIntegerConstraintCandidateTypes
+                },
+                {
+                    .kind = GenericConstraintTraitKind::IsNumeric,
+                    .canonicalQualifiedName = "std::traits::IsNumeric",
+                    .shortName = "IsNumeric",
+                    .predicate = isNumericConstraintType,
+                    .candidateTypes = getNumericConstraintCandidateTypes
+                }
+            }};
+            return descriptors;
+        }
+
+        std::string_view getLastQualifiedSegment(std::string_view name)
+        {
+            const size_t separator = name.rfind("::");
+            if (separator == std::string_view::npos)
+                return name;
+
+            return name.substr(separator + 2);
+        }
+
+        const GenericConstraintTraitDescriptor* findGenericConstraintTraitDescriptor(std::string_view rawName,
+                                                                                     const Ref<Type>& resolvedType = nullptr)
+        {
+            const std::string_view lastSegment = getLastQualifiedSegment(rawName);
+            for (const auto& descriptor : getGenericConstraintTraitDescriptors())
             {
-            case GenericConstraintPredicateKind::IsInteger:
-                return {
-                    ctx.getI8(), ctx.getI16(), ctx.getI32(), ctx.getI64(),
-                    ctx.getU8(), ctx.getU16(), ctx.getU32(), ctx.getU64(),
-                    ctx.getISize(), ctx.getUSize()
-                };
-            case GenericConstraintPredicateKind::IsNumeric:
-                return {
-                    ctx.getI8(), ctx.getI16(), ctx.getI32(), ctx.getI64(),
-                    ctx.getU8(), ctx.getU16(), ctx.getU32(), ctx.getU64(),
-                    ctx.getISize(), ctx.getUSize(),
-                    ctx.getF32(), ctx.getF64()
-                };
-            default:
-                return {};
+                if (rawName == descriptor.shortName ||
+                    rawName == descriptor.canonicalQualifiedName ||
+                    lastSegment == descriptor.shortName)
+                    return &descriptor;
+
+                Ref<Type> unwrapped = unwrapAliasType(resolvedType);
+                if (!unwrapped || unwrapped->kind() != TypeKind::Struct)
+                    continue;
+
+                auto structType = unwrapped.AsFast<StructType>();
+                if (structType && structType->name == descriptor.shortName && structType->scopePath == "std::traits")
+                    return &descriptor;
             }
+
+            return nullptr;
+        }
+
+        std::string_view getGenericConstraintTraitDisplayName(const GenericConstraintTraitDescriptor& descriptor)
+        {
+            return descriptor.canonicalQualifiedName;
         }
 
         Ref<Type> getPreparedConstraintType(SemanticAnalyzer& analyzer, const NodePtr<TypeSpecifier>& typeSpecifier)
@@ -1414,7 +1472,8 @@ namespace wio::sema
         {
             if (argument.typeSpecifier)
             {
-                if (auto predicateKind = tryGetGenericConstraintPredicateKind(argument.typeSpecifier->name.value))
+                Ref<Type> preparedConstraintType = getPreparedConstraintType(analyzer, argument.typeSpecifier);
+                if (const auto* predicateTrait = findGenericConstraintTraitDescriptor(argument.typeSpecifier->name.value, preparedConstraintType))
                 {
                     if (argument.typeSpecifier->generics.size() != 1)
                     {
@@ -1422,7 +1481,7 @@ namespace wio::sema
                             errorLocation,
                             "{} predicate '{}' expects exactly one generic parameter operand.",
                             attributeName,
-                            getGenericConstraintPredicateName(*predicateKind)
+                            getGenericConstraintTraitDisplayName(*predicateTrait)
                         );
                         return false;
                     }
@@ -1437,7 +1496,7 @@ namespace wio::sema
                             errorLocation,
                             "{} predicate '{}' must target the matching generic parameter '{}'.",
                             attributeName,
-                            getGenericConstraintPredicateName(*predicateKind),
+                            getGenericConstraintTraitDisplayName(*predicateTrait),
                             expectedParameterName
                         );
                         return false;
@@ -1446,7 +1505,7 @@ namespace wio::sema
                     return true;
                 }
 
-                Ref<Type> exactType = getPreparedConstraintType(analyzer, argument.typeSpecifier);
+                Ref<Type> exactType = preparedConstraintType;
                 if (!exactType || exactType->isUnknown())
                 {
                     WIO_LOG_ADD_ERROR(
@@ -1461,7 +1520,7 @@ namespace wio::sema
                 {
                     WIO_LOG_ADD_ERROR(
                         errorLocation,
-                        "{} must use fully concrete type constraints or supported predicates like IsInteger<{}>.",
+                        "{} must use fully concrete type constraints or supported predicates like std::traits::IsInteger<{}>.",
                         attributeName,
                         expectedParameterName
                     );
@@ -1476,7 +1535,7 @@ namespace wio::sema
 
             WIO_LOG_ADD_ERROR(
                 errorLocation,
-                "{} supports concrete types{} or supported predicates like IsInteger<{}> and IsNumeric<{}>.",
+                "{} supports concrete types{} or supported predicates like std::traits::IsInteger<{}> and std::traits::IsNumeric<{}>.",
                 attributeName,
                 allowBoolLiteral ? ", boolean constants" : "",
                 expectedParameterName,
@@ -1566,9 +1625,10 @@ namespace wio::sema
                     const auto argument = getAttributeTypeArgument(*applyAttribute, i);
                     if (argument.typeSpecifier)
                     {
-                        if (auto predicateKind = tryGetGenericConstraintPredicateKind(argument.typeSpecifier->name.value))
+                        if (const auto* predicateTrait = findGenericConstraintTraitDescriptor(argument.typeSpecifier->name.value,
+                                                                                              argument.typeSpecifier->refType.Lock()))
                         {
-                            if (!evaluateGenericConstraintPredicate(*predicateKind, bindingTypes[i]))
+                            if (!predicateTrait->predicate(bindingTypes[i]))
                             {
                                 matches = false;
                                 break;
@@ -1664,9 +1724,10 @@ namespace wio::sema
 
                     if (argument.typeSpecifier)
                     {
-                        if (auto predicateKind = tryGetGenericConstraintPredicateKind(argument.typeSpecifier->name.value))
+                        if (const auto* predicateTrait = findGenericConstraintTraitDescriptor(argument.typeSpecifier->name.value,
+                                                                                              argument.typeSpecifier->refType.Lock()))
                         {
-                            candidateLists.push_back(getGenericConstraintCandidateTypes(*predicateKind));
+                            candidateLists.push_back(predicateTrait->candidateTypes());
                             continue;
                         }
 
@@ -3365,11 +3426,52 @@ namespace wio::sema
             return analyzedType;
         };
 
+        auto getFunctionDeclarationForSymbol = [&](const Ref<Symbol>& symbol) -> const FunctionDeclaration*
+        {
+            if (!symbol)
+                return nullptr;
+
+            auto foundDeclaration = functionDeclarationsBySymbol_.find(symbol.Get());
+            return foundDeclaration != functionDeclarationsBySymbol_.end() ? foundDeclaration->second : nullptr;
+        };
+
+        auto getRequiredArgumentCountForCallable = [&](const Ref<Symbol>& symbol,
+                                                       const Ref<FunctionType>& functionType) -> size_t
+        {
+            if (const auto* functionDeclaration = getFunctionDeclarationForSymbol(symbol))
+                return getRequiredParameterCount(functionDeclaration);
+
+            return functionType ? functionType->paramTypes.size() : 0;
+        };
+
+        auto buildCallableSurfaceFunctionType = [&](const Ref<FunctionType>& functionType, size_t arity) -> Ref<FunctionType>
+        {
+            if (!functionType)
+                return nullptr;
+
+            const size_t surfaceArity = std::min(arity, functionType->paramTypes.size());
+            std::vector<Ref<Type>> surfaceParamTypes;
+            surfaceParamTypes.reserve(surfaceArity);
+            for (size_t i = 0; i < surfaceArity; ++i)
+                surfaceParamTypes.push_back(functionType->paramTypes[i]);
+
+            return Compiler::get().getTypeContext().getOrCreateFunctionType(functionType->returnType, surfaceParamTypes)
+                .AsFast<FunctionType>();
+        };
+
         auto analyzeArgumentsForResolvedFunctionType = [&](const Ref<FunctionType>& functionType,
+                                                           const FunctionDeclaration* functionDeclaration,
                                                            bool suppressDiagnostics,
                                                            bool requireExactArity) -> std::optional<std::vector<Ref<Type>>>
         {
             if (!functionType)
+                return std::nullopt;
+
+            const size_t requiredArgumentCount =
+                functionDeclaration ? getRequiredParameterCount(functionDeclaration) : functionType->paramTypes.size();
+            const size_t totalParameterCount = functionType->paramTypes.size();
+
+            if (node.arguments.size() < requiredArgumentCount || node.arguments.size() > totalParameterCount)
                 return std::nullopt;
 
             if (requireExactArity && functionType->paramTypes.size() != node.arguments.size())
@@ -3438,10 +3540,13 @@ namespace wio::sema
 
         auto scoreResolvedCall = [&](const Ref<FunctionType>& functionType,
                                      const std::vector<Ref<Type>>& actualArgumentTypes,
+                                     size_t requiredArgumentCount,
                                      bool isGenericCandidate,
                                      size_t genericParameterCount) -> std::optional<int>
         {
-            if (!functionType || functionType->paramTypes.size() != actualArgumentTypes.size())
+            if (!functionType ||
+                actualArgumentTypes.size() < requiredArgumentCount ||
+                actualArgumentTypes.size() > functionType->paramTypes.size())
                 return std::nullopt;
 
             int currentScore = 0;
@@ -3503,6 +3608,8 @@ namespace wio::sema
                 }
             }
 
+            currentScore -= static_cast<int>((functionType->paramTypes.size() - actualArgumentTypes.size()) * 25);
+
             if (isGenericCandidate)
                 currentScore -= static_cast<int>(std::max<size_t>(1, genericParameterCount));
 
@@ -3529,6 +3636,20 @@ namespace wio::sema
                                          useExplicitFunctionTypeArguments ||
                                          (isConstructorCall && !constructorGenericParameterNames.empty()) ||
                                          !constructorGenericBindings.empty();
+        }
+
+        if (!requiresOverloadResolution)
+        {
+            for (const auto& candidateSymbol : candidateSymbols)
+            {
+                const auto* candidateDeclaration = getFunctionDeclarationForSymbol(candidateSymbol);
+                if (candidateDeclaration &&
+                    getRequiredParameterCount(candidateDeclaration) != candidateDeclaration->parameters.size())
+                {
+                    requiresOverloadResolution = true;
+                    break;
+                }
+            }
         }
 
         if (requiresOverloadResolution)
@@ -3727,7 +3848,11 @@ namespace wio::sema
                     resolvedFunctionType = instantiateGenericType(resolvedFunctionType, constructorGenericBindings);
 
                 auto declaredFunctionType = resolvedFunctionType.AsFast<FunctionType>();
-                if (!declaredFunctionType || declaredFunctionType->paramTypes.size() != node.arguments.size())
+                if (!declaredFunctionType)
+                    return std::nullopt;
+
+                const size_t requiredArgumentCount = getRequiredArgumentCountForCallable(overload, declaredFunctionType);
+                if (node.arguments.size() < requiredArgumentCount || node.arguments.size() > declaredFunctionType->paramTypes.size())
                     return std::nullopt;
 
                 const std::vector<std::string>& activeGenericParameterNames =
@@ -3890,15 +4015,22 @@ namespace wio::sema
                 if (auto score = scoreResolvedCall(
                         resolvedFunctionType.AsFast<FunctionType>(),
                         candidateArgTypes,
+                        requiredArgumentCount,
                         isGenericCandidate,
                         activeGenericParameterNames.size()
                     ); score.has_value())
+                {
+                    auto callableSurfaceType = buildCallableSurfaceFunctionType(
+                        resolvedFunctionType.AsFast<FunctionType>(),
+                        node.arguments.size()
+                    );
                     return ResolvedFunctionCandidate{
                         .symbol = overload,
-                        .functionType = resolvedFunctionType,
+                        .functionType = callableSurfaceType ? callableSurfaceType : resolvedFunctionType,
                         .score = *score,
                         .genericBindings = bindings
                     };
+                }
 
                 return std::nullopt;
             };
@@ -4069,6 +4201,7 @@ namespace wio::sema
 
             if (auto resolvedArgumentTypes = analyzeArgumentsForResolvedFunctionType(
                     bestMatch->functionType.AsFast<FunctionType>(),
+                    nullptr,
                     false,
                     false
                 ); !resolvedArgumentTypes.has_value())
@@ -4097,13 +4230,14 @@ namespace wio::sema
 
                 auto overloadArgumentTypes = analyzeArgumentsForResolvedFunctionType(
                     overloadType.AsFast<FunctionType>(),
+                    nullptr,
                     true,
                     true
                 );
                 if (!overloadArgumentTypes.has_value())
                     continue;
 
-                auto score = scoreResolvedCall(overloadType.AsFast<FunctionType>(), *overloadArgumentTypes, false, 0);
+                auto score = scoreResolvedCall(overloadType.AsFast<FunctionType>(), *overloadArgumentTypes, overloadType.AsFast<FunctionType>()->paramTypes.size(), false, 0);
                 if (!score.has_value())
                     continue;
 
@@ -4150,6 +4284,7 @@ namespace wio::sema
 
             if (auto resolvedArgumentTypes = analyzeArgumentsForResolvedFunctionType(
                     calleeType.AsFast<FunctionType>(),
+                    nullptr,
                     false,
                     false
                 ); !resolvedArgumentTypes.has_value())
@@ -4195,19 +4330,32 @@ namespace wio::sema
 
         auto funcType = calleeType.AsFast<FunctionType>();
         std::vector<Ref<Type>> argTypes;
-        if (auto resolvedArgumentTypes = analyzeArgumentsForResolvedFunctionType(funcType, false, false);
+        const auto* directFunctionDeclaration = getFunctionDeclarationForSymbol(calleeSym);
+        if (auto resolvedArgumentTypes = analyzeArgumentsForResolvedFunctionType(funcType, directFunctionDeclaration, false, false);
             resolvedArgumentTypes.has_value())
         {
             argTypes = std::move(*resolvedArgumentTypes);
         }
         else
         {
+            const size_t requiredArgumentCount = getRequiredArgumentCountForCallable(calleeSym, funcType);
+            const size_t totalParameterCount = funcType ? funcType->paramTypes.size() : 0;
+            if (node.arguments.size() < requiredArgumentCount || node.arguments.size() > totalParameterCount)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Function expects '{}' arguments, but got '{}'.",
+                    formatExpectedArgumentCountDescription(requiredArgumentCount, totalParameterCount),
+                    node.arguments.size()
+                );
+            }
             node.refType = Compiler::get().getTypeContext().getUnknown();
             return;
         }
 
-        if (argTypes.size() != funcType->paramTypes.size())
-            WIO_LOG_ADD_ERROR(node.location(), "Function expects '{}' arguments, but got '{}'.", funcType->paramTypes.size(), argTypes.size());
+        const size_t requiredArgumentCount = getRequiredArgumentCountForCallable(calleeSym, funcType);
+        if (argTypes.size() < requiredArgumentCount || argTypes.size() > funcType->paramTypes.size())
+            WIO_LOG_ADD_ERROR(node.location(), "Function expects '{}' arguments, but got '{}'.", formatExpectedArgumentCountDescription(requiredArgumentCount, funcType->paramTypes.size()), argTypes.size());
         
         size_t argCount = std::min(argTypes.size(), funcType->paramTypes.size());
         for (size_t i = 0; i < argCount; ++i)
@@ -5273,6 +5421,125 @@ namespace wio::sema
 
         auto genericScope = buildGenericTypeParameterScope();
         genericTypeParameterScopes_.push_back(genericScope);
+
+        bool sawDefaultParameter = false;
+        for (size_t i = 0; i < node.parameters.size(); ++i)
+        {
+            auto& param = node.parameters[i];
+            if (!param.defaultValue)
+            {
+                if (sawDefaultParameter)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        param.name ? param.name->location() : node.location(),
+                        "Parameters with default values must be trailing."
+                    );
+                }
+                continue;
+            }
+
+            sawDefaultParameter = true;
+
+            if (!param.type || !funcType->paramTypes[i] || funcType->paramTypes[i]->isUnknown())
+            {
+                WIO_LOG_ADD_ERROR(
+                    param.name ? param.name->location() : param.defaultValue->location(),
+                    "Default parameters require an explicit parameter type."
+                );
+                continue;
+            }
+
+            if (node.name->token.value == "Entry")
+            {
+                WIO_LOG_ADD_ERROR(param.defaultValue->location(), "Entry cannot declare default parameters.");
+            }
+
+            if (hasModuleLifecycle)
+            {
+                WIO_LOG_ADD_ERROR(
+                    param.defaultValue->location(),
+                    "{} cannot declare default parameters.",
+                    getModuleLifecycleAttributeName(moduleLifecycleAttributes.front())
+                );
+            }
+
+            if (!node.body && !isNative)
+            {
+                WIO_LOG_ADD_ERROR(
+                    param.defaultValue->location(),
+                    "Default parameters are currently supported only on functions with Wio bodies or on @Native declarations."
+                );
+            }
+
+            Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
+            bool previousAllowContextualNumericLiteralTyping = allowContextualNumericLiteralTyping_;
+            currentExpectedExpressionType_ = funcType->paramTypes[i];
+            allowContextualNumericLiteralTyping_ = true;
+            param.defaultValue->accept(*this);
+            currentExpectedExpressionType_ = previousExpectedExpressionType;
+            allowContextualNumericLiteralTyping_ = previousAllowContextualNumericLiteralTyping;
+
+            Ref<Type> defaultType = param.defaultValue->refType.Lock();
+            if (funcType->paramTypes[i] &&
+                !funcType->paramTypes[i]->isUnknown() &&
+                defaultType &&
+                !defaultType->isUnknown() &&
+                !isAssignmentLikeCompatible(funcType->paramTypes[i], defaultType))
+            {
+                WIO_LOG_ADD_ERROR(
+                    param.defaultValue->location(),
+                    "Default argument type mismatch for parameter '{}'. Expected '{}', but got '{}'.",
+                    param.name ? param.name->token.value : "<parameter>",
+                    funcType->paramTypes[i]->toString(),
+                    defaultType->toString()
+                );
+            }
+        }
+
+        if (auto overloadSymbol = currentScope_ ? currentScope_->resolve(node.name->token.value) : nullptr;
+            overloadSymbol && overloadSymbol->kind == SymbolKind::FunctionGroup)
+        {
+            const size_t currentRequiredParameterCount = getRequiredParameterCount(node);
+            const size_t currentTotalParameterCount = node.parameters.size();
+
+            for (const auto& overload : overloadSymbol->overloads)
+            {
+                if (!overload || overload == funcSym || !overload->type || overload->type->kind() != TypeKind::Function)
+                    continue;
+
+                auto foundDeclaration = functionDeclarationsBySymbol_.find(overload.Get());
+                if (foundDeclaration == functionDeclarationsBySymbol_.end() || !foundDeclaration->second)
+                    continue;
+
+                const auto* otherDeclaration = foundDeclaration->second;
+                const size_t otherRequiredParameterCount = getRequiredParameterCount(otherDeclaration);
+                const size_t otherTotalParameterCount = otherDeclaration->parameters.size();
+
+                if (currentRequiredParameterCount != currentTotalParameterCount &&
+                    otherTotalParameterCount >= currentRequiredParameterCount &&
+                    otherTotalParameterCount < currentTotalParameterCount)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "Default parameters on '{}' would synthesize an overload with {} arguments, but that signature is already declared explicitly.",
+                        node.name->token.value,
+                        otherTotalParameterCount
+                    );
+                }
+
+                if (otherRequiredParameterCount != otherTotalParameterCount &&
+                    currentTotalParameterCount >= otherRequiredParameterCount &&
+                    currentTotalParameterCount < otherTotalParameterCount)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "Function '{}' conflicts with a default-parameter overload that already covers {} arguments.",
+                        node.name->token.value,
+                        currentTotalParameterCount
+                    );
+                }
+            }
+        }
 
         if (hasInstantiate)
         {

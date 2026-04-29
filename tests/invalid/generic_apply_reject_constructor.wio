@@ -1,4 +1,6 @@
-@Apply(IsNumeric<T>)
+use std::traits as traits;
+
+@Apply(traits::IsNumeric<T>)
 object NumberBox<T> {
     public value: T;
 

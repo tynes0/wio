@@ -1,10 +1,11 @@
 use std::console as console;
+use std::traits as traits;
 
 realm ffi {
     @Native
     @CppHeader("native_generic_math.h")
     @CppName(native_generic::DoubleValue)
-    @Instantiate(IsInteger<T>)
+    @Instantiate(traits::IsInteger<T>)
     fn DoubleValue<T>(value: T) -> T;
 }
 

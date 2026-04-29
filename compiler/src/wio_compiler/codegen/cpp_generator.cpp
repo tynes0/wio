@@ -174,6 +174,85 @@ namespace wio::codegen
         Ref<sema::Type> instantiateGenericType(const Ref<sema::Type>& type,
                                                const std::unordered_map<std::string, Ref<sema::Type>>& bindings);
 
+        size_t getRequiredParameterCount(const FunctionDeclaration& node)
+        {
+            size_t requiredCount = node.parameters.size();
+            while (requiredCount > 0 && node.parameters[requiredCount - 1].defaultValue)
+                --requiredCount;
+
+            return requiredCount;
+        }
+
+        bool hasDefaultParameters(const FunctionDeclaration& node)
+        {
+            return getRequiredParameterCount(node) != node.parameters.size();
+        }
+
+        std::vector<Ref<sema::Type>> getLeadingParameterTypes(const Ref<sema::FunctionType>& functionType, size_t arity)
+        {
+            std::vector<Ref<sema::Type>> parameterTypes;
+            if (!functionType)
+                return parameterTypes;
+
+            const size_t cappedArity = std::min(arity, functionType->paramTypes.size());
+            parameterTypes.reserve(cappedArity);
+            for (size_t i = 0; i < cappedArity; ++i)
+                parameterTypes.push_back(functionType->paramTypes[i]);
+
+            return parameterTypes;
+        }
+
+        bool containsGenericParameterTypeForCodegen(const Ref<sema::Type>& type)
+        {
+            if (!type)
+                return false;
+
+            Ref<sema::Type> resolvedType = unwrapAliasTypeForCodegen(type);
+            if (!resolvedType)
+                return false;
+
+            switch (resolvedType->kind())
+            {
+            case sema::TypeKind::GenericParameter:
+                return true;
+            case sema::TypeKind::Reference:
+                return containsGenericParameterTypeForCodegen(resolvedType.AsFast<sema::ReferenceType>()->referredType);
+            case sema::TypeKind::Array:
+                return containsGenericParameterTypeForCodegen(resolvedType.AsFast<sema::ArrayType>()->elementType);
+            case sema::TypeKind::Dictionary:
+            {
+                auto dictionaryType = resolvedType.AsFast<sema::DictionaryType>();
+                return containsGenericParameterTypeForCodegen(dictionaryType->keyType) ||
+                       containsGenericParameterTypeForCodegen(dictionaryType->valueType);
+            }
+            case sema::TypeKind::Function:
+            {
+                auto functionType = resolvedType.AsFast<sema::FunctionType>();
+                if (containsGenericParameterTypeForCodegen(functionType->returnType))
+                    return true;
+
+                for (const auto& parameterType : functionType->paramTypes)
+                {
+                    if (containsGenericParameterTypeForCodegen(parameterType))
+                        return true;
+                }
+                return false;
+            }
+            case sema::TypeKind::Struct:
+            {
+                auto structType = resolvedType.AsFast<sema::StructType>();
+                for (const auto& genericArgument : structType->genericArguments)
+                {
+                    if (containsGenericParameterTypeForCodegen(genericArgument))
+                        return true;
+                }
+                return false;
+            }
+            default:
+                return false;
+            }
+        }
+
         Ref<sema::Type> instantiateGenericStructType(const Ref<sema::StructType>& structType,
                                                      const std::vector<Ref<sema::Type>>& explicitTypeArguments)
         {
@@ -3268,17 +3347,47 @@ namespace wio::codegen
         if (emitIntrinsicMemberAccess(node))
             return;
 
+        auto getSelectedMemberSymbol = [&]() -> Ref<sema::Symbol>
+        {
+            if (auto selectedMember = node.referencedSymbol.Lock())
+                return selectedMember;
+
+            return node.member->referencedSymbol.Lock();
+        };
+
         auto emitMemberName = [&]()
         {
-            if (auto memberSym = node.member->referencedSymbol.Lock();
+            if (auto memberSym = getSelectedMemberSymbol();
                 memberSym && memberSym->kind == sema::SymbolKind::Function)
             {
-                auto funcType = memberSym->type.AsFast<sema::FunctionType>();
+                auto selectedType = node.refType.Lock();
+                if (!selectedType || selectedType->kind() != sema::TypeKind::Function)
+                    selectedType = node.member->refType.Lock();
+                if (!selectedType || selectedType->kind() != sema::TypeKind::Function)
+                    selectedType = memberSym->type;
+
+                auto funcType = selectedType ? selectedType.AsFast<sema::FunctionType>() : nullptr;
+                if (!funcType)
+                    funcType = memberSym->type.AsFast<sema::FunctionType>();
+
+                if (funcType &&
+                    memberSym->type && memberSym->type->kind() == sema::TypeKind::Function)
+                {
+                    auto declarationFunctionType = memberSym->type.AsFast<sema::FunctionType>();
+                    if (containsGenericParameterTypeForCodegen(declarationFunctionType))
+                    {
+                        funcType = Compiler::get().getTypeContext().getOrCreateFunctionType(
+                            declarationFunctionType->returnType,
+                            getLeadingParameterTypes(declarationFunctionType, funcType->paramTypes.size())
+                        ).AsFast<sema::FunctionType>();
+                    }
+                }
+
                 emit(Mangler::mangleFunction(memberSym->name, funcType->paramTypes));
                 return;
             }
 
-            if (auto memberSym = node.member->referencedSymbol.Lock();
+            if (auto memberSym = getSelectedMemberSymbol();
                 memberSym && memberSym->kind == sema::SymbolKind::FunctionGroup)
             {
                 auto selectedType = node.refType.Lock();
@@ -3297,6 +3406,19 @@ namespace wio::codegen
                 if (selectedType && selectedType->kind() == sema::TypeKind::Function)
                 {
                     auto funcType = selectedType.AsFast<sema::FunctionType>();
+                    if (!memberSym->overloads.empty() &&
+                        memberSym->overloads.front()->type &&
+                        memberSym->overloads.front()->type->kind() == sema::TypeKind::Function)
+                    {
+                        auto declarationFunctionType = memberSym->overloads.front()->type.AsFast<sema::FunctionType>();
+                        if (containsGenericParameterTypeForCodegen(declarationFunctionType))
+                        {
+                            funcType = Compiler::get().getTypeContext().getOrCreateFunctionType(
+                                declarationFunctionType->returnType,
+                                getLeadingParameterTypes(declarationFunctionType, funcType->paramTypes.size())
+                            ).AsFast<sema::FunctionType>();
+                        }
+                    }
                     emit(Mangler::mangleFunction(memberSym->name, funcType->paramTypes));
                     return;
                 }
@@ -3315,17 +3437,33 @@ namespace wio::codegen
         if (auto objSym = node.object->referencedSymbol.Lock();
             objSym && objSym->kind == sema::SymbolKind::Namespace)
         {
-            if (auto memberSym = node.member->referencedSymbol.Lock())
+            if (auto memberSym = getSelectedMemberSymbol())
             {
                 if (memberSym->kind == sema::SymbolKind::Function)
                 {
                     auto funcType = node.refType.Lock();
                     if (!funcType || funcType->kind() != sema::TypeKind::Function)
+                        funcType = node.member->refType.Lock();
+                    if (!funcType || funcType->kind() != sema::TypeKind::Function)
                         funcType = memberSym->type;
 
                     if (funcType && funcType->kind() == sema::TypeKind::Function)
                     {
-                        emit(Mangler::mangleFunction(memberSym->name, funcType.AsFast<sema::FunctionType>()->paramTypes, memberSym->scopePath));
+                        auto mangledFunctionType = funcType.AsFast<sema::FunctionType>();
+                        if (memberSym->type &&
+                            memberSym->type->kind() == sema::TypeKind::Function)
+                        {
+                            auto declarationFunctionType = memberSym->type.AsFast<sema::FunctionType>();
+                            if (containsGenericParameterTypeForCodegen(declarationFunctionType))
+                            {
+                                mangledFunctionType = Compiler::get().getTypeContext().getOrCreateFunctionType(
+                                    declarationFunctionType->returnType,
+                                    getLeadingParameterTypes(declarationFunctionType, mangledFunctionType->paramTypes.size())
+                                ).AsFast<sema::FunctionType>();
+                            }
+                        }
+
+                        emit(Mangler::mangleFunction(memberSym->name, mangledFunctionType->paramTypes, memberSym->scopePath));
                         return;
                     }
                 }
@@ -3343,7 +3481,22 @@ namespace wio::codegen
 
                     if (selectedType && selectedType->kind() == sema::TypeKind::Function)
                     {
-                        emit(Mangler::mangleFunction(memberSym->name, selectedType.AsFast<sema::FunctionType>()->paramTypes, scopePath));
+                        auto mangledFunctionType = selectedType.AsFast<sema::FunctionType>();
+                        if (!memberSym->overloads.empty() &&
+                            memberSym->overloads.front()->type &&
+                            memberSym->overloads.front()->type->kind() == sema::TypeKind::Function)
+                        {
+                            auto declarationFunctionType = memberSym->overloads.front()->type.AsFast<sema::FunctionType>();
+                            if (containsGenericParameterTypeForCodegen(declarationFunctionType))
+                            {
+                                mangledFunctionType = Compiler::get().getTypeContext().getOrCreateFunctionType(
+                                    declarationFunctionType->returnType,
+                                    getLeadingParameterTypes(declarationFunctionType, mangledFunctionType->paramTypes.size())
+                                ).AsFast<sema::FunctionType>();
+                            }
+                        }
+
+                        emit(Mangler::mangleFunction(memberSym->name, mangledFunctionType->paramTypes, scopePath));
                         return;
                     }
                 }
@@ -3567,7 +3720,10 @@ namespace wio::codegen
                 }
 
                 if (declarationType && declarationType->kind() == sema::TypeKind::Function)
-                    mangledFunctionType = declarationType.AsFast<sema::FunctionType>();
+                    mangledFunctionType = Compiler::get().getTypeContext().getOrCreateFunctionType(
+                        declarationType.AsFast<sema::FunctionType>()->returnType,
+                        getLeadingParameterTypes(declarationType.AsFast<sema::FunctionType>(), node.arguments.size())
+                    ).AsFast<sema::FunctionType>();
             }
 
             emit(Mangler::mangleFunction(calleeSym->name, mangledFunctionType->paramTypes, scopePath));
@@ -3966,6 +4122,21 @@ namespace wio::codegen
             emit(formatTemplateArgumentList(instantiationTypes));
         };
 
+        auto emitGenericParameterArgumentList = [&]()
+        {
+            if (node.genericParameters.empty())
+                return;
+
+            emit("<");
+            for (size_t i = 0; i < node.genericParameters.size(); ++i)
+            {
+                emit(node.genericParameters[i]->token.value);
+                if (i + 1 < node.genericParameters.size())
+                    emit(", ");
+            }
+            emit(">");
+        };
+
         auto emitExplicitInstantiationDeclaration = [&](const std::vector<Ref<sema::Type>>& instantiationTypes)
         {
             auto instantiatedFunctionType = instantiateFunctionTypeForCodegen(instantiationTypes);
@@ -3984,6 +4155,116 @@ namespace wio::codegen
                     emit(", ");
             }
             emitLine(");");
+        };
+
+        auto emitWrapperParameters = [&](const std::vector<Ref<sema::Type>>& parameterTypes)
+        {
+            for (size_t i = 0; i < parameterTypes.size(); ++i)
+            {
+                emit(common::formatString(
+                    "{} {}",
+                    toCppType(parameterTypes[i]),
+                    sanitizeCppIdentifier(node.parameters[i].name->token.value)
+                ));
+                if (i + 1 < parameterTypes.size())
+                    emit(", ");
+            }
+        };
+
+        auto emitForwardingCallArguments = [&](size_t providedArgumentCount)
+        {
+            for (size_t i = 0; i < node.parameters.size(); ++i)
+            {
+                if (i > 0)
+                    emit(", ");
+
+                if (i < providedArgumentCount)
+                {
+                    emit(sanitizeCppIdentifier(node.parameters[i].name->token.value));
+                }
+                else if (node.parameters[i].defaultValue)
+                {
+                    node.parameters[i].defaultValue->accept(*this);
+                }
+            }
+        };
+
+        auto emitDefaultArgumentWrappers = [&]()
+        {
+            if ((!node.body && !isNative) || !hasDefaultParameters(node))
+                return;
+
+            const size_t requiredParameterCount = getRequiredParameterCount(node);
+            const size_t totalParameterCount = node.parameters.size();
+
+            if (funcName == "OnConstruct")
+            {
+                for (size_t wrapperArity = requiredParameterCount; wrapperArity < totalParameterCount; ++wrapperArity)
+                {
+                    EMIT_TABS();
+                    emit(currentClassName_ + "(");
+                    emitWrapperParameters(getLeadingParameterTypes(funcType, wrapperArity));
+                    emit(") : " + currentClassName_ + "(");
+                    emitForwardingCallArguments(wrapperArity);
+                    emitLine(") {}");
+                }
+                return;
+            }
+
+            if (funcName == "OnDestruct")
+                return;
+
+            const std::string scopePath = sym ? sym->scopePath : "";
+            const std::string wrapperFullSymbol = Mangler::mangleFunction(funcName, funcType->paramTypes, scopePath);
+            const std::string wrapperMethodFullSymbol = Mangler::mangleFunction(funcName, funcType->paramTypes);
+
+            for (size_t wrapperArity = requiredParameterCount; wrapperArity < totalParameterCount; ++wrapperArity)
+            {
+                const auto wrapperParameterTypes = getLeadingParameterTypes(funcType, wrapperArity);
+                const std::string wrapperSymbol = currentClassName_.empty()
+                    ? Mangler::mangleFunction(funcName, wrapperParameterTypes, scopePath)
+                    : Mangler::mangleFunction(funcName, wrapperParameterTypes);
+
+                if (!node.genericParameters.empty())
+                {
+                    EMIT_TABS();
+                    emit("template <");
+                    for (size_t i = 0; i < node.genericParameters.size(); ++i)
+                    {
+                        emit("typename " + node.genericParameters[i]->token.value);
+                        if (i + 1 < node.genericParameters.size())
+                            emit(", ");
+                    }
+                    emitLine(">");
+                }
+
+                EMIT_TABS();
+                emit(returnType + " " + wrapperSymbol + "(");
+                emitWrapperParameters(wrapperParameterTypes);
+                emit(")");
+
+                if (isEmittingPrototypes_)
+                {
+                    emitLine(";\n");
+                    continue;
+                }
+
+                emitLine();
+                emitLine("{");
+                indent();
+                EMIT_TABS();
+                if (funcType->returnType && !funcType->returnType->isVoid())
+                    emit("return ");
+
+                emit(currentClassName_.empty() ? wrapperFullSymbol : wrapperMethodFullSymbol);
+                emitGenericParameterArgumentList();
+                emit("(");
+                emitForwardingCallArguments(wrapperArity);
+                emit(");");
+                emit("\n");
+                dedent();
+                emitLine("}");
+            }
         };
 
         if (!node.genericParameters.empty())
@@ -4043,6 +4324,7 @@ namespace wio::codegen
         if (isEmittingPrototypes_)
         {
             emitLine(";\n");
+            emitDefaultArgumentWrappers();
             return;
         }
 
@@ -4114,6 +4396,8 @@ namespace wio::codegen
         {
             emitLine(";\n");
         }
+
+        emitDefaultArgumentWrappers();
 
         if (emitsExportWrapper && !isEmittingPrototypes_ && currentClassName_.empty() && node.body)
         {

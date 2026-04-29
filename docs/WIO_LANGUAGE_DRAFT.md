@@ -1575,6 +1575,7 @@ Parameters are written as:
 
 ```wio
 name: Type
+name: Type = expr
 ```
 
 Examples:
@@ -1585,13 +1586,30 @@ fn Damage(target: ref Entity, amount: f32) {
 
 fn ReadOnlyInspect(target: view object) {
 }
+
+fn Score(base: i32, bonus: i32 = 1) -> i32 {
+    return base + bonus;
+}
 ```
 
 #### Current Compiler Note
 
-The parser technically allows missing parameter types in normal functions, but
-that should be treated as an incomplete or internal behavior. User-facing code
-should provide explicit parameter types.
+- User-facing code should provide explicit parameter types.
+- Parameters with default values must be trailing.
+- Default parameters are currently supported on:
+  - functions with Wio bodies,
+  - methods with Wio bodies,
+  - `OnConstruct(...)` constructors,
+  - and declaration-only `@Native` functions.
+- Default parameters are currently rejected on:
+  - `Entry`,
+  - module lifecycle exports such as `@ModuleLoad`,
+  - and declaration-only non-`@Native` functions, including interface methods.
+- Default expressions are analyzed against the declared parameter type.
+- The current v1 surface does not promise parameter-dependent defaults such as
+  `fn Foo(x: i32, y: i32 = x)`.
+- Lowering uses generated wrapper overloads or delegating constructors rather
+  than raw C++ default arguments.
 
 ### 13.3 Return Types
 
@@ -1634,6 +1652,10 @@ The current overload resolution prefers:
 - then compatible numeric matches,
 - then safe reference compatibility,
 - otherwise it reports ambiguity or no matching overload.
+
+For default parameters, the current compiler also rejects overload sets where a
+defaulted declaration would synthesize an arity that is already declared
+explicitly.
 
 ### 13.5 `when` Guards
 
@@ -1697,12 +1719,17 @@ component Vector3 {
 }
 ```
 
+`OnConstruct(...)` may currently use trailing default parameters and lowers them
+through generated delegating constructors.
+
 ### 13.7 `Entry`
 
 The executable entry point must be named `Entry`.
 
 `Entry` is supported only as a top-level function. It must define a Wio body and
 it must return either `i32` or `void`.
+
+`Entry` cannot declare default parameters.
 
 Supported forms:
 
@@ -2179,7 +2206,7 @@ current compiler reliably supports:
 
 - plain identifiers such as `@Trust(Foo)`,
 - plain type names such as `@Type(u32)`,
-- type-like generic forms such as `@Apply(IsInteger<T>)`,
+- type-like generic forms such as `@Apply(traits::IsInteger<T>)`,
 - and interop instantiation forms such as `@Instantiate(i32, bool)`.
 
 Reliable examples:
@@ -2189,8 +2216,10 @@ Reliable examples:
 @Default(public)
 @Type(u32)
 @Trust(Foo)
-@Apply(IsInteger<T>)
-@Instantiate(IsNumeric<T>)
+use std::traits as traits;
+
+@Apply(traits::IsInteger<T>)
+@Instantiate(traits::IsNumeric<T>)
 ```
 
 Potentially unreliable today:
@@ -2379,11 +2408,13 @@ flagset Bits {
 Examples:
 
 ```wio
+use std::traits as traits;
+
 @Native
 @CppHeader("native_generic_math.h")
 @CppName(native_generic::DoubleValue)
 @Instantiate(i32)
-@Instantiate(IsInteger<T>)
+@Instantiate(traits::IsInteger<T>)
 fn DoubleValue<T>(value: T) -> T;
 ```
 
@@ -2394,20 +2425,22 @@ Current rules:
 - Each attribute must provide exactly one argument per generic parameter.
 - Each argument may be:
   - a fully concrete type such as `i32` or `string`,
-  - or a supported predicate form such as `IsInteger<T>` or `IsNumeric<T>`.
+  - or a supported predicate form such as `traits::IsInteger<T>` or `traits::IsNumeric<T>`.
 - Predicate forms expand into concrete instance lists during semantic analysis.
 - Call sites may use only instantiated generic bindings.
 
-Current supported predicate names:
+Current supported trait predicates live under `std::traits`:
 
-- `IsInteger<T>`
-- `IsNumeric<T>`
+- `std::traits::IsInteger<T>`
+- `std::traits::IsNumeric<T>`
 
 For multi-parameter generic functions, positional combinations are allowed:
 
 ```wio
+use std::traits as traits;
+
 @Instantiate(i32, bool)
-@Instantiate(IsInteger<T>, bool)
+@Instantiate(traits::IsInteger<T>, bool)
 fn PickLeft<T, U>(left: T, right: U) -> T;
 ```
 
@@ -2426,15 +2459,17 @@ It is supported on generic:
 Examples:
 
 ```wio
-@Apply(IsInteger<T>)
+use std::traits as traits;
+
+@Apply(traits::IsInteger<T>)
 fn Twice<T>(value: T) -> T {
     return value + value;
 }
 
-@Apply(IsInteger<T>)
+@Apply(traits::IsInteger<T>)
 type IntList<T> = T[];
 
-@Apply(IsNumeric<T>)
+@Apply(traits::IsNumeric<T>)
 object NumberBox<T> {
     public value: T;
 }
@@ -2446,7 +2481,7 @@ Current rules:
 - Each attribute must provide exactly one argument per generic parameter.
 - Each argument may be:
   - a fully concrete type such as `string`,
-  - a supported predicate such as `IsInteger<T>` or `IsNumeric<T>`,
+  - a supported predicate such as `traits::IsInteger<T>` or `traits::IsNumeric<T>`,
   - or a boolean constant (`true` / `false`).
 - Arguments are positional. The predicate operand must target the matching
   generic parameter for that slot.
@@ -2462,8 +2497,10 @@ Constraint semantics today:
 Example with multiple rows:
 
 ```wio
-@Apply(IsInteger<T>, string)
-@Apply(IsNumeric<T>, bool)
+use std::traits as traits;
+
+@Apply(traits::IsInteger<T>, string)
+@Apply(traits::IsNumeric<T>, bool)
 fn Accept<T, U>(value: T, tag: U) {
 }
 ```

@@ -1,0 +1,7 @@
+fn Bad(x: i32 = "oops") -> i32 {
+    return x;
+}
+
+fn Entry() -> i32 {
+    return Bad();
+}

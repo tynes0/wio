@@ -513,13 +513,16 @@ This is one of the language-defining features and needs to be extremely solid.
 - [ ] Define how numeric conversion participates in overload resolution.
 - [ ] Define how `ref` and `view` participate in overload resolution.
 - [ ] Define ambiguity diagnostics.
-- [ ] Define whether default arguments will ever exist.
-- [ ] If default arguments are accepted, design a first source surface such as
-      `fn Foo(x: i32, y: i32 = 0)` and specify:
-  - call-site omission rules,
-  - interaction with overload resolution,
-  - interaction with named/defaulted later parameters,
-  - and lowering into generated C++.
+- [~] Land the first default-parameter slice.
+  - [x] Support trailing defaults on functions and methods with Wio bodies.
+  - [x] Support trailing defaults on `OnConstruct(...)`.
+  - [x] Support trailing defaults on declaration-only `@Native` functions.
+  - [x] Reject defaults on `Entry`, module lifecycle exports, and declaration-only
+        non-`@Native` functions.
+  - [x] Reject overload sets where defaults would synthesize an already-declared
+        arity.
+  - [ ] Decide future support for interface methods, named arguments,
+        parameter-dependent defaults, and richer overload interactions.
 
 ### 9.3 Lambdas
 
@@ -727,8 +730,9 @@ contract.
 - [~] Harden the first generic-filtering attribute slice.
   - [x] Support `@Apply(...)` on generic functions, aliases, `object`,
         `component`, and `interface` declarations.
-  - [x] Support concrete-type and simple predicate constraints such as
-        `IsInteger<T>` and `IsNumeric<T>`.
+  - [x] Support concrete-type and simple predicate constraints surfaced through
+        `std::traits`, such as `traits::IsInteger<T>` and
+        `traits::IsNumeric<T>`.
   - [x] Allow predicate-based `@Instantiate(...)` expansion for generic
         `@Native` / `@Export` functions.
   - [ ] Design `@ApplyIf(...)` or a richer compile-time predicate system for

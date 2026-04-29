@@ -1089,13 +1089,17 @@ namespace wio
         {
             NodePtr<Identifier> paramName = makeNodePtr<Identifier>(consume(TokenType::identifier));
             NodePtr<TypeSpecifier> paramType = nullptr;
+            NodePtr<Expression> defaultValue = nullptr;
 
             if (match(TokenType::opColon, true))
             {
                 paramType = parseType();
             }
 
-            parameters.emplace_back(std::move(paramName), std::move(paramType));
+            if (match(TokenType::opAssign, true))
+                defaultValue = parseExpression();
+
+            parameters.emplace_back(std::move(paramName), std::move(paramType), std::move(defaultValue));
 
             while (match(TokenType::comma, true))
             {
@@ -1103,11 +1107,15 @@ namespace wio
 
                 NodePtr<Identifier> nextParamName = makeNodePtr<Identifier>(consume(TokenType::identifier));
                 NodePtr<TypeSpecifier> nextParamType = nullptr;
+                NodePtr<Expression> nextDefaultValue = nullptr;
 
                 if (match(TokenType::opColon, true))
                     nextParamType = parseType();
 
-                parameters.emplace_back(std::move(nextParamName), std::move(nextParamType));
+                if (match(TokenType::opAssign, true))
+                    nextDefaultValue = parseExpression();
+
+                parameters.emplace_back(std::move(nextParamName), std::move(nextParamType), std::move(nextDefaultValue));
             }
         }
         consume(TokenType::rightParen);

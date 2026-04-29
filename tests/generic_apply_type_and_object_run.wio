@@ -1,9 +1,10 @@
 use std::console as console;
+use std::traits as traits;
 
-@Apply(IsInteger<T>)
+@Apply(traits::IsInteger<T>)
 type IntList<T> = T[];
 
-@Apply(IsNumeric<T>)
+@Apply(traits::IsNumeric<T>)
 object NumberBox<T> {
     public value: T;
 

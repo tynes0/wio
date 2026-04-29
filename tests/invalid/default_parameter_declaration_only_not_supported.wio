@@ -1,0 +1,5 @@
+fn DeclOnlyEcho(value: i32 = 7) -> i32;
+
+fn Entry() -> i32 {
+    return 0;
+}

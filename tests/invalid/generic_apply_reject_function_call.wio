@@ -1,4 +1,6 @@
-@Apply(IsInteger<T>)
+use std::traits as traits;
+
+@Apply(traits::IsInteger<T>)
 fn Echo<T>(value: T) -> T {
     return value;
 }

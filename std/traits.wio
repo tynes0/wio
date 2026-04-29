@@ -1,0 +1,9 @@
+realm std {
+    realm traits {
+        interface IsInteger<T> {
+        }
+
+        interface IsNumeric<T> {
+        }
+    }
+}
