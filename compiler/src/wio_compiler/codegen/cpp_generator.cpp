@@ -5,6 +5,8 @@
 #include "wio/common/logger.h"
 #include "wio/sema/symbol.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <unordered_set>
@@ -45,6 +47,55 @@ namespace wio::codegen
                 return "_wio_" + std::string(identifier);
 
             return std::string(identifier);
+        }
+
+        Ref<sema::Type> unwrapAliasTypeForCodegen(Ref<sema::Type> type)
+        {
+            while (type && type->kind() == sema::TypeKind::Alias)
+                type = type.AsFast<sema::AliasType>()->aliasedType;
+
+            return type;
+        }
+
+        std::string getBackendTypeEquivalenceKey(const Ref<sema::Type>& type)
+        {
+            Ref<sema::Type> resolved = unwrapAliasTypeForCodegen(type);
+            if (!resolved)
+                return "<null>";
+
+            if (resolved->kind() != sema::TypeKind::Primitive)
+                return resolved->toCppString();
+
+            const std::string& name = resolved.AsFast<sema::PrimitiveType>()->name;
+            if (name == "i8") return "int8_t";
+            if (name == "i16") return "int16_t";
+            if (name == "i32") return "int32_t";
+            if (name == "i64") return "int64_t";
+            if (name == "u8") return "uint8_t";
+            if (name == "u16") return "uint16_t";
+            if (name == "u32") return "uint32_t";
+            if (name == "u64") return "uint64_t";
+            if (name == "isize") return sizeof(std::intptr_t) == sizeof(std::int64_t) ? "int64_t" : "int32_t";
+            if (name == "usize") return sizeof(std::size_t) == sizeof(std::uint64_t) ? "uint64_t" : "uint32_t";
+            if (name == "f32") return "float";
+            if (name == "f64") return "double";
+            if (name == "char") return "char";
+            if (name == "uchar" || name == "byte") return "unsigned char";
+            if (name == "bool") return "bool";
+            if (name == "string") return "wio::String";
+            return resolved->toCppString();
+        }
+
+        std::string getBackendInstantiationEquivalenceKey(const std::vector<Ref<sema::Type>>& instantiationTypes)
+        {
+            std::string key;
+            for (size_t i = 0; i < instantiationTypes.size(); ++i)
+            {
+                if (i > 0)
+                    key += "|";
+                key += getBackendTypeEquivalenceKey(instantiationTypes[i]);
+            }
+            return key;
         }
 
         std::string toCppType(const Ref<sema::Type>& type)
@@ -252,39 +303,10 @@ namespace wio::codegen
 
         std::vector<std::vector<Ref<sema::Type>>> getInstantiateTypeLists(const FunctionDeclaration& node)
         {
-            std::vector<std::vector<Ref<sema::Type>>> instantiations;
-            for (const auto& attribute : node.attributes)
-            {
-                if (!attribute || attribute->attribute != Attribute::Instantiate)
-                    continue;
+            if (auto functionSymbol = node.name ? node.name->referencedSymbol.Lock() : nullptr)
+                return functionSymbol->resolvedGenericInstantiations;
 
-                std::vector<Ref<sema::Type>> instantiationTypes;
-                instantiationTypes.reserve(attribute->typeArgs.size());
-                bool isValidInstantiation = true;
-
-                for (const auto& typeArg : attribute->typeArgs)
-                {
-                    if (!typeArg)
-                    {
-                        isValidInstantiation = false;
-                        break;
-                    }
-
-                    Ref<sema::Type> instantiatedType = typeArg->refType.Lock();
-                    if (!instantiatedType)
-                    {
-                        isValidInstantiation = false;
-                        break;
-                    }
-
-                    instantiationTypes.push_back(instantiatedType);
-                }
-
-                if (isValidInstantiation && !instantiationTypes.empty())
-                    instantiations.push_back(std::move(instantiationTypes));
-            }
-
-            return instantiations;
+            return {};
         }
 
         std::string formatInstantiatedLogicalName(const std::string& baseName, const std::vector<Ref<sema::Type>>& instantiationTypes)
@@ -2946,6 +2968,10 @@ namespace wio::codegen
 
         if (tName == "u32")
             emit(valStr + "u");
+        else if (tName == "i64" && valStr == "-9223372036854775808")
+            emit("(std::numeric_limits<int64_t>::min)()");
+        else if (tName == "isize" && valStr == "-9223372036854775808")
+            emit("(std::numeric_limits<ptrdiff_t>::min)()");
         else if (tName == "i64")
             emit(valStr + "ll");
         else if (tName == "u64" || tName == "usize")
@@ -4177,8 +4203,14 @@ namespace wio::codegen
         {
             emitGeneratedDirective();
             emitLine();
+            std::unordered_set<std::string> emittedBackendInstantiations;
             for (const auto& instantiationTypes : instantiationTypeLists)
+            {
+                if (!emittedBackendInstantiations.insert(getBackendInstantiationEquivalenceKey(instantiationTypes)).second)
+                    continue;
+
                 emitExplicitInstantiationDeclaration(instantiationTypes);
+            }
         }
     }
 

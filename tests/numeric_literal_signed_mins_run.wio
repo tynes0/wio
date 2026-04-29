@@ -1,0 +1,19 @@
+use std::console as console;
+use std::assert as assert;
+
+fn Entry() -> i32 {
+    let min8: i8 = -128i8;
+    let min16: i16 = -32768i16;
+    let min32: i32 = -2147483648i32;
+    let min64: i64 = -9223372036854775808i64;
+    let contextualMin8: i8 = -128;
+
+    assert::ExpectEqual(min8 fit i64, -128i64, "i8 min mismatch");
+    assert::ExpectEqual(min16 fit i64, -32768i64, "i16 min mismatch");
+    assert::ExpectEqual(min32 fit i64, -2147483648i64, "i32 min mismatch");
+    assert::ExpectEqual(min64, -9223372036854775808i64, "i64 min mismatch");
+    assert::ExpectEqual(contextualMin8 fit i64, -128i64, "contextual i8 min mismatch");
+
+    console::Print("Signed literal mins: ok");
+    return 0;
+}

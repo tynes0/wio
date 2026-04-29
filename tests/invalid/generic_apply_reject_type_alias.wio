@@ -1,0 +1,7 @@
+@Apply(IsInteger<T>)
+type IntList<T> = T[];
+
+fn Entry() -> i32 {
+    let values: IntList<string> = ["bad"];
+    return values.Count() fit i32;
+}

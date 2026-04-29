@@ -1,0 +1,17 @@
+use std::console as console;
+
+realm ffi {
+    @Native
+    @CppHeader("native_generic_math.h")
+    @CppName(native_generic::DoubleValue)
+    @Instantiate(IsInteger<T>)
+    fn DoubleValue<T>(value: T) -> T;
+}
+
+fn Entry() -> i32 {
+    let small = ffi::DoubleValue(7i16);
+    let large = ffi::DoubleValue(9i64);
+
+    console::Print($"Generic native predicate: ${small fit i32}, ${large}");
+    return 0;
+}

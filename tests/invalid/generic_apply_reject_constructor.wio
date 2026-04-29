@@ -1,0 +1,13 @@
+@Apply(IsNumeric<T>)
+object NumberBox<T> {
+    public value: T;
+
+    OnConstruct(value: T) {
+        self.value = value;
+    }
+}
+
+fn Entry() -> i32 {
+    let box = NumberBox<string>("bad");
+    return box.value.Length();
+}

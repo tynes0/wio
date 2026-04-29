@@ -1,0 +1,25 @@
+use std::console as console;
+
+@Apply(IsInteger<T>)
+type IntList<T> = T[];
+
+@Apply(IsNumeric<T>)
+object NumberBox<T> {
+    public value: T;
+
+    OnConstruct(value: T) {
+        self.value = value;
+    }
+
+    public fn Get() -> T {
+        return self.value;
+    }
+}
+
+fn Entry() -> i32 {
+    let values: IntList<i32> = [1, 2, 3];
+    let box = NumberBox<f32>(1.5f32);
+
+    console::Print($"Generic apply types: ${values.Count()}, ${box.Get()}");
+    return 0;
+}

@@ -83,7 +83,7 @@ add_custom_target(
 
 set(
     WIO_TRACEABILITY_TEST_REGEX
-    "(wio_test_(use_alias_dry_run|realm_basic_run|realm_nested_run|realm_qualified_from_run|object_component_access_semantics_run|interface_ref_upcast_run|component_embedded_member_ctor_run|for_in_dynamic_array_run|for_dict_key_value_run|for_component_binding_run|c_style_for_loop_run|match_value_basic_run|match_statement_basic_run|when_guard_fallback_value_run|fit_numeric_clamp_run|const_scalar_expressions_run|numeric_literal_suffixes_run|array_member_methods_run|dictionary_member_methods_run|string_member_methods_run|std_contract_v1_run|sdk_invalid_api_contract|sdk_module_easy_host_interop|sdk_exported_types_host_interop|sdk_exported_complex_fields_host_interop|sdk_module_hot_reload_interop|sdk_hot_reload_stale_wrappers_interop|sdk_module_stale_bindings_interop)|wio_invalid_(entry_invalid_parameter_type|entry_invalid_return_type|entry_too_many_parameters|entry_missing_body|entry_method_not_top_level|use_missing_user_module|use_missing_std_module|use_alias_conflicts_with_symbol|realm_conflicts_with_symbol|ref_requires_addressable_operand|ref_immutable_to_mutable_param|is_left_requires_object_or_interface|is_right_requires_object_or_interface|fit_requires_numeric_or_object_interface|if_fit_requires_is_condition|component_method_not_allowed|object_inherits_component|final_object_inheritance|default_attribute_invalid_access|private_base_member_access|protected_member_access_outside_hierarchy|trust_requires_struct_type|let_without_initializer|mut_without_initializer|let_without_type_or_initializer|const_without_initializer|const_string_not_supported|const_from_non_const_identifier|const_function_call_not_supported|const_array_not_supported|match_value_requires_assumed|match_assumed_must_be_last|match_duplicate_assumed|match_case_type_mismatch|match_return_type_mismatch|non_void_when_without_else|when_condition_type_mismatch|when_fallback_return_type_mismatch|for_in_requires_array|for_dict_requires_two_bindings|for_component_binding_count_mismatch|for_range_step_zero|break_outside_loop|continue_outside_loop|c_style_for_invalid_condition_type|array_member_requires_mutable_receiver|dictionary_member_requires_mutable_receiver|string_member_requires_mutable_receiver|missing_cpp_header_std_import|std_imports_private_runtime_header))"
+    "(wio_test_(use_alias_dry_run|realm_basic_run|realm_nested_run|realm_qualified_from_run|object_component_access_semantics_run|interface_ref_upcast_run|component_embedded_member_ctor_run|for_in_dynamic_array_run|for_dict_key_value_run|for_component_binding_run|c_style_for_loop_run|match_value_basic_run|match_statement_basic_run|when_guard_fallback_value_run|fit_numeric_clamp_run|const_scalar_expressions_run|numeric_literal_suffixes_run|numeric_literal_signed_mins_run|generic_apply_function_constraints_run|generic_apply_type_and_object_run|generic_native_predicate_bridge_run|array_member_methods_run|dictionary_member_methods_run|string_member_methods_run|std_contract_v1_run|sdk_invalid_api_contract|sdk_module_easy_host_interop|sdk_exported_types_host_interop|sdk_exported_complex_fields_host_interop|sdk_module_hot_reload_interop|sdk_hot_reload_stale_wrappers_interop|sdk_module_stale_bindings_interop)|wio_invalid_(entry_invalid_parameter_type|entry_invalid_return_type|entry_too_many_parameters|entry_missing_body|entry_method_not_top_level|use_missing_user_module|use_missing_std_module|use_alias_conflicts_with_symbol|realm_conflicts_with_symbol|ref_requires_addressable_operand|ref_immutable_to_mutable_param|is_left_requires_object_or_interface|is_right_requires_object_or_interface|fit_requires_numeric_or_object_interface|if_fit_requires_is_condition|component_method_not_allowed|object_inherits_component|final_object_inheritance|default_attribute_invalid_access|private_base_member_access|protected_member_access_outside_hierarchy|trust_requires_struct_type|let_without_initializer|mut_without_initializer|let_without_type_or_initializer|const_without_initializer|const_string_not_supported|const_from_non_const_identifier|const_function_call_not_supported|const_array_not_supported|generic_apply_reject_function_call|generic_apply_reject_type_alias|generic_apply_reject_constructor|generic_apply_non_generic_function|generic_native_predicate_reject_non_integer|match_value_requires_assumed|match_assumed_must_be_last|match_duplicate_assumed|match_case_type_mismatch|match_return_type_mismatch|non_void_when_without_else|when_condition_type_mismatch|when_fallback_return_type_mismatch|for_in_requires_array|for_dict_requires_two_bindings|for_component_binding_count_mismatch|for_range_step_zero|break_outside_loop|continue_outside_loop|c_style_for_invalid_condition_type|array_member_requires_mutable_receiver|dictionary_member_requires_mutable_receiver|string_member_requires_mutable_receiver|missing_cpp_header_std_import|std_imports_private_runtime_header))"
 )
 
 add_custom_target(
@@ -711,6 +711,15 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_generic_native_predicate_bridge_run
+        "${CMAKE_SOURCE_DIR}/tests/native/generic_native_predicate_bridge.wio"
+        "Generic native predicate: 14, 18"
+        --run
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
+    )
+
+    add_wio_output_test(
         wio_test_generic_native_forward_bridge_run
         "${CMAKE_SOURCE_DIR}/tests/native/generic_native_forward_bridge.wio"
         "Generic native forward: 42, 42"
@@ -862,6 +871,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_numeric_literal_context_run
         "${CMAKE_SOURCE_DIR}/tests/numeric_literal_context_run.wio"
         "Numeric literal context: 0/2/3/5/20"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_numeric_literal_signed_mins_run
+        "${CMAKE_SOURCE_DIR}/tests/numeric_literal_signed_mins_run.wio"
+        "Signed literal mins: ok"
         --run
     )
 
@@ -1077,6 +1093,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_generic_apply_function_constraints_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_apply_function_constraints.wio"
+        "Generic apply fn: 42, wio"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_generic_overload_prefers_concrete_run
         "${CMAKE_SOURCE_DIR}/tests/generic_overload_prefers_concrete.wio"
         "Generic overloads: int, generic"
@@ -1122,6 +1145,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_generic_type_alias_nested_run
         "${CMAKE_SOURCE_DIR}/tests/generic_type_alias_nested.wio"
         "Generic alias nested: 12, 36"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_generic_apply_type_and_object_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_apply_type_and_object_run.wio"
+        "Generic apply types: 3, 1.5"
         --run
     )
 
@@ -2002,13 +2032,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_generic_instantiate_argument_count_mismatch
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_instantiate_argument_count_mismatch.wio"
-        "@Instantiate expects exactly 2 type arguments for 'PickLeft'\\."
+        "@Instantiate expects exactly 2 arguments\\."
     )
 
     add_wio_failure_test(
         wio_invalid_generic_instantiate_non_concrete
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_instantiate_non_concrete.wio"
-        "@Instantiate must use fully concrete type arguments\\."
+        "@Instantiate must use fully concrete type constraints or supported predicates like IsInteger<T>\\."
     )
 
     add_wio_failure_test(
@@ -2020,7 +2050,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_generic_export_instantiate_non_abi_safe
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_export_instantiate_non_abi_safe.wio"
-        "@Export instantiated with 'string' produces a non-C-ABI-safe parameter 0 of type 'string'\\."
+        "@Export instantiated with '<string>' produces a non-C-ABI-safe parameter 0 of type 'string'\\."
     )
 
     add_wio_failure_test(
@@ -2064,7 +2094,39 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_type_alias_attributes_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/type_alias_attributes_not_supported.wio"
-        "Attributes are not currently supported on type aliases"
+        "Only @Apply is currently supported on type aliases\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_apply_reject_function_call
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_apply_reject_function_call.wio"
+        "Generic callable 'Echo' rejects type arguments <string> because of @Apply constraints\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_apply_reject_type_alias
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_apply_reject_type_alias.wio"
+        "Generic type alias 'IntList' rejects type arguments <string> because of @Apply constraints\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_apply_reject_constructor
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_apply_reject_constructor.wio"
+        "Generic type 'NumberBox' rejects type arguments <string> because of @Apply constraints\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_apply_non_generic_function
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_apply_non_generic_function.wio"
+        "@Apply can only be used on generic functions\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_native_predicate_reject_non_integer
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_native_predicate_reject_non_integer.wio"
+        "Generic interop function 'DoubleValue' does not declare @Instantiate<f32>\\."
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
     )
 
     add_wio_failure_test(

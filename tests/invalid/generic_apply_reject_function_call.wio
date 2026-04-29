@@ -1,0 +1,9 @@
+@Apply(IsInteger<T>)
+fn Echo<T>(value: T) -> T {
+    return value;
+}
+
+fn Entry() -> i32 {
+    let value = Echo("bad");
+    return value.Length();
+}

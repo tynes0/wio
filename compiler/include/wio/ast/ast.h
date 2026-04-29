@@ -91,6 +91,7 @@ namespace wio
         CppHeader,
         CppName,
         Instantiate,
+        Apply,
         Export,
         Command,
         Event,
@@ -649,11 +650,13 @@ namespace wio
     {
         WIO_STMT_NODE_BODY(TypeAliasDeclaration)
 
+        std::vector<NodePtr<AttributeStatement>> attributes;
         NodePtr<Identifier> name;
         std::vector<NodePtr<Identifier>> genericParameters;
         NodePtr<TypeSpecifier> aliasedType;
 
-        TypeAliasDeclaration(NodePtr<Identifier> _name,
+        TypeAliasDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
+            NodePtr<Identifier> _name,
             std::vector<NodePtr<Identifier>> _genericParameters,
             NodePtr<TypeSpecifier> _aliasedType,
             common::Location _loc);

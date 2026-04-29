@@ -327,21 +327,30 @@ let small = 123;         // usually i32
 let bigger = 5000000000; // usually i64 or u64 depending on range
 ```
 
-#### Edge Case: Negative Numbers
+#### Edge Case: Negative Numbers and Signed Minima
 
-Negative numeric forms are parsed as:
-
-- unary minus operator,
-- followed by a positive literal.
-
-So:
+Surface syntax still treats negative numeric forms as unary minus applied to a
+literal:
 
 ```wio
 let x = -123;
 ```
 
-is not a distinct negative literal token. It is a unary expression applied to
-the integer literal `123`.
+However, the current compiler now folds direct `-literal` forms early enough to
+validate and lower signed minimum values correctly. In practice, these forms are
+supported today:
+
+```wio
+let a: i8 = -128i8;
+let b: i16 = -32768i16;
+let c: i32 = -2147483648i32;
+let d: i64 = -9223372036854775808i64;
+let e: i8 = -128;
+```
+
+This means the front-end still models unary minus as an operator, but literal
+range checking and backend lowering no longer reject signed minima such as
+`-128i8`.
 
 ### 4.3 Floating-Point Literals
 
@@ -2165,8 +2174,13 @@ Attributes may appear before:
 
 #### Important Current Compiler Limitation
 
-Attribute arguments are currently parsed as raw comma-separated tokens, not as
-full expressions.
+Attribute arguments are still more restricted than full expressions, but the
+current compiler reliably supports:
+
+- plain identifiers such as `@Trust(Foo)`,
+- plain type names such as `@Type(u32)`,
+- type-like generic forms such as `@Apply(IsInteger<T>)`,
+- and interop instantiation forms such as `@Instantiate(i32, bool)`.
 
 Reliable examples:
 
@@ -2175,6 +2189,8 @@ Reliable examples:
 @Default(public)
 @Type(u32)
 @Trust(Foo)
+@Apply(IsInteger<T>)
+@Instantiate(IsNumeric<T>)
 ```
 
 Potentially unreliable today:
@@ -2354,6 +2370,108 @@ flagset Bits {
     B = 2
 }
 ```
+
+### 20.12 `@Instantiate(...)`
+
+`@Instantiate(...)` is the current explicit-instantiation surface for generic
+`@Native` and generic `@Export` functions.
+
+Examples:
+
+```wio
+@Native
+@CppHeader("native_generic_math.h")
+@CppName(native_generic::DoubleValue)
+@Instantiate(i32)
+@Instantiate(IsInteger<T>)
+fn DoubleValue<T>(value: T) -> T;
+```
+
+Current rules:
+
+- `@Instantiate(...)` is valid only on generic functions.
+- Today it is supported only together with `@Native` or `@Export`.
+- Each attribute must provide exactly one argument per generic parameter.
+- Each argument may be:
+  - a fully concrete type such as `i32` or `string`,
+  - or a supported predicate form such as `IsInteger<T>` or `IsNumeric<T>`.
+- Predicate forms expand into concrete instance lists during semantic analysis.
+- Call sites may use only instantiated generic bindings.
+
+Current supported predicate names:
+
+- `IsInteger<T>`
+- `IsNumeric<T>`
+
+For multi-parameter generic functions, positional combinations are allowed:
+
+```wio
+@Instantiate(i32, bool)
+@Instantiate(IsInteger<T>, bool)
+fn PickLeft<T, U>(left: T, right: U) -> T;
+```
+
+### 20.13 `@Apply(...)`
+
+`@Apply(...)` is the current generic-constraint attribute surface.
+
+It is supported on generic:
+
+- functions,
+- `type` aliases,
+- `object` declarations,
+- `component` declarations,
+- `interface` declarations.
+
+Examples:
+
+```wio
+@Apply(IsInteger<T>)
+fn Twice<T>(value: T) -> T {
+    return value + value;
+}
+
+@Apply(IsInteger<T>)
+type IntList<T> = T[];
+
+@Apply(IsNumeric<T>)
+object NumberBox<T> {
+    public value: T;
+}
+```
+
+Current rules:
+
+- `@Apply(...)` is valid only on generic declarations.
+- Each attribute must provide exactly one argument per generic parameter.
+- Each argument may be:
+  - a fully concrete type such as `string`,
+  - a supported predicate such as `IsInteger<T>` or `IsNumeric<T>`,
+  - or a boolean constant (`true` / `false`).
+- Arguments are positional. The predicate operand must target the matching
+  generic parameter for that slot.
+
+Constraint semantics today:
+
+- entries inside one `@Apply(...)` are combined positionally,
+- multiple `@Apply(...)` attributes behave as alternative allowed constraint
+  rows,
+- `true` means "this slot imposes no additional restriction",
+- `false` means that constraint row can never match.
+
+Example with multiple rows:
+
+```wio
+@Apply(IsInteger<T>, string)
+@Apply(IsNumeric<T>, bool)
+fn Accept<T, U>(value: T, tag: U) {
+}
+```
+
+This accepts either:
+
+- integer + string,
+- or numeric + bool.
 
 ## 21. Access Control and Member Semantics
 

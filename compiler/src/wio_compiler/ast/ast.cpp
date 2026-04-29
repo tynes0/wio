@@ -222,11 +222,13 @@ namespace wio
 
     VariableDeclaration::~VariableDeclaration() = default;
 
-    TypeAliasDeclaration::TypeAliasDeclaration(NodePtr<Identifier> _name,
+    TypeAliasDeclaration::TypeAliasDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
+        NodePtr<Identifier> _name,
         std::vector<NodePtr<Identifier>> _genericParameters,
         NodePtr<TypeSpecifier> _aliasedType,
         common::Location _loc)
         : Statement(_loc.isValid() ? _loc : _name->location()),
+          attributes(std::move(_attributes)),
           name(std::move(_name)),
           genericParameters(std::move(_genericParameters)),
           aliasedType(std::move(_aliasedType))

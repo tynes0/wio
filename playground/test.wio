@@ -1,0 +1,14 @@
+use std::console as Console;
+
+@Default(public)
+object Entity {
+    id: i32;
+
+    OnConstruct(id: i32) {
+        self.id = id;
+    }
+
+    fn Render() {
+        Console::PrintLine($"Hello ${id}");
+    }
+}

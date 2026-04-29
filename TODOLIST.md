@@ -260,7 +260,9 @@ The language reference now exists, but it still needs to become a true spec.
     - [x] Keep generic constructors/destructors unsupported in v1.
   - [x] Keep v1 generic lowering backend-template-based only; no front-end
         monomorphization.
-  - [x] Keep v1 free of generic constraint syntax.
+  - [x] Land the first light generic-constraint slice via `@Apply(...)` and
+        predicate-based `@Instantiate(...)`, while keeping richer
+        trait/expression systems out of v1.
   - [~] Broaden overload resolution tests for generic-vs-concrete preference,
         ambiguous generic overloads, and mixed namespace/module calls.
     - [x] Cover concrete-vs-generic preference.
@@ -722,11 +724,15 @@ contract.
       type-aware parsing where needed.
 - [ ] Decide where attributes are legal.
 - [ ] Decide attribute ordering and duplicate-attribute rules.
-- [ ] Design generic-filtering attributes for future versions, including:
-  - `@Apply(...)` to restrict a generic declaration to an explicit set of
-    allowed concrete types,
-  - and `@ApplyIf(...)` to gate application on compile-time boolean predicates
-    such as future type-trait style checks.
+- [~] Harden the first generic-filtering attribute slice.
+  - [x] Support `@Apply(...)` on generic functions, aliases, `object`,
+        `component`, and `interface` declarations.
+  - [x] Support concrete-type and simple predicate constraints such as
+        `IsInteger<T>` and `IsNumeric<T>`.
+  - [x] Allow predicate-based `@Instantiate(...)` expansion for generic
+        `@Native` / `@Export` functions.
+  - [ ] Design `@ApplyIf(...)` or a richer compile-time predicate system for
+        future type-trait style checks.
 - [ ] Decide whether `@Apply` / `@ApplyIf` remain attribute-based or evolve
       into a more explicit generic-constraint syntax later.
 

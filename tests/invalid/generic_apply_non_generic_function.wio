@@ -1,0 +1,8 @@
+@Apply(i32)
+fn Echo(value: i32) -> i32 {
+    return value;
+}
+
+fn Entry() -> i32 {
+    return Echo(7);
+}

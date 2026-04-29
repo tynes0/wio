@@ -1,0 +1,19 @@
+use std::console as console;
+
+@Apply(IsInteger<T>)
+fn Twice<T>(value: T) -> T {
+    return value + value;
+}
+
+@Apply(string)
+fn EchoText<T>(value: T) -> T {
+    return value;
+}
+
+fn Entry() -> i32 {
+    let doubled = Twice(21);
+    let label = EchoText("wio");
+
+    console::Print($"Generic apply fn: ${doubled}, ${label}");
+    return 0;
+}

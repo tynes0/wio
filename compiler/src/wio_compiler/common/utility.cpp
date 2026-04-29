@@ -125,8 +125,20 @@ namespace wio::common
 
             if (isNegative)
             {
-                auto res = std::from_chars(rawNumStr.data(), rawNumStr.data() + rawNumStr.size(), signedVal, base);
-                return res.ec == std::errc() && res.ptr == rawNumStr.data() + rawNumStr.size();
+                auto res = std::from_chars(rawNumStr.data(), rawNumStr.data() + rawNumStr.size(), unsignedVal, base);
+                if (res.ec != std::errc() || res.ptr != rawNumStr.data() + rawNumStr.size())
+                    return false;
+
+                constexpr uint64_t kSignedAbsMin = static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + 1ULL;
+                if (unsignedVal > kSignedAbsMin)
+                    return false;
+
+                if (unsignedVal == kSignedAbsMin)
+                    signedVal = std::numeric_limits<int64_t>::min();
+                else
+                    signedVal = -static_cast<int64_t>(unsignedVal);
+
+                return true;
             }
 
             auto res = std::from_chars(rawNumStr.data(), rawNumStr.data() + rawNumStr.size(), unsignedVal, base);

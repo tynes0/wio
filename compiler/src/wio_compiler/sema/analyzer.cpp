@@ -1296,6 +1296,441 @@ namespace wio::sema
             return allArgs;
         }
 
+        enum class GenericConstraintPredicateKind : uint8_t
+        {
+            None,
+            IsInteger,
+            IsNumeric
+        };
+
+        std::optional<GenericConstraintPredicateKind> tryGetGenericConstraintPredicateKind(std::string_view name)
+        {
+            if (name == "IsInteger")
+                return GenericConstraintPredicateKind::IsInteger;
+            if (name == "IsNumeric")
+                return GenericConstraintPredicateKind::IsNumeric;
+            return std::nullopt;
+        }
+
+        std::string_view getGenericConstraintPredicateName(GenericConstraintPredicateKind predicateKind)
+        {
+            switch (predicateKind)
+            {
+            case GenericConstraintPredicateKind::IsInteger: return "IsInteger";
+            case GenericConstraintPredicateKind::IsNumeric: return "IsNumeric";
+            default: return "<unknown>";
+            }
+        }
+
+        AttributeTypeArgument getAttributeTypeArgument(const AttributeStatement& attribute, size_t index)
+        {
+            NodePtr<TypeSpecifier> typeSpecifier = nullptr;
+            if (index < attribute.typeArgs.size())
+                typeSpecifier = attribute.typeArgs[index];
+
+            return AttributeTypeArgument{
+                .token = index < attribute.args.size() ? attribute.args[index] : Token::invalid(),
+                .typeSpecifier = typeSpecifier
+            };
+        }
+
+        bool isExactConstraintTypeMatch(const Ref<Type>& actual, const Ref<Type>& expected)
+        {
+            Ref<Type> lhs = unwrapAliasType(actual);
+            Ref<Type> rhs = unwrapAliasType(expected);
+            return lhs && rhs && lhs->isCompatibleWith(rhs) && rhs->isCompatibleWith(lhs);
+        }
+
+        bool isIntegerConstraintType(const Ref<Type>& type)
+        {
+            Ref<Type> resolved = unwrapAliasType(type);
+            if (!resolved || resolved->kind() != TypeKind::Primitive)
+                return false;
+
+            const std::string& name = resolved.AsFast<PrimitiveType>()->name;
+            return name == "i8" || name == "i16" || name == "i32" || name == "i64" ||
+                   name == "u8" || name == "u16" || name == "u32" || name == "u64" ||
+                   name == "isize" || name == "usize";
+        }
+
+        bool evaluateGenericConstraintPredicate(GenericConstraintPredicateKind predicateKind, const Ref<Type>& type)
+        {
+            switch (predicateKind)
+            {
+            case GenericConstraintPredicateKind::IsInteger:
+                return isIntegerConstraintType(type);
+            case GenericConstraintPredicateKind::IsNumeric:
+            {
+                Ref<Type> resolved = unwrapAliasType(type);
+                return resolved && resolved->isNumeric();
+            }
+            default:
+                return false;
+            }
+        }
+
+        std::vector<Ref<Type>> getGenericConstraintCandidateTypes(GenericConstraintPredicateKind predicateKind)
+        {
+            auto& ctx = Compiler::get().getTypeContext();
+
+            switch (predicateKind)
+            {
+            case GenericConstraintPredicateKind::IsInteger:
+                return {
+                    ctx.getI8(), ctx.getI16(), ctx.getI32(), ctx.getI64(),
+                    ctx.getU8(), ctx.getU16(), ctx.getU32(), ctx.getU64(),
+                    ctx.getISize(), ctx.getUSize()
+                };
+            case GenericConstraintPredicateKind::IsNumeric:
+                return {
+                    ctx.getI8(), ctx.getI16(), ctx.getI32(), ctx.getI64(),
+                    ctx.getU8(), ctx.getU16(), ctx.getU32(), ctx.getU64(),
+                    ctx.getISize(), ctx.getUSize(),
+                    ctx.getF32(), ctx.getF64()
+                };
+            default:
+                return {};
+            }
+        }
+
+        Ref<Type> getPreparedConstraintType(SemanticAnalyzer& analyzer, const NodePtr<TypeSpecifier>& typeSpecifier)
+        {
+            if (!typeSpecifier)
+                return nullptr;
+
+            if (auto lockedType = typeSpecifier->refType.Lock(); lockedType && !lockedType->isUnknown())
+                return lockedType;
+
+            typeSpecifier->accept(analyzer);
+            return typeSpecifier->refType.Lock();
+        }
+
+        bool validateGenericConstraintArgument(SemanticAnalyzer& analyzer,
+                                               const AttributeTypeArgument& argument,
+                                               std::string_view expectedParameterName,
+                                               std::string_view attributeName,
+                                               common::Location errorLocation,
+                                               bool allowBoolLiteral)
+        {
+            if (argument.typeSpecifier)
+            {
+                if (auto predicateKind = tryGetGenericConstraintPredicateKind(argument.typeSpecifier->name.value))
+                {
+                    if (argument.typeSpecifier->generics.size() != 1)
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            errorLocation,
+                            "{} predicate '{}' expects exactly one generic parameter operand.",
+                            attributeName,
+                            getGenericConstraintPredicateName(*predicateKind)
+                        );
+                        return false;
+                    }
+
+                    const auto& predicateOperand = argument.typeSpecifier->generics.front();
+                    if (!predicateOperand ||
+                        predicateOperand->name.type != TokenType::identifier ||
+                        !predicateOperand->generics.empty() ||
+                        predicateOperand->name.value != expectedParameterName)
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            errorLocation,
+                            "{} predicate '{}' must target the matching generic parameter '{}'.",
+                            attributeName,
+                            getGenericConstraintPredicateName(*predicateKind),
+                            expectedParameterName
+                        );
+                        return false;
+                    }
+
+                    return true;
+                }
+
+                Ref<Type> exactType = getPreparedConstraintType(analyzer, argument.typeSpecifier);
+                if (!exactType || exactType->isUnknown())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        errorLocation,
+                        "{} contains an unresolved type constraint.",
+                        attributeName
+                    );
+                    return false;
+                }
+
+                if (containsGenericParameterType(exactType))
+                {
+                    WIO_LOG_ADD_ERROR(
+                        errorLocation,
+                        "{} must use fully concrete type constraints or supported predicates like IsInteger<{}>.",
+                        attributeName,
+                        expectedParameterName
+                    );
+                    return false;
+                }
+
+                return true;
+            }
+
+            if (allowBoolLiteral && (argument.token.type == TokenType::kwTrue || argument.token.type == TokenType::kwFalse))
+                return true;
+
+            WIO_LOG_ADD_ERROR(
+                errorLocation,
+                "{} supports concrete types{} or supported predicates like IsInteger<{}> and IsNumeric<{}>.",
+                attributeName,
+                allowBoolLiteral ? ", boolean constants" : "",
+                expectedParameterName,
+                expectedParameterName
+            );
+            return false;
+        }
+
+        bool validateApplyAttributes(SemanticAnalyzer& analyzer,
+                                     const std::vector<NodePtr<AttributeStatement>>& attributes,
+                                     const std::vector<std::string>& genericParameterNames,
+                                     std::string_view declarationKind,
+                                     common::Location errorLocation)
+        {
+            const auto applyAttributes = getAttributeStatements(attributes, Attribute::Apply);
+            if (applyAttributes.empty())
+                return true;
+
+            if (genericParameterNames.empty())
+            {
+                WIO_LOG_ADD_ERROR(errorLocation, "@Apply can only be used on generic {} declarations.", declarationKind);
+                return false;
+            }
+
+            bool allValid = true;
+            for (const auto* applyAttribute : applyAttributes)
+            {
+                if (!applyAttribute)
+                    continue;
+
+                if (applyAttribute->args.size() != genericParameterNames.size())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        applyAttribute->location(),
+                        "@Apply expects exactly {} arguments.",
+                        genericParameterNames.size()
+                    );
+                    allValid = false;
+                    continue;
+                }
+
+                for (size_t i = 0; i < genericParameterNames.size(); ++i)
+                {
+                    if (!validateGenericConstraintArgument(
+                            analyzer,
+                            getAttributeTypeArgument(*applyAttribute, i),
+                            genericParameterNames[i],
+                            "@Apply",
+                            applyAttribute->location(),
+                            true))
+                    {
+                        allValid = false;
+                    }
+                }
+            }
+
+            return allValid;
+        }
+
+        bool matchesApplyConstraints(const std::vector<NodePtr<AttributeStatement>>& attributes,
+                                     const std::vector<std::string>& genericParameterNames,
+                                     const std::vector<Ref<Type>>& bindingTypes)
+        {
+            const auto applyAttributes = getAttributeStatements(attributes, Attribute::Apply);
+            if (applyAttributes.empty())
+                return true;
+
+            if (bindingTypes.size() != genericParameterNames.size())
+                return false;
+
+            if (std::ranges::any_of(bindingTypes, [](const Ref<Type>& bindingType)
+            {
+                return !bindingType || bindingType->isUnknown() || containsGenericParameterType(bindingType);
+            }))
+            {
+                return true;
+            }
+
+            for (const auto* applyAttribute : applyAttributes)
+            {
+                if (!applyAttribute || applyAttribute->args.size() != bindingTypes.size())
+                    continue;
+
+                bool matches = true;
+                for (size_t i = 0; i < bindingTypes.size(); ++i)
+                {
+                    const auto argument = getAttributeTypeArgument(*applyAttribute, i);
+                    if (argument.typeSpecifier)
+                    {
+                        if (auto predicateKind = tryGetGenericConstraintPredicateKind(argument.typeSpecifier->name.value))
+                        {
+                            if (!evaluateGenericConstraintPredicate(*predicateKind, bindingTypes[i]))
+                            {
+                                matches = false;
+                                break;
+                            }
+                            continue;
+                        }
+
+                        Ref<Type> exactType = argument.typeSpecifier->refType.Lock();
+                        if (!exactType || !isExactConstraintTypeMatch(bindingTypes[i], exactType))
+                        {
+                            matches = false;
+                            break;
+                        }
+                        continue;
+                    }
+
+                    if (argument.token.type == TokenType::kwTrue)
+                        continue;
+
+                    if (argument.token.type == TokenType::kwFalse)
+                    {
+                        matches = false;
+                        break;
+                    }
+
+                    matches = false;
+                    break;
+                }
+
+                if (matches)
+                    return true;
+            }
+
+            return false;
+        }
+
+        std::string formatConcreteInstantiationSignature(const std::vector<Ref<Type>>& instantiationTypes)
+        {
+            std::string signature = "<";
+            for (size_t i = 0; i < instantiationTypes.size(); ++i)
+            {
+                signature += instantiationTypes[i] ? instantiationTypes[i]->toString() : "<unknown>";
+                if (i + 1 < instantiationTypes.size())
+                    signature += ", ";
+            }
+            signature += ">";
+            return signature;
+        }
+
+        std::vector<std::vector<Ref<Type>>> resolveInstantiateAttributes(SemanticAnalyzer& analyzer,
+                                                                         const std::vector<NodePtr<AttributeStatement>>& attributes,
+                                                                         const std::vector<std::string>& genericParameterNames)
+        {
+            std::vector<std::vector<Ref<Type>>> instantiations;
+            const auto instantiateAttributes = getAttributeStatements(attributes, Attribute::Instantiate);
+            if (instantiateAttributes.empty())
+                return instantiations;
+
+            std::unordered_set<std::string> seenInstantiationSignatures;
+            for (const auto* instantiateAttribute : instantiateAttributes)
+            {
+                if (!instantiateAttribute)
+                    continue;
+
+                if (instantiateAttribute->args.size() != genericParameterNames.size())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        instantiateAttribute->location(),
+                        "@Instantiate expects exactly {} arguments.",
+                        genericParameterNames.size()
+                    );
+                    continue;
+                }
+
+                std::vector<std::vector<Ref<Type>>> candidateLists;
+                candidateLists.reserve(genericParameterNames.size());
+                bool isValidInstantiation = true;
+
+                for (size_t i = 0; i < genericParameterNames.size(); ++i)
+                {
+                    const auto argument = getAttributeTypeArgument(*instantiateAttribute, i);
+                    if (!validateGenericConstraintArgument(
+                            analyzer,
+                            argument,
+                            genericParameterNames[i],
+                            "@Instantiate",
+                            instantiateAttribute->location(),
+                            false))
+                    {
+                        isValidInstantiation = false;
+                        break;
+                    }
+
+                    if (argument.typeSpecifier)
+                    {
+                        if (auto predicateKind = tryGetGenericConstraintPredicateKind(argument.typeSpecifier->name.value))
+                        {
+                            candidateLists.push_back(getGenericConstraintCandidateTypes(*predicateKind));
+                            continue;
+                        }
+
+                        Ref<Type> exactType = argument.typeSpecifier->refType.Lock();
+                        if (!exactType)
+                        {
+                            isValidInstantiation = false;
+                            break;
+                        }
+
+                        candidateLists.push_back({ exactType });
+                        continue;
+                    }
+
+                    isValidInstantiation = false;
+                    break;
+                }
+
+                if (!isValidInstantiation)
+                    continue;
+
+                std::vector<Ref<Type>> currentInstantiation;
+                currentInstantiation.reserve(candidateLists.size());
+
+                std::function<void(size_t)> expandCandidates = [&](size_t index)
+                {
+                    if (index == candidateLists.size())
+                    {
+                        std::string signatureKey;
+                        for (size_t i = 0; i < currentInstantiation.size(); ++i)
+                        {
+                            if (i > 0)
+                                signatureKey += "|";
+                            signatureKey += currentInstantiation[i] ? currentInstantiation[i]->toString() : "<unknown>";
+                        }
+
+                        if (!seenInstantiationSignatures.insert(signatureKey).second)
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                instantiateAttribute->location(),
+                                "Duplicate @Instantiate declaration for '{}'.",
+                                formatConcreteInstantiationSignature(currentInstantiation)
+                            );
+                            return;
+                        }
+
+                        instantiations.push_back(currentInstantiation);
+                        return;
+                    }
+
+                    for (const auto& candidateType : candidateLists[index])
+                    {
+                        currentInstantiation.push_back(candidateType);
+                        expandCandidates(index + 1);
+                        currentInstantiation.pop_back();
+                    }
+                };
+
+                expandCandidates(0);
+            }
+
+            return instantiations;
+        }
+
         const Token* getFirstAttributeArg(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
         {
             for (const auto& attr : attributes)
@@ -1525,6 +1960,7 @@ namespace wio::sema
         scopes_.clear();
         symbols_.clear();
         functionDeclarationsBySymbol_.clear();
+        attributeListsBySymbol_.clear();
         exportedCppSymbolLocations_.clear();
         currentScope_ = nullptr;
         currentExpectedExpressionType_ = nullptr;
@@ -1642,6 +2078,32 @@ namespace wio::sema
             return result;
         };
 
+        auto satisfiesApplyForSymbol = [&](const Ref<Symbol>& symbol,
+                                           const std::vector<Ref<Type>>& explicitTypeArguments,
+                                           std::string_view declarationKind) -> bool
+        {
+            if (!symbol || symbol->genericParameterNames.empty())
+                return true;
+
+            auto attributeIt = attributeListsBySymbol_.find(symbol.Get());
+            if (attributeIt == attributeListsBySymbol_.end() || !attributeIt->second)
+                return true;
+
+            if (!matchesApplyConstraints(*attributeIt->second, symbol->genericParameterNames, explicitTypeArguments))
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Generic {} '{}' rejects type arguments {} because of @Apply constraints.",
+                    declarationKind,
+                    node.name.value,
+                    formatConcreteInstantiationSignature(explicitTypeArguments)
+                );
+                return false;
+            }
+
+            return true;
+        };
+
         if (node.name.type == TokenType::kwFn)
         {
             node.generics[0]->accept(*this);
@@ -1744,6 +2206,13 @@ namespace wio::sema
                             }
                             else
                             {
+                                if (!satisfiesApplyForSymbol(sym, explicitTypeArguments, "type"))
+                                {
+                                    type = Compiler::get().getTypeContext().getUnknown();
+                                    node.refType = type;
+                                    return;
+                                }
+
                                 type = instantiateGenericStructType(structType, explicitTypeArguments);
                             }
                         }
@@ -1781,6 +2250,13 @@ namespace wio::sema
                             }
                             else
                             {
+                                if (!satisfiesApplyForSymbol(sym, explicitTypeArguments, "type alias"))
+                                {
+                                    type = Compiler::get().getTypeContext().getUnknown();
+                                    node.refType = type;
+                                    return;
+                                }
+
                                 std::unordered_map<std::string, Ref<Type>> bindings;
                                 bindings.reserve(sym->genericParameterNames.size());
                                 for (size_t i = 0; i < sym->genericParameterNames.size(); ++i)
@@ -2664,6 +3140,7 @@ namespace wio::sema
     {
         node.callee->accept(*this);
         Ref<Symbol> calleeSym = node.callee->referencedSymbol.Lock();
+        Ref<Symbol> genericOwnerSym = calleeSym;
         std::vector<Ref<Type>> explicitTypeArguments;
         explicitTypeArguments.reserve(node.explicitTypeArguments.size());
         for (auto& explicitTypeArgument : node.explicitTypeArguments)
@@ -2705,6 +3182,21 @@ namespace wio::sema
                 if (!explicitTypeArguments.empty())
                 {
                     constructorGenericBindings = buildGenericTypeBindings(structType->genericParameterNames, explicitTypeArguments);
+                    auto attributeIt = attributeListsBySymbol_.find(genericOwnerSym.Get());
+                    if (attributeIt != attributeListsBySymbol_.end() &&
+                        attributeIt->second &&
+                        !matchesApplyConstraints(*attributeIt->second, constructorGenericParameterNames, explicitTypeArguments))
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            node.location(),
+                            "Generic type '{}' rejects type arguments {} because of @Apply constraints.",
+                            structType->name,
+                            formatConcreteInstantiationSignature(explicitTypeArguments)
+                        );
+                        node.refType = Compiler::get().getTypeContext().getUnknown();
+                        return;
+                    }
+
                     structReturnType = instantiateGenericStructType(structType, explicitTypeArguments);
                     node.callee->refType = structReturnType;
                 }
@@ -2735,6 +3227,21 @@ namespace wio::sema
                                     structType->genericParameterNames,
                                     expectedStructType->genericArguments
                                 );
+                                auto attributeIt = attributeListsBySymbol_.find(genericOwnerSym.Get());
+                                if (attributeIt != attributeListsBySymbol_.end() &&
+                                    attributeIt->second &&
+                                    !matchesApplyConstraints(*attributeIt->second, constructorGenericParameterNames, expectedStructType->genericArguments))
+                                {
+                                    WIO_LOG_ADD_ERROR(
+                                        node.location(),
+                                        "Generic type '{}' rejects type arguments {} because of @Apply constraints.",
+                                        structType->name,
+                                        formatConcreteInstantiationSignature(expectedStructType->genericArguments)
+                                    );
+                                    node.refType = Compiler::get().getTypeContext().getUnknown();
+                                    return;
+                                }
+
                                 structReturnType = instantiateGenericStructType(structType, expectedStructType->genericArguments);
                                 node.callee->refType = structReturnType;
                             }
@@ -3126,8 +3633,7 @@ namespace wio::sema
                     return true;
                 }
 
-                auto instantiateAttributes = getAttributeStatements(functionDeclaration->attributes, Attribute::Instantiate);
-                if (instantiateAttributes.empty())
+                if (overload->resolvedGenericInstantiations.empty())
                     return false;
 
                 std::vector<Ref<Type>> resolvedBindingTypes;
@@ -3149,24 +3655,15 @@ namespace wio::sema
                     return true;
                 }
 
-                for (const auto* instantiateAttribute : instantiateAttributes)
+                for (const auto& instantiationTypes : overload->resolvedGenericInstantiations)
                 {
-                    if (!instantiateAttribute || instantiateAttribute->typeArgs.size() != resolvedBindingTypes.size())
+                    if (instantiationTypes.size() != resolvedBindingTypes.size())
                         continue;
 
                     bool matches = true;
-                    for (size_t i = 0; i < instantiateAttribute->typeArgs.size(); ++i)
+                    for (size_t i = 0; i < instantiationTypes.size(); ++i)
                     {
-                        auto typeSpecifier = instantiateAttribute->typeArgs[i];
-                        if (!typeSpecifier)
-                        {
-                            matches = false;
-                            break;
-                        }
-
-                        typeSpecifier->accept(*this);
-                        Ref<Type> declaredInstantiationType = typeSpecifier->refType.Lock();
-                        if (!declaredInstantiationType || !isExactType(declaredInstantiationType, resolvedBindingTypes[i]))
+                        if (!isExactConstraintTypeMatch(instantiationTypes[i], resolvedBindingTypes[i]))
                         {
                             matches = false;
                             break;
@@ -3180,9 +3677,37 @@ namespace wio::sema
                 return false;
             };
 
+            auto satisfiesApplyBinding = [&](const Ref<Symbol>& symbol,
+                                             const std::vector<std::string>& activeGenericParameterNames,
+                                             const std::unordered_map<std::string, Ref<Type>>& bindings) -> bool
+            {
+                if (!symbol || activeGenericParameterNames.empty())
+                    return true;
+
+                auto attributeIt = attributeListsBySymbol_.find(symbol.Get());
+                if (attributeIt == attributeListsBySymbol_.end() || !attributeIt->second)
+                    return true;
+
+                std::vector<Ref<Type>> resolvedBindingTypes;
+                resolvedBindingTypes.reserve(activeGenericParameterNames.size());
+                for (const auto& genericParameterName : activeGenericParameterNames)
+                {
+                    auto foundBinding = bindings.find(genericParameterName);
+                    if (foundBinding == bindings.end() || !foundBinding->second)
+                        return false;
+
+                    resolvedBindingTypes.push_back(foundBinding->second);
+                }
+
+                return matchesApplyConstraints(*attributeIt->second, activeGenericParameterNames, resolvedBindingTypes);
+            };
+
             bool rejectedByInstantiationWhitelist = false;
             std::string rejectedInstantiationFunctionName;
             std::string rejectedInstantiationSignature;
+            bool rejectedByApplyConstraints = false;
+            std::string rejectedApplyTargetName;
+            std::string rejectedApplySignature;
 
             auto tryResolveFunctionCandidate = [&](const Ref<Symbol>& overload) -> std::optional<ResolvedFunctionCandidate>
             {
@@ -3322,6 +3847,25 @@ namespace wio::sema
                         return std::nullopt;
                     }
 
+                    Ref<Symbol> applyConstraintOwner = isConstructorCall ? genericOwnerSym : overload;
+                    if (!satisfiesApplyBinding(applyConstraintOwner, activeGenericParameterNames, bindings))
+                    {
+                        std::vector<Ref<Type>> resolvedBindingTypes;
+                        resolvedBindingTypes.reserve(activeGenericParameterNames.size());
+                        for (const auto& genericParameterName : activeGenericParameterNames)
+                        {
+                            auto foundBinding = bindings.find(genericParameterName);
+                            if (foundBinding != bindings.end())
+                                resolvedBindingTypes.push_back(foundBinding->second);
+                        }
+
+                        rejectedByApplyConstraints = true;
+                        rejectedApplyTargetName =
+                            isConstructorCall && constructorStructType ? constructorStructType->name : overload->name;
+                        rejectedApplySignature = formatInstantiationSignature(resolvedBindingTypes);
+                        return std::nullopt;
+                    }
+
                     std::vector<Ref<Type>> instantiatedParamTypes;
                     instantiatedParamTypes.reserve(declaredFunctionType->paramTypes.size());
                     for (const auto& paramType : declaredFunctionType->paramTypes)
@@ -3413,6 +3957,15 @@ namespace wio::sema
                         "Generic interop function '{}' does not declare @Instantiate{}.",
                         rejectedInstantiationFunctionName,
                         rejectedInstantiationSignature
+                    );
+                }
+                else if (rejectedByApplyConstraints)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "Generic callable '{}' rejects type arguments {} because of @Apply constraints.",
+                        rejectedApplyTargetName,
+                        rejectedApplySignature
                     );
                 }
                 else
@@ -4189,19 +4742,25 @@ namespace wio::sema
         auto genericScope = buildGenericTypeParameterScope();
         genericTypeParameterScopes_.push_back(genericScope);
 
+        std::vector<std::string> genericParameterNames;
+        genericParameterNames.reserve(node.genericParameters.size());
+        for (const auto& genericParameter : node.genericParameters)
+        {
+            if (genericParameter)
+                genericParameterNames.push_back(genericParameter->token.value);
+        }
+
+        validateApplyAttributes(*this, node.attributes, genericParameterNames, "type alias", node.location());
+
         node.aliasedType->accept(*this);
         Ref<Type> aliasedType = node.aliasedType->refType.Lock();
         Ref<Type> aliasType = Compiler::get().getTypeContext().getOrCreateAliasType(node.name->token.value, aliasedType);
         Ref<Symbol> aliasSym = createSymbol(node.name->token.value, aliasType, SymbolKind::TypeAlias, node.location());
         aliasSym->aliasTargetType = aliasedType;
-        aliasSym->genericParameterNames.reserve(node.genericParameters.size());
-        for (const auto& genericParameter : node.genericParameters)
-        {
-            if (genericParameter)
-                aliasSym->genericParameterNames.push_back(genericParameter->token.value);
-        }
+        aliasSym->genericParameterNames = genericParameterNames;
 
         currentScope_->define(node.name->token.value, aliasSym);
+        attributeListsBySymbol_[aliasSym.Get()] = &node.attributes;
         node.name->referencedSymbol = aliasSym;
         node.name->refType = aliasType;
 
@@ -4270,6 +4829,12 @@ namespace wio::sema
             }
             currentScope_->define(node.name->token.value, funcSym);
             functionDeclarationsBySymbol_[funcSym.Get()] = &node;
+            attributeListsBySymbol_[funcSym.Get()] = &node.attributes;
+            if (!funcSym->genericParameterNames.empty())
+            {
+                validateApplyAttributes(*this, node.attributes, funcSym->genericParameterNames, "function", node.location());
+                funcSym->resolvedGenericInstantiations = resolveInstantiateAttributes(*this, node.attributes, funcSym->genericParameterNames);
+            }
 
             node.name->refType = funcType;
             node.name->referencedSymbol = funcSym;
@@ -4287,9 +4852,9 @@ namespace wio::sema
         std::vector<Attribute> moduleLifecycleAttributes = getModuleLifecycleAttributes(node.attributes);
         bool hasModuleLifecycle = !moduleLifecycleAttributes.empty();
         bool isGenericFunction = !node.genericParameters.empty();
+        bool hasApply = hasAttribute(node.attributes, Attribute::Apply);
         bool isStructMethod = currentScope_ && currentScope_->getKind() == ScopeKind::Struct;
-        auto instantiateAttributes = getAttributeStatements(node.attributes, Attribute::Instantiate);
-        bool hasInstantiate = !instantiateAttributes.empty();
+        bool hasInstantiate = hasAttribute(node.attributes, Attribute::Instantiate);
         if (isCommand && isEvent)
         {
             WIO_LOG_ADD_ERROR(node.location(), "@Command and @Event cannot be combined on the same function.");
@@ -4303,6 +4868,11 @@ namespace wio::sema
         if (hasInstantiate && !isGenericFunction)
         {
             WIO_LOG_ADD_ERROR(node.location(), "@Instantiate can only be used on generic functions.");
+        }
+
+        if (hasApply && !isGenericFunction)
+        {
+            WIO_LOG_ADD_ERROR(node.location(), "@Apply can only be used on generic functions.");
         }
 
         if (isGenericFunction)
@@ -4706,68 +5276,8 @@ namespace wio::sema
 
         if (hasInstantiate)
         {
-            std::unordered_set<std::string> seenInstantiationSignatures;
-            for (const auto* instantiateAttribute : instantiateAttributes)
+            for (const auto& instantiationTypes : funcSym->resolvedGenericInstantiations)
             {
-                if (!instantiateAttribute)
-                    continue;
-
-                if (instantiateAttribute->typeArgs.size() != node.genericParameters.size())
-                {
-                    WIO_LOG_ADD_ERROR(
-                        node.location(),
-                        "@Instantiate expects exactly {} type arguments for '{}'.",
-                        node.genericParameters.size(),
-                        node.name->token.value
-                    );
-                    continue;
-                }
-
-                std::vector<Ref<Type>> instantiationTypes;
-                instantiationTypes.reserve(instantiateAttribute->typeArgs.size());
-                bool isValidInstantiation = true;
-                std::string instantiationSignature;
-
-                for (const auto& typeSpecifier : instantiateAttribute->typeArgs)
-                {
-                    if (!typeSpecifier)
-                    {
-                        WIO_LOG_ADD_ERROR(node.location(), "@Instantiate expects concrete type arguments, not raw tokens.");
-                        isValidInstantiation = false;
-                        break;
-                    }
-
-                    typeSpecifier->accept(*this);
-                    Ref<Type> instantiationType = typeSpecifier->refType.Lock();
-                    if (!instantiationType || instantiationType->isUnknown())
-                    {
-                        WIO_LOG_ADD_ERROR(node.location(), "@Instantiate contains an unresolved type argument.");
-                        isValidInstantiation = false;
-                        break;
-                    }
-
-                    if (containsGenericParameterType(instantiationType))
-                    {
-                        WIO_LOG_ADD_ERROR(node.location(), "@Instantiate must use fully concrete type arguments.");
-                        isValidInstantiation = false;
-                        break;
-                    }
-
-                    instantiationTypes.push_back(instantiationType);
-                    if (!instantiationSignature.empty())
-                        instantiationSignature += "|";
-                    instantiationSignature += instantiationType->toString();
-                }
-
-                if (!isValidInstantiation)
-                    continue;
-
-                if (!seenInstantiationSignatures.insert(instantiationSignature).second)
-                {
-                    WIO_LOG_ADD_ERROR(node.location(), "Duplicate @Instantiate declaration for '{}'.", instantiationSignature);
-                    continue;
-                }
-
                 if (isExported)
                 {
                     auto instantiationBindings = buildGenericTypeBindings(funcSym->genericParameterNames, instantiationTypes);
@@ -4779,6 +5289,8 @@ namespace wio::sema
                         WIO_LOG_ADD_ERROR(node.location(), "@Instantiate failed to produce a concrete exported signature.");
                         continue;
                     }
+
+                    const std::string instantiationSignature = formatConcreteInstantiationSignature(instantiationTypes);
 
                     for (size_t i = 0; i < instantiatedFunctionType->paramTypes.size(); ++i)
                     {
@@ -4829,36 +5341,8 @@ namespace wio::sema
             const std::string baseExportSymbolName = getDeclaredExportSymbolName(node, hasModuleLifecycle);
             if (!node.genericParameters.empty() && isExported)
             {
-                for (const auto* instantiateAttribute : instantiateAttributes)
+                for (const auto& instantiationTypes : funcSym->resolvedGenericInstantiations)
                 {
-                    if (!instantiateAttribute || instantiateAttribute->typeArgs.size() != node.genericParameters.size())
-                        continue;
-
-                    std::vector<Ref<Type>> instantiationTypes;
-                    bool isValidInstantiation = true;
-                    instantiationTypes.reserve(instantiateAttribute->typeArgs.size());
-
-                    for (const auto& typeSpecifier : instantiateAttribute->typeArgs)
-                    {
-                        if (!typeSpecifier)
-                        {
-                            isValidInstantiation = false;
-                            break;
-                        }
-
-                        Ref<Type> instantiationType = typeSpecifier->refType.Lock();
-                        if (!instantiationType || instantiationType->isUnknown() || containsGenericParameterType(instantiationType))
-                        {
-                            isValidInstantiation = false;
-                            break;
-                        }
-
-                        instantiationTypes.push_back(instantiationType);
-                    }
-
-                    if (!isValidInstantiation)
-                        continue;
-
                     registerExportedSymbol(formatInstantiatedExportSymbolName(baseExportSymbolName, instantiationTypes));
                 }
             }
@@ -5039,11 +5523,16 @@ namespace wio::sema
                 if (genericParameter)
                     interfaceType.AsFast<StructType>()->genericParameterNames.push_back(genericParameter->token.value);
             }
+            auto genericScope = buildGenericTypeParameterScope();
+            genericTypeParameterScopes_.push_back(genericScope);
+            validateApplyAttributes(*this, node.attributes, interfaceType.AsFast<StructType>()->genericParameterNames, "interface", node.location());
+            genericTypeParameterScopes_.pop_back();
             Ref<Symbol> interfaceSym = createSymbol(node.name->token.value, interfaceType, SymbolKind::Struct, node.location());
             interfaceSym->innerScope = interfaceScope;
             interfaceSym->flags.set_isInterface(true);
             interfaceSym->genericParameterNames = interfaceType.AsFast<StructType>()->genericParameterNames;
             currentScope_->define(node.name->token.value, interfaceSym);
+            attributeListsBySymbol_[interfaceSym.Get()] = &node.attributes;
             
             node.name->refType = interfaceType;
             node.name->referencedSymbol = interfaceSym;
@@ -5110,10 +5599,15 @@ namespace wio::sema
                     structType.AsFast<StructType>()->genericParameterNames.push_back(genericParameter->token.value);
             }
             structType.AsFast<StructType>()->isFinal = hasAttribute(node.attributes, Attribute::Final);
+            auto genericScope = buildGenericTypeParameterScope();
+            genericTypeParameterScopes_.push_back(genericScope);
+            validateApplyAttributes(*this, node.attributes, structType.AsFast<StructType>()->genericParameterNames, "component", node.location());
+            genericTypeParameterScopes_.pop_back();
             Ref<Symbol> compSym = createSymbol(node.name->token.value, structType, SymbolKind::Struct, node.location());
             compSym->innerScope = structScope;
             compSym->genericParameterNames = structType.AsFast<StructType>()->genericParameterNames;
             currentScope_->define(node.name->token.value, compSym);
+            attributeListsBySymbol_[compSym.Get()] = &node.attributes;
             
             node.name->refType = structType;
             node.name->referencedSymbol = compSym;
@@ -5465,10 +5959,15 @@ namespace wio::sema
                     structType.AsFast<StructType>()->genericParameterNames.push_back(genericParameter->token.value);
             }
             structType.AsFast<StructType>()->isFinal = hasAttribute(node.attributes, Attribute::Final);
+            auto genericScope = buildGenericTypeParameterScope();
+            genericTypeParameterScopes_.push_back(genericScope);
+            validateApplyAttributes(*this, node.attributes, structType.AsFast<StructType>()->genericParameterNames, "object", node.location());
+            genericTypeParameterScopes_.pop_back();
             Ref<Symbol> objSym = createSymbol(node.name->token.value, structType, SymbolKind::Struct, node.location());
             objSym->innerScope = structScope;
             objSym->genericParameterNames = structType.AsFast<StructType>()->genericParameterNames;
             currentScope_->define(node.name->token.value, objSym);
+            attributeListsBySymbol_[objSym.Get()] = &node.attributes;
             
             node.name->refType = structType;
             node.name->referencedSymbol = objSym;

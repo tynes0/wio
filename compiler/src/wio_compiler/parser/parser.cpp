@@ -25,6 +25,11 @@ namespace wio
                    token.type == TokenType::kwFn ||
                    token.type == TokenType::leftBracket;
         }
+
+        bool isSignFoldableNumericLiteral(const Token& token)
+        {
+            return token.type == TokenType::integerLiteral || token.type == TokenType::floatLiteral;
+        }
     }
     
     NodePtr<Program> Parser::parseProgram()
@@ -233,6 +238,16 @@ namespace wio
             {
                 NodePtr<Expression> operand = parseExpression(getPrecedence(TokenType::kwRef) + 1, true);
                 left = makeNodePtr<RefExpression>(false, std::move(operand), op.loc);
+            }
+            else if (op.type == TokenType::opMinus && isSignFoldableNumericLiteral(peek()))
+            {
+                Token literal = advance();
+                literal.value = "-" + literal.value;
+
+                if (literal.type == TokenType::integerLiteral)
+                    left = makeNodePtr<IntegerLiteral>(std::move(literal));
+                else
+                    left = makeNodePtr<FloatLiteral>(std::move(literal));
             }
             else
             {
@@ -1011,8 +1026,13 @@ namespace wio
 
     NodePtr<TypeAliasDeclaration> Parser::parseTypeAliasDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
     {
-        if (!attributes.empty())
-            utError("Attributes are not currently supported on type aliases.", attributes.front()->location());
+        for (const auto& attribute : attributes)
+        {
+            if (!attribute || attribute->attribute == Attribute::Apply)
+                continue;
+
+            utError("Only @Apply is currently supported on type aliases.", attribute->location());
+        }
 
         Token startTok = consume(TokenType::kwType);
         NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
@@ -1035,6 +1055,7 @@ namespace wio
         consume(TokenType::semicolon);
 
         return makeNodePtr<TypeAliasDeclaration>(
+            std::move(attributes),
             std::move(name),
             std::move(genericParameters),
             std::move(aliasedType),

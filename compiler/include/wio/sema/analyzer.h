@@ -23,6 +23,7 @@ namespace wio::sema
         std::vector<Ref<Scope>> scopes_;
         std::vector<Ref<Symbol>> symbols_;
         std::unordered_map<const Symbol*, const FunctionDeclaration*> functionDeclarationsBySymbol_;
+        std::unordered_map<const Symbol*, const std::vector<NodePtr<AttributeStatement>>*> attributeListsBySymbol_;
         std::unordered_map<std::string, common::Location> exportedCppSymbolLocations_;
         Ref<Scope> currentScope_ = nullptr;
         Ref<Type> currentExpectedExpressionType_ = nullptr;
