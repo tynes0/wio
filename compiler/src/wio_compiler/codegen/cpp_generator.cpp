@@ -123,7 +123,20 @@ namespace wio::codegen
                 return baseName;
             };
 
-            auto tryParseSyntheticPackElementType = [](std::string_view name) -> std::optional<std::pair<std::string, std::size_t>>
+            enum class SyntheticPackElementKind : uint8_t
+            {
+                Absolute,
+                FromEnd
+            };
+
+            struct SyntheticPackElement
+            {
+                std::string packName;
+                std::size_t value = 0;
+                SyntheticPackElementKind kind = SyntheticPackElementKind::Absolute;
+            };
+
+            auto tryParseSyntheticPackElementType = [](std::string_view name) -> std::optional<SyntheticPackElement>
             {
                 const size_t openBracket = name.find('[');
                 const size_t closeBracket = name.find(']');
@@ -135,9 +148,36 @@ namespace wio::codegen
                 if (packName.empty() || indexString.empty())
                     return std::nullopt;
 
+                if (indexString == "last")
+                    return SyntheticPackElement{packName, 1, SyntheticPackElementKind::FromEnd};
+
+                if (indexString.starts_with("last-"))
+                {
+                    const std::string offsetText = indexString.substr(5);
+                    if (offsetText.empty())
+                        return std::nullopt;
+
+                    try
+                    {
+                        return SyntheticPackElement{
+                            packName,
+                            static_cast<std::size_t>(std::stoull(offsetText)) + 1,
+                            SyntheticPackElementKind::FromEnd
+                        };
+                    }
+                    catch (...)
+                    {
+                        return std::nullopt;
+                    }
+                }
+
                 try
                 {
-                    return std::pair<std::string, std::size_t>{ packName, static_cast<std::size_t>(std::stoull(indexString)) };
+                    return SyntheticPackElement{
+                        packName,
+                        static_cast<std::size_t>(std::stoull(indexString)),
+                        SyntheticPackElementKind::Absolute
+                    };
                 }
                 catch (...)
                 {
@@ -150,10 +190,20 @@ namespace wio::codegen
                 const auto genericParameter = current.AsFast<sema::GenericParameterType>();
                 if (auto syntheticPackElement = tryParseSyntheticPackElementType(genericParameter->name))
                 {
+                    if (syntheticPackElement->kind == SyntheticPackElementKind::FromEnd)
+                    {
+                        return common::formatString(
+                            "typename wio::meta::TypePackView<{}...>::template At<(wio::meta::TypePackView<{}...>::size - {})>",
+                            syntheticPackElement->packName,
+                            syntheticPackElement->packName,
+                            syntheticPackElement->value
+                        );
+                    }
+
                     return common::formatString(
                         "typename wio::meta::TypePackView<{}...>::template At<{}>",
-                        syntheticPackElement->first,
-                        syntheticPackElement->second
+                        syntheticPackElement->packName,
+                        syntheticPackElement->value
                     );
                 }
             }
@@ -226,10 +276,25 @@ namespace wio::codegen
             return packName + "[" + std::to_string(index) + "]";
         }
 
+        std::string makePackTailElementBindingName(const std::string& packName, const size_t distanceFromEnd)
+        {
+            if (distanceFromEnd <= 1)
+                return packName + "[last]";
+
+            return packName + "[last-" + std::to_string(distanceFromEnd - 1) + "]";
+        }
+
+        enum class PackElementBindingKind : uint8_t
+        {
+            Absolute,
+            FromEnd
+        };
+
         struct ParsedPackElementBinding
         {
             std::string packName;
-            size_t index = 0;
+            size_t value = 0;
+            PackElementBindingKind kind = PackElementBindingKind::Absolute;
         };
 
         std::optional<ParsedPackElementBinding> tryParsePackElementBindingName(const std::string_view name)
@@ -243,6 +308,30 @@ namespace wio::codegen
             if (packName.empty() || indexText.empty())
                 return std::nullopt;
 
+            if (indexText == "last")
+                return ParsedPackElementBinding{std::string(packName), 1, PackElementBindingKind::FromEnd};
+
+            if (indexText.starts_with("last-"))
+            {
+                const std::string_view offsetText = indexText.substr(5);
+                if (offsetText.empty())
+                    return std::nullopt;
+
+                size_t offset = 0;
+                for (const char ch : offsetText)
+                {
+                    if (ch < '0' || ch > '9')
+                        return std::nullopt;
+                    offset = (offset * 10) + static_cast<size_t>(ch - '0');
+                }
+
+                return ParsedPackElementBinding{
+                    std::string(packName),
+                    offset + 1,
+                    PackElementBindingKind::FromEnd
+                };
+            }
+
             size_t index = 0;
             for (const char ch : indexText)
             {
@@ -251,7 +340,34 @@ namespace wio::codegen
                 index = (index * 10) + static_cast<size_t>(ch - '0');
             }
 
-            return ParsedPackElementBinding{std::string(packName), index};
+            return ParsedPackElementBinding{
+                std::string(packName),
+                index,
+                PackElementBindingKind::Absolute
+            };
+        }
+
+        std::string makePackElementBindingName(const ParsedPackElementBinding& binding)
+        {
+            if (binding.kind == PackElementBindingKind::FromEnd)
+                return makePackTailElementBindingName(binding.packName, binding.value);
+
+            return makePackElementBindingName(binding.packName, binding.value);
+        }
+
+        std::optional<size_t> tryResolveConcretePackElementIndex(const ParsedPackElementBinding& binding, const size_t packSize)
+        {
+            if (binding.kind == PackElementBindingKind::Absolute)
+            {
+                if (binding.value >= packSize)
+                    return std::nullopt;
+                return binding.value;
+            }
+
+            if (binding.value == 0 || binding.value > packSize)
+                return std::nullopt;
+
+            return packSize - binding.value;
         }
 
         std::optional<std::string> tryGetSymbolicPackReferenceName(const Ref<sema::Type>& type)
@@ -377,6 +493,123 @@ namespace wio::codegen
                 return tryEvaluateStaticPackIndex(fit->operand);
 
             return std::nullopt;
+        }
+
+        struct PackSizeReference
+        {
+            std::optional<std::string> packName;
+            std::optional<size_t> concreteSize;
+        };
+
+        std::optional<PackSizeReference> tryResolvePackSizeReference(const NodePtr<Expression>& expression)
+        {
+            if (!expression)
+                return std::nullopt;
+
+            const auto* memberAccess = expression->as<MemberAccessExpression>();
+            if (!memberAccess || !memberAccess->member)
+                return std::nullopt;
+
+            if (memberAccess->intrinsicMember != IntrinsicMember::PackSize &&
+                memberAccess->member->token.value != "size")
+            {
+                return std::nullopt;
+            }
+
+            Ref<sema::Type> objectType = unwrapAliasTypeForCodegen(memberAccess->object ? memberAccess->object->refType.Lock() : nullptr);
+            if (!objectType)
+                return std::nullopt;
+
+            PackSizeReference result;
+            switch (objectType->kind())
+            {
+            case sema::TypeKind::GenericParameterPack:
+                result.packName = objectType.AsFast<sema::GenericParameterPackType>()->name;
+                return result;
+            case sema::TypeKind::ValuePackView:
+            {
+                auto packViewType = objectType.AsFast<sema::ValuePackViewType>();
+                if (auto symbolicPackName = tryGetSymbolicPackReferenceName(objectType))
+                    result.packName = *symbolicPackName;
+                if (!packViewType->elementTypes.empty())
+                    result.concreteSize = packViewType->elementTypes.size();
+                return result;
+            }
+            case sema::TypeKind::TypePackView:
+            {
+                auto packViewType = objectType.AsFast<sema::TypePackViewType>();
+                if (auto symbolicPackName = tryGetSymbolicPackReferenceName(objectType))
+                    result.packName = *symbolicPackName;
+                if (!packViewType->elementTypes.empty())
+                    result.concreteSize = packViewType->elementTypes.size();
+                return result;
+            }
+            case sema::TypeKind::PackStorage:
+            {
+                auto storageType = objectType.AsFast<sema::PackStorageType>();
+                if (auto symbolicPackName = tryGetSymbolicPackReferenceName(objectType))
+                    result.packName = *symbolicPackName;
+                if (!storageType->elementTypes.empty())
+                    result.concreteSize = storageType->elementTypes.size();
+                return result;
+            }
+            default:
+                return std::nullopt;
+            }
+        }
+
+        std::optional<ParsedPackElementBinding> tryEvaluatePackIndexBinding(
+            const NodePtr<Expression>& expression,
+            const std::optional<std::string_view> expectedPackName = std::nullopt)
+        {
+            if (!expression)
+                return std::nullopt;
+
+            if (auto absoluteIndex = tryEvaluateStaticPackIndex(expression))
+            {
+                ParsedPackElementBinding binding;
+                binding.packName = expectedPackName ? std::string(*expectedPackName) : std::string();
+                binding.value = *absoluteIndex;
+                binding.kind = PackElementBindingKind::Absolute;
+                return binding;
+            }
+
+            const auto* binary = expression->as<BinaryExpression>();
+            if (!binary || binary->op.type != TokenType::opMinus)
+                return std::nullopt;
+
+            auto packSizeReference = tryResolvePackSizeReference(binary->left);
+            auto rhsIndex = tryEvaluateStaticPackIndex(binary->right);
+            if (!packSizeReference || !rhsIndex.has_value())
+                return std::nullopt;
+
+            if (expectedPackName.has_value() &&
+                packSizeReference->packName.has_value() &&
+                *packSizeReference->packName != *expectedPackName)
+            {
+                return std::nullopt;
+            }
+
+            if (packSizeReference->concreteSize.has_value())
+            {
+                if (*rhsIndex > *packSizeReference->concreteSize)
+                    return std::nullopt;
+
+                ParsedPackElementBinding binding;
+                binding.packName = expectedPackName ? std::string(*expectedPackName) : packSizeReference->packName.value_or(std::string());
+                binding.value = *packSizeReference->concreteSize - *rhsIndex;
+                binding.kind = PackElementBindingKind::Absolute;
+                return binding;
+            }
+
+            if (!packSizeReference->packName.has_value())
+                return std::nullopt;
+
+            ParsedPackElementBinding binding;
+            binding.packName = *packSizeReference->packName;
+            binding.value = *rhsIndex;
+            binding.kind = PackElementBindingKind::FromEnd;
+            return binding;
         }
 
         Ref<sema::Type> instantiateGenericType(const Ref<sema::Type>& type, const GenericBindingSet& bindings);
@@ -536,7 +769,18 @@ namespace wio::codegen
                 if (auto parsedPackElement = tryParsePackElementBindingName(genericParam->name))
                 {
                     if (auto aliasIt = bindings.packAliases.find(parsedPackElement->packName); aliasIt != bindings.packAliases.end())
-                        return ctx.getOrCreateGenericParameterType(makePackElementBindingName(aliasIt->second, parsedPackElement->index));
+                    {
+                        ParsedPackElementBinding reboundBinding = *parsedPackElement;
+                        reboundBinding.packName = aliasIt->second;
+                        return ctx.getOrCreateGenericParameterType(makePackElementBindingName(reboundBinding));
+                    }
+
+                    if (auto packIt = bindings.packBindings.find(parsedPackElement->packName);
+                        packIt != bindings.packBindings.end() && !packIt->second.empty())
+                    {
+                        if (auto resolvedIndex = tryResolveConcretePackElementIndex(*parsedPackElement, packIt->second.size()))
+                            return packIt->second[*resolvedIndex];
+                    }
                 }
                 return current;
             }
@@ -3667,9 +3911,23 @@ namespace wio::codegen
                 objectType = unwrapAliasType(objectType.AsFast<sema::ReferenceType>()->referredType);
         }
 
-        const auto staticIndex = tryEvaluateStaticPackIndex(node.index);
-        if (objectType && staticIndex.has_value())
+        const auto expectedPackName =
+            (objectType && objectType->kind() == sema::TypeKind::GenericParameterPack) ? std::optional<std::string_view>(objectType.AsFast<sema::GenericParameterPackType>()->name) :
+            (objectType && objectType->kind() == sema::TypeKind::ValuePackView) ? std::optional<std::string_view>(objectType.AsFast<sema::ValuePackViewType>()->packName) :
+            (objectType && objectType->kind() == sema::TypeKind::PackStorage) ? std::optional<std::string_view>(objectType.AsFast<sema::PackStorageType>()->packName) :
+            (objectType && objectType->kind() == sema::TypeKind::TypePackView) ? std::optional<std::string_view>(objectType.AsFast<sema::TypePackViewType>()->packName) :
+            std::nullopt;
+        const auto indexBinding = tryEvaluatePackIndexBinding(node.index, expectedPackName);
+        if (objectType && indexBinding.has_value())
         {
+            auto buildTemplateIndexExpr = [&](const ParsedPackElementBinding& binding, std::string_view sizeExpr) -> std::string
+            {
+                if (binding.kind == PackElementBindingKind::FromEnd)
+                    return common::formatString("({} - {})", sizeExpr, binding.value);
+
+                return std::to_string(binding.value);
+            };
+
             if (objectType->kind() == sema::TypeKind::GenericParameterPack)
             {
                 const std::string packTypeName = objectType.AsFast<sema::GenericParameterPackType>()->name;
@@ -3677,27 +3935,63 @@ namespace wio::codegen
                 const bool isRuntimePackValue =
                     packValueSymbol &&
                     packValueSymbol->flags.get_isParameterPack() &&
-                    (packValueSymbol->kind == sema::SymbolKind::Parameter || packValueSymbol->kind == sema::SymbolKind::Variable);
+                     (packValueSymbol->kind == sema::SymbolKind::Parameter || packValueSymbol->kind == sema::SymbolKind::Variable);
                 const std::string packValueName = isRuntimePackValue
                     ? sanitizeCppIdentifier(packValueSymbol->name)
                     : packTypeName;
-                emit(common::formatString("std::get<{}>(std::forward_as_tuple({}...))", *staticIndex, packValueName));
+                const std::string sizeExpr = isRuntimePackValue
+                    ? common::formatString("sizeof...({})", packValueName)
+                    : common::formatString("wio::meta::TypePackView<{}...>::size", packTypeName);
+                emit(common::formatString(
+                    "std::get<{}>(std::forward_as_tuple({}...))",
+                    buildTemplateIndexExpr(*indexBinding, sizeExpr),
+                    packValueName
+                ));
                 return;
             }
 
             if (objectType->kind() == sema::TypeKind::ValuePackView || objectType->kind() == sema::TypeKind::PackStorage)
             {
+                std::string sizeExpr;
+                if (objectType->kind() == sema::TypeKind::ValuePackView)
+                {
+                    auto packViewType = objectType.AsFast<sema::ValuePackViewType>();
+                    sizeExpr = packViewType->elementTypes.empty()
+                        ? common::formatString("wio::meta::ValuePackView<{}...>::size", packViewType->packName)
+                        : std::to_string(packViewType->elementTypes.size());
+                }
+                else
+                {
+                    auto storageType = objectType.AsFast<sema::PackStorageType>();
+                    sizeExpr = storageType->elementTypes.empty()
+                        ? common::formatString("wio::meta::PackStorage<{}...>::size", storageType->packName)
+                        : std::to_string(storageType->elementTypes.size());
+                }
+
                 emit("(");
                 node.object->accept(*this);
-                emit(common::formatString(").template Get<{}>()", *staticIndex));
+                emit(common::formatString(").template Get<{}>()", buildTemplateIndexExpr(*indexBinding, sizeExpr)));
                 return;
             }
         }
 
-        node.object->accept(*this);
-        emit("[");
+        auto emitIndexableReceiver = [&]()
+        {
+            const std::size_t derefCount = getAutoReadableReferenceDepth(node.object ? node.object->refType.Lock() : nullptr);
+            for (std::size_t i = 0; i < derefCount; ++i)
+                emit("*(");
+
+            node.object->accept(*this);
+
+            for (std::size_t i = 0; i < derefCount; ++i)
+                emit(")");
+        };
+
+        emit("wio::intrinsics::Index(");
+        emitIndexableReceiver();
+        emit(", ");
         node.index->accept(*this);
-        emit("]");
+        emit(")");
     }
 
     bool CppGenerator::emitIntrinsicMemberAccess(MemberAccessExpression& node)
@@ -5894,7 +6188,7 @@ namespace wio::codegen
                 emit("1");
             emit(");\n");
 
-            emitLine("if (_wio_range_step == 0) throw std::runtime_error(\"Range step cannot be zero.\");");
+            emitLine("if (_wio_range_step == 0) throw wio::runtime::RuntimeException(\"Range step cannot be zero.\");");
 
             emitLine("if (_wio_range_step > 0)");
             emitLine("{");
@@ -5997,7 +6291,7 @@ namespace wio::codegen
                 emit("1");
             emit(");\n");
 
-            emitLine("if (_wio_array_step <= 0) throw std::runtime_error(\"Array step must be positive.\");");
+            emitLine("if (_wio_array_step <= 0) throw wio::runtime::RuntimeException(\"Array step must be positive.\");");
 
             EMIT_TABS();
             emit("for (std::size_t _wio_index = 0; _wio_index < _wio_range.size(); _wio_index += static_cast<std::size_t>(_wio_array_step))\n");

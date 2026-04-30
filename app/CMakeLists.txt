@@ -83,7 +83,7 @@ add_custom_target(
 
 set(
     WIO_TRACEABILITY_TEST_REGEX
-    "(wio_test_(use_alias_dry_run|realm_basic_run|realm_nested_run|realm_qualified_from_run|object_component_access_semantics_run|interface_ref_upcast_run|component_embedded_member_ctor_run|for_in_dynamic_array_run|for_dict_key_value_run|for_component_binding_run|c_style_for_loop_run|match_value_basic_run|match_statement_basic_run|when_guard_fallback_value_run|fit_numeric_clamp_run|const_scalar_expressions_run|numeric_literal_suffixes_run|numeric_literal_signed_mins_run|default_parameters_run|default_parameter_native_bridge_run|function_parameter_pack_run|pack_meta_and_generic_declarations_run|generic_apply_function_constraints_run|generic_apply_type_and_object_run|generic_native_predicate_bridge_run|array_member_methods_run|dictionary_member_methods_run|string_member_methods_run|std_contract_v1_run|sdk_invalid_api_contract|sdk_module_easy_host_interop|sdk_exported_types_host_interop|sdk_exported_complex_fields_host_interop|sdk_module_hot_reload_interop|sdk_hot_reload_stale_wrappers_interop|sdk_module_stale_bindings_interop)|wio_invalid_(entry_invalid_parameter_type|entry_invalid_return_type|entry_too_many_parameters|entry_missing_body|entry_method_not_top_level|use_missing_user_module|use_missing_std_module|use_alias_conflicts_with_symbol|realm_conflicts_with_symbol|ref_requires_addressable_operand|ref_immutable_to_mutable_param|is_left_requires_object_or_interface|is_right_requires_object_or_interface|fit_requires_numeric_or_object_interface|if_fit_requires_is_condition|component_method_not_allowed|object_inherits_component|final_object_inheritance|default_attribute_invalid_access|private_base_member_access|protected_member_access_outside_hierarchy|trust_requires_struct_type|let_without_initializer|mut_without_initializer|let_without_type_or_initializer|const_without_initializer|const_string_not_supported|const_from_non_const_identifier|const_function_call_not_supported|const_array_not_supported|default_parameter_non_trailing|default_parameter_type_mismatch|default_parameter_declaration_only_not_supported|default_parameter_entry_not_allowed|default_parameter_overload_conflict|generic_parameter_pack_non_trailing|parameter_pack_non_trailing|parameter_pack_missing_matching_generic_pack|parameter_pack_bare_use_not_allowed|parameter_pack_default_not_supported|parameter_pack_method_not_supported|parameter_pack_explicit_type_arguments_not_supported|generic_apply_reject_function_call|generic_apply_reject_type_alias|generic_apply_reject_constructor|generic_apply_non_generic_function|generic_native_predicate_reject_non_integer|pack_field_requires_generic_pack|pack_index_requires_compile_time_constant|type_pack_to_static_array_not_supported|match_value_requires_assumed|match_assumed_must_be_last|match_duplicate_assumed|match_case_type_mismatch|match_return_type_mismatch|non_void_when_without_else|when_condition_type_mismatch|when_fallback_return_type_mismatch|for_in_requires_array|for_dict_requires_two_bindings|for_component_binding_count_mismatch|for_range_step_zero|break_outside_loop|continue_outside_loop|c_style_for_invalid_condition_type|array_member_requires_mutable_receiver|dictionary_member_requires_mutable_receiver|string_member_requires_mutable_receiver|missing_cpp_header_std_import|std_imports_private_runtime_header))"
+    "(wio_test_(use_alias_dry_run|realm_basic_run|realm_nested_run|realm_qualified_from_run|object_component_access_semantics_run|interface_ref_upcast_run|component_embedded_member_ctor_run|for_in_dynamic_array_run|for_dict_key_value_run|for_component_binding_run|c_style_for_loop_run|match_value_basic_run|match_statement_basic_run|when_guard_fallback_value_run|fit_numeric_clamp_run|const_scalar_expressions_run|numeric_literal_suffixes_run|numeric_literal_signed_mins_run|default_parameters_run|default_parameter_native_bridge_run|function_parameter_pack_run|pack_meta_and_generic_declarations_run|generic_apply_function_constraints_run|generic_apply_type_and_object_run|generic_native_predicate_bridge_run|array_member_methods_run|dictionary_member_methods_run|string_member_methods_run|direct_indexing_run|control_flow_return_analysis_run|std_contract_v1_run|sdk_invalid_api_contract|sdk_module_easy_host_interop|sdk_exported_types_host_interop|sdk_exported_complex_fields_host_interop|sdk_module_hot_reload_interop|sdk_hot_reload_stale_wrappers_interop|sdk_module_stale_bindings_interop)|wio_runtime_direct_index_out_of_range|wio_invalid_(entry_invalid_parameter_type|entry_invalid_return_type|entry_too_many_parameters|entry_missing_body|entry_method_not_top_level|use_missing_user_module|use_missing_std_module|use_alias_conflicts_with_symbol|realm_conflicts_with_symbol|ref_requires_addressable_operand|ref_immutable_to_mutable_param|is_left_requires_object_or_interface|is_right_requires_object_or_interface|fit_requires_numeric_or_object_interface|if_fit_requires_is_condition|component_method_not_allowed|object_inherits_component|final_object_inheritance|default_attribute_invalid_access|private_base_member_access|protected_member_access_outside_hierarchy|trust_requires_struct_type|let_without_initializer|mut_without_initializer|let_without_type_or_initializer|const_without_initializer|const_string_not_supported|const_from_non_const_identifier|const_function_call_not_supported|const_array_not_supported|default_parameter_non_trailing|default_parameter_type_mismatch|default_parameter_declaration_only_not_supported|default_parameter_entry_not_allowed|default_parameter_overload_conflict|generic_parameter_pack_non_trailing|parameter_pack_non_trailing|parameter_pack_missing_matching_generic_pack|parameter_pack_bare_use_not_allowed|parameter_pack_default_not_supported|parameter_pack_method_not_supported|parameter_pack_explicit_type_arguments_not_supported|generic_apply_reject_function_call|generic_apply_reject_type_alias|generic_apply_reject_constructor|generic_apply_non_generic_function|generic_native_predicate_reject_non_integer|pack_field_requires_generic_pack|pack_index_requires_compile_time_constant|pack_index_from_size_requires_subtraction|type_pack_to_static_array_not_supported|match_value_requires_assumed|match_assumed_must_be_last|match_duplicate_assumed|match_case_type_mismatch|match_return_type_mismatch|non_void_when_without_else|non_void_missing_return|non_void_if_missing_return|array_index_requires_integer|static_array_index_out_of_range|when_condition_type_mismatch|when_fallback_return_type_mismatch|for_in_requires_array|for_dict_requires_two_bindings|for_component_binding_count_mismatch|for_range_step_zero|break_outside_loop|continue_outside_loop|c_style_for_invalid_condition_type|array_member_requires_mutable_receiver|dictionary_member_requires_mutable_receiver|string_member_requires_mutable_receiver|missing_cpp_header_std_import|std_imports_private_runtime_header))"
 )
 
 add_custom_target(
@@ -992,6 +992,28 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_direct_indexing_run
+        "${CMAKE_SOURCE_DIR}/tests/direct_indexing_run.wio"
+        "Direct indexing: ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_control_flow_return_analysis_run
+        "${CMAKE_SOURCE_DIR}/tests/control_flow_return_analysis_run.wio"
+        "Control-flow returns: ok"
+        --run
+    )
+
+    add_wio_non_dry_failure_test_clean(
+        wio_runtime_direct_index_out_of_range
+        "${CMAKE_SOURCE_DIR}/tests/direct_index_out_of_range_runtime_failure.wio"
+        "Runtime Error: Index access index 3 is out of range for size 3\\."
+        "stl_vector|Assertion '__n < this->size\\(\\)' failed"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_intrinsic_member_overloads_run
         "${CMAKE_SOURCE_DIR}/tests/intrinsic_member_overloads.wio"
         "Intrinsic overloads: true/true/4/4/8/Arena/Arena/  7/7  /2/3/3"
@@ -1294,6 +1316,34 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/invalid/non_void_when_without_else.wio"
         "Functions with a return value must provide an 'else' fallback for 'when' guards"
         "Compiling failed:"
+    )
+
+    add_wio_non_dry_failure_test_clean(
+        wio_invalid_non_void_missing_return
+        "${CMAKE_SOURCE_DIR}/tests/invalid/non_void_missing_return.wio"
+        "Non-void function 'Broken' must return a value on all control-flow paths\\."
+        "Generated C\\+\\+ output:"
+    )
+
+    add_wio_non_dry_failure_test_clean(
+        wio_invalid_non_void_if_missing_return
+        "${CMAKE_SOURCE_DIR}/tests/invalid/non_void_if_missing_return.wio"
+        "Non-void function 'Broken' must return a value on all control-flow paths\\."
+        "Generated C\\+\\+ output:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_array_index_requires_integer
+        "${CMAKE_SOURCE_DIR}/tests/invalid/array_index_requires_integer.wio"
+        "Array and string indices must be integer values\\."
+        "stl_vector|Unhandled compiler failure"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_static_array_index_out_of_range
+        "${CMAKE_SOURCE_DIR}/tests/invalid/static_array_index_out_of_range.wio"
+        "Index 2 is out of range for compile-time array size 2\\."
+        "stl_vector|Generated C\\+\\+ output:"
     )
 
     add_wio_failure_test_clean(
@@ -1633,6 +1683,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_pack_index_requires_compile_time_constant
         "${CMAKE_SOURCE_DIR}/tests/invalid/pack_index_requires_compile_time_constant.wio"
         "Pack indexing requires a non-negative compile-time integer index."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_pack_index_from_size_requires_subtraction
+        "${CMAKE_SOURCE_DIR}/tests/invalid/pack_index_from_size_requires_subtraction.wio"
+        "Pack type indexing from '.size' must subtract at least 1."
     )
 
     add_wio_failure_test(

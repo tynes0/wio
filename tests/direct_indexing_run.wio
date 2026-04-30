@@ -1,0 +1,19 @@
+use std::console as console;
+use std::assert as assert;
+
+fn Entry() -> i32 {
+    let values: i32[] = [10, 20, 30];
+    let letters: [char; 3] = ['a', 'b', 'c'];
+    let text = "wio";
+
+    let valuesRef = ref values;
+
+    assert::ExpectEqual(values[0usize], 10, "dynamic array index access mismatch");
+    assert::ExpectEqual(letters[2usize], 'c', "static array index access mismatch");
+    assert::ExpectEqual(text[1usize], 'i', "string index access mismatch");
+
+    assert::ExpectEqual(valuesRef[1usize], 20, "reference-backed index read mismatch");
+
+    console::Print("Direct indexing: ok");
+    return 0;
+}

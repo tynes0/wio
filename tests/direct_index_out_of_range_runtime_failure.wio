@@ -1,0 +1,5 @@
+fn Entry() -> i32 {
+    let values: string[] = ["alpha", "beta", "gamma"];
+    let bad = values[3usize];
+    return bad.Count() fit i32;
+}

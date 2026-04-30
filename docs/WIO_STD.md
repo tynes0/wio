@@ -101,8 +101,8 @@ Current expectation:
 
 - it is intentionally smaller and more experimental than the main stable module
   families
-- it currently focuses on pack counting, pack storage, pack indexing aliases,
-  and simple value/type helpers
+- it currently focuses on pack counting, pack storage, first/last pack indexing
+  aliases, and simple value/type helpers
 - richer transforms such as `Take`, `Drop`, `Zip`, `MapTypes`, and future
   const-generic style helpers are still future work
 

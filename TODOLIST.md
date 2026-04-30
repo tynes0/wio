@@ -311,9 +311,10 @@ The language reference now exists, but it still needs to become a true spec.
   - [x] Support pack storage fields via `pack values: Args...;` on `object` and
         `component` declarations.
   - [x] Support pack built-ins for the current v1 slice:
-        `.size`, `.array`, `ToStaticArray<T>()`, value-pack indexing, and type-pack indexing.
+        `.size`, `.array`, `ToStaticArray<T>()`, value-pack indexing, type-pack
+        indexing, and same-pack `.size - N` indexing.
   - [x] Land the initial `std::meta` bootstrap layer around `Head`, `First`,
-        `Types`, `Values`, `CountValues`, and `FirstValue`.
+        `Last`, `Types`, `Values`, `CountValues`, `FirstValue`, and `LastValue`.
   - [x] Reject explicit type arguments on generic pack functions for now and
         rely on deduction from call arguments.
   - [x] Reject default parameters, `@Apply`, `@Instantiate`, `when`, and

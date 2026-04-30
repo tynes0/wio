@@ -28,6 +28,10 @@ object Counter<Args...> {
     public fn First() -> Args[0usize] {
         return self.storage.values[0usize];
     }
+
+    public fn Last() -> Args[Args.size - 1usize] {
+        return self.storage.values[self.storage.values.size - 1usize];
+    }
 }
 
 object AliasBridge<Outer...> {
@@ -43,6 +47,10 @@ object AliasBridge<Outer...> {
 
     public fn First() -> Outer[0usize] {
         return self.storage.values[0usize];
+    }
+
+    public fn Last() -> Outer[Outer.size - 1usize] {
+        return self.storage.values[self.storage.values.size - 1usize];
     }
 }
 
@@ -71,6 +79,7 @@ fn SumValues<Args...>(args: Args...) -> i32 {
 fn Entry() -> i32 {
     let headValue: meta::Head<i32, bool, string> = 42i32;
     let indexedHeadValue: meta::First<i32, bool, string> = 77i32;
+    let indexedLastValue: meta::Last<i32, bool, i16> = 88i16;
     let types: meta::Types<i32, bool, string> = meta::Types();
     let values: meta::Values<i32, i32, i32> = meta::Values(7i32, 8i32, 9i32);
     let box: Counter<i32, i32, i32> = Counter(10i32, 20i32, 30i32);
@@ -79,24 +88,32 @@ fn Entry() -> i32 {
 
     let countValues = meta::CountValues(1i32, true, "ok");
     let firstValue = meta::FirstValue(9i32, false, "tail");
+    let lastValue = meta::LastValue(14i32, 15i16, 16i8);
     let callback: Callback<i32, i32> = (x: i32, y: i32) => x + y;
     let callbackResult = UseCallback(callback);
     let typedArray = values.data.ToStaticArray<i32>();
+    let lastStored = values.data[values.data.size - 1usize];
     let sum = SumValues(4i32, 5u8, 6i16);
 
     assert::ExpectEqual(headValue, 42, "meta::Head alias failed");
     assert::ExpectEqual(indexedHeadValue, 77, "meta::First alias failed");
+    assert::ExpectEqual(indexedLastValue, 88i16, "meta::Last alias failed");
     assert::ExpectEqual(types.Count() fit i32, 3, "type pack object count failed");
     assert::ExpectEqual(values.Count() fit i32, 3, "value pack storage count failed");
     assert::ExpectEqual(values.First(), 7, "value pack storage first failed");
+    assert::ExpectEqual(values.Last(), 9, "value pack storage last failed");
+    assert::ExpectEqual(lastStored, 9, "pack storage size-based indexing failed");
     assert::ExpectEqual(typedArray[1usize], 8, "value pack ToStaticArray failed");
     assert::ExpectEqual(box.CountStored() fit i32, 3, "component pack storage count failed");
     assert::ExpectEqual(box.First(), 10, "component pack storage first failed");
+    assert::ExpectEqual(box.Last(), 30, "component pack storage last failed");
     assert::ExpectEqual(aliasBox.CountStored() fit i32, 3, "symbolic pack alias count failed");
     assert::ExpectEqual(aliasBox.First(), 11, "symbolic pack alias first failed");
+    assert::ExpectEqual(aliasBox.Last(), 13i8, "symbolic pack alias last failed");
     assert::ExpectEqual(counter.Count(1i32, true, "ok") fit i32, 3, "generic interface/object pack count failed");
     assert::ExpectEqual(countValues fit i32, 3, "meta::CountValues failed");
     assert::ExpectEqual(firstValue, 9, "meta::FirstValue failed");
+    assert::ExpectEqual(lastValue, 16i8, "meta::LastValue failed");
     assert::ExpectEqual(callbackResult, 10, "pack type alias callback failed");
     assert::ExpectEqual(sum, 15, "function pack ToStaticArray failed");
 

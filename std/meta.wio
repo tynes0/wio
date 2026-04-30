@@ -2,13 +2,18 @@ realm std {
     realm meta {
         type Head<T, Tail...> = T;
         type First<Ts...> = Ts[0usize];
+        type Last<Ts...> = Ts[Ts.size - 1usize];
 
         fn CountValues<Args...>(args: Args...) -> usize {
             return args.size;
         }
 
-        fn FirstValue<Head, Tail...>(head: Head, tail: Tail...) -> Head {
-            return head;
+        fn FirstValue<Args...>(args: Args...) -> Args[0usize] {
+            return args[0usize];
+        }
+
+        fn LastValue<Args...>(args: Args...) -> Args[Args.size - 1usize] {
+            return args[args.size - 1usize];
         }
 
         object Types<Ts...> {
@@ -30,6 +35,10 @@ realm std {
 
             public fn First() -> Args[0usize] {
                 return self.data[0usize];
+            }
+
+            public fn Last() -> Args[Args.size - 1usize] {
+                return self.data[self.data.size - 1usize];
             }
         }
     }

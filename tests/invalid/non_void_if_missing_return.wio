@@ -1,0 +1,9 @@
+fn Broken(condition: bool) -> i32 {
+    if (condition) {
+        return 1;
+    }
+}
+
+fn Entry() -> i32 {
+    return Broken(true);
+}

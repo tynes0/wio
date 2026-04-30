@@ -1,0 +1,7 @@
+fn Broken() -> i32 {
+    let value = 42;
+}
+
+fn Entry() -> i32 {
+    return Broken();
+}

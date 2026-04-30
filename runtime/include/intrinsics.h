@@ -43,6 +43,17 @@ namespace wio::intrinsics
             }
         }
 
+        template <typename TIndex>
+        inline std::string formatDirectIndexValue(const TIndex index)
+        {
+            using RawIndex = std::remove_cv_t<std::remove_reference_t<TIndex>>;
+
+            if constexpr (std::is_signed_v<RawIndex>)
+                return std::to_string(static_cast<long long>(index));
+            else
+                return std::to_string(static_cast<unsigned long long>(index));
+        }
+
         inline std::ptrdiff_t toSignedIndex(const std::size_t index)
         {
             return static_cast<std::ptrdiff_t>(index);
@@ -151,6 +162,42 @@ namespace wio::intrinsics
     inline bool Empty(const TContainer& container)
     {
         return container.empty();
+    }
+
+    template <typename TContainer, typename TIndex>
+    inline decltype(auto) Index(TContainer&& container, const TIndex index)
+    {
+        using RawIndex = std::remove_cv_t<std::remove_reference_t<TIndex>>;
+        auto&& resolvedContainer = std::forward<TContainer>(container);
+
+        if constexpr (!std::is_integral_v<RawIndex>)
+        {
+            detail::throwRuntimeError("Index access requires an integer index.");
+        }
+        else
+        {
+            if constexpr (std::is_signed_v<RawIndex>)
+            {
+                if (index < 0)
+                {
+                    detail::throwRuntimeError(
+                        "Index access index " + detail::formatDirectIndexValue(index) +
+                        " is out of range for size " + std::to_string(resolvedContainer.size()) + "."
+                    );
+                }
+            }
+
+            const std::size_t normalizedIndex = static_cast<std::size_t>(index);
+            if (normalizedIndex >= resolvedContainer.size())
+            {
+                detail::throwRuntimeError(
+                    "Index access index " + detail::formatDirectIndexValue(index) +
+                    " is out of range for size " + std::to_string(resolvedContainer.size()) + "."
+                );
+            }
+
+            return resolvedContainer[normalizedIndex];
+        }
     }
 
     template <typename TContainer>

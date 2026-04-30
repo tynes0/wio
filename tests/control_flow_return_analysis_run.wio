@@ -1,0 +1,21 @@
+use std::console as console;
+use std::assert as assert;
+
+fn AlwaysIfTrue() -> i32 {
+    if (true) {
+        return 7;
+    }
+}
+
+fn AlwaysLoopReturn() -> i32 {
+    while (true) {
+        return 9;
+    }
+}
+
+fn Entry() -> i32 {
+    assert::ExpectEqual(AlwaysIfTrue(), 7, "constant if return analysis mismatch");
+    assert::ExpectEqual(AlwaysLoopReturn(), 9, "while(true) return analysis mismatch");
+    console::Print("Control-flow returns: ok");
+    return 0;
+}

@@ -602,10 +602,25 @@ namespace wio::sema
             return common::formatString("{}[{}]", packName, index);
         }
 
+        std::string makePackTailElementBindingName(const std::string& packName, const size_t distanceFromEnd)
+        {
+            if (distanceFromEnd <= 1)
+                return common::formatString("{}[last]", packName);
+
+            return common::formatString("{}[last-{}]", packName, distanceFromEnd - 1);
+        }
+
+        enum class PackElementBindingKind : uint8_t
+        {
+            Absolute,
+            FromEnd
+        };
+
         struct ParsedPackElementBinding
         {
             std::string packName;
-            size_t index = 0;
+            size_t value = 0;
+            PackElementBindingKind kind = PackElementBindingKind::Absolute;
         };
 
         std::optional<ParsedPackElementBinding> tryParsePackElementBindingName(const std::string_view name)
@@ -619,6 +634,31 @@ namespace wio::sema
             if (packName.empty() || indexText.empty())
                 return std::nullopt;
 
+            if (indexText == "last")
+                return ParsedPackElementBinding{std::string(packName), 1, PackElementBindingKind::FromEnd};
+
+            if (indexText.starts_with("last-"))
+            {
+                const std::string_view offsetText = indexText.substr(5);
+                if (offsetText.empty())
+                    return std::nullopt;
+
+                size_t offset = 0;
+                for (const char ch : offsetText)
+                {
+                    if (ch < '0' || ch > '9')
+                        return std::nullopt;
+
+                    offset = (offset * 10) + static_cast<size_t>(ch - '0');
+                }
+
+                return ParsedPackElementBinding{
+                    std::string(packName),
+                    offset + 1,
+                    PackElementBindingKind::FromEnd
+                };
+            }
+
             size_t index = 0;
             for (const char ch : indexText)
             {
@@ -628,7 +668,35 @@ namespace wio::sema
                 index = (index * 10) + static_cast<size_t>(ch - '0');
             }
 
-            return ParsedPackElementBinding{std::string(packName), index};
+            return ParsedPackElementBinding{
+                std::string(packName),
+                index,
+                PackElementBindingKind::Absolute
+            };
+        }
+
+        std::string makePackElementBindingName(const ParsedPackElementBinding& binding)
+        {
+            if (binding.kind == PackElementBindingKind::FromEnd)
+                return makePackTailElementBindingName(binding.packName, binding.value);
+
+            return makePackElementBindingName(binding.packName, binding.value);
+        }
+
+        std::optional<size_t> tryResolveConcretePackElementIndex(const ParsedPackElementBinding& binding, const size_t packSize)
+        {
+            if (binding.kind == PackElementBindingKind::Absolute)
+            {
+                if (binding.value >= packSize)
+                    return std::nullopt;
+
+                return binding.value;
+            }
+
+            if (binding.value == 0 || binding.value > packSize)
+                return std::nullopt;
+
+            return packSize - binding.value;
         }
 
         std::optional<std::string> tryGetSymbolicPackReferenceName(const Ref<Type>& type)
@@ -786,9 +854,303 @@ namespace wio::sema
             return std::nullopt;
         }
 
+        std::optional<bool> tryEvaluateStaticTruthiness(const NodePtr<Expression>& expression)
+        {
+            if (!expression)
+                return std::nullopt;
+
+            if (const auto* literal = expression->as<BoolLiteral>())
+                return literal->token.value == "true";
+
+            if (const auto* literal = expression->as<IntegerLiteral>())
+            {
+                const IntegerResult result = common::getInteger(literal->token.value);
+                if (!result.isValid)
+                    return std::nullopt;
+
+                switch (result.type)
+                {
+                case IntegerType::i8: return result.value.v_i8 != 0;
+                case IntegerType::i16: return result.value.v_i16 != 0;
+                case IntegerType::i32: return result.value.v_i32 != 0;
+                case IntegerType::i64: return result.value.v_i64 != 0;
+                case IntegerType::u8: return result.value.v_u8 != 0;
+                case IntegerType::u16: return result.value.v_u16 != 0;
+                case IntegerType::u32: return result.value.v_u32 != 0;
+                case IntegerType::u64: return result.value.v_u64 != 0;
+                case IntegerType::isize: return result.value.v_isize != 0;
+                case IntegerType::usize: return result.value.v_usize != 0;
+                case IntegerType::Unknown: return std::nullopt;
+                }
+            }
+
+            if (const auto* literal = expression->as<FloatLiteral>())
+            {
+                const FloatResult result = common::getFloat(literal->token.value);
+                if (!result.isValid)
+                    return std::nullopt;
+
+                switch (result.type)
+                {
+                case FloatType::f32: return result.value.v_f32 != 0.0f;
+                case FloatType::f64: return result.value.v_f64 != 0.0;
+                case FloatType::Unknown: return std::nullopt;
+                }
+            }
+
+            if (const auto* unary = expression->as<UnaryExpression>())
+            {
+                if (unary->op.type == TokenType::kwNot)
+                {
+                    if (auto operandTruthiness = tryEvaluateStaticTruthiness(unary->operand))
+                        return !*operandTruthiness;
+
+                    return std::nullopt;
+                }
+
+                if (unary->op.type == TokenType::opPlus || unary->op.type == TokenType::opMinus)
+                    return tryEvaluateStaticTruthiness(unary->operand);
+            }
+
+            if (const auto* fit = expression->as<FitExpression>())
+                return tryEvaluateStaticTruthiness(fit->operand);
+
+            return std::nullopt;
+        }
+
+        bool statementMayBreakCurrentLoop(const NodePtr<Statement>& statement);
+
+        bool statementDefinitelyReturns(const NodePtr<Statement>& statement)
+        {
+            if (!statement)
+                return false;
+
+            if (statement->is<ReturnStatement>())
+                return true;
+
+            if (const auto* block = statement->as<BlockStatement>())
+            {
+                for (const auto& nestedStatement : block->statements)
+                {
+                    if (statementDefinitelyReturns(nestedStatement))
+                        return true;
+                }
+
+                return false;
+            }
+
+            if (const auto* ifStatement = statement->as<IfStatement>())
+            {
+                if (auto truthiness = tryEvaluateStaticTruthiness(ifStatement->condition))
+                {
+                    return *truthiness
+                        ? statementDefinitelyReturns(ifStatement->thenBranch)
+                        : statementDefinitelyReturns(ifStatement->elseBranch);
+                }
+
+                return statementDefinitelyReturns(ifStatement->thenBranch) &&
+                       statementDefinitelyReturns(ifStatement->elseBranch);
+            }
+
+            if (const auto* whileStatement = statement->as<WhileStatement>())
+            {
+                if (auto truthiness = tryEvaluateStaticTruthiness(whileStatement->condition);
+                    truthiness.has_value() && *truthiness)
+                {
+                    return statementDefinitelyReturns(whileStatement->body) &&
+                           !statementMayBreakCurrentLoop(whileStatement->body);
+                }
+
+                return false;
+            }
+
+            if (const auto* cForStatement = statement->as<CForStatement>())
+            {
+                std::optional<bool> truthiness = cForStatement->condition
+                    ? tryEvaluateStaticTruthiness(cForStatement->condition)
+                    : std::optional<bool>(true);
+
+                if (truthiness.has_value() && *truthiness)
+                {
+                    return statementDefinitelyReturns(cForStatement->body) &&
+                           !statementMayBreakCurrentLoop(cForStatement->body);
+                }
+
+                return false;
+            }
+
+            return false;
+        }
+
+        bool statementMayBreakCurrentLoop(const NodePtr<Statement>& statement)
+        {
+            if (!statement)
+                return false;
+
+            if (statement->is<BreakStatement>())
+                return true;
+
+            if (const auto* block = statement->as<BlockStatement>())
+            {
+                for (const auto& nestedStatement : block->statements)
+                {
+                    if (statementMayBreakCurrentLoop(nestedStatement))
+                        return true;
+                }
+
+                return false;
+            }
+
+            if (const auto* ifStatement = statement->as<IfStatement>())
+            {
+                if (auto truthiness = tryEvaluateStaticTruthiness(ifStatement->condition))
+                {
+                    return *truthiness
+                        ? statementMayBreakCurrentLoop(ifStatement->thenBranch)
+                        : statementMayBreakCurrentLoop(ifStatement->elseBranch);
+                }
+
+                return statementMayBreakCurrentLoop(ifStatement->thenBranch) ||
+                       statementMayBreakCurrentLoop(ifStatement->elseBranch);
+            }
+
+            if (statement->is<WhileStatement>() ||
+                statement->is<CForStatement>() ||
+                statement->is<ForInStatement>())
+            {
+                return false;
+            }
+
+            return false;
+        }
+
+        struct PackSizeReference
+        {
+            std::optional<std::string> packName;
+            std::optional<size_t> concreteSize;
+        };
+
+        std::optional<PackSizeReference> tryResolvePackSizeReference(const NodePtr<Expression>& expression)
+        {
+            if (!expression)
+                return std::nullopt;
+
+            const auto* memberAccess = expression->as<MemberAccessExpression>();
+            if (!memberAccess || !memberAccess->member)
+                return std::nullopt;
+
+            if (memberAccess->intrinsicMember != IntrinsicMember::PackSize &&
+                memberAccess->member->token.value != "size")
+            {
+                return std::nullopt;
+            }
+
+            Ref<Type> objectType = unwrapAliasType(memberAccess->object ? memberAccess->object->refType.Lock() : nullptr);
+            if (!objectType)
+                return std::nullopt;
+
+            PackSizeReference result;
+            switch (objectType->kind())
+            {
+            case TypeKind::GenericParameterPack:
+                result.packName = objectType.AsFast<GenericParameterPackType>()->name;
+                return result;
+            case TypeKind::ValuePackView:
+            {
+                auto packViewType = objectType.AsFast<ValuePackViewType>();
+                if (auto symbolicPackName = tryGetNormalizedSymbolicPackName(objectType))
+                    result.packName = *symbolicPackName;
+                if (!packViewType->elementTypes.empty())
+                    result.concreteSize = packViewType->elementTypes.size();
+                return result;
+            }
+            case TypeKind::TypePackView:
+            {
+                auto packViewType = objectType.AsFast<TypePackViewType>();
+                if (auto symbolicPackName = tryGetNormalizedSymbolicPackName(objectType))
+                    result.packName = *symbolicPackName;
+                if (!packViewType->elementTypes.empty())
+                    result.concreteSize = packViewType->elementTypes.size();
+                return result;
+            }
+            case TypeKind::PackStorage:
+            {
+                auto storageType = objectType.AsFast<PackStorageType>();
+                if (auto symbolicPackName = tryGetNormalizedSymbolicPackName(objectType))
+                    result.packName = *symbolicPackName;
+                if (!storageType->elementTypes.empty())
+                    result.concreteSize = storageType->elementTypes.size();
+                return result;
+            }
+            default:
+                return std::nullopt;
+            }
+        }
+
+        std::optional<ParsedPackElementBinding> tryEvaluatePackIndexBinding(
+            const NodePtr<Expression>& expression,
+            const std::optional<std::string_view> expectedPackName = std::nullopt)
+        {
+            if (!expression)
+                return std::nullopt;
+
+            if (auto absoluteIndex = tryEvaluateStaticPackIndex(expression))
+            {
+                ParsedPackElementBinding binding;
+                binding.packName = expectedPackName ? std::string(*expectedPackName) : std::string();
+                binding.value = *absoluteIndex;
+                binding.kind = PackElementBindingKind::Absolute;
+                return binding;
+            }
+
+            const auto* binary = expression->as<BinaryExpression>();
+            if (!binary || binary->op.type != TokenType::opMinus)
+                return std::nullopt;
+
+            auto packSizeReference = tryResolvePackSizeReference(binary->left);
+            auto rhsIndex = tryEvaluateStaticPackIndex(binary->right);
+            if (!packSizeReference || !rhsIndex.has_value())
+                return std::nullopt;
+
+            if (expectedPackName.has_value() &&
+                packSizeReference->packName.has_value() &&
+                *packSizeReference->packName != *expectedPackName)
+            {
+                return std::nullopt;
+            }
+
+            if (packSizeReference->concreteSize.has_value())
+            {
+                if (*rhsIndex > *packSizeReference->concreteSize)
+                    return std::nullopt;
+
+                ParsedPackElementBinding binding;
+                binding.packName = expectedPackName ? std::string(*expectedPackName) : packSizeReference->packName.value_or(std::string());
+                binding.value = *packSizeReference->concreteSize - *rhsIndex;
+                binding.kind = PackElementBindingKind::Absolute;
+                return binding;
+            }
+
+            if (!packSizeReference->packName.has_value())
+                return std::nullopt;
+
+            ParsedPackElementBinding binding;
+            binding.packName = *packSizeReference->packName;
+            binding.value = *rhsIndex;
+            binding.kind = PackElementBindingKind::FromEnd;
+            return binding;
+        }
+
         Ref<Type> makeSyntheticPackElementType(const std::string& packName, const size_t index)
         {
             return Compiler::get().getTypeContext().getOrCreateGenericParameterType(makePackElementBindingName(packName, index));
+        }
+
+        Ref<Type> makeSyntheticPackElementType(const ParsedPackElementBinding& binding)
+        {
+            return Compiler::get().getTypeContext().getOrCreateGenericParameterType(
+                makePackElementBindingName(binding)
+            );
         }
 
         std::string formatDiagnosticType(const Ref<Type>& type)
@@ -947,7 +1309,13 @@ namespace wio::sema
             case TypeKind::GenericParameter:
             {
                 auto genericParam = current.AsFast<GenericParameterType>();
-                return std::ranges::find(genericParameterNames, genericParam->name) != genericParameterNames.end();
+                if (std::ranges::find(genericParameterNames, genericParam->name) != genericParameterNames.end())
+                    return true;
+
+                if (auto parsedPackElement = tryParsePackElementBindingName(genericParam->name))
+                    return std::ranges::find(genericParameterNames, parsedPackElement->packName) != genericParameterNames.end();
+
+                return false;
             }
             case TypeKind::GenericParameterPack:
             {
@@ -1039,6 +1407,13 @@ namespace wio::sema
                 {
                     instances.emplace(genericParam->name, current.Get());
                 }
+                else if (auto parsedPackElement = tryParsePackElementBindingName(genericParam->name);
+                         parsedPackElement &&
+                         std::ranges::find(genericParameterNames, parsedPackElement->packName) != genericParameterNames.end() &&
+                         !instances.contains(parsedPackElement->packName))
+                {
+                    instances.emplace(parsedPackElement->packName, current.Get());
+                }
                 return;
             }
             case TypeKind::GenericParameterPack:
@@ -1118,6 +1493,13 @@ namespace wio::sema
                 auto genericParam = current.AsFast<GenericParameterType>();
                 if (auto foundInstance = instances.find(genericParam->name); foundInstance != instances.end())
                     return foundInstance->second == current.Get();
+
+                if (auto parsedPackElement = tryParsePackElementBindingName(genericParam->name))
+                {
+                    if (auto foundInstance = instances.find(parsedPackElement->packName); foundInstance != instances.end())
+                        return foundInstance->second == current.Get();
+                }
+
                 return false;
             }
             case TypeKind::GenericParameterPack:
@@ -1362,7 +1744,18 @@ namespace wio::sema
                 if (auto parsedPackElement = tryParsePackElementBindingName(genericParam->name))
                 {
                     if (auto aliasIt = bindings.packAliases.find(parsedPackElement->packName); aliasIt != bindings.packAliases.end())
-                        return makeSyntheticPackElementType(aliasIt->second, parsedPackElement->index);
+                    {
+                        ParsedPackElementBinding reboundBinding = *parsedPackElement;
+                        reboundBinding.packName = aliasIt->second;
+                        return makeSyntheticPackElementType(reboundBinding);
+                    }
+
+                    if (auto packIt = bindings.packBindings.find(parsedPackElement->packName);
+                        packIt != bindings.packBindings.end() && !packIt->second.empty())
+                    {
+                        if (auto resolvedIndex = tryResolveConcretePackElementIndex(*parsedPackElement, packIt->second.size()))
+                            return packIt->second[*resolvedIndex];
+                    }
                 }
                 return current;
             }
@@ -3003,40 +3396,51 @@ namespace wio::sema
         if (node.packIndex)
         {
             node.packIndex->accept(*this);
-            auto indexValue = tryEvaluateStaticPackIndex(node.packIndex);
-            if (!indexValue.has_value())
+            const auto expectedPackName =
+                (type && type->kind() == TypeKind::GenericParameterPack) ? std::optional<std::string_view>(type.AsFast<GenericParameterPackType>()->name) :
+                (type && type->kind() == TypeKind::TypePackView) ? std::optional<std::string_view>(type.AsFast<TypePackViewType>()->packName) :
+                std::nullopt;
+            auto indexBinding = tryEvaluatePackIndexBinding(node.packIndex, expectedPackName);
+            if (!indexBinding.has_value())
             {
                 WIO_LOG_ADD_ERROR(node.packIndex->location(), "Pack type indexing requires a non-negative compile-time integer index.");
                 type = Compiler::get().getTypeContext().getUnknown();
             }
+            else if (indexBinding->kind == PackElementBindingKind::FromEnd && indexBinding->value == 0)
+            {
+                WIO_LOG_ADD_ERROR(node.packIndex->location(), "Pack type indexing from '.size' must subtract at least 1.");
+                type = Compiler::get().getTypeContext().getUnknown();
+            }
             else if (type && type->kind() == TypeKind::GenericParameterPack)
             {
-                const std::string packName = type.AsFast<GenericParameterPackType>()->name;
-                type = makeSyntheticPackElementType(packName, *indexValue);
+                ParsedPackElementBinding reboundBinding = *indexBinding;
+                reboundBinding.packName = type.AsFast<GenericParameterPackType>()->name;
+                type = makeSyntheticPackElementType(reboundBinding);
             }
             else if (type && type->kind() == TypeKind::TypePackView)
             {
                 auto packViewType = type.AsFast<TypePackViewType>();
                 if (!packViewType->elementTypes.empty())
                 {
-                    if (*indexValue >= packViewType->elementTypes.size())
+                    if (auto resolvedIndex = tryResolveConcretePackElementIndex(*indexBinding, packViewType->elementTypes.size()))
+                    {
+                        type = packViewType->elementTypes[*resolvedIndex];
+                    }
+                    else
                     {
                         WIO_LOG_ADD_ERROR(
                             node.packIndex->location(),
-                            "Pack type index {} is out of range for size {}.",
-                            *indexValue,
+                            "Pack type index is out of range for size {}.",
                             packViewType->elementTypes.size()
                         );
                         type = Compiler::get().getTypeContext().getUnknown();
                     }
-                    else
-                    {
-                        type = packViewType->elementTypes[*indexValue];
-                    }
                 }
                 else
                 {
-                    type = makeSyntheticPackElementType(packViewType->packName, *indexValue);
+                    ParsedPackElementBinding reboundBinding = *indexBinding;
+                    reboundBinding.packName = packViewType->packName;
+                    type = makeSyntheticPackElementType(reboundBinding);
                 }
             }
             else
@@ -3668,10 +4072,11 @@ namespace wio::sema
         allowParameterPackIdentifierReference_ = previousAllowParameterPackIdentifierReference;
         allowTypePackIdentifierReference_ = previousAllowTypePackIdentifierReference;
         Ref<Type> objType = node.object->refType.Lock();
-        Ref<Type> resolvedObjType = unwrapAliasType(objType);
+        Ref<Type> resolvedObjType = getAutoReadableType(objType);
+        resolvedObjType = unwrapAliasType(resolvedObjType);
 
         node.index->accept(*this);
-        Ref<Type> idxType = node.index->refType.Lock();
+        Ref<Type> idxType = getAutoReadableType(node.index->refType.Lock());
 
         if (!resolvedObjType)
         {
@@ -3682,10 +4087,16 @@ namespace wio::sema
         const auto resolvePackElementType = [&](const std::string& packName,
                                                 const std::vector<Ref<Type>>& elementTypes) -> Ref<Type>
         {
-            auto indexValue = tryEvaluateStaticPackIndex(node.index);
-            if (!indexValue.has_value())
+            auto indexBinding = tryEvaluatePackIndexBinding(node.index, packName);
+            if (!indexBinding.has_value())
             {
                 WIO_LOG_ADD_ERROR(node.index->location(), "Pack indexing requires a non-negative compile-time integer index.");
+                return Compiler::get().getTypeContext().getUnknown();
+            }
+
+            if (indexBinding->kind == PackElementBindingKind::FromEnd && indexBinding->value == 0)
+            {
+                WIO_LOG_ADD_ERROR(node.index->location(), "Pack indexing from '.size' must subtract at least 1.");
                 return Compiler::get().getTypeContext().getUnknown();
             }
 
@@ -3694,24 +4105,27 @@ namespace wio::sema
                 if (elementTypes.size() == 1)
                 {
                     if (auto symbolicPackName = tryGetSymbolicPackReferenceName(elementTypes.front()))
-                        return makeSyntheticPackElementType(*symbolicPackName, *indexValue);
+                    {
+                        ParsedPackElementBinding reboundBinding = *indexBinding;
+                        reboundBinding.packName = *symbolicPackName;
+                        return makeSyntheticPackElementType(reboundBinding);
+                    }
                 }
 
-                if (*indexValue >= elementTypes.size())
-                {
-                    WIO_LOG_ADD_ERROR(
-                        node.index->location(),
-                        "Pack index {} is out of range for size {}.",
-                        *indexValue,
-                        elementTypes.size()
-                    );
-                    return Compiler::get().getTypeContext().getUnknown();
-                }
+                if (auto resolvedIndex = tryResolveConcretePackElementIndex(*indexBinding, elementTypes.size()))
+                    return elementTypes[*resolvedIndex];
 
-                return elementTypes[*indexValue];
+                WIO_LOG_ADD_ERROR(
+                    node.index->location(),
+                    "Pack index is out of range for size {}.",
+                    elementTypes.size()
+                );
+                return Compiler::get().getTypeContext().getUnknown();
             }
 
-            return makeSyntheticPackElementType(packName, *indexValue);
+            ParsedPackElementBinding reboundBinding = *indexBinding;
+            reboundBinding.packName = packName;
+            return makeSyntheticPackElementType(reboundBinding);
         };
 
         if (resolvedObjType->kind() == TypeKind::GenericParameterPack)
@@ -3751,14 +4165,28 @@ namespace wio::sema
             return;
         }
         
-        if (!idxType->isNumeric())
+        if (!isIntegralLikeType(idxType))
         {
-            WIO_LOG_ADD_ERROR(node.index->location(), "Array index must be an integer.");
+            WIO_LOG_ADD_ERROR(node.index->location(), "Array and string indices must be integer values.");
         }
         
         if (resolvedObjType->kind() == TypeKind::Array)
         {
             auto arrType = resolvedObjType.AsFast<ArrayType>();
+
+            if (auto staticIndex = tryEvaluateStaticPackIndex(node.index);
+                staticIndex.has_value() &&
+                (arrType->arrayKind == ArrayType::ArrayKind::Static || arrType->arrayKind == ArrayType::ArrayKind::Literal) &&
+                *staticIndex >= arrType->size)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.index->location(),
+                    "Index {} is out of range for compile-time array size {}.",
+                    *staticIndex,
+                    arrType->size
+                );
+            }
+
             node.refType = arrType->elementType;
             return;
         }
@@ -5149,16 +5577,46 @@ namespace wio::sema
 
                     std::vector<Ref<Type>> instantiatedParamTypes;
                     instantiatedParamTypes.reserve(declaredFunctionType->paramTypes.size());
+                    GenericBindingSet extendedBindings;
+                    extendedBindings.directBindings = bindings;
+
+                    if (overload->hasGenericParameterPack &&
+                        !overload->genericParameterNames.empty() &&
+                        declaredFunctionType->hasParameterPack &&
+                        !declaredFunctionType->paramTypes.empty() &&
+                        !packExpansionIndex.has_value())
+                    {
+                        const std::string& packName = overload->genericParameterNames.back();
+                        const size_t fixedParameterCountForPack =
+                            declaredFunctionType->paramTypes.size() - 1;
+
+                        std::vector<Ref<Type>> packBindingTypes;
+                        if (candidateArgTypes.size() > fixedParameterCountForPack)
+                        {
+                            packBindingTypes.reserve(candidateArgTypes.size() - fixedParameterCountForPack);
+                            for (size_t i = fixedParameterCountForPack; i < candidateArgTypes.size(); ++i)
+                            {
+                                packBindingTypes.push_back(candidateArgTypes[i]);
+                                extendedBindings.directBindings.emplace(
+                                    makePackElementBindingName(packName, i - fixedParameterCountForPack),
+                                    candidateArgTypes[i]
+                                );
+                            }
+                        }
+
+                        extendedBindings.packBindings.emplace(packName, std::move(packBindingTypes));
+                    }
+
                     for (const auto& paramType : declaredFunctionType->paramTypes)
                     {
-                        Ref<Type> instantiatedType = instantiateGenericType(paramType, bindings);
+                        Ref<Type> instantiatedType = instantiateGenericType(paramType, extendedBindings);
                         if (!instantiatedType)
                             return std::nullopt;
 
                         instantiatedParamTypes.push_back(instantiatedType);
                     }
 
-                    Ref<Type> instantiatedReturnType = instantiateGenericType(declaredFunctionType->returnType, bindings);
+                    Ref<Type> instantiatedReturnType = instantiateGenericType(declaredFunctionType->returnType, extendedBindings);
                     if (!instantiatedReturnType)
                         return std::nullopt;
 
@@ -7033,6 +7491,20 @@ namespace wio::sema
 
         if (node.body)
             node.body->accept(*this);
+
+        const bool requiresReturnValue = funcType->returnType &&
+                                         !funcType->returnType->isUnknown() &&
+                                         !funcType->returnType->isVoid();
+        const bool allPathsReturn = statementDefinitelyReturns(node.body);
+
+        if (node.body && !isNative && requiresReturnValue && !allPathsReturn)
+        {
+            WIO_LOG_ADD_ERROR(
+                node.name ? node.name->location() : node.location(),
+                "Non-void function '{}' must return a value on all control-flow paths.",
+                node.name ? node.name->token.value : "<function>"
+            );
+        }
 
         exitScope();
         genericTypeParameterScopes_.pop_back();

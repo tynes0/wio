@@ -1168,7 +1168,20 @@ let arr: i32[] = [1, 2, 3];
 let x = arr[0];
 ```
 
-The index expression must be numeric.
+The index expression must be an integer value.
+
+Current stabilization notes:
+
+- direct indexing applies to dynamic arrays, static arrays, literal-backed arrays,
+  and strings,
+- direct indexing through `ref` / `view` wrappers is automatically read through
+  before the index operation is analyzed,
+- if a static or literal-backed array is indexed with a compile-time constant
+  that is outside its known size, Wio reports a semantic diagnostic before C++
+  generation,
+- dynamic arrays and strings use Wio runtime bounds checks for direct `[]`
+  access, so out-of-range failures surface as Wio runtime errors rather than raw
+  backend STL assertions.
 
 ### 10.4 Function Calls and Constructor Calls
 
@@ -1537,6 +1550,18 @@ return x + y;
 
 Return statements are validated against the surrounding function’s return type.
 
+For non-`void` functions, Wio also requires that every reachable control-flow
+path returns a value.
+
+Current stabilization notes:
+
+- a bare `return;` is only valid in `void` functions,
+- a `return expr;` value must be compatible with the declared return type,
+- if a non-`void` function can fall off the end without returning, Wio reports a
+  semantic diagnostic before C++ generation,
+- compile-time-known branches such as `if (true)` and `while (true)` participate
+  in that analysis, so obviously returning code is not rejected conservatively.
+
 ### 12.7 `if` Condition Type Checking
 
 Design intent says `if` should behave broadly like familiar C-family languages.
@@ -1629,6 +1654,10 @@ fn Add(x: i32, y: i32) -> i32 {
 }
 ```
 
+If a function declares a non-`void` return type, the function body must return a
+value on all control-flow paths. That rule is enforced in Wio semantic analysis
+and is not intentionally left to generated C++ diagnostics.
+
 ### 13.4 Overloading
 
 Functions with the same name may coexist in the same scope and become an
@@ -1698,6 +1727,7 @@ fn ForwardAll<Args...>(args: Args...) -> i32 {
 }
 
 type First<Ts...> = Ts[0usize];
+type Last<Ts...> = Ts[Ts.size - 1usize];
 
 component Holder<Args...> {
     public pack values: Args...;
@@ -1712,6 +1742,10 @@ object Counter<Args...> {
 
     public fn First() -> Args[0usize] {
         return self.storage.values[0usize];
+    }
+
+    public fn Last() -> Args[Args.size - 1usize] {
+        return self.storage.values[self.storage.values.size - 1usize];
     }
 }
 ```
@@ -1730,11 +1764,12 @@ Current rules:
 - `object` and `component` declarations may define pack storage fields via
   `pack values: Args...;`,
 - pack storage fields support `.size`, `.array`, `ToStaticArray<T>()`, and
-  compile-time indexing such as `values[0usize]`,
+  compile-time indexing such as `values[0usize]` or
+  `values[values.size - 1usize]`,
 - raw value packs support `.size`, `.array`, `ToStaticArray<T>()`, and
-  compile-time indexing such as `args[0usize]`,
+  compile-time indexing such as `args[0usize]` or `args[args.size - 1usize]`,
 - raw type packs support `.size`, `.array`, and compile-time type indexing such
-  as `Args[0usize]`,
+  as `Args[0usize]` or `Args[Args.size - 1usize]`,
 - native pack bridges are supported, so declaration-only `@Native` functions may
   use `fn Foo<Args...>(args: Args...) -> ...;`.
 
@@ -1742,10 +1777,13 @@ The source-level `std::meta` bootstrap layer currently includes:
 
 - `type Head<T, Tail...> = T;`
 - `type First<Ts...> = Ts[0usize];`
+- `type Last<Ts...> = Ts[Ts.size - 1usize];`
 - `fn CountValues<Args...>(args: Args...) -> usize`
-- `fn FirstValue<Head, Tail...>(head: Head, tail: Tail...) -> Head`
+- `fn FirstValue<Args...>(args: Args...) -> Args[0usize]`
+- `fn LastValue<Args...>(args: Args...) -> Args[Args.size - 1usize]`
 - `object Types<Ts...>`
-- `object Values<Args...>` with a public `pack data: Args...;` field
+- `object Values<Args...>` with a public `pack data: Args...;` field and
+  `First()` / `Last()` helpers
 
 Current v1 limitations:
 
@@ -1756,7 +1794,8 @@ Current v1 limitations:
 - export/module ABI attributes are currently rejected on generic pack functions,
 - `when`/`else` clauses are currently rejected on generic pack functions,
 - default parameters are currently rejected on generic pack functions,
-- pack indexing currently requires a non-negative compile-time integer literal,
+- pack indexing currently accepts non-negative compile-time integer literals and
+  same-pack `.size - N` expressions such as `Args[Args.size - 1usize]`,
 - pack storage is intentionally compile-time-shaped; it is not a normal mutable
   runtime array surface with methods like `Push` or `Remove`,
 - richer pack meta transforms such as `Take`, `Drop`, `Zip`, `MapTypes`, and

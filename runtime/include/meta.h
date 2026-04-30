@@ -56,6 +56,40 @@ namespace wio::meta
             return std::get<I>(values_);
         }
 
+        template <std::size_t DistanceFromEnd = 1>
+        constexpr decltype(auto) GetFromEnd()
+        {
+            static_assert(DistanceFromEnd > 0 && DistanceFromEnd <= size, "Pack index is out of range.");
+            return std::get<size - DistanceFromEnd>(values_);
+        }
+
+        template <std::size_t DistanceFromEnd = 1>
+        constexpr decltype(auto) GetFromEnd() const
+        {
+            static_assert(DistanceFromEnd > 0 && DistanceFromEnd <= size, "Pack index is out of range.");
+            return std::get<size - DistanceFromEnd>(values_);
+        }
+
+        constexpr decltype(auto) First()
+        {
+            return Get<0>();
+        }
+
+        constexpr decltype(auto) First() const
+        {
+            return Get<0>();
+        }
+
+        constexpr decltype(auto) Last()
+        {
+            return GetFromEnd<>();
+        }
+
+        constexpr decltype(auto) Last() const
+        {
+            return GetFromEnd<>();
+        }
+
         constexpr ValuePackView AsView() const
         {
             return *this;
@@ -111,6 +145,40 @@ namespace wio::meta
         constexpr decltype(auto) Get() const
         {
             return std::get<I>(values_);
+        }
+
+        template <std::size_t DistanceFromEnd = 1>
+        constexpr decltype(auto) GetFromEnd()
+        {
+            static_assert(DistanceFromEnd > 0 && DistanceFromEnd <= size, "Pack index is out of range.");
+            return std::get<size - DistanceFromEnd>(values_);
+        }
+
+        template <std::size_t DistanceFromEnd = 1>
+        constexpr decltype(auto) GetFromEnd() const
+        {
+            static_assert(DistanceFromEnd > 0 && DistanceFromEnd <= size, "Pack index is out of range.");
+            return std::get<size - DistanceFromEnd>(values_);
+        }
+
+        constexpr decltype(auto) First()
+        {
+            return Get<0>();
+        }
+
+        constexpr decltype(auto) First() const
+        {
+            return Get<0>();
+        }
+
+        constexpr decltype(auto) Last()
+        {
+            return GetFromEnd<>();
+        }
+
+        constexpr decltype(auto) Last() const
+        {
+            return GetFromEnd<>();
         }
 
         constexpr auto AsView()
