@@ -1,0 +1,7 @@
+fn Bad<T, Args...>(index: usize, args: Args...) -> T {
+    return args[index];
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

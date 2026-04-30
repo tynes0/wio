@@ -1685,10 +1685,10 @@ Current rules:
 - generic methods on `component` declarations stay out of the current v1 slice,
 - generic `interface` methods remain unsupported in v1.
 
-### 13.6 Function Parameter Packs
+### 13.6 Generic Packs and Pack Storage
 
-Wio now supports the first function-only variadic generic slice via trailing
-generic parameter packs and trailing function parameter packs.
+Wio now supports the first broad variadic-generic slice across functions,
+generic aliases, `object`, `component`, and `interface` declarations.
 
 Examples:
 
@@ -1697,23 +1697,55 @@ fn ForwardAll<Args...>(args: Args...) -> i32 {
     return ffi::CountTypes(args...);
 }
 
-fn ForwardHead<T, Args...>(head: T, tail: Args...) -> i32 {
-    return ffi::CountWithHead(head, tail...);
+type First<Ts...> = Ts[0usize];
+
+component Holder<Args...> {
+    public pack values: Args...;
+}
+
+object Counter<Args...> {
+    public storage: Holder<Args...>;
+
+    public fn OnConstruct(values: Args...) {
+        self.storage.values = values.array;
+    }
+
+    public fn First() -> Args[0usize] {
+        return self.storage.values[0usize];
+    }
 }
 ```
 
 Current rules:
 
-- only top-level functions may declare generic parameter packs,
-- only one generic parameter pack is supported,
+- at most one generic parameter pack is supported per declaration,
 - the generic pack must be the trailing generic parameter,
-- the matching function parameter pack must be trailing,
-- pack expansion is currently supported only as a trailing function-call
-  argument, such as `callee(args...)`,
-- bare parameter-pack identifiers such as `args` are rejected; the current v1
-  surface requires `args...` in the forwarding call,
+- a function parameter pack must be the trailing function parameter,
+- top-level functions may declare their own function parameter packs via
+  `fn Foo<Args...>(args: Args...)`,
+- pack expansion is currently supported as a trailing function-call argument,
+  such as `callee(args...)`,
+- generic aliases, `object`, `component`, and `interface` declarations may carry
+  a trailing generic parameter pack,
+- `object` and `component` declarations may define pack storage fields via
+  `pack values: Args...;`,
+- pack storage fields support `.size`, `.array`, `ToStaticArray<T>()`, and
+  compile-time indexing such as `values[0usize]`,
+- raw value packs support `.size`, `.array`, `ToStaticArray<T>()`, and
+  compile-time indexing such as `args[0usize]`,
+- raw type packs support `.size`, `.array`, and compile-time type indexing such
+  as `Args[0usize]`,
 - native pack bridges are supported, so declaration-only `@Native` functions may
   use `fn Foo<Args...>(args: Args...) -> ...;`.
+
+The source-level `std::meta` bootstrap layer currently includes:
+
+- `type Head<T, Tail...> = T;`
+- `type First<Ts...> = Ts[0usize];`
+- `fn CountValues<Args...>(args: Args...) -> usize`
+- `fn FirstValue<Head, Tail...>(head: Head, tail: Tail...) -> Head`
+- `object Types<Ts...>`
+- `object Values<Args...>` with a public `pack data: Args...;` field
 
 Current v1 limitations:
 
@@ -1724,8 +1756,11 @@ Current v1 limitations:
 - export/module ABI attributes are currently rejected on generic pack functions,
 - `when`/`else` clauses are currently rejected on generic pack functions,
 - default parameters are currently rejected on generic pack functions,
-- the current pack slice does not yet extend to generic aliases, `object`,
-  `component`, or `interface` declarations.
+- pack indexing currently requires a non-negative compile-time integer literal,
+- pack storage is intentionally compile-time-shaped; it is not a normal mutable
+  runtime array surface with methods like `Push` or `Remove`,
+- richer pack meta transforms such as `Take`, `Drop`, `Zip`, `MapTypes`, and
+  future const-generic indexing remain future work.
 
 ### 13.7 `when` Guards
 

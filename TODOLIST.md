@@ -306,15 +306,21 @@ The language reference now exists, but it still needs to become a true spec.
         `fn Foo<Args...>(args: Args...)`.
   - [x] Support trailing pack forwarding at call sites via `callee(args...)`.
   - [x] Support the first declaration-only `@Native` pack bridge path.
+  - [x] Extend trailing generic packs to generic aliases, `object`,
+        `component`, and `interface` declarations.
+  - [x] Support pack storage fields via `pack values: Args...;` on `object` and
+        `component` declarations.
+  - [x] Support pack built-ins for the current v1 slice:
+        `.size`, `.array`, `ToStaticArray<T>()`, value-pack indexing, and type-pack indexing.
+  - [x] Land the initial `std::meta` bootstrap layer around `Head`, `First`,
+        `Types`, `Values`, `CountValues`, and `FirstValue`.
   - [x] Reject explicit type arguments on generic pack functions for now and
         rely on deduction from call arguments.
   - [x] Reject default parameters, `@Apply`, `@Instantiate`, `when`, and
         export/module ABI attributes on generic pack functions in the current
         v1 slice.
-  - [ ] Broaden pack support beyond top-level functions after the current
-        function-only model is fully hardened.
-- [ ] Decide whether the variadic-generic design also applies to generic
-       `object` / `component` / `interface` declarations.
+  - [ ] Broaden pack support further into explicit type-argument calls, richer
+        compile-time pack transforms, and export/module ABI surfaces.
 - [ ] Design how variadic generic expansion should interact with overload
        resolution, backend template lowering, and future constraint systems.
 - [ ] Design const-generic / non-type generic parameters for future versions,

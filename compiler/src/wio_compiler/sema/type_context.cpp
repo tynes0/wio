@@ -78,4 +78,19 @@ namespace wio::sema
     {
         return makeType<GenericParameterPackType>(name);
     }
+
+    Ref<Type> TypeContext::getOrCreateValuePackViewType(const std::string& packName, std::vector<Ref<Type>> elementTypes)
+    {
+        return makeType<ValuePackViewType>(packName, std::move(elementTypes));
+    }
+
+    Ref<Type> TypeContext::getOrCreateTypePackViewType(const std::string& packName, std::vector<Ref<Type>> elementTypes)
+    {
+        return makeType<TypePackViewType>(packName, std::move(elementTypes));
+    }
+
+    Ref<Type> TypeContext::getOrCreatePackStorageType(const std::string& packName, std::vector<Ref<Type>> elementTypes)
+    {
+        return makeType<PackStorageType>(packName, std::move(elementTypes));
+    }
 }

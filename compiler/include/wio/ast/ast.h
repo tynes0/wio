@@ -119,6 +119,9 @@ namespace wio
 
     FrenumClassInNamespace(wio, IntrinsicMember, uint8_t,
         None,
+        PackSize,
+        PackArray,
+        PackToStaticArray,
         ArrayCount,
         ArrayEmpty,
         ArrayCapacity,
@@ -317,13 +320,21 @@ namespace wio
 
         Token name; // Type name (Ex: Result)
         std::vector<NodePtrUnchecked<TypeSpecifier>> generics; // Generic parameters (Ex: <Texture>)
+        NodePtr<Expression> packIndex;
         size_t size = 0;
 
         bool isMut = false;
         bool isRef = false;
         bool isPackExpansion = false;
 
-        TypeSpecifier(Token _name, std::vector<NodePtrUnchecked<TypeSpecifier>> _generics, size_t size, bool _isMut, bool _isRef, bool _isPackExpansion, common::Location _loc);
+        TypeSpecifier(Token _name,
+            std::vector<NodePtrUnchecked<TypeSpecifier>> _generics,
+            NodePtr<Expression> _packIndex,
+            size_t size,
+            bool _isMut,
+            bool _isRef,
+            bool _isPackExpansion,
+            common::Location _loc);
         ~TypeSpecifier() override;
     };
 
@@ -658,9 +669,14 @@ namespace wio
         NodePtr<Identifier> name;
         NodePtr<TypeSpecifier> type;
         NodePtr<Expression> initializer;
+        bool isPackField = false;
         
         VariableDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, Mutability _mutability,
-            NodePtr<Identifier> _name, NodePtr<TypeSpecifier> _type, NodePtr<Expression> _init, common::Location _loc);
+            NodePtr<Identifier> _name,
+            NodePtr<TypeSpecifier> _type,
+            NodePtr<Expression> _init,
+            bool _isPackField,
+            common::Location _loc);
         ~VariableDeclaration() override;
     };
 
@@ -671,11 +687,13 @@ namespace wio
         std::vector<NodePtr<AttributeStatement>> attributes;
         NodePtr<Identifier> name;
         std::vector<NodePtr<Identifier>> genericParameters;
+        bool hasGenericParameterPack = false;
         NodePtr<TypeSpecifier> aliasedType;
 
         TypeAliasDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
             NodePtr<Identifier> _name,
             std::vector<NodePtr<Identifier>> _genericParameters,
+            bool _hasGenericParameterPack,
             NodePtr<TypeSpecifier> _aliasedType,
             common::Location _loc);
         ~TypeAliasDeclaration() override;
@@ -708,10 +726,14 @@ namespace wio
         std::vector<NodePtr<AttributeStatement>> attributes;
         NodePtr<Identifier> name;
         std::vector<NodePtr<Identifier>> genericParameters;
+        bool hasGenericParameterPack = false;
         std::vector<NodePtr<FunctionDeclaration>> methods;
 
         InterfaceDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
-            std::vector<NodePtr<Identifier>> _genericParameters, std::vector<NodePtr<FunctionDeclaration>> _methods, common::Location _loc);
+            std::vector<NodePtr<Identifier>> _genericParameters,
+            bool _hasGenericParameterPack,
+            std::vector<NodePtr<FunctionDeclaration>> _methods,
+            common::Location _loc);
         ~InterfaceDeclaration() override;
     };
 
@@ -729,10 +751,14 @@ namespace wio
         std::vector<NodePtr<AttributeStatement>> attributes;
         NodePtr<Identifier> name;
         std::vector<NodePtr<Identifier>> genericParameters;
+        bool hasGenericParameterPack = false;
         std::vector<ComponentMember> members;
 
         ComponentDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
-            std::vector<NodePtr<Identifier>> _genericParameters, std::vector<ComponentMember> _members, common::Location _loc);
+            std::vector<NodePtr<Identifier>> _genericParameters,
+            bool _hasGenericParameterPack,
+            std::vector<ComponentMember> _members,
+            common::Location _loc);
         ~ComponentDeclaration() override;
     };
 
@@ -750,10 +776,14 @@ namespace wio
         std::vector<NodePtr<AttributeStatement>> attributes;
         NodePtr<Identifier> name;
         std::vector<NodePtr<Identifier>> genericParameters;
+        bool hasGenericParameterPack = false;
         std::vector<ObjectMember> members;
 
         ObjectDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
-            std::vector<NodePtr<Identifier>> _genericParameters, std::vector<ObjectMember> _members, common::Location _loc);
+            std::vector<NodePtr<Identifier>> _genericParameters,
+            bool _hasGenericParameterPack,
+            std::vector<ObjectMember> _members,
+            common::Location _loc);
         ~ObjectDeclaration() override;
     };
 

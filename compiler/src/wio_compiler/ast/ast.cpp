@@ -29,8 +29,15 @@ namespace wio
 
     Program::~Program() = default;
 
-    TypeSpecifier::TypeSpecifier(Token _name, std::vector<NodePtrUnchecked<TypeSpecifier>> _generics, size_t size, bool _isMut, bool _isRef, bool _isPackExpansion, common::Location _loc)
-        : ASTNode(_loc), name(std::move(_name)), generics(std::move(_generics)), size(size), isMut(_isMut), isRef(_isRef), isPackExpansion(_isPackExpansion)
+    TypeSpecifier::TypeSpecifier(Token _name,
+        std::vector<NodePtrUnchecked<TypeSpecifier>> _generics,
+        NodePtr<Expression> _packIndex,
+        size_t size,
+        bool _isMut,
+        bool _isRef,
+        bool _isPackExpansion,
+        common::Location _loc)
+        : ASTNode(_loc), name(std::move(_name)), generics(std::move(_generics)), packIndex(std::move(_packIndex)), size(size), isMut(_isMut), isRef(_isRef), isPackExpansion(_isPackExpansion)
     {
     }
 
@@ -226,9 +233,9 @@ namespace wio
     AttributeStatement::~AttributeStatement() = default;
 
     VariableDeclaration::VariableDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, Mutability _mutability,
-        NodePtr<Identifier> _name, NodePtr<TypeSpecifier> _type, NodePtr<Expression> _init, common::Location _loc)
+        NodePtr<Identifier> _name, NodePtr<TypeSpecifier> _type, NodePtr<Expression> _init, bool _isPackField, common::Location _loc)
         : Statement(_loc), attributes(std::move(_attributes)), mutability(_mutability), name(std::move(_name)),
-        type(std::move(_type)), initializer(std::move(_init))
+        type(std::move(_type)), initializer(std::move(_init)), isPackField(_isPackField)
     {
     }
 
@@ -237,12 +244,14 @@ namespace wio
     TypeAliasDeclaration::TypeAliasDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
         NodePtr<Identifier> _name,
         std::vector<NodePtr<Identifier>> _genericParameters,
+        bool _hasGenericParameterPack,
         NodePtr<TypeSpecifier> _aliasedType,
         common::Location _loc)
         : Statement(_loc.isValid() ? _loc : _name->location()),
           attributes(std::move(_attributes)),
           name(std::move(_name)),
           genericParameters(std::move(_genericParameters)),
+          hasGenericParameterPack(_hasGenericParameterPack),
           aliasedType(std::move(_aliasedType))
     {
     }
@@ -261,27 +270,39 @@ namespace wio
     FunctionDeclaration::~FunctionDeclaration() = default;
 
     InterfaceDeclaration::InterfaceDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
-        NodePtr<Identifier> _name, std::vector<NodePtr<Identifier>> _genericParameters, std::vector<NodePtr<FunctionDeclaration>> _methods, common::Location _loc)
+        NodePtr<Identifier> _name,
+        std::vector<NodePtr<Identifier>> _genericParameters,
+        bool _hasGenericParameterPack,
+        std::vector<NodePtr<FunctionDeclaration>> _methods,
+        common::Location _loc)
             : Statement(_loc.isValid() ? _loc : _name->location()), attributes(std::move(_attributes)),
-            name(std::move(_name)), genericParameters(std::move(_genericParameters)), methods(std::move(_methods))
+            name(std::move(_name)), genericParameters(std::move(_genericParameters)), hasGenericParameterPack(_hasGenericParameterPack), methods(std::move(_methods))
     {
     }
 
     InterfaceDeclaration::~InterfaceDeclaration() = default;
 
     ComponentDeclaration::ComponentDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
-                                               NodePtr<Identifier> _name, std::vector<NodePtr<Identifier>> _genericParameters, std::vector<ComponentMember> _members, common::Location _loc)
+                                               NodePtr<Identifier> _name,
+                                               std::vector<NodePtr<Identifier>> _genericParameters,
+                                               bool _hasGenericParameterPack,
+                                               std::vector<ComponentMember> _members,
+                                               common::Location _loc)
             : Statement(_loc.isValid() ? _loc : _name->location()), attributes(std::move(_attributes)),
-            name(std::move(_name)), genericParameters(std::move(_genericParameters)), members(std::move(_members))
+            name(std::move(_name)), genericParameters(std::move(_genericParameters)), hasGenericParameterPack(_hasGenericParameterPack), members(std::move(_members))
     {
     }
 
     ComponentDeclaration::~ComponentDeclaration() = default;
 
     ObjectDeclaration::ObjectDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
-        NodePtr<Identifier> _name, std::vector<NodePtr<Identifier>> _genericParameters, std::vector<ObjectMember> _members, common::Location _loc)
+        NodePtr<Identifier> _name,
+        std::vector<NodePtr<Identifier>> _genericParameters,
+        bool _hasGenericParameterPack,
+        std::vector<ObjectMember> _members,
+        common::Location _loc)
             : Statement(_loc.isValid() ? _loc : _name->location()), attributes(std::move(_attributes)),
-            name(std::move(_name)), genericParameters(std::move(_genericParameters)), members(std::move(_members))
+            name(std::move(_name)), genericParameters(std::move(_genericParameters)), hasGenericParameterPack(_hasGenericParameterPack), members(std::move(_members))
     {
     }
 

@@ -46,6 +46,12 @@ namespace wio::sema
             return rhs->kind() == TypeKind::GenericParameterPack &&
                    lhs.AsFast<GenericParameterPackType>()->name == rhs.AsFast<GenericParameterPackType>()->name;
         }
+        if (lhs->kind() == TypeKind::ValuePackView ||
+            lhs->kind() == TypeKind::TypePackView ||
+            lhs->kind() == TypeKind::PackStorage)
+        {
+            return lhs->isCompatibleWith(rhs);
+        }
         if (lhs->kind() == TypeKind::Reference)
         {
             if (rhs->kind() == TypeKind::Null)
@@ -151,6 +157,45 @@ namespace wio::sema
             if (kind2 == TypeKind::Null)
                 return true; // Null compatible with all types
 
+            const bool isPackViewStoragePair =
+                (kind1 == TypeKind::ValuePackView && kind2 == TypeKind::PackStorage) ||
+                (kind1 == TypeKind::PackStorage && kind2 == TypeKind::ValuePackView);
+            if (isPackViewStoragePair)
+            {
+                if (kind1 == TypeKind::ValuePackView)
+                {
+                    auto* p1 = static_cast<const ValuePackViewType*>(t1);
+                    auto* p2 = static_cast<const PackStorageType*>(t2);
+                    if (!p1->elementTypes.empty() || !p2->elementTypes.empty())
+                    {
+                        if (p1->elementTypes.size() != p2->elementTypes.size())
+                            return false;
+                        for (size_t i = 0; i < p1->elementTypes.size(); ++i)
+                        {
+                            if (!p1->elementTypes[i]->isCompatibleWith(p2->elementTypes[i]))
+                                return false;
+                        }
+                        return true;
+                    }
+                    return p1->packName == p2->packName;
+                }
+
+                auto* p1 = static_cast<const PackStorageType*>(t1);
+                auto* p2 = static_cast<const ValuePackViewType*>(t2);
+                if (!p1->elementTypes.empty() || !p2->elementTypes.empty())
+                {
+                    if (p1->elementTypes.size() != p2->elementTypes.size())
+                        return false;
+                    for (size_t i = 0; i < p1->elementTypes.size(); ++i)
+                    {
+                        if (!p1->elementTypes[i]->isCompatibleWith(p2->elementTypes[i]))
+                            return false;
+                    }
+                    return true;
+                }
+                return p1->packName == p2->packName;
+            }
+
             return false;
         }
 
@@ -205,6 +250,91 @@ namespace wio::sema
             auto* g1 = static_cast<const GenericParameterPackType*>(t1);
             auto* g2 = static_cast<const GenericParameterPackType*>(t2);
             return g1->name == g2->name;
+        }
+        case TypeKind::ValuePackView:
+        {
+            auto* p1 = static_cast<const ValuePackViewType*>(t1);
+            if (kind2 == TypeKind::PackStorage)
+            {
+                auto* p2 = static_cast<const PackStorageType*>(t2);
+                if (!p1->elementTypes.empty() || !p2->elementTypes.empty())
+                {
+                    if (p1->elementTypes.size() != p2->elementTypes.size())
+                        return false;
+                    for (size_t i = 0; i < p1->elementTypes.size(); ++i)
+                    {
+                        if (!p1->elementTypes[i]->isCompatibleWith(p2->elementTypes[i]))
+                            return false;
+                    }
+                    return true;
+                }
+                return p1->packName == p2->packName;
+            }
+
+            auto* p2 = static_cast<const ValuePackViewType*>(t2);
+            if (!p1->elementTypes.empty() || !p2->elementTypes.empty())
+            {
+                if (p1->elementTypes.size() != p2->elementTypes.size())
+                    return false;
+                for (size_t i = 0; i < p1->elementTypes.size(); ++i)
+                {
+                    if (!p1->elementTypes[i]->isCompatibleWith(p2->elementTypes[i]))
+                        return false;
+                }
+                return true;
+            }
+            return p1->packName == p2->packName;
+        }
+        case TypeKind::TypePackView:
+        {
+            auto* p1 = static_cast<const TypePackViewType*>(t1);
+            auto* p2 = static_cast<const TypePackViewType*>(t2);
+            if (!p1->elementTypes.empty() || !p2->elementTypes.empty())
+            {
+                if (p1->elementTypes.size() != p2->elementTypes.size())
+                    return false;
+                for (size_t i = 0; i < p1->elementTypes.size(); ++i)
+                {
+                    if (!p1->elementTypes[i]->isCompatibleWith(p2->elementTypes[i]))
+                        return false;
+                }
+                return true;
+            }
+            return p1->packName == p2->packName;
+        }
+        case TypeKind::PackStorage:
+        {
+            auto* p1 = static_cast<const PackStorageType*>(t1);
+            if (kind2 == TypeKind::ValuePackView)
+            {
+                auto* p2 = static_cast<const ValuePackViewType*>(t2);
+                if (!p1->elementTypes.empty() || !p2->elementTypes.empty())
+                {
+                    if (p1->elementTypes.size() != p2->elementTypes.size())
+                        return false;
+                    for (size_t i = 0; i < p1->elementTypes.size(); ++i)
+                    {
+                        if (!p1->elementTypes[i]->isCompatibleWith(p2->elementTypes[i]))
+                            return false;
+                    }
+                    return true;
+                }
+                return p1->packName == p2->packName;
+            }
+
+            auto* p2 = static_cast<const PackStorageType*>(t2);
+            if (!p1->elementTypes.empty() || !p2->elementTypes.empty())
+            {
+                if (p1->elementTypes.size() != p2->elementTypes.size())
+                    return false;
+                for (size_t i = 0; i < p1->elementTypes.size(); ++i)
+                {
+                    if (!p1->elementTypes[i]->isCompatibleWith(p2->elementTypes[i]))
+                        return false;
+                }
+                return true;
+            }
+            return p1->packName == p2->packName;
         }
         
         case TypeKind::Reference:
@@ -400,6 +530,147 @@ namespace wio::sema
     std::string GenericParameterPackType::toCppString() const
     {
         return name + "...";
+    }
+
+    ValuePackViewType::ValuePackViewType(std::string packName, std::vector<Ref<Type>> elementTypes)
+        : packName(std::move(packName)), elementTypes(std::move(elementTypes))
+    {
+    }
+
+    TypeKind ValuePackViewType::kind() const
+    {
+        return TypeKind::ValuePackView;
+    }
+
+    std::string ValuePackViewType::toString() const
+    {
+        if (!elementTypes.empty())
+        {
+            std::string result = "pack-values<";
+            for (size_t i = 0; i < elementTypes.size(); ++i)
+            {
+                result += elementTypes[i] ? elementTypes[i]->toString() : "<unknown>";
+                if (i + 1 < elementTypes.size())
+                    result += ", ";
+            }
+            result += ">";
+            return result;
+        }
+        return "pack-values<" + packName + "...>";
+    }
+
+    std::string ValuePackViewType::toCppString() const
+    {
+        std::string result = "wio::meta::ValuePackView<";
+        if (!elementTypes.empty())
+        {
+            for (size_t i = 0; i < elementTypes.size(); ++i)
+            {
+                result += elementTypes[i] ? elementTypes[i]->toCppString() : "void";
+                if (i + 1 < elementTypes.size())
+                    result += ", ";
+            }
+        }
+        else
+        {
+            result += packName + "...";
+        }
+        result += ">";
+        return result;
+    }
+
+    TypePackViewType::TypePackViewType(std::string packName, std::vector<Ref<Type>> elementTypes)
+        : packName(std::move(packName)), elementTypes(std::move(elementTypes))
+    {
+    }
+
+    TypeKind TypePackViewType::kind() const
+    {
+        return TypeKind::TypePackView;
+    }
+
+    std::string TypePackViewType::toString() const
+    {
+        if (!elementTypes.empty())
+        {
+            std::string result = "type-pack<";
+            for (size_t i = 0; i < elementTypes.size(); ++i)
+            {
+                result += elementTypes[i] ? elementTypes[i]->toString() : "<unknown>";
+                if (i + 1 < elementTypes.size())
+                    result += ", ";
+            }
+            result += ">";
+            return result;
+        }
+        return "type-pack<" + packName + "...>";
+    }
+
+    std::string TypePackViewType::toCppString() const
+    {
+        std::string result = "wio::meta::TypePackView<";
+        if (!elementTypes.empty())
+        {
+            for (size_t i = 0; i < elementTypes.size(); ++i)
+            {
+                result += elementTypes[i] ? elementTypes[i]->toCppString() : "void";
+                if (i + 1 < elementTypes.size())
+                    result += ", ";
+            }
+        }
+        else
+        {
+            result += packName + "...";
+        }
+        result += ">";
+        return result;
+    }
+
+    PackStorageType::PackStorageType(std::string packName, std::vector<Ref<Type>> elementTypes)
+        : packName(std::move(packName)), elementTypes(std::move(elementTypes))
+    {
+    }
+
+    TypeKind PackStorageType::kind() const
+    {
+        return TypeKind::PackStorage;
+    }
+
+    std::string PackStorageType::toString() const
+    {
+        if (!elementTypes.empty())
+        {
+            std::string result = "pack-storage<";
+            for (size_t i = 0; i < elementTypes.size(); ++i)
+            {
+                result += elementTypes[i] ? elementTypes[i]->toString() : "<unknown>";
+                if (i + 1 < elementTypes.size())
+                    result += ", ";
+            }
+            result += ">";
+            return result;
+        }
+        return "pack-storage<" + packName + "...>";
+    }
+
+    std::string PackStorageType::toCppString() const
+    {
+        std::string result = "wio::meta::PackStorage<";
+        if (!elementTypes.empty())
+        {
+            for (size_t i = 0; i < elementTypes.size(); ++i)
+            {
+                result += elementTypes[i] ? elementTypes[i]->toCppString() : "void";
+                if (i + 1 < elementTypes.size())
+                    result += ", ";
+            }
+        }
+        else
+        {
+            result += packName + "...";
+        }
+        result += ">";
+        return result;
     }
 
     FunctionType::FunctionType(std::vector<Ref<Type>> paramTypes, Ref<Type> returnType, bool hasParameterPack)

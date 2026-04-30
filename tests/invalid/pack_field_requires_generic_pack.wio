@@ -1,0 +1,7 @@
+object Broken {
+    pack values: i32;
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

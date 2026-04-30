@@ -1,0 +1,105 @@
+use std::assert as assert;
+use std::console as console;
+use std::meta as meta;
+
+interface ICounter<Args...> {
+    fn Count(args: Args...) -> usize;
+}
+
+component PackHolder<Args...> {
+    public pack values: Args...;
+}
+
+component AliasHolder<Us...> {
+    public pack values: Us...;
+}
+
+object Counter<Args...> {
+    public storage: PackHolder<Args...>;
+
+    public fn OnConstruct(args: Args...) {
+        self.storage.values = args.array;
+    }
+
+    public fn CountStored() -> usize {
+        return self.storage.values.size;
+    }
+
+    public fn First() -> Args[0usize] {
+        return self.storage.values[0usize];
+    }
+}
+
+object AliasBridge<Outer...> {
+    public storage: AliasHolder<Outer...>;
+
+    public fn OnConstruct(values: Outer...) {
+        self.storage.values = values.array;
+    }
+
+    public fn CountStored() -> usize {
+        return self.storage.values.size;
+    }
+
+    public fn First() -> Outer[0usize] {
+        return self.storage.values[0usize];
+    }
+}
+
+@From(ICounter<Args...>)
+object VariadicCounter<Args...> {
+    public fn Count(args: Args...) -> usize {
+        return args.size;
+    }
+}
+
+type Callback<Args...> = fn(Args...) -> i32;
+
+fn UseCallback(callback: fn(i32, i32) -> i32) -> i32 {
+    return callback(4, 6);
+}
+
+fn SumValues<Args...>(args: Args...) -> i32 {
+    let values = args.ToStaticArray<i32>();
+    mut sum: i32 = 0;
+    for value in values {
+        sum += value;
+    }
+    return sum;
+}
+
+fn Entry() -> i32 {
+    let headValue: meta::Head<i32, bool, string> = 42i32;
+    let indexedHeadValue: meta::First<i32, bool, string> = 77i32;
+    let types: meta::Types<i32, bool, string> = meta::Types();
+    let values: meta::Values<i32, i32, i32> = meta::Values(7i32, 8i32, 9i32);
+    let box: Counter<i32, i32, i32> = Counter(10i32, 20i32, 30i32);
+    let aliasBox: AliasBridge<i32, i16, i8> = AliasBridge(11i32, 12i16, 13i8);
+    let counter: VariadicCounter<i32, bool, string> = VariadicCounter();
+
+    let countValues = meta::CountValues(1i32, true, "ok");
+    let firstValue = meta::FirstValue(9i32, false, "tail");
+    let callback: Callback<i32, i32> = (x: i32, y: i32) => x + y;
+    let callbackResult = UseCallback(callback);
+    let typedArray = values.data.ToStaticArray<i32>();
+    let sum = SumValues(4i32, 5u8, 6i16);
+
+    assert::ExpectEqual(headValue, 42, "meta::Head alias failed");
+    assert::ExpectEqual(indexedHeadValue, 77, "meta::First alias failed");
+    assert::ExpectEqual(types.Count() fit i32, 3, "type pack object count failed");
+    assert::ExpectEqual(values.Count() fit i32, 3, "value pack storage count failed");
+    assert::ExpectEqual(values.First(), 7, "value pack storage first failed");
+    assert::ExpectEqual(typedArray[1usize], 8, "value pack ToStaticArray failed");
+    assert::ExpectEqual(box.CountStored() fit i32, 3, "component pack storage count failed");
+    assert::ExpectEqual(box.First(), 10, "component pack storage first failed");
+    assert::ExpectEqual(aliasBox.CountStored() fit i32, 3, "symbolic pack alias count failed");
+    assert::ExpectEqual(aliasBox.First(), 11, "symbolic pack alias first failed");
+    assert::ExpectEqual(counter.Count(1i32, true, "ok") fit i32, 3, "generic interface/object pack count failed");
+    assert::ExpectEqual(countValues fit i32, 3, "meta::CountValues failed");
+    assert::ExpectEqual(firstValue, 9, "meta::FirstValue failed");
+    assert::ExpectEqual(callbackResult, 10, "pack type alias callback failed");
+    assert::ExpectEqual(sum, 15, "function pack ToStaticArray failed");
+
+    console::Print("Pack meta + generic declarations: ok");
+    return 0;
+}

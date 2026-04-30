@@ -57,6 +57,9 @@ namespace wio::sema
         Ref<Type> getOrCreateAliasType(const std::string& name, Ref<Type> aliasedType);
         Ref<Type> getOrCreateGenericParameterType(const std::string& name);
         Ref<Type> getOrCreateGenericParameterPackType(const std::string& name);
+        Ref<Type> getOrCreateValuePackViewType(const std::string& packName, std::vector<Ref<Type>> elementTypes = {});
+        Ref<Type> getOrCreateTypePackViewType(const std::string& packName, std::vector<Ref<Type>> elementTypes = {});
+        Ref<Type> getOrCreatePackStorageType(const std::string& packName, std::vector<Ref<Type>> elementTypes = {});
 
     private:
         std::vector<Ref<Type>> ownedTypes_;

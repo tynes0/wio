@@ -1,0 +1,8 @@
+fn Bad<Ts...>() -> i32 {
+    let values = Ts.array.ToStaticArray<i32>();
+    return values[0usize];
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

@@ -1,6 +1,7 @@
 ﻿#include "wio/codegen/cpp_generator.h"
 
 #include "wio/common/filesystem/filesystem.h"
+#include "wio/common/utility.h"
 #include "compiler.h"
 #include "wio/common/logger.h"
 #include "wio/sema/symbol.h"
@@ -102,6 +103,10 @@ namespace wio::codegen
         {
             if (!type) return "void"; // Fallback
 
+            Ref<sema::Type> current = unwrapAliasTypeForCodegen(type);
+            if (!current)
+                current = type;
+
             auto appendGenericArguments = [&](std::string baseName, const Ref<sema::StructType>& structType)
             {
                 if (!structType || structType->genericArguments.empty())
@@ -118,12 +123,47 @@ namespace wio::codegen
                 return baseName;
             };
 
-            if (type->kind() == sema::TypeKind::GenericParameterPack)
-                return type.AsFast<sema::GenericParameterPackType>()->name + "...";
-
-            if (type->kind() == sema::TypeKind::Function)
+            auto tryParseSyntheticPackElementType = [](std::string_view name) -> std::optional<std::pair<std::string, std::size_t>>
             {
-                auto funcType = type.AsFast<sema::FunctionType>();
+                const size_t openBracket = name.find('[');
+                const size_t closeBracket = name.find(']');
+                if (openBracket == std::string_view::npos || closeBracket == std::string_view::npos || closeBracket <= openBracket + 1)
+                    return std::nullopt;
+
+                const std::string packName(name.substr(0, openBracket));
+                const std::string indexString(name.substr(openBracket + 1, closeBracket - openBracket - 1));
+                if (packName.empty() || indexString.empty())
+                    return std::nullopt;
+
+                try
+                {
+                    return std::pair<std::string, std::size_t>{ packName, static_cast<std::size_t>(std::stoull(indexString)) };
+                }
+                catch (...)
+                {
+                    return std::nullopt;
+                }
+            };
+
+            if (current->kind() == sema::TypeKind::GenericParameter)
+            {
+                const auto genericParameter = current.AsFast<sema::GenericParameterType>();
+                if (auto syntheticPackElement = tryParseSyntheticPackElementType(genericParameter->name))
+                {
+                    return common::formatString(
+                        "typename wio::meta::TypePackView<{}...>::template At<{}>",
+                        syntheticPackElement->first,
+                        syntheticPackElement->second
+                    );
+                }
+            }
+
+            if (current->kind() == sema::TypeKind::GenericParameterPack)
+                return current.AsFast<sema::GenericParameterPackType>()->name + "...";
+
+            if (current->kind() == sema::TypeKind::Function)
+            {
+                auto funcType = current.AsFast<sema::FunctionType>();
                 std::string result = "std::function<" + toCppType(funcType->returnType) + "(";
                 for (size_t i = 0; i < funcType->paramTypes.size(); ++i) {
                     result += toCppType(funcType->paramTypes[i]);
@@ -133,9 +173,9 @@ namespace wio::codegen
                 return result;
             }
             
-            if (type->kind() == sema::TypeKind::Reference)
+            if (current->kind() == sema::TypeKind::Reference)
             {
-                auto refType = type.AsFast<sema::ReferenceType>();
+                auto refType = current.AsFast<sema::ReferenceType>();
                 if (refType->referredType && refType->referredType->kind() == sema::TypeKind::Struct)
                 {
                     auto sType = refType->referredType.AsFast<sema::StructType>();
@@ -143,14 +183,14 @@ namespace wio::codegen
                         return appendGenericArguments(Mangler::mangleInterface(sType->name, sType->scopePath), sType) + "*";
                 }
             }
-            else if (type->kind() == sema::TypeKind::Struct)
+            else if (current->kind() == sema::TypeKind::Struct)
             {
-                auto sType = type.AsFast<sema::StructType>();
+                auto sType = current.AsFast<sema::StructType>();
                 if (sType->isInterface)
                     return appendGenericArguments(Mangler::mangleInterface(sType->name, sType->scopePath), sType) + "*"; 
             }
 
-            return type->toCppString();
+            return current->toCppString();
         }
 
         Ref<sema::Type> unwrapAliasType(Ref<sema::Type> type)
@@ -174,6 +214,172 @@ namespace wio::codegen
             return bindings;
         }
 
+        struct GenericBindingSet
+        {
+            std::unordered_map<std::string, Ref<sema::Type>> directBindings;
+            std::unordered_map<std::string, std::vector<Ref<sema::Type>>> packBindings;
+            std::unordered_map<std::string, std::string> packAliases;
+        };
+
+        std::string makePackElementBindingName(const std::string& packName, const size_t index)
+        {
+            return packName + "[" + std::to_string(index) + "]";
+        }
+
+        struct ParsedPackElementBinding
+        {
+            std::string packName;
+            size_t index = 0;
+        };
+
+        std::optional<ParsedPackElementBinding> tryParsePackElementBindingName(const std::string_view name)
+        {
+            const size_t openBracket = name.find('[');
+            if (openBracket == std::string_view::npos || !name.ends_with("]"))
+                return std::nullopt;
+
+            const std::string_view packName = name.substr(0, openBracket);
+            const std::string_view indexText = name.substr(openBracket + 1, name.size() - openBracket - 2);
+            if (packName.empty() || indexText.empty())
+                return std::nullopt;
+
+            size_t index = 0;
+            for (const char ch : indexText)
+            {
+                if (ch < '0' || ch > '9')
+                    return std::nullopt;
+                index = (index * 10) + static_cast<size_t>(ch - '0');
+            }
+
+            return ParsedPackElementBinding{std::string(packName), index};
+        }
+
+        std::optional<std::string> tryGetSymbolicPackReferenceName(const Ref<sema::Type>& type)
+        {
+            Ref<sema::Type> current = unwrapAliasTypeForCodegen(type);
+            if (!current)
+                return std::nullopt;
+
+            switch (current->kind())
+            {
+            case sema::TypeKind::GenericParameterPack:
+                return current.AsFast<sema::GenericParameterPackType>()->name;
+            case sema::TypeKind::ValuePackView:
+            {
+                auto packViewType = current.AsFast<sema::ValuePackViewType>();
+                if (packViewType->elementTypes.empty())
+                    return packViewType->packName;
+                return std::nullopt;
+            }
+            case sema::TypeKind::TypePackView:
+            {
+                auto packViewType = current.AsFast<sema::TypePackViewType>();
+                if (packViewType->elementTypes.empty())
+                    return packViewType->packName;
+                return std::nullopt;
+            }
+            case sema::TypeKind::PackStorage:
+            {
+                auto storageType = current.AsFast<sema::PackStorageType>();
+                if (storageType->elementTypes.empty())
+                    return storageType->packName;
+                return std::nullopt;
+            }
+            default:
+                return std::nullopt;
+            }
+        }
+
+        size_t getMinimumGenericArgumentCount(const std::vector<std::string>& parameterNames, const bool hasGenericParameterPack)
+        {
+            if (parameterNames.empty())
+                return 0;
+
+            return hasGenericParameterPack ? parameterNames.size() - 1 : parameterNames.size();
+        }
+
+        GenericBindingSet buildExtendedGenericBindings(
+            const std::vector<std::string>& parameterNames,
+            const bool hasGenericParameterPack,
+            const std::vector<Ref<sema::Type>>& typeArguments)
+        {
+            GenericBindingSet bindings;
+            const size_t fixedCount = getMinimumGenericArgumentCount(parameterNames, hasGenericParameterPack);
+            bindings.directBindings.reserve(fixedCount + typeArguments.size());
+
+            for (size_t i = 0; i < fixedCount && i < typeArguments.size(); ++i)
+                bindings.directBindings.emplace(parameterNames[i], typeArguments[i]);
+
+            if (!hasGenericParameterPack || parameterNames.empty())
+                return bindings;
+
+            const std::string& packName = parameterNames.back();
+            std::vector<Ref<sema::Type>> packTypes;
+            if (typeArguments.size() > fixedCount)
+            {
+                if (typeArguments.size() == fixedCount + 1)
+                {
+                    if (auto symbolicPackName = tryGetSymbolicPackReferenceName(typeArguments[fixedCount]))
+                    {
+                        bindings.packAliases.emplace(packName, *symbolicPackName);
+                        bindings.packBindings.emplace(packName, std::move(packTypes));
+                        return bindings;
+                    }
+                }
+
+                packTypes.reserve(typeArguments.size() - fixedCount);
+                for (size_t i = fixedCount; i < typeArguments.size(); ++i)
+                {
+                    packTypes.push_back(typeArguments[i]);
+                    bindings.directBindings.emplace(makePackElementBindingName(packName, i - fixedCount), typeArguments[i]);
+                }
+            }
+
+            bindings.packBindings.emplace(packName, std::move(packTypes));
+            return bindings;
+        }
+
+        std::optional<size_t> tryEvaluateStaticPackIndex(const NodePtr<Expression>& expression)
+        {
+            if (!expression)
+                return std::nullopt;
+
+            if (const auto* literal = expression->as<IntegerLiteral>())
+            {
+                const IntegerResult result = common::getInteger(literal->token.value);
+                if (!result.isValid)
+                    return std::nullopt;
+
+                switch (result.type)
+                {
+                case IntegerType::i8: if (result.value.v_i8 >= 0) return static_cast<size_t>(result.value.v_i8); break;
+                case IntegerType::i16: if (result.value.v_i16 >= 0) return static_cast<size_t>(result.value.v_i16); break;
+                case IntegerType::i32: if (result.value.v_i32 >= 0) return static_cast<size_t>(result.value.v_i32); break;
+                case IntegerType::i64: if (result.value.v_i64 >= 0) return static_cast<size_t>(result.value.v_i64); break;
+                case IntegerType::u8: return static_cast<size_t>(result.value.v_u8);
+                case IntegerType::u16: return static_cast<size_t>(result.value.v_u16);
+                case IntegerType::u32: return static_cast<size_t>(result.value.v_u32);
+                case IntegerType::u64: return static_cast<size_t>(result.value.v_u64);
+                case IntegerType::isize: if (result.value.v_isize >= 0) return static_cast<size_t>(result.value.v_isize); break;
+                case IntegerType::usize: return static_cast<size_t>(result.value.v_usize);
+                case IntegerType::Unknown: break;
+                }
+            }
+
+            if (const auto* unary = expression->as<UnaryExpression>())
+            {
+                if (unary->op.type == TokenType::opPlus)
+                    return tryEvaluateStaticPackIndex(unary->operand);
+                return std::nullopt;
+            }
+
+            if (const auto* fit = expression->as<FitExpression>())
+                return tryEvaluateStaticPackIndex(fit->operand);
+
+            return std::nullopt;
+        }
+
+        Ref<sema::Type> instantiateGenericType(const Ref<sema::Type>& type, const GenericBindingSet& bindings);
         Ref<sema::Type> instantiateGenericType(const Ref<sema::Type>& type,
                                                const std::unordered_map<std::string, Ref<sema::Type>>& bindings);
 
@@ -218,6 +424,9 @@ namespace wio::codegen
             {
             case sema::TypeKind::GenericParameter:
             case sema::TypeKind::GenericParameterPack:
+            case sema::TypeKind::ValuePackView:
+            case sema::TypeKind::TypePackView:
+            case sema::TypeKind::PackStorage:
                 return true;
             case sema::TypeKind::Reference:
                 return containsGenericParameterTypeForCodegen(resolvedType.AsFast<sema::ReferenceType>()->referredType);
@@ -266,7 +475,11 @@ namespace wio::codegen
             if (structType->genericParameterNames.empty())
                 return structType;
 
-            auto bindingMap = buildGenericTypeBindings(structType->genericParameterNames, explicitTypeArguments);
+            const auto bindings = buildExtendedGenericBindings(
+                structType->genericParameterNames,
+                structType->hasGenericParameterPack,
+                explicitTypeArguments
+            );
             auto instantiatedScope = structType->structScope.Lock();
             auto instantiatedType = Compiler::get().getTypeContext().getOrCreateStructType(
                 structType->name,
@@ -278,21 +491,32 @@ namespace wio::codegen
             instantiatedType->scopePath = structType->scopePath;
             instantiatedType->genericParameterNames = structType->genericParameterNames;
             instantiatedType->genericArguments = explicitTypeArguments;
+            instantiatedType->hasGenericParameterPack = structType->hasGenericParameterPack;
             instantiatedType->fieldNames = structType->fieldNames;
+            instantiatedType->trustedTypeKeys = structType->trustedTypeKeys;
+            instantiatedType->isFinal = structType->isFinal;
 
             instantiatedType->fieldTypes.reserve(structType->fieldTypes.size());
             for (const auto& fieldType : structType->fieldTypes)
-                instantiatedType->fieldTypes.push_back(instantiateGenericType(fieldType, bindingMap));
+                instantiatedType->fieldTypes.push_back(instantiateGenericType(fieldType, bindings));
 
             instantiatedType->baseTypes.reserve(structType->baseTypes.size());
             for (const auto& baseType : structType->baseTypes)
-                instantiatedType->baseTypes.push_back(instantiateGenericType(baseType, bindingMap));
+                instantiatedType->baseTypes.push_back(instantiateGenericType(baseType, bindings));
 
             return instantiatedType;
         }
 
         Ref<sema::Type> instantiateGenericType(const Ref<sema::Type>& type,
                                                const std::unordered_map<std::string, Ref<sema::Type>>& bindings)
+        {
+            GenericBindingSet wrappedBindings;
+            wrappedBindings.directBindings = bindings;
+            return instantiateGenericType(type, wrappedBindings);
+        }
+
+        Ref<sema::Type> instantiateGenericType(const Ref<sema::Type>& type,
+                                               const GenericBindingSet& bindings)
         {
             Ref<sema::Type> current = unwrapAliasType(type);
             if (!current)
@@ -306,12 +530,91 @@ namespace wio::codegen
             case sema::TypeKind::GenericParameter:
             {
                 auto genericParam = current.AsFast<sema::GenericParameterType>();
-                if (auto it = bindings.find(genericParam->name); it != bindings.end())
+                if (auto it = bindings.directBindings.find(genericParam->name); it != bindings.directBindings.end())
                     return it->second;
+
+                if (auto parsedPackElement = tryParsePackElementBindingName(genericParam->name))
+                {
+                    if (auto aliasIt = bindings.packAliases.find(parsedPackElement->packName); aliasIt != bindings.packAliases.end())
+                        return ctx.getOrCreateGenericParameterType(makePackElementBindingName(aliasIt->second, parsedPackElement->index));
+                }
                 return current;
             }
             case sema::TypeKind::GenericParameterPack:
+            {
+                auto genericPack = current.AsFast<sema::GenericParameterPackType>();
+                if (auto it = bindings.packBindings.find(genericPack->name); it != bindings.packBindings.end())
+                {
+                    if (!it->second.empty())
+                        return ctx.getOrCreateTypePackViewType(genericPack->name, it->second);
+                    if (auto aliasIt = bindings.packAliases.find(genericPack->name); aliasIt != bindings.packAliases.end())
+                        return ctx.getOrCreateTypePackViewType(aliasIt->second);
+                }
                 return current;
+            }
+            case sema::TypeKind::ValuePackView:
+            {
+                auto viewType = current.AsFast<sema::ValuePackViewType>();
+                if (!viewType->elementTypes.empty())
+                {
+                    std::vector<Ref<sema::Type>> instantiatedElements;
+                    instantiatedElements.reserve(viewType->elementTypes.size());
+                    for (const auto& elementType : viewType->elementTypes)
+                        instantiatedElements.push_back(instantiateGenericType(elementType, bindings));
+                    return ctx.getOrCreateValuePackViewType(viewType->packName, std::move(instantiatedElements));
+                }
+
+                if (auto it = bindings.packBindings.find(viewType->packName); it != bindings.packBindings.end())
+                {
+                    if (!it->second.empty())
+                        return ctx.getOrCreateValuePackViewType(viewType->packName, it->second);
+                    if (auto aliasIt = bindings.packAliases.find(viewType->packName); aliasIt != bindings.packAliases.end())
+                        return ctx.getOrCreateValuePackViewType(aliasIt->second);
+                }
+                return current;
+            }
+            case sema::TypeKind::TypePackView:
+            {
+                auto viewType = current.AsFast<sema::TypePackViewType>();
+                if (!viewType->elementTypes.empty())
+                {
+                    std::vector<Ref<sema::Type>> instantiatedElements;
+                    instantiatedElements.reserve(viewType->elementTypes.size());
+                    for (const auto& elementType : viewType->elementTypes)
+                        instantiatedElements.push_back(instantiateGenericType(elementType, bindings));
+                    return ctx.getOrCreateTypePackViewType(viewType->packName, std::move(instantiatedElements));
+                }
+
+                if (auto it = bindings.packBindings.find(viewType->packName); it != bindings.packBindings.end())
+                {
+                    if (!it->second.empty())
+                        return ctx.getOrCreateTypePackViewType(viewType->packName, it->second);
+                    if (auto aliasIt = bindings.packAliases.find(viewType->packName); aliasIt != bindings.packAliases.end())
+                        return ctx.getOrCreateTypePackViewType(aliasIt->second);
+                }
+                return current;
+            }
+            case sema::TypeKind::PackStorage:
+            {
+                auto storageType = current.AsFast<sema::PackStorageType>();
+                if (!storageType->elementTypes.empty())
+                {
+                    std::vector<Ref<sema::Type>> instantiatedElements;
+                    instantiatedElements.reserve(storageType->elementTypes.size());
+                    for (const auto& elementType : storageType->elementTypes)
+                        instantiatedElements.push_back(instantiateGenericType(elementType, bindings));
+                    return ctx.getOrCreatePackStorageType(storageType->packName, std::move(instantiatedElements));
+                }
+
+                if (auto it = bindings.packBindings.find(storageType->packName); it != bindings.packBindings.end())
+                {
+                    if (!it->second.empty())
+                        return ctx.getOrCreatePackStorageType(storageType->packName, it->second);
+                    if (auto aliasIt = bindings.packAliases.find(storageType->packName); aliasIt != bindings.packAliases.end())
+                        return ctx.getOrCreatePackStorageType(aliasIt->second);
+                }
+                return current;
+            }
             case sema::TypeKind::Reference:
             {
                 auto refType = current.AsFast<sema::ReferenceType>();
@@ -342,9 +645,49 @@ namespace wio::codegen
             {
                 auto functionType = current.AsFast<sema::FunctionType>();
                 std::vector<Ref<sema::Type>> instantiatedParamTypes;
-                instantiatedParamTypes.reserve(functionType->paramTypes.size());
-                for (const auto& paramType : functionType->paramTypes)
-                    instantiatedParamTypes.push_back(instantiateGenericType(paramType, bindings));
+                instantiatedParamTypes.reserve(functionType->paramTypes.size() + 4);
+
+                if (functionType->hasParameterPack && !functionType->paramTypes.empty())
+                {
+                    const size_t fixedParameterCount = functionType->paramTypes.size() - 1;
+                    for (size_t i = 0; i < fixedParameterCount; ++i)
+                        instantiatedParamTypes.push_back(instantiateGenericType(functionType->paramTypes[i], bindings));
+
+                    auto trailingType = unwrapAliasType(functionType->paramTypes.back());
+                    if (trailingType && trailingType->kind() == sema::TypeKind::GenericParameterPack)
+                    {
+                        const std::string& packName = trailingType.AsFast<sema::GenericParameterPackType>()->name;
+                        if (auto it = bindings.packBindings.find(packName); it != bindings.packBindings.end())
+                        {
+                            if (!it->second.empty())
+                            {
+                                for (const auto& packType : it->second)
+                                    instantiatedParamTypes.push_back(packType);
+                                return ctx.getOrCreateFunctionType(
+                                    instantiateGenericType(functionType->returnType, bindings),
+                                    instantiatedParamTypes,
+                                    false
+                                );
+                            }
+                            if (auto aliasIt = bindings.packAliases.find(packName); aliasIt != bindings.packAliases.end())
+                            {
+                                instantiatedParamTypes.push_back(ctx.getOrCreateGenericParameterPackType(aliasIt->second));
+                                return ctx.getOrCreateFunctionType(
+                                    instantiateGenericType(functionType->returnType, bindings),
+                                    instantiatedParamTypes,
+                                    true
+                                );
+                            }
+                        }
+                    }
+
+                    instantiatedParamTypes.push_back(instantiateGenericType(functionType->paramTypes.back(), bindings));
+                }
+                else
+                {
+                    for (const auto& paramType : functionType->paramTypes)
+                        instantiatedParamTypes.push_back(instantiateGenericType(paramType, bindings));
+                }
 
                 return ctx.getOrCreateFunctionType(
                     instantiateGenericType(functionType->returnType, bindings),
@@ -368,13 +711,28 @@ namespace wio::codegen
                 if (!structType->genericParameterNames.empty())
                 {
                     std::vector<Ref<sema::Type>> instantiatedArguments;
-                    instantiatedArguments.reserve(structType->genericParameterNames.size());
-                    for (const auto& genericParameterName : structType->genericParameterNames)
+                    const size_t fixedCount = getMinimumGenericArgumentCount(
+                        structType->genericParameterNames,
+                        structType->hasGenericParameterPack
+                    );
+                    instantiatedArguments.reserve(fixedCount + 4);
+                    for (size_t i = 0; i < fixedCount; ++i)
                     {
-                        if (auto it = bindings.find(genericParameterName); it != bindings.end())
+                        if (auto it = bindings.directBindings.find(structType->genericParameterNames[i]); it != bindings.directBindings.end())
                             instantiatedArguments.push_back(it->second);
                         else
                             return current;
+                    }
+
+                    if (structType->hasGenericParameterPack)
+                    {
+                        const std::string& packName = structType->genericParameterNames.back();
+                        auto bindingIt = bindings.packBindings.find(packName);
+                        if (bindingIt == bindings.packBindings.end())
+                            return current;
+
+                        for (const auto& boundType : bindingIt->second)
+                            instantiatedArguments.push_back(boundType);
                     }
 
                     return instantiateGenericStructType(structType, instantiatedArguments);
@@ -1829,6 +2187,7 @@ namespace wio::codegen
         emitHeaderLine("#include <exception.h>");
         emitHeaderLine("#include <fit.h>");
         emitHeaderLine("#include <intrinsics.h>");
+        emitHeaderLine("#include <meta.h>");
         emitHeaderLine("#include <module_api.h>");
         emitHeaderLine("#include <ref.h>");
         emitHeaderLine();
@@ -2801,7 +3160,15 @@ namespace wio::codegen
             std::string templateLine = "template <";
             for (size_t i = 0; i < genericParameters.size(); ++i)
             {
-                templateLine += "typename " + genericParameters[i]->token.value;
+                const bool isGenericParameterPack =
+                    genericParameters.size() > 0 &&
+                    i + 1 == genericParameters.size() &&
+                    genericParameters[i] &&
+                    genericParameters[i]->refType.Lock() &&
+                    genericParameters[i]->refType.Lock()->kind() == sema::TypeKind::GenericParameterPack;
+                templateLine += isGenericParameterPack
+                    ? "typename... " + genericParameters[i]->token.value
+                    : "typename " + genericParameters[i]->token.value;
                 if (i + 1 < genericParameters.size())
                     templateLine += ", ";
             }
@@ -2894,6 +3261,26 @@ namespace wio::codegen
             
             emit(")>");
             return;
+        }
+
+        if (node.packIndex)
+        {
+            if (auto resolvedType = node.refType.Lock();
+                resolvedType && !containsGenericParameterTypeForCodegen(resolvedType))
+            {
+                emit(toCppType(resolvedType));
+                return;
+            }
+
+            if (auto indexValue = tryEvaluateStaticPackIndex(node.packIndex))
+            {
+                emit(common::formatString(
+                    "typename wio::meta::TypePackView<{}...>::template At<{}>",
+                    node.name.value,
+                    *indexValue
+                ));
+                return;
+            }
         }
 
         if (auto resolvedType = node.refType.Lock())
@@ -3273,7 +3660,40 @@ namespace wio::codegen
 
     void CppGenerator::visit(ArrayAccessExpression& node)
     {
-        // Wio: arr[0] -> C++: arr[0]
+        Ref<sema::Type> objectType = unwrapAliasType(node.object ? node.object->refType.Lock() : nullptr);
+        if (objectType)
+        {
+            while (objectType && objectType->kind() == sema::TypeKind::Reference)
+                objectType = unwrapAliasType(objectType.AsFast<sema::ReferenceType>()->referredType);
+        }
+
+        const auto staticIndex = tryEvaluateStaticPackIndex(node.index);
+        if (objectType && staticIndex.has_value())
+        {
+            if (objectType->kind() == sema::TypeKind::GenericParameterPack)
+            {
+                const std::string packTypeName = objectType.AsFast<sema::GenericParameterPackType>()->name;
+                auto packValueSymbol = node.object ? node.object->referencedSymbol.Lock() : nullptr;
+                const bool isRuntimePackValue =
+                    packValueSymbol &&
+                    packValueSymbol->flags.get_isParameterPack() &&
+                    (packValueSymbol->kind == sema::SymbolKind::Parameter || packValueSymbol->kind == sema::SymbolKind::Variable);
+                const std::string packValueName = isRuntimePackValue
+                    ? sanitizeCppIdentifier(packValueSymbol->name)
+                    : packTypeName;
+                emit(common::formatString("std::get<{}>(std::forward_as_tuple({}...))", *staticIndex, packValueName));
+                return;
+            }
+
+            if (objectType->kind() == sema::TypeKind::ValuePackView || objectType->kind() == sema::TypeKind::PackStorage)
+            {
+                emit("(");
+                node.object->accept(*this);
+                emit(common::formatString(").template Get<{}>()", *staticIndex));
+                return;
+            }
+        }
+
         node.object->accept(*this);
         emit("[");
         node.index->accept(*this);
@@ -3285,12 +3705,109 @@ namespace wio::codegen
         if (node.intrinsicMember == IntrinsicMember::None)
             return false;
 
+        Ref<sema::Type> receiverType = unwrapAliasType(node.object ? node.object->refType.Lock() : nullptr);
+        while (receiverType && receiverType->kind() == sema::TypeKind::Reference)
+            receiverType = unwrapAliasType(receiverType.AsFast<sema::ReferenceType>()->referredType);
+
+        auto emitPackReceiverArrayExpr = [&]()
+        {
+            if (!receiverType)
+                return;
+
+            if (receiverType->kind() == sema::TypeKind::GenericParameterPack)
+            {
+                const std::string packTypeName = receiverType.AsFast<sema::GenericParameterPackType>()->name;
+                auto packValueSymbol = node.object ? node.object->referencedSymbol.Lock() : nullptr;
+                const bool isRuntimePackValue =
+                    packValueSymbol &&
+                    packValueSymbol->flags.get_isParameterPack() &&
+                    (packValueSymbol->kind == sema::SymbolKind::Parameter || packValueSymbol->kind == sema::SymbolKind::Variable);
+
+                if (isRuntimePackValue)
+                {
+                    const std::string packValueName = sanitizeCppIdentifier(packValueSymbol->name);
+                    emit(common::formatString("wio::meta::ValuePackView<{}...>({}...)", packTypeName, packValueName));
+                }
+                else
+                {
+                    emit(common::formatString("wio::meta::TypePackView<{}...>{{}}", packTypeName));
+                }
+                return;
+            }
+
+            if (receiverType->kind() == sema::TypeKind::TypePackView)
+            {
+                auto typePackView = receiverType.AsFast<sema::TypePackViewType>();
+                if (!typePackView->elementTypes.empty())
+                {
+                    emit("wio::meta::TypePackView<");
+                    for (size_t i = 0; i < typePackView->elementTypes.size(); ++i)
+                    {
+                        emit(toCppType(typePackView->elementTypes[i]));
+                        if (i + 1 < typePackView->elementTypes.size())
+                            emit(", ");
+                    }
+                    emit(">{}");
+                }
+                else
+                {
+                    emit(common::formatString("wio::meta::TypePackView<{}...>{{}}", typePackView->packName));
+                }
+                return;
+            }
+
+            if (receiverType->kind() == sema::TypeKind::ValuePackView)
+            {
+                node.object->accept(*this);
+                return;
+            }
+
+            if (receiverType->kind() == sema::TypeKind::PackStorage)
+            {
+                emit("(");
+                node.object->accept(*this);
+                emit(").AsView()");
+            }
+        };
+
+            if (node.intrinsicMember == IntrinsicMember::PackSize)
+        {
+            if (!receiverType)
+                return false;
+
+            if (receiverType->kind() == sema::TypeKind::GenericParameterPack)
+            {
+                const std::string packTypeName = receiverType.AsFast<sema::GenericParameterPackType>()->name;
+                auto packValueSymbol = node.object ? node.object->referencedSymbol.Lock() : nullptr;
+                const bool isRuntimePackValue =
+                    packValueSymbol &&
+                    packValueSymbol->flags.get_isParameterPack() &&
+                    (packValueSymbol->kind == sema::SymbolKind::Parameter || packValueSymbol->kind == sema::SymbolKind::Variable);
+                const std::string packSizeTarget = isRuntimePackValue
+                    ? sanitizeCppIdentifier(packValueSymbol->name)
+                    : packTypeName;
+                emit(common::formatString("sizeof...({})", packSizeTarget));
+                return true;
+            }
+
+            emit("(");
+            emitPackReceiverArrayExpr();
+            emit(").Size()");
+            return true;
+        }
+
+        if (node.intrinsicMember == IntrinsicMember::PackArray)
+        {
+            emitPackReceiverArrayExpr();
+            return true;
+        }
+
         auto functionType = node.refType.Lock();
         if (!functionType || functionType->kind() != sema::TypeKind::Function)
             return false;
 
         std::size_t referenceDepth = 0;
-        Ref<sema::Type> receiverType = node.object->refType.Lock();
+        receiverType = node.object->refType.Lock();
         while (receiverType && receiverType->kind() == sema::TypeKind::Alias)
             receiverType = receiverType.AsFast<sema::AliasType>()->aliasedType;
         while (receiverType && receiverType->kind() == sema::TypeKind::Reference)
@@ -3616,6 +4133,43 @@ namespace wio::codegen
 
     void CppGenerator::visit(FunctionCallExpression& node)
     {
+        if (const auto* memberAccess = node.callee ? node.callee->as<MemberAccessExpression>() : nullptr;
+            memberAccess && memberAccess->intrinsicMember == IntrinsicMember::PackToStaticArray)
+        {
+            Ref<sema::Type> receiverType = unwrapAliasType(memberAccess->object ? memberAccess->object->refType.Lock() : nullptr);
+            while (receiverType && receiverType->kind() == sema::TypeKind::Reference)
+                receiverType = unwrapAliasType(receiverType.AsFast<sema::ReferenceType>()->referredType);
+
+            if (node.explicitTypeArguments.empty())
+            {
+                emit("/* invalid PackToStaticArray call */");
+                return;
+            }
+
+            if (receiverType && receiverType->kind() == sema::TypeKind::GenericParameterPack)
+            {
+                const std::string packTypeName = receiverType.AsFast<sema::GenericParameterPackType>()->name;
+                auto packValueSymbol = memberAccess->object ? memberAccess->object->referencedSymbol.Lock() : nullptr;
+                const std::string packValueName =
+                    packValueSymbol &&
+                    packValueSymbol->flags.get_isParameterPack() &&
+                    (packValueSymbol->kind == sema::SymbolKind::Parameter || packValueSymbol->kind == sema::SymbolKind::Variable)
+                        ? sanitizeCppIdentifier(packValueSymbol->name)
+                        : packTypeName;
+                emit("wio::meta::PackToStaticArray<");
+                node.explicitTypeArguments.front()->accept(*this);
+                emit(common::formatString(">({}...)", packValueName));
+                return;
+            }
+
+            emit("(");
+            memberAccess->object->accept(*this);
+            emit(").template ToStaticArray<");
+            node.explicitTypeArguments.front()->accept(*this);
+            emit(">()");
+            return;
+        }
+
         auto calleeType = node.callee->refType.Lock();
         auto calleeSym = node.callee->referencedSymbol.Lock();
         
@@ -4050,6 +4604,29 @@ namespace wio::codegen
 
         Ref<sema::Type> varType = (sym && sym->type) ? sym->type : node.name->refType.Lock();
         std::string typeStr = toCppType(varType);
+        Ref<sema::Type> resolvedVarType = unwrapAliasType(varType);
+        if (resolvedVarType &&
+            resolvedVarType->kind() == sema::TypeKind::Array &&
+            node.initializer)
+        {
+            auto arrayType = resolvedVarType.AsFast<sema::ArrayType>();
+            if (arrayType->arrayKind == sema::ArrayType::ArrayKind::Static &&
+                arrayType->size == 0)
+            {
+                if (const auto* functionCall = node.initializer->as<FunctionCallExpression>())
+                {
+                    if (const auto* memberAccess = functionCall->callee ? functionCall->callee->as<MemberAccessExpression>() : nullptr;
+                        memberAccess && memberAccess->intrinsicMember == IntrinsicMember::PackToStaticArray)
+                    {
+                        typeStr = "auto";
+                    }
+                }
+            }
+        }
+
+        if (typeStr.empty())
+            typeStr = "auto";
+
         std::string prefix;
         std::string suffix;
 
@@ -4097,7 +4674,10 @@ namespace wio::codegen
             emit("template <");
             for (size_t i = 0; i < node.genericParameters.size(); ++i)
             {
-                emit("typename " + node.genericParameters[i]->token.value);
+                const bool isGenericParameterPack = node.hasGenericParameterPack && i + 1 == node.genericParameters.size();
+                emit(isGenericParameterPack
+                    ? "typename... " + node.genericParameters[i]->token.value
+                    : "typename " + node.genericParameters[i]->token.value);
                 if (i + 1 < node.genericParameters.size())
                     emit(", ");
             }
@@ -4141,7 +4721,7 @@ namespace wio::codegen
 
         auto instantiateFunctionTypeForCodegen = [&](const std::vector<Ref<sema::Type>>& instantiationTypes)
         {
-            auto bindings = buildGenericTypeBindings(sym->genericParameterNames, instantiationTypes);
+            auto bindings = buildExtendedGenericBindings(sym->genericParameterNames, sym->hasGenericParameterPack, instantiationTypes);
             return instantiateGenericType(funcType, bindings).AsFast<sema::FunctionType>();
         };
 
@@ -4159,6 +4739,8 @@ namespace wio::codegen
             for (size_t i = 0; i < node.genericParameters.size(); ++i)
             {
                 emit(node.genericParameters[i]->token.value);
+                if (node.hasGenericParameterPack && i + 1 == node.genericParameters.size())
+                    emit("...");
                 if (i + 1 < node.genericParameters.size())
                     emit(", ");
             }
@@ -4552,7 +5134,10 @@ namespace wio::codegen
             emit("template <");
             for (size_t i = 0; i < node.genericParameters.size(); ++i)
             {
-                emit("typename " + node.genericParameters[i]->token.value);
+                const bool isGenericParameterPack = node.hasGenericParameterPack && i + 1 == node.genericParameters.size();
+                emit(isGenericParameterPack
+                    ? "typename... " + node.genericParameters[i]->token.value
+                    : "typename " + node.genericParameters[i]->token.value);
                 if (i + 1 < node.genericParameters.size())
                     emit(", ");
             }
@@ -4600,7 +5185,10 @@ namespace wio::codegen
             emit("template <");
             for (size_t i = 0; i < node.genericParameters.size(); ++i)
             {
-                emit("typename " + node.genericParameters[i]->token.value);
+                const bool isGenericParameterPack = node.hasGenericParameterPack && i + 1 == node.genericParameters.size();
+                emit(isGenericParameterPack
+                    ? "typename... " + node.genericParameters[i]->token.value
+                    : "typename " + node.genericParameters[i]->token.value);
                 if (i + 1 < node.genericParameters.size())
                     emit(", ");
             }
@@ -4787,7 +5375,10 @@ namespace wio::codegen
             emit("template <");
             for (size_t i = 0; i < node.genericParameters.size(); ++i)
             {
-                emit("typename " + node.genericParameters[i]->token.value);
+                const bool isGenericParameterPack = node.hasGenericParameterPack && i + 1 == node.genericParameters.size();
+                emit(isGenericParameterPack
+                    ? "typename... " + node.genericParameters[i]->token.value
+                    : "typename " + node.genericParameters[i]->token.value);
                 if (i + 1 < node.genericParameters.size())
                     emit(", ");
             }
@@ -4892,6 +5483,8 @@ namespace wio::codegen
             for (size_t i = 0; i < node.genericParameters.size(); ++i)
             {
                 objectRefFriend += node.genericParameters[i]->token.value;
+                if (node.hasGenericParameterPack && i + 1 == node.genericParameters.size())
+                    objectRefFriend += "...";
                 if (i + 1 < node.genericParameters.size())
                     objectRefFriend += ", ";
             }

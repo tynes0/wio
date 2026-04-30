@@ -318,10 +318,33 @@ namespace wio::sema
             return std::nullopt;
         }
 
+        std::optional<std::string> tryGetNormalizedSymbolicPackName(const Ref<Type>& type);
+
         bool isAssignmentLikeCompatible(const Ref<Type>& destination, const Ref<Type>& source)
         {
             if (!destination || !source || source->isUnknown())
                 return false;
+
+            Ref<Type> resolvedDestination = unwrapAliasType(destination);
+            Ref<Type> resolvedSource = unwrapAliasType(source);
+            if (resolvedDestination && resolvedSource)
+            {
+                const auto destinationPackName = tryGetNormalizedSymbolicPackName(resolvedDestination);
+                const auto sourcePackName = tryGetNormalizedSymbolicPackName(resolvedSource);
+                if (destinationPackName.has_value() && sourcePackName.has_value())
+                {
+                    const auto destinationKind = resolvedDestination->kind();
+                    const auto sourceKind = resolvedSource->kind();
+                    const bool isPackAssignment =
+                        (destinationKind == TypeKind::PackStorage &&
+                         (sourceKind == TypeKind::ValuePackView || sourceKind == TypeKind::PackStorage)) ||
+                        (destinationKind == TypeKind::ValuePackView && sourceKind == TypeKind::ValuePackView) ||
+                        (destinationKind == TypeKind::TypePackView && sourceKind == TypeKind::TypePackView);
+
+                    if (isPackAssignment && *destinationPackName == *sourcePackName)
+                        return true;
+                }
+            }
 
             return destination->isCompatibleWith(source) ||
                    (destination->isNumeric() && source->isNumeric());
@@ -567,6 +590,207 @@ namespace wio::sema
             return bindings;
         }
 
+        struct GenericBindingSet
+        {
+            std::unordered_map<std::string, Ref<Type>> directBindings;
+            std::unordered_map<std::string, std::vector<Ref<Type>>> packBindings;
+            std::unordered_map<std::string, std::string> packAliases;
+        };
+
+        std::string makePackElementBindingName(const std::string& packName, const size_t index)
+        {
+            return common::formatString("{}[{}]", packName, index);
+        }
+
+        struct ParsedPackElementBinding
+        {
+            std::string packName;
+            size_t index = 0;
+        };
+
+        std::optional<ParsedPackElementBinding> tryParsePackElementBindingName(const std::string_view name)
+        {
+            const size_t openBracket = name.find('[');
+            if (openBracket == std::string_view::npos || !name.ends_with("]"))
+                return std::nullopt;
+
+            const std::string_view packName = name.substr(0, openBracket);
+            const std::string_view indexText = name.substr(openBracket + 1, name.size() - openBracket - 2);
+            if (packName.empty() || indexText.empty())
+                return std::nullopt;
+
+            size_t index = 0;
+            for (const char ch : indexText)
+            {
+                if (ch < '0' || ch > '9')
+                    return std::nullopt;
+
+                index = (index * 10) + static_cast<size_t>(ch - '0');
+            }
+
+            return ParsedPackElementBinding{std::string(packName), index};
+        }
+
+        std::optional<std::string> tryGetSymbolicPackReferenceName(const Ref<Type>& type)
+        {
+            Ref<Type> current = unwrapAliasType(type);
+            if (!current)
+                return std::nullopt;
+
+            switch (current->kind())
+            {
+            case TypeKind::GenericParameterPack:
+                return current.AsFast<GenericParameterPackType>()->name;
+            case TypeKind::ValuePackView:
+            {
+                auto packViewType = current.AsFast<ValuePackViewType>();
+                if (packViewType->elementTypes.empty())
+                    return packViewType->packName;
+                return std::nullopt;
+            }
+            case TypeKind::TypePackView:
+            {
+                auto packViewType = current.AsFast<TypePackViewType>();
+                if (packViewType->elementTypes.empty())
+                    return packViewType->packName;
+                return std::nullopt;
+            }
+            case TypeKind::PackStorage:
+            {
+                auto storageType = current.AsFast<PackStorageType>();
+                if (storageType->elementTypes.empty())
+                    return storageType->packName;
+                return std::nullopt;
+            }
+            default:
+                return std::nullopt;
+            }
+        }
+
+        std::optional<std::string> tryGetNormalizedSymbolicPackName(const Ref<Type>& type)
+        {
+            Ref<Type> current = unwrapAliasType(type);
+            if (!current)
+                return std::nullopt;
+
+            if (auto directPackName = tryGetSymbolicPackReferenceName(current))
+                return directPackName;
+
+            auto tryGetPackAliasFromElements = [](const std::vector<Ref<Type>>& elementTypes) -> std::optional<std::string>
+            {
+                if (elementTypes.size() != 1)
+                    return std::nullopt;
+                return tryGetSymbolicPackReferenceName(elementTypes.front());
+            };
+
+            switch (current->kind())
+            {
+            case TypeKind::ValuePackView:
+                return tryGetPackAliasFromElements(current.AsFast<ValuePackViewType>()->elementTypes);
+            case TypeKind::TypePackView:
+                return tryGetPackAliasFromElements(current.AsFast<TypePackViewType>()->elementTypes);
+            case TypeKind::PackStorage:
+                return tryGetPackAliasFromElements(current.AsFast<PackStorageType>()->elementTypes);
+            default:
+                return std::nullopt;
+            }
+        }
+
+        size_t getMinimumGenericArgumentCount(const std::vector<std::string>& parameterNames, const bool hasGenericParameterPack)
+        {
+            if (parameterNames.empty())
+                return 0;
+
+            return hasGenericParameterPack ? parameterNames.size() - 1 : parameterNames.size();
+        }
+
+        GenericBindingSet buildExtendedGenericBindings(const std::vector<std::string>& parameterNames,
+                                                       const bool hasGenericParameterPack,
+                                                       const std::vector<Ref<Type>>& typeArguments)
+        {
+            GenericBindingSet bindings;
+            const size_t fixedCount = getMinimumGenericArgumentCount(parameterNames, hasGenericParameterPack);
+            bindings.directBindings.reserve(fixedCount + typeArguments.size());
+
+            for (size_t i = 0; i < fixedCount && i < typeArguments.size(); ++i)
+                bindings.directBindings.emplace(parameterNames[i], typeArguments[i]);
+
+            if (!hasGenericParameterPack || parameterNames.empty())
+                return bindings;
+
+            const std::string& packName = parameterNames.back();
+            std::vector<Ref<Type>> packTypes;
+            if (typeArguments.size() > fixedCount)
+            {
+                if (typeArguments.size() == fixedCount + 1)
+                {
+                    if (auto symbolicPackName = tryGetSymbolicPackReferenceName(typeArguments[fixedCount]))
+                    {
+                        bindings.packAliases.emplace(packName, *symbolicPackName);
+                        bindings.packBindings.emplace(packName, std::move(packTypes));
+                        return bindings;
+                    }
+                }
+
+                packTypes.reserve(typeArguments.size() - fixedCount);
+                for (size_t i = fixedCount; i < typeArguments.size(); ++i)
+                {
+                    packTypes.push_back(typeArguments[i]);
+                    bindings.directBindings.emplace(makePackElementBindingName(packName, i - fixedCount), typeArguments[i]);
+                }
+            }
+
+            bindings.packBindings.emplace(packName, std::move(packTypes));
+            return bindings;
+        }
+
+        std::optional<size_t> tryEvaluateStaticPackIndex(const NodePtr<Expression>& expression)
+        {
+            if (!expression)
+                return std::nullopt;
+
+            if (const auto* literal = expression->as<IntegerLiteral>())
+            {
+                const IntegerResult result = common::getInteger(literal->token.value);
+                if (!result.isValid)
+                    return std::nullopt;
+
+                switch (result.type)
+                {
+                case IntegerType::i8: if (result.value.v_i8 >= 0) return static_cast<size_t>(result.value.v_i8); break;
+                case IntegerType::i16: if (result.value.v_i16 >= 0) return static_cast<size_t>(result.value.v_i16); break;
+                case IntegerType::i32: if (result.value.v_i32 >= 0) return static_cast<size_t>(result.value.v_i32); break;
+                case IntegerType::i64: if (result.value.v_i64 >= 0) return static_cast<size_t>(result.value.v_i64); break;
+                case IntegerType::u8: return static_cast<size_t>(result.value.v_u8);
+                case IntegerType::u16: return static_cast<size_t>(result.value.v_u16);
+                case IntegerType::u32: return static_cast<size_t>(result.value.v_u32);
+                case IntegerType::u64: return static_cast<size_t>(result.value.v_u64);
+                case IntegerType::isize: if (result.value.v_isize >= 0) return static_cast<size_t>(result.value.v_isize); break;
+                case IntegerType::usize: return result.value.v_usize;
+                default: break;
+                }
+
+                return std::nullopt;
+            }
+
+            if (const auto* unary = expression->as<UnaryExpression>())
+            {
+                if (unary->op.type == TokenType::opPlus)
+                    return tryEvaluateStaticPackIndex(unary->operand);
+                return std::nullopt;
+            }
+
+            if (const auto* fit = expression->as<FitExpression>())
+                return tryEvaluateStaticPackIndex(fit->operand);
+
+            return std::nullopt;
+        }
+
+        Ref<Type> makeSyntheticPackElementType(const std::string& packName, const size_t index)
+        {
+            return Compiler::get().getTypeContext().getOrCreateGenericParameterType(makePackElementBindingName(packName, index));
+        }
+
         std::string formatDiagnosticType(const Ref<Type>& type)
         {
             if (!type)
@@ -639,6 +863,36 @@ namespace wio::sema
             case TypeKind::GenericParameter:
             case TypeKind::GenericParameterPack:
                 return true;
+            case TypeKind::ValuePackView:
+            {
+                auto packViewType = current.AsFast<ValuePackViewType>();
+                if (packViewType->elementTypes.empty())
+                    return true;
+                return std::ranges::any_of(packViewType->elementTypes, [](const Ref<Type>& elementType)
+                {
+                    return containsGenericParameterType(elementType);
+                });
+            }
+            case TypeKind::TypePackView:
+            {
+                auto packViewType = current.AsFast<TypePackViewType>();
+                if (packViewType->elementTypes.empty())
+                    return true;
+                return std::ranges::any_of(packViewType->elementTypes, [](const Ref<Type>& elementType)
+                {
+                    return containsGenericParameterType(elementType);
+                });
+            }
+            case TypeKind::PackStorage:
+            {
+                auto storageType = current.AsFast<PackStorageType>();
+                if (storageType->elementTypes.empty())
+                    return true;
+                return std::ranges::any_of(storageType->elementTypes, [](const Ref<Type>& elementType)
+                {
+                    return containsGenericParameterType(elementType);
+                });
+            }
             case TypeKind::Reference:
                 return containsGenericParameterType(current.AsFast<ReferenceType>()->referredType);
             case TypeKind::Array:
@@ -700,6 +954,36 @@ namespace wio::sema
                 auto genericParam = current.AsFast<GenericParameterPackType>();
                 return std::ranges::find(genericParameterNames, genericParam->name) != genericParameterNames.end();
             }
+            case TypeKind::ValuePackView:
+            {
+                auto packViewType = current.AsFast<ValuePackViewType>();
+                if (std::ranges::find(genericParameterNames, packViewType->packName) != genericParameterNames.end())
+                    return true;
+                return std::ranges::any_of(packViewType->elementTypes, [&](const Ref<Type>& elementType)
+                {
+                    return containsNamedGenericParameterType(elementType, genericParameterNames);
+                });
+            }
+            case TypeKind::TypePackView:
+            {
+                auto packViewType = current.AsFast<TypePackViewType>();
+                if (std::ranges::find(genericParameterNames, packViewType->packName) != genericParameterNames.end())
+                    return true;
+                return std::ranges::any_of(packViewType->elementTypes, [&](const Ref<Type>& elementType)
+                {
+                    return containsNamedGenericParameterType(elementType, genericParameterNames);
+                });
+            }
+            case TypeKind::PackStorage:
+            {
+                auto storageType = current.AsFast<PackStorageType>();
+                if (std::ranges::find(genericParameterNames, storageType->packName) != genericParameterNames.end())
+                    return true;
+                return std::ranges::any_of(storageType->elementTypes, [&](const Ref<Type>& elementType)
+                {
+                    return containsNamedGenericParameterType(elementType, genericParameterNames);
+                });
+            }
             case TypeKind::Reference:
                 return containsNamedGenericParameterType(current.AsFast<ReferenceType>()->referredType, genericParameterNames);
             case TypeKind::Array:
@@ -759,6 +1043,27 @@ namespace wio::sema
             }
             case TypeKind::GenericParameterPack:
                 return;
+            case TypeKind::ValuePackView:
+            {
+                auto packViewType = current.AsFast<ValuePackViewType>();
+                for (const auto& elementType : packViewType->elementTypes)
+                    collectGenericParameterInstances(elementType, genericParameterNames, instances);
+                return;
+            }
+            case TypeKind::TypePackView:
+            {
+                auto packViewType = current.AsFast<TypePackViewType>();
+                for (const auto& elementType : packViewType->elementTypes)
+                    collectGenericParameterInstances(elementType, genericParameterNames, instances);
+                return;
+            }
+            case TypeKind::PackStorage:
+            {
+                auto storageType = current.AsFast<PackStorageType>();
+                for (const auto& elementType : storageType->elementTypes)
+                    collectGenericParameterInstances(elementType, genericParameterNames, instances);
+                return;
+            }
             case TypeKind::Reference:
                 collectGenericParameterInstances(current.AsFast<ReferenceType>()->referredType, genericParameterNames, instances);
                 return;
@@ -817,6 +1122,30 @@ namespace wio::sema
             }
             case TypeKind::GenericParameterPack:
                 return true;
+            case TypeKind::ValuePackView:
+            {
+                auto packViewType = current.AsFast<ValuePackViewType>();
+                return std::ranges::any_of(packViewType->elementTypes, [&](const Ref<Type>& elementType)
+                {
+                    return containsGenericParameterInstance(elementType, instances);
+                });
+            }
+            case TypeKind::TypePackView:
+            {
+                auto packViewType = current.AsFast<TypePackViewType>();
+                return std::ranges::any_of(packViewType->elementTypes, [&](const Ref<Type>& elementType)
+                {
+                    return containsGenericParameterInstance(elementType, instances);
+                });
+            }
+            case TypeKind::PackStorage:
+            {
+                auto storageType = current.AsFast<PackStorageType>();
+                return std::ranges::any_of(storageType->elementTypes, [&](const Ref<Type>& elementType)
+                {
+                    return containsGenericParameterInstance(elementType, instances);
+                });
+            }
             case TypeKind::Reference:
                 return containsGenericParameterInstance(current.AsFast<ReferenceType>()->referredType, instances);
             case TypeKind::Array:
@@ -907,6 +1236,54 @@ namespace wio::sema
                 }
                 return false;
             }
+            case TypeKind::ValuePackView:
+            {
+                auto packViewType = current.AsFast<ValuePackViewType>();
+                if (packViewType->elementTypes.empty())
+                {
+                    if (outPackName)
+                        *outPackName = packViewType->packName;
+                    return true;
+                }
+                for (const auto& elementType : packViewType->elementTypes)
+                {
+                    if (containsGenericParameterPackType(elementType, outPackName))
+                        return true;
+                }
+                return false;
+            }
+            case TypeKind::TypePackView:
+            {
+                auto packViewType = current.AsFast<TypePackViewType>();
+                if (packViewType->elementTypes.empty())
+                {
+                    if (outPackName)
+                        *outPackName = packViewType->packName;
+                    return true;
+                }
+                for (const auto& elementType : packViewType->elementTypes)
+                {
+                    if (containsGenericParameterPackType(elementType, outPackName))
+                        return true;
+                }
+                return false;
+            }
+            case TypeKind::PackStorage:
+            {
+                auto storageType = current.AsFast<PackStorageType>();
+                if (storageType->elementTypes.empty())
+                {
+                    if (outPackName)
+                        *outPackName = storageType->packName;
+                    return true;
+                }
+                for (const auto& elementType : storageType->elementTypes)
+                {
+                    if (containsGenericParameterPackType(elementType, outPackName))
+                        return true;
+                }
+                return false;
+            }
             case TypeKind::Alias:
                 return containsGenericParameterPackType(current.AsFast<AliasType>()->aliasedType, outPackName);
             default:
@@ -915,6 +1292,7 @@ namespace wio::sema
         }
 
         Ref<Type> instantiateGenericType(const Ref<Type>& type, const std::unordered_map<std::string, Ref<Type>>& bindings);
+        Ref<Type> instantiateGenericType(const Ref<Type>& type, const GenericBindingSet& bindings);
 
         Ref<Type> instantiateGenericStructType(const Ref<StructType>& structType,
                                                const std::vector<Ref<Type>>& explicitTypeArguments)
@@ -925,7 +1303,11 @@ namespace wio::sema
             if (structType->genericParameterNames.empty())
                 return structType;
 
-            auto bindings = buildGenericTypeBindings(structType->genericParameterNames, explicitTypeArguments);
+            const auto bindings = buildExtendedGenericBindings(
+                structType->genericParameterNames,
+                structType->hasGenericParameterPack,
+                explicitTypeArguments
+            );
 
             auto instantiatedScope = structType->structScope.Lock();
             auto instantiatedType = Compiler::get().getTypeContext().getOrCreateStructType(
@@ -938,6 +1320,7 @@ namespace wio::sema
             instantiatedType->scopePath = structType->scopePath;
             instantiatedType->genericParameterNames = structType->genericParameterNames;
             instantiatedType->genericArguments = explicitTypeArguments;
+            instantiatedType->hasGenericParameterPack = structType->hasGenericParameterPack;
             instantiatedType->fieldNames = structType->fieldNames;
             instantiatedType->trustedTypeKeys = structType->trustedTypeKeys;
             instantiatedType->isFinal = structType->isFinal;
@@ -955,24 +1338,109 @@ namespace wio::sema
 
         Ref<Type> instantiateGenericType(const Ref<Type>& type, const std::unordered_map<std::string, Ref<Type>>& bindings)
         {
+            GenericBindingSet bindingSet;
+            bindingSet.directBindings = bindings;
+            return instantiateGenericType(type, bindingSet);
+        }
+
+        Ref<Type> instantiateGenericType(const Ref<Type>& type, const GenericBindingSet& bindings)
+        {
             Ref<Type> current = unwrapAliasType(type);
             if (!current)
                 return nullptr;
 
             auto& ctx = Compiler::get().getTypeContext();
-            
-            // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
+
             switch (current->kind())
             {
             case TypeKind::GenericParameter:
             {
                 auto genericParam = current.AsFast<GenericParameterType>();
-                if (auto it = bindings.find(genericParam->name); it != bindings.end())
+                if (auto it = bindings.directBindings.find(genericParam->name); it != bindings.directBindings.end())
                     return it->second;
+
+                if (auto parsedPackElement = tryParsePackElementBindingName(genericParam->name))
+                {
+                    if (auto aliasIt = bindings.packAliases.find(parsedPackElement->packName); aliasIt != bindings.packAliases.end())
+                        return makeSyntheticPackElementType(aliasIt->second, parsedPackElement->index);
+                }
                 return current;
             }
             case TypeKind::GenericParameterPack:
+            {
+                auto genericPack = current.AsFast<GenericParameterPackType>();
+                if (auto it = bindings.packBindings.find(genericPack->name); it != bindings.packBindings.end())
+                {
+                    if (!it->second.empty())
+                        return ctx.getOrCreateTypePackViewType(genericPack->name, it->second);
+                    if (auto aliasIt = bindings.packAliases.find(genericPack->name); aliasIt != bindings.packAliases.end())
+                        return ctx.getOrCreateTypePackViewType(aliasIt->second);
+                }
                 return current;
+            }
+            case TypeKind::ValuePackView:
+            {
+                auto viewType = current.AsFast<ValuePackViewType>();
+                if (!viewType->elementTypes.empty())
+                {
+                    std::vector<Ref<Type>> instantiatedElements;
+                    instantiatedElements.reserve(viewType->elementTypes.size());
+                    for (const auto& elementType : viewType->elementTypes)
+                        instantiatedElements.push_back(instantiateGenericType(elementType, bindings));
+                    return ctx.getOrCreateValuePackViewType(viewType->packName, std::move(instantiatedElements));
+                }
+
+                if (auto it = bindings.packBindings.find(viewType->packName); it != bindings.packBindings.end())
+                {
+                    if (!it->second.empty())
+                        return ctx.getOrCreateValuePackViewType(viewType->packName, it->second);
+                    if (auto aliasIt = bindings.packAliases.find(viewType->packName); aliasIt != bindings.packAliases.end())
+                        return ctx.getOrCreateValuePackViewType(aliasIt->second);
+                }
+                return current;
+            }
+            case TypeKind::TypePackView:
+            {
+                auto viewType = current.AsFast<TypePackViewType>();
+                if (!viewType->elementTypes.empty())
+                {
+                    std::vector<Ref<Type>> instantiatedElements;
+                    instantiatedElements.reserve(viewType->elementTypes.size());
+                    for (const auto& elementType : viewType->elementTypes)
+                        instantiatedElements.push_back(instantiateGenericType(elementType, bindings));
+                    return ctx.getOrCreateTypePackViewType(viewType->packName, std::move(instantiatedElements));
+                }
+
+                if (auto it = bindings.packBindings.find(viewType->packName); it != bindings.packBindings.end())
+                {
+                    if (!it->second.empty())
+                        return ctx.getOrCreateTypePackViewType(viewType->packName, it->second);
+                    if (auto aliasIt = bindings.packAliases.find(viewType->packName); aliasIt != bindings.packAliases.end())
+                        return ctx.getOrCreateTypePackViewType(aliasIt->second);
+                }
+                return current;
+            }
+            case TypeKind::PackStorage:
+            {
+                auto storageType = current.AsFast<PackStorageType>();
+                if (!storageType->elementTypes.empty())
+                {
+                    std::vector<Ref<Type>> instantiatedElements;
+                    instantiatedElements.reserve(storageType->elementTypes.size());
+                    for (const auto& elementType : storageType->elementTypes)
+                        instantiatedElements.push_back(instantiateGenericType(elementType, bindings));
+                    return ctx.getOrCreatePackStorageType(storageType->packName, std::move(instantiatedElements));
+                }
+
+                if (auto it = bindings.packBindings.find(storageType->packName); it != bindings.packBindings.end())
+                {
+                    if (!it->second.empty())
+                        return ctx.getOrCreatePackStorageType(storageType->packName, it->second);
+                    if (auto aliasIt = bindings.packAliases.find(storageType->packName); aliasIt != bindings.packAliases.end())
+                        return ctx.getOrCreatePackStorageType(aliasIt->second);
+                }
+                return current;
+            }
             case TypeKind::Reference:
             {
                 auto refType = current.AsFast<ReferenceType>();
@@ -1004,13 +1472,51 @@ namespace wio::sema
                 auto funcType = current.AsFast<FunctionType>();
                 std::vector<Ref<Type>> instantiatedParams;
                 instantiatedParams.reserve(funcType->paramTypes.size());
-                for (const auto& paramType : funcType->paramTypes)
-                    instantiatedParams.push_back(instantiateGenericType(paramType, bindings));
+                bool hasParameterPack = funcType->hasParameterPack;
+
+                if (funcType->hasParameterPack &&
+                    !funcType->paramTypes.empty() &&
+                    unwrapAliasType(funcType->paramTypes.back()) &&
+                    unwrapAliasType(funcType->paramTypes.back())->kind() == TypeKind::GenericParameterPack)
+                {
+                    const auto packType = unwrapAliasType(funcType->paramTypes.back()).AsFast<GenericParameterPackType>();
+                    for (size_t i = 0; i + 1 < funcType->paramTypes.size(); ++i)
+                        instantiatedParams.push_back(instantiateGenericType(funcType->paramTypes[i], bindings));
+
+                    if (auto it = bindings.packBindings.find(packType->name); it != bindings.packBindings.end())
+                    {
+                        if (!it->second.empty())
+                        {
+                            for (const auto& boundType : it->second)
+                                instantiatedParams.push_back(boundType);
+                            hasParameterPack = false;
+                        }
+                        else if (auto aliasIt = bindings.packAliases.find(packType->name); aliasIt != bindings.packAliases.end())
+                        {
+                            instantiatedParams.push_back(
+                                Compiler::get().getTypeContext().getOrCreateGenericParameterPackType(aliasIt->second)
+                            );
+                        }
+                        else
+                        {
+                            instantiatedParams.push_back(funcType->paramTypes.back());
+                        }
+                    }
+                    else
+                    {
+                        instantiatedParams.push_back(funcType->paramTypes.back());
+                    }
+                }
+                else
+                {
+                    for (const auto& paramType : funcType->paramTypes)
+                        instantiatedParams.push_back(instantiateGenericType(paramType, bindings));
+                }
 
                 return ctx.getOrCreateFunctionType(
                     instantiateGenericType(funcType->returnType, bindings),
                     instantiatedParams,
-                    funcType->hasParameterPack
+                    hasParameterPack
                 );
             }
             case TypeKind::Struct:
@@ -1029,14 +1535,26 @@ namespace wio::sema
 
                 if (!structType->genericParameterNames.empty())
                 {
-                    instantiatedArguments.reserve(structType->genericParameterNames.size());
-                    for (const auto& genericParameterName : structType->genericParameterNames)
+                    const size_t fixedCount = getMinimumGenericArgumentCount(structType->genericParameterNames, structType->hasGenericParameterPack);
+                    instantiatedArguments.reserve(fixedCount);
+                    for (size_t i = 0; i < fixedCount; ++i)
                     {
-                        auto bindingIt = bindings.find(genericParameterName);
-                        if (bindingIt == bindings.end())
+                        auto bindingIt = bindings.directBindings.find(structType->genericParameterNames[i]);
+                        if (bindingIt == bindings.directBindings.end())
                             return current;
 
                         instantiatedArguments.push_back(bindingIt->second);
+                    }
+
+                    if (structType->hasGenericParameterPack)
+                    {
+                        const std::string& packName = structType->genericParameterNames.back();
+                        auto bindingIt = bindings.packBindings.find(packName);
+                        if (bindingIt == bindings.packBindings.end())
+                            return current;
+
+                        for (const auto& boundType : bindingIt->second)
+                            instantiatedArguments.push_back(boundType);
                     }
 
                     return instantiateGenericStructType(structType, instantiatedArguments);
@@ -2354,13 +2872,23 @@ namespace wio::sema
                         auto structType = sym->type.AsFast<StructType>();
                         if (!structType->genericParameterNames.empty())
                         {
-                            if (explicitTypeArguments.size() != structType->genericParameterNames.size())
+                            const size_t minimumArgumentCount = getMinimumGenericArgumentCount(
+                                structType->genericParameterNames,
+                                structType->hasGenericParameterPack
+                            );
+                            const bool invalidGenericArity =
+                                structType->hasGenericParameterPack
+                                    ? explicitTypeArguments.size() < minimumArgumentCount
+                                    : explicitTypeArguments.size() != structType->genericParameterNames.size();
+                            if (invalidGenericArity)
                             {
                                 WIO_LOG_ADD_ERROR(
                                     node.location(),
-                                    "Generic type '{}' expects {} generic arguments, but got {}.",
+                                    structType->hasGenericParameterPack
+                                        ? "Generic type '{}' expects at least {} generic arguments, but got {}."
+                                        : "Generic type '{}' expects {} generic arguments, but got {}.",
                                     node.name.value,
-                                    structType->genericParameterNames.size(),
+                                    structType->hasGenericParameterPack ? minimumArgumentCount : structType->genericParameterNames.size(),
                                     explicitTypeArguments.size()
                                 );
                                 type = Compiler::get().getTypeContext().getUnknown();
@@ -2398,13 +2926,23 @@ namespace wio::sema
                     {
                         if (!sym->genericParameterNames.empty())
                         {
-                            if (explicitTypeArguments.size() != sym->genericParameterNames.size())
+                            const size_t minimumArgumentCount = getMinimumGenericArgumentCount(
+                                sym->genericParameterNames,
+                                sym->hasGenericParameterPack
+                            );
+                            const bool invalidGenericArity =
+                                sym->hasGenericParameterPack
+                                    ? explicitTypeArguments.size() < minimumArgumentCount
+                                    : explicitTypeArguments.size() != sym->genericParameterNames.size();
+                            if (invalidGenericArity)
                             {
                                 WIO_LOG_ADD_ERROR(
                                     node.location(),
-                                    "Type alias '{}' expects {} generic arguments, but got {}.",
+                                    sym->hasGenericParameterPack
+                                        ? "Type alias '{}' expects at least {} generic arguments, but got {}."
+                                        : "Type alias '{}' expects {} generic arguments, but got {}.",
                                     node.name.value,
-                                    sym->genericParameterNames.size(),
+                                    sym->hasGenericParameterPack ? minimumArgumentCount : sym->genericParameterNames.size(),
                                     explicitTypeArguments.size()
                                 );
                                 type = Compiler::get().getTypeContext().getUnknown();
@@ -2418,10 +2956,11 @@ namespace wio::sema
                                     return;
                                 }
 
-                                std::unordered_map<std::string, Ref<Type>> bindings;
-                                bindings.reserve(sym->genericParameterNames.size());
-                                for (size_t i = 0; i < sym->genericParameterNames.size(); ++i)
-                                    bindings.emplace(sym->genericParameterNames[i], explicitTypeArguments[i]);
+                                const auto bindings = buildExtendedGenericBindings(
+                                    sym->genericParameterNames,
+                                    sym->hasGenericParameterPack,
+                                    explicitTypeArguments
+                                );
 
                                 Ref<Type> instantiatedAliasTarget = instantiateGenericType(sym->aliasTargetType, bindings);
                                 type = Compiler::get().getTypeContext().getOrCreateAliasType(
@@ -2459,6 +2998,52 @@ namespace wio::sema
         {
             WIO_LOG_ADD_ERROR(node.location(), "Unknown type: '{}'", node.name.value);
             type = Compiler::get().getTypeContext().getUnknown();
+        }
+
+        if (node.packIndex)
+        {
+            node.packIndex->accept(*this);
+            auto indexValue = tryEvaluateStaticPackIndex(node.packIndex);
+            if (!indexValue.has_value())
+            {
+                WIO_LOG_ADD_ERROR(node.packIndex->location(), "Pack type indexing requires a non-negative compile-time integer index.");
+                type = Compiler::get().getTypeContext().getUnknown();
+            }
+            else if (type && type->kind() == TypeKind::GenericParameterPack)
+            {
+                const std::string packName = type.AsFast<GenericParameterPackType>()->name;
+                type = makeSyntheticPackElementType(packName, *indexValue);
+            }
+            else if (type && type->kind() == TypeKind::TypePackView)
+            {
+                auto packViewType = type.AsFast<TypePackViewType>();
+                if (!packViewType->elementTypes.empty())
+                {
+                    if (*indexValue >= packViewType->elementTypes.size())
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            node.packIndex->location(),
+                            "Pack type index {} is out of range for size {}.",
+                            *indexValue,
+                            packViewType->elementTypes.size()
+                        );
+                        type = Compiler::get().getTypeContext().getUnknown();
+                    }
+                    else
+                    {
+                        type = packViewType->elementTypes[*indexValue];
+                    }
+                }
+                else
+                {
+                    type = makeSyntheticPackElementType(packViewType->packName, *indexValue);
+                }
+            }
+            else
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Only generic type packs can be indexed in type position.");
+                type = Compiler::get().getTypeContext().getUnknown();
+            }
         }
 
         if (node.isPackExpansion)
@@ -3013,6 +3598,22 @@ namespace wio::sema
 
         if (!sym)
         {
+            if (allowTypePackIdentifierReference_)
+            {
+                for (auto& genericTypeParameterScope : std::ranges::reverse_view(genericTypeParameterScopes_))
+                {
+                    if (auto genericTypeIt = genericTypeParameterScope.find(node.token.value); genericTypeIt != genericTypeParameterScope.end())
+                    {
+                        Ref<Type> genericType = genericTypeIt->second;
+                        if (genericType && genericType->kind() == TypeKind::GenericParameterPack)
+                        {
+                            node.refType = genericType;
+                            return;
+                        }
+                    }
+                }
+            }
+
             WIO_LOG_ADD_ERROR(node.location(), "Undefined symbol: '{}'", node.token.value);
             node.refType = Compiler::get().getTypeContext().getUnknown();
             return;
@@ -3059,7 +3660,13 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(ArrayAccessExpression& node)
     {
+        const bool previousAllowParameterPackIdentifierReference = allowParameterPackIdentifierReference_;
+        const bool previousAllowTypePackIdentifierReference = allowTypePackIdentifierReference_;
+        allowParameterPackIdentifierReference_ = true;
+        allowTypePackIdentifierReference_ = true;
         node.object->accept(*this);
+        allowParameterPackIdentifierReference_ = previousAllowParameterPackIdentifierReference;
+        allowTypePackIdentifierReference_ = previousAllowTypePackIdentifierReference;
         Ref<Type> objType = node.object->refType.Lock();
         Ref<Type> resolvedObjType = unwrapAliasType(objType);
 
@@ -3069,6 +3676,71 @@ namespace wio::sema
         if (!resolvedObjType)
         {
             node.refType = Compiler::get().getTypeContext().getUnknown();
+            return;
+        }
+
+        const auto resolvePackElementType = [&](const std::string& packName,
+                                                const std::vector<Ref<Type>>& elementTypes) -> Ref<Type>
+        {
+            auto indexValue = tryEvaluateStaticPackIndex(node.index);
+            if (!indexValue.has_value())
+            {
+                WIO_LOG_ADD_ERROR(node.index->location(), "Pack indexing requires a non-negative compile-time integer index.");
+                return Compiler::get().getTypeContext().getUnknown();
+            }
+
+            if (!elementTypes.empty())
+            {
+                if (elementTypes.size() == 1)
+                {
+                    if (auto symbolicPackName = tryGetSymbolicPackReferenceName(elementTypes.front()))
+                        return makeSyntheticPackElementType(*symbolicPackName, *indexValue);
+                }
+
+                if (*indexValue >= elementTypes.size())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.index->location(),
+                        "Pack index {} is out of range for size {}.",
+                        *indexValue,
+                        elementTypes.size()
+                    );
+                    return Compiler::get().getTypeContext().getUnknown();
+                }
+
+                return elementTypes[*indexValue];
+            }
+
+            return makeSyntheticPackElementType(packName, *indexValue);
+        };
+
+        if (resolvedObjType->kind() == TypeKind::GenericParameterPack)
+        {
+            node.refType = resolvePackElementType(
+                resolvedObjType.AsFast<GenericParameterPackType>()->name,
+                {}
+            );
+            return;
+        }
+
+        if (resolvedObjType->kind() == TypeKind::ValuePackView)
+        {
+            auto viewType = resolvedObjType.AsFast<ValuePackViewType>();
+            node.refType = resolvePackElementType(viewType->packName, viewType->elementTypes);
+            return;
+        }
+
+        if (resolvedObjType->kind() == TypeKind::PackStorage)
+        {
+            auto storageType = resolvedObjType.AsFast<PackStorageType>();
+            node.refType = resolvePackElementType(storageType->packName, storageType->elementTypes);
+            return;
+        }
+
+        if (resolvedObjType->kind() == TypeKind::TypePackView)
+        {
+            auto viewType = resolvedObjType.AsFast<TypePackViewType>();
+            node.refType = resolvePackElementType(viewType->packName, viewType->elementTypes);
             return;
         }
 
@@ -3096,7 +3768,13 @@ namespace wio::sema
     
     void SemanticAnalyzer::visit(MemberAccessExpression& node)
     {
+        const bool previousAllowParameterPackIdentifierReference = allowParameterPackIdentifierReference_;
+        const bool previousAllowTypePackIdentifierReference = allowTypePackIdentifierReference_;
+        allowParameterPackIdentifierReference_ = true;
+        allowTypePackIdentifierReference_ = true;
         node.object->accept(*this);
+        allowParameterPackIdentifierReference_ = previousAllowParameterPackIdentifierReference;
+        allowTypePackIdentifierReference_ = previousAllowTypePackIdentifierReference;
         node.intrinsicMember = IntrinsicMember::None;
         node.intrinsicOverloadMembers.clear();
         node.intrinsicOverloadTypes.clear();
@@ -3115,6 +3793,115 @@ namespace wio::sema
                 return;
             }
             leftType = lockedType;
+        }
+
+        Ref<Type> resolvedLeftType = unwrapAliasType(leftType);
+        if (resolvedLeftType &&
+            (resolvedLeftType->kind() == TypeKind::GenericParameterPack ||
+             resolvedLeftType->kind() == TypeKind::ValuePackView ||
+             resolvedLeftType->kind() == TypeKind::TypePackView ||
+             resolvedLeftType->kind() == TypeKind::PackStorage))
+        {
+            auto& typeContext = Compiler::get().getTypeContext();
+            const auto memberName = node.member->token.value;
+
+            auto resolvePackName = [&]() -> std::string
+            {
+                auto normalizePackName = [&](const std::string& fallbackName, const std::vector<Ref<Type>>& elementTypes) -> std::string
+                {
+                    if (elementTypes.size() == 1)
+                    {
+                        if (auto symbolicPackName = tryGetSymbolicPackReferenceName(elementTypes.front()))
+                            return *symbolicPackName;
+                    }
+                    return fallbackName;
+                };
+
+                switch (resolvedLeftType->kind())
+                {
+                case TypeKind::GenericParameterPack:
+                    return resolvedLeftType.AsFast<GenericParameterPackType>()->name;
+                case TypeKind::ValuePackView:
+                {
+                    auto viewType = resolvedLeftType.AsFast<ValuePackViewType>();
+                    return normalizePackName(viewType->packName, viewType->elementTypes);
+                }
+                case TypeKind::TypePackView:
+                {
+                    auto viewType = resolvedLeftType.AsFast<TypePackViewType>();
+                    return normalizePackName(viewType->packName, viewType->elementTypes);
+                }
+                case TypeKind::PackStorage:
+                {
+                    auto storageType = resolvedLeftType.AsFast<PackStorageType>();
+                    return normalizePackName(storageType->packName, storageType->elementTypes);
+                }
+                default:
+                    return {};
+                }
+            };
+
+            auto resolvePackElements = [&]() -> std::vector<Ref<Type>>
+            {
+                auto normalizePackElements = [](const std::vector<Ref<Type>>& elementTypes) -> std::vector<Ref<Type>>
+                {
+                    if (elementTypes.size() == 1 && tryGetSymbolicPackReferenceName(elementTypes.front()).has_value())
+                        return {};
+                    return elementTypes;
+                };
+
+                switch (resolvedLeftType->kind())
+                {
+                case TypeKind::ValuePackView:
+                    return normalizePackElements(resolvedLeftType.AsFast<ValuePackViewType>()->elementTypes);
+                case TypeKind::TypePackView:
+                    return normalizePackElements(resolvedLeftType.AsFast<TypePackViewType>()->elementTypes);
+                case TypeKind::PackStorage:
+                    return normalizePackElements(resolvedLeftType.AsFast<PackStorageType>()->elementTypes);
+                default:
+                    return {};
+                }
+            };
+
+            if (memberName == "size")
+            {
+                node.intrinsicMember = IntrinsicMember::PackSize;
+                node.refType = typeContext.getUSize();
+                node.member->refType = node.refType.Lock();
+                return;
+            }
+
+            if (memberName == "array")
+            {
+                node.intrinsicMember = IntrinsicMember::PackArray;
+                const std::string packName = resolvePackName();
+                const auto packElements = resolvePackElements();
+                const bool isValuePackReference =
+                    resolvedLeftType->kind() == TypeKind::ValuePackView ||
+                    resolvedLeftType->kind() == TypeKind::PackStorage ||
+                    (resolvedLeftType->kind() == TypeKind::GenericParameterPack &&
+                     leftSymbol &&
+                     (leftSymbol->kind == SymbolKind::Variable || leftSymbol->kind == SymbolKind::Parameter));
+
+                if (isValuePackReference)
+                {
+                    node.refType = typeContext.getOrCreateValuePackViewType(packName, packElements);
+                }
+                else
+                {
+                    node.refType = typeContext.getOrCreateTypePackViewType(packName, packElements);
+                }
+                node.member->refType = node.refType.Lock();
+                return;
+            }
+
+            if (memberName == "ToStaticArray")
+            {
+                node.intrinsicMember = IntrinsicMember::PackToStaticArray;
+                node.refType = typeContext.getOrCreateFunctionType(typeContext.getUnknown(), {});
+                node.member->refType = node.refType.Lock();
+                return;
+            }
         }
 
         std::function<Ref<Symbol>(Ref<Type>, const std::string&, Ref<Type>*)> findMemberInHierarchy =
@@ -3327,7 +4114,11 @@ namespace wio::sema
         if (auto instantiatedStructType = actualStructType ? actualStructType.AsFast<StructType>() : nullptr;
             instantiatedStructType && !instantiatedStructType->genericParameterNames.empty() && !instantiatedStructType->genericArguments.empty())
         {
-            auto bindings = buildGenericTypeBindings(instantiatedStructType->genericParameterNames, instantiatedStructType->genericArguments);
+            auto bindings = buildExtendedGenericBindings(
+                instantiatedStructType->genericParameterNames,
+                instantiatedStructType->hasGenericParameterPack,
+                instantiatedStructType->genericArguments
+            );
             memberType = instantiateGenericType(memberType, bindings);
         }
 
@@ -3354,11 +4145,51 @@ namespace wio::sema
             explicitTypeArguments.push_back(explicitTypeArgument->refType.Lock());
         }
 
+        if (auto* memberAccess = node.callee->as<MemberAccessExpression>();
+            memberAccess && memberAccess->intrinsicMember == IntrinsicMember::PackToStaticArray)
+        {
+            if (!node.arguments.empty())
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Pack ToStaticArray does not accept runtime arguments.");
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+
+            if (explicitTypeArguments.size() != 1 || !explicitTypeArguments.front())
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Pack ToStaticArray requires exactly one explicit element type argument.");
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+
+            Ref<Type> receiverType = unwrapAliasType(memberAccess->object->refType.Lock());
+            if (!receiverType || receiverType->kind() == TypeKind::TypePackView)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Type packs cannot be converted to runtime static arrays.");
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+
+            size_t arraySize = 0;
+            if (receiverType->kind() == TypeKind::ValuePackView)
+                arraySize = receiverType.AsFast<ValuePackViewType>()->elementTypes.size();
+            else if (receiverType->kind() == TypeKind::PackStorage)
+                arraySize = receiverType.AsFast<PackStorageType>()->elementTypes.size();
+
+            node.refType = Compiler::get().getTypeContext().getOrCreateArrayType(
+                explicitTypeArguments.front(),
+                ArrayType::ArrayKind::Static,
+                arraySize
+            );
+            return;
+        }
+
         bool isConstructorCall = false;
         Ref<Type> structReturnType = nullptr;
         Ref<StructType> constructorStructType = nullptr;
         std::vector<std::string> constructorGenericParameterNames;
         std::unordered_map<std::string, Ref<Type>> constructorGenericBindings;
+        GenericBindingSet constructorGenericBindingSet;
         bool useExplicitFunctionTypeArguments = false;
 
         if (calleeSym && calleeSym->kind == SymbolKind::Struct)
@@ -3371,22 +4202,36 @@ namespace wio::sema
 
             if (!structType->genericParameterNames.empty())
             {
-                if (!explicitTypeArguments.empty() && explicitTypeArguments.size() != structType->genericParameterNames.size())
-                {
-                    WIO_LOG_ADD_ERROR(
-                        node.location(),
-                        "Generic type '{}' expects {} generic arguments, but got {}.",
-                        structType->name,
-                        structType->genericParameterNames.size(),
-                        explicitTypeArguments.size()
-                    );
+                  const size_t minimumArgumentCount = getMinimumGenericArgumentCount(
+                      structType->genericParameterNames,
+                      structType->hasGenericParameterPack
+                  );
+                  if (!explicitTypeArguments.empty() &&
+                      (structType->hasGenericParameterPack
+                          ? explicitTypeArguments.size() < minimumArgumentCount
+                          : explicitTypeArguments.size() != structType->genericParameterNames.size()))
+                  {
+                      WIO_LOG_ADD_ERROR(
+                          node.location(),
+                          structType->hasGenericParameterPack
+                              ? "Generic type '{}' expects at least {} generic arguments, but got {}."
+                              : "Generic type '{}' expects {} generic arguments, but got {}.",
+                          structType->name,
+                          structType->hasGenericParameterPack ? minimumArgumentCount : structType->genericParameterNames.size(),
+                          explicitTypeArguments.size()
+                      );
                     node.refType = Compiler::get().getTypeContext().getUnknown();
                     return;
                 }
 
                 if (!explicitTypeArguments.empty())
                 {
-                    constructorGenericBindings = buildGenericTypeBindings(structType->genericParameterNames, explicitTypeArguments);
+                      constructorGenericBindings = buildGenericTypeBindings(structType->genericParameterNames, explicitTypeArguments);
+                      constructorGenericBindingSet = buildExtendedGenericBindings(
+                          structType->genericParameterNames,
+                          structType->hasGenericParameterPack,
+                          explicitTypeArguments
+                      );
                     auto attributeIt = attributeListsBySymbol_.find(genericOwnerSym.Get());
                     if (attributeIt != attributeListsBySymbol_.end() &&
                         attributeIt->second &&
@@ -3414,7 +4259,9 @@ namespace wio::sema
                         if (expectedStructType &&
                             expectedStructType->name == structType->name &&
                             expectedStructType->scopePath == structType->scopePath &&
-                            expectedStructType->genericArguments.size() == structType->genericParameterNames.size())
+                              (structType->hasGenericParameterPack
+                                  ? expectedStructType->genericArguments.size() >= minimumArgumentCount
+                                  : expectedStructType->genericArguments.size() == structType->genericParameterNames.size()))
                         {
                             bool hasConcreteExpectedArguments = true;
                             for (const auto& genericArgument : expectedStructType->genericArguments)
@@ -3428,10 +4275,15 @@ namespace wio::sema
 
                             if (hasConcreteExpectedArguments)
                             {
-                                constructorGenericBindings = buildGenericTypeBindings(
-                                    structType->genericParameterNames,
-                                    expectedStructType->genericArguments
-                                );
+                                  constructorGenericBindings = buildGenericTypeBindings(
+                                      structType->genericParameterNames,
+                                      expectedStructType->genericArguments
+                                  );
+                                  constructorGenericBindingSet = buildExtendedGenericBindings(
+                                      structType->genericParameterNames,
+                                      structType->hasGenericParameterPack,
+                                      expectedStructType->genericArguments
+                                  );
                                 auto attributeIt = attributeListsBySymbol_.find(genericOwnerSym.Get());
                                 if (attributeIt != attributeListsBySymbol_.end() &&
                                     attributeIt->second &&
@@ -3877,13 +4729,14 @@ namespace wio::sema
             Ref<Type> resolvedCalleeType = node.callee->refType.Lock();
             if (!resolvedCalleeType || resolvedCalleeType->kind() != TypeKind::Function)
                 resolvedCalleeType = calleeSym->type;
-            if (!constructorGenericBindings.empty())
-                resolvedCalleeType = instantiateGenericType(resolvedCalleeType, constructorGenericBindings);
+            if (!constructorGenericBindings.empty() || !constructorGenericBindingSet.packBindings.empty())
+                resolvedCalleeType = instantiateGenericType(resolvedCalleeType, constructorGenericBindingSet);
 
             requiresOverloadResolution = (!calleeSym->genericParameterNames.empty() && containsGenericParameterType(resolvedCalleeType)) ||
                                          useExplicitFunctionTypeArguments ||
                                          (isConstructorCall && !constructorGenericParameterNames.empty()) ||
-                                         !constructorGenericBindings.empty();
+                                          !constructorGenericBindings.empty() ||
+                                          !constructorGenericBindingSet.packBindings.empty();
         }
 
         if (!requiresOverloadResolution)
@@ -4102,8 +4955,8 @@ namespace wio::sema
                         resolvedFunctionType = calleeResolvedType;
                     }
                 }
-                if (!constructorGenericBindings.empty())
-                    resolvedFunctionType = instantiateGenericType(resolvedFunctionType, constructorGenericBindings);
+                if (!constructorGenericBindings.empty() || !constructorGenericBindingSet.packBindings.empty())
+                    resolvedFunctionType = instantiateGenericType(resolvedFunctionType, constructorGenericBindingSet);
 
                 auto declaredFunctionType = resolvedFunctionType.AsFast<FunctionType>();
                 if (!declaredFunctionType)
@@ -4484,7 +5337,7 @@ namespace wio::sema
                 node.callee->referencedSymbol = bestMatch->symbol;
                 node.callee->refType = bestMatch->functionType;
             }
-            else if (constructorStructType && !constructorGenericParameterNames.empty() && !constructorGenericBindings.empty())
+            else if (constructorStructType && !constructorGenericParameterNames.empty() && (!constructorGenericBindings.empty() || !constructorGenericBindingSet.packBindings.empty()))
             {
                 node.callee->refType = structReturnType;
             }
@@ -4508,6 +5361,7 @@ namespace wio::sema
                 }
 
                 constructorGenericBindings = bestMatch->genericBindings;
+                constructorGenericBindingSet.directBindings = bestMatch->genericBindings;
                 structReturnType = instantiateGenericStructType(constructorStructType, deducedGenericArguments);
                 node.callee->refType = structReturnType;
             }
@@ -4631,8 +5485,8 @@ namespace wio::sema
 
         if (!calleeType || calleeType->kind() != TypeKind::Function)
             calleeType = calleeSym->type;
-        if (!constructorGenericBindings.empty())
-            calleeType = instantiateGenericType(calleeType, constructorGenericBindings);
+        if (!constructorGenericBindings.empty() || !constructorGenericBindingSet.packBindings.empty())
+            calleeType = instantiateGenericType(calleeType, constructorGenericBindingSet);
 
         if (!calleeType || calleeType->kind() != TypeKind::Function)
         {
@@ -5091,15 +5945,30 @@ namespace wio::sema
             if (currentScope_->getKind() == ScopeKind::Function || currentScope_->getKind() == ScopeKind::Block)
                 return;
     
-            Ref<Type> declaredType = nullptr;
-            if (node.type)
-            {
-                node.type->accept(*this);
-                declaredType = node.type->refType.Lock();
-            }
-            
-            SymbolFlags flags = SymbolFlags::createAllFalse();
-            if (node.mutability == Mutability::Mutable) flags.set_isMutable(true);
+              Ref<Type> declaredType = nullptr;
+              if (node.type)
+              {
+                  node.type->accept(*this);
+                  declaredType = node.type->refType.Lock();
+              }
+
+              if (node.isPackField)
+              {
+                  if (!declaredType || declaredType->kind() != TypeKind::GenericParameterPack)
+                  {
+                      WIO_LOG_ADD_ERROR(node.location(), "Pack fields must declare a trailing generic pack type such as 'pack values: Args...;'.");
+                      declaredType = Compiler::get().getTypeContext().getUnknown();
+                  }
+                  else
+                  {
+                      declaredType = Compiler::get().getTypeContext().getOrCreatePackStorageType(
+                          declaredType.AsFast<GenericParameterPackType>()->name
+                      );
+                  }
+              }
+
+              SymbolFlags flags = SymbolFlags::createAllFalse();
+              if (node.mutability == Mutability::Mutable) flags.set_isMutable(true);
             if (node.mutability == Mutability::Const) flags.set_isConst(true);
             if (currentScope_->getKind() == ScopeKind::Global) flags.set_isGlobal(true);
     
@@ -5114,14 +5983,29 @@ namespace wio::sema
         
         if (!sym)
         {
-            Ref<Type> declaredType = nullptr;
-            if (node.type)
-            {
-                node.type->accept(*this);
-                declaredType = node.type->refType.Lock();
-            }
-            
-            SymbolFlags flags = SymbolFlags::createAllFalse();
+              Ref<Type> declaredType = nullptr;
+              if (node.type)
+              {
+                  node.type->accept(*this);
+                  declaredType = node.type->refType.Lock();
+              }
+
+              if (node.isPackField)
+              {
+                  if (!declaredType || declaredType->kind() != TypeKind::GenericParameterPack)
+                  {
+                      WIO_LOG_ADD_ERROR(node.location(), "Pack fields must declare a trailing generic pack type such as 'pack values: Args...;'.");
+                      declaredType = Compiler::get().getTypeContext().getUnknown();
+                  }
+                  else
+                  {
+                      declaredType = Compiler::get().getTypeContext().getOrCreatePackStorageType(
+                          declaredType.AsFast<GenericParameterPackType>()->name
+                      );
+                  }
+              }
+
+              SymbolFlags flags = SymbolFlags::createAllFalse();
             if (node.mutability == Mutability::Mutable) flags.set_isMutable(true);
             if (node.mutability == Mutability::Const) flags.set_isConst(true);
             
@@ -5193,7 +6077,12 @@ namespace wio::sema
                     continue;
                 }
 
-                Ref<Type> parameterType = Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
+                const bool isGenericParameterPack =
+                    node.hasGenericParameterPack &&
+                    genericIndex + 1 == node.genericParameters.size();
+                Ref<Type> parameterType = isGenericParameterPack
+                    ? Compiler::get().getTypeContext().getOrCreateGenericParameterPackType(parameterName)
+                    : Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
                 genericParameter->refType = parameterType;
                 scope.emplace(parameterName, parameterType);
             }
@@ -5229,6 +6118,7 @@ namespace wio::sema
         Ref<Symbol> aliasSym = createSymbol(node.name->token.value, aliasType, SymbolKind::TypeAlias, node.location());
         aliasSym->aliasTargetType = aliasedType;
         aliasSym->genericParameterNames = genericParameterNames;
+        aliasSym->hasGenericParameterPack = node.hasGenericParameterPack;
 
         currentScope_->define(node.name->token.value, aliasSym);
         attributeListsBySymbol_[aliasSym.Get()] = &node.attributes;
@@ -5341,6 +6231,9 @@ namespace wio::sema
             return parameter.isParameterPack;
         });
         const bool isPackFunction = node.hasGenericParameterPack || hasFunctionParameterPack;
+        std::string activeFunctionPackName = node.hasGenericParameterPack && !node.genericParameters.empty()
+            ? node.genericParameters.back()->token.value
+            : "";
         if (isCommand && isEvent)
         {
             WIO_LOG_ADD_ERROR(node.location(), "@Command and @Event cannot be combined on the same function.");
@@ -5417,10 +6310,30 @@ namespace wio::sema
 
         if (isPackFunction)
         {
-            if (!node.hasGenericParameterPack)
+            if (!activeFunctionPackName.empty())
             {
-                WIO_LOG_ADD_ERROR(node.location(), "Function parameter packs require a matching trailing generic parameter pack.");
+                // already declared on the function itself
             }
+            else
+            {
+                for (size_t i = 0; i < node.parameters.size(); ++i)
+                {
+                    auto& parameter = node.parameters[i];
+                    Ref<Type> parameterType = i < funcType->paramTypes.size() ? funcType->paramTypes[i] : Compiler::get().getTypeContext().getUnknown();
+                    std::string containedPackName;
+                    const bool containsPack = containsGenericParameterPackType(parameterType, &containedPackName);
+                    if (parameter.isParameterPack && containsPack)
+                    {
+                        if (activeFunctionPackName.empty())
+                            activeFunctionPackName = containedPackName;
+                        else if (activeFunctionPackName != containedPackName)
+                            WIO_LOG_ADD_ERROR(parameter.name->location(), "Function parameter packs must reference a single trailing generic pack.");
+                    }
+                }
+            }
+
+            if (activeFunctionPackName.empty())
+                WIO_LOG_ADD_ERROR(node.location(), "Function parameter packs require a matching trailing generic parameter pack.");
 
             if (hasApply)
             {
@@ -5447,9 +6360,9 @@ namespace wio::sema
                 WIO_LOG_ADD_ERROR(node.returnType->location(), "Generic parameter packs are currently supported only in the trailing function parameter position.");
             }
 
-            if (!node.genericParameters.empty())
+            if (!activeFunctionPackName.empty())
             {
-                const std::string& expectedPackName = node.genericParameters.back()->token.value;
+                const std::string& expectedPackName = activeFunctionPackName;
                 bool sawParameterPack = false;
 
                 for (size_t i = 0; i < node.parameters.size(); ++i)
@@ -6201,8 +7114,9 @@ namespace wio::sema
             std::unordered_map<std::string, Ref<Type>> scope;
             scope.reserve(node.genericParameters.size());
 
-            for (const auto& genericParameter : node.genericParameters)
+            for (size_t genericIndex = 0; genericIndex < node.genericParameters.size(); ++genericIndex)
             {
+                const auto& genericParameter = node.genericParameters[genericIndex];
                 if (!genericParameter)
                     continue;
 
@@ -6213,7 +7127,12 @@ namespace wio::sema
                     continue;
                 }
 
-                Ref<Type> parameterType = Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
+                const bool isGenericParameterPack =
+                    node.hasGenericParameterPack &&
+                    genericIndex + 1 == node.genericParameters.size();
+                Ref<Type> parameterType = isGenericParameterPack
+                    ? Compiler::get().getTypeContext().getOrCreateGenericParameterPackType(parameterName)
+                    : Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
                 genericParameter->refType = parameterType;
                 scope.emplace(parameterName, parameterType);
             }
@@ -6234,6 +7153,7 @@ namespace wio::sema
                 if (genericParameter)
                     interfaceType.AsFast<StructType>()->genericParameterNames.push_back(genericParameter->token.value);
             }
+            interfaceType.AsFast<StructType>()->hasGenericParameterPack = node.hasGenericParameterPack;
             auto genericScope = buildGenericTypeParameterScope();
             genericTypeParameterScopes_.push_back(genericScope);
             validateApplyAttributes(*this, node.attributes, interfaceType.AsFast<StructType>()->genericParameterNames, "interface", node.location());
@@ -6242,6 +7162,7 @@ namespace wio::sema
             interfaceSym->innerScope = interfaceScope;
             interfaceSym->flags.set_isInterface(true);
             interfaceSym->genericParameterNames = interfaceType.AsFast<StructType>()->genericParameterNames;
+            interfaceSym->hasGenericParameterPack = node.hasGenericParameterPack;
             currentScope_->define(node.name->token.value, interfaceSym);
             attributeListsBySymbol_[interfaceSym.Get()] = &node.attributes;
             
@@ -6276,8 +7197,9 @@ namespace wio::sema
             std::unordered_map<std::string, Ref<Type>> scope;
             scope.reserve(node.genericParameters.size());
 
-            for (const auto& genericParameter : node.genericParameters)
+            for (size_t genericIndex = 0; genericIndex < node.genericParameters.size(); ++genericIndex)
             {
+                const auto& genericParameter = node.genericParameters[genericIndex];
                 if (!genericParameter)
                     continue;
 
@@ -6288,7 +7210,12 @@ namespace wio::sema
                     continue;
                 }
 
-                Ref<Type> parameterType = Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
+                const bool isGenericParameterPack =
+                    node.hasGenericParameterPack &&
+                    genericIndex + 1 == node.genericParameters.size();
+                Ref<Type> parameterType = isGenericParameterPack
+                    ? Compiler::get().getTypeContext().getOrCreateGenericParameterPackType(parameterName)
+                    : Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
                 genericParameter->refType = parameterType;
                 scope.emplace(parameterName, parameterType);
             }
@@ -6309,6 +7236,7 @@ namespace wio::sema
                 if (genericParameter)
                     structType.AsFast<StructType>()->genericParameterNames.push_back(genericParameter->token.value);
             }
+            structType.AsFast<StructType>()->hasGenericParameterPack = node.hasGenericParameterPack;
             structType.AsFast<StructType>()->isFinal = hasAttribute(node.attributes, Attribute::Final);
             auto genericScope = buildGenericTypeParameterScope();
             genericTypeParameterScopes_.push_back(genericScope);
@@ -6317,6 +7245,7 @@ namespace wio::sema
             Ref<Symbol> compSym = createSymbol(node.name->token.value, structType, SymbolKind::Struct, node.location());
             compSym->innerScope = structScope;
             compSym->genericParameterNames = structType.AsFast<StructType>()->genericParameterNames;
+            compSym->hasGenericParameterPack = node.hasGenericParameterPack;
             currentScope_->define(node.name->token.value, compSym);
             attributeListsBySymbol_[compSym.Get()] = &node.attributes;
             
@@ -6636,8 +7565,9 @@ namespace wio::sema
             std::unordered_map<std::string, Ref<Type>> scope;
             scope.reserve(node.genericParameters.size());
 
-            for (const auto& genericParameter : node.genericParameters)
+            for (size_t genericIndex = 0; genericIndex < node.genericParameters.size(); ++genericIndex)
             {
+                const auto& genericParameter = node.genericParameters[genericIndex];
                 if (!genericParameter)
                     continue;
 
@@ -6648,7 +7578,12 @@ namespace wio::sema
                     continue;
                 }
 
-                Ref<Type> parameterType = Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
+                const bool isGenericParameterPack =
+                    node.hasGenericParameterPack &&
+                    genericIndex + 1 == node.genericParameters.size();
+                Ref<Type> parameterType = isGenericParameterPack
+                    ? Compiler::get().getTypeContext().getOrCreateGenericParameterPackType(parameterName)
+                    : Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
                 genericParameter->refType = parameterType;
                 scope.emplace(parameterName, parameterType);
             }
@@ -6669,6 +7604,7 @@ namespace wio::sema
                 if (genericParameter)
                     structType.AsFast<StructType>()->genericParameterNames.push_back(genericParameter->token.value);
             }
+            structType.AsFast<StructType>()->hasGenericParameterPack = node.hasGenericParameterPack;
             structType.AsFast<StructType>()->isFinal = hasAttribute(node.attributes, Attribute::Final);
             auto genericScope = buildGenericTypeParameterScope();
             genericTypeParameterScopes_.push_back(genericScope);
@@ -6677,6 +7613,7 @@ namespace wio::sema
             Ref<Symbol> objSym = createSymbol(node.name->token.value, structType, SymbolKind::Struct, node.location());
             objSym->innerScope = structScope;
             objSym->genericParameterNames = structType.AsFast<StructType>()->genericParameterNames;
+            objSym->hasGenericParameterPack = node.hasGenericParameterPack;
             currentScope_->define(node.name->token.value, objSym);
             attributeListsBySymbol_[objSym.Get()] = &node.attributes;
             

@@ -91,6 +91,21 @@ Current v1 expectation:
 - if a feature already belongs to the language, `std` should wrap it rather than
   re-implement a competing version
 
+### 2.4 Experimental Pure-Wio Meta Module
+
+- `std::meta`
+
+`std::meta` is the current bootstrap surface for generic-pack ergonomics.
+
+Current expectation:
+
+- it is intentionally smaller and more experimental than the main stable module
+  families
+- it currently focuses on pack counting, pack storage, pack indexing aliases,
+  and simple value/type helpers
+- richer transforms such as `Take`, `Drop`, `Zip`, `MapTypes`, and future
+  const-generic style helpers are still future work
+
 ---
 
 ## 3. Language vs Std Ownership
@@ -129,6 +144,10 @@ v1 direction:
 - `std::collections`
 - `std::strings`
 - `std::algorithms`
+
+The following is available but still experimental:
+
+- `std::meta`
 
 The following is intentionally not part of the current stable surface:
 

@@ -17,6 +17,9 @@ namespace wio
             Null,       // null
             GenericParameter, // T
             GenericParameterPack, // Args...
+            ValuePackView, // args.array
+            TypePackView, // Args.array
+            PackStorage, // pack values: Args...;
             Reference,  // ref
             Array,      // [T]
             Dictionary, // Dict<T,T> or Tree<T,T>
@@ -88,6 +91,42 @@ namespace wio
             std::string toString() const override;
             std::string toCppString() const override;
         };
+
+        struct ValuePackViewType : Type
+        {
+            std::string packName;
+            std::vector<Ref<Type>> elementTypes;
+
+            ValuePackViewType(std::string packName, std::vector<Ref<Type>> elementTypes = {});
+
+            TypeKind kind() const override;
+            std::string toString() const override;
+            std::string toCppString() const override;
+        };
+
+        struct TypePackViewType : Type
+        {
+            std::string packName;
+            std::vector<Ref<Type>> elementTypes;
+
+            TypePackViewType(std::string packName, std::vector<Ref<Type>> elementTypes = {});
+
+            TypeKind kind() const override;
+            std::string toString() const override;
+            std::string toCppString() const override;
+        };
+
+        struct PackStorageType : Type
+        {
+            std::string packName;
+            std::vector<Ref<Type>> elementTypes;
+
+            PackStorageType(std::string packName, std::vector<Ref<Type>> elementTypes = {});
+
+            TypeKind kind() const override;
+            std::string toString() const override;
+            std::string toCppString() const override;
+        };
     
         struct FunctionType : Type
         {
@@ -149,6 +188,7 @@ namespace wio
             WeakRef<Scope> structScope;
             std::vector<std::string> genericParameterNames;
             std::vector<Ref<Type>> genericArguments;
+            bool hasGenericParameterPack = false;
             std::vector<Ref<Type>> baseTypes;
             std::vector<std::string> fieldNames;
             std::vector<Ref<Type>> fieldTypes;
@@ -178,4 +218,4 @@ namespace wio
     }
 }
 
-MakeFrenumWithNamespace(wio::sema, TypeKind, Primitive, Null, GenericParameter, GenericParameterPack, Reference, Array, Dictionary, Function, Struct, Alias)
+MakeFrenumWithNamespace(wio::sema, TypeKind, Primitive, Null, GenericParameter, GenericParameterPack, ValuePackView, TypePackView, PackStorage, Reference, Array, Dictionary, Function, Struct, Alias)

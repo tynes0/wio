@@ -34,6 +34,7 @@ namespace wio::sema
         Ref<Symbol> currentFunctionParameterPackSymbol_ = nullptr;
         Ref<Type> currentFunctionParameterPackType_ = nullptr;
         bool allowParameterPackIdentifierReference_ = false;
+        bool allowTypePackIdentifierReference_ = false;
         std::vector<std::string> currentNamespacePath_;
         std::vector<std::unordered_map<std::string, Ref<Type>>> genericTypeParameterScopes_;
         uint32_t loopDepth_ = 0;

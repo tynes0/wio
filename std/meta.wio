@@ -1,0 +1,36 @@
+realm std {
+    realm meta {
+        type Head<T, Tail...> = T;
+        type First<Ts...> = Ts[0usize];
+
+        fn CountValues<Args...>(args: Args...) -> usize {
+            return args.size;
+        }
+
+        fn FirstValue<Head, Tail...>(head: Head, tail: Tail...) -> Head {
+            return head;
+        }
+
+        object Types<Ts...> {
+            public fn Count() -> usize {
+                return Ts.size;
+            }
+        }
+
+        object Values<Args...> {
+            public pack data: Args...;
+
+            public fn OnConstruct(args: Args...) {
+                self.data = args.array;
+            }
+
+            public fn Count() -> usize {
+                return self.data.size;
+            }
+
+            public fn First() -> Args[0usize] {
+                return self.data[0usize];
+            }
+        }
+    }
+}
