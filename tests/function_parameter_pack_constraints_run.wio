@@ -1,0 +1,17 @@
+use std::assert as assert;
+use std::console as console;
+use std::traits as traits;
+
+@Apply(traits::IsInteger<Args...>)
+fn CountIntegers<Args...>(args: Args...) -> i32 {
+    return args.size fit i32;
+}
+
+fn Entry() -> i32 {
+    let count = CountIntegers(1i32, 2u8, 3i16, 4usize);
+
+    assert::ExpectEqual(count, 4, "parameter-pack @Apply integer constraint failed");
+
+    console::Print("Function pack constraints: ok");
+    return 0;
+}

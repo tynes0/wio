@@ -102,7 +102,18 @@ Current expectation:
 - it is intentionally smaller and more experimental than the main stable module
   families
 - it currently focuses on pack counting, pack storage, first/last pack indexing
-  aliases, and simple value/type helpers
+  aliases, explicit `Values<Args...>` / `Types<Ts...>` wrappers, simple
+  value/type helpers, source-level pack capture/reset helpers, and pack-storage
+  mutation helpers
+- the current second wave includes:
+  - `TypeCount<Ts...>()`
+  - `ContainsType<T, Ts...>()`
+  - `Types<Ts...>.Contains<T>()`
+  - `Values<Args...>.Set(...)`
+  - `Values<Args...>.ReplaceFirst(...)`
+  - `Values<Args...>.ReplaceLast(...)`
+- compile-time array conversion still uses the existing pack surface directly:
+  `args.ToStaticArray<T>()` or `values.data.ToStaticArray<T>()`
 - richer transforms such as `Take`, `Drop`, `Zip`, `MapTypes`, and future
   const-generic style helpers are still future work
 

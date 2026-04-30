@@ -1,0 +1,4 @@
+@Export
+fn MissingPackInstantiation<Args...>(args: Args...) -> i32 {
+    return args.size fit i32;
+}

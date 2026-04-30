@@ -1,0 +1,3 @@
+fn MutateView<Args...>(args: Args...) {
+    args[0usize] = args[0usize];
+}

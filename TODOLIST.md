@@ -315,13 +315,20 @@ The language reference now exists, but it still needs to become a true spec.
         indexing, and same-pack `.size - N` indexing.
   - [x] Land the initial `std::meta` bootstrap layer around `Head`, `First`,
         `Last`, `Types`, `Values`, `CountValues`, `FirstValue`, and `LastValue`.
-  - [x] Reject explicit type arguments on generic pack functions for now and
-        rely on deduction from call arguments.
-  - [x] Reject default parameters, `@Apply`, `@Instantiate`, `when`, and
-        export/module ABI attributes on generic pack functions in the current
-        v1 slice.
-  - [ ] Broaden pack support further into explicit type-argument calls, richer
-        compile-time pack transforms, and export/module ABI surfaces.
+  - [x] Support explicit type arguments on generic pack function calls,
+        including symbolic forwarding.
+  - [x] Support pack-function `@Apply(...)` constraints, concrete trailing-pack
+        `@Instantiate(...)`, fixed-prefix default parameters, and the first
+        concrete `@Export` / `@Native` interop policy.
+  - [x] Support pack storage indexed writes while keeping raw pack views
+        read-only.
+- [~] Keep broadening compile-time pack transforms; the runtime/bootstrap
+      `std::meta` layer is in place, while richer transforms such as
+      `Take` / `Drop` / `Zip` / `MapTypes` still depend on future const-generic
+      and deeper meta work.
+  - [x] Land the second `std::meta` wave around `TypeCount`, `ContainsType`,
+        `Types.Contains`, and richer `Values` mutation /
+        reset / conversion helpers.
 - [ ] Design how variadic generic expansion should interact with overload
        resolution, backend template lowering, and future constraint systems.
 - [ ] Design const-generic / non-type generic parameters for future versions,

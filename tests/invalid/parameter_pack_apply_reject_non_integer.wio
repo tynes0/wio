@@ -1,0 +1,10 @@
+use std::traits as traits;
+
+@Apply(traits::IsInteger<Args...>)
+fn CountIntegers<Args...>(args: Args...) -> i32 {
+    return args.size fit i32;
+}
+
+fn Entry() -> i32 {
+    return CountIntegers(1i32, 2.0f32);
+}

@@ -1625,11 +1625,14 @@ fn Score(base: i32, bonus: i32 = 1) -> i32 {
   - functions with Wio bodies,
   - methods with Wio bodies,
   - `OnConstruct(...)` constructors,
-  - and declaration-only `@Native` functions.
+  - declaration-only `@Native` functions,
+  - and generic pack functions when the defaults stay on the fixed parameter
+    prefix before the trailing pack.
 - Default parameters are currently rejected on:
   - `Entry`,
   - module lifecycle exports such as `@ModuleLoad`,
-  - and declaration-only non-`@Native` functions, including interface methods.
+  - declaration-only non-`@Native` functions, including interface methods,
+  - and the trailing pack parameter itself on generic pack functions.
 - Default expressions are analyzed against the declared parameter type.
 - The current v1 surface does not promise parameter-dependent defaults such as
   `fn Foo(x: i32, y: i32 = x)`.
@@ -1771,33 +1774,53 @@ Current rules:
 - raw type packs support `.size`, `.array`, and compile-time type indexing such
   as `Args[0usize]` or `Args[Args.size - 1usize]`,
 - native pack bridges are supported, so declaration-only `@Native` functions may
-  use `fn Foo<Args...>(args: Args...) -> ...;`.
+  use `fn Foo<Args...>(args: Args...) -> ...;`,
+- explicit type arguments are supported on generic pack function calls,
+  including symbolic forwarding such as `callee<T, Args...>(head, tail...)`,
+- generic pack functions may use `@Apply(...)`,
+- generic `@Native` and generic `@Export` pack functions may use
+  `@Instantiate(...)`,
+- trailing fixed parameters may declare defaults before a function parameter
+  pack, but the pack parameter itself cannot declare a default value,
+- pack storage fields support compile-time indexed writes such as
+  `self.values[0usize] = value;`,
+- raw value packs and pack views are intentionally read-only and cannot be
+  assigned through directly,
+- generic `@Export` pack functions must provide at least one concrete
+  `@Instantiate(...)` row.
 
 The source-level `std::meta` bootstrap layer currently includes:
 
 - `type Head<T, Tail...> = T;`
 - `type First<Ts...> = Ts[0usize];`
 - `type Last<Ts...> = Ts[Ts.size - 1usize];`
+- `fn TypeCount<Ts...>() -> usize`
+- `fn ContainsType<T, Ts...>() -> bool`
 - `fn CountValues<Args...>(args: Args...) -> usize`
 - `fn FirstValue<Args...>(args: Args...) -> Args[0usize]`
 - `fn LastValue<Args...>(args: Args...) -> Args[Args.size - 1usize]`
-- `object Types<Ts...>`
+- `object Types<Ts...>` with `Count()` / `Empty()` / `Contains<T>()`
 - `object Values<Args...>` with a public `pack data: Args...;` field and
-  `First()` / `Last()` helpers
+  `First()` / `Last()` / `Set(...)` / `ReplaceFirst(...)` /
+  `ReplaceLast(...)` helpers
 
 Current v1 limitations:
 
-- explicit type arguments are not supported on generic pack functions yet;
-  deduction must come from call arguments,
-- `@Apply(...)` and `@Instantiate(...)` are currently rejected on generic pack
-  functions,
-- export/module ABI attributes are currently rejected on generic pack functions,
 - `when`/`else` clauses are currently rejected on generic pack functions,
-- default parameters are currently rejected on generic pack functions,
+- pack-oriented `@Instantiate(...)` rows require concrete pack element types for
+  the pack tail; predicate expansion belongs in `@Apply(...)`,
+- pack-oriented `@Apply(...)` rows should use the pack name in pack position,
+  such as `@Apply(traits::IsInteger<Args...>)`,
+- generic pack export surfaces currently rely on concrete `@Instantiate(...)`
+  rows rather than open-ended ABI generation,
 - pack indexing currently accepts non-negative compile-time integer literals and
   same-pack `.size - N` expressions such as `Args[Args.size - 1usize]`,
 - pack storage is intentionally compile-time-shaped; it is not a normal mutable
   runtime array surface with methods like `Push` or `Remove`,
+- `std::meta` currently wraps the existing pack surface rather than providing a
+  full const-generic transformation language,
+- array conversion for pack-backed `std::meta::Values` still flows through the
+  underlying pack field or value-pack surface, such as `values.data.ToStaticArray<T>()`,
 - richer pack meta transforms such as `Take`, `Drop`, `Zip`, `MapTypes`, and
   future const-generic indexing remain future work.
 
@@ -2566,13 +2589,15 @@ Current rules:
 
 - `@Instantiate(...)` is valid only on generic functions.
 - Today it is supported only together with `@Native` or `@Export`.
-- Generic pack functions are the current exception: they rely on argument
-  deduction and currently reject `@Instantiate(...)`.
-- Each attribute must provide exactly one argument per generic parameter.
+- Each attribute must provide exactly one argument per fixed generic parameter.
+- On generic pack functions, extra trailing `@Instantiate(...)` arguments map to
+  concrete pack element types.
 - Each argument may be:
   - a fully concrete type such as `i32` or `string`,
   - or a supported predicate form such as `traits::IsInteger<T>` or `traits::IsNumeric<T>`.
 - Predicate forms expand into concrete instance lists during semantic analysis.
+- On generic pack functions, predicate forms are allowed only for fixed generic
+  parameters; the pack tail itself must use concrete types.
 - Call sites may use only instantiated generic bindings.
 
 Current supported trait predicates live under `std::traits`:
@@ -2588,6 +2613,10 @@ use std::traits as traits;
 @Instantiate(i32, bool)
 @Instantiate(traits::IsInteger<T>, bool)
 fn PickLeft<T, U>(left: T, right: U) -> T;
+
+@Instantiate(i32, bool)
+@Instantiate(i32, i32, i32)
+fn CountExport<Args...>(args: Args...) -> i32;
 ```
 
 ### 20.13 `@Apply(...)`
@@ -2624,7 +2653,6 @@ object NumberBox<T> {
 Current rules:
 
 - `@Apply(...)` is valid only on generic declarations.
-- Generic pack functions currently reject `@Apply(...)`.
 - Each attribute must provide exactly one argument per generic parameter.
 - Each argument may be:
   - a fully concrete type such as `string`,
@@ -2632,6 +2660,8 @@ Current rules:
   - or a boolean constant (`true` / `false`).
 - Arguments are positional. The predicate operand must target the matching
   generic parameter for that slot.
+- On generic pack declarations, the trailing pack slot should be written in pack
+  position, for example `@Apply(traits::IsInteger<Args...>)`.
 
 Constraint semantics today:
 

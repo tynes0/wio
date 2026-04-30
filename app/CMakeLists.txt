@@ -83,7 +83,7 @@ add_custom_target(
 
 set(
     WIO_TRACEABILITY_TEST_REGEX
-    "(wio_test_(use_alias_dry_run|realm_basic_run|realm_nested_run|realm_qualified_from_run|object_component_access_semantics_run|interface_ref_upcast_run|component_embedded_member_ctor_run|for_in_dynamic_array_run|for_dict_key_value_run|for_component_binding_run|c_style_for_loop_run|match_value_basic_run|match_statement_basic_run|when_guard_fallback_value_run|fit_numeric_clamp_run|const_scalar_expressions_run|numeric_literal_suffixes_run|numeric_literal_signed_mins_run|default_parameters_run|default_parameter_native_bridge_run|function_parameter_pack_run|pack_meta_and_generic_declarations_run|generic_apply_function_constraints_run|generic_apply_type_and_object_run|generic_native_predicate_bridge_run|array_member_methods_run|dictionary_member_methods_run|string_member_methods_run|direct_indexing_run|control_flow_return_analysis_run|std_contract_v1_run|sdk_invalid_api_contract|sdk_module_easy_host_interop|sdk_exported_types_host_interop|sdk_exported_complex_fields_host_interop|sdk_module_hot_reload_interop|sdk_hot_reload_stale_wrappers_interop|sdk_module_stale_bindings_interop)|wio_runtime_direct_index_out_of_range|wio_invalid_(entry_invalid_parameter_type|entry_invalid_return_type|entry_too_many_parameters|entry_missing_body|entry_method_not_top_level|use_missing_user_module|use_missing_std_module|use_alias_conflicts_with_symbol|realm_conflicts_with_symbol|ref_requires_addressable_operand|ref_immutable_to_mutable_param|is_left_requires_object_or_interface|is_right_requires_object_or_interface|fit_requires_numeric_or_object_interface|if_fit_requires_is_condition|component_method_not_allowed|object_inherits_component|final_object_inheritance|default_attribute_invalid_access|private_base_member_access|protected_member_access_outside_hierarchy|trust_requires_struct_type|let_without_initializer|mut_without_initializer|let_without_type_or_initializer|const_without_initializer|const_string_not_supported|const_from_non_const_identifier|const_function_call_not_supported|const_array_not_supported|default_parameter_non_trailing|default_parameter_type_mismatch|default_parameter_declaration_only_not_supported|default_parameter_entry_not_allowed|default_parameter_overload_conflict|generic_parameter_pack_non_trailing|parameter_pack_non_trailing|parameter_pack_missing_matching_generic_pack|parameter_pack_bare_use_not_allowed|parameter_pack_default_not_supported|parameter_pack_method_not_supported|parameter_pack_explicit_type_arguments_not_supported|generic_apply_reject_function_call|generic_apply_reject_type_alias|generic_apply_reject_constructor|generic_apply_non_generic_function|generic_native_predicate_reject_non_integer|pack_field_requires_generic_pack|pack_index_requires_compile_time_constant|pack_index_from_size_requires_subtraction|type_pack_to_static_array_not_supported|match_value_requires_assumed|match_assumed_must_be_last|match_duplicate_assumed|match_case_type_mismatch|match_return_type_mismatch|non_void_when_without_else|non_void_missing_return|non_void_if_missing_return|array_index_requires_integer|static_array_index_out_of_range|when_condition_type_mismatch|when_fallback_return_type_mismatch|for_in_requires_array|for_dict_requires_two_bindings|for_component_binding_count_mismatch|for_range_step_zero|break_outside_loop|continue_outside_loop|c_style_for_invalid_condition_type|array_member_requires_mutable_receiver|dictionary_member_requires_mutable_receiver|string_member_requires_mutable_receiver|missing_cpp_header_std_import|std_imports_private_runtime_header))"
+    "(wio_test_(use_alias_dry_run|realm_basic_run|realm_nested_run|realm_qualified_from_run|object_component_access_semantics_run|interface_ref_upcast_run|component_embedded_member_ctor_run|for_in_dynamic_array_run|for_dict_key_value_run|for_component_binding_run|c_style_for_loop_run|match_value_basic_run|match_statement_basic_run|when_guard_fallback_value_run|fit_numeric_clamp_run|const_scalar_expressions_run|numeric_literal_suffixes_run|numeric_literal_signed_mins_run|default_parameters_run|default_parameter_native_bridge_run|function_parameter_pack_run|function_parameter_pack_explicit_type_arguments_run|function_parameter_pack_constraints_run|function_parameter_pack_defaults_run|pack_storage_write_semantics_run|pack_meta_and_generic_declarations_run|std_meta_second_wave_run|generic_apply_function_constraints_run|generic_apply_type_and_object_run|generic_native_predicate_bridge_run|array_member_methods_run|dictionary_member_methods_run|string_member_methods_run|direct_indexing_run|control_flow_return_analysis_run|std_contract_v1_run|sdk_invalid_api_contract|sdk_module_easy_host_interop|sdk_exported_types_host_interop|sdk_exported_complex_fields_host_interop|sdk_module_hot_reload_interop|sdk_hot_reload_stale_wrappers_interop|sdk_module_stale_bindings_interop|pack_export_host_interop)|wio_runtime_direct_index_out_of_range|wio_invalid_(entry_invalid_parameter_type|entry_invalid_return_type|entry_too_many_parameters|entry_missing_body|entry_method_not_top_level|use_missing_user_module|use_missing_std_module|use_alias_conflicts_with_symbol|realm_conflicts_with_symbol|ref_requires_addressable_operand|ref_immutable_to_mutable_param|is_left_requires_object_or_interface|is_right_requires_object_or_interface|fit_requires_numeric_or_object_interface|if_fit_requires_is_condition|component_method_not_allowed|object_inherits_component|final_object_inheritance|default_attribute_invalid_access|private_base_member_access|protected_member_access_outside_hierarchy|trust_requires_struct_type|let_without_initializer|mut_without_initializer|let_without_type_or_initializer|const_without_initializer|const_string_not_supported|const_from_non_const_identifier|const_function_call_not_supported|const_array_not_supported|default_parameter_non_trailing|default_parameter_type_mismatch|default_parameter_declaration_only_not_supported|default_parameter_entry_not_allowed|default_parameter_overload_conflict|generic_parameter_pack_non_trailing|parameter_pack_non_trailing|parameter_pack_missing_matching_generic_pack|parameter_pack_bare_use_not_allowed|parameter_pack_default_not_supported|parameter_pack_method_not_supported|parameter_pack_apply_reject_non_integer|parameter_pack_export_requires_instantiate|parameter_pack_instantiate_predicate_not_allowed|parameter_pack_view_assignment_not_allowed|generic_apply_reject_function_call|generic_apply_reject_type_alias|generic_apply_reject_constructor|generic_apply_non_generic_function|generic_native_predicate_reject_non_integer|pack_field_requires_generic_pack|pack_index_requires_compile_time_constant|pack_index_from_size_requires_subtraction|type_pack_to_static_array_not_supported|match_value_requires_assumed|match_assumed_must_be_last|match_duplicate_assumed|match_case_type_mismatch|match_return_type_mismatch|non_void_when_without_else|non_void_missing_return|non_void_if_missing_return|array_index_requires_integer|static_array_index_out_of_range|when_condition_type_mismatch|when_fallback_return_type_mismatch|for_in_requires_array|for_dict_requires_two_bindings|for_component_binding_count_mismatch|for_range_step_zero|break_outside_loop|continue_outside_loop|c_style_for_invalid_condition_type|array_member_requires_mutable_receiver|dictionary_member_requires_mutable_receiver|string_member_requires_mutable_receiver|missing_cpp_header_std_import|std_imports_private_runtime_header))"
 )
 
 add_custom_target(
@@ -907,10 +907,54 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_function_parameter_pack_explicit_type_arguments_run
+        "${CMAKE_SOURCE_DIR}/tests/function_parameter_pack_explicit_type_arguments_run.wio"
+        "Function packs explicit args: ok"
+        --run
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
+    )
+
+    add_wio_output_test(
+        wio_test_function_parameter_pack_constraints_run
+        "${CMAKE_SOURCE_DIR}/tests/function_parameter_pack_constraints_run.wio"
+        "Function pack constraints: ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_function_parameter_pack_defaults_run
+        "${CMAKE_SOURCE_DIR}/tests/function_parameter_pack_defaults_run.wio"
+        "Function pack defaults: ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_pack_storage_write_semantics_run
+        "${CMAKE_SOURCE_DIR}/tests/pack_storage_write_semantics_run.wio"
+        "Pack storage write semantics: ok"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_pack_meta_and_generic_declarations_run
         "${CMAKE_SOURCE_DIR}/tests/pack_meta_and_generic_declarations_run.wio"
         "Pack meta \\+ generic declarations: ok"
         --run
+    )
+
+    add_wio_output_test(
+        wio_test_std_meta_second_wave_run
+        "${CMAKE_SOURCE_DIR}/tests/std_meta_second_wave_run.wio"
+        "Std meta second wave: ok"
+        --run
+    )
+
+    add_wio_shared_host_interop_test(
+        wio_test_pack_export_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/pack_exported_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/pack_export_host.cpp"
+        "Pack export instantiate: exports=2 pair=2 triple=3"
     )
 
     add_wio_output_test(
@@ -2284,7 +2328,9 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_parameter_pack_default_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/parameter_pack_default_not_supported.wio"
-        "Default parameters are not supported on generic pack functions yet\\."
+        "Parameter pack 'args' cannot declare a default value\\. Default values apply only to fixed parameters before the trailing pack\\."
+        --target
+        static
     )
 
     add_wio_failure_test(
@@ -2294,11 +2340,35 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_failure_test(
-        wio_invalid_parameter_pack_explicit_type_arguments_not_supported
-        "${CMAKE_SOURCE_DIR}/tests/invalid/parameter_pack_explicit_type_arguments_not_supported.wio"
-        "Explicit type arguments are not supported on generic pack function 'CountTypes' yet\\. Rely on deduction from call arguments\\."
+        wio_invalid_parameter_pack_apply_reject_non_integer
+        "${CMAKE_SOURCE_DIR}/tests/invalid/parameter_pack_apply_reject_non_integer.wio"
+        "Generic callable 'CountIntegers' rejects type arguments <i32, f32> because of @Apply constraints\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_parameter_pack_export_requires_instantiate
+        "${CMAKE_SOURCE_DIR}/tests/invalid/parameter_pack_export_requires_instantiate.wio"
+        "Generic @Export pack functions must declare at least one concrete @Instantiate\\(\\.\\.\\.\\)\\."
+        --target
+        shared
+    )
+
+    add_wio_failure_test(
+        wio_invalid_parameter_pack_instantiate_predicate_not_allowed
+        "${CMAKE_SOURCE_DIR}/tests/invalid/parameter_pack_instantiate_predicate_not_allowed.wio"
+        "@Instantiate on generic pack declarations must provide concrete pack element types for 'Args\\.\\.\\.'\\. Predicates belong in @Apply\\."
         --include-dir
         "${CMAKE_SOURCE_DIR}/tests/native"
+        --target
+        static
+    )
+
+    add_wio_failure_test(
+        wio_invalid_parameter_pack_view_assignment_not_allowed
+        "${CMAKE_SOURCE_DIR}/tests/invalid/parameter_pack_view_assignment_not_allowed.wio"
+        "Cannot assign through raw pack values or pack views\\. Assign to a mutable pack storage field instead\\."
+        --target
+        static
     )
 
     add_wio_failure_test(

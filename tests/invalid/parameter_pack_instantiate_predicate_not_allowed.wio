@@ -1,0 +1,7 @@
+use std::traits as traits;
+
+@Native
+@CppHeader("native_pack_ops.h")
+@CppName(native_pack::CountTypes)
+@Instantiate(traits::IsInteger<Args>)
+fn InvalidPackInstantiate<Args...>(args: Args...) -> i32;

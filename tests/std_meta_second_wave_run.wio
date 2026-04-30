@@ -1,0 +1,37 @@
+use std::assert as assert;
+use std::console as console;
+use std::meta as meta;
+
+fn Entry() -> i32 {
+    let typeCount = meta::TypeCount<i32, bool, string>();
+    let hasBool = meta::ContainsType<bool, i32, bool, string>();
+    let hasFloat = meta::ContainsType<f64, i32, bool, string>();
+    let types: meta::Types<i32, bool, string> = meta::Types();
+    let values: meta::Values<i32, i32, i32> = meta::Values(10i32, 20i32, 30i32);
+
+    values.Set(40i32, 50i32, 60i32);
+    values.ReplaceFirst(7i32);
+    values.ReplaceLast(9i32);
+
+    let captured = values.data.ToStaticArray<i32>();
+    let convertedValues: meta::Values<i32, u8, i16> = meta::Values(1i32, 2u8, 3i16);
+    let converted = convertedValues.data.ToStaticArray<i32>();
+
+    assert::ExpectEqual(typeCount fit i32, 3, "meta::TypeCount failed");
+    assert::ExpectTrue(hasBool, "meta::ContainsType positive failed");
+    assert::ExpectFalse(hasFloat, "meta::ContainsType negative failed");
+    assert::ExpectEqual(types.Count() fit i32, 3, "meta::Types.Count failed");
+    assert::ExpectFalse(types.Empty(), "meta::Types.Empty failed");
+    assert::ExpectTrue(types.Contains<bool>(), "meta::Types.Contains positive failed");
+    assert::ExpectFalse(types.Contains<f32>(), "meta::Types.Contains negative failed");
+    assert::ExpectEqual(values.Count() fit i32, 3, "meta::Values.Count failed");
+    assert::ExpectFalse(values.Empty(), "meta::Values.Empty failed");
+    assert::ExpectEqual(values.First(), 7, "meta::Values.ReplaceFirst failed");
+    assert::ExpectEqual(values.Last(), 9, "meta::Values.ReplaceLast failed");
+    assert::ExpectEqual(captured[1usize], 50, "meta values ToStaticArray failed");
+    assert::ExpectEqual(converted[0usize], 1, "meta values conversion first failed");
+    assert::ExpectEqual(converted[2usize], 3, "meta values conversion failed");
+
+    console::Print("Std meta second wave: ok");
+    return 0;
+}

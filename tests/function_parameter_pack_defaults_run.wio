@@ -1,0 +1,19 @@
+use std::assert as assert;
+use std::console as console;
+
+fn CountWithDefaultLabel<T, Args...>(head: T, label: string = "ready", tail: Args...) -> i32 {
+    if (label == "ready") {
+        return 10 + (tail.size fit i32);
+    }
+
+    return 20 + (tail.size fit i32);
+}
+
+fn Entry() -> i32 {
+    let count = CountWithDefaultLabel(7i32);
+
+    assert::ExpectEqual(count, 10, "default parameter before trailing pack failed");
+
+    console::Print("Function pack defaults: ok");
+    return 0;
+}

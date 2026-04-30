@@ -616,9 +616,22 @@ namespace wio::codegen
         Ref<sema::Type> instantiateGenericType(const Ref<sema::Type>& type,
                                                const std::unordered_map<std::string, Ref<sema::Type>>& bindings);
 
+        size_t getFixedParameterCount(const FunctionDeclaration& node)
+        {
+            const bool hasParameterPack = std::ranges::any_of(node.parameters, [](const Parameter& parameter)
+            {
+                return parameter.isParameterPack;
+            });
+
+            if (hasParameterPack && !node.parameters.empty())
+                return node.parameters.size() - 1;
+
+            return node.parameters.size();
+        }
+
         size_t getRequiredParameterCount(const FunctionDeclaration& node)
         {
-            size_t requiredCount = node.parameters.size();
+            size_t requiredCount = getFixedParameterCount(node);
             while (requiredCount > 0 && node.parameters[requiredCount - 1].defaultValue)
                 --requiredCount;
 
@@ -627,7 +640,7 @@ namespace wio::codegen
 
         bool hasDefaultParameters(const FunctionDeclaration& node)
         {
-            return getRequiredParameterCount(node) != node.parameters.size();
+            return getRequiredParameterCount(node) != getFixedParameterCount(node);
         }
 
         std::vector<Ref<sema::Type>> getLeadingParameterTypes(const Ref<sema::FunctionType>& functionType, size_t arity)
@@ -787,13 +800,10 @@ namespace wio::codegen
             case sema::TypeKind::GenericParameterPack:
             {
                 auto genericPack = current.AsFast<sema::GenericParameterPackType>();
+                if (auto aliasIt = bindings.packAliases.find(genericPack->name); aliasIt != bindings.packAliases.end())
+                    return ctx.getOrCreateTypePackViewType(aliasIt->second);
                 if (auto it = bindings.packBindings.find(genericPack->name); it != bindings.packBindings.end())
-                {
-                    if (!it->second.empty())
-                        return ctx.getOrCreateTypePackViewType(genericPack->name, it->second);
-                    if (auto aliasIt = bindings.packAliases.find(genericPack->name); aliasIt != bindings.packAliases.end())
-                        return ctx.getOrCreateTypePackViewType(aliasIt->second);
-                }
+                    return ctx.getOrCreateTypePackViewType(genericPack->name, it->second);
                 return current;
             }
             case sema::TypeKind::ValuePackView:
@@ -808,13 +818,10 @@ namespace wio::codegen
                     return ctx.getOrCreateValuePackViewType(viewType->packName, std::move(instantiatedElements));
                 }
 
+                if (auto aliasIt = bindings.packAliases.find(viewType->packName); aliasIt != bindings.packAliases.end())
+                    return ctx.getOrCreateValuePackViewType(aliasIt->second);
                 if (auto it = bindings.packBindings.find(viewType->packName); it != bindings.packBindings.end())
-                {
-                    if (!it->second.empty())
-                        return ctx.getOrCreateValuePackViewType(viewType->packName, it->second);
-                    if (auto aliasIt = bindings.packAliases.find(viewType->packName); aliasIt != bindings.packAliases.end())
-                        return ctx.getOrCreateValuePackViewType(aliasIt->second);
-                }
+                    return ctx.getOrCreateValuePackViewType(viewType->packName, it->second);
                 return current;
             }
             case sema::TypeKind::TypePackView:
@@ -829,13 +836,10 @@ namespace wio::codegen
                     return ctx.getOrCreateTypePackViewType(viewType->packName, std::move(instantiatedElements));
                 }
 
+                if (auto aliasIt = bindings.packAliases.find(viewType->packName); aliasIt != bindings.packAliases.end())
+                    return ctx.getOrCreateTypePackViewType(aliasIt->second);
                 if (auto it = bindings.packBindings.find(viewType->packName); it != bindings.packBindings.end())
-                {
-                    if (!it->second.empty())
-                        return ctx.getOrCreateTypePackViewType(viewType->packName, it->second);
-                    if (auto aliasIt = bindings.packAliases.find(viewType->packName); aliasIt != bindings.packAliases.end())
-                        return ctx.getOrCreateTypePackViewType(aliasIt->second);
-                }
+                    return ctx.getOrCreateTypePackViewType(viewType->packName, it->second);
                 return current;
             }
             case sema::TypeKind::PackStorage:
@@ -850,13 +854,10 @@ namespace wio::codegen
                     return ctx.getOrCreatePackStorageType(storageType->packName, std::move(instantiatedElements));
                 }
 
+                if (auto aliasIt = bindings.packAliases.find(storageType->packName); aliasIt != bindings.packAliases.end())
+                    return ctx.getOrCreatePackStorageType(aliasIt->second);
                 if (auto it = bindings.packBindings.find(storageType->packName); it != bindings.packBindings.end())
-                {
-                    if (!it->second.empty())
-                        return ctx.getOrCreatePackStorageType(storageType->packName, it->second);
-                    if (auto aliasIt = bindings.packAliases.find(storageType->packName); aliasIt != bindings.packAliases.end())
-                        return ctx.getOrCreatePackStorageType(aliasIt->second);
-                }
+                    return ctx.getOrCreatePackStorageType(storageType->packName, it->second);
                 return current;
             }
             case sema::TypeKind::Reference:
@@ -901,8 +902,25 @@ namespace wio::codegen
                     if (trailingType && trailingType->kind() == sema::TypeKind::GenericParameterPack)
                     {
                         const std::string& packName = trailingType.AsFast<sema::GenericParameterPackType>()->name;
+                        if (auto aliasIt = bindings.packAliases.find(packName); aliasIt != bindings.packAliases.end())
+                        {
+                            instantiatedParamTypes.push_back(ctx.getOrCreateGenericParameterPackType(aliasIt->second));
+                            return ctx.getOrCreateFunctionType(
+                                instantiateGenericType(functionType->returnType, bindings),
+                                instantiatedParamTypes,
+                                true
+                            );
+                        }
                         if (auto it = bindings.packBindings.find(packName); it != bindings.packBindings.end())
                         {
+                            if (it->second.empty())
+                            {
+                                return ctx.getOrCreateFunctionType(
+                                    instantiateGenericType(functionType->returnType, bindings),
+                                    instantiatedParamTypes,
+                                    false
+                                );
+                            }
                             if (!it->second.empty())
                             {
                                 for (const auto& packType : it->second)
@@ -911,15 +929,6 @@ namespace wio::codegen
                                     instantiateGenericType(functionType->returnType, bindings),
                                     instantiatedParamTypes,
                                     false
-                                );
-                            }
-                            if (auto aliasIt = bindings.packAliases.find(packName); aliasIt != bindings.packAliases.end())
-                            {
-                                instantiatedParamTypes.push_back(ctx.getOrCreateGenericParameterPackType(aliasIt->second));
-                                return ctx.getOrCreateFunctionType(
-                                    instantiateGenericType(functionType->returnType, bindings),
-                                    instantiatedParamTypes,
-                                    true
                                 );
                             }
                         }
@@ -1641,7 +1650,11 @@ namespace wio::codegen
 
                         if (exportSymbol)
                         {
-                            auto bindings = buildGenericTypeBindings(exportSymbol->genericParameterNames, instantiationTypes);
+                            auto bindings = buildExtendedGenericBindings(
+                                exportSymbol->genericParameterNames,
+                                exportSymbol->hasGenericParameterPack,
+                                instantiationTypes
+                            );
                             info.functionType = instantiateGenericType(exportSymbol->type, bindings).AsFast<sema::FunctionType>();
                         }
 
@@ -5061,28 +5074,58 @@ namespace wio::codegen
             emitLine(");");
         };
 
-        auto emitWrapperParameters = [&](const std::vector<Ref<sema::Type>>& parameterTypes)
+        auto getWrapperParameterTypes = [&](size_t providedFixedParameterCount) -> std::vector<Ref<sema::Type>>
         {
-            for (size_t i = 0; i < parameterTypes.size(); ++i)
+            std::vector<Ref<sema::Type>> parameterTypes;
+            if (!funcType)
+                return parameterTypes;
+
+            parameterTypes.reserve(providedFixedParameterCount + (funcType->hasParameterPack ? 1 : 0));
+            for (size_t i = 0; i < providedFixedParameterCount && i < funcType->paramTypes.size(); ++i)
+                parameterTypes.push_back(funcType->paramTypes[i]);
+
+            if (funcType->hasParameterPack && !funcType->paramTypes.empty())
+                parameterTypes.push_back(funcType->paramTypes.back());
+
+            return parameterTypes;
+        };
+
+        auto emitWrapperParameters = [&](size_t providedFixedParameterCount)
+        {
+            for (size_t i = 0; i < providedFixedParameterCount; ++i)
             {
                 emit(common::formatString(
                     "{} {}",
-                    toCppType(parameterTypes[i]),
+                    toCppType(funcType->paramTypes[i]),
                     sanitizeCppIdentifier(node.parameters[i].name->token.value)
                 ));
-                if (i + 1 < parameterTypes.size())
+                if (i + 1 < providedFixedParameterCount || funcType->hasParameterPack)
                     emit(", ");
+            }
+
+            if (funcType->hasParameterPack && !node.parameters.empty())
+            {
+                const size_t packParameterIndex = node.parameters.size() - 1;
+                emit(common::formatString(
+                    "{} {}...",
+                    toCppType(funcType->paramTypes.back()),
+                    sanitizeCppIdentifier(node.parameters[packParameterIndex].name->token.value)
+                ));
             }
         };
 
-        auto emitForwardingCallArguments = [&](size_t providedArgumentCount)
+        auto emitForwardingCallArguments = [&](size_t providedFixedArgumentCount)
         {
             for (size_t i = 0; i < node.parameters.size(); ++i)
             {
                 if (i > 0)
                     emit(", ");
 
-                if (i < providedArgumentCount)
+                if (funcType->hasParameterPack && i + 1 == node.parameters.size())
+                {
+                    emit(sanitizeCppIdentifier(node.parameters[i].name->token.value) + "...");
+                }
+                else if (i < providedFixedArgumentCount)
                 {
                     emit(sanitizeCppIdentifier(node.parameters[i].name->token.value));
                 }
@@ -5095,19 +5138,19 @@ namespace wio::codegen
 
         auto emitDefaultArgumentWrappers = [&]()
         {
-            if ((!node.body && !isNative) || !hasDefaultParameters(node))
+            if ((!node.body && !isNative) || !hasDefaultParameters(node) || (funcType && funcType->hasParameterPack))
                 return;
 
             const size_t requiredParameterCount = getRequiredParameterCount(node);
-            const size_t totalParameterCount = node.parameters.size();
+            const size_t fixedParameterCount = getFixedParameterCount(node);
 
             if (funcName == "OnConstruct")
             {
-                for (size_t wrapperArity = requiredParameterCount; wrapperArity < totalParameterCount; ++wrapperArity)
+                for (size_t wrapperArity = requiredParameterCount; wrapperArity < fixedParameterCount; ++wrapperArity)
                 {
                     EMIT_TABS();
                     emit(currentClassName_ + "(");
-                    emitWrapperParameters(getLeadingParameterTypes(funcType, wrapperArity));
+                    emitWrapperParameters(wrapperArity);
                     emit(") : " + currentClassName_ + "(");
                     emitForwardingCallArguments(wrapperArity);
                     emitLine(") {}");
@@ -5122,9 +5165,9 @@ namespace wio::codegen
             const std::string wrapperFullSymbol = Mangler::mangleFunction(funcName, funcType->paramTypes, scopePath);
             const std::string wrapperMethodFullSymbol = Mangler::mangleFunction(funcName, funcType->paramTypes);
 
-            for (size_t wrapperArity = requiredParameterCount; wrapperArity < totalParameterCount; ++wrapperArity)
+            for (size_t wrapperArity = requiredParameterCount; wrapperArity < fixedParameterCount; ++wrapperArity)
             {
-                const auto wrapperParameterTypes = getLeadingParameterTypes(funcType, wrapperArity);
+                const auto wrapperParameterTypes = getWrapperParameterTypes(wrapperArity);
                 const std::string wrapperSymbol = currentClassName_.empty()
                     ? Mangler::mangleFunction(funcName, wrapperParameterTypes, scopePath)
                     : Mangler::mangleFunction(funcName, wrapperParameterTypes);
@@ -5147,7 +5190,7 @@ namespace wio::codegen
 
                 EMIT_TABS();
                 emit(returnType + " " + wrapperSymbol + "(");
-                emitWrapperParameters(wrapperParameterTypes);
+                emitWrapperParameters(wrapperArity);
                 emit(")");
 
                 if (isEmittingPrototypes_)
@@ -5224,6 +5267,11 @@ namespace wio::codegen
                 if (param.isParameterPack && parameterType.ends_with("..."))
                     parameterType = parameterType.substr(0, parameterType.size() - 3) + "...";
                 emit(common::formatString("{} {}", parameterType, sanitizeCppIdentifier(param.name->token.value)));
+                if (isEmittingPrototypes_ && funcType && funcType->hasParameterPack && param.defaultValue && !param.isParameterPack)
+                {
+                    emit(" = ");
+                    param.defaultValue->accept(*this);
+                }
                 if (i < node.parameters.size() - 1) emit(", ");
             }
             emit(")");
@@ -5253,7 +5301,21 @@ namespace wio::codegen
             if (funcType->returnType && !funcType->returnType->isVoid())
                 emit("return ");
 
-            emit(nativeSymbol + "(");
+            emit(nativeSymbol);
+            if (!node.genericParameters.empty() && node.parameters.empty())
+            {
+                emit("<");
+                for (size_t genericIndex = 0; genericIndex < node.genericParameters.size(); ++genericIndex)
+                {
+                    emit(node.genericParameters[genericIndex]->token.value);
+                    if (node.hasGenericParameterPack && genericIndex + 1 == node.genericParameters.size())
+                        emit("...");
+                    if (genericIndex + 1 < node.genericParameters.size())
+                        emit(", ");
+                }
+                emit(">");
+            }
+            emit("(");
             for (size_t i = 0; i < node.parameters.size(); ++i)
             {
                 emit(sanitizeCppIdentifier(node.parameters[i].name->token.value));
@@ -5321,6 +5383,20 @@ namespace wio::codegen
             if (!node.genericParameters.empty() && !instantiationTypeLists.empty())
             {
                 const std::string exportBaseSymbol = getExportedCppSymbolName(node);
+                const size_t fixedDeclaredParameterCount = getFixedParameterCount(node);
+                auto getExportWrapperParameterName = [&](size_t parameterIndex) -> std::string
+                {
+                    if (parameterIndex < fixedDeclaredParameterCount && parameterIndex < node.parameters.size())
+                        return sanitizeCppIdentifier(node.parameters[parameterIndex].name->token.value);
+
+                    if (node.parameters.empty())
+                        return common::formatString("arg_{}", parameterIndex);
+
+                    const std::string packBaseName =
+                        sanitizeCppIdentifier(node.parameters.back().name->token.value);
+                    return common::formatString("{}_{}", packBaseName, parameterIndex - fixedDeclaredParameterCount);
+                };
+
                 for (const auto& instantiationTypes : instantiationTypeLists)
                 {
                     auto instantiatedFunctionType = instantiateFunctionTypeForCodegen(instantiationTypes);
@@ -5331,14 +5407,14 @@ namespace wio::codegen
                     EMIT_TABS();
                     emit("extern \"C\" WIO_EXPORT " + toCppType(instantiatedFunctionType->returnType) + " " +
                          formatInstantiatedExportSymbolName(exportBaseSymbol, instantiationTypes) + "(");
-                    for (size_t i = 0; i < node.parameters.size(); ++i)
+                    for (size_t i = 0; i < instantiatedFunctionType->paramTypes.size(); ++i)
                     {
                         emit(common::formatString(
                             "{} {}",
                             toCppType(instantiatedFunctionType->paramTypes[i]),
-                            sanitizeCppIdentifier(node.parameters[i].name->token.value)
+                            getExportWrapperParameterName(i)
                         ));
-                        if (i < node.parameters.size() - 1) emit(", ");
+                        if (i + 1 < instantiatedFunctionType->paramTypes.size()) emit(", ");
                     }
                     emit(")");
                     emit("\n");
@@ -5352,10 +5428,10 @@ namespace wio::codegen
                     emit(internalSymbol);
                     emitTemplateSpecializationArguments(instantiationTypes);
                     emit("(");
-                    for (size_t i = 0; i < node.parameters.size(); ++i)
+                    for (size_t i = 0; i < instantiatedFunctionType->paramTypes.size(); ++i)
                     {
-                        emit(sanitizeCppIdentifier(node.parameters[i].name->token.value));
-                        if (i < node.parameters.size() - 1) emit(", ");
+                        emit(getExportWrapperParameterName(i));
+                        if (i + 1 < instantiatedFunctionType->paramTypes.size()) emit(", ");
                     }
                     emit(");");
                     emit("\n");

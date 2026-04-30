@@ -254,8 +254,20 @@ namespace wio::meta
     template <typename... Ts>
     inline constexpr std::size_t TypeCount = sizeof...(Ts);
 
+    template <typename... Ts>
+    constexpr std::size_t CountTypesValue() noexcept
+    {
+        return sizeof...(Ts);
+    }
+
     template <typename T, typename... Ts>
     inline constexpr bool Contains = (std::is_same_v<T, Ts> || ...);
+
+    template <typename T, typename... Ts>
+    constexpr bool ContainsTypeValue() noexcept
+    {
+        return (std::is_same_v<T, Ts> || ...);
+    }
 
     template <template <typename> typename Trait, typename... Ts>
     inline constexpr bool All = (Trait<Ts>::value && ...);

@@ -1,0 +1,6 @@
+@Export
+@Instantiate(i32, bool)
+@Instantiate(i32, i32, i32)
+fn CountExport<Args...>(args: Args...) -> i32 {
+    return args.size fit i32;
+}
