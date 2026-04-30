@@ -1,0 +1,5 @@
+object Foo {
+    public fn Bar<Args...>(args: Args...) -> i32 {
+        return 0;
+    }
+}

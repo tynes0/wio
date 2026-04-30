@@ -265,7 +265,19 @@ namespace wio
         {
             if (stopAtFit && peek().type == TokenType::kwFit)
                 break;
-            
+
+            if (peek().type == TokenType::opRangeInclusive &&
+                (peek(1).type == TokenType::comma ||
+                 peek(1).type == TokenType::rightParen ||
+                 peek(1).type == TokenType::rightBracket ||
+                 peek(1).type == TokenType::semicolon ||
+                 peek(1).type == TokenType::rightBrace))
+            {
+                const Token ellipsisToken = advance();
+                left = makeNodePtr<PackExpansionExpression>(std::move(left), ellipsisToken.loc);
+                continue;
+            }
+
             int precedence = getPrecedence(peek().type);
             if (precedence < minPrecedence)
                 break;
@@ -689,7 +701,7 @@ namespace wio
             std::vector<NodePtr<TypeSpecifier>> generics;
             generics.push_back(std::move(innerType));
             
-            return makeNodePtr<TypeSpecifier>(std::move(token), std::move(generics), 0, true, true, refToken.loc);
+            return makeNodePtr<TypeSpecifier>(std::move(token), std::move(generics), 0, true, true, false, refToken.loc);
         }
         if (match(TokenType::kwView))
         {
@@ -700,7 +712,7 @@ namespace wio
             std::vector<NodePtr<TypeSpecifier>> generics;
             generics.push_back(std::move(innerType));
             
-            return makeNodePtr<TypeSpecifier>(std::move(token), std::move(generics), 0, true, false, viewToken.loc);
+            return makeNodePtr<TypeSpecifier>(std::move(token), std::move(generics), 0, true, false, false, viewToken.loc);
         }
 
         if (match(TokenType::leftBracket))
@@ -738,7 +750,7 @@ namespace wio
             std::vector<NodePtr<TypeSpecifier>> generics;
             generics.push_back(std::move(innerType));
 
-            return makeNodePtr<TypeSpecifier>(arrayToken, std::move(generics), size, false, false, leftBracketToken.loc);
+            return makeNodePtr<TypeSpecifier>(arrayToken, std::move(generics), size, false, false, false, leftBracketToken.loc);
         }
 
         if (match(TokenType::kwFn))
@@ -772,7 +784,7 @@ namespace wio
                     .value = "void",
                     .loc = rightParenToken.loc
                 };
-                retType = makeNodePtr<TypeSpecifier>(std::move(voidTok), std::vector<NodePtr<TypeSpecifier>>{}, 0, false, false, rightParenToken.loc);
+                retType = makeNodePtr<TypeSpecifier>(std::move(voidTok), std::vector<NodePtr<TypeSpecifier>>{}, 0, false, false, false, rightParenToken.loc);
             }
             
             generics[0] = std::move(retType);
@@ -782,7 +794,7 @@ namespace wio
                 .value = "fn",
                 .loc = fnToken.loc
             };
-            return makeNodePtr<TypeSpecifier>(std::move(fnTok), std::move(generics), 0, false, false, fnToken.loc);
+            return makeNodePtr<TypeSpecifier>(std::move(fnTok), std::move(generics), 0, false, false, false, fnToken.loc);
         }
 
         match(TokenType::kwConst, true);
@@ -815,7 +827,7 @@ namespace wio
             consume(TokenType::opGreater);
         }
 
-        auto result = makeNodePtr<TypeSpecifier>(std::move(typeName), std::move(generics), 0, false, false, startLoc);
+        auto result = makeNodePtr<TypeSpecifier>(std::move(typeName), std::move(generics), 0, false, false, false, startLoc);
 
         while (match(TokenType::leftBracket, true))
         {
@@ -829,8 +841,11 @@ namespace wio
             std::vector<NodePtr<TypeSpecifier>> args;
             args.push_back(std::move(result));
 
-            result = makeNodePtr<TypeSpecifier>(std::move(DynArrayToken), std::move(args), 0, false, false, startLoc);
+            result = makeNodePtr<TypeSpecifier>(std::move(DynArrayToken), std::move(args), 0, false, false, false, startLoc);
         }
+
+        if (match(TokenType::opRangeInclusive, true))
+            result->isPackExpansion = true;
 
         return result;
     }
@@ -1040,11 +1055,19 @@ namespace wio
         std::vector<NodePtr<Identifier>> genericParameters;
         if (match(TokenType::opLess, true))
         {
-            genericParameters.push_back(makeNodePtr<Identifier>(consume(TokenType::identifier)));
+            auto firstGeneric = makeNodePtr<Identifier>(consume(TokenType::identifier));
+            if (match(TokenType::opRangeInclusive, true))
+                utError("Generic parameter packs are currently supported only on functions.", firstGeneric->location());
+
+            genericParameters.push_back(std::move(firstGeneric));
             while (match(TokenType::comma, true))
             {
                 expectElementAfterComma(TokenType::opGreater, "generic parameter");
-                genericParameters.push_back(makeNodePtr<Identifier>(consume(TokenType::identifier)));
+                auto genericParameter = makeNodePtr<Identifier>(consume(TokenType::identifier));
+                if (match(TokenType::opRangeInclusive, true))
+                    utError("Generic parameter packs are currently supported only on functions.", genericParameter->location());
+
+                genericParameters.push_back(std::move(genericParameter));
             }
 
             consume(TokenType::opGreater);
@@ -1069,14 +1092,26 @@ namespace wio
         
         NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
         std::vector<NodePtr<Identifier>> genericParameters;
+        bool hasGenericParameterPack = false;
 
         if (match(TokenType::opLess, true))
         {
-            genericParameters.push_back(makeNodePtr<Identifier>(consume(TokenType::identifier)));
+            auto firstGeneric = makeNodePtr<Identifier>(consume(TokenType::identifier));
+            if (match(TokenType::opRangeInclusive, true))
+                hasGenericParameterPack = true;
+
+            genericParameters.push_back(std::move(firstGeneric));
             while (match(TokenType::comma, true))
             {
                 expectElementAfterComma(TokenType::opGreater, "generic parameter");
-                genericParameters.push_back(makeNodePtr<Identifier>(consume(TokenType::identifier)));
+                if (hasGenericParameterPack)
+                    utError("Generic parameter packs must be trailing.", currentOrPreviousLocation());
+
+                auto genericParameter = makeNodePtr<Identifier>(consume(TokenType::identifier));
+                if (match(TokenType::opRangeInclusive, true))
+                    hasGenericParameterPack = true;
+
+                genericParameters.push_back(std::move(genericParameter));
             }
 
             consume(TokenType::opGreater);
@@ -1090,16 +1125,18 @@ namespace wio
             NodePtr<Identifier> paramName = makeNodePtr<Identifier>(consume(TokenType::identifier));
             NodePtr<TypeSpecifier> paramType = nullptr;
             NodePtr<Expression> defaultValue = nullptr;
+            bool isParameterPack = false;
 
             if (match(TokenType::opColon, true))
             {
                 paramType = parseType();
+                isParameterPack = paramType && paramType->isPackExpansion;
             }
 
             if (match(TokenType::opAssign, true))
                 defaultValue = parseExpression();
 
-            parameters.emplace_back(std::move(paramName), std::move(paramType), std::move(defaultValue));
+            parameters.emplace_back(std::move(paramName), std::move(paramType), std::move(defaultValue), isParameterPack);
 
             while (match(TokenType::comma, true))
             {
@@ -1108,14 +1145,18 @@ namespace wio
                 NodePtr<Identifier> nextParamName = makeNodePtr<Identifier>(consume(TokenType::identifier));
                 NodePtr<TypeSpecifier> nextParamType = nullptr;
                 NodePtr<Expression> nextDefaultValue = nullptr;
+                bool nextIsParameterPack = false;
 
                 if (match(TokenType::opColon, true))
+                {
                     nextParamType = parseType();
+                    nextIsParameterPack = nextParamType && nextParamType->isPackExpansion;
+                }
 
                 if (match(TokenType::opAssign, true))
                     nextDefaultValue = parseExpression();
 
-                parameters.emplace_back(std::move(nextParamName), std::move(nextParamType), std::move(nextDefaultValue));
+                parameters.emplace_back(std::move(nextParamName), std::move(nextParamType), std::move(nextDefaultValue), nextIsParameterPack);
             }
         }
         consume(TokenType::rightParen);
@@ -1143,6 +1184,7 @@ namespace wio
             std::move(attributes),
             std::move(name),
             std::move(genericParameters),
+            hasGenericParameterPack,
             std::move(parameters),
             std::move(returnType),
             std::move(whenCond),
@@ -1160,11 +1202,19 @@ namespace wio
 
         if (match(TokenType::opLess, true))
         {
-            genericParameters.push_back(makeNodePtr<Identifier>(consume(TokenType::identifier)));
+            auto firstGeneric = makeNodePtr<Identifier>(consume(TokenType::identifier));
+            if (match(TokenType::opRangeInclusive, true))
+                utError("Generic parameter packs are currently supported only on functions.", firstGeneric->location());
+
+            genericParameters.push_back(std::move(firstGeneric));
             while (match(TokenType::comma, true))
             {
                 expectElementAfterComma(TokenType::opGreater, "generic parameter");
-                genericParameters.push_back(makeNodePtr<Identifier>(consume(TokenType::identifier)));
+                auto genericParameter = makeNodePtr<Identifier>(consume(TokenType::identifier));
+                if (match(TokenType::opRangeInclusive, true))
+                    utError("Generic parameter packs are currently supported only on functions.", genericParameter->location());
+
+                genericParameters.push_back(std::move(genericParameter));
             }
 
             consume(TokenType::opGreater);
@@ -1200,11 +1250,19 @@ namespace wio
 
         if (match(TokenType::opLess, true))
         {
-            genericParameters.push_back(makeNodePtr<Identifier>(consume(TokenType::identifier)));
+            auto firstGeneric = makeNodePtr<Identifier>(consume(TokenType::identifier));
+            if (match(TokenType::opRangeInclusive, true))
+                utError("Generic parameter packs are currently supported only on functions.", firstGeneric->location());
+
+            genericParameters.push_back(std::move(firstGeneric));
             while (match(TokenType::comma, true))
             {
                 expectElementAfterComma(TokenType::opGreater, "generic parameter");
-                genericParameters.push_back(makeNodePtr<Identifier>(consume(TokenType::identifier)));
+                auto genericParameter = makeNodePtr<Identifier>(consume(TokenType::identifier));
+                if (match(TokenType::opRangeInclusive, true))
+                    utError("Generic parameter packs are currently supported only on functions.", genericParameter->location());
+
+                genericParameters.push_back(std::move(genericParameter));
             }
 
             consume(TokenType::opGreater);
@@ -1283,11 +1341,19 @@ namespace wio
 
         if (match(TokenType::opLess, true))
         {
-            genericParameters.push_back(makeNodePtr<Identifier>(consume(TokenType::identifier)));
+            auto firstGeneric = makeNodePtr<Identifier>(consume(TokenType::identifier));
+            if (match(TokenType::opRangeInclusive, true))
+                utError("Generic parameter packs are currently supported only on functions.", firstGeneric->location());
+
+            genericParameters.push_back(std::move(firstGeneric));
             while (match(TokenType::comma, true))
             {
                 expectElementAfterComma(TokenType::opGreater, "generic parameter");
-                genericParameters.push_back(makeNodePtr<Identifier>(consume(TokenType::identifier)));
+                auto genericParameter = makeNodePtr<Identifier>(consume(TokenType::identifier));
+                if (match(TokenType::opRangeInclusive, true))
+                    utError("Generic parameter packs are currently supported only on functions.", genericParameter->location());
+
+                genericParameters.push_back(std::move(genericParameter));
             }
 
             consume(TokenType::opGreater);

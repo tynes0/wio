@@ -16,6 +16,7 @@ namespace wio
             Primitive,  // i32, f32, bool, void
             Null,       // null
             GenericParameter, // T
+            GenericParameterPack, // Args...
             Reference,  // ref
             Array,      // [T]
             Dictionary, // Dict<T,T> or Tree<T,T>
@@ -76,13 +77,25 @@ namespace wio
             std::string toString() const override;
             std::string toCppString() const override;
         };
+
+        struct GenericParameterPackType : Type
+        {
+            std::string name;
+
+            explicit GenericParameterPackType(std::string name);
+
+            TypeKind kind() const override;
+            std::string toString() const override;
+            std::string toCppString() const override;
+        };
     
         struct FunctionType : Type
         {
             std::vector<Ref<Type>> paramTypes;
             Ref<Type> returnType;
+            bool hasParameterPack = false;
 
-            FunctionType(std::vector<Ref<Type>> paramTypes, Ref<Type> returnType);
+            FunctionType(std::vector<Ref<Type>> paramTypes, Ref<Type> returnType, bool hasParameterPack = false);
 
             TypeKind kind() const override;
             std::string toString() const override;
@@ -165,4 +178,4 @@ namespace wio
     }
 }
 
-MakeFrenumWithNamespace(wio::sema, TypeKind, Primitive, Null, GenericParameter, Reference, Array, Dictionary, Function, Struct, Alias)
+MakeFrenumWithNamespace(wio::sema, TypeKind, Primitive, Null, GenericParameter, GenericParameterPack, Reference, Array, Dictionary, Function, Struct, Alias)

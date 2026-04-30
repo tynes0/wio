@@ -1,0 +1,10 @@
+realm ffi {
+    @Native
+    @CppHeader("native_pack_ops.h")
+    @CppName(native_pack::CountTypes)
+    fn CountTypes<Args...>(args: Args...) -> i32;
+}
+
+fn Entry() -> i32 {
+    return ffi::CountTypes<i32>(1i32);
+}

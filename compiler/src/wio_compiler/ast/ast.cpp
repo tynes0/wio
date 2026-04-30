@@ -29,8 +29,8 @@ namespace wio
 
     Program::~Program() = default;
 
-    TypeSpecifier::TypeSpecifier(Token _name, std::vector<NodePtrUnchecked<TypeSpecifier>> _generics, size_t size, bool _isMut, bool _isRef, common::Location _loc)
-        : ASTNode(_loc), name(std::move(_name)), generics(std::move(_generics)), size(size), isMut(_isMut), isRef(_isRef)
+    TypeSpecifier::TypeSpecifier(Token _name, std::vector<NodePtrUnchecked<TypeSpecifier>> _generics, size_t size, bool _isMut, bool _isRef, bool _isPackExpansion, common::Location _loc)
+        : ASTNode(_loc), name(std::move(_name)), generics(std::move(_generics)), size(size), isMut(_isMut), isRef(_isRef), isPackExpansion(_isPackExpansion)
     {
     }
 
@@ -163,8 +163,15 @@ namespace wio
 
     FunctionCallExpression::~FunctionCallExpression() = default;
 
-    Parameter::Parameter(NodePtr<Identifier> _name, NodePtr<TypeSpecifier> _type, NodePtr<Expression> _defaultValue)
-        : name(std::move(_name)), type(std::move(_type)), defaultValue(std::move(_defaultValue))
+    PackExpansionExpression::PackExpansionExpression(NodePtr<Expression> _operand, common::Location _loc)
+        : Expression(_loc.isValid() ? _loc : (_operand ? _operand->location() : common::Location::invalid())), operand(std::move(_operand))
+    {
+    }
+
+    PackExpansionExpression::~PackExpansionExpression() = default;
+
+    Parameter::Parameter(NodePtr<Identifier> _name, NodePtr<TypeSpecifier> _type, NodePtr<Expression> _defaultValue, bool _isParameterPack)
+        : name(std::move(_name)), type(std::move(_type)), defaultValue(std::move(_defaultValue)), isParameterPack(_isParameterPack)
     {
     }
 
@@ -243,10 +250,10 @@ namespace wio
     TypeAliasDeclaration::~TypeAliasDeclaration() = default;
 
     FunctionDeclaration::FunctionDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
-        NodePtr<Identifier> _name, std::vector<NodePtr<Identifier>> _genericParameters, std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType,
+        NodePtr<Identifier> _name, std::vector<NodePtr<Identifier>> _genericParameters, bool _hasGenericParameterPack, std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType,
         NodePtr<Expression> _whenCondition, NodePtr<Expression> _whenFallback, NodePtr<Statement> _body, common::Location _loc)
               : Statement(_loc.isValid() ? _loc : _name->location()), attributes(std::move(_attributes)),
-              name(std::move(_name)), genericParameters(std::move(_genericParameters)), parameters(std::move(_params)), returnType(std::move(_retType)),
+              name(std::move(_name)), genericParameters(std::move(_genericParameters)), hasGenericParameterPack(_hasGenericParameterPack), parameters(std::move(_params)), returnType(std::move(_retType)),
               whenCondition(std::move(_whenCondition)), whenFallback(std::move(_whenFallback)),  body(std::move(_body))
     {
     }

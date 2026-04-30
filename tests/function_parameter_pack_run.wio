@@ -1,0 +1,37 @@
+use std::console as console;
+use std::assert as assert;
+
+realm ffi {
+    @Native
+    @CppHeader("native_pack_ops.h")
+    @CppName(native_pack::CountTypes)
+    fn CountTypes<Args...>(args: Args...) -> i32;
+
+    @Native
+    @CppHeader("native_pack_ops.h")
+    @CppName(native_pack::CountWithHead)
+    fn CountWithHead<T, Args...>(head: T, tail: Args...) -> i32;
+}
+
+fn ForwardCount<Args...>(args: Args...) -> i32 {
+    return ffi::CountTypes(args...);
+}
+
+fn ForwardHead<T, Args...>(head: T, tail: Args...) -> i32 {
+    return ffi::CountWithHead(head, tail...);
+}
+
+fn Entry() -> i32 {
+    let zero = ForwardCount();
+    let a = ffi::CountTypes(1i32, true, 3.0f);
+    let b = ForwardCount(1i32, 2i32, 3i32);
+    let c = ForwardHead(7i32, 1i32, 2i32);
+
+    assert::ExpectEqual(zero, 0, "empty parameter pack failed");
+    assert::ExpectEqual(a, 3, "native parameter pack count failed");
+    assert::ExpectEqual(b, 3, "forwarded parameter pack count failed");
+    assert::ExpectEqual(c, 3, "mixed head + parameter pack forwarding failed");
+
+    console::Print("Function packs: ok");
+    return 0;
+}

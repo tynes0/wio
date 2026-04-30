@@ -118,6 +118,9 @@ namespace wio::codegen
                 return baseName;
             };
 
+            if (type->kind() == sema::TypeKind::GenericParameterPack)
+                return type.AsFast<sema::GenericParameterPackType>()->name + "...";
+
             if (type->kind() == sema::TypeKind::Function)
             {
                 auto funcType = type.AsFast<sema::FunctionType>();
@@ -214,6 +217,7 @@ namespace wio::codegen
             switch (resolvedType->kind())
             {
             case sema::TypeKind::GenericParameter:
+            case sema::TypeKind::GenericParameterPack:
                 return true;
             case sema::TypeKind::Reference:
                 return containsGenericParameterTypeForCodegen(resolvedType.AsFast<sema::ReferenceType>()->referredType);
@@ -306,6 +310,8 @@ namespace wio::codegen
                     return it->second;
                 return current;
             }
+            case sema::TypeKind::GenericParameterPack:
+                return current;
             case sema::TypeKind::Reference:
             {
                 auto refType = current.AsFast<sema::ReferenceType>();
@@ -342,7 +348,8 @@ namespace wio::codegen
 
                 return ctx.getOrCreateFunctionType(
                     instantiateGenericType(functionType->returnType, bindings),
-                    instantiatedParamTypes
+                    instantiatedParamTypes,
+                    functionType->hasParameterPack
                 );
             }
             case sema::TypeKind::Struct:
@@ -1818,6 +1825,7 @@ namespace wio::codegen
         emitHeaderLine("#include <map>");
         emitHeaderLine("#include <stdexcept>");
         emitHeaderLine("#include <unordered_map>");
+        emitHeaderLine();
         emitHeaderLine("#include <exception.h>");
         emitHeaderLine("#include <fit.h>");
         emitHeaderLine("#include <intrinsics.h>");
@@ -3242,6 +3250,13 @@ namespace wio::codegen
         emit(sanitizeCppIdentifier(node.token.value));
     }
 
+    void CppGenerator::visit(PackExpansionExpression& node)
+    {
+        if (node.operand)
+            node.operand->accept(*this);
+        emit("...");
+    }
+
     void CppGenerator::visit(NullExpression& node)
     {
         auto lockedRefType = node.refType.Lock();
@@ -3720,10 +3735,20 @@ namespace wio::codegen
                 }
 
                 if (declarationType && declarationType->kind() == sema::TypeKind::Function)
-                    mangledFunctionType = Compiler::get().getTypeContext().getOrCreateFunctionType(
-                        declarationType.AsFast<sema::FunctionType>()->returnType,
-                        getLeadingParameterTypes(declarationType.AsFast<sema::FunctionType>(), node.arguments.size())
-                    ).AsFast<sema::FunctionType>();
+                {
+                    auto declarationFunctionType = declarationType.AsFast<sema::FunctionType>();
+                    if (declarationFunctionType->hasParameterPack)
+                    {
+                        mangledFunctionType = declarationFunctionType;
+                    }
+                    else
+                    {
+                        mangledFunctionType = Compiler::get().getTypeContext().getOrCreateFunctionType(
+                            declarationFunctionType->returnType,
+                            getLeadingParameterTypes(declarationFunctionType, node.arguments.size())
+                        ).AsFast<sema::FunctionType>();
+                    }
+                }
             }
 
             emit(Mangler::mangleFunction(calleeSym->name, mangledFunctionType->paramTypes, scopePath));
@@ -3750,7 +3775,10 @@ namespace wio::codegen
             if (functionType && i < functionType->paramTypes.size())
                 expectedType = functionType->paramTypes[i];
 
-            emitArgumentWithImplicitCast(node.arguments[i], expectedType);
+            if (node.arguments[i] && node.arguments[i]->is<PackExpansionExpression>())
+                node.arguments[i]->accept(*this);
+            else
+                emitArgumentWithImplicitCast(node.arguments[i], expectedType);
             if (i < node.arguments.size() - 1)
                 emit(", ");
         }
@@ -4231,7 +4259,10 @@ namespace wio::codegen
                     emit("template <");
                     for (size_t i = 0; i < node.genericParameters.size(); ++i)
                     {
-                        emit("typename " + node.genericParameters[i]->token.value);
+                        const bool isGenericParameterPack = node.hasGenericParameterPack && i + 1 == node.genericParameters.size();
+                        emit(isGenericParameterPack
+                            ? "typename... " + node.genericParameters[i]->token.value
+                            : "typename " + node.genericParameters[i]->token.value);
                         if (i + 1 < node.genericParameters.size())
                             emit(", ");
                     }
@@ -4273,7 +4304,10 @@ namespace wio::codegen
             emit("template <");
             for (size_t i = 0; i < node.genericParameters.size(); ++i)
             {
-                emit("typename " + node.genericParameters[i]->token.value);
+                const bool isGenericParameterPack = node.hasGenericParameterPack && i + 1 == node.genericParameters.size();
+                emit(isGenericParameterPack
+                    ? "typename... " + node.genericParameters[i]->token.value
+                    : "typename " + node.genericParameters[i]->token.value);
                 if (i < node.genericParameters.size() - 1)
                     emit(", ");
             }
@@ -4310,7 +4344,10 @@ namespace wio::codegen
             for (size_t i = 0; i < node.parameters.size(); ++i)
             {
                 auto& param = node.parameters[i];
-                emit(common::formatString("{} {}", toCppType(param.name->refType.Lock()), sanitizeCppIdentifier(param.name->token.value)));
+                std::string parameterType = toCppType(param.name->refType.Lock());
+                if (param.isParameterPack && parameterType.ends_with("..."))
+                    parameterType = parameterType.substr(0, parameterType.size() - 3) + "...";
+                emit(common::formatString("{} {}", parameterType, sanitizeCppIdentifier(param.name->token.value)));
                 if (i < node.parameters.size() - 1) emit(", ");
             }
             emit(")");
@@ -4344,6 +4381,8 @@ namespace wio::codegen
             for (size_t i = 0; i < node.parameters.size(); ++i)
             {
                 emit(sanitizeCppIdentifier(node.parameters[i].name->token.value));
+                if (node.parameters[i].isParameterPack)
+                    emit("...");
                 if (i < node.parameters.size() - 1)
                     emit(", ");
             }

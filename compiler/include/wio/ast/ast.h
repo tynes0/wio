@@ -321,8 +321,9 @@ namespace wio
 
         bool isMut = false;
         bool isRef = false;
+        bool isPackExpansion = false;
 
-        TypeSpecifier(Token _name, std::vector<NodePtrUnchecked<TypeSpecifier>> _generics, size_t size, bool _isMut, bool _isRef, common::Location _loc);
+        TypeSpecifier(Token _name, std::vector<NodePtrUnchecked<TypeSpecifier>> _generics, size_t size, bool _isMut, bool _isRef, bool _isPackExpansion, common::Location _loc);
         ~TypeSpecifier() override;
     };
 
@@ -523,15 +524,27 @@ namespace wio
         ~FunctionCallExpression() override;
     };
 
+    struct PackExpansionExpression : Expression
+    {
+        WIO_EXP_NODE_BODY(PackExpansionExpression)
+
+        NodePtr<Expression> operand;
+
+        explicit PackExpansionExpression(NodePtr<Expression> _operand, common::Location _loc = common::Location::invalid());
+        ~PackExpansionExpression() override;
+    };
+
     struct Parameter
     {
         NodePtr<Identifier> name;
         NodePtr<TypeSpecifier> type;
         NodePtr<Expression> defaultValue;
+        bool isParameterPack = false;
 
         Parameter(NodePtr<Identifier> _name = nullptr,
             NodePtr<TypeSpecifier> _type = nullptr,
-            NodePtr<Expression> _defaultValue = nullptr);
+            NodePtr<Expression> _defaultValue = nullptr,
+            bool _isParameterPack = false);
     };
 
     struct LambdaExpression : Expression
@@ -675,6 +688,7 @@ namespace wio
         std::vector<NodePtr<AttributeStatement>> attributes;
         NodePtr<Identifier> name;
         std::vector<NodePtr<Identifier>> genericParameters;
+        bool hasGenericParameterPack = false;
         std::vector<Parameter> parameters;
         NodePtr<TypeSpecifier> returnType;
         NodePtr<Expression> whenCondition; 
@@ -682,7 +696,7 @@ namespace wio
         NodePtr<Statement> body;
 
         FunctionDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
-            std::vector<NodePtr<Identifier>> _genericParameters, std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType, NodePtr<Expression> _whenCondition,
+            std::vector<NodePtr<Identifier>> _genericParameters, bool _hasGenericParameterPack, std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType, NodePtr<Expression> _whenCondition,
             NodePtr<Expression> _whenFallback, NodePtr<Statement> _body, common::Location _loc);
         ~FunctionDeclaration() override;
     };

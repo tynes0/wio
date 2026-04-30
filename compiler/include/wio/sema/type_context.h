@@ -47,7 +47,7 @@ namespace wio::sema
         
         Ref<Type> getOrCreateReferenceType(Ref<Type> referredType, bool isMutable);
         Ref<Type> getOrCreateArrayType(Ref<Type> elementType, ArrayType::ArrayKind arrayKind, size_t size = 0);
-        Ref<Type> getOrCreateFunctionType(Ref<Type> returnType, std::vector<Ref<Type>> paramTypes);
+        Ref<Type> getOrCreateFunctionType(Ref<Type> returnType, std::vector<Ref<Type>> paramTypes, bool hasParameterPack = false);
         Ref<Type> getOrCreateDictionaryType(Ref<Type> keyType, Ref<Type> valueType, bool isOrdered = false);
         Ref<Type> getOrCreateTreeType(Ref<Type> keyType, Ref<Type> valueType);
         Ref<Type> getOrCreateStructType(const std::string& name,
@@ -56,6 +56,7 @@ namespace wio::sema
                                         bool isInterface = false);
         Ref<Type> getOrCreateAliasType(const std::string& name, Ref<Type> aliasedType);
         Ref<Type> getOrCreateGenericParameterType(const std::string& name);
+        Ref<Type> getOrCreateGenericParameterPackType(const std::string& name);
 
     private:
         std::vector<Ref<Type>> ownedTypes_;

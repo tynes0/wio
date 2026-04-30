@@ -1,0 +1,3 @@
+fn Bad<T..., U>(head: U) -> i32 {
+    return 0;
+}

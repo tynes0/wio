@@ -1,0 +1,3 @@
+fn Bad<T>(value: i32, args: T...) -> i32 {
+    return value;
+}

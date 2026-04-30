@@ -298,15 +298,25 @@ The language reference now exists, but it still needs to become a true spec.
   - [x] Keep generic defaults and partial specialization out of v1.
   - [ ] Decide whether generic defaults and partial specialization will ever
         exist in later versions.
-- [ ] Add end-to-end examples such as `Array<T>`, `Result<T>`, `Pair<K, V>`,
-      generic utility functions, and container-oriented generic loops once the
-      rest of the surface is frozen.
-- [ ] Design variadic generics / generic packs for future versions, including a
-      source-level spelling for forms like `Foo<Args...>(args: Args...)`.
+  - [ ] Add end-to-end examples such as `Array<T>`, `Result<T>`, `Pair<K, V>`,
+       generic utility functions, and container-oriented generic loops once the
+       rest of the surface is frozen.
+- [~] Land the first variadic-generic / generic-pack slice.
+  - [x] Support top-level generic function packs via
+        `fn Foo<Args...>(args: Args...)`.
+  - [x] Support trailing pack forwarding at call sites via `callee(args...)`.
+  - [x] Support the first declaration-only `@Native` pack bridge path.
+  - [x] Reject explicit type arguments on generic pack functions for now and
+        rely on deduction from call arguments.
+  - [x] Reject default parameters, `@Apply`, `@Instantiate`, `when`, and
+        export/module ABI attributes on generic pack functions in the current
+        v1 slice.
+  - [ ] Broaden pack support beyond top-level functions after the current
+        function-only model is fully hardened.
 - [ ] Decide whether the variadic-generic design also applies to generic
-      `object` / `component` / `interface` declarations.
+       `object` / `component` / `interface` declarations.
 - [ ] Design how variadic generic expansion should interact with overload
-      resolution, backend template lowering, and future constraint systems.
+       resolution, backend template lowering, and future constraint systems.
 - [ ] Design const-generic / non-type generic parameters for future versions,
       especially numeric forms such as `Vector<T, N>` and their interaction
       with static arrays like `[T; N]`.

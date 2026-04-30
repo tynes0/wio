@@ -51,9 +51,9 @@ namespace wio::sema
         return makeType<DictionaryType>(std::move(keyType), std::move(valueType), true);
     }
 
-    Ref<Type> TypeContext::getOrCreateFunctionType(Ref<Type> returnType, std::vector<Ref<Type>> paramTypes)
+    Ref<Type> TypeContext::getOrCreateFunctionType(Ref<Type> returnType, std::vector<Ref<Type>> paramTypes, bool hasParameterPack)
     {
-        return makeType<FunctionType>(std::move(paramTypes), std::move(returnType));
+        return makeType<FunctionType>(std::move(paramTypes), std::move(returnType), hasParameterPack);
     }
 
     Ref<Type> TypeContext::getOrCreateStructType(const std::string& name,
@@ -72,5 +72,10 @@ namespace wio::sema
     Ref<Type> TypeContext::getOrCreateGenericParameterType(const std::string& name)
     {
         return makeType<GenericParameterType>(name);
+    }
+
+    Ref<Type> TypeContext::getOrCreateGenericParameterPackType(const std::string& name)
+    {
+        return makeType<GenericParameterPackType>(name);
     }
 }

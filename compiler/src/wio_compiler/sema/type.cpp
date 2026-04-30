@@ -41,6 +41,11 @@ namespace wio::sema
             }
             return false;
         }
+        if (lhs->kind() == TypeKind::GenericParameterPack)
+        {
+            return rhs->kind() == TypeKind::GenericParameterPack &&
+                   lhs.AsFast<GenericParameterPackType>()->name == rhs.AsFast<GenericParameterPackType>()->name;
+        }
         if (lhs->kind() == TypeKind::Reference)
         {
             if (rhs->kind() == TypeKind::Null)
@@ -195,6 +200,12 @@ namespace wio::sema
             auto* g2 = static_cast<const GenericParameterType*>(t2);
             return g1->name == g2->name;
         }
+        case TypeKind::GenericParameterPack:
+        {
+            auto* g1 = static_cast<const GenericParameterPackType*>(t1);
+            auto* g2 = static_cast<const GenericParameterPackType*>(t2);
+            return g1->name == g2->name;
+        }
         
         case TypeKind::Reference:
         {
@@ -238,8 +249,12 @@ namespace wio::sema
         {
             auto* f1 = static_cast<const FunctionType*>(t1);
             auto* f2 = static_cast<const FunctionType*>(t2);
-            
-            if (f1->paramTypes.size() != f2->paramTypes.size()) return false;
+
+            if (f1->hasParameterPack != f2->hasParameterPack)
+                return false;
+
+            if (f1->paramTypes.size() != f2->paramTypes.size())
+                return false;
             if (!f1->returnType->isCompatibleWith(f2->returnType)) return false;
             
             for (size_t i = 0; i < f1->paramTypes.size(); ++i)
@@ -367,8 +382,28 @@ namespace wio::sema
         return name;
     }
 
-    FunctionType::FunctionType(std::vector<Ref<Type>> paramTypes, Ref<Type> returnType)
-        : paramTypes(std::move(paramTypes)), returnType(std::move(returnType))
+    GenericParameterPackType::GenericParameterPackType(std::string name)
+        : name(std::move(name))
+    {
+    }
+
+    TypeKind GenericParameterPackType::kind() const
+    {
+        return TypeKind::GenericParameterPack;
+    }
+
+    std::string GenericParameterPackType::toString() const
+    {
+        return name + "...";
+    }
+
+    std::string GenericParameterPackType::toCppString() const
+    {
+        return name + "...";
+    }
+
+    FunctionType::FunctionType(std::vector<Ref<Type>> paramTypes, Ref<Type> returnType, bool hasParameterPack)
+        : paramTypes(std::move(paramTypes)), returnType(std::move(returnType)), hasParameterPack(hasParameterPack)
     {
     }
 

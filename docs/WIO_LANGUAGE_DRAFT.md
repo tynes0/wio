@@ -1657,7 +1657,77 @@ For default parameters, the current compiler also rejects overload sets where a
 defaulted declaration would synthesize an arity that is already declared
 explicitly.
 
-### 13.5 `when` Guards
+### 13.5 Generic Functions
+
+Wio supports the first generic function slice through angle-bracket generic
+parameter lists.
+
+Examples:
+
+```wio
+fn Identity<T>(value: T) -> T {
+    return value;
+}
+
+fn PairText<T, U>(left: T, right: U) -> string {
+    return $"${left}:${right}";
+}
+```
+
+Current rules:
+
+- top-level free functions support generic parameter lists,
+- explicit call syntax such as `Identity<i32>(42)` is supported for non-pack
+  generic functions,
+- generic overload resolution uses parameter-driven deduction first and explicit
+  generic arguments second,
+- generic methods on `object` declarations are supported,
+- generic methods on `component` declarations stay out of the current v1 slice,
+- generic `interface` methods remain unsupported in v1.
+
+### 13.6 Function Parameter Packs
+
+Wio now supports the first function-only variadic generic slice via trailing
+generic parameter packs and trailing function parameter packs.
+
+Examples:
+
+```wio
+fn ForwardAll<Args...>(args: Args...) -> i32 {
+    return ffi::CountTypes(args...);
+}
+
+fn ForwardHead<T, Args...>(head: T, tail: Args...) -> i32 {
+    return ffi::CountWithHead(head, tail...);
+}
+```
+
+Current rules:
+
+- only top-level functions may declare generic parameter packs,
+- only one generic parameter pack is supported,
+- the generic pack must be the trailing generic parameter,
+- the matching function parameter pack must be trailing,
+- pack expansion is currently supported only as a trailing function-call
+  argument, such as `callee(args...)`,
+- bare parameter-pack identifiers such as `args` are rejected; the current v1
+  surface requires `args...` in the forwarding call,
+- native pack bridges are supported, so declaration-only `@Native` functions may
+  use `fn Foo<Args...>(args: Args...) -> ...;`.
+
+Current v1 limitations:
+
+- explicit type arguments are not supported on generic pack functions yet;
+  deduction must come from call arguments,
+- `@Apply(...)` and `@Instantiate(...)` are currently rejected on generic pack
+  functions,
+- export/module ABI attributes are currently rejected on generic pack functions,
+- `when`/`else` clauses are currently rejected on generic pack functions,
+- default parameters are currently rejected on generic pack functions,
+- the current pack slice does not yet extend to generic aliases, `object`,
+  `component`, or `interface` declarations.
+
+### 13.7 `when` Guards
 
 Wio supports function-level guards via `when`.
 
@@ -1694,7 +1764,7 @@ fn LogIfPositive(x: i32) when (x > 0) {
 - The fallback expression must be compatible with the function return type.
 - The guard condition must be a boolean, numeric, or reference-like condition.
 
-### 13.6 Lifecycle Functions
+### 13.8 Lifecycle Functions
 
 Wio recognizes special lifecycle names:
 
@@ -1722,7 +1792,7 @@ component Vector3 {
 `OnConstruct(...)` may currently use trailing default parameters and lowers them
 through generated delegating constructors.
 
-### 13.7 `Entry`
+### 13.9 `Entry`
 
 The executable entry point must be named `Entry`.
 
@@ -2422,6 +2492,8 @@ Current rules:
 
 - `@Instantiate(...)` is valid only on generic functions.
 - Today it is supported only together with `@Native` or `@Export`.
+- Generic pack functions are the current exception: they rely on argument
+  deduction and currently reject `@Instantiate(...)`.
 - Each attribute must provide exactly one argument per generic parameter.
 - Each argument may be:
   - a fully concrete type such as `i32` or `string`,
@@ -2478,6 +2550,7 @@ object NumberBox<T> {
 Current rules:
 
 - `@Apply(...)` is valid only on generic declarations.
+- Generic pack functions currently reject `@Apply(...)`.
 - Each attribute must provide exactly one argument per generic parameter.
 - Each argument may be:
   - a fully concrete type such as `string`,

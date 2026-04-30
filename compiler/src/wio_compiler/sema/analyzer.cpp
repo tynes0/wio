@@ -591,7 +591,8 @@ namespace wio::sema
         std::string formatFunctionDiagnosticSignature(std::string_view name,
                                                       const std::vector<std::string>& genericParameterNames,
                                                       const Ref<FunctionType>& functionType,
-                                                      bool isConstructor = false)
+                                                      bool isConstructor = false,
+                                                      bool hasGenericParameterPack = false)
         {
             std::string signature(name);
 
@@ -601,6 +602,8 @@ namespace wio::sema
                 for (size_t i = 0; i < genericParameterNames.size(); ++i)
                 {
                     signature += genericParameterNames[i];
+                    if (hasGenericParameterPack && i + 1 == genericParameterNames.size())
+                        signature += "...";
                     if (i + 1 < genericParameterNames.size())
                         signature += ", ";
                 }
@@ -634,6 +637,7 @@ namespace wio::sema
             switch (current->kind())
             {
             case TypeKind::GenericParameter:
+            case TypeKind::GenericParameterPack:
                 return true;
             case TypeKind::Reference:
                 return containsGenericParameterType(current.AsFast<ReferenceType>()->referredType);
@@ -689,6 +693,11 @@ namespace wio::sema
             case TypeKind::GenericParameter:
             {
                 auto genericParam = current.AsFast<GenericParameterType>();
+                return std::ranges::find(genericParameterNames, genericParam->name) != genericParameterNames.end();
+            }
+            case TypeKind::GenericParameterPack:
+            {
+                auto genericParam = current.AsFast<GenericParameterPackType>();
                 return std::ranges::find(genericParameterNames, genericParam->name) != genericParameterNames.end();
             }
             case TypeKind::Reference:
@@ -748,6 +757,8 @@ namespace wio::sema
                 }
                 return;
             }
+            case TypeKind::GenericParameterPack:
+                return;
             case TypeKind::Reference:
                 collectGenericParameterInstances(current.AsFast<ReferenceType>()->referredType, genericParameterNames, instances);
                 return;
@@ -804,6 +815,8 @@ namespace wio::sema
                     return foundInstance->second == current.Get();
                 return false;
             }
+            case TypeKind::GenericParameterPack:
+                return true;
             case TypeKind::Reference:
                 return containsGenericParameterInstance(current.AsFast<ReferenceType>()->referredType, instances);
             case TypeKind::Array:
@@ -835,6 +848,67 @@ namespace wio::sema
             }
             case TypeKind::Alias:
                 return containsGenericParameterInstance(current.AsFast<AliasType>()->aliasedType, instances);
+            default:
+                return false;
+            }
+        }
+
+        std::string getGenericParameterPackName(const Ref<Type>& type)
+        {
+            Ref<Type> current = unwrapAliasType(type);
+            if (!current || current->kind() != TypeKind::GenericParameterPack)
+                return {};
+
+            return current.AsFast<GenericParameterPackType>()->name;
+        }
+
+        bool containsGenericParameterPackType(const Ref<Type>& type, std::string* outPackName = nullptr)
+        {
+            Ref<Type> current = unwrapAliasType(type);
+            if (!current)
+                return false;
+
+            switch (current->kind())
+            {
+            case TypeKind::GenericParameterPack:
+                if (outPackName)
+                    *outPackName = current.AsFast<GenericParameterPackType>()->name;
+                return true;
+            case TypeKind::Reference:
+                return containsGenericParameterPackType(current.AsFast<ReferenceType>()->referredType, outPackName);
+            case TypeKind::Array:
+                return containsGenericParameterPackType(current.AsFast<ArrayType>()->elementType, outPackName);
+            case TypeKind::Dictionary:
+            {
+                auto dictType = current.AsFast<DictionaryType>();
+                return containsGenericParameterPackType(dictType->keyType, outPackName) ||
+                       containsGenericParameterPackType(dictType->valueType, outPackName);
+            }
+            case TypeKind::Function:
+            {
+                auto functionType = current.AsFast<FunctionType>();
+                if (containsGenericParameterPackType(functionType->returnType, outPackName))
+                    return true;
+
+                for (const auto& parameterType : functionType->paramTypes)
+                {
+                    if (containsGenericParameterPackType(parameterType, outPackName))
+                        return true;
+                }
+                return false;
+            }
+            case TypeKind::Struct:
+            {
+                auto structType = current.AsFast<StructType>();
+                for (const auto& genericArgument : structType->genericArguments)
+                {
+                    if (containsGenericParameterPackType(genericArgument, outPackName))
+                        return true;
+                }
+                return false;
+            }
+            case TypeKind::Alias:
+                return containsGenericParameterPackType(current.AsFast<AliasType>()->aliasedType, outPackName);
             default:
                 return false;
             }
@@ -897,6 +971,8 @@ namespace wio::sema
                     return it->second;
                 return current;
             }
+            case TypeKind::GenericParameterPack:
+                return current;
             case TypeKind::Reference:
             {
                 auto refType = current.AsFast<ReferenceType>();
@@ -933,7 +1009,8 @@ namespace wio::sema
 
                 return ctx.getOrCreateFunctionType(
                     instantiateGenericType(funcType->returnType, bindings),
-                    instantiatedParams
+                    instantiatedParams,
+                    funcType->hasParameterPack
                 );
             }
             case TypeKind::Struct:
@@ -1032,6 +1109,10 @@ namespace wio::sema
                 bindings.emplace(genericParam->name, resolvedActual);
                 return true;
             }
+
+            if (resolvedExpected->kind() == TypeKind::GenericParameterPack)
+                return resolvedActual->kind() == TypeKind::GenericParameterPack &&
+                       resolvedExpected.AsFast<GenericParameterPackType>()->name == resolvedActual.AsFast<GenericParameterPackType>()->name;
 
             if (resolvedExpected->kind() == TypeKind::Reference &&
                 resolvedActual->kind() == TypeKind::Reference)
@@ -2171,13 +2252,32 @@ namespace wio::sema
             auto retType = node.generics[0]->refType.Lock();
             
             std::vector<Ref<Type>> paramTypes;
+            bool hasParameterPack = false;
             for (size_t i = 1; i < node.generics.size(); ++i)
             {
                 node.generics[i]->accept(*this);
-                paramTypes.push_back(node.generics[i]->refType.Lock());
+                Ref<Type> parameterType = node.generics[i]->refType.Lock();
+                if (containsGenericParameterPackType(parameterType))
+                {
+                    if (i + 1 != node.generics.size())
+                    {
+                        WIO_LOG_ADD_ERROR(node.generics[i]->location(), "Function type parameter packs must be trailing.");
+                        node.refType = Compiler::get().getTypeContext().getUnknown();
+                        return;
+                    }
+                    hasParameterPack = true;
+                }
+                paramTypes.push_back(parameterType);
             }
-            
-            node.refType = Compiler::get().getTypeContext().getOrCreateFunctionType(retType, paramTypes);
+
+            if (containsGenericParameterPackType(retType))
+            {
+                WIO_LOG_ADD_ERROR(node.generics[0]->location(), "Function type return positions cannot use generic parameter packs.");
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+
+            node.refType = Compiler::get().getTypeContext().getOrCreateFunctionType(retType, paramTypes, hasParameterPack);
             return;
         }
 
@@ -2358,6 +2458,20 @@ namespace wio::sema
         if (!type)
         {
             WIO_LOG_ADD_ERROR(node.location(), "Unknown type: '{}'", node.name.value);
+            type = Compiler::get().getTypeContext().getUnknown();
+        }
+
+        if (node.isPackExpansion)
+        {
+            if (!type || type->kind() != TypeKind::GenericParameterPack)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Only generic parameter packs can use '...' in type position.");
+                type = Compiler::get().getTypeContext().getUnknown();
+            }
+        }
+        else if (type && type->kind() == TypeKind::GenericParameterPack)
+        {
+            WIO_LOG_ADD_ERROR(node.location(), "Generic parameter packs must be written with '...' in type position.");
             type = Compiler::get().getTypeContext().getUnknown();
         }
 
@@ -2906,6 +3020,36 @@ namespace wio::sema
 
         node.referencedSymbol = sym;
         node.refType = sym->type;
+
+        if (sym->flags.get_isParameterPack() && !allowParameterPackIdentifierReference_)
+        {
+            WIO_LOG_ADD_ERROR(
+                node.location(),
+                "Parameter pack '{}' must be expanded as '{}...' inside a function call.",
+                node.token.value,
+                node.token.value
+            );
+            node.refType = Compiler::get().getTypeContext().getUnknown();
+        }
+    }
+
+    void SemanticAnalyzer::visit(PackExpansionExpression& node)
+    {
+        const bool previousAllowParameterPackIdentifierReference = allowParameterPackIdentifierReference_;
+        allowParameterPackIdentifierReference_ = true;
+        node.operand->accept(*this);
+        allowParameterPackIdentifierReference_ = previousAllowParameterPackIdentifierReference;
+
+        auto referencedSymbol = node.operand ? node.operand->referencedSymbol.Lock() : nullptr;
+        if (!referencedSymbol || !referencedSymbol->flags.get_isParameterPack())
+        {
+            WIO_LOG_ADD_ERROR(node.location(), "Pack expansion expressions currently support only function parameter packs.");
+            node.refType = Compiler::get().getTypeContext().getUnknown();
+            return;
+        }
+
+        node.referencedSymbol = referencedSymbol;
+        node.refType = referencedSymbol->type;
     }
     
     void SemanticAnalyzer::visit(NullExpression& node)
@@ -3332,6 +3476,29 @@ namespace wio::sema
 
         useExplicitFunctionTypeArguments = !isConstructorCall && !explicitTypeArguments.empty();
 
+        std::optional<size_t> packExpansionIndex;
+        for (size_t i = 0; i < node.arguments.size(); ++i)
+        {
+            if (!node.arguments[i] || !node.arguments[i]->is<PackExpansionExpression>())
+                continue;
+
+            if (packExpansionIndex.has_value())
+            {
+                WIO_LOG_ADD_ERROR(node.arguments[i]->location(), "Only one pack expansion argument is supported in a function call.");
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+
+            if (i + 1 != node.arguments.size())
+            {
+                WIO_LOG_ADD_ERROR(node.arguments[i]->location(), "Pack expansion arguments must be trailing.");
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+
+            packExpansionIndex = i;
+        }
+
         auto isSafeRefCast = [&](const Ref<Type>& dest, const Ref<Type>& src) -> bool
         {
             if (dest && src && dest->kind() == TypeKind::Reference && src->kind() == TypeKind::Reference)
@@ -3438,24 +3605,51 @@ namespace wio::sema
         auto getRequiredArgumentCountForCallable = [&](const Ref<Symbol>& symbol,
                                                        const Ref<FunctionType>& functionType) -> size_t
         {
+            if (functionType && functionType->hasParameterPack)
+                return functionType->paramTypes.empty() ? 0 : functionType->paramTypes.size() - 1;
+
             if (const auto* functionDeclaration = getFunctionDeclarationForSymbol(symbol))
                 return getRequiredParameterCount(functionDeclaration);
 
             return functionType ? functionType->paramTypes.size() : 0;
         };
 
-        auto buildCallableSurfaceFunctionType = [&](const Ref<FunctionType>& functionType, size_t arity) -> Ref<FunctionType>
+        auto buildCallableSurfaceFunctionType = [&](const Ref<FunctionType>& functionType,
+                                                   const std::vector<Ref<Type>>& actualArgumentTypes,
+                                                   bool usesPackExpansion) -> Ref<FunctionType>
         {
             if (!functionType)
                 return nullptr;
 
-            const size_t surfaceArity = std::min(arity, functionType->paramTypes.size());
+            if (!functionType->hasParameterPack)
+            {
+                const size_t surfaceArity = std::min(actualArgumentTypes.size(), functionType->paramTypes.size());
+                std::vector<Ref<Type>> surfaceParamTypes;
+                surfaceParamTypes.reserve(surfaceArity);
+                for (size_t i = 0; i < surfaceArity; ++i)
+                    surfaceParamTypes.push_back(functionType->paramTypes[i]);
+
+                return Compiler::get().getTypeContext().getOrCreateFunctionType(functionType->returnType, surfaceParamTypes)
+                    .AsFast<FunctionType>();
+            }
+
+            const size_t fixedParameterCount = functionType->paramTypes.empty() ? 0 : functionType->paramTypes.size() - 1;
             std::vector<Ref<Type>> surfaceParamTypes;
-            surfaceParamTypes.reserve(surfaceArity);
-            for (size_t i = 0; i < surfaceArity; ++i)
+            surfaceParamTypes.reserve(std::max(actualArgumentTypes.size(), functionType->paramTypes.size()));
+            for (size_t i = 0; i < fixedParameterCount; ++i)
                 surfaceParamTypes.push_back(functionType->paramTypes[i]);
 
-            return Compiler::get().getTypeContext().getOrCreateFunctionType(functionType->returnType, surfaceParamTypes)
+            if (usesPackExpansion)
+            {
+                surfaceParamTypes.push_back(functionType->paramTypes.back());
+                return Compiler::get().getTypeContext().getOrCreateFunctionType(functionType->returnType, surfaceParamTypes, true)
+                    .AsFast<FunctionType>();
+            }
+
+            for (size_t i = fixedParameterCount; i < actualArgumentTypes.size(); ++i)
+                surfaceParamTypes.push_back(actualArgumentTypes[i]);
+
+            return Compiler::get().getTypeContext().getOrCreateFunctionType(functionType->returnType, surfaceParamTypes, false)
                 .AsFast<FunctionType>();
         };
 
@@ -3467,15 +3661,50 @@ namespace wio::sema
             if (!functionType)
                 return std::nullopt;
 
-            const size_t requiredArgumentCount =
-                functionDeclaration ? getRequiredParameterCount(functionDeclaration) : functionType->paramTypes.size();
+            const bool usesPackExpansion = packExpansionIndex.has_value();
+            const bool hasParameterPack = functionType->hasParameterPack;
+            const size_t fixedParameterCount = hasParameterPack && !functionType->paramTypes.empty()
+                ? functionType->paramTypes.size() - 1
+                : functionType->paramTypes.size();
+            const size_t requiredArgumentCount = hasParameterPack
+                ? fixedParameterCount
+                : (functionDeclaration ? getRequiredParameterCount(functionDeclaration) : functionType->paramTypes.size());
             const size_t totalParameterCount = functionType->paramTypes.size();
 
-            if (node.arguments.size() < requiredArgumentCount || node.arguments.size() > totalParameterCount)
-                return std::nullopt;
+            if (usesPackExpansion)
+            {
+                if (!hasParameterPack)
+                    return std::nullopt;
 
-            if (requireExactArity && functionType->paramTypes.size() != node.arguments.size())
-                return std::nullopt;
+                if (*packExpansionIndex != fixedParameterCount)
+                    return std::nullopt;
+            }
+            else
+            {
+                if (node.arguments.size() < requiredArgumentCount)
+                    return std::nullopt;
+
+                if (!hasParameterPack && node.arguments.size() > totalParameterCount)
+                    return std::nullopt;
+            }
+
+            if (requireExactArity)
+            {
+                if (usesPackExpansion)
+                {
+                    if (!hasParameterPack || node.arguments.size() != fixedParameterCount + 1)
+                        return std::nullopt;
+                }
+                else if (hasParameterPack)
+                {
+                    if (node.arguments.size() < fixedParameterCount)
+                        return std::nullopt;
+                }
+                else if (functionType->paramTypes.size() != node.arguments.size())
+                {
+                    return std::nullopt;
+                }
+            }
 
             std::vector<Ref<Type>> resolvedArgumentTypes;
             resolvedArgumentTypes.reserve(node.arguments.size());
@@ -3483,7 +3712,16 @@ namespace wio::sema
             for (size_t i = 0; i < node.arguments.size(); ++i)
             {
                 Ref<Type> expectedType = nullptr;
-                if (i < functionType->paramTypes.size())
+                if (usesPackExpansion)
+                {
+                    if (i < fixedParameterCount)
+                        expectedType = functionType->paramTypes[i];
+                    else if (i == *packExpansionIndex)
+                        expectedType = functionType->paramTypes.back();
+                }
+                else if (!hasParameterPack && i < functionType->paramTypes.size())
+                    expectedType = functionType->paramTypes[i];
+                else if (hasParameterPack && i < fixedParameterCount)
                     expectedType = functionType->paramTypes[i];
 
                 auto analyzedType = analyzeArgumentWithExpectedType(node.arguments[i], expectedType, suppressDiagnostics);
@@ -3546,12 +3784,21 @@ namespace wio::sema
         {
             if (!functionType ||
                 actualArgumentTypes.size() < requiredArgumentCount ||
-                actualArgumentTypes.size() > functionType->paramTypes.size())
+                (!functionType->hasParameterPack && actualArgumentTypes.size() > functionType->paramTypes.size()))
                 return std::nullopt;
 
             int currentScore = 0;
+            const size_t fixedParameterCount = functionType->hasParameterPack && !functionType->paramTypes.empty()
+                ? functionType->paramTypes.size() - 1
+                : functionType->paramTypes.size();
             for (size_t i = 0; i < actualArgumentTypes.size(); ++i)
             {
+                if (functionType->hasParameterPack && i >= fixedParameterCount)
+                {
+                    currentScore += actualArgumentTypes[i] && actualArgumentTypes[i]->kind() == TypeKind::GenericParameterPack ? 4 : 8;
+                    continue;
+                }
+
                 auto dest = functionType->paramTypes[i];
                 const auto& src = actualArgumentTypes[i];
 
@@ -3608,7 +3855,8 @@ namespace wio::sema
                 }
             }
 
-            currentScore -= static_cast<int>((functionType->paramTypes.size() - actualArgumentTypes.size()) * 25);
+            if (!functionType->hasParameterPack)
+                currentScore -= static_cast<int>((functionType->paramTypes.size() - actualArgumentTypes.size()) * 25);
 
             if (isGenericCandidate)
                 currentScore -= static_cast<int>(std::max<size_t>(1, genericParameterCount));
@@ -3675,7 +3923,8 @@ namespace wio::sema
                     isConstructorCall && constructorStructType ? constructorStructType->name : overload->name,
                     genericParameterNames,
                     functionType,
-                    isConstructorCall
+                    isConstructorCall,
+                    overload->hasGenericParameterPack
                 );
             };
 
@@ -3739,13 +3988,20 @@ namespace wio::sema
             auto isAllowedInstantiateBinding = [&](const Ref<Symbol>& overload,
                                                    const std::vector<std::string>& activeGenericParameterNames,
                                                    const std::unordered_map<std::string, Ref<Type>>& bindings) -> bool
-            {
-                if (!overload || activeGenericParameterNames.empty())
-                    return true;
+              {
+                  if (!overload || activeGenericParameterNames.empty())
+                      return true;
 
-                auto foundDeclaration = functionDeclarationsBySymbol_.find(overload.Get());
-                if (foundDeclaration == functionDeclarationsBySymbol_.end() || !foundDeclaration->second)
-                    return true;
+                  if (overload->hasGenericParameterPack)
+                      return true;
+
+                  if (auto overloadFunctionType = overload->type ? overload->type.AsFast<FunctionType>() : nullptr;
+                      overloadFunctionType && overloadFunctionType->hasParameterPack)
+                      return true;
+
+                  auto foundDeclaration = functionDeclarationsBySymbol_.find(overload.Get());
+                  if (foundDeclaration == functionDeclarationsBySymbol_.end() || !foundDeclaration->second)
+                      return true;
 
                 const auto* functionDeclaration = foundDeclaration->second;
                 if (!hasAttribute(functionDeclaration->attributes, Attribute::Native) &&
@@ -3829,6 +4085,8 @@ namespace wio::sema
             bool rejectedByApplyConstraints = false;
             std::string rejectedApplyTargetName;
             std::string rejectedApplySignature;
+            bool rejectedExplicitTypeArgumentsForPack = false;
+            std::string rejectedExplicitTypeArgumentTargetName;
 
             auto tryResolveFunctionCandidate = [&](const Ref<Symbol>& overload) -> std::optional<ResolvedFunctionCandidate>
             {
@@ -3851,13 +4109,36 @@ namespace wio::sema
                 if (!declaredFunctionType)
                     return std::nullopt;
 
+                const bool candidateHasParameterPack = declaredFunctionType->hasParameterPack;
+                const size_t fixedParameterCount = candidateHasParameterPack && !declaredFunctionType->paramTypes.empty()
+                    ? declaredFunctionType->paramTypes.size() - 1
+                    : declaredFunctionType->paramTypes.size();
                 const size_t requiredArgumentCount = getRequiredArgumentCountForCallable(overload, declaredFunctionType);
-                if (node.arguments.size() < requiredArgumentCount || node.arguments.size() > declaredFunctionType->paramTypes.size())
+                if (packExpansionIndex.has_value())
+                {
+                    if (!candidateHasParameterPack || *packExpansionIndex != fixedParameterCount)
+                        return std::nullopt;
+                }
+                else if (node.arguments.size() < requiredArgumentCount || (!candidateHasParameterPack && node.arguments.size() > declaredFunctionType->paramTypes.size()))
+                {
                     return std::nullopt;
+                }
 
                 const std::vector<std::string>& activeGenericParameterNames =
                     isConstructorCall ? constructorGenericParameterNames : overload->genericParameterNames;
                 bool isGenericCandidate = containsGenericParameterType(resolvedFunctionType);
+                const bool hasGenericParameterPack = overload->hasGenericParameterPack || candidateHasParameterPack;
+                std::vector<std::string> deducibleGenericParameterNames = activeGenericParameterNames;
+                if (hasGenericParameterPack && !deducibleGenericParameterNames.empty())
+                    deducibleGenericParameterNames.pop_back();
+
+                if (useExplicitFunctionTypeArguments && hasGenericParameterPack)
+                {
+                    rejectedExplicitTypeArgumentsForPack = true;
+                    rejectedExplicitTypeArgumentTargetName = overload->name;
+                    return std::nullopt;
+                }
+
                 if (useExplicitFunctionTypeArguments && !isGenericCandidate)
                     return std::nullopt;
 
@@ -3873,7 +4154,7 @@ namespace wio::sema
                 {
                     if (useExplicitFunctionTypeArguments)
                     {
-                        if (activeGenericParameterNames.size() != explicitTypeArguments.size())
+                        if (deducibleGenericParameterNames.size() != explicitTypeArguments.size())
                             return std::nullopt;
 
                         for (size_t i = 0; i < explicitTypeArguments.size(); ++i)
@@ -3881,14 +4162,26 @@ namespace wio::sema
                             if (!explicitTypeArguments[i] || explicitTypeArguments[i]->isUnknown())
                                 return std::nullopt;
 
-                            bindings.emplace(activeGenericParameterNames[i], explicitTypeArguments[i]);
+                            bindings.emplace(deducibleGenericParameterNames[i], explicitTypeArguments[i]);
                         }
                     }
                 }
 
                 auto getExpectedParameterType = [&](size_t index) -> Ref<Type>
                 {
-                    Ref<Type> expectedParameterType = declaredFunctionType->paramTypes[index];
+                    Ref<Type> expectedParameterType = nullptr;
+                    if (candidateHasParameterPack)
+                    {
+                        if (index < fixedParameterCount)
+                            expectedParameterType = declaredFunctionType->paramTypes[index];
+                        else if (packExpansionIndex.has_value() && index == *packExpansionIndex)
+                            expectedParameterType = declaredFunctionType->paramTypes.back();
+                    }
+                    else if (index < declaredFunctionType->paramTypes.size())
+                    {
+                        expectedParameterType = declaredFunctionType->paramTypes[index];
+                    }
+
                     if (!bindings.empty())
                         expectedParameterType = instantiateGenericType(expectedParameterType, bindings);
                     return expectedParameterType;
@@ -3897,10 +4190,14 @@ namespace wio::sema
                 for (size_t i = 0; i < node.arguments.size(); ++i)
                 {
                     Ref<Type> expectedParameterType = getExpectedParameterType(i);
+                    const bool usesPackExpansionArgument = packExpansionIndex.has_value() && i == *packExpansionIndex;
+                    const bool isConcretePackTailArgument = candidateHasParameterPack && !packExpansionIndex.has_value() && i >= fixedParameterCount;
                     bool shouldDeferArgument =
                         isGenericCandidate &&
+                        !usesPackExpansionArgument &&
+                        !isConcretePackTailArgument &&
                         isContextSensitiveArgument(node.arguments[i]) &&
-                        containsNamedGenericParameterType(expectedParameterType, activeGenericParameterNames);
+                        containsNamedGenericParameterType(expectedParameterType, deducibleGenericParameterNames);
 
                     if (shouldDeferArgument)
                         continue;
@@ -3913,6 +4210,8 @@ namespace wio::sema
                     analyzedArguments[i] = true;
 
                     if (isGenericCandidate &&
+                        !usesPackExpansionArgument &&
+                        !isConcretePackTailArgument &&
                         !deduceGenericBindings(expectedParameterType, candidateArgTypes[i], bindings))
                     {
                         return std::nullopt;
@@ -3925,6 +4224,8 @@ namespace wio::sema
                         continue;
 
                     Ref<Type> expectedParameterType = getExpectedParameterType(i);
+                    const bool usesPackExpansionArgument = packExpansionIndex.has_value() && i == *packExpansionIndex;
+                    const bool isConcretePackTailArgument = candidateHasParameterPack && !packExpansionIndex.has_value() && i >= fixedParameterCount;
                     auto analyzedType = analyzeArgumentWithExpectedType(node.arguments[i], expectedParameterType, true);
                     if (!analyzedType.has_value())
                         return std::nullopt;
@@ -3933,6 +4234,8 @@ namespace wio::sema
                     analyzedArguments[i] = true;
 
                     if (isGenericCandidate &&
+                        !usesPackExpansionArgument &&
+                        !isConcretePackTailArgument &&
                         !deduceGenericBindings(expectedParameterType, candidateArgTypes[i], bindings))
                     {
                         return std::nullopt;
@@ -3944,7 +4247,7 @@ namespace wio::sema
 
                 if (isGenericCandidate)
                 {
-                    for (const auto& genericParameterName : activeGenericParameterNames)
+                    for (const auto& genericParameterName : deducibleGenericParameterNames)
                     {
                         if (!bindings.contains(genericParameterName) ||
                             !bindings.at(genericParameterName) ||
@@ -3958,8 +4261,8 @@ namespace wio::sema
                     if (!isAllowedInstantiateBinding(overload, activeGenericParameterNames, bindings))
                     {
                         std::vector<Ref<Type>> resolvedBindingTypes;
-                        resolvedBindingTypes.reserve(activeGenericParameterNames.size());
-                        for (const auto& genericParameterName : activeGenericParameterNames)
+                        resolvedBindingTypes.reserve(deducibleGenericParameterNames.size());
+                        for (const auto& genericParameterName : deducibleGenericParameterNames)
                         {
                             auto foundBinding = bindings.find(genericParameterName);
                             if (foundBinding != bindings.end())
@@ -3973,11 +4276,11 @@ namespace wio::sema
                     }
 
                     Ref<Symbol> applyConstraintOwner = isConstructorCall ? genericOwnerSym : overload;
-                    if (!satisfiesApplyBinding(applyConstraintOwner, activeGenericParameterNames, bindings))
+                    if (!satisfiesApplyBinding(applyConstraintOwner, deducibleGenericParameterNames, bindings))
                     {
                         std::vector<Ref<Type>> resolvedBindingTypes;
-                        resolvedBindingTypes.reserve(activeGenericParameterNames.size());
-                        for (const auto& genericParameterName : activeGenericParameterNames)
+                        resolvedBindingTypes.reserve(deducibleGenericParameterNames.size());
+                        for (const auto& genericParameterName : deducibleGenericParameterNames)
                         {
                             auto foundBinding = bindings.find(genericParameterName);
                             if (foundBinding != bindings.end())
@@ -4008,7 +4311,8 @@ namespace wio::sema
 
                     resolvedFunctionType = Compiler::get().getTypeContext().getOrCreateFunctionType(
                         instantiatedReturnType,
-                        instantiatedParamTypes
+                        instantiatedParamTypes,
+                        declaredFunctionType->hasParameterPack
                     );
                 }
 
@@ -4022,7 +4326,8 @@ namespace wio::sema
                 {
                     auto callableSurfaceType = buildCallableSurfaceFunctionType(
                         resolvedFunctionType.AsFast<FunctionType>(),
-                        node.arguments.size()
+                        candidateArgTypes,
+                        packExpansionIndex.has_value()
                     );
                     return ResolvedFunctionCandidate{
                         .symbol = overload,
@@ -4082,7 +4387,15 @@ namespace wio::sema
             }
             if (!bestMatch.has_value())
             {
-                if (rejectedByInstantiationWhitelist)
+                if (rejectedExplicitTypeArgumentsForPack)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "Explicit type arguments are not supported on generic pack function '{}' yet. Rely on deduction from call arguments.",
+                        rejectedExplicitTypeArgumentTargetName
+                    );
+                }
+                else if (rejectedByInstantiationWhitelist)
                 {
                     WIO_LOG_ADD_ERROR(
                         node.location(),
@@ -4340,12 +4653,14 @@ namespace wio::sema
         {
             const size_t requiredArgumentCount = getRequiredArgumentCountForCallable(calleeSym, funcType);
             const size_t totalParameterCount = funcType ? funcType->paramTypes.size() : 0;
-            if (node.arguments.size() < requiredArgumentCount || node.arguments.size() > totalParameterCount)
+            if (node.arguments.size() < requiredArgumentCount || (!funcType->hasParameterPack && node.arguments.size() > totalParameterCount))
             {
                 WIO_LOG_ADD_ERROR(
                     node.location(),
                     "Function expects '{}' arguments, but got '{}'.",
-                    formatExpectedArgumentCountDescription(requiredArgumentCount, totalParameterCount),
+                    funcType->hasParameterPack
+                        ? common::formatString("{} or more", requiredArgumentCount)
+                        : formatExpectedArgumentCountDescription(requiredArgumentCount, totalParameterCount),
                     node.arguments.size()
                 );
             }
@@ -4354,10 +4669,17 @@ namespace wio::sema
         }
 
         const size_t requiredArgumentCount = getRequiredArgumentCountForCallable(calleeSym, funcType);
-        if (argTypes.size() < requiredArgumentCount || argTypes.size() > funcType->paramTypes.size())
-            WIO_LOG_ADD_ERROR(node.location(), "Function expects '{}' arguments, but got '{}'.", formatExpectedArgumentCountDescription(requiredArgumentCount, funcType->paramTypes.size()), argTypes.size());
+        if (argTypes.size() < requiredArgumentCount || (!funcType->hasParameterPack && argTypes.size() > funcType->paramTypes.size()))
+            WIO_LOG_ADD_ERROR(node.location(), "Function expects '{}' arguments, but got '{}'.",
+                funcType->hasParameterPack
+                    ? common::formatString("{} or more", requiredArgumentCount)
+                    : formatExpectedArgumentCountDescription(requiredArgumentCount, funcType->paramTypes.size()),
+                argTypes.size());
         
-        size_t argCount = std::min(argTypes.size(), funcType->paramTypes.size());
+        const size_t fixedParameterCount = funcType->hasParameterPack && !funcType->paramTypes.empty()
+            ? funcType->paramTypes.size() - 1
+            : funcType->paramTypes.size();
+        size_t argCount = funcType->hasParameterPack ? std::min(argTypes.size(), fixedParameterCount) : std::min(argTypes.size(), funcType->paramTypes.size());
         for (size_t i = 0; i < argCount; ++i)
         {
             auto expectedType = funcType->paramTypes[i];
@@ -4858,8 +5180,9 @@ namespace wio::sema
             std::unordered_map<std::string, Ref<Type>> scope;
             scope.reserve(node.genericParameters.size());
 
-            for (const auto& genericParameter : node.genericParameters)
+            for (size_t genericIndex = 0; genericIndex < node.genericParameters.size(); ++genericIndex)
             {
+                const auto& genericParameter = node.genericParameters[genericIndex];
                 if (!genericParameter)
                     continue;
 
@@ -4922,8 +5245,9 @@ namespace wio::sema
             std::unordered_map<std::string, Ref<Type>> scope;
             scope.reserve(node.genericParameters.size());
 
-            for (const auto& genericParameter : node.genericParameters)
+            for (size_t genericIndex = 0; genericIndex < node.genericParameters.size(); ++genericIndex)
             {
+                const auto& genericParameter = node.genericParameters[genericIndex];
                 if (!genericParameter)
                     continue;
 
@@ -4934,7 +5258,13 @@ namespace wio::sema
                     continue;
                 }
 
-                Ref<Type> parameterType = Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
+                const bool isGenericParameterPack =
+                    node.hasGenericParameterPack &&
+                    genericIndex + 1 == node.genericParameters.size();
+
+                Ref<Type> parameterType = isGenericParameterPack
+                    ? Compiler::get().getTypeContext().getOrCreateGenericParameterPackType(parameterName)
+                    : Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
                 genericParameter->refType = parameterType;
                 scope.emplace(parameterName, parameterType);
             }
@@ -4955,6 +5285,7 @@ namespace wio::sema
             }
 
             std::vector<Ref<Type>> paramTypes;
+            bool hasParameterPack = false;
             for (auto& param : node.parameters)
             {
                 Ref<Type> pType = Compiler::get().getTypeContext().getUnknown();
@@ -4963,10 +5294,11 @@ namespace wio::sema
                     param.type->accept(*this);
                     pType = param.type->refType.Lock();
                 }
+                hasParameterPack = hasParameterPack || param.isParameterPack;
                 paramTypes.push_back(pType);
             }
 
-            auto funcType = Compiler::get().getTypeContext().getOrCreateFunctionType(returnType, paramTypes);
+            auto funcType = Compiler::get().getTypeContext().getOrCreateFunctionType(returnType, paramTypes, hasParameterPack);
             
             Ref<Symbol> funcSym = createSymbol(node.name->token.value, funcType, SymbolKind::Function, node.location());
             funcSym->genericParameterNames.reserve(node.genericParameters.size());
@@ -4975,6 +5307,7 @@ namespace wio::sema
                 if (genericParameter)
                     funcSym->genericParameterNames.push_back(genericParameter->token.value);
             }
+            funcSym->hasGenericParameterPack = node.hasGenericParameterPack;
             currentScope_->define(node.name->token.value, funcSym);
             functionDeclarationsBySymbol_[funcSym.Get()] = &node;
             attributeListsBySymbol_[funcSym.Get()] = &node.attributes;
@@ -5003,6 +5336,11 @@ namespace wio::sema
         bool hasApply = hasAttribute(node.attributes, Attribute::Apply);
         bool isStructMethod = currentScope_ && currentScope_->getKind() == ScopeKind::Struct;
         bool hasInstantiate = hasAttribute(node.attributes, Attribute::Instantiate);
+        const bool hasFunctionParameterPack = std::ranges::any_of(node.parameters, [](const Parameter& parameter)
+        {
+            return parameter.isParameterPack;
+        });
+        const bool isPackFunction = node.hasGenericParameterPack || hasFunctionParameterPack;
         if (isCommand && isEvent)
         {
             WIO_LOG_ADD_ERROR(node.location(), "@Command and @Event cannot be combined on the same function.");
@@ -5025,6 +5363,11 @@ namespace wio::sema
 
         if (isGenericFunction)
         {
+            if (isPackFunction && isStructMethod)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Generic parameter packs are currently supported only on top-level functions.");
+            }
+
             if (isStructMethod)
             {
                 auto currentStruct = currentStructType_ ? currentStructType_.AsFast<StructType>() : nullptr;
@@ -5053,7 +5396,7 @@ namespace wio::sema
                 WIO_LOG_ADD_ERROR(node.location(), "@Instantiate is currently supported only together with @Native or @Export.");
             }
 
-            if ((isNative || isExported) && !hasInstantiate)
+            if ((isNative || isExported) && !hasInstantiate && !isPackFunction)
             {
                 WIO_LOG_ADD_ERROR(
                     node.location(),
@@ -5070,6 +5413,91 @@ namespace wio::sema
         else if (hasInstantiate)
         {
             WIO_LOG_ADD_ERROR(node.location(), "@Instantiate can only be used on generic functions.");
+        }
+
+        if (isPackFunction)
+        {
+            if (!node.hasGenericParameterPack)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Function parameter packs require a matching trailing generic parameter pack.");
+            }
+
+            if (hasApply)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "@Apply is not supported on generic pack functions yet.");
+            }
+
+            if (hasInstantiate)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "@Instantiate is not supported on generic pack functions yet.");
+            }
+
+            if (isExported || isCommand || isEvent || hasModuleLifecycle)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Generic pack functions cannot currently use export or module ABI attributes.");
+            }
+
+            if (node.whenCondition || node.whenFallback)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "when/else clauses are not supported on generic pack functions yet.");
+            }
+
+            if (node.returnType && containsGenericParameterPackType(funcType->returnType))
+            {
+                WIO_LOG_ADD_ERROR(node.returnType->location(), "Generic parameter packs are currently supported only in the trailing function parameter position.");
+            }
+
+            if (!node.genericParameters.empty())
+            {
+                const std::string& expectedPackName = node.genericParameters.back()->token.value;
+                bool sawParameterPack = false;
+
+                for (size_t i = 0; i < node.parameters.size(); ++i)
+                {
+                    auto& parameter = node.parameters[i];
+                    Ref<Type> parameterType = i < funcType->paramTypes.size() ? funcType->paramTypes[i] : Compiler::get().getTypeContext().getUnknown();
+                    std::string containedPackName;
+                    const bool containsPack = containsGenericParameterPackType(parameterType, &containedPackName);
+
+                    if (parameter.isParameterPack)
+                    {
+                        sawParameterPack = true;
+
+                        if (i + 1 != node.parameters.size())
+                        {
+                            WIO_LOG_ADD_ERROR(parameter.name->location(), "Function parameter packs must be trailing.");
+                        }
+
+                        if (!containsPack || containedPackName != expectedPackName)
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                parameter.name->location(),
+                                "Function parameter pack '{}' requires the trailing generic pack '{}...'.",
+                                parameter.name->token.value,
+                                expectedPackName
+                            );
+                        }
+                    }
+                    else if (containsPack)
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            parameter.name->location(),
+                            "Generic pack parameter '{}...' is currently supported only in the trailing function parameter position.",
+                            containedPackName
+                        );
+                    }
+
+                    if (parameter.defaultValue)
+                    {
+                        WIO_LOG_ADD_ERROR(parameter.name->location(), "Default parameters are not supported on generic pack functions yet.");
+                    }
+                }
+
+                if (!sawParameterPack)
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "Generic parameter pack '{}...' requires a matching trailing function parameter pack.", expectedPackName);
+                }
+            }
         }
 
         if (node.name->token.value == "Entry")
@@ -5417,7 +5845,11 @@ namespace wio::sema
         }
 
         Ref<Type> prevRetType = currentFunctionReturnType_;
+        Ref<Symbol> prevFunctionParameterPackSymbol = currentFunctionParameterPackSymbol_;
+        Ref<Type> prevFunctionParameterPackType = currentFunctionParameterPackType_;
         currentFunctionReturnType_ = funcType->returnType;
+        currentFunctionParameterPackSymbol_ = nullptr;
+        currentFunctionParameterPackType_ = nullptr;
 
         auto genericScope = buildGenericTypeParameterScope();
         genericTypeParameterScopes_.push_back(genericScope);
@@ -5625,11 +6057,21 @@ namespace wio::sema
         {
             auto& param = node.parameters[i];
             
-            Ref<Symbol> pSym = createSymbol(param.name->token.value, funcType->paramTypes[i], SymbolKind::Parameter, param.name->location());
+            SymbolFlags parameterFlags = SymbolFlags::createAllFalse();
+            if (param.isParameterPack)
+                parameterFlags.set_isParameterPack(true);
+
+            Ref<Symbol> pSym = createSymbol(param.name->token.value, funcType->paramTypes[i], SymbolKind::Parameter, param.name->location(), parameterFlags);
             currentScope_->define(param.name->token.value, pSym);
             
             param.name->referencedSymbol = pSym;
             param.name->refType = funcType->paramTypes[i];
+
+            if (param.isParameterPack)
+            {
+                currentFunctionParameterPackSymbol_ = pSym;
+                currentFunctionParameterPackType_ = funcType->paramTypes[i];
+            }
         }
 
         if (node.whenCondition)
@@ -5682,6 +6124,8 @@ namespace wio::sema
         exitScope();
         genericTypeParameterScopes_.pop_back();
         currentFunctionReturnType_ = prevRetType;
+        currentFunctionParameterPackSymbol_ = prevFunctionParameterPackSymbol;
+        currentFunctionParameterPackType_ = prevFunctionParameterPackType;
     }
 
     void SemanticAnalyzer::visit(RealmDeclaration& node)

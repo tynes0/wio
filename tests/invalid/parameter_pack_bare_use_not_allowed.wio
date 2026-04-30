@@ -1,0 +1,4 @@
+fn Bad<Args...>(args: Args...) -> i32 {
+    let copy = args;
+    return 0;
+}
