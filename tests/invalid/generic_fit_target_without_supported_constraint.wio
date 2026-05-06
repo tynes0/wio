@@ -1,0 +1,7 @@
+fn Cast<T>(value: i32) -> T {
+    return value fit T;
+}
+
+fn Entry(args: string[]) -> i32 {
+    return 0;
+}

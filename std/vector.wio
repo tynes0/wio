@@ -1,0 +1,26 @@
+realm std {
+    component Vector2 {
+            x: f64;
+            y: f64;
+
+            fn OnConstruct() {
+                x = 0.0f64;
+                y = 0.0f64;
+            }
+
+            fn OnConstruct(value: f64) {
+                x = value;
+                y = value;
+            }
+
+            fn OnConstruct(x: f64, y: f64) {
+                self.x = x;
+                self.y = y;
+            }
+
+            fn OnConstruct(other: view Vector2) {
+                self.x = other.x;
+                self.y = other.y;
+            }
+        }
+}

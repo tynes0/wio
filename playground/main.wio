@@ -1,18 +1,12 @@
 use std::console as Console;
-use std::algorithms as Algorithms;
-use std::math as Math;
+use std::vector;
 
-fn Entry() -> i32
+fn PrintVec2(vec: std::Vector2) {
+    Console::Print($"Vector2: x -> ${ vec.x } y-> ${ vec.y }");
+}
+
+fn Entry() -> void
 {
-    mut strs: string[] = [];
-    strs.Push("Foo");
-    strs.Push("Bar");
-    strs.Push("Baz");
-
-    mut str: string = strs.Join(",");
-    str.Push(']');
-    str = str.Reversed();
-    str.Push('[');
-
-    Console::PrintLine(str.Reversed());
+    mut vec: std::Vector2 = std::Vector2();
+    PrintVec2(vec);
 }

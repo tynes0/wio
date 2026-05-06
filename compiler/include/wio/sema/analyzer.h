@@ -33,6 +33,7 @@ namespace wio::sema
         Ref<Type> currentBaseStructType_ = nullptr;
         Ref<Symbol> currentFunctionParameterPackSymbol_ = nullptr;
         Ref<Type> currentFunctionParameterPackType_ = nullptr;
+        std::vector<Ref<Symbol>> activeGenericConstraintSymbols_;
         bool allowParameterPackIdentifierReference_ = false;
         bool allowTypePackIdentifierReference_ = false;
         std::vector<std::string> currentNamespacePath_;

@@ -1,0 +1,21 @@
+use std::assert as assert;
+
+fn Append(values: ref string[]) {
+    values.Push("c");
+}
+
+fn Put(values: ref Dict<string, i32>) {
+    values.Set("answer", 42);
+}
+
+fn Entry(args: string[]) -> i32 {
+    mut values: string[] = ["a", "b"];
+    Append(ref values);
+    assert::ExpectEqual(values.Count(), 3usize, "ref mut array receiver should allow Push");
+    assert::ExpectEqual(values.Last(), "c", "ref mut array receiver should update content");
+
+    mut dict: Dict<string, i32> = {};
+    Put(ref dict);
+    assert::ExpectEqual(dict.Get("answer"), 42, "ref mut dict receiver should allow Set");
+    return 0;
+}

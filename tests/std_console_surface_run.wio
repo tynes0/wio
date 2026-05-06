@@ -3,6 +3,16 @@ use std::console as console;
 fn Entry() -> i32 {
     let numbers: i32[] = [1, 2, 3];
     let letters: string[] = ["a", "b"];
+    let caps = console::Capabilities();
+    let outStream = console::GetStandardOutputInfo(0usize);
+    let title = console::TitleOr("");
+    let newline = console::NewLineOr("\n");
+    let formatted = console::Format(" fmt({0}, {1}, {2})", 7, true, "ok");
+    let colorsSupported = caps.colors;
+    let streamOpen = outStream.isOpen;
+    let hasWriter = outStream.hasWriter;
+    let titleCount = title.Count();
+    let newlineCount = newline.Count();
 
     console::Write("Std console surface: ");
     console::WriteJoined(numbers, ",");
@@ -10,5 +20,8 @@ fn Entry() -> i32 {
     console::WriteRepeat("x", 3);
     console::PrintSpace();
     console::WriteJoined(letters, "/");
+    console::Write(formatted);
+    console::PrintSpace();
+    console::PrintFormat("meta={0}/{1}/{2}/{3}/{4}", colorsSupported, streamOpen, hasWriter, titleCount fit i32, newlineCount fit i32);
     return 0;
 }

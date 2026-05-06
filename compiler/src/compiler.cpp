@@ -2543,7 +2543,18 @@ namespace wio
                 {
                     if (!gAppData.flags.get_NoBuiltin())
                     {
-                        mergedStatements.push_back(std::move(stmt));
+                        std::vector<std::string> childExportedSymbols;
+                        auto childProgram = parseAndMerge(useStmt->modulePath, true, actualPath.parent_path(), &childExportedSymbols);
+                        for (auto& childStmt : childProgram->statements)
+                        {
+                            mergedStatements.push_back(std::move(childStmt));
+                        }
+
+                        if (!useStmt->aliasName.empty())
+                        {
+                            useStmt->importedSymbols = std::move(childExportedSymbols);
+                            mergedStatements.push_back(std::move(stmt));
+                        }
                     }
                 }
                 else

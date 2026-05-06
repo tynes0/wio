@@ -1,0 +1,13 @@
+use std::assert as assert;
+use std::traits as traits;
+
+@Apply(traits::IsNumeric<T>)
+fn CastNumeric<T>(value: i32) -> T {
+    return value fit T;
+}
+
+fn Entry(args: string[]) -> i32 {
+    let value = CastNumeric<i32>(11);
+    assert::ExpectEqual(value, 11, "numeric constrained fit should work");
+    return 0;
+}

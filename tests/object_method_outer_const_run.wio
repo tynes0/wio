@@ -1,0 +1,15 @@
+object ScaleReader {
+    fn OnConstruct() {
+    }
+
+    public fn Read() -> i32 {
+        return GlobalScale;
+    }
+}
+
+const GlobalScale: i32 = 9;
+
+fn Entry(args: string[]) -> i32 {
+    let reader: ScaleReader = ScaleReader();
+    return reader.Read();
+}

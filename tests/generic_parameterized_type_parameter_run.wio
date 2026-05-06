@@ -1,0 +1,16 @@
+use std::assert as assert;
+
+component Pair<T> {
+    x: T;
+    y: T;
+}
+
+fn First<T>(value: Pair<T>) -> T {
+    return value.x;
+}
+
+fn Entry(args: string[]) -> i32 {
+    let value = Pair<i32>(3, 4);
+    assert::ExpectEqual(First<i32>(value), 3, "generic parameterized type parameters should resolve");
+    return 0;
+}

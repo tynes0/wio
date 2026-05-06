@@ -193,6 +193,25 @@ namespace wio::sema
             return type;
         }
 
+        bool isMutableReferenceTypeChain(Ref<Type> type)
+        {
+            Ref<Type> current = unwrapAliasType(type);
+            bool sawReference = false;
+
+            while (current && current->kind() == TypeKind::Reference)
+            {
+                sawReference = true;
+
+                auto referenceType = current.AsFast<ReferenceType>();
+                if (!referenceType->isMutable)
+                    return false;
+
+                current = unwrapAliasType(referenceType->referredType);
+            }
+
+            return sawReference;
+        }
+
         bool canMutateIntrinsicReceiver(const NodePtr<Expression>& expression)
         {
             if (!expression)
@@ -202,19 +221,12 @@ namespace wio::sema
             {
                 if (receiverSymbol->flags.get_isMutable())
                     return true;
+
+                if (isMutableReferenceTypeChain(receiverSymbol->type))
+                    return true;
             }
 
-            Ref<Type> receiverType = unwrapAliasType(expression->refType.Lock());
-            while (receiverType && receiverType->kind() == TypeKind::Reference)
-            {
-                auto referenceType = receiverType.AsFast<ReferenceType>();
-                if (!referenceType->isMutable)
-                    return false;
-
-                receiverType = unwrapAliasType(referenceType->referredType);
-            }
-
-            return false;
+            return isMutableReferenceTypeChain(expression->refType.Lock());
         }
 
         bool isUnsupportedStaticArrayMember(const Ref<Type>& type, std::string_view memberName)
@@ -6438,6 +6450,112 @@ namespace wio::sema
         auto srcType = node.operand->refType.Lock();
         auto destType = node.targetType->refType.Lock();
 
+        struct GenericFitConstraintInfo
+        {
+            bool isKnown = false;
+            bool allowsNumeric = false;
+            bool allowsObjectLike = false;
+        };
+
+        auto resolveGenericFitConstraintInfo = [&](const Ref<Type>& candidateType) -> GenericFitConstraintInfo
+        {
+            GenericFitConstraintInfo info;
+
+            Ref<Type> resolvedCandidateType = unwrapAliasType(candidateType);
+            if (!resolvedCandidateType || resolvedCandidateType->kind() != TypeKind::GenericParameter)
+                return info;
+
+            const std::string& genericParameterName = resolvedCandidateType.AsFast<GenericParameterType>()->name;
+
+            for (auto symbolIt = activeGenericConstraintSymbols_.rbegin();
+                 symbolIt != activeGenericConstraintSymbols_.rend();
+                 ++symbolIt)
+            {
+                const Ref<Symbol>& activeSymbol = *symbolIt;
+                if (!activeSymbol)
+                    continue;
+
+                auto genericParameterIt = std::ranges::find(activeSymbol->genericParameterNames, genericParameterName);
+                if (genericParameterIt == activeSymbol->genericParameterNames.end())
+                    continue;
+
+                auto attributeIt = attributeListsBySymbol_.find(activeSymbol.Get());
+                if (attributeIt == attributeListsBySymbol_.end() || !attributeIt->second)
+                    return {};
+
+                const size_t genericParameterIndex = static_cast<size_t>(
+                    std::distance(activeSymbol->genericParameterNames.begin(), genericParameterIt)
+                );
+                const auto applyAttributes = getAttributeStatements(*attributeIt->second, Attribute::Apply);
+                if (applyAttributes.empty())
+                    return {};
+
+                bool sawApplicableConstraint = false;
+                bool allConstraintsAreFitCompatible = true;
+                auto& typeContext = Compiler::get().getTypeContext();
+
+                for (const auto* applyAttribute : applyAttributes)
+                {
+                    if (!applyAttribute || applyAttribute->args.size() != activeSymbol->genericParameterNames.size())
+                        continue;
+
+                    sawApplicableConstraint = true;
+                    const auto argument = getAttributeTypeArgument(*applyAttribute, genericParameterIndex);
+
+                    if (argument.typeSpecifier)
+                    {
+                        if (const auto* predicateTrait =
+                                findGenericConstraintTraitDescriptor(argument.typeSpecifier->name.value,
+                                                                     argument.typeSpecifier->refType.Lock()))
+                        {
+                            if (predicateTrait->kind == GenericConstraintTraitKind::IsInteger ||
+                                predicateTrait->kind == GenericConstraintTraitKind::IsNumeric)
+                            {
+                                info.allowsNumeric = true;
+                                continue;
+                            }
+
+                            allConstraintsAreFitCompatible = false;
+                            break;
+                        }
+
+                        Ref<Type> exactType = unwrapAliasType(argument.typeSpecifier->refType.Lock());
+                        if (!exactType || exactType->isUnknown())
+                        {
+                            allConstraintsAreFitCompatible = false;
+                            break;
+                        }
+
+                        if (isNumericConstraintType(exactType))
+                        {
+                            info.allowsNumeric = true;
+                            continue;
+                        }
+
+                        if (getObjectOrInterfaceStructType(exactType) || isExactType(exactType, typeContext.getObject()))
+                        {
+                            info.allowsObjectLike = true;
+                            continue;
+                        }
+
+                        allConstraintsAreFitCompatible = false;
+                        break;
+                    }
+
+                    allConstraintsAreFitCompatible = false;
+                    break;
+                }
+
+                if (!sawApplicableConstraint || !allConstraintsAreFitCompatible)
+                    return {};
+
+                info.isKnown = info.allowsNumeric || info.allowsObjectLike;
+                return info;
+            }
+
+            return info;
+        };
+
         if (srcType && destType && !srcType->isUnknown() && !destType->isUnknown())
         {
             Ref<Type> resolvedSrcType = unwrapAliasType(srcType);
@@ -6453,6 +6571,26 @@ namespace wio::sema
             {
                 node.refType = destType;
                 return;
+            }
+
+            if (resolvedDestType && resolvedDestType->kind() == TypeKind::GenericParameter)
+            {
+                const GenericFitConstraintInfo constraintInfo = resolveGenericFitConstraintInfo(resolvedDestType);
+                const bool isNumericFit =
+                    resolvedSrcType &&
+                    resolvedSrcType->isNumeric() &&
+                    constraintInfo.isKnown &&
+                    constraintInfo.allowsNumeric;
+                const bool isObjectLikeFit =
+                    getObjectOrInterfaceStructType(srcType) &&
+                    constraintInfo.isKnown &&
+                    constraintInfo.allowsObjectLike;
+
+                if (isNumericFit || isObjectLikeFit)
+                {
+                    node.refType = destType;
+                    return;
+                }
             }
 
             WIO_LOG_ADD_ERROR(
@@ -7497,6 +7635,8 @@ namespace wio::sema
 
         auto genericScope = buildGenericTypeParameterScope();
         genericTypeParameterScopes_.push_back(genericScope);
+        if (!funcSym->genericParameterNames.empty())
+            activeGenericConstraintSymbols_.push_back(funcSym);
 
         bool sawDefaultParameter = false;
         for (size_t i = 0; i < node.parameters.size(); ++i)
@@ -7803,6 +7943,8 @@ namespace wio::sema
 
         exitScope();
         genericTypeParameterScopes_.pop_back();
+        if (!funcSym->genericParameterNames.empty())
+            activeGenericConstraintSymbols_.pop_back();
         currentFunctionReturnType_ = prevRetType;
         currentFunctionParameterPackSymbol_ = prevFunctionParameterPackSymbol;
         currentFunctionParameterPackType_ = prevFunctionParameterPackType;
@@ -8315,12 +8457,16 @@ namespace wio::sema
         currentScope_ = sym->innerScope;
         currentStructType_ = structType;
         genericTypeParameterScopes_.push_back(buildGenericTypeParameterScope());
+        if (!structType->genericParameterNames.empty())
+            activeGenericConstraintSymbols_.push_back(sym);
         
         for (auto& member : node.members)
             if (member.declaration->is<FunctionDeclaration>())
                 member.declaration->accept(*this);
 
         genericTypeParameterScopes_.pop_back();
+        if (!structType->genericParameterNames.empty())
+            activeGenericConstraintSymbols_.pop_back();
         currentStructType_ = nullptr;
         currentScope_ = prevScope;
     }
@@ -8859,6 +9005,8 @@ namespace wio::sema
         currentStructType_ = structType;
         currentBaseStructType_ = nullptr;
         genericTypeParameterScopes_.push_back(buildGenericTypeParameterScope());
+        if (!structType->genericParameterNames.empty())
+            activeGenericConstraintSymbols_.push_back(sym);
 
         for (const auto& baseType : structType->baseTypes)
         {
@@ -8878,6 +9026,8 @@ namespace wio::sema
                 member.declaration->accept(*this);
 
         genericTypeParameterScopes_.pop_back();
+        if (!structType->genericParameterNames.empty())
+            activeGenericConstraintSymbols_.pop_back();
         currentStructType_ = nullptr;
         currentBaseStructType_ = nullptr;
         currentScope_ = prevScope;
