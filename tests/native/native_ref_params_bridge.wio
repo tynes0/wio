@@ -1,0 +1,50 @@
+use std::console as console;
+
+realm ffi {
+    @Native
+    @CppHeader("native_ref_params.h")
+    @CppName(native_refs::Increment)
+    fn Increment(value: ref i32);
+
+    @Native
+    @CppHeader("native_ref_params.h")
+    @CppName(native_refs::ReadView)
+    fn ReadView(value: view i32) -> i32;
+
+    @Native
+    @CppHeader("native_ref_params.h")
+    @CppName(native_refs::AppendBang)
+    fn AppendBang(value: ref string);
+
+    @Native
+    @CppHeader("native_ref_params.h")
+    @CppName(native_refs::StartsWithHi)
+    fn StartsWithHi(value: view string) -> bool;
+
+    @Native
+    @CppHeader("native_ref_params.h")
+    @CppName(native_refs::PushValue)
+    fn PushValue(values: ref i32[], value: i32);
+
+    @Native
+    @CppHeader("native_ref_params.h")
+    @CppName(native_refs::LastPlusOne)
+    fn LastPlusOne(values: view i32[]) -> i32;
+}
+
+fn Entry() -> i32 {
+    mut number: i32 = 7;
+    ffi::Increment(ref number);
+    let viewed = ffi::ReadView(ref number);
+
+    mut text: string = "Hi";
+    ffi::AppendBang(ref text);
+    let starts = ffi::StartsWithHi(ref text);
+
+    mut values: i32[] = [1, 2];
+    ffi::PushValue(ref values, 9);
+    let lastPlusOne = ffi::LastPlusOne(ref values);
+
+    console::Print($"Native refs: ${number}, ${viewed}, ${text}, ${starts}, ${values.Count() fit i32}, ${lastPlusOne}");
+    return 0;
+}

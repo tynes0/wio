@@ -1,0 +1,18 @@
+@Native
+@CppHeader("../native/native_generic_pod_components.h")
+@CppName(native_pod_generic::pair2)
+component Pair<T> {
+    first: T;
+    second: T;
+}
+
+realm ffi {
+    @Native
+    @CppHeader("../native/native_generic_pod_components.h")
+    @CppName(native_pod_generic::SumI32)
+    fn SumInvalid(value: Pair<string>) -> i32;
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

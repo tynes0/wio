@@ -1,0 +1,52 @@
+use std::console as console;
+
+@Native
+@CppHeader("native_generic_pod_components.h")
+@CppName(native_pod_generic::pair2)
+component Pair<T> {
+    first: T;
+    second: T;
+}
+
+@Native
+@CppHeader("native_generic_pod_components.h")
+@CppName(native_pod_generic::wrapper)
+component Wrapper<T> {
+    value: Pair<T>;
+}
+
+realm ffi {
+    @Native
+    @CppHeader("native_generic_pod_components.h")
+    @CppName(native_pod_generic::SumI32)
+    fn SumI32(value: Pair<i32>) -> i32;
+
+    @Native
+    @CppHeader("native_generic_pod_components.h")
+    @CppName(native_pod_generic::ScaleF32)
+    fn ScaleF32(value: ref Pair<f32>, factor: f32);
+
+    @Native
+    @CppHeader("native_generic_pod_components.h")
+    @CppName(native_pod_generic::SumWrapperI32)
+    fn SumWrapperI32(value: Wrapper<i32>) -> i32;
+
+    @Native
+    @CppHeader("native_generic_pod_components.h")
+    @CppName(native_pod_generic::MakeI32)
+    fn MakeI32(first: i32, second: i32) -> Pair<i32>;
+}
+
+fn Entry() -> i32 {
+    let sum = ffi::SumI32(Pair<i32>(3, 4));
+
+    mut scaled = Pair<f32>(1.5f, 2.5f);
+    ffi::ScaleF32(ref scaled, 2.0f);
+
+    let wrapped = Wrapper<i32>(Pair<i32>(2, 3));
+    let wrappedSum = ffi::SumWrapperI32(wrapped);
+    let made = ffi::MakeI32(4, 5);
+
+    console::Print($"Generic native POD component: ${sum}, ${scaled.first}, ${scaled.second}, ${wrappedSum}, ${made.first}, ${made.second}");
+    return 0;
+}

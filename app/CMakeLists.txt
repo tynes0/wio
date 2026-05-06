@@ -711,6 +711,15 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_native_ref_params_bridge_run
+        "${CMAKE_SOURCE_DIR}/tests/native/native_ref_params_bridge.wio"
+        "Native refs: 12, 13, Hi!, true, 3, 10"
+        --run
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
+    )
+
+    add_wio_output_test(
         wio_test_native_generic_bridge_run
         "${CMAKE_SOURCE_DIR}/tests/native/native_generic_bridge.wio"
         "Generic native double: 42, 42"
@@ -739,6 +748,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/native"
         --backend-arg
         "${CMAKE_SOURCE_DIR}/tests/native/native_pod_components.cpp"
+    )
+
+    add_wio_output_test(
+        wio_test_native_generic_pod_component_bridge_run
+        "${CMAKE_SOURCE_DIR}/tests/native/native_generic_pod_component_bridge.wio"
+        "Generic native POD component: 7, 3, 5, 5, 4, 5"
+        --run
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
+        --backend-arg
+        "${CMAKE_SOURCE_DIR}/tests/native/native_generic_pod_components.cpp"
     )
 
     add_wio_output_test(
@@ -1914,6 +1934,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_native_component_non_pod_field_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/native_component_non_pod_field_not_supported.wio"
         "Declaration-level @Native component 'BadNativeComponent' field 'name' uses type 'string' which is not POD-native-compatible yet"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_native_generic_component_non_pod_specialization_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/native_generic_component_non_pod_specialization_not_supported.wio"
+        "Declaration-level @Native component 'Pair<string>' field 'first' resolves to type 'string' which is not POD-native-compatible yet"
     )
 
     add_wio_failure_test(

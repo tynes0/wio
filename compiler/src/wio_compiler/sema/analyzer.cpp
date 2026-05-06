@@ -636,6 +636,9 @@ namespace wio::sema
 
         size_t getMinimumGenericArgumentCount(const std::vector<std::string>& parameterNames, bool hasGenericParameterPack);
         bool containsGenericParameterType(const Ref<Type>& type);
+        bool isNativePodInteropFieldType(const Ref<Type>& type, bool allowGenericPlaceholders = false);
+        void validateInstantiatedNativePodComponent(const Ref<StructType>& structType,
+                                                    const common::Location& errorLocation = common::Location::invalid());
 
         std::optional<std::vector<Ref<Type>>> tryMaterializeConcreteInstantiation(
             const std::vector<std::string>& parameterNames,
@@ -1762,7 +1765,8 @@ namespace wio::sema
         Ref<Type> instantiateGenericType(const Ref<Type>& type, const GenericBindingSet& bindings);
 
         Ref<Type> instantiateGenericStructType(const Ref<StructType>& structType,
-                                               const std::vector<Ref<Type>>& explicitTypeArguments)
+                                               const std::vector<Ref<Type>>& explicitTypeArguments,
+                                               const common::Location& errorLocation = common::Location::invalid())
         {
             if (!structType)
                 return nullptr;
@@ -1791,14 +1795,21 @@ namespace wio::sema
             instantiatedType->fieldNames = structType->fieldNames;
             instantiatedType->trustedTypeKeys = structType->trustedTypeKeys;
             instantiatedType->isFinal = structType->isFinal;
+            instantiatedType->isNativePodComponent = structType->isNativePodComponent;
+            instantiatedType->nativeCppName = structType->nativeCppName;
+            instantiatedType->nativeCppHeader = structType->nativeCppHeader;
 
+            instantiatedType->fieldTypes.clear();
             instantiatedType->fieldTypes.reserve(structType->fieldTypes.size());
             for (const auto& fieldType : structType->fieldTypes)
                 instantiatedType->fieldTypes.push_back(instantiateGenericType(fieldType, bindings));
 
+            instantiatedType->baseTypes.clear();
             instantiatedType->baseTypes.reserve(structType->baseTypes.size());
             for (const auto& baseType : structType->baseTypes)
                 instantiatedType->baseTypes.push_back(instantiateGenericType(baseType, bindings));
+
+            validateInstantiatedNativePodComponent(instantiatedType, errorLocation);
 
             return instantiatedType;
         }
@@ -3106,7 +3117,7 @@ namespace wio::sema
             }
         }
 
-        bool isNativePodInteropFieldType(const Ref<Type>& type)
+        bool isNativePodInteropFieldType(const Ref<Type>& type, const bool allowGenericPlaceholders)
         {
             Ref<Type> current = type;
             while (current && current->kind() == TypeKind::Alias)
@@ -3122,13 +3133,57 @@ namespace wio::sema
                 const std::string typeName = current->toString();
                 return typeName != "void" && typeName != "string" && typeName != "object";
             }
+            case TypeKind::GenericParameter:
+                return allowGenericPlaceholders;
             case TypeKind::Struct:
             {
                 auto structType = current.AsFast<StructType>();
-                return structType && !structType->isObject && !structType->isInterface && structType->isNativePodComponent;
+                if (!structType || structType->isObject || structType->isInterface || !structType->isNativePodComponent)
+                    return false;
+
+                if (allowGenericPlaceholders)
+                    return true;
+
+                return std::ranges::all_of(structType->fieldTypes, [](const Ref<Type>& fieldType)
+                {
+                    return isNativePodInteropFieldType(fieldType, false);
+                });
             }
             default:
                 return false;
+            }
+        }
+
+        void validateInstantiatedNativePodComponent(const Ref<StructType>& structType,
+                                                    const common::Location& errorLocation)
+        {
+            if (!structType || !structType->isNativePodComponent)
+                return;
+
+            const bool hasConcreteInstantiation =
+                structType->genericParameterNames.empty() ||
+                (!structType->genericArguments.empty() &&
+                 structType->genericArguments.size() == structType->genericParameterNames.size() &&
+                 std::ranges::all_of(structType->genericArguments, [](const Ref<Type>& genericArgument)
+                 {
+                     return genericArgument && !genericArgument->isUnknown() && !containsGenericParameterType(genericArgument);
+                 }));
+
+            if (!hasConcreteInstantiation)
+                return;
+
+            for (size_t fieldIndex = 0; fieldIndex < structType->fieldTypes.size() && fieldIndex < structType->fieldNames.size(); ++fieldIndex)
+            {
+                if (isNativePodInteropFieldType(structType->fieldTypes[fieldIndex], false))
+                    continue;
+
+                WIO_LOG_ADD_ERROR(
+                    errorLocation,
+                    "Declaration-level @Native component '{}' field '{}' resolves to type '{}' which is not POD-native-compatible yet. Supported field types are primitives and other declaration-level @Native components.",
+                    structType->toString(),
+                    structType->fieldNames[fieldIndex],
+                    structType->fieldTypes[fieldIndex] ? structType->fieldTypes[fieldIndex]->toString() : "<unknown>"
+                );
             }
         }
 
@@ -3153,6 +3208,20 @@ namespace wio::sema
             auto structType = current.AsFast<StructType>();
             if (!structType || structType->isObject || structType->isInterface || !structType->isNativePodComponent)
                 return nullptr;
+
+            if (!structType->genericArguments.empty())
+            {
+                if (auto structScope = structType->structScope.Lock())
+                {
+                    if (auto baseSymbol = structScope->resolve(structType->name);
+                        baseSymbol && baseSymbol->kind == SymbolKind::Struct)
+                    {
+                        auto baseStruct = baseSymbol->type.AsFast<StructType>();
+                        if (baseStruct && baseStruct.Get() != structType.Get() && !baseStruct->genericParameterNames.empty())
+                            structType = instantiateGenericStructType(baseStruct, structType->genericArguments).AsFast<StructType>();
+                    }
+                }
+            }
 
             return structType;
         }
@@ -3707,7 +3776,7 @@ namespace wio::sema
                                     return;
                                 }
 
-                                type = instantiateGenericStructType(structType, explicitTypeArguments);
+                                type = instantiateGenericStructType(structType, explicitTypeArguments, node.location());
                             }
                         }
                         else
@@ -7943,6 +8012,8 @@ namespace wio::sema
                 if (!nativeComponent)
                     return;
 
+                validateInstantiatedNativePodComponent(nativeComponent, node.location());
+
                 if (nativeComponent->nativeCppName.empty())
                 {
                     WIO_LOG_ADD_ERROR(
@@ -8496,11 +8567,6 @@ namespace wio::sema
 
             if (isNativePodComponent)
             {
-                if (!node.genericParameters.empty())
-                {
-                    WIO_LOG_ADD_ERROR(node.location(), "Declaration-level @Native POD components do not support generics yet.");
-                }
-
                 if (hasAttribute(node.attributes, Attribute::CppHeader))
                 {
                     auto headerArgs = getAttributeArgs(node.attributes, Attribute::CppHeader);
@@ -8662,7 +8728,7 @@ namespace wio::sema
                         structType->fieldNames.push_back(varDecl->name->token.value);
                         structType->fieldTypes.push_back(memberSym->type);
 
-                        if (structType->isNativePodComponent && !isNativePodInteropFieldType(memberSym->type))
+                        if (structType->isNativePodComponent && !isNativePodInteropFieldType(memberSym->type, true))
                         {
                             WIO_LOG_ADD_ERROR(
                                 varDecl->location(),

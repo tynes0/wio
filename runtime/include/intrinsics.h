@@ -6,6 +6,7 @@
 #include <array>
 #include <cctype>
 #include <cstddef>
+#include <functional>
 #include <iterator>
 #include <map>
 #include <string>
@@ -46,6 +47,207 @@ namespace wio::intrinsics
 
         const std::string& Value;
     };
+
+    template <typename T>
+    struct NativeViewArg
+    {
+        explicit NativeViewArg(const T* value) noexcept
+            : Value(value)
+        {
+        }
+
+        const T* AsPointer() const noexcept
+        {
+            return Value;
+        }
+
+        const T& AsReference() const noexcept
+        {
+            return *Value;
+        }
+
+        const T* Value;
+    };
+
+    template <typename T>
+    struct NativeRefArg
+    {
+        explicit NativeRefArg(T* value) noexcept
+            : Value(value)
+        {
+        }
+
+        T* AsPointer() const noexcept
+        {
+            return Value;
+        }
+
+        const T* AsConstPointer() const noexcept
+        {
+            return Value;
+        }
+
+        T& AsReference() const noexcept
+        {
+            return *Value;
+        }
+
+        const T& AsConstReference() const noexcept
+        {
+            return *Value;
+        }
+
+        T* Value;
+    };
+
+    struct NativeStringViewArg
+    {
+        explicit NativeStringViewArg(const std::string* value) noexcept
+            : Value(value)
+        {
+        }
+
+        const std::string* AsPointer() const noexcept
+        {
+            return Value;
+        }
+
+        const std::string& AsReference() const noexcept
+        {
+            return *Value;
+        }
+
+        std::string_view AsStringView() const noexcept
+        {
+            return std::string_view(*Value);
+        }
+
+        const char* AsCString() const noexcept
+        {
+            return Value->c_str();
+        }
+
+        const std::string* Value;
+    };
+
+    struct NativeStringRefArg
+    {
+        explicit NativeStringRefArg(std::string* value) noexcept
+            : Value(value)
+        {
+        }
+
+        std::string* AsPointer() const noexcept
+        {
+            return Value;
+        }
+
+        const std::string* AsConstPointer() const noexcept
+        {
+            return Value;
+        }
+
+        std::string& AsReference() const noexcept
+        {
+            return *Value;
+        }
+
+        const std::string& AsConstReference() const noexcept
+        {
+            return *Value;
+        }
+
+        std::string_view AsStringView() const noexcept
+        {
+            return std::string_view(*Value);
+        }
+
+        const char* AsCString() const noexcept
+        {
+            return Value->c_str();
+        }
+
+        std::string* Value;
+    };
+
+    namespace detail
+    {
+        template <typename T>
+        inline constexpr bool AlwaysFalse = false;
+    }
+
+    template <typename T>
+    decltype(auto) NativePreferredArg(T&& value) noexcept
+    {
+        return std::forward<T>(value);
+    }
+
+    template <typename T>
+    decltype(auto) NativeFallbackArg(T&& value) noexcept
+    {
+        return std::forward<T>(value);
+    }
+
+    template <typename T>
+    const T& NativePreferredArg(const NativeViewArg<T>& value) noexcept
+    {
+        return value.AsReference();
+    }
+
+    template <typename T>
+    const T* NativeFallbackArg(const NativeViewArg<T>& value) noexcept
+    {
+        return value.AsPointer();
+    }
+
+    template <typename T>
+    T& NativePreferredArg(const NativeRefArg<T>& value) noexcept
+    {
+        return value.AsReference();
+    }
+
+    template <typename T>
+    T* NativeFallbackArg(const NativeRefArg<T>& value) noexcept
+    {
+        return value.AsPointer();
+    }
+
+    inline const std::string& NativePreferredArg(const NativeStringViewArg& value) noexcept
+    {
+        return value.AsReference();
+    }
+
+    inline const std::string* NativeFallbackArg(const NativeStringViewArg& value) noexcept
+    {
+        return value.AsPointer();
+    }
+
+    inline std::string& NativePreferredArg(const NativeStringRefArg& value) noexcept
+    {
+        return value.AsReference();
+    }
+
+    inline std::string* NativeFallbackArg(const NativeStringRefArg& value) noexcept
+    {
+        return value.AsPointer();
+    }
+
+    template <typename F, typename... Args>
+    decltype(auto) InvokeNativeRefAware(F&& function, Args&&... args)
+    {
+        if constexpr (std::is_invocable_v<F, decltype(NativePreferredArg(std::forward<Args>(args)))...>)
+        {
+            return std::invoke(std::forward<F>(function), NativePreferredArg(std::forward<Args>(args))...);
+        }
+        else if constexpr (std::is_invocable_v<F, decltype(NativeFallbackArg(std::forward<Args>(args)))...>)
+        {
+            return std::invoke(std::forward<F>(function), NativeFallbackArg(std::forward<Args>(args))...);
+        }
+        else
+        {
+            static_assert(detail::AlwaysFalse<F>, "No compatible native ref/view calling convention was found.");
+        }
+    }
 
     namespace detail
     {

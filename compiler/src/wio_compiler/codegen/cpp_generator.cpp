@@ -250,6 +250,9 @@ namespace wio::codegen
             return type;
         }
 
+        Ref<sema::Type> instantiateGenericStructType(const Ref<sema::StructType>& structType,
+                                                     const std::vector<Ref<sema::Type>>& explicitTypeArguments);
+
         Ref<sema::StructType> getNativePodComponentStructTypeForCodegen(const Ref<sema::Type>& type)
         {
             Ref<sema::Type> current = unwrapAliasType(type);
@@ -265,6 +268,20 @@ namespace wio::codegen
             auto structType = current.AsFast<sema::StructType>();
             if (!structType || structType->isObject || structType->isInterface || !structType->isNativePodComponent)
                 return nullptr;
+
+            if (!structType->genericArguments.empty())
+            {
+                if (auto structScope = structType->structScope.Lock())
+                {
+                    if (auto baseSymbol = structScope->resolve(structType->name);
+                        baseSymbol && baseSymbol->kind == sema::SymbolKind::Struct)
+                    {
+                        auto baseStruct = baseSymbol->type.AsFast<sema::StructType>();
+                        if (baseStruct && baseStruct.Get() != structType.Get() && !baseStruct->genericParameterNames.empty())
+                            structType = instantiateGenericStructType(baseStruct, structType->genericArguments).AsFast<sema::StructType>();
+                    }
+                }
+            }
 
             return structType;
         }
@@ -764,10 +781,12 @@ namespace wio::codegen
             instantiatedType->nativeCppName = structType->nativeCppName;
             instantiatedType->nativeCppHeader = structType->nativeCppHeader;
 
+            instantiatedType->fieldTypes.clear();
             instantiatedType->fieldTypes.reserve(structType->fieldTypes.size());
             for (const auto& fieldType : structType->fieldTypes)
                 instantiatedType->fieldTypes.push_back(instantiateGenericType(fieldType, bindings));
 
+            instantiatedType->baseTypes.clear();
             instantiatedType->baseTypes.reserve(structType->baseTypes.size());
             for (const auto& baseType : structType->baseTypes)
                 instantiatedType->baseTypes.push_back(instantiateGenericType(baseType, bindings));
@@ -5372,18 +5391,80 @@ namespace wio::codegen
         {
             std::string nativeSymbol = getNativeCppSymbolName(node);
             const bool isNativeMember = !currentClassName_.empty();
-            auto getNativePodCppName = [](const Ref<sema::StructType>& structType) -> std::string
+            std::function<std::string(const Ref<sema::Type>&)> getNativePodCppTypeName;
+            std::function<std::string(const Ref<sema::StructType>&)> getNativePodCppName;
+
+            getNativePodCppName = [&](const Ref<sema::StructType>& structType) -> std::string
             {
                 if (!structType)
                     return {};
-                return structType->nativeCppName.empty() ? structType->name : structType->nativeCppName;
+
+                std::string cppName = structType->nativeCppName.empty() ? structType->name : structType->nativeCppName;
+                if (structType->genericArguments.empty())
+                    return cppName;
+
+                cppName += "<";
+                for (size_t genericIndex = 0; genericIndex < structType->genericArguments.size(); ++genericIndex)
+                {
+                    if (genericIndex > 0)
+                        cppName += ", ";
+                    cppName += getNativePodCppTypeName(structType->genericArguments[genericIndex]);
+                }
+                cppName += ">";
+                return cppName;
+            };
+
+            getNativePodCppTypeName = [&](const Ref<sema::Type>& type) -> std::string
+            {
+                auto resolvedType = unwrapAliasTypeForCodegen(type);
+                if (!resolvedType)
+                    return "void";
+
+                if (resolvedType->kind() == sema::TypeKind::Struct)
+                {
+                    auto structType = resolvedType.AsFast<sema::StructType>();
+                    if (structType && !structType->isObject && !structType->isInterface && structType->isNativePodComponent)
+                        return getNativePodCppName(structType);
+                }
+
+                return resolvedType->toCppString();
             };
 
             auto isDirectStringNativeInteropType = [](const Ref<sema::Type>& type) -> bool
             {
                 auto resolvedType = unwrapAliasTypeForCodegen(type);
+                if (!resolvedType || resolvedType->kind() != sema::TypeKind::Primitive)
+                    return false;
+
                 auto primitiveType = resolvedType.AsFast<sema::PrimitiveType>();
                 return primitiveType && primitiveType->name == "string";
+            };
+
+            auto shouldUseNativeReferenceWrapper = [](const Ref<sema::Type>& type) -> bool
+            {
+                auto resolvedType = unwrapAliasTypeForCodegen(type);
+                if (!resolvedType || resolvedType->kind() != sema::TypeKind::Reference)
+                    return false;
+
+                auto refType = resolvedType.AsFast<sema::ReferenceType>();
+                auto referredType = unwrapAliasTypeForCodegen(refType->referredType);
+                if (!referredType || referredType->kind() != sema::TypeKind::Struct)
+                    return true;
+
+                auto structType = referredType.AsFast<sema::StructType>();
+                if (structType->isObject || structType->isInterface || structType->isNativePodComponent)
+                    return false;
+
+                return true;
+            };
+
+            auto buildNativeReferencePreferredExpr = [&](const std::string& expr, const Ref<sema::Type>& type) -> std::string
+            {
+                auto resolvedType = unwrapAliasTypeForCodegen(type);
+                if (!resolvedType || resolvedType->kind() != sema::TypeKind::Reference)
+                    return expr;
+
+                return "*" + expr;
             };
 
             std::function<std::string(const std::string&, const Ref<sema::Type>&, bool)> buildWioToNativePodExpr;
@@ -5438,13 +5519,20 @@ namespace wio::codegen
             struct NativePreparedArgument
             {
                 std::string callExpr;
+                std::string preferredCallExpr;
+                std::string fallbackCallExpr;
                 std::string mutableTargetName;
                 Ref<sema::Type> mutableTargetType = nullptr;
                 bool mutableTargetIsPointer = false;
+                bool usesReferenceDispatch = false;
+                std::string signatureType;
+                std::string preferredSignatureType;
+                std::string fallbackSignatureType;
             };
 
             std::vector<NativePreparedArgument> preparedArguments;
             preparedArguments.reserve(node.parameters.size() + (isNativeMember ? 1 : 0));
+            bool usesNativeReferenceWrappers = false;
 
             emitLine();
             emitLine("{");
@@ -5454,6 +5542,11 @@ namespace wio::codegen
             {
                 NativePreparedArgument selfArgument;
                 selfArgument.callExpr = "this";
+                selfArgument.preferredCallExpr = "this";
+                selfArgument.fallbackCallExpr = "this";
+                selfArgument.signatureType = currentClassName_ + "*";
+                selfArgument.preferredSignatureType = selfArgument.signatureType;
+                selfArgument.fallbackSignatureType = selfArgument.signatureType;
                 preparedArguments.push_back(std::move(selfArgument));
             }
 
@@ -5469,13 +5562,55 @@ namespace wio::codegen
                     if (isDirectStringNativeInteropType(parameterType))
                     {
                         preparedArguments.push_back({
-                            common::formatString("wio::intrinsics::NativeStringArg({})", parameterName)
+                            common::formatString("wio::intrinsics::NativeStringArg({})", parameterName),
+                            common::formatString("wio::intrinsics::NativeStringArg({})", parameterName),
+                            common::formatString("wio::intrinsics::NativeStringArg({})", parameterName),
+                            "",
+                            nullptr,
+                            false,
+                            false,
+                            toCppType(parameterType),
+                            toCppType(parameterType),
+                            toCppType(parameterType)
                         });
                         continue;
                     }
 
+                    if (shouldUseNativeReferenceWrapper(parameterType))
+                    {
+                        auto referenceType = resolvedParameterType.AsFast<sema::ReferenceType>();
+                        const std::string referredCppType = toCppType(referenceType->referredType);
+                        const std::string preferredSignatureType = referenceType->isMutable
+                                                                       ? referredCppType + "&"
+                                                                       : "const " + referredCppType + "&";
+                        const std::string fallbackSignatureType = toCppType(parameterType);
+                        preparedArguments.push_back({
+                            parameterName,
+                            buildNativeReferencePreferredExpr(parameterName, parameterType),
+                            parameterName,
+                            "",
+                            nullptr,
+                            false,
+                            true,
+                            fallbackSignatureType,
+                            preferredSignatureType,
+                            fallbackSignatureType
+                        });
+                        usesNativeReferenceWrappers = true;
+                        continue;
+                    }
+
                     preparedArguments.push_back({
-                        parameterName + (node.parameters[i].isParameterPack ? "..." : "")
+                        parameterName + (node.parameters[i].isParameterPack ? "..." : ""),
+                        parameterName + (node.parameters[i].isParameterPack ? "..." : ""),
+                        parameterName + (node.parameters[i].isParameterPack ? "..." : ""),
+                        "",
+                        nullptr,
+                        false,
+                        false,
+                        toCppType(parameterType),
+                        toCppType(parameterType),
+                        toCppType(parameterType)
                     });
                     continue;
                 }
@@ -5494,47 +5629,193 @@ namespace wio::codegen
 
                 NativePreparedArgument preparedArgument;
                 preparedArgument.callExpr = nativeTempName;
+                preparedArgument.preferredCallExpr = nativeTempName;
+                preparedArgument.fallbackCallExpr = nativeTempName;
                 preparedArgument.mutableTargetName = isMutableReference ? parameterName : "";
                 preparedArgument.mutableTargetType = isMutableReference ? parameterType : nullptr;
                 preparedArgument.mutableTargetIsPointer = isMutableReference;
+                preparedArgument.signatureType = getNativePodCppName(nativeStruct);
+                preparedArgument.preferredSignatureType = preparedArgument.signatureType;
+                preparedArgument.fallbackSignatureType = preparedArgument.signatureType;
                 preparedArguments.push_back(std::move(preparedArgument));
             }
 
             const auto nativeReturnStruct = getNativePodComponentStructTypeForCodegen(funcType->returnType);
             const bool returnsNativePodComponent = static_cast<bool>(nativeReturnStruct);
 
-            EMIT_TABS();
-            if (returnsNativePodComponent)
+            auto emitNativeSymbolInvocationTarget = [&]()
             {
-                emit("auto _wio_native_result = ");
-            }
-            else if (funcType->returnType && !funcType->returnType->isVoid())
-            {
-                emit("return ");
-            }
-
-            emit(nativeSymbol);
-            if (!node.genericParameters.empty() && node.parameters.empty())
-            {
-                emit("<");
-                for (size_t genericIndex = 0; genericIndex < node.genericParameters.size(); ++genericIndex)
+                emit(nativeSymbol);
+                if (!node.genericParameters.empty() && node.parameters.empty())
                 {
-                    emit(node.genericParameters[genericIndex]->token.value);
-                    if (node.hasGenericParameterPack && genericIndex + 1 == node.genericParameters.size())
-                        emit("...");
-                    if (genericIndex + 1 < node.genericParameters.size())
-                        emit(", ");
+                    emit("<");
+                    for (size_t genericIndex = 0; genericIndex < node.genericParameters.size(); ++genericIndex)
+                    {
+                        emit(node.genericParameters[genericIndex]->token.value);
+                        if (node.hasGenericParameterPack && genericIndex + 1 == node.genericParameters.size())
+                            emit("...");
+                        if (genericIndex + 1 < node.genericParameters.size())
+                            emit(", ");
+                    }
+                    emit(">");
                 }
-                emit(">");
-            }
-            emit("(");
-            for (size_t argumentIndex = 0; argumentIndex < preparedArguments.size(); ++argumentIndex)
+            };
+
+            auto emitNativeInvocation = [&](bool preferReferenceDispatch)
             {
-                if (argumentIndex > 0)
-                    emit(", ");
-                emit(preparedArguments[argumentIndex].callExpr);
+                emitNativeSymbolInvocationTarget();
+                emit("(");
+                for (size_t argumentIndex = 0; argumentIndex < preparedArguments.size(); ++argumentIndex)
+                {
+                    if (argumentIndex > 0)
+                        emit(", ");
+
+                    const auto& preparedArgument = preparedArguments[argumentIndex];
+                    if (preferReferenceDispatch && preparedArgument.usesReferenceDispatch)
+                        emit(preparedArgument.preferredCallExpr);
+                    else if (!preferReferenceDispatch && preparedArgument.usesReferenceDispatch)
+                        emit(preparedArgument.fallbackCallExpr);
+                    else
+                        emit(preparedArgument.callExpr);
+                }
+                emit(")");
+            };
+
+            if (usesNativeReferenceWrappers)
+            {
+                EMIT_TABS();
+                emit(common::formatString("auto _wio_native_invoke = [&]("));
+                for (size_t argumentIndex = 0; argumentIndex < preparedArguments.size(); ++argumentIndex)
+                {
+                    if (argumentIndex > 0)
+                        emit(", ");
+                    emit(common::formatString("auto&& _wio_native_arg{}", argumentIndex));
+                }
+                emit(") -> ");
+                emit(funcType->returnType && !funcType->returnType->isVoid()
+                         ? (returnsNativePodComponent ? getNativePodCppName(nativeReturnStruct) : returnType)
+                         : "void");
+                emitLine(" {");
+                indent();
+                EMIT_TABS();
+                emit("if constexpr (requires { ");
+                emitNativeSymbolInvocationTarget();
+                emit("(");
+                for (size_t argumentIndex = 0; argumentIndex < preparedArguments.size(); ++argumentIndex)
+                {
+                    if (argumentIndex > 0)
+                        emit(", ");
+                    if (preparedArguments[argumentIndex].usesReferenceDispatch)
+                    {
+                        emit(common::formatString("*_wio_native_arg{}", argumentIndex));
+                    }
+                    else
+                    {
+                        emit(common::formatString(
+                            "std::forward<decltype(_wio_native_arg{})>(_wio_native_arg{})",
+                            argumentIndex,
+                            argumentIndex
+                        ));
+                    }
+                }
+                emit("); })");
+                emit("\n");
+                EMIT_TABS();
+                emitLine("{");
+                indent();
+                EMIT_TABS();
+                if (funcType->returnType && !funcType->returnType->isVoid())
+                    emit("return ");
+                emitNativeSymbolInvocationTarget();
+                emit("(");
+                for (size_t argumentIndex = 0; argumentIndex < preparedArguments.size(); ++argumentIndex)
+                {
+                    if (argumentIndex > 0)
+                        emit(", ");
+                    if (preparedArguments[argumentIndex].usesReferenceDispatch)
+                    {
+                        emit(common::formatString("*_wio_native_arg{}", argumentIndex));
+                    }
+                    else
+                    {
+                        emit(common::formatString(
+                            "std::forward<decltype(_wio_native_arg{})>(_wio_native_arg{})",
+                            argumentIndex,
+                            argumentIndex
+                        ));
+                    }
+                }
+                emit(")");
+                emit(";");
+                emit("\n");
+                dedent();
+                EMIT_TABS();
+                emitLine("}");
+                EMIT_TABS();
+                emitLine("else");
+                EMIT_TABS();
+                emitLine("{");
+                indent();
+                EMIT_TABS();
+                if (funcType->returnType && !funcType->returnType->isVoid())
+                    emit("return ");
+                emitNativeSymbolInvocationTarget();
+                emit("(");
+                for (size_t argumentIndex = 0; argumentIndex < preparedArguments.size(); ++argumentIndex)
+                {
+                    if (argumentIndex > 0)
+                        emit(", ");
+                    emit(common::formatString(
+                        "std::forward<decltype(_wio_native_arg{})>(_wio_native_arg{})",
+                        argumentIndex,
+                        argumentIndex
+                    ));
+                }
+                emit(")");
+                emit(";");
+                emit("\n");
+                dedent();
+                EMIT_TABS();
+                emitLine("}");
+                dedent();
+                EMIT_TABS();
+                emitLine("};");
+
+                EMIT_TABS();
+                if (returnsNativePodComponent)
+                {
+                    emit("auto _wio_native_result = _wio_native_invoke(");
+                }
+                else if (funcType->returnType && !funcType->returnType->isVoid())
+                {
+                    emit("return _wio_native_invoke(");
+                }
+                else
+                {
+                    emit("_wio_native_invoke(");
+                }
+                for (size_t argumentIndex = 0; argumentIndex < preparedArguments.size(); ++argumentIndex)
+                {
+                    if (argumentIndex > 0)
+                        emit(", ");
+                    emit(preparedArguments[argumentIndex].callExpr);
+                }
+                emit(");");
             }
-            emit(");");
+            else
+            {
+                EMIT_TABS();
+                if (returnsNativePodComponent)
+                {
+                    emit("auto _wio_native_result = ");
+                }
+                else if (funcType->returnType && !funcType->returnType->isVoid())
+                {
+                    emit("return ");
+                }
+                emitNativeInvocation(false);
+                emit(";");
+            }
             emit("\n");
 
             for (const auto& preparedArgument : preparedArguments)
