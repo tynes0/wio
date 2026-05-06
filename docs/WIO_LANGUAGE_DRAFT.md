@@ -184,6 +184,7 @@ Current built-in type keywords include:
 - `char`
 - `uchar`
 - `string`
+- `opaque`
 - `void`
 - `component`
 - `object`
@@ -538,6 +539,7 @@ Wio currently exposes the following built-in types:
 - `char`
 - `uchar`
 - `string`
+- `opaque`
 - `void`
 
 Examples:
@@ -547,6 +549,7 @@ let hp: i32 = 100;
 let speed: f32 = 5.0f;
 let ok: bool = true;
 let name: string = "Entity";
+let payload: opaque = null;
 ```
 
 ### 5.2 The Root `object` Type
@@ -562,7 +565,29 @@ fn Inspect(target: view object) {
 }
 ```
 
-### 5.3 Reference Types
+### 5.3 `opaque`
+
+`opaque` is the built-in foreign payload type.
+
+Use it for:
+
+- host-owned handles,
+- native `void*`-style payloads,
+- callback cookies,
+- external engine tokens.
+
+Current first-slice semantics:
+
+- `opaque` may be assigned,
+- `opaque` may be compared with `==` and `!=`,
+- `opaque` may be compared against `null`,
+- `opaque` may cross native `@Native` boundaries,
+- field access, arithmetic, and ordered comparisons are rejected before generated C++.
+
+For the wider runtime model and planned future siblings such as `box<T>` and
+`anyref`, see [`WIO_RUNTIME_TYPE_MODEL.md`](./WIO_RUNTIME_TYPE_MODEL.md).
+
+### 5.4 Reference Types
 
 Reference types are written with `ref` or `view` in type position.
 

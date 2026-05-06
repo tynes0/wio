@@ -262,6 +262,14 @@ namespace wio::sema
                    resolvedType.AsFast<PrimitiveType>()->name == "string";
         }
 
+        bool isOpaqueType(const Ref<Type>& type)
+        {
+            Ref<Type> resolvedType = unwrapAliasType(type);
+            return resolvedType &&
+                   resolvedType->kind() == TypeKind::Primitive &&
+                   resolvedType.AsFast<PrimitiveType>()->name == "opaque";
+        }
+
         bool isIntrinsicReceiverType(const Ref<Type>& type)
         {
             Ref<Type> resolvedType = unwrapAliasType(type);
@@ -2255,6 +2263,7 @@ namespace wio::sema
             if (name == "bool") return ctx.getBool();
             if (name == "char") return ctx.getChar();
             if (name == "string") return ctx.getString();
+            if (name == "opaque") return ctx.getOpaque();
             if (name == "void") return ctx.getVoid();
 
             if (name == "object") return ctx.getObject();
@@ -4086,6 +4095,23 @@ namespace wio::sema
             isCompatible = readableLhsType->isCompatibleWith(readableRhsType);
         }
 
+        const bool isEqualityComparison =
+            node.op.type == TokenType::opEqual || node.op.type == TokenType::opNotEqual;
+        const bool isOrderingComparison =
+            node.op.type == TokenType::opLess || node.op.type == TokenType::opLessEqual ||
+            node.op.type == TokenType::opGreater || node.op.type == TokenType::opGreaterEqual;
+        const bool isAnyComparison = isEqualityComparison || isOrderingComparison;
+
+        if (!isCompatible && isAnyComparison)
+        {
+            isCompatible = rhsType->isCompatibleWith(lhsType);
+            if (!isCompatible && readableLhsType && readableRhsType &&
+                (shouldAutoReadReferenceType(lhsType) || shouldAutoReadReferenceType(rhsType)))
+            {
+                isCompatible = readableRhsType->isCompatibleWith(readableLhsType);
+            }
+        }
+
         if (!isCompatible)
         {
             WIO_LOG_ADD_ERROR(
@@ -4099,7 +4125,24 @@ namespace wio::sema
             return;
         }
 
-        if (node.op.isComparison() ||
+        const Ref<Type> semanticLhsType = readableLhsType ? readableLhsType : lhsType;
+        const Ref<Type> semanticRhsType = readableRhsType ? readableRhsType : rhsType;
+        if (isOpaqueType(semanticLhsType) || isOpaqueType(semanticRhsType))
+        {
+            const bool isAssignment = node.op.type == TokenType::opAssign;
+            if (!isAssignment && !isEqualityComparison)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.op.loc,
+                    "Opaque values support only assignment and equality comparisons. Operator '{}' is not supported.",
+                    node.op.value
+                );
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+        }
+
+        if (isAnyComparison ||
             node.op.type == TokenType::opLogicalAnd ||
             node.op.type == TokenType::opLogicalOr ||
             node.op.type == TokenType::kwAnd ||
@@ -4644,7 +4687,15 @@ namespace wio::sema
     
     void SemanticAnalyzer::visit(NullExpression& node)
     {
-        node.refType = Compiler::get().getTypeContext().getNull();
+        auto& typeContext = Compiler::get().getTypeContext();
+        Ref<Type> transformedType = currentExpectedExpressionType_
+            ? getAutoReadableType(currentExpectedExpressionType_)
+            : nullptr;
+
+        if (!transformedType || transformedType->isUnknown())
+            transformedType = typeContext.getVoid();
+
+        node.refType = typeContext.getOrCreateNullType(transformedType);
     }
 
     void SemanticAnalyzer::visit(ArrayAccessExpression& node)

@@ -80,6 +80,7 @@ using wio::isize;
 using wio::usize;
 using wio::byte;
 using wio::string;
+using wio::opaque;
 ```
 
 Important mappings:
@@ -87,6 +88,7 @@ Important mappings:
 - `wio::isize` -> `std::intptr_t`
 - `wio::usize` -> `std::uintptr_t`
 - `wio::string` -> `std::string`
+- `wio::opaque` -> `void*`
 
 This means host code can stay visually aligned with Wio source code instead of
 mixing Wio type names with unrelated C++ spellings.

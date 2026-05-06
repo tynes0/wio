@@ -48,6 +48,7 @@ namespace wio
     using uchar = unsigned char;
     using byte = std::byte;
     using string = std::string;
+    using opaque = void*;
     using object_handle = std::uintptr_t;
 
     template <typename T>

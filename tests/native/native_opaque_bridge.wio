@@ -1,0 +1,53 @@
+use std::console as console;
+
+realm ffi {
+    @Native
+    @CppHeader("native_opaque_bridge.h")
+    @CppName(native_opaque::MakeTagged)
+    fn MakeTagged(value: i32) -> opaque;
+
+    @Native
+    @CppHeader("native_opaque_bridge.h")
+    @CppName(native_opaque::IsNull)
+    fn IsNull(value: opaque) -> bool;
+
+    @Native
+    @CppHeader("native_opaque_bridge.h")
+    @CppName(native_opaque::Same)
+    fn Same(lhs: opaque, rhs: opaque) -> bool;
+
+    @Native
+    @CppHeader("native_opaque_bridge.h")
+    @CppName(native_opaque::ReadTag)
+    fn ReadTag(value: opaque) -> i32;
+
+    @Native
+    @CppHeader("native_opaque_bridge.h")
+    @CppName(native_opaque::ReadTagView)
+    fn ReadTagView(value: view opaque) -> i32;
+
+    @Native
+    @CppHeader("native_opaque_bridge.h")
+    @CppName(native_opaque::Replace)
+    fn Replace(target: ref opaque, value: opaque);
+}
+
+fn Entry() -> i32 {
+    mut handle: opaque = null;
+    let first = ffi::MakeTagged(6);
+    let second = ffi::MakeTagged(12);
+
+    let wasNull = handle == null;
+    let stillNull = null == handle;
+
+    ffi::Replace(ref handle, first);
+
+    let sameFirst = ffi::Same(handle, first);
+    let sameSecond = ffi::Same(handle, second);
+    let tag = ffi::ReadTag(handle);
+    let tagView = ffi::ReadTagView(ref handle);
+    let notNull = null != handle;
+
+    console::Print($"Opaque bridge: ${wasNull}, ${stillNull}, ${sameFirst}, ${sameSecond}, ${tag}, ${tagView}, ${notNull}");
+    return 0;
+}

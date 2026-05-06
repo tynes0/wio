@@ -84,6 +84,7 @@ namespace wio::codegen
             if (name == "uchar" || name == "byte") return "unsigned char";
             if (name == "bool") return "bool";
             if (name == "string") return "wio::String";
+            if (name == "opaque") return "void*";
             return resolved->toCppString();
         }
 
@@ -106,6 +107,33 @@ namespace wio::codegen
             Ref<sema::Type> current = unwrapAliasTypeForCodegen(type);
             if (!current)
                 current = type;
+
+            auto buildReferenceCppType = [](const Ref<sema::ReferenceType>& refType) -> std::string
+            {
+                if (!refType || !refType->referredType)
+                    return "void*";
+
+                std::string referredCppType = toCppType(refType->referredType);
+                Ref<sema::Type> resolvedReferredType = unwrapAliasTypeForCodegen(refType->referredType);
+
+                if (resolvedReferredType && resolvedReferredType->kind() == sema::TypeKind::Struct)
+                {
+                    auto structType = resolvedReferredType.AsFast<sema::StructType>();
+                    if (structType->isInterface)
+                        return referredCppType;
+
+                    if (structType->isObject)
+                        return refType->isMutable ? (referredCppType + "&") : ("const " + referredCppType + "&");
+                }
+
+                if (refType->isMutable)
+                    return referredCppType + "*";
+
+                if (!referredCppType.empty() && referredCppType.back() == '*')
+                    return referredCppType + " const*";
+
+                return "const " + referredCppType + "*";
+            };
 
             auto appendGenericArguments = [&](std::string baseName, const Ref<sema::StructType>& structType)
             {
@@ -226,12 +254,17 @@ namespace wio::codegen
             if (current->kind() == sema::TypeKind::Reference)
             {
                 auto refType = current.AsFast<sema::ReferenceType>();
+                if (!refType)
+                    return current->toCppString();
+
                 if (refType->referredType && refType->referredType->kind() == sema::TypeKind::Struct)
                 {
                     auto sType = refType->referredType.AsFast<sema::StructType>();
                     if (sType->isInterface)
                         return appendGenericArguments(Mangler::mangleInterface(sType->name, sType->scopePath), sType) + "*";
                 }
+
+                return buildReferenceCppType(refType);
             }
             else if (current->kind() == sema::TypeKind::Struct)
             {
@@ -4044,7 +4077,29 @@ namespace wio::codegen
         auto lockedRefType = node.refType.Lock();
         if (lockedRefType && lockedRefType->kind() == sema::TypeKind::Null)
         {
-            emit(lockedRefType.AsFast<sema::NullType>()->transformedType->toCppString());
+            auto transformedType = lockedRefType.AsFast<sema::NullType>()->transformedType;
+            auto resolvedTransformedType = unwrapAliasTypeForCodegen(transformedType);
+            const bool isPointerLikeNull =
+                !resolvedTransformedType ||
+                resolvedTransformedType->kind() == sema::TypeKind::Null ||
+                resolvedTransformedType->kind() == sema::TypeKind::Function ||
+                resolvedTransformedType->kind() == sema::TypeKind::Reference ||
+                (resolvedTransformedType->kind() == sema::TypeKind::Primitive &&
+                 resolvedTransformedType.AsFast<sema::PrimitiveType>()->name == "opaque") ||
+                (resolvedTransformedType->kind() == sema::TypeKind::Struct &&
+                 ([&]()
+                 {
+                     auto structType = resolvedTransformedType.AsFast<sema::StructType>();
+                     return structType && (structType->isObject || structType->isInterface);
+                 })());
+
+            if (isPointerLikeNull)
+            {
+                emit("nullptr");
+                return;
+            }
+
+            emit(transformedType ? transformedType->toCppString() : std::string("void"));
             emit("{}");
         }
         else
@@ -5480,6 +5535,17 @@ namespace wio::codegen
                 return primitiveType && primitiveType->name == "string";
             };
 
+            auto buildNativeReferenceSignatureType = [](const std::string& referredCppType, bool isMutable) -> std::string
+            {
+                if (isMutable)
+                    return referredCppType + "&";
+
+                if (!referredCppType.empty() && referredCppType.back() == '*')
+                    return referredCppType + " const&";
+
+                return "const " + referredCppType + "&";
+            };
+
             auto shouldUseNativeReferenceWrapper = [](const Ref<sema::Type>& type) -> bool
             {
                 auto resolvedType = unwrapAliasTypeForCodegen(type);
@@ -5632,9 +5698,8 @@ namespace wio::codegen
                     {
                         auto referenceType = resolvedParameterType.AsFast<sema::ReferenceType>();
                         const std::string referredCppType = toCppType(referenceType->referredType);
-                        const std::string preferredSignatureType = referenceType->isMutable
-                                                                       ? referredCppType + "&"
-                                                                       : "const " + referredCppType + "&";
+                        const std::string preferredSignatureType =
+                            buildNativeReferenceSignatureType(referredCppType, referenceType->isMutable);
                         const std::string fallbackSignatureType = toCppType(parameterType);
                         preparedArguments.push_back({
                             parameterName,

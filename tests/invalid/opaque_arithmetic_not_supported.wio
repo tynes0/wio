@@ -1,0 +1,6 @@
+fn Entry() -> i32 {
+    let left: opaque = null;
+    let right: opaque = null;
+    let bad = left + right;
+    return 0;
+}

@@ -8,6 +8,7 @@ namespace wio::sema
         t_bool   = makeType<PrimitiveType>("bool");
         t_char   = makeType<PrimitiveType>("char");
         t_string = makeType<PrimitiveType>("string");
+        t_opaque = makeType<PrimitiveType>("opaque");
 
         t_i8  = makeType<PrimitiveType>("i8");
         t_i16 = makeType<PrimitiveType>("i16");
@@ -34,6 +35,11 @@ namespace wio::sema
     Ref<Type> TypeContext::getOrCreateReferenceType(Ref<Type> referredType, bool isMutable)
     {
         return makeType<ReferenceType>(std::move(referredType), isMutable);
+    }
+
+    Ref<Type> TypeContext::getOrCreateNullType(Ref<Type> transformedType)
+    {
+        return makeType<NullType>(std::move(transformedType));
     }
 
     Ref<Type> TypeContext::getOrCreateArrayType(Ref<Type> elementType, ArrayType::ArrayKind arrayKind, size_t size)

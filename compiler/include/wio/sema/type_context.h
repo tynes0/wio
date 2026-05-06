@@ -24,6 +24,7 @@ namespace wio::sema
         Ref<Type> getBool()   const { return t_bool; }
         Ref<Type> getChar()   const { return t_char; }
         Ref<Type> getString() const { return t_string; }
+        Ref<Type> getOpaque() const { return t_opaque; }
         Ref<Type> getUnknown() const { return t_unknown; }
 
         Ref<Type> getI8()  const { return t_i8; }
@@ -44,6 +45,7 @@ namespace wio::sema
 
         Ref<Type> getNull() const { return t_null; }
         Ref<Type> getObject() const { return t_object; }
+        Ref<Type> getOrCreateNullType(Ref<Type> transformedType);
         
         Ref<Type> getOrCreateReferenceType(Ref<Type> referredType, bool isMutable);
         Ref<Type> getOrCreateArrayType(Ref<Type> elementType, ArrayType::ArrayKind arrayKind, size_t size = 0);
@@ -68,6 +70,7 @@ namespace wio::sema
         Ref<Type> t_bool = nullptr;
         Ref<Type> t_char = nullptr;
         Ref<Type> t_string = nullptr;
+        Ref<Type> t_opaque = nullptr;
         Ref<Type> t_unknown = nullptr;
 
         Ref<Type> t_i8 = nullptr;

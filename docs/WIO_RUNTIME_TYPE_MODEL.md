@@ -46,7 +46,7 @@ The rest of this document defines what each category means.
 | `component` | inline value / POD-like data | copied by value or passed by `ref` / `view` | structural POD bridge | partially implemented |
 | `object` | user-defined heap object with identity | reference/handle semantics | handle/bridge, not POD layout sharing | implemented direction, still evolving |
 | `string` / dynamic array / `Dict` / `Tree` | managed runtime containers | runtime-managed | dedicated bridge, not native POD | implemented direction |
-| `opaque` | foreign host payload / external handle | host-owned or externally owned | pass-through opaque ABI value | planned |
+| `opaque` | foreign host payload / external handle | host-owned or externally owned | pass-through opaque ABI value | initial source-level and native pass-through slice implemented |
 | `box<T>` | heap allocation for value types | heap-owned wrapper around a value | wrapper/bridge, not POD | planned |
 | `anyref` | common supertype for reference-like values | reference semantics | depends on wrapped runtime value | planned |
 
@@ -282,6 +282,14 @@ The recommended source-level rules are:
 - it may be copied, passed, compared for equality, and checked for null-ness,
 - it may cross native boundaries,
 - ownership remains explicit and external to ordinary Wio object semantics.
+
+Current implemented slice:
+
+- source-level `opaque` is a built-in type keyword,
+- equality/inequality with other `opaque` values is supported,
+- equality/inequality with `null` is supported,
+- native `@Native` pass-through uses `void*`,
+- arithmetic, field access, and ordered comparisons are intentionally rejected.
 
 ### 6.4 Interop Model
 

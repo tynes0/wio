@@ -155,7 +155,11 @@ namespace wio::sema
         if (kind1 != kind2)
         {
             if (kind2 == TypeKind::Null)
+            {
+                const_cast<NullType*>(static_cast<const NullType*>(t2))->transformedType =
+                    Ref<Type>(const_cast<Type*>(t1));
                 return true; // Null compatible with all types
+            }
 
             const bool isPackViewStoragePair =
                 (kind1 == TypeKind::ValuePackView && kind2 == TypeKind::PackStorage) ||
@@ -743,6 +747,8 @@ namespace wio::sema
         }
         
         if (isMutable) return baseTypeStr + "*";
+        if (!baseTypeStr.empty() && baseTypeStr.back() == '*')
+            return baseTypeStr + " const*";
         else return "const " + baseTypeStr + "*";
     }
 
