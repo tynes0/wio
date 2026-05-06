@@ -30,6 +30,20 @@ work:
 - First real test wave:
   positive feature tests, invalid-program coverage, and interop/SDK tests
 
+## Current Near-Term Focus
+
+Before the next larger type-system or meta-programming wave, the preferred
+hardening focus is a tight interop slice:
+
+1. Wio `string` -> native `const char*` parameter bridging with explicit
+   lifetime rules
+2. Native `ref` / `view` parameter passing with safe write-back semantics
+3. Generic native POD `component` declarations with specialization-time ABI
+   validation
+
+These belong to the current alpha/productization track, not to a distant future
+feature bucket.
+
 ## Phase 1 - Todo Truth Audit
 
 - Goal:

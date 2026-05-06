@@ -1,0 +1,27 @@
+use std::console as console;
+
+realm ffi {
+    @Native
+    @CppHeader("native_cstring_bridge.h")
+    @CppName(native_cstring::CountChars)
+    fn CountChars(value: string) -> i32;
+
+    @Native
+    @CppHeader("native_cstring_bridge.h")
+    @CppName(native_cstring::CountCharsView)
+    fn CountCharsView(value: string) -> i32;
+
+    @Native
+    @CppHeader("native_cstring_bridge.h")
+    @CppName(native_cstring::StartsWithWio)
+    fn StartsWithWio(value: string) -> bool;
+}
+
+fn Entry() -> i32 {
+    let value = "Wio";
+    let count1 = ffi::CountChars(value);
+    let count2 = ffi::CountCharsView(value);
+    let starts = ffi::StartsWithWio(value);
+    console::Print($"Native cstring bridge: ${count1}, ${count2}, ${starts}");
+    return 0;
+}

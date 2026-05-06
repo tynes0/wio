@@ -1,26 +1,14 @@
 realm std {
+    use @CppHeader("std_vector.h");
+
+    @Native
+    @CppName(wio::runtime::std_vector::Vec2)
     component Vector2 {
-            x: f64;
-            y: f64;
+        x: f64;
+        y: f64;
+    }
 
-            fn OnConstruct() {
-                x = 0.0f64;
-                y = 0.0f64;
-            }
-
-            fn OnConstruct(value: f64) {
-                x = value;
-                y = value;
-            }
-
-            fn OnConstruct(x: f64, y: f64) {
-                self.x = x;
-                self.y = y;
-            }
-
-            fn OnConstruct(other: view Vector2) {
-                self.x = other.x;
-                self.y = other.y;
-            }
-        }
+    @Native
+    @CppName(wio::runtime::std_vector::PrintVec)
+    fn PrintVec2(vec: Vector2);
 }

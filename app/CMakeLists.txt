@@ -702,6 +702,15 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_native_cstring_bridge_run
+        "${CMAKE_SOURCE_DIR}/tests/native/native_cstring_bridge.wio"
+        "Native cstring bridge: 3, 3, true"
+        --run
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
+    )
+
+    add_wio_output_test(
         wio_test_native_generic_bridge_run
         "${CMAKE_SOURCE_DIR}/tests/native/native_generic_bridge.wio"
         "Generic native double: 42, 42"

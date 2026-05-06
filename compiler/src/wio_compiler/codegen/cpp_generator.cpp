@@ -5379,6 +5379,13 @@ namespace wio::codegen
                 return structType->nativeCppName.empty() ? structType->name : structType->nativeCppName;
             };
 
+            auto isDirectStringNativeInteropType = [](const Ref<sema::Type>& type) -> bool
+            {
+                auto resolvedType = unwrapAliasTypeForCodegen(type);
+                auto primitiveType = resolvedType.AsFast<sema::PrimitiveType>();
+                return primitiveType && primitiveType->name == "string";
+            };
+
             std::function<std::string(const std::string&, const Ref<sema::Type>&, bool)> buildWioToNativePodExpr;
             buildWioToNativePodExpr = [&](const std::string& expr, const Ref<sema::Type>& sourceType, bool sourceIsPointer) -> std::string
             {
@@ -5459,6 +5466,14 @@ namespace wio::codegen
 
                 if (!nativeStruct)
                 {
+                    if (isDirectStringNativeInteropType(parameterType))
+                    {
+                        preparedArguments.push_back({
+                            common::formatString("wio::intrinsics::NativeStringArg({})", parameterName)
+                        });
+                        continue;
+                    }
+
                     preparedArguments.push_back({
                         parameterName + (node.parameters[i].isParameterPack ? "..." : "")
                     });

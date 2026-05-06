@@ -17,6 +17,36 @@
 
 namespace wio::intrinsics
 {
+    struct NativeStringArg
+    {
+        explicit NativeStringArg(const std::string& value) noexcept
+            : Value(value)
+        {
+        }
+
+        operator const char*() const noexcept
+        {
+            return Value.c_str();
+        }
+
+        operator std::string_view() const noexcept
+        {
+            return std::string_view(Value);
+        }
+
+        operator const std::string&() const noexcept
+        {
+            return Value;
+        }
+
+        operator std::string() const
+        {
+            return Value;
+        }
+
+        const std::string& Value;
+    };
+
     namespace detail
     {
         [[noreturn]] inline void throwRuntimeError(const std::string& message)

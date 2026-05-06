@@ -88,7 +88,19 @@ execution order, see `ORDERED_TODOLIST.md`.
       reliable user-facing alpha experience.
 - [ ] Expand docs into a status-marked reference plus focused tutorials.
 
-### 1.5 P3 - Long-Horizon Features
+### 1.5 Current Near-Term Interop Priority
+
+These are the next preferred implementation items inside the current alpha
+hardening track:
+
+- [ ] Allow Wio `string` values to bind ergonomically to native
+      `const char*` parameters with explicit lifetime rules.
+- [ ] Support native `ref` / `view` parameter passing as a first-class interop
+      feature instead of keeping it as an edge-case bridge.
+- [ ] Allow declaration-level native POD bridging for generic `component`
+      declarations when each concrete specialization remains ABI-valid.
+
+### 1.6 P3 - Long-Horizon Features
 
 - [ ] Reflection for `enum` and `flagset`.
 - [ ] Concurrency model (`async`, `await`, `coroutine`, `yield`, `thread`).
@@ -285,7 +297,7 @@ The language reference now exists, but it still needs to become a true spec.
       rejected during semantic analysis.
 - [x] Require generic exported instances to derive concrete C ABI symbol names
       from the base export symbol plus concrete type mangling.
-  - [x] Keep v1 explicit instantiation attribute-based via `@Instantiate(...)`,
+- [x] Keep v1 explicit instantiation attribute-based via `@Instantiate(...)`,
         including multi-parameter specialization lists such as
         `@Instantiate(i32, bool)`.
   - [ ] Decide whether the long-term explicit-instantiation syntax should stay
@@ -329,6 +341,11 @@ The language reference now exists, but it still needs to become a true spec.
   - [x] Land the second `std::meta` wave around `TypeCount`, `ContainsType`,
         `Types.Contains`, and richer `Values` mutation /
         reset / conversion helpers.
+- [ ] Broaden native generic interop beyond generic free functions so
+      declaration-level native POD `component` declarations may also be generic
+      when every concrete specialization can be validated structurally.
+- [ ] Decide how `@CppHeader(...)`, `@CppName(...)`, and explicit
+      specialization/instantiation rules apply to generic native components.
 - [ ] Design how variadic generic expansion should interact with overload
        resolution, backend template lowering, and future constraint systems.
 - [ ] Design const-generic / non-type generic parameters for future versions,
@@ -399,6 +416,11 @@ This is one of the language-defining features and needs to be extremely solid.
 - [ ] Define whether temporaries may bind to `ref`.
 - [ ] Define whether implicit reference creation is ever allowed.
 - [ ] Decide how overload resolution treats `T`, `ref T`, and `view T`.
+- [ ] Support native-call lowering for `ref` / `view` parameters as an explicit
+      interop feature, including clear copy-back rules for mutable native
+      references.
+- [ ] Define how native reference passing interacts with arrays, dictionaries,
+      strings, components, and future opaque foreign-handle types.
 
 ### 6.4 Ownership and Lifetime
 
@@ -666,6 +688,11 @@ This is one of the language-defining features and needs to be extremely solid.
 - [ ] Decide whether `string` is UTF-8, UTF-16, UTF-32, or backend-native.
 - [ ] Decide copy and ownership behavior for strings.
 - [ ] Define literal escape behavior fully.
+- [ ] Support passing Wio `string` values to native `const char*` parameters,
+      with explicit lifetime rules for the temporary native view used during the
+      call.
+- [ ] Decide whether that bridge remains read-only `const char*` only or later
+      expands to `char*`, `std::string_view`, and other native text surfaces.
 
 ### 12.2 Interpolated Strings
 
@@ -1086,6 +1113,17 @@ semantics are still one of the biggest hardening gaps.
       Wio.
 - [ ] Design native/foreign declarations plus backend link configuration so Wio
       code can consume existing C++ static and shared libraries directly.
+- [ ] Make the next interop hardening slice explicitly cover:
+  - Wio `string` -> native `const char*`,
+  - native `ref` / `view` parameter passing,
+  - and generic native POD `component` declarations.
+- [ ] Define lifetime rules for temporary native string views created from Wio
+      `string` arguments.
+- [ ] Allow native functions to consume mutable references when Wio can model
+      the write-back semantics safely and predictably.
+- [ ] Broaden declaration-level native POD interop from concrete components to
+      generic components, with specialization-time POD validation and stable
+      ABI/codegen rules.
 - [ ] Design reload-safe boundaries for future hot-reload support.
 - [ ] Decide what metadata or registration layer is needed so hot-reloaded
       modules can be discovered and rebound safely.

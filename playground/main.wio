@@ -1,12 +1,8 @@
 use std::console as Console;
 use std::vector;
 
-fn PrintVec2(vec: std::Vector2) {
-    Console::Print($"Vector2: x -> ${ vec.x } y-> ${ vec.y }");
-}
-
 fn Entry() -> void
 {
     mut vec: std::Vector2 = std::Vector2();
-    PrintVec2(vec);
+    std::PrintVec2(vec);
 }
