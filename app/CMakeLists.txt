@@ -1344,8 +1344,18 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_success_test(
+        wio_test_generic_fit_target_specialization_dry_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_fit_target_specialization_run.wio"
+    )
+
+    add_wio_success_test(
         wio_test_generic_parameterized_type_parameter_dry_run
         "${CMAKE_SOURCE_DIR}/tests/generic_parameterized_type_parameter_run.wio"
+    )
+
+    add_wio_success_test(
+        wio_test_generic_parameterized_type_parameter_realm_dry_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_parameterized_type_parameter_realm_run.wio"
     )
 
     add_wio_success_test(
@@ -1354,8 +1364,18 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_success_test(
+        wio_test_ref_mut_container_field_members_dry_run
+        "${CMAKE_SOURCE_DIR}/tests/ref_mut_container_field_members_run.wio"
+    )
+
+    add_wio_success_test(
         wio_test_object_method_outer_const_dry_run
         "${CMAKE_SOURCE_DIR}/tests/object_method_outer_const_run.wio"
+    )
+
+    add_wio_success_test(
+        wio_test_object_method_outer_const_realm_dry_run
+        "${CMAKE_SOURCE_DIR}/tests/object_method_outer_const_realm_run.wio"
     )
 
     add_wio_output_test(

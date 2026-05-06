@@ -217,6 +217,18 @@ namespace wio::sema
             if (!expression)
                 return false;
 
+            if (auto memberAccess = expression->as<MemberAccessExpression>())
+            {
+                if (auto memberSymbol = memberAccess->referencedSymbol.Lock(); memberSymbol)
+                {
+                    if ((memberSymbol->kind == SymbolKind::Variable || memberSymbol->kind == SymbolKind::Parameter) &&
+                        canMutateIntrinsicReceiver(memberAccess->object))
+                    {
+                        return true;
+                    }
+                }
+            }
+
             if (auto receiverSymbol = expression->referencedSymbol.Lock(); receiverSymbol)
             {
                 if (receiverSymbol->flags.get_isMutable())
@@ -3175,6 +3187,8 @@ namespace wio::sema
         functionDeclarationsBySymbol_.clear();
         attributeListsBySymbol_.clear();
         exportedCppSymbolLocations_.clear();
+        validatedGenericFunctionBodyKeys_.clear();
+        validatingGenericFunctionBodyKeys_.clear();
         currentScope_ = nullptr;
         currentExpectedExpressionType_ = nullptr;
         currentNamespacePath_.clear();
@@ -3222,6 +3236,189 @@ namespace wio::sema
         symbol->scopePath = getCurrentNamespacePath();
         symbols_.push_back(symbol);
         return symbol;
+    }
+
+    bool SemanticAnalyzer::validateConcreteGenericFunctionBody(
+        const FunctionDeclaration& node,
+        const Ref<Symbol>& funcSym,
+        const Ref<FunctionType>& declaredFunctionType,
+        const std::unordered_map<std::string, Ref<Type>>& directBindings,
+        const std::unordered_map<std::string, std::vector<Ref<Type>>>& packBindings,
+        const std::unordered_map<std::string, std::string>& packAliases)
+    {
+        if (!funcSym || !declaredFunctionType || funcSym->genericParameterNames.empty())
+            return true;
+
+        GenericBindingSet bindingSet;
+        bindingSet.directBindings = directBindings;
+        bindingSet.packBindings = packBindings;
+        bindingSet.packAliases = packAliases;
+
+        auto materializedInstantiation = tryMaterializeConcreteInstantiation(
+            funcSym->genericParameterNames,
+            funcSym->hasGenericParameterPack,
+            bindingSet
+        );
+        if (!materializedInstantiation.has_value())
+            return true;
+
+        std::string validationKey = common::formatString(
+            "{}::{}<{}>",
+            funcSym.Get(),
+            node.name ? node.name->token.value : "<function>",
+            formatDiagnosticTypeList(*materializedInstantiation)
+        );
+        if (validatedGenericFunctionBodyKeys_.contains(validationKey))
+            return true;
+        if (validatingGenericFunctionBodyKeys_.contains(validationKey))
+            return true;
+
+        validatingGenericFunctionBodyKeys_.insert(validationKey);
+
+        auto finalizeValidation = [&](const bool succeeded)
+        {
+            validatingGenericFunctionBodyKeys_.erase(validationKey);
+            if (succeeded)
+                validatedGenericFunctionBodyKeys_.insert(validationKey);
+        };
+
+        std::unordered_map<std::string, Ref<Type>> concreteGenericScope;
+        concreteGenericScope.reserve(node.genericParameters.size());
+        for (size_t genericIndex = 0; genericIndex < node.genericParameters.size(); ++genericIndex)
+        {
+            const auto& genericParameter = node.genericParameters[genericIndex];
+            if (!genericParameter)
+                continue;
+
+            const std::string& parameterName = genericParameter->token.value;
+            const bool isGenericParameterPack =
+                node.hasGenericParameterPack &&
+                genericIndex + 1 == node.genericParameters.size();
+
+            Ref<Type> parameterType = isGenericParameterPack
+                ? Compiler::get().getTypeContext().getOrCreateGenericParameterPackType(parameterName)
+                : Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
+            concreteGenericScope.emplace(parameterName, instantiateGenericType(parameterType, bindingSet));
+        }
+
+        Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
+        Ref<Type> previousFunctionReturnType = currentFunctionReturnType_;
+        Ref<Symbol> previousFunctionParameterPackSymbol = currentFunctionParameterPackSymbol_;
+        Ref<Type> previousFunctionParameterPackType = currentFunctionParameterPackType_;
+        Ref<Scope> previousScope = currentScope_;
+        bool previousAllowContextualNumericLiteralTyping = allowContextualNumericLiteralTyping_;
+
+        currentExpectedExpressionType_ = nullptr;
+        currentFunctionReturnType_ = instantiateGenericType(declaredFunctionType->returnType, bindingSet);
+        currentFunctionParameterPackSymbol_ = nullptr;
+        currentFunctionParameterPackType_ = nullptr;
+
+        genericTypeParameterScopes_.push_back(concreteGenericScope);
+        activeGenericConstraintSymbols_.push_back(funcSym);
+        if (funcSym->innerScope)
+            currentScope_ = funcSym->innerScope;
+        enterScope(ScopeKind::Function);
+
+        for (size_t i = 0; i < node.parameters.size(); ++i)
+        {
+            auto& param = node.parameters[i];
+            Ref<Type> instantiatedParameterType = instantiateGenericType(declaredFunctionType->paramTypes[i], bindingSet);
+
+            SymbolFlags parameterFlags = SymbolFlags::createAllFalse();
+            if (param.isParameterPack)
+                parameterFlags.set_isParameterPack(true);
+
+            Ref<Symbol> parameterSymbol = createSymbol(
+                param.name->token.value,
+                instantiatedParameterType,
+                SymbolKind::Parameter,
+                param.name->location(),
+                parameterFlags
+            );
+            currentScope_->define(param.name->token.value, parameterSymbol);
+
+            if (param.isParameterPack)
+            {
+                currentFunctionParameterPackSymbol_ = parameterSymbol;
+                currentFunctionParameterPackType_ = instantiatedParameterType;
+            }
+        }
+
+        const int32_t previousErrorCount = Logger::get().getErrorCount();
+
+        if (node.whenCondition)
+        {
+            node.whenCondition->accept(*this);
+
+            if (auto conditionType = node.whenCondition->refType.Lock(); !isGuardConditionTypeAllowed(conditionType))
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.whenCondition->location(),
+                    "When guard condition must be a boolean, numeric, or reference type. Got: {}",
+                    conditionType->toString()
+                );
+            }
+
+            if (node.whenFallback)
+            {
+                currentExpectedExpressionType_ = currentFunctionReturnType_;
+                allowContextualNumericLiteralTyping_ = true;
+                node.whenFallback->accept(*this);
+                currentExpectedExpressionType_ = nullptr;
+                allowContextualNumericLiteralTyping_ = previousAllowContextualNumericLiteralTyping;
+
+                Ref<Type> fallbackType = node.whenFallback->refType.Lock();
+                if (currentFunctionReturnType_ &&
+                    !currentFunctionReturnType_->isUnknown() &&
+                    fallbackType &&
+                    !fallbackType->isUnknown() &&
+                    !isAssignmentLikeCompatible(currentFunctionReturnType_, fallbackType))
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.whenFallback->location(),
+                        "When guard fallback type mismatch! Expected '{}', but got '{}'.",
+                        currentFunctionReturnType_->toString(),
+                        fallbackType->toString()
+                    );
+                }
+            }
+            else if (currentFunctionReturnType_ != Compiler::get().getTypeContext().getVoid())
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Functions with a return value must provide an 'else' fallback for 'when' guards.");
+            }
+        }
+
+        if (node.body)
+            node.body->accept(*this);
+
+        const bool requiresReturnValue = currentFunctionReturnType_ &&
+                                         !currentFunctionReturnType_->isUnknown() &&
+                                         !currentFunctionReturnType_->isVoid();
+        const bool allPathsReturn = statementDefinitelyReturns(node.body);
+
+        if (node.body && requiresReturnValue && !allPathsReturn)
+        {
+            WIO_LOG_ADD_ERROR(
+                node.name ? node.name->location() : node.location(),
+                "Non-void function '{}' must return a value on all control-flow paths.",
+                node.name ? node.name->token.value : "<function>"
+            );
+        }
+
+        const bool succeeded = Logger::get().getErrorCount() == previousErrorCount;
+
+        exitScope();
+        activeGenericConstraintSymbols_.pop_back();
+        genericTypeParameterScopes_.pop_back();
+        currentExpectedExpressionType_ = previousExpectedExpressionType;
+        currentFunctionReturnType_ = previousFunctionReturnType;
+        currentFunctionParameterPackSymbol_ = previousFunctionParameterPackSymbol;
+        currentFunctionParameterPackType_ = previousFunctionParameterPackType;
+        currentScope_ = previousScope;
+        allowContextualNumericLiteralTyping_ = previousAllowContextualNumericLiteralTyping;
+
+        finalizeValidation(succeeded);
+        return succeeded;
     }
 
     void SemanticAnalyzer::visit(Program& node)
@@ -6061,6 +6258,31 @@ namespace wio::sema
                 return;
             }
 
+            if (!isConstructorCall &&
+                bestMatch->symbol &&
+                !bestMatch->symbol->genericParameterNames.empty() &&
+                bestMatch->symbol->type &&
+                bestMatch->symbol->type->kind() == TypeKind::Function &&
+                containsGenericParameterType(bestMatch->symbol->type.AsFast<FunctionType>()->returnType))
+            {
+                auto declarationIt = functionDeclarationsBySymbol_.find(bestMatch->symbol.Get());
+                auto declaredFunctionType = bestMatch->symbol->type ? bestMatch->symbol->type.AsFast<FunctionType>() : nullptr;
+                if (declarationIt != functionDeclarationsBySymbol_.end() &&
+                    declarationIt->second &&
+                    declaredFunctionType &&
+                    !validateConcreteGenericFunctionBody(
+                        *declarationIt->second,
+                        bestMatch->symbol,
+                        declaredFunctionType,
+                        bestMatch->bindingSet.directBindings,
+                        bestMatch->bindingSet.packBindings,
+                        bestMatch->bindingSet.packAliases))
+                {
+                    node.refType = Compiler::get().getTypeContext().getUnknown();
+                    return;
+                }
+            }
+
             if (!isConstructorCall)
             {
                 node.callee->referencedSymbol = bestMatch->symbol;
@@ -6453,6 +6675,8 @@ namespace wio::sema
         struct GenericFitConstraintInfo
         {
             bool isKnown = false;
+            bool hasApplicableConstraints = false;
+            bool isIncompatible = false;
             bool allowsNumeric = false;
             bool allowsObjectLike = false;
         };
@@ -6547,9 +6771,15 @@ namespace wio::sema
                 }
 
                 if (!sawApplicableConstraint || !allConstraintsAreFitCompatible)
-                    return {};
+                {
+                    info.hasApplicableConstraints = sawApplicableConstraint;
+                    info.isIncompatible = sawApplicableConstraint;
+                    return info;
+                }
 
+                info.hasApplicableConstraints = true;
                 info.isKnown = info.allowsNumeric || info.allowsObjectLike;
+                info.isIncompatible = !info.isKnown;
                 return info;
             }
 
@@ -6576,19 +6806,30 @@ namespace wio::sema
             if (resolvedDestType && resolvedDestType->kind() == TypeKind::GenericParameter)
             {
                 const GenericFitConstraintInfo constraintInfo = resolveGenericFitConstraintInfo(resolvedDestType);
+                const bool sourceIsNumeric = resolvedSrcType && resolvedSrcType->isNumeric();
+                const bool sourceIsObjectLike = getObjectOrInterfaceStructType(srcType) != nullptr;
                 const bool isNumericFit =
-                    resolvedSrcType &&
-                    resolvedSrcType->isNumeric() &&
-                    constraintInfo.isKnown &&
-                    constraintInfo.allowsNumeric;
+                    sourceIsNumeric &&
+                    (!constraintInfo.hasApplicableConstraints || constraintInfo.allowsNumeric);
                 const bool isObjectLikeFit =
-                    getObjectOrInterfaceStructType(srcType) &&
-                    constraintInfo.isKnown &&
-                    constraintInfo.allowsObjectLike;
+                    sourceIsObjectLike &&
+                    (!constraintInfo.hasApplicableConstraints || constraintInfo.allowsObjectLike);
 
                 if (isNumericFit || isObjectLikeFit)
                 {
                     node.refType = destType;
+                    return;
+                }
+
+                if ((sourceIsNumeric || sourceIsObjectLike) && constraintInfo.isIncompatible)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "The 'fit' target generic parameter '{}' does not allow {} conversions.",
+                        resolvedDestType.AsFast<GenericParameterType>()->name,
+                        sourceIsNumeric ? "numeric" : "object/interface"
+                    );
+                    node.refType = Compiler::get().getTypeContext().getUnknown();
                     return;
                 }
             }
@@ -7045,6 +7286,7 @@ namespace wio::sema
             auto funcType = Compiler::get().getTypeContext().getOrCreateFunctionType(returnType, paramTypes, hasParameterPack);
             
             Ref<Symbol> funcSym = createSymbol(node.name->token.value, funcType, SymbolKind::Function, node.location());
+            funcSym->innerScope = currentScope_;
             funcSym->genericParameterNames.reserve(node.genericParameters.size());
             for (const auto& genericParameter : node.genericParameters)
             {

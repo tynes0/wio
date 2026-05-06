@@ -5,6 +5,7 @@
 #include "scope.h"
 #include "type.h"
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace wio::sema
@@ -53,5 +54,16 @@ namespace wio::sema
 
         [[nodiscard]] std::string getCurrentNamespacePath() const;
         Ref<Symbol> createSymbol(std::string name, Ref<Type> type, SymbolKind kind, common::Location loc, SymbolFlags flags = SymbolFlags::createAllFalse());
+        bool validateConcreteGenericFunctionBody(
+            const FunctionDeclaration& node,
+            const Ref<Symbol>& funcSym,
+            const Ref<FunctionType>& declaredFunctionType,
+            const std::unordered_map<std::string, Ref<Type>>& directBindings,
+            const std::unordered_map<std::string, std::vector<Ref<Type>>>& packBindings,
+            const std::unordered_map<std::string, std::string>& packAliases
+        );
+
+        std::unordered_set<std::string> validatedGenericFunctionBodyKeys_;
+        std::unordered_set<std::string> validatingGenericFunctionBodyKeys_;
     };
 }

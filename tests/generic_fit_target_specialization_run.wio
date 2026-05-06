@@ -1,0 +1,25 @@
+use std::assert as assert;
+
+object Base {
+}
+
+@From(Base)
+object Derived {
+}
+
+fn CastNumeric<T>(value: i32) -> T {
+    return value fit T;
+}
+
+fn CastObject<T>(value: Derived) -> T {
+    return value fit T;
+}
+
+fn Entry(args: string[]) -> i32 {
+    let numericValue = CastNumeric<i32>(27);
+    assert::ExpectEqual(numericValue, 27, "generic fit should defer numeric specialization until instantiation");
+
+    let baseValue: Base = CastObject<Base>(Derived());
+    assert::ExpectTrue(baseValue is Base, "generic fit should allow object specializations");
+    return 0;
+}

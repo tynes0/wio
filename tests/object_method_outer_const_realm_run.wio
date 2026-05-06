@@ -1,0 +1,17 @@
+use std::assert as assert;
+
+realm demo {
+    const GlobalScale: i32 = 9;
+
+    object ScaleReader {
+        public fn Read() -> i32 {
+            return GlobalScale;
+        }
+    }
+}
+
+fn Entry(args: string[]) -> i32 {
+    let reader: demo::ScaleReader = demo::ScaleReader();
+    assert::ExpectEqual(reader.Read(), 9, "object methods should resolve realm-level const values");
+    return 0;
+}

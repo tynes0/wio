@@ -3,5 +3,6 @@ fn Cast<T>(value: i32) -> T {
 }
 
 fn Entry(args: string[]) -> i32 {
+    let text = Cast<string>(11);
     return 0;
 }

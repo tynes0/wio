@@ -113,7 +113,7 @@ function New-TemplateSpec {
         "hybrid-module" {
             $spec.description = "Shared Wio module plus native C++ host."
             $spec.wioSource = @"
-use std::io as console;
+use std::console as console;
 
 mut gCounter: i32 = 0;
 
@@ -213,7 +213,7 @@ int main(int argc, char** argv)
             $spec.hostEnabled = $false
             $spec.runPassLibraryPath = $false
             $spec.wioSource = @"
-use std::io as console;
+use std::console as console;
 
 fn Entry() -> i32 {
     console::Print("Hello from a plain Wio application.");
@@ -226,7 +226,7 @@ fn Entry() -> i32 {
             $spec.hostEnabled = $false
             $spec.runPassLibraryPath = $false
             $spec.wioSource = @"
-use std::io as console;
+use std::console as console;
 
 realm ffi {
     @Native
@@ -371,6 +371,8 @@ $manifestMakeWio = @(
     ""
     (Convert-SectionToMakeWio -Name "run" -Values $manifestObject.run)
 ) -join [Environment]::NewLine
+
+$manifestJson = $manifestObject | ConvertTo-Json -Depth 10
 
 $wrapperBuild = @"
 param(

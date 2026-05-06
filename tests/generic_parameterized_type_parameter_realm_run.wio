@@ -1,0 +1,18 @@
+use std::assert as assert;
+
+realm math {
+    component Vector2<T> {
+        x: T;
+        y: T;
+    }
+}
+
+fn First<T>(value: math::Vector2<T>) -> T {
+    return value.x;
+}
+
+fn Entry(args: string[]) -> i32 {
+    let value = math::Vector2<i32>(7, 9);
+    assert::ExpectEqual(First<i32>(value), 7, "generic parameterized type parameters should resolve across realms");
+    return 0;
+}

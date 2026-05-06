@@ -1,0 +1,26 @@
+use std::assert as assert;
+
+object ContainerBox {
+    public values: string[];
+    public counts: Dict<string, i32>;
+
+    OnConstruct() {
+        self.values = [];
+        self.counts = {};
+    }
+}
+
+fn Mutate(box: ref ContainerBox) {
+    box.values.Push("item");
+    box.counts.Set("answer", 42);
+}
+
+fn Entry(args: string[]) -> i32 {
+    mut box: ContainerBox = ContainerBox();
+    Mutate(ref box);
+
+    assert::ExpectEqual(box.values.Count(), 1usize, "field-backed ref array should allow mutating members");
+    assert::ExpectEqual(box.values[0usize], "item", "field-backed ref array should mutate in place");
+    assert::ExpectEqual(box.counts.Get("answer"), 42, "field-backed ref dict should allow mutating members");
+    return 0;
+}
