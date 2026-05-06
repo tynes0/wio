@@ -6834,7 +6834,10 @@ namespace wio::codegen
             
             if (node.elseBranch)
             {
-                emit("else ");
+                if (node.elseBranch->is<IfStatement>())
+                    emitLine("else");
+                else
+                    emit("else ");
                 node.elseBranch->accept(*this);
             }
             return;
@@ -6853,7 +6856,10 @@ namespace wio::codegen
         
         if (node.elseBranch)
         {
-            emit("else ");
+            if (node.elseBranch->is<IfStatement>())
+                emitLine("else");
+            else
+                emit("else ");
             node.elseBranch->accept(*this);
         }
     }

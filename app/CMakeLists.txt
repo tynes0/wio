@@ -1136,6 +1136,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         --run
     )
 
+    add_wio_output_test(
+        wio_test_else_if_chain_run
+        "${CMAKE_SOURCE_DIR}/tests/else_if_chain_run.wio"
+        "Else-if chain: 2"
+        --run
+    )
+
     add_wio_non_dry_failure_test_clean(
         wio_runtime_direct_index_out_of_range
         "${CMAKE_SOURCE_DIR}/tests/direct_index_out_of_range_runtime_failure.wio"

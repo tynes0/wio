@@ -1540,13 +1540,13 @@ namespace wio
 
         if (match(TokenType::kwElse, true))
         {
-            if (match(TokenType::kwIf, true))
+            if (match(TokenType::kwIf))
             {
                 elseBranch = parseIfStatement();
             }
             else
             {
-                elseBranch = parseBlockStatement();
+                elseBranch = match(TokenType::leftBrace) ? parseBlockStatement() : parseStatement();
             }
         }
 
