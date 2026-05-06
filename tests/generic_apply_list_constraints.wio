@@ -1,0 +1,15 @@
+use std::console as console;
+
+@Apply(f32, f64)
+fn Square<T>(value: T) -> T {
+    return value * value;
+}
+
+fn Entry() -> i32 {
+    let value64: f64 = 3.0;
+    let ok32 = Square(2.0f) == 4.0f;
+    let ok64 = Square(value64) == 9.0;
+
+    console::Print($"Generic apply list: ${ok32}, ${ok64}");
+    return 0;
+}

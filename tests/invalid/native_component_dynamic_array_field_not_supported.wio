@@ -1,0 +1,10 @@
+@Native
+@CppHeader("../native/native_generic_pod_array_components.h")
+@CppName(native_pod_array_generic::triplet)
+component BadNativeArrayField {
+    values: i32[];
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

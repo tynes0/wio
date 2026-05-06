@@ -286,6 +286,14 @@ namespace wio::codegen
             return structType;
         }
 
+        bool usesNativePodAliasModelForCodegen(const Ref<sema::StructType>& structType)
+        {
+            return static_cast<bool>(structType) &&
+                   !structType->isObject &&
+                   !structType->isInterface &&
+                   structType->isNativePodComponent;
+        }
+
         std::unordered_map<std::string, Ref<sema::Type>> buildGenericTypeBindings(
             const std::vector<std::string>& parameterNames,
             const std::vector<Ref<sema::Type>>& typeArguments)
@@ -3549,8 +3557,40 @@ namespace wio::codegen
             {
                 auto declaration = stmt->template as<ComponentDeclaration>();
                 auto sym = declaration->name->referencedSymbol.Lock();
-                emitTemplateForwardDeclarationPrefix(declaration->genericParameters);
-                emitLine(std::format("struct {};", Mangler::mangleStruct(declaration->name->token.value, sym ? sym->scopePath : "")));
+                auto componentType = getStructTypeFromSymbol(sym);
+                if (componentType && usesNativePodAliasModelForCodegen(componentType))
+                {
+                    emitTemplateForwardDeclarationPrefix(declaration->genericParameters);
+
+                    std::string nativeTypeName = componentType->nativeCppName.empty()
+                        ? componentType->name
+                        : componentType->nativeCppName;
+                    if (!declaration->genericParameters.empty())
+                    {
+                        nativeTypeName += "<";
+                        for (size_t i = 0; i < declaration->genericParameters.size(); ++i)
+                        {
+                            if (i > 0)
+                                nativeTypeName += ", ";
+
+                            nativeTypeName += declaration->genericParameters[i]->token.value;
+                            if (declaration->hasGenericParameterPack && i + 1 == declaration->genericParameters.size())
+                                nativeTypeName += "...";
+                        }
+                        nativeTypeName += ">";
+                    }
+
+                    emitLine(std::format(
+                        "using {} = {};",
+                        Mangler::mangleStruct(declaration->name->token.value, sym ? sym->scopePath : ""),
+                        nativeTypeName
+                    ));
+                }
+                else
+                {
+                    emitTemplateForwardDeclarationPrefix(declaration->genericParameters);
+                    emitLine(std::format("struct {};", Mangler::mangleStruct(declaration->name->token.value, sym ? sym->scopePath : "")));
+                }
             }
             else if (stmt->template is<ObjectDeclaration>())
             {
@@ -5474,6 +5514,9 @@ namespace wio::codegen
                 if (!nativeStruct)
                     return expr;
 
+                if (usesNativePodAliasModelForCodegen(nativeStruct))
+                    return sourceIsPointer ? "*" + expr : expr;
+
                 std::string result = getNativePodCppName(nativeStruct) + "{";
                 for (size_t fieldIndex = 0; fieldIndex < nativeStruct->fieldNames.size(); ++fieldIndex)
                 {
@@ -5496,6 +5539,13 @@ namespace wio::codegen
                 auto nativeStruct = getNativePodComponentStructTypeForCodegen(destinationType);
                 if (!nativeStruct)
                     return;
+
+                if (usesNativePodAliasModelForCodegen(nativeStruct))
+                {
+                    EMIT_TABS();
+                    emitLine((destinationIsPointer ? "*" + destinationExpr : destinationExpr) + " = " + sourceExpr + ";");
+                    return;
+                }
 
                 for (size_t fieldIndex = 0; fieldIndex < nativeStruct->fieldNames.size(); ++fieldIndex)
                 {
@@ -5556,6 +5606,8 @@ namespace wio::codegen
                 auto parameterType = i < funcType->paramTypes.size() ? funcType->paramTypes[i] : nullptr;
                 auto resolvedParameterType = unwrapAliasTypeForCodegen(parameterType);
                 auto nativeStruct = getNativePodComponentStructTypeForCodegen(parameterType);
+                const bool usesNativePodAliasModel =
+                    nativeStruct && usesNativePodAliasModelForCodegen(nativeStruct);
 
                 if (!nativeStruct)
                 {
@@ -5615,6 +5667,31 @@ namespace wio::codegen
                     continue;
                 }
 
+                if (usesNativePodAliasModel)
+                {
+                    const bool isReferenceParameter =
+                        resolvedParameterType && resolvedParameterType->kind() == sema::TypeKind::Reference;
+                    const bool isMutableReference =
+                        isReferenceParameter && resolvedParameterType.AsFast<sema::ReferenceType>()->isMutable;
+                    const std::string directCallExpr = isReferenceParameter ? "*" + parameterName : parameterName;
+                    const std::string nativeSignatureType = getNativePodCppName(nativeStruct);
+
+                    NativePreparedArgument preparedArgument;
+                    preparedArgument.callExpr = directCallExpr;
+                    preparedArgument.preferredCallExpr = directCallExpr;
+                    preparedArgument.fallbackCallExpr = directCallExpr;
+                    preparedArgument.mutableTargetName = "";
+                    preparedArgument.mutableTargetType = nullptr;
+                    preparedArgument.mutableTargetIsPointer = false;
+                    preparedArgument.signatureType = isReferenceParameter
+                        ? (isMutableReference ? nativeSignatureType + "&" : "const " + nativeSignatureType + "&")
+                        : nativeSignatureType;
+                    preparedArgument.preferredSignatureType = preparedArgument.signatureType;
+                    preparedArgument.fallbackSignatureType = preparedArgument.signatureType;
+                    preparedArguments.push_back(std::move(preparedArgument));
+                    continue;
+                }
+
                 const std::string nativeTempName = common::formatString("_wio_native_arg{}", i);
                 EMIT_TABS();
                 emitLine(getNativePodCppName(nativeStruct) + " " + nativeTempName + " = " + buildWioToNativePodExpr(
@@ -5642,6 +5719,8 @@ namespace wio::codegen
 
             const auto nativeReturnStruct = getNativePodComponentStructTypeForCodegen(funcType->returnType);
             const bool returnsNativePodComponent = static_cast<bool>(nativeReturnStruct);
+            const bool returnsNativePodAliasComponent =
+                nativeReturnStruct && usesNativePodAliasModelForCodegen(nativeReturnStruct);
 
             auto emitNativeSymbolInvocationTarget = [&]()
             {
@@ -5693,7 +5772,9 @@ namespace wio::codegen
                 }
                 emit(") -> ");
                 emit(funcType->returnType && !funcType->returnType->isVoid()
-                         ? (returnsNativePodComponent ? getNativePodCppName(nativeReturnStruct) : returnType)
+                         ? (returnsNativePodAliasComponent
+                                ? returnType
+                                : (returnsNativePodComponent ? getNativePodCppName(nativeReturnStruct) : returnType))
                          : "void");
                 emitLine(" {");
                 indent();
@@ -5833,12 +5914,20 @@ namespace wio::codegen
 
             if (returnsNativePodComponent)
             {
-                const std::string wioReturnTypeName = toCppType(funcType->returnType);
-                EMIT_TABS();
-                emitLine(wioReturnTypeName + " _wio_result{};");
-                emitNativePodCopyBack("_wio_result", funcType->returnType, "_wio_native_result", false);
-                EMIT_TABS();
-                emitLine("return _wio_result;");
+                if (returnsNativePodAliasComponent)
+                {
+                    EMIT_TABS();
+                    emitLine("return _wio_native_result;");
+                }
+                else
+                {
+                    const std::string wioReturnTypeName = toCppType(funcType->returnType);
+                    EMIT_TABS();
+                    emitLine(wioReturnTypeName + " _wio_result{};");
+                    emitNativePodCopyBack("_wio_result", funcType->returnType, "_wio_native_result", false);
+                    EMIT_TABS();
+                    emitLine("return _wio_result;");
+                }
             }
 
             dedent();
@@ -6080,6 +6169,29 @@ namespace wio::codegen
         }
 
         std::string structName = mangleStructTypeName(componentType);
+        if (componentType && usesNativePodAliasModelForCodegen(componentType))
+        {
+            std::string nativeTypeName = componentType->nativeCppName.empty() ? componentType->name : componentType->nativeCppName;
+            if (!node.genericParameters.empty())
+            {
+                nativeTypeName += "<";
+                for (size_t i = 0; i < node.genericParameters.size(); ++i)
+                {
+                    if (i > 0)
+                        nativeTypeName += ", ";
+
+                    nativeTypeName += node.genericParameters[i]->token.value;
+                    if (node.hasGenericParameterPack && i + 1 == node.genericParameters.size())
+                        nativeTypeName += "...";
+                }
+                nativeTypeName += ">";
+            }
+
+            EMIT_TABS();
+            emitLine("using " + structName + " = " + nativeTypeName + ";\n");
+            return;
+        }
+
         emit("struct " + structName);
         
         if (hasAttribute(node.attributes, Attribute::Final)) emit(" final");

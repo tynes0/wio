@@ -1,0 +1,9 @@
+@Apply(f32, f64)
+fn Square<T>(value: T) -> T {
+    return value * value;
+}
+
+fn Entry() -> i32 {
+    let bad = Square(4);
+    return 0;
+}

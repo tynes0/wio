@@ -2407,6 +2407,32 @@ namespace wio::sema
             };
         }
 
+        bool usesSingleGenericApplyConstraintList(const AttributeStatement& attribute,
+                                                  const std::vector<std::string>& genericParameterNames)
+        {
+            return genericParameterNames.size() == 1 && !attribute.args.empty();
+        }
+
+        std::vector<AttributeTypeArgument> getApplyConstraintArguments(
+            const AttributeStatement& attribute,
+            const std::vector<std::string>& genericParameterNames,
+            const size_t genericParameterIndex)
+        {
+            if (usesSingleGenericApplyConstraintList(attribute, genericParameterNames))
+            {
+                std::vector<AttributeTypeArgument> constraintArguments;
+                constraintArguments.reserve(attribute.args.size());
+                for (size_t argumentIndex = 0; argumentIndex < attribute.args.size(); ++argumentIndex)
+                    constraintArguments.push_back(getAttributeTypeArgument(attribute, argumentIndex));
+                return constraintArguments;
+            }
+
+            if (genericParameterIndex >= attribute.args.size())
+                return {};
+
+            return { getAttributeTypeArgument(attribute, genericParameterIndex) };
+        }
+
         bool isExactConstraintTypeMatch(const Ref<Type>& actual, const Ref<Type>& expected)
         {
             Ref<Type> lhs = unwrapAliasType(actual);
@@ -2642,7 +2668,20 @@ namespace wio::sema
                 if (!applyAttribute)
                     continue;
 
-                if (applyAttribute->args.size() != genericParameterNames.size())
+                if (genericParameterNames.size() == 1)
+                {
+                    if (applyAttribute->args.empty())
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            applyAttribute->location(),
+                            "@Apply on single-parameter generic {} declarations expects at least one type or predicate argument.",
+                            declarationKind
+                        );
+                        allValid = false;
+                        continue;
+                    }
+                }
+                else if (applyAttribute->args.size() != genericParameterNames.size())
                 {
                     WIO_LOG_ADD_ERROR(
                         applyAttribute->location(),
@@ -2655,15 +2694,26 @@ namespace wio::sema
 
                 for (size_t i = 0; i < genericParameterNames.size(); ++i)
                 {
-                    if (!validateGenericConstraintArgument(
-                            analyzer,
-                            getAttributeTypeArgument(*applyAttribute, i),
-                            genericParameterNames[i],
-                            "@Apply",
-                            applyAttribute->location(),
-                            true))
+                    const auto constraintArguments =
+                        getApplyConstraintArguments(*applyAttribute, genericParameterNames, i);
+                    if (constraintArguments.empty())
                     {
                         allValid = false;
+                        continue;
+                    }
+
+                    for (const auto& constraintArgument : constraintArguments)
+                    {
+                        if (!validateGenericConstraintArgument(
+                                analyzer,
+                                constraintArgument,
+                                genericParameterNames[i],
+                                "@Apply",
+                                applyAttribute->location(),
+                                true))
+                        {
+                            allValid = false;
+                        }
                     }
                 }
             }
@@ -2682,17 +2732,28 @@ namespace wio::sema
 
             for (const auto* applyAttribute : applyAttributes)
             {
-                if (!applyAttribute || applyAttribute->args.size() != genericParameterNames.size())
+                if (!applyAttribute)
+                    continue;
+
+                if (genericParameterNames.size() != 1 && applyAttribute->args.size() != genericParameterNames.size())
                     continue;
 
                 bool matches = true;
                 for (size_t i = 0; i < genericParameterNames.size(); ++i)
                 {
-                    const auto argument = getAttributeTypeArgument(*applyAttribute, i);
+                    const auto constraintArguments =
+                        getApplyConstraintArguments(*applyAttribute, genericParameterNames, i);
                     const bool isPackParameter = hasGenericParameterPack && i + 1 == genericParameterNames.size();
                     const std::string& genericParameterName = genericParameterNames[i];
 
-                    auto evaluateConstraintAgainstSingleType = [&](const Ref<Type>& bindingType) -> bool
+                    if (constraintArguments.empty())
+                    {
+                        matches = false;
+                        break;
+                    }
+
+                    auto evaluateConstraintAgainstSingleType = [&](const AttributeTypeArgument& argument,
+                                                                   const Ref<Type>& bindingType) -> bool
                     {
                         if (!bindingType || bindingType->isUnknown() || containsGenericParameterType(bindingType))
                             return true;
@@ -2719,6 +2780,14 @@ namespace wio::sema
                         return false;
                     };
 
+                    auto evaluateConstraintSetAgainstSingleType = [&](const Ref<Type>& bindingType) -> bool
+                    {
+                        return std::ranges::any_of(constraintArguments, [&](const AttributeTypeArgument& argument)
+                        {
+                            return evaluateConstraintAgainstSingleType(argument, bindingType);
+                        });
+                    };
+
                     if (!isPackParameter)
                     {
                         auto bindingIt = bindings.directBindings.find(genericParameterName);
@@ -2728,7 +2797,7 @@ namespace wio::sema
                             break;
                         }
 
-                        if (!evaluateConstraintAgainstSingleType(bindingIt->second))
+                        if (!evaluateConstraintSetAgainstSingleType(bindingIt->second))
                         {
                             matches = false;
                             break;
@@ -2749,7 +2818,7 @@ namespace wio::sema
 
                     for (const auto& packElementType : packIt->second)
                     {
-                        if (!evaluateConstraintAgainstSingleType(packElementType))
+                        if (!evaluateConstraintSetAgainstSingleType(packElementType))
                         {
                             matches = false;
                             break;
@@ -3135,6 +3204,14 @@ namespace wio::sema
             }
             case TypeKind::GenericParameter:
                 return allowGenericPlaceholders;
+            case TypeKind::Array:
+            {
+                auto arrayType = current.AsFast<ArrayType>();
+                if (!arrayType || arrayType->arrayKind != ArrayType::ArrayKind::Static)
+                    return false;
+
+                return isNativePodInteropFieldType(arrayType->elementType, allowGenericPlaceholders);
+            }
             case TypeKind::Struct:
             {
                 auto structType = current.AsFast<StructType>();
@@ -3179,7 +3256,7 @@ namespace wio::sema
 
                 WIO_LOG_ADD_ERROR(
                     errorLocation,
-                    "Declaration-level @Native component '{}' field '{}' resolves to type '{}' which is not POD-native-compatible yet. Supported field types are primitives and other declaration-level @Native components.",
+                    "Declaration-level @Native component '{}' field '{}' resolves to type '{}' which is not POD-native-compatible yet. Supported field types are primitives, POD-compatible static arrays, and other declaration-level @Native components.",
                     structType->toString(),
                     structType->fieldNames[fieldIndex],
                     structType->fieldTypes[fieldIndex] ? structType->fieldTypes[fieldIndex]->toString() : "<unknown>"
@@ -6840,54 +6917,89 @@ namespace wio::sema
 
                 for (const auto* applyAttribute : applyAttributes)
                 {
-                    if (!applyAttribute || applyAttribute->args.size() != activeSymbol->genericParameterNames.size())
+                    if (!applyAttribute)
+                        continue;
+
+                    if (activeSymbol->genericParameterNames.size() != 1 &&
+                        applyAttribute->args.size() != activeSymbol->genericParameterNames.size())
+                        continue;
+
+                    const auto constraintArguments =
+                        getApplyConstraintArguments(*applyAttribute, activeSymbol->genericParameterNames, genericParameterIndex);
+                    if (constraintArguments.empty())
                         continue;
 
                     sawApplicableConstraint = true;
-                    const auto argument = getAttributeTypeArgument(*applyAttribute, genericParameterIndex);
+                    bool attributeAllowsNumeric = false;
+                    bool attributeAllowsObjectLike = false;
+                    bool attributeIsCompatible = true;
 
-                    if (argument.typeSpecifier)
+                    for (const auto& argument : constraintArguments)
                     {
-                        if (const auto* predicateTrait =
-                                findGenericConstraintTraitDescriptor(argument.typeSpecifier->name.value,
-                                                                     argument.typeSpecifier->refType.Lock()))
+                        if (argument.typeSpecifier)
                         {
-                            if (predicateTrait->kind == GenericConstraintTraitKind::IsInteger ||
-                                predicateTrait->kind == GenericConstraintTraitKind::IsNumeric)
+                            if (const auto* predicateTrait =
+                                    findGenericConstraintTraitDescriptor(argument.typeSpecifier->name.value,
+                                                                         argument.typeSpecifier->refType.Lock()))
                             {
-                                info.allowsNumeric = true;
+                                if (predicateTrait->kind == GenericConstraintTraitKind::IsInteger ||
+                                    predicateTrait->kind == GenericConstraintTraitKind::IsNumeric)
+                                {
+                                    attributeAllowsNumeric = true;
+                                    continue;
+                                }
+
+                                attributeIsCompatible = false;
+                                break;
+                            }
+
+                            Ref<Type> exactType = unwrapAliasType(argument.typeSpecifier->refType.Lock());
+                            if (!exactType || exactType->isUnknown())
+                            {
+                                attributeIsCompatible = false;
+                                break;
+                            }
+
+                            if (isNumericConstraintType(exactType))
+                            {
+                                attributeAllowsNumeric = true;
                                 continue;
                             }
 
-                            allConstraintsAreFitCompatible = false;
-                            break;
+                            if (getObjectOrInterfaceStructType(exactType) || isExactType(exactType, typeContext.getObject()))
+                            {
+                                attributeAllowsObjectLike = true;
+                                continue;
+                            }
                         }
 
-                        Ref<Type> exactType = unwrapAliasType(argument.typeSpecifier->refType.Lock());
-                        if (!exactType || exactType->isUnknown())
-                        {
-                            allConstraintsAreFitCompatible = false;
-                            break;
-                        }
+                        attributeIsCompatible = false;
+                        break;
+                    }
 
-                        if (isNumericConstraintType(exactType))
-                        {
-                            info.allowsNumeric = true;
-                            continue;
-                        }
-
-                        if (getObjectOrInterfaceStructType(exactType) || isExactType(exactType, typeContext.getObject()))
-                        {
-                            info.allowsObjectLike = true;
-                            continue;
-                        }
-
+                    if (!attributeIsCompatible || (attributeAllowsNumeric && attributeAllowsObjectLike))
+                    {
                         allConstraintsAreFitCompatible = false;
                         break;
                     }
 
-                    allConstraintsAreFitCompatible = false;
-                    break;
+                    if (!attributeAllowsNumeric && !attributeAllowsObjectLike)
+                    {
+                        allConstraintsAreFitCompatible = false;
+                        break;
+                    }
+
+                    if ((info.allowsNumeric && attributeAllowsObjectLike) ||
+                        (info.allowsObjectLike && attributeAllowsNumeric))
+                    {
+                        allConstraintsAreFitCompatible = false;
+                        break;
+                    }
+
+                    if (attributeAllowsNumeric)
+                        info.allowsNumeric = true;
+                    if (attributeAllowsObjectLike)
+                        info.allowsObjectLike = true;
                 }
 
                 if (!sawApplicableConstraint || !allConstraintsAreFitCompatible)
@@ -8732,7 +8844,7 @@ namespace wio::sema
                         {
                             WIO_LOG_ADD_ERROR(
                                 varDecl->location(),
-                                "Declaration-level @Native component '{}' field '{}' uses type '{}' which is not POD-native-compatible yet. Supported field types are primitives and other declaration-level @Native components.",
+                                "Declaration-level @Native component '{}' field '{}' uses type '{}' which is not POD-native-compatible yet. Supported field types are primitives, POD-compatible static arrays, and other declaration-level @Native components.",
                                 node.name->token.value,
                                 varDecl->name->token.value,
                                 memberSym->type ? memberSym->type->toString() : "<unknown>"

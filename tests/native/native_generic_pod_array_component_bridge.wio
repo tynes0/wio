@@ -1,0 +1,35 @@
+use std::console as console;
+
+@Native
+@CppHeader("native_generic_pod_array_components.h")
+@CppName(native_pod_array_generic::triplet)
+component Triplet<T> {
+    values: [T; 3];
+}
+
+realm ffi {
+    @Native
+    @CppHeader("native_generic_pod_array_components.h")
+    @CppName(native_pod_array_generic::SumI32)
+    fn SumI32(value: Triplet<i32>) -> i32;
+
+    @Native
+    @CppHeader("native_generic_pod_array_components.h")
+    @CppName(native_pod_array_generic::RotateLeftI32)
+    fn RotateLeftI32(value: ref Triplet<i32>);
+
+    @Native
+    @CppHeader("native_generic_pod_array_components.h")
+    @CppName(native_pod_array_generic::MakeI32)
+    fn MakeI32(a: i32, b: i32, c: i32) -> Triplet<i32>;
+}
+
+fn Entry() -> i32 {
+    mut value = Triplet<i32>([1, 2, 3]);
+    let sum = ffi::SumI32(value);
+    ffi::RotateLeftI32(ref value);
+    let made = ffi::MakeI32(4, 5, 6);
+
+    console::Print($"Native generic POD array: ${sum}, ${value.values[0usize]}, ${value.values[1usize]}, ${value.values[2usize]}, ${made.values[0usize]}, ${made.values[1usize]}, ${made.values[2usize]}");
+    return 0;
+}
