@@ -1,0 +1,10 @@
+@Native
+@CppHeader("native_pod_components.h")
+@CppName(vec2)
+component BadNativeComponent {
+    name: string;
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

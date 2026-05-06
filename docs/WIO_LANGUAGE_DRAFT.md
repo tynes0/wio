@@ -2038,6 +2038,12 @@ Wio’s OOP model is built around:
 - `object`
 - `interface`
 
+For the broader runtime-type design, including the recommended separation
+between `component`, `object`, managed container types, the planned `opaque`
+foreign-payload type, the future `box<T>` heap wrapper, and the possible
+`anyref` umbrella reference type, see
+[`WIO_RUNTIME_TYPE_MODEL.md`](./WIO_RUNTIME_TYPE_MODEL.md).
+
 ## 16. `interface`
 
 ### 16.1 Purpose

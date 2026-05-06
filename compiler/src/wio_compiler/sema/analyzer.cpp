@@ -3106,6 +3106,57 @@ namespace wio::sema
             }
         }
 
+        bool isNativePodInteropFieldType(const Ref<Type>& type)
+        {
+            Ref<Type> current = type;
+            while (current && current->kind() == TypeKind::Alias)
+                current = current.AsFast<AliasType>()->aliasedType;
+
+            if (!current)
+                return false;
+
+            switch (current->kind())
+            {
+            case TypeKind::Primitive:
+            {
+                const std::string typeName = current->toString();
+                return typeName != "void" && typeName != "string" && typeName != "object";
+            }
+            case TypeKind::Struct:
+            {
+                auto structType = current.AsFast<StructType>();
+                return structType && !structType->isObject && !structType->isInterface && structType->isNativePodComponent;
+            }
+            default:
+                return false;
+            }
+        }
+
+        Ref<StructType> getNativePodComponentStructType(const Ref<Type>& type)
+        {
+            Ref<Type> current = type;
+            while (current && current->kind() == TypeKind::Alias)
+                current = current.AsFast<AliasType>()->aliasedType;
+
+            if (!current)
+                return nullptr;
+
+            if (current->kind() == TypeKind::Reference)
+                current = current.AsFast<ReferenceType>()->referredType;
+
+            while (current && current->kind() == TypeKind::Alias)
+                current = current.AsFast<AliasType>()->aliasedType;
+
+            if (!current || current->kind() != TypeKind::Struct)
+                return nullptr;
+
+            auto structType = current.AsFast<StructType>();
+            if (!structType || structType->isObject || structType->isInterface || !structType->isNativePodComponent)
+                return nullptr;
+
+            return structType;
+        }
+
         bool isExactType(const Ref<Type>& actual, const Ref<Type>& expected)
         {
             Ref<Type> lhs = actual;
@@ -7326,6 +7377,10 @@ namespace wio::sema
         bool isGenericFunction = !node.genericParameters.empty();
         bool hasApply = hasAttribute(node.attributes, Attribute::Apply);
         bool isStructMethod = currentScope_ && currentScope_->getKind() == ScopeKind::Struct;
+        auto currentStruct = currentStructType_ ? currentStructType_.AsFast<StructType>() : nullptr;
+        const bool isLifecycleMethod =
+            node.name->token.value == "OnConstruct" || node.name->token.value == "OnDestruct";
+        const bool isComponentMethodContext = currentStruct && !currentStruct->isObject && !currentStruct->isInterface;
         bool hasInstantiate = hasAttribute(node.attributes, Attribute::Instantiate);
         const bool hasFunctionParameterPack = std::ranges::any_of(node.parameters, [](const Parameter& parameter)
         {
@@ -7364,7 +7419,6 @@ namespace wio::sema
 
             if (isStructMethod)
             {
-                auto currentStruct = currentStructType_ ? currentStructType_.AsFast<StructType>() : nullptr;
                 if (!currentStruct || !currentStruct->isObject)
                 {
                     WIO_LOG_ADD_ERROR(node.location(), "Generic methods are currently supported only on object methods.");
@@ -7605,9 +7659,22 @@ namespace wio::sema
                 WIO_LOG_ADD_ERROR(node.location(), "@Native functions cannot define a Wio body. Declare them with ';' only.");
             }
 
-            if (currentScope_ && currentScope_->getKind() == ScopeKind::Struct)
+            if (isStructMethod)
             {
-                WIO_LOG_ADD_ERROR(node.location(), "@Native is currently supported only for top-level functions.");
+                if (!currentStruct || currentStruct->isInterface)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "@Native methods are currently supported only on object methods and on object/component OnConstruct/OnDestruct lifecycle functions."
+                    );
+                }
+                else if (isComponentMethodContext && !isLifecycleMethod)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "@Native methods are currently supported only on object methods and on object/component OnConstruct/OnDestruct lifecycle functions."
+                    );
+                }
             }
 
             if (node.name->token.value == "Entry")
@@ -7866,6 +7933,39 @@ namespace wio::sema
                     );
                 }
             }
+        }
+
+        if (isNative)
+        {
+            auto validateNativeComponentInteropType = [&](const Ref<Type>& nativeType, std::string_view role, std::string_view displayName)
+            {
+                auto nativeComponent = getNativePodComponentStructType(nativeType);
+                if (!nativeComponent)
+                    return;
+
+                if (nativeComponent->nativeCppName.empty())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "@Native {} '{}' uses component '{}' directly, but that component is missing a declaration-level @CppName for its native C++ POD type.",
+                        role,
+                        displayName,
+                        nativeComponent->name
+                    );
+                }
+            };
+
+            for (size_t parameterIndex = 0; parameterIndex < funcType->paramTypes.size(); ++parameterIndex)
+            {
+                const std::string parameterName =
+                    parameterIndex < node.parameters.size() && node.parameters[parameterIndex].name
+                        ? node.parameters[parameterIndex].name->token.value
+                        : common::formatString("param{}", parameterIndex);
+                validateNativeComponentInteropType(funcType->paramTypes[parameterIndex], "parameter", parameterName);
+            }
+
+            if (funcType->returnType && !funcType->returnType->isVoid())
+                validateNativeComponentInteropType(funcType->returnType, "return type of", node.name->token.value);
         }
 
         Ref<Type> prevRetType = currentFunctionReturnType_;
@@ -8389,6 +8489,63 @@ namespace wio::sema
             }
             structType.AsFast<StructType>()->hasGenericParameterPack = node.hasGenericParameterPack;
             structType.AsFast<StructType>()->isFinal = hasAttribute(node.attributes, Attribute::Final);
+            const bool isNativePodComponent = hasAttribute(node.attributes, Attribute::Native);
+            structType.AsFast<StructType>()->isNativePodComponent = isNativePodComponent;
+            structType.AsFast<StructType>()->nativeCppName = node.name ? node.name->token.value : "";
+            structType.AsFast<StructType>()->nativeCppHeader.clear();
+
+            if (isNativePodComponent)
+            {
+                if (!node.genericParameters.empty())
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "Declaration-level @Native POD components do not support generics yet.");
+                }
+
+                if (hasAttribute(node.attributes, Attribute::CppHeader))
+                {
+                    auto headerArgs = getAttributeArgs(node.attributes, Attribute::CppHeader);
+                    if (headerArgs.size() != 1 || headerArgs.front().type != TokenType::stringLiteral)
+                    {
+                        WIO_LOG_ADD_ERROR(node.location(), "@CppHeader on a native component expects exactly one string literal argument.");
+                    }
+                    else
+                    {
+                        structType.AsFast<StructType>()->nativeCppHeader = headerArgs.front().value;
+                    }
+                }
+
+                if (hasAttribute(node.attributes, Attribute::CppName))
+                {
+                    auto cppNameArgs = getAttributeArgs(node.attributes, Attribute::CppName);
+                    if (cppNameArgs.size() != 1)
+                    {
+                        WIO_LOG_ADD_ERROR(node.location(), "@CppName on a native component expects exactly one target symbol argument.");
+                    }
+                    else if (const Token* cppNameArg = getFirstAttributeArg(node.attributes, Attribute::CppName); cppNameArg)
+                    {
+                        if (cppNameArg->type != TokenType::identifier && cppNameArg->type != TokenType::stringLiteral)
+                        {
+                            WIO_LOG_ADD_ERROR(node.location(), "@CppName on a native component expects an identifier path like foo::bar or a string literal.");
+                        }
+                        else if (!isValidCppSymbolPath(cppNameArg->value, true))
+                        {
+                            WIO_LOG_ADD_ERROR(node.location(), "@CppName on a native component must be a valid C++ identifier path like foo::bar.");
+                        }
+                        else
+                        {
+                            structType.AsFast<StructType>()->nativeCppName = cppNameArg->value;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                if (hasAttribute(node.attributes, Attribute::CppHeader))
+                    WIO_LOG_ADD_ERROR(node.location(), "@CppHeader on components currently requires declaration-level @Native.");
+                if (hasAttribute(node.attributes, Attribute::CppName))
+                    WIO_LOG_ADD_ERROR(node.location(), "@CppName on components currently requires declaration-level @Native.");
+            }
+
             auto genericScope = buildGenericTypeParameterScope();
             genericTypeParameterScopes_.push_back(genericScope);
             validateApplyAttributes(*this, node.attributes, structType.AsFast<StructType>()->genericParameterNames, "component", node.location());
@@ -8453,6 +8610,24 @@ namespace wio::sema
             AccessModifier defaultAccess = getDefaultAccessModifier(node.attributes, AccessModifier::Public);
             structType->trustedTypeKeys.clear();
 
+            if (structType->isNativePodComponent)
+            {
+                for (const auto& member : node.members)
+                {
+                    if (!member.declaration)
+                        continue;
+
+                    if (!member.declaration->is<VariableDeclaration>())
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            member.declaration->location(),
+                            "Declaration-level @Native components currently support only POD-style fields. Lifecycle functions and methods are not supported on the component declaration itself."
+                        );
+                        continue;
+                    }
+                }
+            }
+
             for (const auto& trustArg : getAttributeTypeArgs(node.attributes, Attribute::Trust))
             {
                 auto trustedStruct = resolveTrustedStructType(*this, prevScope, trustArg, node.location());
@@ -8486,6 +8661,17 @@ namespace wio::sema
                         memberTypes.push_back(memberSym->type);
                         structType->fieldNames.push_back(varDecl->name->token.value);
                         structType->fieldTypes.push_back(memberSym->type);
+
+                        if (structType->isNativePodComponent && !isNativePodInteropFieldType(memberSym->type))
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                varDecl->location(),
+                                "Declaration-level @Native component '{}' field '{}' uses type '{}' which is not POD-native-compatible yet. Supported field types are primitives and other declaration-level @Native components.",
+                                node.name->token.value,
+                                varDecl->name->token.value,
+                                memberSym->type ? memberSym->type->toString() : "<unknown>"
+                            );
+                        }
                     }
                     
                     if (member.access == AccessModifier::None) member.access = defaultAccess;
@@ -8761,6 +8947,20 @@ namespace wio::sema
             }
             structType.AsFast<StructType>()->hasGenericParameterPack = node.hasGenericParameterPack;
             structType.AsFast<StructType>()->isFinal = hasAttribute(node.attributes, Attribute::Final);
+
+            if (hasAttribute(node.attributes, Attribute::Native))
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Declaration-level @Native POD interop is currently supported only on components. Objects are not supported yet.");
+            }
+            if (hasAttribute(node.attributes, Attribute::CppHeader))
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "@CppHeader on objects is reserved for future declaration-level native object interop.");
+            }
+            if (hasAttribute(node.attributes, Attribute::CppName))
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "@CppName on objects is reserved for future declaration-level native object interop.");
+            }
+
             auto genericScope = buildGenericTypeParameterScope();
             genericTypeParameterScopes_.push_back(genericScope);
             validateApplyAttributes(*this, node.attributes, structType.AsFast<StructType>()->genericParameterNames, "object", node.location());

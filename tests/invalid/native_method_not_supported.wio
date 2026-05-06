@@ -1,4 +1,4 @@
-object NativeHolder {
+component NativeHolder {
     @Native
     fn GetValue() -> i32;
 }

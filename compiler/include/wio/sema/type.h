@@ -196,6 +196,9 @@ namespace wio
             bool isObject;
             bool isInterface;
             bool isFinal = false;
+            bool isNativePodComponent = false;
+            std::string nativeCppName;
+            std::string nativeCppHeader;
 
             StructType(std::string name, WeakRef<Scope> structScope, bool isObject = false, bool isInterface = false);
             

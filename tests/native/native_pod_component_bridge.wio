@@ -1,0 +1,42 @@
+use std::console as console;
+
+@Native
+@CppHeader("native_pod_components.h")
+@CppName(vec2)
+component Vector2 {
+    x: f32;
+    y: f32;
+}
+
+realm ffi {
+    @Native
+    @CppHeader("native_pod_components.h")
+    @CppName(native_pod::LengthSquared)
+    fn LengthSquared(value: Vector2) -> f32;
+
+    @Native
+    @CppHeader("native_pod_components.h")
+    @CppName(native_pod::SumView)
+    fn SumView(value: view Vector2) -> f32;
+
+    @Native
+    @CppHeader("native_pod_components.h")
+    @CppName(native_pod::Translate)
+    fn Translate(value: ref Vector2, dx: f32, dy: f32);
+
+    @Native
+    @CppHeader("native_pod_components.h")
+    @CppName(native_pod::Make)
+    fn Make(x: f32, y: f32) -> Vector2;
+}
+
+fn Entry() -> i32 {
+    mut value = Vector2(3.0f, 4.0f);
+    let len = ffi::LengthSquared(value);
+    let sum = ffi::SumView(ref value);
+    ffi::Translate(ref value, 1.0f, 2.0f);
+    let made = ffi::Make(7.0f, 8.0f);
+
+    console::Print($"Native POD component: ${len}, ${sum}, ${value.x}, ${value.y}, ${made.x}, ${made.y}");
+    return 0;
+}

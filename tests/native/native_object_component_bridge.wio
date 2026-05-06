@@ -1,0 +1,65 @@
+use std::console as console;
+
+@Default(public)
+object NativeCounter {
+    @Native
+    @CppHeader("native_struct_methods.h")
+    @CppName(native_struct::InitCounter)
+    OnConstruct(start: i32);
+
+    @Native
+    @CppHeader("native_struct_methods.h")
+    @CppName(native_struct::AddToCounter)
+    fn Add(delta: i32) -> i32;
+
+    @Native
+    @CppHeader("native_struct_methods.h")
+    @CppName(native_struct::DestroyCounter)
+    OnDestruct();
+}
+
+component NativePoint {
+    x: i32;
+    y: i32;
+
+    @Native
+    @CppHeader("native_struct_methods.h")
+    @CppName(native_struct::InitPoint)
+    OnConstruct(px: i32, py: i32);
+
+    @Native
+    @CppHeader("native_struct_methods.h")
+    @CppName(native_struct::DestroyPoint)
+    OnDestruct();
+}
+
+@Native
+@CppHeader("native_struct_methods.h")
+@CppName(native_struct::GetDestroyedCounterCount)
+fn GetDestroyedCounterCount() -> i32;
+
+@Native
+@CppHeader("native_struct_methods.h")
+@CppName(native_struct::GetDestroyedPointCount)
+fn GetDestroyedPointCount() -> i32;
+
+@Native
+@CppHeader("native_struct_methods.h")
+@CppName(native_struct::GetLastPointSum)
+fn GetLastPointSum() -> i32;
+
+fn Entry() -> i32 {
+    mut total: i32 = 0;
+    {
+        let counter = NativeCounter(10);
+        total = counter.Add(5);
+
+        {
+            let point = NativePoint(3, 4);
+            console::Print($"Native struct interop: ${total}, ${point.x}, ${point.y}");
+        }
+    }
+
+    console::Print($" / ${GetDestroyedCounterCount()}, ${GetDestroyedPointCount()}, ${GetLastPointSum()}");
+    return 0;
+}

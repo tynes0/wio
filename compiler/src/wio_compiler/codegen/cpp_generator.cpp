@@ -250,6 +250,25 @@ namespace wio::codegen
             return type;
         }
 
+        Ref<sema::StructType> getNativePodComponentStructTypeForCodegen(const Ref<sema::Type>& type)
+        {
+            Ref<sema::Type> current = unwrapAliasType(type);
+            if (!current)
+                return nullptr;
+
+            if (current->kind() == sema::TypeKind::Reference)
+                current = unwrapAliasType(current.AsFast<sema::ReferenceType>()->referredType);
+
+            if (!current || current->kind() != sema::TypeKind::Struct)
+                return nullptr;
+
+            auto structType = current.AsFast<sema::StructType>();
+            if (!structType || structType->isObject || structType->isInterface || !structType->isNativePodComponent)
+                return nullptr;
+
+            return structType;
+        }
+
         std::unordered_map<std::string, Ref<sema::Type>> buildGenericTypeBindings(
             const std::vector<std::string>& parameterNames,
             const std::vector<Ref<sema::Type>>& typeArguments)
@@ -741,6 +760,9 @@ namespace wio::codegen
             instantiatedType->fieldNames = structType->fieldNames;
             instantiatedType->trustedTypeKeys = structType->trustedTypeKeys;
             instantiatedType->isFinal = structType->isFinal;
+            instantiatedType->isNativePodComponent = structType->isNativePodComponent;
+            instantiatedType->nativeCppName = structType->nativeCppName;
+            instantiatedType->nativeCppHeader = structType->nativeCppHeader;
 
             instantiatedType->fieldTypes.reserve(structType->fieldTypes.size());
             for (const auto& fieldType : structType->fieldTypes)
@@ -2257,6 +2279,28 @@ namespace wio::codegen
             }
         }
 
+        void appendNativeHeader(std::string header,
+                                std::unordered_set<std::string>& seenHeaders,
+                                std::vector<std::string>& orderedHeaders)
+        {
+            if (!header.empty() && seenHeaders.insert(header).second)
+                orderedHeaders.push_back(std::move(header));
+        }
+
+        void collectCppHeadersFromFunction(const FunctionDeclaration& declaration,
+                                           std::unordered_set<std::string>& seenHeaders,
+                                           std::vector<std::string>& orderedHeaders)
+        {
+            if (!isNativeFunction(declaration))
+                return;
+
+            auto headerArg = getSingleAttributeArg(declaration.attributes, Attribute::CppHeader);
+            if (!headerArg.has_value() || headerArg->type != TokenType::stringLiteral)
+                return;
+
+            appendNativeHeader(headerArg->value, seenHeaders, orderedHeaders);
+        }
+
         void collectCppHeaders(const std::vector<NodePtr<Statement>>& statements, std::unordered_set<std::string>& seenHeaders, std::vector<std::string>& orderedHeaders)
         {
             for (const auto& statement : statements)
@@ -2274,22 +2318,57 @@ namespace wio::codegen
                 {
                     if (useStmt->isCppHeader)
                     {
-                        if (seenHeaders.insert(useStmt->modulePath).second)
-                            orderedHeaders.push_back(useStmt->modulePath);
+                        appendNativeHeader(useStmt->modulePath, seenHeaders, orderedHeaders);
                         continue;
                     }
                 }
 
-                const auto* fnDecl = statement->as<FunctionDeclaration>();
-                if (!fnDecl || !isNativeFunction(*fnDecl))
+                if (const auto* fnDecl = statement->as<FunctionDeclaration>())
+                {
+                    collectCppHeadersFromFunction(*fnDecl, seenHeaders, orderedHeaders);
                     continue;
+                }
 
-                auto headerArg = getSingleAttributeArg(fnDecl->attributes, Attribute::CppHeader);
-                if (!headerArg.has_value() || headerArg->type != TokenType::stringLiteral)
+                if (const auto* objectDecl = statement->as<ObjectDeclaration>())
+                {
+                    if (hasAttribute(objectDecl->attributes, Attribute::Native))
+                    {
+                        if (auto headerArg = getSingleAttributeArg(objectDecl->attributes, Attribute::CppHeader); headerArg.has_value() && headerArg->type == TokenType::stringLiteral)
+                            appendNativeHeader(headerArg->value, seenHeaders, orderedHeaders);
+                    }
+
+                    for (const auto& member : objectDecl->members)
+                    {
+                        if (member.declaration && member.declaration->is<FunctionDeclaration>())
+                            collectCppHeadersFromFunction(*member.declaration->as<FunctionDeclaration>(), seenHeaders, orderedHeaders);
+                    }
                     continue;
+                }
 
-                if (seenHeaders.insert(headerArg->value).second)
-                    orderedHeaders.push_back(headerArg->value);
+                if (const auto* componentDecl = statement->as<ComponentDeclaration>())
+                {
+                    if (hasAttribute(componentDecl->attributes, Attribute::Native))
+                    {
+                        if (auto headerArg = getSingleAttributeArg(componentDecl->attributes, Attribute::CppHeader); headerArg.has_value() && headerArg->type == TokenType::stringLiteral)
+                            appendNativeHeader(headerArg->value, seenHeaders, orderedHeaders);
+                    }
+
+                    for (const auto& member : componentDecl->members)
+                    {
+                        if (member.declaration && member.declaration->is<FunctionDeclaration>())
+                            collectCppHeadersFromFunction(*member.declaration->as<FunctionDeclaration>(), seenHeaders, orderedHeaders);
+                    }
+                    continue;
+                }
+
+                if (const auto* interfaceDecl = statement->as<InterfaceDeclaration>())
+                {
+                    for (const auto& method : interfaceDecl->methods)
+                    {
+                        if (method)
+                            collectCppHeadersFromFunction(*method, seenHeaders, orderedHeaders);
+                    }
+                }
             }
         }
 
@@ -5292,14 +5371,132 @@ namespace wio::codegen
         if (isNative)
         {
             std::string nativeSymbol = getNativeCppSymbolName(node);
+            const bool isNativeMember = !currentClassName_.empty();
+            auto getNativePodCppName = [](const Ref<sema::StructType>& structType) -> std::string
+            {
+                if (!structType)
+                    return {};
+                return structType->nativeCppName.empty() ? structType->name : structType->nativeCppName;
+            };
+
+            std::function<std::string(const std::string&, const Ref<sema::Type>&, bool)> buildWioToNativePodExpr;
+            buildWioToNativePodExpr = [&](const std::string& expr, const Ref<sema::Type>& sourceType, bool sourceIsPointer) -> std::string
+            {
+                auto nativeStruct = getNativePodComponentStructTypeForCodegen(sourceType);
+                if (!nativeStruct)
+                    return expr;
+
+                std::string result = getNativePodCppName(nativeStruct) + "{";
+                for (size_t fieldIndex = 0; fieldIndex < nativeStruct->fieldNames.size(); ++fieldIndex)
+                {
+                    const std::string wioFieldName = sanitizeCppIdentifier(nativeStruct->fieldNames[fieldIndex]);
+                    const std::string fieldExpr = expr + (sourceIsPointer ? "->" : ".") + wioFieldName;
+                    result += buildWioToNativePodExpr(fieldExpr, nativeStruct->fieldTypes[fieldIndex], false);
+                    if (fieldIndex + 1 < nativeStruct->fieldNames.size())
+                        result += ", ";
+                }
+                result += "}";
+                return result;
+            };
+
+            std::function<void(const std::string&, const Ref<sema::Type>&, const std::string&, bool)> emitNativePodCopyBack;
+            emitNativePodCopyBack = [&](const std::string& destinationExpr,
+                                        const Ref<sema::Type>& destinationType,
+                                        const std::string& sourceExpr,
+                                        bool destinationIsPointer)
+            {
+                auto nativeStruct = getNativePodComponentStructTypeForCodegen(destinationType);
+                if (!nativeStruct)
+                    return;
+
+                for (size_t fieldIndex = 0; fieldIndex < nativeStruct->fieldNames.size(); ++fieldIndex)
+                {
+                    const std::string wioFieldName = sanitizeCppIdentifier(nativeStruct->fieldNames[fieldIndex]);
+                    const std::string nativeFieldName = nativeStruct->fieldNames[fieldIndex];
+                    const std::string destinationFieldExpr = destinationExpr + (destinationIsPointer ? "->" : ".") + wioFieldName;
+                    const std::string sourceFieldExpr = sourceExpr + "." + nativeFieldName;
+                    auto nestedNativeStruct = getNativePodComponentStructTypeForCodegen(nativeStruct->fieldTypes[fieldIndex]);
+                    if (nestedNativeStruct)
+                    {
+                        emitNativePodCopyBack(destinationFieldExpr, nativeStruct->fieldTypes[fieldIndex], sourceFieldExpr, false);
+                    }
+                    else
+                    {
+                        EMIT_TABS();
+                        emitLine(destinationFieldExpr + " = " + sourceFieldExpr + ";");
+                    }
+                }
+            };
+
+            struct NativePreparedArgument
+            {
+                std::string callExpr;
+                std::string mutableTargetName;
+                Ref<sema::Type> mutableTargetType = nullptr;
+                bool mutableTargetIsPointer = false;
+            };
+
+            std::vector<NativePreparedArgument> preparedArguments;
+            preparedArguments.reserve(node.parameters.size() + (isNativeMember ? 1 : 0));
 
             emitLine();
             emitLine("{");
             indent();
-            EMIT_TABS();
 
-            if (funcType->returnType && !funcType->returnType->isVoid())
+            if (isNativeMember)
+            {
+                NativePreparedArgument selfArgument;
+                selfArgument.callExpr = "this";
+                preparedArguments.push_back(std::move(selfArgument));
+            }
+
+            for (size_t i = 0; i < node.parameters.size(); ++i)
+            {
+                const std::string parameterName = sanitizeCppIdentifier(node.parameters[i].name->token.value);
+                auto parameterType = i < funcType->paramTypes.size() ? funcType->paramTypes[i] : nullptr;
+                auto resolvedParameterType = unwrapAliasTypeForCodegen(parameterType);
+                auto nativeStruct = getNativePodComponentStructTypeForCodegen(parameterType);
+
+                if (!nativeStruct)
+                {
+                    preparedArguments.push_back({
+                        parameterName + (node.parameters[i].isParameterPack ? "..." : "")
+                    });
+                    continue;
+                }
+
+                const std::string nativeTempName = common::formatString("_wio_native_arg{}", i);
+                EMIT_TABS();
+                emitLine(getNativePodCppName(nativeStruct) + " " + nativeTempName + " = " + buildWioToNativePodExpr(
+                    parameterName,
+                    parameterType,
+                    resolvedParameterType && resolvedParameterType->kind() == sema::TypeKind::Reference
+                ) + ";");
+
+                bool isMutableReference = false;
+                if (resolvedParameterType && resolvedParameterType->kind() == sema::TypeKind::Reference)
+                    isMutableReference = resolvedParameterType.AsFast<sema::ReferenceType>()->isMutable;
+
+                NativePreparedArgument preparedArgument;
+                preparedArgument.callExpr = nativeTempName;
+                preparedArgument.mutableTargetName = isMutableReference ? parameterName : "";
+                preparedArgument.mutableTargetType = isMutableReference ? parameterType : nullptr;
+                preparedArgument.mutableTargetIsPointer = isMutableReference;
+                preparedArguments.push_back(std::move(preparedArgument));
+            }
+
+            const auto nativeReturnStruct = getNativePodComponentStructTypeForCodegen(funcType->returnType);
+            const bool returnsNativePodComponent = static_cast<bool>(nativeReturnStruct);
+
+            EMIT_TABS();
+            if (returnsNativePodComponent)
+            {
+                emit("auto _wio_native_result = ");
+            }
+            else if (funcType->returnType && !funcType->returnType->isVoid())
+            {
                 emit("return ");
+            }
 
             emit(nativeSymbol);
             if (!node.genericParameters.empty() && node.parameters.empty())
@@ -5316,16 +5513,37 @@ namespace wio::codegen
                 emit(">");
             }
             emit("(");
-            for (size_t i = 0; i < node.parameters.size(); ++i)
+            for (size_t argumentIndex = 0; argumentIndex < preparedArguments.size(); ++argumentIndex)
             {
-                emit(sanitizeCppIdentifier(node.parameters[i].name->token.value));
-                if (node.parameters[i].isParameterPack)
-                    emit("...");
-                if (i < node.parameters.size() - 1)
+                if (argumentIndex > 0)
                     emit(", ");
+                emit(preparedArguments[argumentIndex].callExpr);
             }
             emit(");");
             emit("\n");
+
+            for (const auto& preparedArgument : preparedArguments)
+            {
+                if (preparedArgument.mutableTargetName.empty())
+                    continue;
+
+                emitNativePodCopyBack(
+                    preparedArgument.mutableTargetName,
+                    preparedArgument.mutableTargetType,
+                    preparedArgument.callExpr,
+                    preparedArgument.mutableTargetIsPointer
+                );
+            }
+
+            if (returnsNativePodComponent)
+            {
+                const std::string wioReturnTypeName = toCppType(funcType->returnType);
+                EMIT_TABS();
+                emitLine(wioReturnTypeName + " _wio_result{};");
+                emitNativePodCopyBack("_wio_result", funcType->returnType, "_wio_native_result", false);
+                EMIT_TABS();
+                emitLine("return _wio_result;");
+            }
 
             dedent();
             emitLine("}");

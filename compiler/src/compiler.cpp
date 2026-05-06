@@ -1496,6 +1496,42 @@ namespace wio
             return std::nullopt;
         }
 
+        void appendRequiredCppHeader(std::vector<RequiredCppHeader>& headers,
+                                     std::string header,
+                                     common::Location location,
+                                     const std::filesystem::path& sourcePath,
+                                     std::string origin)
+        {
+            headers.push_back({
+                .header = std::move(header),
+                .location = location,
+                .sourcePath = sourcePath,
+                .origin = std::move(origin)
+            });
+        }
+
+        void collectRequiredCppHeaderFromFunction(const FunctionDeclaration& declaration,
+                                                  const std::filesystem::path& sourcePath,
+                                                  std::vector<RequiredCppHeader>& headers)
+        {
+            if (!hasAttribute(declaration.attributes, Attribute::Native))
+                return;
+
+            if (auto headerValue = getCppHeaderAttributeValue(declaration.attributes); headerValue.has_value())
+            {
+                appendRequiredCppHeader(
+                    headers,
+                    *headerValue,
+                    declaration.location(),
+                    sourcePath,
+                    common::formatString(
+                        "@CppHeader on native function '{}'",
+                        declaration.name ? declaration.name->token.value : "<anonymous>"
+                    )
+                );
+            }
+        }
+
         void collectRequiredCppHeaders(const std::vector<NodePtr<Statement>>& statements,
                                        const std::filesystem::path& sourcePath,
                                        std::vector<RequiredCppHeader>& headers)
@@ -1515,32 +1551,55 @@ namespace wio
                 {
                     if (useStmt->isCppHeader && !useStmt->modulePath.empty())
                     {
-                        headers.push_back({
-                            .header = useStmt->modulePath,
-                            .location = useStmt->location(),
-                            .sourcePath = sourcePath,
-                            .origin = "use @CppHeader"
-                        });
+                        appendRequiredCppHeader(headers, useStmt->modulePath, useStmt->location(), sourcePath, "use @CppHeader");
                     }
                     continue;
                 }
 
                 if (const auto* fnDecl = statement->as<FunctionDeclaration>())
                 {
-                    if (!hasAttribute(fnDecl->attributes, Attribute::Native))
-                        continue;
+                    collectRequiredCppHeaderFromFunction(*fnDecl, sourcePath, headers);
+                    continue;
+                }
 
-                    if (auto headerValue = getCppHeaderAttributeValue(fnDecl->attributes); headerValue.has_value())
+                if (const auto* objectDecl = statement->as<ObjectDeclaration>())
+                {
+                    if (hasAttribute(objectDecl->attributes, Attribute::Native))
                     {
-                        headers.push_back({
-                            .header = *headerValue,
-                            .location = fnDecl->location(),
-                            .sourcePath = sourcePath,
-                            .origin = common::formatString(
-                                "@CppHeader on native function '{}'",
-                                fnDecl->name ? fnDecl->name->token.value : "<anonymous>"
-                            )
-                        });
+                        if (auto headerValue = getCppHeaderAttributeValue(objectDecl->attributes); headerValue.has_value())
+                            appendRequiredCppHeader(headers, *headerValue, objectDecl->location(), sourcePath, common::formatString("@CppHeader on native object '{}'", objectDecl->name ? objectDecl->name->token.value : "<anonymous>"));
+                    }
+
+                    for (const auto& member : objectDecl->members)
+                    {
+                        if (member.declaration && member.declaration->is<FunctionDeclaration>())
+                            collectRequiredCppHeaderFromFunction(*member.declaration->as<FunctionDeclaration>(), sourcePath, headers);
+                    }
+                    continue;
+                }
+
+                if (const auto* componentDecl = statement->as<ComponentDeclaration>())
+                {
+                    if (hasAttribute(componentDecl->attributes, Attribute::Native))
+                    {
+                        if (auto headerValue = getCppHeaderAttributeValue(componentDecl->attributes); headerValue.has_value())
+                            appendRequiredCppHeader(headers, *headerValue, componentDecl->location(), sourcePath, common::formatString("@CppHeader on native component '{}'", componentDecl->name ? componentDecl->name->token.value : "<anonymous>"));
+                    }
+
+                    for (const auto& member : componentDecl->members)
+                    {
+                        if (member.declaration && member.declaration->is<FunctionDeclaration>())
+                            collectRequiredCppHeaderFromFunction(*member.declaration->as<FunctionDeclaration>(), sourcePath, headers);
+                    }
+                    continue;
+                }
+
+                if (const auto* interfaceDecl = statement->as<InterfaceDeclaration>())
+                {
+                    for (const auto& method : interfaceDecl->methods)
+                    {
+                        if (method)
+                            collectRequiredCppHeaderFromFunction(*method, sourcePath, headers);
                     }
                 }
             }

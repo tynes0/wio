@@ -711,6 +711,28 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_native_object_component_bridge_run
+        "${CMAKE_SOURCE_DIR}/tests/native/native_object_component_bridge.wio"
+        "Native struct interop: 15, 3, 4 / 1, 1, 7"
+        --run
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
+        --backend-arg
+        "${CMAKE_SOURCE_DIR}/tests/native/native_struct_methods.cpp"
+    )
+
+    add_wio_output_test(
+        wio_test_native_pod_component_bridge_run
+        "${CMAKE_SOURCE_DIR}/tests/native/native_pod_component_bridge.wio"
+        "Native POD component: 25, 7, 4, 6, 7, 8"
+        --run
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
+        --backend-arg
+        "${CMAKE_SOURCE_DIR}/tests/native/native_pod_components.cpp"
+    )
+
+    add_wio_output_test(
         wio_test_generic_native_predicate_bridge_run
         "${CMAKE_SOURCE_DIR}/tests/native/generic_native_predicate_bridge.wio"
         "Generic native predicate: 14, 18"
@@ -1876,7 +1898,19 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_native_method_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/native_method_not_supported.wio"
-        "@Native is currently supported only for top-level functions"
+        "@Native methods are currently supported only on object methods and on object/component OnConstruct/OnDestruct lifecycle functions"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_native_component_non_pod_field_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/native_component_non_pod_field_not_supported.wio"
+        "Declaration-level @Native component 'BadNativeComponent' field 'name' uses type 'string' which is not POD-native-compatible yet"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_native_object_declaration_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/native_object_declaration_not_supported.wio"
+        "Declaration-level @Native POD interop is currently supported only on components"
     )
 
     add_wio_failure_test(
