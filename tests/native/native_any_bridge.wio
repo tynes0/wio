@@ -1,0 +1,74 @@
+use std::assert as assert;
+use std::console as console;
+
+object Enemy {
+    public hp: i32;
+}
+
+realm ffi {
+    @Native
+    @CppHeader("native_any_bridge.h")
+    @CppName(native_any::MakeInt)
+    fn MakeInt(value: i32) -> any;
+
+    @Native
+    @CppHeader("native_any_bridge.h")
+    @CppName(native_any::ReadInt)
+    fn ReadInt(value: view any) -> i32;
+
+    @Native
+    @CppHeader("native_any_bridge.h")
+    @CppName(native_any::IsNull)
+    fn IsNull(value: view any) -> bool;
+
+    @Native
+    @CppHeader("native_any_bridge.h")
+    @CppName(native_any::IsString)
+    fn IsString(value: view any) -> bool;
+
+    @Native
+    @CppHeader("native_any_bridge.h")
+    @CppName(native_any::ReplaceWithGreeting)
+    fn ReplaceWithGreeting(target: ref any);
+
+    @Native
+    @CppHeader("native_any_bridge.h")
+    @CppName(native_any::IsObjectPayload)
+    fn IsObjectPayload(value: view any) -> bool;
+
+    @Native
+    @CppHeader("native_any_bridge.h")
+    @CppName(native_any::Echo)
+    fn Echo(value: view any) -> any;
+}
+
+fn Entry() -> i32 {
+    let doubled = ffi::MakeInt(6);
+    assert::ExpectTrue(doubled is i32, "native any return should preserve boxed integers");
+    assert::ExpectEqual(ffi::ReadInt(ref doubled), 12, "native any view should recover boxed integers");
+
+    mut payload: any = null;
+    assert::ExpectTrue(ffi::IsNull(ref payload), "native any view should observe null payloads");
+
+    ffi::ReplaceWithGreeting(ref payload);
+    assert::ExpectTrue(ffi::IsString(ref payload), "native any ref should allow replacement with boxed strings");
+
+    if (payload is string fit text) {
+        assert::ExpectEqual(text, "payload", "native any ref mutation should be visible to Wio");
+    } else {
+        return 1;
+    }
+
+    let objectPayload: any = Enemy(15);
+    assert::ExpectTrue(ffi::IsObjectPayload(ref objectPayload), "native any view should recognize boxed object payloads");
+
+    let echoed = ffi::Echo(ref objectPayload);
+    if (echoed is Enemy fit enemy) {
+        assert::ExpectEqual(enemy.hp, 15, "native any echo should preserve exact object payloads");
+    } else {
+        return 2;
+    }
+
+    console::PrintLine("native-any-ok");
+    return 0;
+}

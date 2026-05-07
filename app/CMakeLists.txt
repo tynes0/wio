@@ -729,6 +729,15 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_native_any_bridge_run
+        "${CMAKE_SOURCE_DIR}/tests/native/native_any_bridge.wio"
+        "native-any-ok"
+        --run
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
+    )
+
+    add_wio_output_test(
         wio_test_native_generic_bridge_run
         "${CMAKE_SOURCE_DIR}/tests/native/native_generic_bridge.wio"
         "Generic native double: 42, 42"
@@ -1479,6 +1488,30 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/object_method_outer_const_realm_run.wio"
     )
 
+    add_wio_success_test(
+        wio_test_any_basic_boxing_dry_run
+        "${CMAKE_SOURCE_DIR}/tests/any_basic_boxing_run.wio"
+    )
+
+    add_wio_success_test(
+        wio_test_any_object_fit_dry_run
+        "${CMAKE_SOURCE_DIR}/tests/any_object_fit_run.wio"
+    )
+
+    add_wio_output_test(
+        wio_test_any_basic_boxing_run
+        "${CMAKE_SOURCE_DIR}/tests/any_basic_boxing_run.wio"
+        "any-basic-ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_any_object_fit_run
+        "${CMAKE_SOURCE_DIR}/tests/any_object_fit_run.wio"
+        "any-object-ok"
+        --run
+    )
+
     add_wio_output_test(
         wio_show_tokens_alias_stream
         "${CMAKE_SOURCE_DIR}/tests/test_use_alias.wio"
@@ -1540,6 +1573,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_generic_fit_target_without_supported_constraint
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_fit_target_without_supported_constraint.wio"
         "The 'fit' operator can only be used with numeric types or object/interface casts\\."
+        "Generated C\\+\\+ output:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_any_arithmetic_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/any_arithmetic_not_supported.wio"
+        "Any values support only assignment, the 'is' operator, the 'fit' operator, and equality comparisons with null\\. Operator '\\+' is not supported\\."
         "Generated C\\+\\+ output:"
     )
 

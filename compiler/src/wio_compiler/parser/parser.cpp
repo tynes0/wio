@@ -390,7 +390,7 @@ namespace wio
         if (match(TokenType::stringLiteral))
             return parseStringLiteral();
 
-        if (match(TokenType::identifier))
+        if (match(TokenType::identifier) || peek().isType())
             return makeNodePtr<Identifier>(advance());
 
         if (match(TokenType::charLiteral))

@@ -184,6 +184,7 @@ Current built-in type keywords include:
 - `char`
 - `uchar`
 - `string`
+- `any`
 - `opaque`
 - `void`
 - `component`
@@ -539,6 +540,7 @@ Wio currently exposes the following built-in types:
 - `char`
 - `uchar`
 - `string`
+- `any`
 - `opaque`
 - `void`
 
@@ -584,8 +586,20 @@ Current first-slice semantics:
 - `opaque` may cross native `@Native` boundaries,
 - field access, arithmetic, and ordered comparisons are rejected before generated C++.
 
-For the wider runtime model and planned future siblings such as `box<T>` and
-`anyref`, see [`WIO_RUNTIME_TYPE_MODEL.md`](./WIO_RUNTIME_TYPE_MODEL.md).
+`any` is the heap-backed universal runtime payload type. The initial source
+slice is now available for:
+
+- boxing primitive, component, object, array, dictionary, string, and `opaque` values,
+- `is` checks against concrete runtime types,
+- `fit` casts back out of `any`,
+- null assignment and null equality,
+- initial `@Native` interop by value and through `view any` / `ref any`.
+
+Interface payload recovery and deeper native ergonomics are still being
+hardened.
+
+For the wider runtime model and future siblings such as `box<T>`, see
+[`WIO_RUNTIME_TYPE_MODEL.md`](./WIO_RUNTIME_TYPE_MODEL.md).
 
 ### 5.4 Reference Types
 
@@ -2066,7 +2080,7 @@ Wio’s OOP model is built around:
 For the broader runtime-type design, including the recommended separation
 between `component`, `object`, managed container types, the planned `opaque`
 foreign-payload type, the future `box<T>` heap wrapper, and the possible
-`anyref` umbrella reference type, see
+`any` universal runtime payload type, see
 [`WIO_RUNTIME_TYPE_MODEL.md`](./WIO_RUNTIME_TYPE_MODEL.md).
 
 ## 16. `interface`

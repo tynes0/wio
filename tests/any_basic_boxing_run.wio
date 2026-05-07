@@ -1,0 +1,33 @@
+use std::assert as assert;
+use std::console as console;
+
+component Vector2 {
+    x: i32;
+    y: i32;
+}
+
+fn Entry(args: string[]) -> i32 {
+    let integerValue: any = 42;
+    let stringValue: any = "hello";
+    let vectorValue: any = Vector2(3, 4);
+    let nullValue: any = null;
+
+    assert::ExpectTrue(integerValue is i32, "any should report boxed integer payloads");
+    assert::ExpectEqual(integerValue fit i32, 42, "any fit should recover integer payloads");
+
+    if (stringValue is string fit text) {
+        assert::ExpectEqual(text, "hello", "any pattern fit should recover boxed strings");
+    } else {
+        return 1;
+    }
+
+    if (vectorValue is Vector2 fit vector) {
+        assert::ExpectEqual(vector.x + vector.y, 7, "any pattern fit should recover boxed components");
+    } else {
+        return 2;
+    }
+
+    assert::ExpectTrue(nullValue == null, "any should compare against null");
+    console::PrintLine("any-basic-ok");
+    return 0;
+}

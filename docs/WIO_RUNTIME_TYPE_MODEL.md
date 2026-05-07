@@ -35,7 +35,7 @@ The recommended categories are:
    and `Tree`
 4. `opaque`
 5. `box<T>` as a future heap-wrapper for value types
-6. `anyref` as a future common supertype for reference-like values
+6. `any` as a heap-backed universal erased runtime payload
 
 The rest of this document defines what each category means.
 
@@ -48,7 +48,7 @@ The rest of this document defines what each category means.
 | `string` / dynamic array / `Dict` / `Tree` | managed runtime containers | runtime-managed | dedicated bridge, not native POD | implemented direction |
 | `opaque` | foreign host payload / external handle | host-owned or externally owned | pass-through opaque ABI value | initial source-level and native pass-through slice implemented |
 | `box<T>` | heap allocation for value types | heap-owned wrapper around a value | wrapper/bridge, not POD | planned |
-| `anyref` | common supertype for reference-like values | reference semantics | depends on wrapped runtime value | planned |
+| `any` | universal erased runtime payload | heap-backed wrapper cell | wrapper/bridge, not POD | initial source slice and runtime foundation implemented |
 
 ## 3. `component`
 
@@ -304,7 +304,7 @@ This is intentionally different from:
 
 - `component`, which is structural data,
 - `object`, which is a Wio runtime object,
-- `box<T>`, which is a heap wrapper around a Wio value.
+- `box<T>`, which is a heap wrapper around a single known Wio value.
 
 ### 6.5 Why Not Reuse `object`
 
@@ -349,34 +349,53 @@ That makes the language less clear.
 It is a runtime wrapper concept and should use runtime/SDK bridging rules
 instead of raw layout rules.
 
-## 8. `anyref` (Planned)
+## 8. `any` (Initial Source Slice Implemented)
 
 ### 8.1 Purpose
 
-If Wio eventually needs a C#-like common reference supertype, it should use a
-name such as `anyref`, not `object`.
+If Wio needs a C#-like "store anything on the heap, recover it later" type, it
+should use a dedicated name such as `any`, not `object`.
 
-This avoids overloading the meaning of `object`.
+This avoids overloading the meaning of `object`, while still giving Wio a
+userdata-style runtime payload slot.
 
 ### 8.2 Intended Meaning
 
-`anyref` would represent:
+`any` should represent:
 
-- "some reference-like runtime value",
-- not "any possible Wio value".
+- a heap-backed runtime payload,
+- possibly originating from a scalar, component, object, or managed container,
+- with type-erased transport and runtime re-checking through `is` / `fit`.
 
-Components and scalar values should remain outside that category unless they are
-explicitly boxed.
+Unlike `box<T>`, this is not a single known wrapped type.
+Unlike `opaque`, this is still a Wio-known runtime value.
 
 ### 8.3 Why This Separation Matters
 
 This keeps three distinct concepts separate:
 
 - `object`: user-defined runtime object category
-- `anyref`: possible future umbrella reference type
+- `any`: universal runtime payload / userdata-like boxed value
 - `opaque`: foreign host payload
 
 That separation is healthy for both language clarity and ABI design.
+
+### 8.4 Current Foundation
+
+The first source-level `any` slice is now exposed. The runtime foundation lives
+in:
+
+- [`runtime/include/any.h`](../runtime/include/any.h)
+
+That header and compiler slice currently establish this model:
+
+- `Any` is a heap-backed wrapper handle,
+- plain values live in `AnyValueCell<T>`,
+- object references live in `AnyObjectCell<T>`,
+- the payload itself does not need to inherit from `RefCountedObject`; only
+  the heap cell does,
+- source-level `any` supports concrete boxing, `is`, `fit`, and null equality,
+- initial native interop is available through by-value `any`, `view any`, and `ref any`.
 
 ## 9. Native Interop Policy
 
@@ -472,9 +491,8 @@ The current compiler/runtime direction already fits much of this design:
 
 The following items are still future-facing:
 
-- a real `opaque` type in the source language,
 - `box<T>`,
-- `anyref`,
+- source-level `any`,
 - final container/top-reference categorization details,
 - full native object policy beyond the current bridge slices.
 
@@ -489,7 +507,7 @@ The recommended long-term Wio runtime type model is:
 4. `opaque` is the foreign host payload category and replaces the old
    `userdata` naming idea.
 5. `box<T>` is the future heap wrapper for value types.
-6. `anyref` is the future name for a common reference supertype if one is added.
+6. `any` is the future universal runtime payload / userdata-like boxed type.
 
 This keeps the language readable, the runtime model consistent, and native
 interop much easier to reason about.

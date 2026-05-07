@@ -270,6 +270,69 @@ namespace wio::sema
                    resolvedType.AsFast<PrimitiveType>()->name == "opaque";
         }
 
+        bool isAnyType(const Ref<Type>& type)
+        {
+            Ref<Type> resolvedType = unwrapAliasType(type);
+            return resolvedType &&
+                   resolvedType->kind() == TypeKind::Primitive &&
+                   resolvedType.AsFast<PrimitiveType>()->name == "any";
+        }
+
+        bool isConcreteObjectTypeSupportedByAny(const Ref<Type>& type)
+        {
+            Ref<Type> resolvedType = unwrapAliasType(type);
+            if (!resolvedType || resolvedType->kind() != TypeKind::Struct)
+                return false;
+
+            auto structType = resolvedType.AsFast<StructType>();
+            return structType && structType->isObject && !structType->isInterface;
+        }
+
+        bool isStorableInAny(const Ref<Type>& type)
+        {
+            Ref<Type> resolvedType = unwrapAliasType(type);
+            if (!resolvedType || resolvedType->isUnknown())
+                return false;
+
+            switch (resolvedType->kind())
+            {
+            case TypeKind::Primitive:
+            {
+                const std::string& primitiveName = resolvedType.AsFast<PrimitiveType>()->name;
+                return primitiveName != "void" &&
+                       primitiveName != "<unknown>";
+            }
+            case TypeKind::Array:
+            case TypeKind::Dictionary:
+                return true;
+            case TypeKind::Struct:
+            {
+                auto structType = resolvedType.AsFast<StructType>();
+                if (!structType)
+                    return false;
+
+                if (structType->isInterface)
+                    return false;
+
+                return true;
+            }
+            default:
+                return false;
+            }
+        }
+
+        bool isSupportedAnyCastTargetType(const Ref<Type>& type)
+        {
+            Ref<Type> resolvedType = unwrapAliasType(type);
+            if (!resolvedType || resolvedType->isUnknown())
+                return false;
+
+            if (isAnyType(resolvedType))
+                return false;
+
+            return isStorableInAny(resolvedType);
+        }
+
         bool isIntrinsicReceiverType(const Ref<Type>& type)
         {
             Ref<Type> resolvedType = unwrapAliasType(type);
@@ -2263,6 +2326,7 @@ namespace wio::sema
             if (name == "bool") return ctx.getBool();
             if (name == "char") return ctx.getChar();
             if (name == "string") return ctx.getString();
+            if (name == "any") return ctx.getAny();
             if (name == "opaque") return ctx.getOpaque();
             if (name == "void") return ctx.getVoid();
 
@@ -4051,6 +4115,23 @@ namespace wio::sema
         }
         if (node.op.type == TokenType::kwIs)
         {
+            Ref<Type> lhsType = getAutoReadableType(node.left->refType.Lock());
+            Ref<Type> rhsType = node.right->refType.Lock();
+
+            if (isAnyType(lhsType))
+            {
+                if (!isSupportedAnyCastTargetType(rhsType))
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.right->location(),
+                        "The right side of the 'is' operator must be a concrete storable runtime type when the left side is 'any'."
+                    );
+                }
+
+                node.refType = Compiler::get().getTypeContext().getBool();
+                return;
+            }
+
             auto typeSym = node.right->referencedSymbol.Lock();
             Ref<StructType> targetStruct = (typeSym && typeSym->kind == SymbolKind::Struct)
                 ? getObjectOrInterfaceStructType(typeSym->type)
@@ -4127,6 +4208,26 @@ namespace wio::sema
 
         const Ref<Type> semanticLhsType = readableLhsType ? readableLhsType : lhsType;
         const Ref<Type> semanticRhsType = readableRhsType ? readableRhsType : rhsType;
+        if (isAnyType(semanticLhsType) || isAnyType(semanticRhsType))
+        {
+            const bool isAssignment = node.op.type == TokenType::opAssign;
+            const bool comparesWithNull =
+                isEqualityComparison &&
+                ((unwrapAliasType(lhsType) && unwrapAliasType(lhsType)->kind() == TypeKind::Null) ||
+                 (unwrapAliasType(rhsType) && unwrapAliasType(rhsType)->kind() == TypeKind::Null));
+
+            if (!isAssignment && !comparesWithNull)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.op.loc,
+                    "Any values support only assignment, the 'is' operator, the 'fit' operator, and equality comparisons with null. Operator '{}' is not supported.",
+                    node.op.value
+                );
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+        }
+
         if (isOpaqueType(semanticLhsType) || isOpaqueType(semanticRhsType))
         {
             const bool isAssignment = node.op.type == TokenType::opAssign;
@@ -4630,6 +4731,15 @@ namespace wio::sema
 
         if (!sym)
         {
+            if (node.token.isType())
+            {
+                if (Ref<Type> builtinType = resolvePrimitiveType(node.token.value))
+                {
+                    node.refType = builtinType;
+                    return;
+                }
+            }
+
             if (allowTypePackIdentifierReference_)
             {
                 for (auto& genericTypeParameterScope : std::ranges::reverse_view(genericTypeParameterScopes_))
@@ -7083,6 +7193,22 @@ namespace wio::sema
             if (getObjectOrInterfaceStructType(srcType) && getObjectOrInterfaceStructType(destType))
             {
                 node.refType = destType;
+                return;
+            }
+
+            if (isAnyType(resolvedSrcType))
+            {
+                if (isSupportedAnyCastTargetType(resolvedDestType))
+                {
+                    node.refType = destType;
+                    return;
+                }
+
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "The 'fit' operator can only convert 'any' to concrete storable runtime types."
+                );
+                node.refType = Compiler::get().getTypeContext().getUnknown();
                 return;
             }
 
@@ -9870,8 +9996,15 @@ namespace wio::sema
                 Ref<StructType> targetStruct = (typeSym && typeSym->kind == SymbolKind::Struct)
                     ? getObjectOrInterfaceStructType(typeSym->type)
                     : nullptr;
+                Ref<Type> lhsType = getAutoReadableType(binExpr->left->refType.Lock());
+                Ref<Type> targetType = binExpr->right->refType.Lock();
 
-                if (binExpr->op.type == TokenType::kwIs && targetStruct)
+                if (binExpr->op.type == TokenType::kwIs && isAnyType(lhsType) && isSupportedAnyCastTargetType(targetType))
+                {
+                    auto varSym = createSymbol(node.matchVar.value, targetType, SymbolKind::Variable, node.matchVar.loc);
+                    currentScope_->define(node.matchVar.value, varSym);
+                }
+                else if (binExpr->op.type == TokenType::kwIs && targetStruct)
                 {
                     auto refType = Compiler::get().getTypeContext().getOrCreateReferenceType(typeSym->type, false);
                     auto varSym = createSymbol(node.matchVar.value, refType, SymbolKind::Variable, node.matchVar.loc);

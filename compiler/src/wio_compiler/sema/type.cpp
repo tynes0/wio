@@ -152,6 +152,47 @@ namespace wio::sema
         TypeKind kind1 = t1->kind();
         TypeKind kind2 = t2->kind();
 
+        auto isAnyPrimitive = [](const Type* type) -> bool
+        {
+            return type &&
+                   type->kind() == TypeKind::Primitive &&
+                   static_cast<const PrimitiveType*>(type)->name == "any";
+        };
+
+        auto isAnyStorableType = [](const Type* type) -> bool
+        {
+            if (!type)
+                return false;
+
+            switch (type->kind())
+            {
+            case TypeKind::Primitive:
+            {
+                const auto* primitive = static_cast<const PrimitiveType*>(type);
+                return primitive->name != "void" &&
+                       primitive->name != "<unknown>";
+            }
+            case TypeKind::Array:
+            case TypeKind::Dictionary:
+            case TypeKind::Struct:
+                return true;
+            default:
+                return false;
+            }
+        };
+
+        if (isAnyPrimitive(t1))
+        {
+            if (kind2 == TypeKind::Null)
+            {
+                const_cast<NullType*>(static_cast<const NullType*>(t2))->transformedType =
+                    Ref<Type>(const_cast<Type*>(t1));
+                return true;
+            }
+
+            return isAnyStorableType(t2);
+        }
+
         if (kind1 != kind2)
         {
             if (kind2 == TypeKind::Null)

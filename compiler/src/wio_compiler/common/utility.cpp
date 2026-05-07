@@ -483,6 +483,7 @@ namespace wio::common
         if (wioTypeStr == "byte") return "unsigned char";
         if (wioTypeStr == "bool") return "bool";
         if (wioTypeStr == "string") return "wio::String";
+        if (wioTypeStr == "any") return "wio::runtime::Any";
         if (wioTypeStr == "opaque") return "void*";
         if (wioTypeStr == "duration") return "wio::Duration";
         return {};

@@ -84,8 +84,17 @@ namespace wio::codegen
             if (name == "uchar" || name == "byte") return "unsigned char";
             if (name == "bool") return "bool";
             if (name == "string") return "wio::String";
+            if (name == "any") return "wio::runtime::Any";
             if (name == "opaque") return "void*";
             return resolved->toCppString();
+        }
+
+        bool isAnyTypeForCodegen(const Ref<sema::Type>& type)
+        {
+            Ref<sema::Type> resolved = unwrapAliasTypeForCodegen(type);
+            return resolved &&
+                   resolved->kind() == sema::TypeKind::Primitive &&
+                   resolved.AsFast<sema::PrimitiveType>()->name == "any";
         }
 
         std::string getBackendInstantiationEquivalenceKey(const std::vector<Ref<sema::Type>>& instantiationTypes)
@@ -2581,6 +2590,7 @@ namespace wio::codegen
         emitHeaderLine("#include <unordered_map>");
         emitHeaderLine();
         emitHeaderLine("#include <exception.h>");
+        emitHeaderLine("#include <any.h>");
         emitHeaderLine("#include <fit.h>");
         emitHeaderLine("#include <intrinsics.h>");
         emitHeaderLine("#include <meta.h>");
@@ -3753,6 +3763,34 @@ namespace wio::codegen
 
         if (node.op.type == TokenType::kwIs)
         {
+            if (isAnyTypeForCodegen(node.left->refType.Lock()))
+            {
+                Ref<sema::Type> targetType = unwrapAliasTypeForCodegen(node.right->refType.Lock());
+                emit("([&](){ wio::runtime::Any _wio_any = ");
+                node.left->accept(*this);
+                emit("; return ");
+
+                if (targetType && targetType->kind() == sema::TypeKind::Struct)
+                {
+                    auto structType = targetType.AsFast<sema::StructType>();
+                    if (structType->isObject && !structType->isInterface)
+                    {
+                        emit("!_wio_any.IsNull() && _wio_any.IsObject<" + mangleStructTypeName(structType) + ">()");
+                    }
+                    else
+                    {
+                        emit("_wio_any.IsBoxed<" + toCppType(targetType) + ">()");
+                    }
+                }
+                else
+                {
+                    emit("_wio_any.IsBoxed<" + toCppType(targetType) + ">()");
+                }
+
+                emit("; }())");
+                return;
+            }
+
             node.left->accept(*this);
             
             bool isFatPointer = false;
@@ -4085,7 +4123,8 @@ namespace wio::codegen
                 resolvedTransformedType->kind() == sema::TypeKind::Function ||
                 resolvedTransformedType->kind() == sema::TypeKind::Reference ||
                 (resolvedTransformedType->kind() == sema::TypeKind::Primitive &&
-                 resolvedTransformedType.AsFast<sema::PrimitiveType>()->name == "opaque") ||
+                 (resolvedTransformedType.AsFast<sema::PrimitiveType>()->name == "opaque" ||
+                  resolvedTransformedType.AsFast<sema::PrimitiveType>()->name == "any")) ||
                 (resolvedTransformedType->kind() == sema::TypeKind::Struct &&
                  ([&]()
                  {
@@ -4928,6 +4967,26 @@ namespace wio::codegen
         auto srcType = node.operand->refType.Lock();
         auto destType = node.targetType->refType.Lock();
 
+        if (isAnyTypeForCodegen(srcType))
+        {
+            Ref<sema::Type> resolvedDestType = unwrapAliasTypeForCodegen(destType);
+            if (resolvedDestType && resolvedDestType->kind() == sema::TypeKind::Struct)
+            {
+                auto structType = resolvedDestType.AsFast<sema::StructType>();
+                if (structType->isObject && !structType->isInterface)
+                {
+                    emit("(");
+                    node.operand->accept(*this);
+                    emit(").AsObject<" + mangleStructTypeName(structType) + ">()");
+                    return;
+                }
+            }
+
+            emit("(");
+            node.operand->accept(*this);
+            emit(").AsBoxed<" + toCppType(destType) + ">()");
+            return;
+        }
 
         if (srcType->isNumeric() && destType->isNumeric())
         {
@@ -6796,9 +6855,66 @@ namespace wio::codegen
         if (node.matchVar.isValid() && node.condition->is<BinaryExpression>())
         {
             auto binExpr = node.condition->as<BinaryExpression>();
+            auto targetType = binExpr->right->refType.Lock();
+
+            if (isAnyTypeForCodegen(binExpr->left->refType.Lock()))
+            {
+                Ref<sema::Type> resolvedTargetType = unwrapAliasTypeForCodegen(targetType);
+                const std::string targetCppType = toCppType(targetType);
+
+                EMIT_TABS();
+                emit("if (wio::runtime::Any _wio_any_match = ");
+                binExpr->left->accept(*this);
+                emit("; ");
+
+                if (resolvedTargetType && resolvedTargetType->kind() == sema::TypeKind::Struct)
+                {
+                    auto structType = resolvedTargetType.AsFast<sema::StructType>();
+                    if (structType->isObject && !structType->isInterface)
+                    {
+                        emit("_wio_any_match.IsObject<" + mangleStructTypeName(structType) + ">()");
+                        emit(")\n");
+                        emitLine("{");
+                        indent();
+                        emitLine(targetCppType + " " + node.matchVar.value + " = _wio_any_match.AsObject<" + mangleStructTypeName(structType) + ">();");
+                    }
+                    else
+                    {
+                        emit("_wio_any_match.IsBoxed<" + targetCppType + ">()");
+                        emit(")\n");
+                        emitLine("{");
+                        indent();
+                        emitLine(targetCppType + " " + node.matchVar.value + " = _wio_any_match.AsBoxed<" + targetCppType + ">();");
+                    }
+                }
+                else
+                {
+                    emit("_wio_any_match.IsBoxed<" + targetCppType + ">()");
+                    emit(")\n");
+                    emitLine("{");
+                    indent();
+                    emitLine(targetCppType + " " + node.matchVar.value + " = _wio_any_match.AsBoxed<" + targetCppType + ">();");
+                }
+
+                if (node.thenBranch) node.thenBranch->accept(*this);
+
+                dedent();
+                emitLine("}");
+
+                if (node.elseBranch)
+                {
+                    if (node.elseBranch->is<IfStatement>())
+                        emitLine("else");
+                    else
+                        emit("else ");
+                    node.elseBranch->accept(*this);
+                }
+                return;
+            }
+
             auto typeSym = binExpr->right->referencedSymbol.Lock();
             auto sType = typeSym->type.AsFast<sema::StructType>();
-            
+
             std::string destCpp = toCppType(typeSym->type);
             std::string typeIdStr = sType->isInterface
                 ? (mangleInterfaceTypeName(sType) + "::TYPE_ID")

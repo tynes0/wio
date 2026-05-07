@@ -1,0 +1,5 @@
+fn Entry(args: string[]) -> i32 {
+    let value: any = 12;
+    let next = value + 1;
+    return 0;
+}

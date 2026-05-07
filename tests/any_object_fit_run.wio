@@ -1,0 +1,24 @@
+use std::assert as assert;
+use std::console as console;
+
+object Enemy {
+    public hp: i32;
+}
+
+fn Entry(args: string[]) -> i32 {
+    let enemyValue: any = Enemy(27);
+
+    assert::ExpectTrue(enemyValue is Enemy, "any should recognize exact boxed object references");
+
+    if (enemyValue is Enemy fit enemy) {
+        assert::ExpectEqual(enemy.hp, 27, "any pattern fit should recover exact object references");
+
+        let exactEnemy: Enemy = enemyValue fit Enemy;
+        assert::ExpectEqual(exactEnemy.hp, 27, "any fit should recover exact object references");
+
+        console::PrintLine("any-object-ok");
+        return 0;
+    }
+
+    return 1;
+}
