@@ -20,6 +20,12 @@ realm std {
                 self.value = value;
                 return previous;
             }
+
+            public fn Swap(other: ref box<T>) {
+                let previous = self.value;
+                self.value = other.value;
+                other.value = previous;
+            }
         }
 
         type Box<T> = box<T>;

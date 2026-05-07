@@ -1,0 +1,76 @@
+use std::assert as assert;
+use std::console as console;
+use std::heap as heap;
+
+component Vector2 {
+    x: i32;
+    y: i32;
+}
+
+object Counter {
+    public value: i32;
+
+    OnConstruct(value: i32) {
+        self.value = value;
+    }
+
+    public fn Increment() {
+        self.value += 1;
+    }
+}
+
+fn Entry() -> i32 {
+    let vectorPayload: any = Vector2(3, 4);
+    if (vectorPayload is Vector2 fit vectorCopy) {
+        vectorCopy.x = 99;
+        assert::ExpectEqual(vectorCopy.x, 99, "fit should recover boxed component payloads");
+    } else {
+        return 1;
+    }
+    let vectorAfter = vectorPayload fit Vector2;
+    assert::ExpectEqual(vectorAfter.x, 3, "component payloads recovered from any should be value copies");
+
+    let numbersPayload: any = [1, 2, 3];
+    if (not (numbersPayload is i32[])) {
+        return 2;
+    }
+    mut numbersCopy = numbersPayload fit i32[];
+    numbersCopy.Push(4);
+    assert::ExpectEqual(numbersCopy.Count() fit i32, 4, "fit should recover boxed dynamic arrays into mutable local copies");
+    let numbersAfter = numbersPayload fit i32[];
+    assert::ExpectEqual(numbersAfter.Count() fit i32, 3, "dynamic array payloads recovered from any should be value copies");
+
+    mut scores: Dict<string, i32> = {};
+    scores.Set("hp", 10);
+    let dictPayload: any = scores;
+    if (not (dictPayload is Dict<string, i32>)) {
+        return 3;
+    }
+    mut dictCopy = dictPayload fit Dict<string, i32>;
+    dictCopy.Set("mp", 5);
+    assert::ExpectTrue(dictCopy.ContainsKey("mp"), "fit should recover boxed dictionary payloads into mutable local copies");
+    let dictAfter = dictPayload fit Dict<string, i32>;
+    assert::ExpectFalse(dictAfter.ContainsKey("mp"), "dictionary payloads recovered from any should be value copies");
+
+    let objectPayload: any = Counter(7);
+    if (objectPayload is Counter fit counter) {
+        counter.Increment();
+        assert::ExpectEqual(counter.value, 8, "fit should recover boxed object payloads");
+    } else {
+        return 4;
+    }
+    let objectAfter = objectPayload fit Counter;
+    assert::ExpectEqual(objectAfter.value, 8, "object payloads recovered from any should preserve shared identity");
+
+    let boxedPayload: any = heap::box("hello");
+    if (boxedPayload is heap::box<string> fit textBox) {
+        textBox.Set("changed");
+    } else {
+        return 5;
+    }
+    let boxedAfter = boxedPayload fit heap::box<string>;
+    assert::ExpectEqual(boxedAfter.Get(), "changed", "boxed payloads recovered from any should preserve shared box identity");
+
+    console::PrintLine("any-value-reference-semantics-ok");
+    return 0;
+}

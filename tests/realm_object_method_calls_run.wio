@@ -1,0 +1,29 @@
+use std::assert as assert;
+use std::console as console;
+
+realm nf {
+    object Game {
+        public fn ResetBullets() -> i32 {
+            return 1;
+        }
+
+        public fn ResetEnemies() -> i32 {
+            return 2;
+        }
+
+        public fn GoPlay() -> i32 {
+            return 4;
+        }
+
+        public fn ResetGame() -> i32 {
+            return ResetBullets() + ResetEnemies() + GoPlay();
+        }
+    }
+}
+
+fn Entry(args: string[]) -> i32 {
+    let game = nf::Game();
+    assert::ExpectEqual(game.ResetGame(), 7, "realm object methods should call sibling methods without realm-qualified mangling");
+    console::Print("Realm object method sum: 7");
+    return 0;
+}

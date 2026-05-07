@@ -1,0 +1,47 @@
+use std::assert as assert;
+use std::console as console;
+use std::heap as heap;
+
+fn Read(value: view heap::box<i32>) -> i32 {
+    return value.Get();
+}
+
+fn Mutate(target: heap::box<i32>, value: i32) {
+    target.Set(value);
+}
+
+fn Rebind(target: ref heap::box<i32>, value: i32) {
+    target = heap::box(value);
+}
+
+fn Entry() -> i32 {
+    mut first = heap::box(5);
+    let shared = first;
+
+    Mutate(shared, 9);
+    assert::ExpectEqual(first.Get(), 9, "box value arguments should share the same heap handle");
+    assert::ExpectEqual(shared.Get(), 9, "shared box handles should observe the same updated value");
+    assert::ExpectEqual(Read(first), 9, "view box arguments should read the current boxed value");
+
+    Rebind(ref first, 42);
+    assert::ExpectEqual(first.Get(), 42, "ref box parameters should be able to rebind the caller handle");
+    assert::ExpectEqual(shared.Get(), 9, "rebinding one box variable should not mutate previously shared handles");
+
+    mut other = heap::box(100);
+    first.Swap(ref other);
+    assert::ExpectEqual(first.Get(), 100, "Swap should exchange boxed values through ref box parameters");
+    assert::ExpectEqual(other.Get(), 42, "Swap should update the other boxed value too");
+
+    let payload: any = first;
+    if (payload is heap::box<i32> fit recovered) {
+        recovered.Set(88);
+    } else {
+        return 1;
+    }
+
+    assert::ExpectEqual(first.Get(), 88, "any should preserve shared box handles when recovering boxed payloads");
+    assert::ExpectEqual(other.Get(), 42, "unrelated boxes should stay unchanged after any recovery");
+
+    console::PrintLine("std-heap-box-semantics-ok");
+    return 0;
+}

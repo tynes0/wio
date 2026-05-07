@@ -1,0 +1,21 @@
+use std::console as console;
+
+realm demo {
+    object Reader {
+        public fn Sum() -> i32 {
+            return GlobalScale + RealmScale + LocalScale;
+        }
+
+        const LocalScale: i32 = 7;
+    }
+
+    const RealmScale: i32 = 11;
+}
+
+const GlobalScale: i32 = 9;
+
+fn Entry(args: string[]) -> i32 {
+    let reader: demo::Reader = demo::Reader();
+    console::PrintLine(reader.Sum());
+    return 0;
+}

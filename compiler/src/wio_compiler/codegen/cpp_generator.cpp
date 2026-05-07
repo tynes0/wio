@@ -97,6 +97,29 @@ namespace wio::codegen
                    resolved.AsFast<sema::PrimitiveType>()->name == "any";
         }
 
+        bool isStructMemberFunctionSymbol(const Ref<sema::Symbol>& symbol)
+        {
+            if (!symbol)
+                return false;
+
+            if (symbol->kind == sema::SymbolKind::Function)
+                return symbol->innerScope && symbol->innerScope->getKind() == sema::ScopeKind::Struct;
+
+            if (symbol->kind != sema::SymbolKind::FunctionGroup)
+                return false;
+
+            if (symbol->innerScope && symbol->innerScope->getKind() == sema::ScopeKind::Struct)
+                return true;
+
+            for (const auto& overload : symbol->overloads)
+            {
+                if (isStructMemberFunctionSymbol(overload))
+                    return true;
+            }
+
+            return false;
+        }
+
         std::string getBackendInstantiationEquivalenceKey(const std::vector<Ref<sema::Type>>& instantiationTypes)
         {
             std::string key;
@@ -1175,6 +1198,21 @@ namespace wio::codegen
             }
 
             return depth;
+        }
+
+        bool shouldTreatReferenceAsHandleForAssignment(const Ref<sema::Type>& type)
+        {
+            Ref<sema::Type> resolvedType = unwrapAliasType(type);
+            if (!resolvedType || resolvedType->kind() != sema::TypeKind::Reference)
+                return false;
+
+            auto referenceType = resolvedType.AsFast<sema::ReferenceType>();
+            Ref<sema::Type> referredType = unwrapAliasType(referenceType->referredType);
+            if (!referredType || referredType->kind() != sema::TypeKind::Struct)
+                return false;
+
+            auto structType = referredType.AsFast<sema::StructType>();
+            return structType && (structType->isObject || structType->isInterface);
         }
 
         std::string_view getIntrinsicHelperName(const IntrinsicMember member)
@@ -2541,7 +2579,7 @@ namespace wio::codegen
     
     CppGenerator::CppGenerator() = default;
 
-    bool CppGenerator::emitAnyInterfaceBoxingIfNeeded(const NodePtr<Expression>& expression, const Ref<sema::Type>& expectedType)
+    bool CppGenerator::emitAnyBoxingIfNeeded(const NodePtr<Expression>& expression, const Ref<sema::Type>& expectedType)
     {
         if (!expression || !expectedType)
             return false;
@@ -2557,14 +2595,63 @@ namespace wio::codegen
         if (resolvedActualType && resolvedActualType->kind() == sema::TypeKind::Reference)
             resolvedActualType = unwrapAliasTypeForCodegen(resolvedActualType.AsFast<sema::ReferenceType>()->referredType);
 
-        if (!resolvedActualType || resolvedActualType->kind() != sema::TypeKind::Struct)
+        if (!resolvedActualType)
             return false;
 
-        auto structType = resolvedActualType.AsFast<sema::StructType>();
-        if (!structType || !structType->isInterface)
+        if (isAnyTypeForCodegen(resolvedActualType))
             return false;
 
-        emit("wio::runtime::Any::FromInterface<" + mangleInterfaceTypeName(structType) + ">(");
+        if (resolvedActualType->kind() == sema::TypeKind::Null)
+        {
+            emit("wio::runtime::Any()");
+            return true;
+        }
+
+        if (resolvedActualType->kind() == sema::TypeKind::Primitive)
+        {
+            auto primitiveType = resolvedActualType.AsFast<sema::PrimitiveType>();
+            if (primitiveType && primitiveType->name == "string")
+            {
+                emit("wio::runtime::Any(");
+                expression->accept(*this);
+                emit(")");
+                return true;
+            }
+        }
+
+        if (resolvedActualType->kind() == sema::TypeKind::Struct)
+        {
+            auto structType = resolvedActualType.AsFast<sema::StructType>();
+            if (!structType)
+                return false;
+
+            if (structType->isInterface)
+            {
+                emit("wio::runtime::Any::FromInterface<" + mangleInterfaceTypeName(structType) + ">(");
+                expression->accept(*this);
+                emit(")");
+                return true;
+            }
+
+            if (structType->isObject)
+            {
+                emit("wio::runtime::Any::FromObject<" + mangleStructTypeName(structType) + ">(");
+                expression->accept(*this);
+                emit(")");
+                return true;
+            }
+        }
+
+        if (expression->is<ArrayLiteral>() || expression->is<DictionaryLiteral>())
+        {
+            emit("wio::runtime::Any::Box(");
+            emit(toCppType(resolvedActualType));
+            expression->accept(*this);
+            emit(")");
+            return true;
+        }
+
+        emit("wio::runtime::Any::Box(");
         expression->accept(*this);
         emit(")");
         return true;
@@ -3619,6 +3706,16 @@ namespace wio::codegen
 
         emitPhase(emitPhase, statements, [&](const auto& stmt)
         {
+            if (stmt->template is<VariableDeclaration>())
+            {
+                auto variableDecl = stmt->template as<VariableDeclaration>();
+                if (variableDecl->mutability == Mutability::Const)
+                    stmt->accept(*this);
+            }
+        });
+
+        emitPhase(emitPhase, statements, [&](const auto& stmt)
+        {
             if (stmt->template is<EnumDeclaration>() || stmt->template is<FlagsetDeclaration>() || stmt->template is<FlagDeclaration>())
                 stmt->accept(*this);
         });
@@ -3697,7 +3794,11 @@ namespace wio::codegen
         emitPhase(emitPhase, statements, [&](const auto& stmt)
         {
             if (stmt->template is<VariableDeclaration>())
-                stmt->accept(*this);
+            {
+                auto variableDecl = stmt->template as<VariableDeclaration>();
+                if (variableDecl->mutability != Mutability::Const)
+                    stmt->accept(*this);
+            }
         });
 
         emitPhase(emitPhase, statements, [&](const auto& stmt)
@@ -3771,6 +3872,18 @@ namespace wio::codegen
 
             for (std::size_t i = 0; i < derefCount; ++i)
                 emit(")");
+        };
+
+        auto emitAssignableLeftExpression = [&](const NodePtr<Expression>& expression)
+        {
+            Ref<sema::Type> expressionType = expression ? expression->refType.Lock() : nullptr;
+            if (shouldTreatReferenceAsHandleForAssignment(expressionType))
+            {
+                expression->accept(*this);
+                return;
+            }
+
+            emitReadableExpression(expression);
         };
 
         if (node.op.type == TokenType::kwIn)
@@ -3879,7 +3992,10 @@ namespace wio::codegen
         }
         
         emit("(");
-        emitReadableExpression(node.left);
+        if (node.op.type == TokenType::opAssign)
+            emitAssignableLeftExpression(node.left);
+        else
+            emitReadableExpression(node.left);
         
         std::string opStr = node.op.value;
         if (node.op.type == TokenType::kwAnd)
@@ -3911,36 +4027,42 @@ namespace wio::codegen
 
     void CppGenerator::visit(AssignmentExpression& node)
     {
-        int derefCount = 0;
-
         auto lhsType = node.left->refType.Lock();
         auto rhsType = node.right->refType.Lock();
-
-        if (lhsType && rhsType && !lhsType->isCompatibleWith(rhsType))
+        if (shouldTreatReferenceAsHandleForAssignment(lhsType))
         {
-            Ref<sema::Type> current = lhsType;
-        
-            while (current && current->kind() == sema::TypeKind::Reference)
-            {
-                auto rType = current.AsFast<sema::ReferenceType>();
-                derefCount++;
-            
-                if (rType->referredType->isCompatibleWith(rhsType)) {
-                    break;
-                }
-                current = rType->referredType;
-            }
+            node.left->accept(*this);
         }
+        else
+        {
+            int derefCount = 0;
 
-        for (int i = 0; i < derefCount; ++i) emit("*(");
+            if (lhsType && rhsType && !lhsType->isCompatibleWith(rhsType))
+            {
+                Ref<sema::Type> current = lhsType;
+
+                while (current && current->kind() == sema::TypeKind::Reference)
+                {
+                    auto rType = current.AsFast<sema::ReferenceType>();
+                    derefCount++;
+
+                    if (rType->referredType->isCompatibleWith(rhsType)) {
+                        break;
+                    }
+                    current = rType->referredType;
+                }
+            }
+
+            for (int i = 0; i < derefCount; ++i) emit("*(");
     
-        node.left->accept(*this);
+            node.left->accept(*this);
     
-        for (int i = 0; i < derefCount; ++i) emit(")");
+            for (int i = 0; i < derefCount; ++i) emit(")");
+        }
 
         emit(" " + node.op.value + " "); // =, +=, -= ...
 
-        if (!emitAnyInterfaceBoxingIfNeeded(node.right, lhsType))
+        if (!emitAnyBoxingIfNeeded(node.right, lhsType))
             node.right->accept(*this);
     }
 
@@ -4107,7 +4229,11 @@ namespace wio::codegen
             if (sym->kind == sema::SymbolKind::Function)
             {
                 auto funcType = sym->type.AsFast<sema::FunctionType>();
-                emit(Mangler::mangleFunction(sym->name, funcType->paramTypes, sym->scopePath));
+                emit(Mangler::mangleFunction(
+                    sym->name,
+                    funcType->paramTypes,
+                    isStructMemberFunctionSymbol(sym) ? "" : sym->scopePath
+                ));
                 return;
             }
 
@@ -4127,7 +4253,11 @@ namespace wio::codegen
                 if (selectedType && selectedType->kind() == sema::TypeKind::Function)
                 {
                     auto funcType = selectedType.AsFast<sema::FunctionType>();
-                    emit(Mangler::mangleFunction(sym->name, funcType->paramTypes, scopePath));
+                    emit(Mangler::mangleFunction(
+                        sym->name,
+                        funcType->paramTypes,
+                        isStructMemberFunctionSymbol(sym) ? "" : scopePath
+                    ));
                     return;
                 }
             }
@@ -4812,7 +4942,7 @@ namespace wio::codegen
             auto resolvedExpected = unwrapAliasType(expectedType);
             auto resolvedActual = unwrapAliasType(actualType);
 
-            if (emitAnyInterfaceBoxingIfNeeded(argument, expectedType))
+            if (emitAnyBoxingIfNeeded(argument, expectedType))
                 return;
 
             if (resolvedExpected &&
@@ -4881,6 +5011,8 @@ namespace wio::codegen
             std::string scopePath = calleeSym->scopePath;
             if (scopePath.empty() && calleeSym->kind == sema::SymbolKind::FunctionGroup && !calleeSym->overloads.empty())
                 scopePath = calleeSym->overloads.front()->scopePath;
+            if (isStructMemberFunctionSymbol(calleeSym))
+                scopePath.clear();
 
             Ref<sema::FunctionType> mangledFunctionType = functionType;
             if (!calleeSym->genericParameterNames.empty())
@@ -5264,7 +5396,7 @@ namespace wio::codegen
 
         if (node.mutability == Mutability::Const)
         {
-            prefix = "constexpr ";
+            prefix = currentClassName_.empty() ? "constexpr " : "static constexpr ";
         }
         else if (node.mutability == Mutability::Immutable)
         {
@@ -5288,7 +5420,7 @@ namespace wio::codegen
         if (node.initializer)
         {
             buffer_ << " = ";
-            if (!emitAnyInterfaceBoxingIfNeeded(node.initializer, varType))
+            if (!emitAnyBoxingIfNeeded(node.initializer, varType))
                 node.initializer->accept(*this);
         }
 
@@ -6440,6 +6572,8 @@ namespace wio::codegen
             if (member.declaration->is<VariableDeclaration>())
             {
                 auto vDecl = member.declaration->as<VariableDeclaration>();
+                if (vDecl->mutability == Mutability::Const)
+                    continue;
                 auto sym = vDecl->name->referencedSymbol.Lock();
                 Ref<sema::Type> varType = (sym && sym->type) ? sym->type : vDecl->name->refType.Lock();
                 memberVars.emplace_back(toCppType(varType), sanitizeCppIdentifier(vDecl->name->token.value));
@@ -6714,6 +6848,8 @@ namespace wio::codegen
             if (member.declaration->is<VariableDeclaration>())
             {
                 auto vDecl = member.declaration->as<VariableDeclaration>();
+                if (vDecl->mutability == Mutability::Const)
+                    continue;
                 const auto& sym = vDecl->name->referencedSymbol.Lock();
                 Ref<sema::Type> varType = (sym && sym->type) ? sym->type : vDecl->name->refType.Lock();
                 memberVars.emplace_back(toCppType(varType), sanitizeCppIdentifier(vDecl->name->token.value));
@@ -7442,7 +7578,7 @@ namespace wio::codegen
         if (node.value)
         {
             buffer_ << " ";
-            if (!emitAnyInterfaceBoxingIfNeeded(node.value, currentFunctionReturnType_))
+            if (!emitAnyBoxingIfNeeded(node.value, currentFunctionReturnType_))
                 node.value->accept(*this);
         }
         buffer_ << ";\n";

@@ -1332,6 +1332,10 @@ namespace wio
                     isPackField = true;
                 }
 
+                Mutability memberMutability = Mutability::Mutable;
+                if (match(TokenType::kwConst, true))
+                    memberMutability = Mutability::Const;
+
                 NodePtr<Identifier> memberName = makeNodePtr<Identifier>(consume(TokenType::identifier));
                 
                 NodePtr<TypeSpecifier> memberType = nullptr;
@@ -1350,7 +1354,7 @@ namespace wio
                 auto varDecl =
                     makeNodePtr<VariableDeclaration>(
                         std::move(memberAttrs),
-                        Mutability::Mutable,
+                        memberMutability,
                         std::move(memberName),
                         std::move(memberType),
                         std::move(init),
@@ -1434,6 +1438,10 @@ namespace wio
                     isPackField = true;
                 }
 
+                Mutability memberMutability = Mutability::Mutable;
+                if (match(TokenType::kwConst, true))
+                    memberMutability = Mutability::Const;
+
                 NodePtr<Identifier> memberName = makeNodePtr<Identifier>(consume(TokenType::identifier));
                 
                 NodePtr<TypeSpecifier> memberType = nullptr;
@@ -1452,7 +1460,7 @@ namespace wio
                 auto varDecl =
                     makeNodePtr<VariableDeclaration>(
                         std::move(memberAttrs),
-                        Mutability::Mutable,
+                        memberMutability,
                         std::move(memberName),
                         std::move(memberType),
                         std::move(init),
