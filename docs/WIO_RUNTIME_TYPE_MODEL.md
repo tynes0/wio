@@ -34,7 +34,7 @@ The recommended categories are:
 3. managed special container types such as `string`, dynamic arrays, `Dict`,
    and `Tree`
 4. `opaque`
-5. `box<T>` as a future heap-wrapper for value types
+5. `box<T>` as a heap-wrapper for value types
 6. `any` as a heap-backed universal erased runtime payload
 
 The rest of this document defines what each category means.
@@ -47,8 +47,8 @@ The rest of this document defines what each category means.
 | `object` | user-defined heap object with identity | reference/handle semantics | handle/bridge, not POD layout sharing | implemented direction, still evolving |
 | `string` / dynamic array / `Dict` / `Tree` | managed runtime containers | runtime-managed | dedicated bridge, not native POD | implemented direction |
 | `opaque` | foreign host payload / external handle | host-owned or externally owned | pass-through opaque ABI value | initial source-level and native pass-through slice implemented |
-| `box<T>` | heap allocation for value types | heap-owned wrapper around a value | wrapper/bridge, not POD | planned |
-| `any` | universal erased runtime payload | heap-backed wrapper cell | wrapper/bridge, not POD | initial source slice and runtime foundation implemented |
+| `box<T>` | heap allocation for value types | heap-owned wrapper around a value | wrapper/bridge, not POD | initial std-backed source slice implemented |
+| `any` | universal erased runtime payload | heap-backed wrapper cell | wrapper/bridge, not POD | initial source slice, native bridge, and std event/context helpers implemented |
 
 ## 3. `component`
 
@@ -316,11 +316,11 @@ Using `object` for this purpose would blur two very different worlds:
 Keeping `opaque` separate makes the language easier to reason about and keeps
 the ABI cleaner.
 
-## 7. `box<T>` (Planned)
+## 7. `box<T>` (Initial Std-Backed Slice Implemented)
 
 ### 7.1 Purpose
 
-`box<T>` is the recommended future heap-wrapper for value types.
+`box<T>` is the recommended heap-wrapper for value types.
 
 It answers a different need than `object`.
 
@@ -330,7 +330,24 @@ Use cases:
 - sharing a value through reference-style ownership,
 - avoiding forced conversion of data-only types into `object`.
 
-### 7.2 Why `box<T>` Matters
+### 7.2 Current Slice
+
+The current first slice is available as:
+
+- `std::heap::box<T>`
+
+This keeps the model available today without prematurely freezing a dedicated
+builtin keyword. The current std-backed wrapper is still intended to represent
+the long-term `box<T>` semantic direction:
+
+- heap-backed
+- reference/handle-style sharing
+- a typed wrapper around one known Wio value
+- not a POD/native layout bridge
+- usable with `any is std::heap::box<T>` / `any fit std::heap::box<T>`-style
+  recovery on concrete generic specializations
+
+### 7.3 Why `box<T>` Matters
 
 Without `box<T>`, users often force data into the object model just because
 they want heap allocation.
@@ -342,7 +359,7 @@ That makes the language less clear.
 - "this is still a value type,"
 - "but I want it stored on the heap."
 
-### 7.3 Native Interop Direction
+### 7.4 Native Interop Direction
 
 `box<T>` should not try to become a POD bridge.
 
@@ -392,10 +409,14 @@ That header and compiler slice currently establish this model:
 - `Any` is a heap-backed wrapper handle,
 - plain values live in `AnyValueCell<T>`,
 - object references live in `AnyObjectCell<T>`,
+- interface-typed expressions box by first recovering their backing runtime object,
 - the payload itself does not need to inherit from `RefCountedObject`; only
   the heap cell does,
 - source-level `any` supports concrete boxing, `is`, `fit`, and null equality,
-- initial native interop is available through by-value `any`, `view any`, and `ref any`.
+- initial native interop is available through by-value `any`, `view any`, and `ref any`,
+- object payloads can be recovered through interface `is` / `fit` using the same runtime cast path as ordinary object/interface conversions,
+- std-backed event/context helpers now exist through `std::event`, using `any`
+  as payload and userdata-style runtime transport.
 
 ## 9. Native Interop Policy
 

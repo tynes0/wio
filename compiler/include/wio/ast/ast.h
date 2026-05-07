@@ -489,6 +489,16 @@ namespace wio
         ~Identifier() override;
     };
 
+    struct TypeExpression : Expression
+    {
+        WIO_EXP_NODE_BODY(TypeExpression)
+
+        NodePtr<TypeSpecifier> type;
+
+        explicit TypeExpression(NodePtr<TypeSpecifier> _type, common::Location _loc = common::Location::invalid());
+        ~TypeExpression() override;
+    };
+
     struct NullExpression : Expression
     {
         WIO_EXP_NODE_BODY(NullExpression)
@@ -923,8 +933,9 @@ namespace wio
         std::vector<std::string> importedSymbols;
         bool isStdLib = false;
         bool isCppHeader = false;
+        bool importAllIntoScope = false;
         
-        explicit UseStatement(std::string _moduleName, std::string _modulePath, std::string _aliasName, bool _isStdLib, bool _isCppHeader, common::Location _loc = common::Location::invalid());
+        explicit UseStatement(std::string _moduleName, std::string _modulePath, std::string _aliasName, bool _isStdLib, bool _isCppHeader, bool _importAllIntoScope = false, common::Location _loc = common::Location::invalid());
         ~UseStatement() override;
     };
 

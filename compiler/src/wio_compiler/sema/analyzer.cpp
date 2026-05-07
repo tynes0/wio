@@ -311,9 +311,6 @@ namespace wio::sema
                 if (!structType)
                     return false;
 
-                if (structType->isInterface)
-                    return false;
-
                 return true;
             }
             default:
@@ -329,6 +326,13 @@ namespace wio::sema
 
             if (isAnyType(resolvedType))
                 return false;
+
+            if (resolvedType->kind() == TypeKind::Struct)
+            {
+                auto structType = resolvedType.AsFast<StructType>();
+                if (structType && structType->isInterface)
+                    return true;
+            }
 
             return isStorableInAny(resolvedType);
         }
@@ -4124,7 +4128,7 @@ namespace wio::sema
                 {
                     WIO_LOG_ADD_ERROR(
                         node.right->location(),
-                        "The right side of the 'is' operator must be a concrete storable runtime type when the left side is 'any'."
+                        "The right side of the 'is' operator must be a concrete runtime-storable type or interface when the left side is 'any'."
                     );
                 }
 
@@ -4257,6 +4261,21 @@ namespace wio::sema
             // Todo: In arithmetic operations (for now), the result type is the same as the type of the left operand.
             node.refType = readableLhsType ? readableLhsType : lhsType;
         }
+    }
+
+    void SemanticAnalyzer::visit(TypeExpression& node)
+    {
+        if (!node.type)
+        {
+            node.refType = Compiler::get().getTypeContext().getUnknown();
+            return;
+        }
+
+        node.type->accept(*this);
+        node.refType = node.type->refType.Lock();
+
+        if (node.type->name.type == TokenType::identifier)
+            node.referencedSymbol = resolveQualifiedSymbol(currentScope_, node.type->name.value);
     }
     
     void SemanticAnalyzer::visit(UnaryExpression& node)
@@ -7206,7 +7225,7 @@ namespace wio::sema
 
                 WIO_LOG_ADD_ERROR(
                     node.location(),
-                    "The 'fit' operator can only convert 'any' to concrete storable runtime types."
+                    "The 'fit' operator can only convert 'any' to concrete runtime-storable types or interfaces."
                 );
                 node.refType = Compiler::get().getTypeContext().getUnknown();
                 return;
@@ -10422,21 +10441,50 @@ namespace wio::sema
             return resolvedNamespace;
         };
 
-        if (node.aliasName.empty())
-            return;
-
         if (auto importedNamespace = resolveImportedNamespace())
         {
-            if (auto existingAlias = currentScope_->resolveLocally(node.aliasName))
+            if (!node.aliasName.empty())
             {
-                if (existingAlias == importedNamespace)
-                    return;
+                if (auto existingAlias = currentScope_->resolveLocally(node.aliasName))
+                {
+                    if (existingAlias == importedNamespace)
+                        return;
 
-                WIO_LOG_ADD_ERROR(node.location(), "Symbol '{}' already exists and cannot be used as an import alias.", node.aliasName);
+                    WIO_LOG_ADD_ERROR(node.location(), "Symbol '{}' already exists and cannot be used as an import alias.", node.aliasName);
+                    return;
+                }
+
+                currentScope_->define(node.aliasName, importedNamespace);
                 return;
             }
 
-            currentScope_->define(node.aliasName, importedNamespace);
+            if (!node.importAllIntoScope)
+                return;
+
+            if (!importedNamespace->innerScope)
+                return;
+
+            for (const auto& [symbolName, importedSymbol] : importedNamespace->innerScope->getSymbols())
+            {
+                if (!importedSymbol)
+                    continue;
+
+                if (auto existingSymbol = currentScope_->resolveLocally(symbolName))
+                {
+                    if (existingSymbol == importedSymbol)
+                        continue;
+
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "Symbol '{}' already exists and cannot be directly imported from module '{}'.",
+                        symbolName,
+                        node.modulePath
+                    );
+                    continue;
+                }
+
+                currentScope_->define(symbolName, importedSymbol);
+            }
             return;
         }
 
@@ -10445,6 +10493,9 @@ namespace wio::sema
             WIO_LOG_ADD_ERROR(node.location(), "Standard library module 'std::{}' could not be resolved after merge.", node.modulePath);
             return;
         }
+
+        if (node.aliasName.empty() && !node.importAllIntoScope)
+            return;
 
         std::vector<Ref<Symbol>> importedSymbols;
         importedSymbols.reserve(node.importedSymbols.size());
@@ -10461,19 +10512,45 @@ namespace wio::sema
             importedSymbols.push_back(importedSymbol);
         }
 
-        Ref<Symbol> aliasNamespace = getOrCreateNamespace(currentScope_, node.aliasName);
-        if (!aliasNamespace || !aliasNamespace->innerScope)
+        if (!node.aliasName.empty())
+        {
+            Ref<Symbol> aliasNamespace = getOrCreateNamespace(currentScope_, node.aliasName);
+            if (!aliasNamespace || !aliasNamespace->innerScope)
+                return;
+
+            for (const auto& importedSymbol : importedSymbols)
+            {
+                if (!importedSymbol)
+                    continue;
+
+                if (aliasNamespace->innerScope->resolveLocally(importedSymbol->name))
+                    continue;
+
+                aliasNamespace->innerScope->define(importedSymbol->name, importedSymbol);
+            }
             return;
+        }
 
         for (const auto& importedSymbol : importedSymbols)
         {
             if (!importedSymbol)
                 continue;
 
-            if (aliasNamespace->innerScope->resolveLocally(importedSymbol->name))
-                continue;
+            if (auto existingSymbol = currentScope_->resolveLocally(importedSymbol->name))
+            {
+                if (existingSymbol == importedSymbol)
+                    continue;
 
-            aliasNamespace->innerScope->define(importedSymbol->name, importedSymbol);
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Symbol '{}' already exists and cannot be directly imported from module '{}'.",
+                    importedSymbol->name,
+                    node.modulePath
+                );
+                continue;
+            }
+
+            currentScope_->define(importedSymbol->name, importedSymbol);
         }
     }
 }

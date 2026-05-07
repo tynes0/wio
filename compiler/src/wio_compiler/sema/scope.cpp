@@ -64,6 +64,11 @@ namespace wio::sema
         return nullptr;
     }
 
+    const std::map<std::string, Ref<Symbol>>& Scope::getSymbols() const
+    {
+        return symbols_;
+    }
+
     WeakRef<Scope> Scope::getParent() const
     {
         return parent_;

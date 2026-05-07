@@ -2541,6 +2541,35 @@ namespace wio::codegen
     
     CppGenerator::CppGenerator() = default;
 
+    bool CppGenerator::emitAnyInterfaceBoxingIfNeeded(const NodePtr<Expression>& expression, const Ref<sema::Type>& expectedType)
+    {
+        if (!expression || !expectedType)
+            return false;
+
+        Ref<sema::Type> resolvedExpectedType = unwrapAliasTypeForCodegen(expectedType);
+        if (resolvedExpectedType && resolvedExpectedType->kind() == sema::TypeKind::Reference)
+            resolvedExpectedType = unwrapAliasTypeForCodegen(resolvedExpectedType.AsFast<sema::ReferenceType>()->referredType);
+
+        if (!isAnyTypeForCodegen(resolvedExpectedType))
+            return false;
+
+        Ref<sema::Type> resolvedActualType = unwrapAliasTypeForCodegen(expression->refType.Lock());
+        if (resolvedActualType && resolvedActualType->kind() == sema::TypeKind::Reference)
+            resolvedActualType = unwrapAliasTypeForCodegen(resolvedActualType.AsFast<sema::ReferenceType>()->referredType);
+
+        if (!resolvedActualType || resolvedActualType->kind() != sema::TypeKind::Struct)
+            return false;
+
+        auto structType = resolvedActualType.AsFast<sema::StructType>();
+        if (!structType || !structType->isInterface)
+            return false;
+
+        emit("wio::runtime::Any::FromInterface<" + mangleInterfaceTypeName(structType) + ">(");
+        expression->accept(*this);
+        emit(")");
+        return true;
+    }
+
     std::string CppGenerator::generate(const Ref<Program>& program)
     {
         buffer_.str("");
@@ -3773,9 +3802,13 @@ namespace wio::codegen
                 if (targetType && targetType->kind() == sema::TypeKind::Struct)
                 {
                     auto structType = targetType.AsFast<sema::StructType>();
-                    if (structType->isObject && !structType->isInterface)
+                    if (structType->isInterface)
                     {
-                        emit("!_wio_any.IsNull() && _wio_any.IsObject<" + mangleStructTypeName(structType) + ">()");
+                        emit("_wio_any.IsInterface<" + Mangler::mangleInterface(structType->name, structType->scopePath) + ">()");
+                    }
+                    else if (structType->isObject && !structType->isInterface)
+                    {
+                        emit("!_wio_any.IsNull() && _wio_any.CanCastObject<" + mangleStructTypeName(structType) + ">()");
                     }
                     else
                     {
@@ -3816,13 +3849,24 @@ namespace wio::codegen
 
             emit(isFatPointer ? "._WF_IsA(" : "->_WF_IsA(");
 
-            auto rightSym = node.right->referencedSymbol.Lock();
-            if (rightSym && rightSym->kind == sema::SymbolKind::Struct)
+            Ref<sema::Type> rhsType = unwrapAliasTypeForCodegen(node.right->refType.Lock());
+            auto targetStruct = rhsType && rhsType->kind() == sema::TypeKind::Struct
+                ? rhsType.AsFast<sema::StructType>()
+                : nullptr;
+
+            if (targetStruct)
+            {
+                if (targetStruct->isInterface)
+                    emit(mangleInterfaceTypeName(targetStruct) + "::TYPE_ID");
+                else
+                    emit(mangleStructTypeName(targetStruct) + "::TYPE_ID");
+            }
+            else if (auto rightSym = node.right->referencedSymbol.Lock(); rightSym && rightSym->kind == sema::SymbolKind::Struct)
             {
                 auto sType = rightSym->type.AsFast<sema::StructType>();
-                if (sType->isInterface) 
+                if (sType->isInterface)
                     emit(mangleInterfaceTypeName(sType) + "::TYPE_ID");
-                else 
+                else
                     emit(mangleStructTypeName(sType) + "::TYPE_ID");
             }
             else
@@ -3895,8 +3939,9 @@ namespace wio::codegen
         for (int i = 0; i < derefCount; ++i) emit(")");
 
         emit(" " + node.op.value + " "); // =, +=, -= ...
-    
-        node.right->accept(*this);
+
+        if (!emitAnyInterfaceBoxingIfNeeded(node.right, lhsType))
+            node.right->accept(*this);
     }
 
     void CppGenerator::visit(IntegerLiteral& node)
@@ -4101,6 +4146,23 @@ namespace wio::codegen
         }
 
         emit(sanitizeCppIdentifier(node.token.value));
+    }
+
+    void CppGenerator::visit(TypeExpression& node)
+    {
+        if (auto resolvedType = node.refType.Lock())
+        {
+            emit(toCppType(resolvedType));
+            return;
+        }
+
+        if (node.type)
+        {
+            node.type->accept(*this);
+            return;
+        }
+
+        emit("/* invalid type expression */");
     }
 
     void CppGenerator::visit(PackExpansionExpression& node)
@@ -4750,6 +4812,9 @@ namespace wio::codegen
             auto resolvedExpected = unwrapAliasType(expectedType);
             auto resolvedActual = unwrapAliasType(actualType);
 
+            if (emitAnyInterfaceBoxingIfNeeded(argument, expectedType))
+                return;
+
             if (resolvedExpected &&
                 resolvedExpected->kind() == sema::TypeKind::Function &&
                 argument &&
@@ -4973,11 +5038,19 @@ namespace wio::codegen
             if (resolvedDestType && resolvedDestType->kind() == sema::TypeKind::Struct)
             {
                 auto structType = resolvedDestType.AsFast<sema::StructType>();
+                if (structType->isInterface)
+                {
+                    emit("(");
+                    node.operand->accept(*this);
+                    emit(").AsInterface<" + Mangler::mangleInterface(structType->name, structType->scopePath) + ">()");
+                    return;
+                }
+
                 if (structType->isObject && !structType->isInterface)
                 {
                     emit("(");
                     node.operand->accept(*this);
-                    emit(").AsObject<" + mangleStructTypeName(structType) + ">()");
+                    emit(").CastObject<" + mangleStructTypeName(structType) + ">()");
                     return;
                 }
             }
@@ -5215,7 +5288,8 @@ namespace wio::codegen
         if (node.initializer)
         {
             buffer_ << " = ";
-            node.initializer->accept(*this);
+            if (!emitAnyInterfaceBoxingIfNeeded(node.initializer, varType))
+                node.initializer->accept(*this);
         }
 
         buffer_ << ";\n";
@@ -5256,6 +5330,8 @@ namespace wio::codegen
     {
         auto sym = node.name->referencedSymbol.Lock();
         auto funcType = sym->type.AsFast<sema::FunctionType>();
+        Ref<sema::Type> previousFunctionReturnType = currentFunctionReturnType_;
+        currentFunctionReturnType_ = funcType ? funcType->returnType : nullptr;
         auto instantiationTypeLists = getInstantiateTypeLists(node);
 
         std::string returnType = funcType->returnType ? toCppType(funcType->returnType) : "void";
@@ -6214,6 +6290,8 @@ namespace wio::codegen
                 emitExplicitInstantiationDeclaration(instantiationTypes);
             }
         }
+
+        currentFunctionReturnType_ = previousFunctionReturnType;
     }
 
     void CppGenerator::visit(RealmDeclaration& node)
@@ -6248,6 +6326,7 @@ namespace wio::codegen
         uint64_t typeId = common::fnv1a(interfaceName.c_str());
         emitLine(common::formatString("static constexpr uint64_t TYPE_ID = {}ull;", typeId));
         emitLine(common::formatString("virtual ~{}() = default;\n", interfaceName));
+        emitLine("virtual wio::runtime::RefCountedObject* _WF_RuntimeObject() noexcept = 0;");
     
         for (auto& method : node.methods)
         {
@@ -6562,6 +6641,7 @@ namespace wio::codegen
         uint64_t typeId = common::fnv1a(structName.c_str());
         emitLine(common::formatString("static constexpr uint64_t TYPE_ID = {}ull;", typeId));
         emitLine(common::formatString("virtual uint64_t _WF_GetTypeID() const {{ return {}ull; }}", typeId));
+        emitLine("virtual wio::runtime::RefCountedObject* _WF_RuntimeObject() noexcept override { return this; }");
         
         emitLine("virtual bool _WF_IsA(uint64_t id) const override {");
         indent();
@@ -6870,13 +6950,21 @@ namespace wio::codegen
                 if (resolvedTargetType && resolvedTargetType->kind() == sema::TypeKind::Struct)
                 {
                     auto structType = resolvedTargetType.AsFast<sema::StructType>();
-                    if (structType->isObject && !structType->isInterface)
+                    if (structType->isInterface)
                     {
-                        emit("_wio_any_match.IsObject<" + mangleStructTypeName(structType) + ">()");
+                        emit("_wio_any_match.IsInterface<" + Mangler::mangleInterface(structType->name, structType->scopePath) + ">()");
                         emit(")\n");
                         emitLine("{");
                         indent();
-                        emitLine(targetCppType + " " + node.matchVar.value + " = _wio_any_match.AsObject<" + mangleStructTypeName(structType) + ">();");
+                        emitLine(targetCppType + " " + node.matchVar.value + " = _wio_any_match.AsInterface<" + Mangler::mangleInterface(structType->name, structType->scopePath) + ">();");
+                    }
+                    else if (structType->isObject && !structType->isInterface)
+                    {
+                        emit("_wio_any_match.CanCastObject<" + mangleStructTypeName(structType) + ">()");
+                        emit(")\n");
+                        emitLine("{");
+                        indent();
+                        emitLine(targetCppType + " " + node.matchVar.value + " = _wio_any_match.CastObject<" + mangleStructTypeName(structType) + ">();");
                     }
                     else
                     {
@@ -7354,7 +7442,8 @@ namespace wio::codegen
         if (node.value)
         {
             buffer_ << " ";
-            node.value->accept(*this);
+            if (!emitAnyInterfaceBoxingIfNeeded(node.value, currentFunctionReturnType_))
+                node.value->accept(*this);
         }
         buffer_ << ";\n";
     }

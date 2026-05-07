@@ -1,0 +1,61 @@
+use std::assert as assert;
+use std::console as console;
+
+realm combat {
+    interface IDamageable {
+        fn TakeDamage(amount: i32);
+        fn GetHp() -> i32;
+    }
+
+    @From(combat::IDamageable)
+    object Boss {
+        public hp: i32;
+
+        OnConstruct() {
+            self.hp = 20;
+        }
+
+        public fn TakeDamage(amount: i32) {
+            self.hp -= amount;
+        }
+
+        public fn GetHp() -> i32 {
+            return self.hp;
+        }
+    }
+}
+
+fn Echo(value: any) -> any {
+    return value;
+}
+
+fn BoxInterface(value: combat::IDamageable) -> any {
+    return value;
+}
+
+fn Entry() -> i32 {
+    let bossObject: combat::Boss = combat::Boss();
+
+    mut payload: any = bossObject fit combat::IDamageable;
+    assert::ExpectTrue(payload is combat::IDamageable, "interface local should box directly into any");
+
+    if (payload is combat::IDamageable fit boxedDamageable) {
+        boxedDamageable.TakeDamage(4);
+        assert::ExpectEqual(boxedDamageable.GetHp(), 16, "boxed interface payload should stay callable");
+    } else {
+        return 1;
+    }
+
+    let echoed: any = Echo(bossObject fit combat::IDamageable);
+    assert::ExpectTrue(echoed is combat::IDamageable, "interface argument should box when passed to any");
+
+    let returned: any = BoxInterface(bossObject fit combat::IDamageable);
+    assert::ExpectTrue(returned is combat::IDamageable, "interface return should box when returning any");
+
+    payload = bossObject fit combat::IDamageable;
+    let boss: combat::Boss = payload fit combat::Boss;
+    assert::ExpectEqual(boss.hp, 16, "assignment into any should preserve the backing object");
+
+    console::PrintLine("any-interface-boxing-ok");
+    return 0;
+}

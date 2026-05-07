@@ -27,6 +27,7 @@ namespace wio::codegen
 
         bool isEmittingPrototypes_ = false;
         std::string currentClassName_;
+        Ref<sema::Type> currentFunctionReturnType_;
 
         void emitStatements(const std::vector<NodePtr<Statement>>& statements);
         void generateHeader();
@@ -36,6 +37,7 @@ namespace wio::codegen
         void emitLine(const std::string& str = "");
         void emitHeader(const std::string& str);
         void emitHeaderLine(const std::string& str = "");
+        bool emitAnyInterfaceBoxingIfNeeded(const NodePtr<Expression>& expression, const Ref<sema::Type>& expectedType);
         void emitSourceDirective(const common::Location& loc);
         void emitGeneratedDirective();
         void emitMain(FunctionDeclaration& node);

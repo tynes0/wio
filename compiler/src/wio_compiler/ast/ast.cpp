@@ -142,6 +142,13 @@ namespace wio
 
     Identifier::~Identifier() = default;
 
+    TypeExpression::TypeExpression(NodePtr<TypeSpecifier> _type, common::Location _loc)
+        : Expression(_loc.isValid() ? _loc : (_type ? _type->location() : common::Location::invalid())), type(std::move(_type))
+    {
+    }
+
+    TypeExpression::~TypeExpression() = default;
+
     NullExpression::NullExpression(common::Location _loc)
         : Expression(_loc)
     {
@@ -389,8 +396,8 @@ namespace wio
 
     ReturnStatement::~ReturnStatement() = default;
 
-    UseStatement::UseStatement(std::string _moduleName, std::string _modulePath, std::string _aliasName, bool _isStdLib, bool _isCppHeader, common::Location _loc)
-        : Statement(_loc), moduleName(std::move(_moduleName)), modulePath(std::move(_modulePath)), aliasName(std::move(_aliasName)), isStdLib(_isStdLib), isCppHeader(_isCppHeader)
+    UseStatement::UseStatement(std::string _moduleName, std::string _modulePath, std::string _aliasName, bool _isStdLib, bool _isCppHeader, bool _importAllIntoScope, common::Location _loc)
+        : Statement(_loc), moduleName(std::move(_moduleName)), modulePath(std::move(_modulePath)), aliasName(std::move(_aliasName)), isStdLib(_isStdLib), isCppHeader(_isCppHeader), importAllIntoScope(_importAllIntoScope)
     {
     }
 

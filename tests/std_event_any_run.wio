@@ -1,0 +1,71 @@
+use std::assert as assert;
+use std::console as console;
+use std::event as event;
+use std::heap as heap;
+
+fn IncrementPayload(current: ref event::Event) {
+    if (current.payload is i32 fit amount) {
+        current.payload = amount + 1;
+    }
+}
+
+fn AttachContext(current: ref event::Event) {
+    current.context = heap::box("player-1");
+}
+
+fn StopOnString(current: ref event::Event) {
+    if (current.payload is string) {
+        current.Handle();
+    }
+}
+
+fn Entry() -> i32 {
+    mut damage = event::Event("damage", 10, null);
+    IncrementPayload(ref damage);
+    AttachContext(ref damage);
+
+    assert::ExpectTrue(damage.HasPayload(), "event payload should still exist after emit");
+    assert::ExpectTrue(damage.HasContext(), "event context should be attachable through any");
+
+    if (damage.payload is i32 fit amount) {
+        assert::ExpectEqual(amount, 11, "event payload should flow through any-aware handlers");
+    } else {
+        return 1;
+    }
+
+    if (damage.context is heap::box<string> fit contextBox) {
+        assert::ExpectEqual(contextBox.Get(), "player-1", "event context should preserve boxed userdata payloads");
+    } else {
+        return 2;
+    }
+
+    mut message = event::Event("message", "hello", null);
+    StopOnString(ref message);
+    if (not message.handled) {
+        IncrementPayload(ref message);
+    }
+
+    assert::ExpectTrue(message.handled, "event payloads should be able to drive handled state");
+    if (message.payload is string fit text) {
+        assert::ExpectEqual(text, "hello", "handled payloads should remain available for typed reads");
+    } else {
+        return 3;
+    }
+
+    damage.ClearPayload();
+    damage.ClearContext();
+    assert::ExpectFalse(damage.HasPayload(), "ClearPayload should reset event payloads to null");
+    assert::ExpectFalse(damage.HasContext(), "ClearContext should reset event userdata to null");
+
+    damage.Reset("spawn", heap::box(3), "wave-1");
+    assert::ExpectEqual(damage.name, "spawn", "Reset should replace the event name");
+    assert::ExpectFalse(damage.handled, "Reset should clear the handled flag");
+    if (damage.payload is heap::box<i32> fit countBox) {
+        assert::ExpectEqual(countBox.Get(), 3, "Reset should accept boxed any payloads");
+    } else {
+        return 4;
+    }
+
+    console::PrintLine("std-event-any-ok");
+    return 0;
+}

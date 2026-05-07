@@ -117,6 +117,25 @@ Current expectation:
 - richer transforms such as `Take`, `Drop`, `Zip`, `MapTypes`, and future
   const-generic style helpers are still future work
 
+### 2.5 Experimental Runtime-Model Helper Modules
+
+- `std::heap`
+- `std::event`
+
+These modules sit closer to the runtime type model than to ordinary collection
+helpers.
+
+Current expectation:
+
+- `std::heap::box<T>` is the first source-level heap wrapper slice for typed
+  values
+- it is intentionally std-backed for now rather than a dedicated builtin
+  keyword
+- `std::event` provides an `any`-powered event/context/payload surface for
+  userdata-style flows, handler dispatch, and small message pipelines
+- both modules should currently be treated as implemented but still
+  experimental/hardening-oriented, not frozen v1 core
+
 ---
 
 ## 3. Language vs Std Ownership
@@ -159,6 +178,8 @@ v1 direction:
 The following is available but still experimental:
 
 - `std::meta`
+- `std::heap`
+- `std::event`
 
 The following is intentionally not part of the current stable surface:
 

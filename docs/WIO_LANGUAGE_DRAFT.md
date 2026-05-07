@@ -590,15 +590,18 @@ Current first-slice semantics:
 slice is now available for:
 
 - boxing primitive, component, object, array, dictionary, string, and `opaque` values,
+- direct boxing of interface-typed expressions by preserving their backing runtime object,
 - `is` checks against concrete runtime types,
 - `fit` casts back out of `any`,
 - null assignment and null equality,
-- initial `@Native` interop by value and through `view any` / `ref any`.
+- initial `@Native` interop by value and through `view any` / `ref any`,
+- object payload recovery through interface `is` / `fit`,
+- direct generic boxed target checks such as `payload is heap::box<string>` and
+  `payload fit heap::box<i32>`,
+- std-backed event/context helpers through `std::event`.
 
-Interface payload recovery and deeper native ergonomics are still being
-hardened.
-
-For the wider runtime model and future siblings such as `box<T>`, see
+For the wider runtime model and the current std-backed `std::heap::box<T>`
+wrapper, see
 [`WIO_RUNTIME_TYPE_MODEL.md`](./WIO_RUNTIME_TYPE_MODEL.md).
 
 ### 5.4 Reference Types
@@ -2777,6 +2780,7 @@ Supported user-facing forms:
 ```wio
 use std::console;
 use std::console as console;
+use std::math::*;
 use gameplay::combat;
 use gameplay::combat as combat;
 use @CppHeader("native_bridge.h");
@@ -2798,6 +2802,8 @@ Common current modules include:
 - `std::path`
 - `std::algorithms`
 - `std::assert`
+- `std::heap`
+- `std::event`
 
 Example:
 
@@ -2850,10 +2856,17 @@ use combat::damage;
 use combat::damage as damage;
 ```
 
-User modules are merged recursively before semantic analysis. A non-aliased
-module merge exposes its top-level declarations normally. An aliased import
-creates an alias namespace containing the imported module's top-level exported
-symbols.
+User modules are merged recursively before semantic analysis.
+
+- A non-aliased module merge exposes its top-level declarations normally.
+- `use path::*;` directly imports the target module or realm members into the
+  current scope.
+- When an aliased import targets a module file that does not declare a top-level
+  `realm`, its declarations are exposed only through the alias namespace.
+  Example: `use helper as hp;` gives `hp::GetValue()` but not bare `GetValue()`.
+- When an aliased import targets a module that already declares top-level
+  realms, the merged realm structure stays intact and the alias becomes an
+  additional namespace entry point.
 
 If a module file cannot be found or cannot be read, the compiler emits a Wio
 diagnostic and stops instead of falling through to generated C++ errors.

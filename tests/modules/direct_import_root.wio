@@ -1,0 +1,7 @@
+use std::console as console;
+use std::math::*;
+
+fn Entry(args: string[]) -> i32 {
+    console::Print($"Direct import math: ${Abs(-5)}, ${Min(8, 3)}");
+    return 0;
+}

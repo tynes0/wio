@@ -1472,6 +1472,27 @@ namespace wio
             return exportedSymbols;
         }
 
+        bool hasDeclaredTopLevelRealms(const std::vector<NodePtr<Statement>>& statements)
+        {
+            return std::ranges::any_of(statements, [](const NodePtr<Statement>& statement)
+            {
+                return statement && statement->is<RealmDeclaration>();
+            });
+        }
+
+        NodePtr<Statement> wrapStatementsInAliasRealm(std::string aliasName,
+                                                      std::vector<NodePtr<Statement>> statements,
+                                                      common::Location location)
+        {
+            Token aliasToken;
+            aliasToken.type = TokenType::identifier;
+            aliasToken.value = std::move(aliasName);
+            aliasToken.loc = location;
+
+            auto aliasIdentifier = makeNodePtr<Identifier>(std::move(aliasToken), location);
+            return makeNodePtr<RealmDeclaration>(std::move(aliasIdentifier), std::move(statements), location);
+        }
+
         bool hasAttribute(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute attribute)
         {
             return std::ranges::any_of(attributes, [attribute](const NodePtr<AttributeStatement>& stmt)
@@ -2213,14 +2234,29 @@ namespace wio
                         if (!gAppData.flags.get_NoBuiltin())
                         {
                             std::vector<std::string> importedSymbols;
-                            auto moduleProg = parseAndMerge(useStmt->modulePath, true, sourcePath.parent_path(), &importedSymbols);
-                            for (auto& modStmt : moduleProg->statements)
-                                finalStatements.push_back(std::move(modStmt));
+                            bool declaresTopLevelRealms = false;
+                            auto moduleProg = parseAndMerge(useStmt->modulePath, true, sourcePath.parent_path(), &importedSymbols, &declaresTopLevelRealms);
 
-                            if (!useStmt->aliasName.empty())
+                            if (!useStmt->aliasName.empty() && !declaresTopLevelRealms)
                             {
-                                useStmt->importedSymbols = std::move(importedSymbols);
-                                finalStatements.push_back(std::move(stmt));
+                                finalStatements.push_back(
+                                    wrapStatementsInAliasRealm(
+                                        useStmt->aliasName,
+                                        std::move(moduleProg->statements),
+                                        useStmt->location()
+                                    )
+                                );
+                            }
+                            else
+                            {
+                                for (auto& modStmt : moduleProg->statements)
+                                    finalStatements.push_back(std::move(modStmt));
+
+                                if (!useStmt->aliasName.empty() || useStmt->importAllIntoScope)
+                                {
+                                    useStmt->importedSymbols = std::move(importedSymbols);
+                                    finalStatements.push_back(std::move(stmt));
+                                }
                             }
                         }
                     }
@@ -2235,16 +2271,31 @@ namespace wio
                             else
                             {
                                 std::vector<std::string> importedSymbols;
-                                auto moduleProg = parseAndMerge(useStmt->modulePath, useStmt->isStdLib, sourcePath.parent_path(), &importedSymbols);
-                                for (auto& modStmt : moduleProg->statements)
-                                {
-                                    finalStatements.push_back(std::move(modStmt));
-                                }
+                                bool declaresTopLevelRealms = false;
+                                auto moduleProg = parseAndMerge(useStmt->modulePath, useStmt->isStdLib, sourcePath.parent_path(), &importedSymbols, &declaresTopLevelRealms);
 
-                                if (!useStmt->aliasName.empty())
+                                if (!useStmt->aliasName.empty() && !declaresTopLevelRealms)
                                 {
-                                    useStmt->importedSymbols = std::move(importedSymbols);
-                                    finalStatements.push_back(std::move(stmt));
+                                    finalStatements.push_back(
+                                        wrapStatementsInAliasRealm(
+                                            useStmt->aliasName,
+                                            std::move(moduleProg->statements),
+                                            useStmt->location()
+                                        )
+                                    );
+                                }
+                                else
+                                {
+                                    for (auto& modStmt : moduleProg->statements)
+                                    {
+                                        finalStatements.push_back(std::move(modStmt));
+                                    }
+
+                                    if (!useStmt->aliasName.empty() || useStmt->importAllIntoScope)
+                                    {
+                                        useStmt->importedSymbols = std::move(importedSymbols);
+                                        finalStatements.push_back(std::move(stmt));
+                                    }
                                 }
                             }
                         }
@@ -2550,7 +2601,7 @@ namespace wio
         return instance;
     }
 
-    Ref<Program> Compiler::parseAndMerge(const std::string& modulePath, bool isStdLib, const std::filesystem::path& currentDir, std::vector<std::string>* exportedSymbols)
+    Ref<Program> Compiler::parseAndMerge(const std::string& modulePath, bool isStdLib, const std::filesystem::path& currentDir, std::vector<std::string>* exportedSymbols, bool* declaresTopLevelRealms)
     {
         std::optional<std::filesystem::path> resolvedModulePath = resolveModuleSourcePath(modulePath, isStdLib, currentDir);
         if (!resolvedModulePath.has_value())
@@ -2586,10 +2637,13 @@ namespace wio
         Parser parser(lexer.lex());
         auto subProgram = parser.parseProgram();
         collectRequiredCppHeaders(subProgram->statements, actualPath, gAppData.requiredCppHeaders);
+        const bool moduleDeclaresTopLevelRealms = hasDeclaredTopLevelRealms(subProgram->statements);
 
         std::vector<std::string> moduleExportedSymbols = collectExportedSymbols(subProgram->statements);
         if (exportedSymbols)
             *exportedSymbols = moduleExportedSymbols;
+        if (declaresTopLevelRealms)
+            *declaresTopLevelRealms = moduleDeclaresTopLevelRealms;
 
         std::vector<NodePtr<Statement>> mergedStatements;
 
@@ -2603,16 +2657,31 @@ namespace wio
                     if (!gAppData.flags.get_NoBuiltin())
                     {
                         std::vector<std::string> childExportedSymbols;
-                        auto childProgram = parseAndMerge(useStmt->modulePath, true, actualPath.parent_path(), &childExportedSymbols);
-                        for (auto& childStmt : childProgram->statements)
-                        {
-                            mergedStatements.push_back(std::move(childStmt));
-                        }
+                        bool childDeclaresTopLevelRealms = false;
+                        auto childProgram = parseAndMerge(useStmt->modulePath, true, actualPath.parent_path(), &childExportedSymbols, &childDeclaresTopLevelRealms);
 
-                        if (!useStmt->aliasName.empty())
+                        if (!useStmt->aliasName.empty() && !childDeclaresTopLevelRealms)
                         {
-                            useStmt->importedSymbols = std::move(childExportedSymbols);
-                            mergedStatements.push_back(std::move(stmt));
+                            mergedStatements.push_back(
+                                wrapStatementsInAliasRealm(
+                                    useStmt->aliasName,
+                                    std::move(childProgram->statements),
+                                    useStmt->location()
+                                )
+                            );
+                        }
+                        else
+                        {
+                            for (auto& childStmt : childProgram->statements)
+                            {
+                                mergedStatements.push_back(std::move(childStmt));
+                            }
+
+                            if (!useStmt->aliasName.empty() || useStmt->importAllIntoScope)
+                            {
+                                useStmt->importedSymbols = std::move(childExportedSymbols);
+                                mergedStatements.push_back(std::move(stmt));
+                            }
                         }
                     }
                 }
@@ -2627,16 +2696,31 @@ namespace wio
                         else
                         {
                             std::vector<std::string> childExportedSymbols;
-                            auto childProgram = parseAndMerge(useStmt->modulePath, useStmt->isStdLib, actualPath.parent_path(), &childExportedSymbols);
-                            for (auto& childStmt : childProgram->statements)
-                            {
-                                mergedStatements.push_back(std::move(childStmt));
-                            }
+                            bool childDeclaresTopLevelRealms = false;
+                            auto childProgram = parseAndMerge(useStmt->modulePath, useStmt->isStdLib, actualPath.parent_path(), &childExportedSymbols, &childDeclaresTopLevelRealms);
 
-                            if (!useStmt->aliasName.empty())
+                            if (!useStmt->aliasName.empty() && !childDeclaresTopLevelRealms)
                             {
-                                useStmt->importedSymbols = std::move(childExportedSymbols);
-                                mergedStatements.push_back(std::move(stmt));
+                                mergedStatements.push_back(
+                                    wrapStatementsInAliasRealm(
+                                        useStmt->aliasName,
+                                        std::move(childProgram->statements),
+                                        useStmt->location()
+                                    )
+                                );
+                            }
+                            else
+                            {
+                                for (auto& childStmt : childProgram->statements)
+                                {
+                                    mergedStatements.push_back(std::move(childStmt));
+                                }
+
+                                if (!useStmt->aliasName.empty() || useStmt->importAllIntoScope)
+                                {
+                                    useStmt->importedSymbols = std::move(childExportedSymbols);
+                                    mergedStatements.push_back(std::move(stmt));
+                                }
                             }
                         }
                     }

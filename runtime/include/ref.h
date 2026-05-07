@@ -93,6 +93,8 @@ namespace wio::runtime
         virtual bool _WF_IsA(uint64_t id) const { return false; }
         // NOLINTNEXTLINE(clang-diagnostic-reserved-identifier, bugprone-reserved-identifier)
         virtual void* _WF_CastTo(uint64_t id) { return nullptr; }
+        // NOLINTNEXTLINE(clang-diagnostic-reserved-identifier, bugprone-reserved-identifier)
+        virtual RefCountedObject* _WF_RuntimeObject() noexcept { return this; }
     private:
         /**
          * @brief Atomically increments the strong reference count.

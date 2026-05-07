@@ -1,0 +1,36 @@
+use std::assert as assert;
+use std::console as console;
+use std::heap as heap;
+
+component Vector2 {
+    x: i32;
+    y: i32;
+}
+
+fn Raise(target: heap::box<i32>, value: i32) {
+    target.Set(value);
+}
+
+fn Entry() -> i32 {
+    let number: heap::box<i32> = heap::box(7);
+    let shared = number;
+
+    assert::ExpectEqual(number.Get(), 7, "box should expose the initial value");
+    shared.Set(11);
+    assert::ExpectEqual(number.Get(), 11, "box copies should share the same heap object");
+
+    let previous = number.Replace(15);
+    assert::ExpectEqual(previous, 11, "Replace should return the previous value");
+    assert::ExpectEqual(shared.Get(), 15, "Replace should update the shared heap object");
+
+    Raise(shared, 21);
+    assert::ExpectEqual(number.Get(), 21, "box should stay mutable through ordinary function arguments");
+
+    let position = heap::box(Vector2(3, 4));
+    position.value.x = 9;
+    assert::ExpectEqual(position.value.x, 9, "boxed component field updates should stay visible");
+    assert::ExpectEqual(position.value.y, 4, "boxed component should preserve untouched fields");
+
+    console::PrintLine("std-heap-box-ok");
+    return 0;
+}

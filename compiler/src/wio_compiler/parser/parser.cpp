@@ -285,6 +285,15 @@ namespace wio
             if (peek().type == TokenType::opGreater && peek(1).type == TokenType::rightBrace)
                 break;
 
+            if (match(TokenType::kwIs))
+            {
+                Token op = advance();
+                auto targetType = parseType();
+                auto right = makeNodePtr<TypeExpression>(std::move(targetType), op.loc);
+                left = makeNodePtr<BinaryExpression>(std::move(left), std::move(op), std::move(right), op.loc);
+                continue;
+            }
+
             if (peek().type == TokenType::opLess &&
                 (left->is<Identifier>() || left->is<MemberAccessExpression>()) &&
                 canParseExplicitTypeArgumentCall())
@@ -1775,7 +1784,7 @@ namespace wio
 
             consume(TokenType::semicolon);
 
-            return makeNodePtr<UseStatement>("", stmt->args.front().value, "", false, true, startLoc);
+            return makeNodePtr<UseStatement>("", stmt->args.front().value, "", false, true, false, startLoc);
         }
         
         std::vector<std::string> moduleParts;
@@ -1807,11 +1816,19 @@ namespace wio
                 }
             }
 
-            if (match(TokenType::opScope, true) && !skipScope)
-            {
-                modulePathEndLoc = previousLocation();
-                moduleParts.emplace_back("/");
-            }
+              if (match(TokenType::opScope, false))
+              {
+                  if (peek(1).type == TokenType::opStar)
+                      break;
+
+                  advance();
+
+                  if (!skipScope)
+                  {
+                      modulePathEndLoc = previousLocation();
+                      moduleParts.emplace_back("/");
+                  }
+              }
         }
 
         if (moduleParts.empty())
@@ -1823,20 +1840,29 @@ namespace wio
         std::string moduleName = moduleParts.back();
         std::string modulePath;
         std::string aliasName;
+        bool importAllIntoScope = false;
 
         std::ranges::for_each(moduleParts, [&modulePath](const std::string& part)
         {
             modulePath.append(part);
         });
 
+        if (match(TokenType::opScope, true))
+        {
+            consume(TokenType::opStar);
+            importAllIntoScope = true;
+        }
+
         if (match(TokenType::kwAs, true))
         {
+            if (importAllIntoScope)
+                utError("Direct-import use statements cannot also define an alias.", peek().loc);
             aliasName = consume(TokenType::identifier).value;
         }
 
         consume(TokenType::semicolon);
         
-        return makeNodePtr<UseStatement>(std::move(moduleName), std::move(modulePath), std::move(aliasName), isStdLib, false, startLoc);
+        return makeNodePtr<UseStatement>(std::move(moduleName), std::move(modulePath), std::move(aliasName), isStdLib, false, importAllIntoScope, startLoc);
     }
 
     NodePtr<Statement> Parser::parseRealmDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
