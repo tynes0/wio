@@ -476,11 +476,11 @@ realm std {
 
         @Native
         @CppName(wio::runtime::std_console::WriteFormat)
-        fn PrintFormat<Args...>(format: string, args: Args...) -> StatusCode;
+        fn PrintFormatRaw<Args...>(format: string, args: Args...) -> StatusCode;
 
         @Native
         @CppName(wio::runtime::std_console::WriteLineFormat)
-        fn PrintLineFormat<Args...>(format: string, args: Args...) -> StatusCode;
+        fn PrintLineFormatRaw<Args...>(format: string, args: Args...) -> StatusCode;
 
         @Native
         @CppName(wio::runtime::std_console::Format)
@@ -488,85 +488,85 @@ realm std {
 
         @Native
         @CppName(wio::runtime::std_console::WriteSegment)
-        fn WriteSlice(value: string, index: usize, count: usize) -> i32;
+        fn WriteSliceRaw(value: string, index: usize, count: usize) -> i32;
 
         @Native
         @CppName(wio::runtime::std_console::WriteBuffer)
-        fn WriteBuffer(buffer: string, index: i32, count: i32) -> i32;
+        fn WriteBufferRaw(buffer: string, index: i32, count: i32) -> i32;
 
         @Native
         @CppName(wio::runtime::std_console::WriteTextDecimal)
-        fn WriteDecimal(value: string) -> i32;
+        fn WriteDecimalRaw(value: string) -> i32;
 
         @Native
         @CppName(wio::runtime::std_console::WriteLineTextDecimal)
-        fn WriteDecimalLine(value: string) -> i32;
+        fn WriteDecimalLineRaw(value: string) -> i32;
 
         @Native
         @CppName(wio::runtime::std_console::WriteErrorText)
-        fn WriteError(value: string) -> i32;
+        fn WriteErrorRaw(value: string) -> i32;
 
         @Native
         @CppName(wio::runtime::std_console::WriteErrorLine)
-        fn WriteErrorLine() -> i32;
+        fn WriteErrorLineRaw() -> i32;
 
         @Native
         @CppName(wio::runtime::std_console::WriteErrorLineText)
-        fn WriteErrorLine(value: string) -> i32;
+        fn WriteErrorLineRaw(value: string) -> i32;
 
-        fn PrintSpace() -> i32 {
-            return PrintRaw(" ");
+        fn PrintSpace() -> Result<ResultUnit> {
+            return Print(" ");
         }
 
-        fn Write<T>(value: T) -> i32 {
-            return PrintRaw(value);
+        fn Write<T>(value: T) -> Result<ResultUnit> {
+            return Print(value);
         }
 
-        fn WriteLine<T>(value: T) -> i32 {
-            return PrintLineRaw(value);
+        fn WriteLine<T>(value: T) -> Result<ResultUnit> {
+            return PrintLine(value);
         }
 
-        fn WriteRepeat<T>(value: T, count: usize) -> i32 {
+        fn WriteRepeat<T>(value: T, count: usize) -> Result<ResultUnit> {
             mut index: usize = 0usize;
             while (index < count) {
-                let result = PrintRaw(value);
-                if (result != 0) {
+                let result = Print(value);
+                if (result.IsError()) {
                     return result;
                 }
                 index += 1usize;
             }
-            return 0;
+            return OkUnit();
         }
 
-        fn WriteJoined<T>(values: T[], separator: string) -> i32 {
+        fn WriteJoined<T>(values: T[], separator: string) -> Result<ResultUnit> {
             mut index: usize = 0usize;
             while (index < values.Count()) {
                 if (index > 0usize) {
-                    let separatorResult = PrintRaw(separator);
-                    if (separatorResult != 0) {
+                    let separatorResult = Write(separator);
+                    if (separatorResult.IsError()) {
                         return separatorResult;
                     }
                 }
 
-                let valueResult = PrintRaw(values[index]);
-                if (valueResult != 0) {
+                let valueResult = Write(values[index]);
+                if (valueResult.IsError()) {
                     return valueResult;
                 }
 
                 index += 1usize;
             }
 
-            return 0;
+            return OkUnit();
         }
 
-        fn WriteEachLine<T>(values: T[]) -> i32 {
+        fn WriteEachLine<T>(values: T[]) -> Result<ResultUnit> {
             for value in values {
-                let result = PrintLineRaw(value);
-                if (result != 0) {
+                let result = WriteLine(value);
+                if (result.IsError()) {
                     return result;
                 }
             }
-            return 0;
+            return OkUnit();
         }
 
         @Native
@@ -579,15 +579,15 @@ realm std {
 
         @Native
         @CppName(wio::runtime::std_console::InputN)
-        fn InputN(count: usize) -> string;
+        fn InputNRaw(count: usize) -> string;
 
         @Native
         @CppName(wio::runtime::std_console::InputChar)
-        fn InputChar(isHidden: bool) -> char;
+        fn InputCharRaw(isHidden: bool) -> char;
 
         @Native
         @CppName(wio::runtime::std_console::InputChar)
-        fn InputChar() -> char;
+        fn InputCharRaw() -> char;
 
         @Native
         @CppName(wio::runtime::std_console::InputWord)
@@ -595,11 +595,11 @@ realm std {
 
         @Native
         @CppName(wio::runtime::std_console::InputUntil)
-        fn InputUntil(delimiter: char, includeDelimiter: bool) -> string;
+        fn InputUntilRaw(delimiter: char, includeDelimiter: bool) -> string;
 
         @Native
         @CppName(wio::runtime::std_console::InputUntil)
-        fn InputUntil(delimiter: char) -> string;
+        fn InputUntilRaw(delimiter: char) -> string;
 
         fn Print<T>(value: T) -> Result<ResultUnit> {
             let status = PrintRaw(value);
@@ -640,6 +640,42 @@ realm std {
             return PrintLine(value);
         }
 
+        fn PrintFormat<Args...>(format: string, args: Args...) -> Result<ResultUnit> {
+            return ResultFromStatus(PrintFormatRaw(format, args...));
+        }
+
+        fn PrintLineFormat<Args...>(format: string, args: Args...) -> Result<ResultUnit> {
+            return ResultFromStatus(PrintLineFormatRaw(format, args...));
+        }
+
+        fn WriteSlice(value: string, index: usize, count: usize) -> Result<ResultUnit> {
+            return ResultFromStatus(WriteSliceRaw(value, index, count) fit u8);
+        }
+
+        fn WriteBuffer(buffer: string, index: i32, count: i32) -> Result<ResultUnit> {
+            return ResultFromStatus(WriteBufferRaw(buffer, index, count) fit u8);
+        }
+
+        fn WriteDecimal(value: string) -> Result<ResultUnit> {
+            return ResultFromStatus(WriteDecimalRaw(value) fit u8);
+        }
+
+        fn WriteDecimalLine(value: string) -> Result<ResultUnit> {
+            return ResultFromStatus(WriteDecimalLineRaw(value) fit u8);
+        }
+
+        fn WriteError(value: string) -> Result<ResultUnit> {
+            return ResultFromStatus(WriteErrorRaw(value) fit u8);
+        }
+
+        fn WriteErrorLine() -> Result<ResultUnit> {
+            return ResultFromStatus(WriteErrorLineRaw() fit u8);
+        }
+
+        fn WriteErrorLine(value: string) -> Result<ResultUnit> {
+            return ResultFromStatus(WriteErrorLineRaw(value) fit u8);
+        }
+
         fn Input(prompt: string) -> Result<string> {
             let value = InputRaw(prompt);
             if (LastStatusCode() == Status::Ok) {
@@ -664,6 +700,33 @@ realm std {
 
         fn InputResult() -> Result<string> {
             return Input();
+        }
+
+        fn InputN(count: usize) -> Result<string> {
+            let value = InputNRaw(count);
+            if (LastStatusCode() == Status::Ok) {
+                return Result<string>(value);
+            }
+
+            return Result<string>(LastResultError());
+        }
+
+        fn InputChar(isHidden: bool) -> Result<char> {
+            let value = InputCharRaw(isHidden);
+            if (LastStatusCode() == Status::Ok) {
+                return Result<char>(value);
+            }
+
+            return Result<char>(LastResultError());
+        }
+
+        fn InputChar() -> Result<char> {
+            let value = InputCharRaw();
+            if (LastStatusCode() == Status::Ok) {
+                return Result<char>(value);
+            }
+
+            return Result<char>(LastResultError());
         }
 
         fn ReadLine() -> Result<string> {
@@ -692,6 +755,24 @@ realm std {
 
         fn ReadWordResult() -> Result<string> {
             return ReadWord();
+        }
+
+        fn InputUntil(delimiter: char, includeDelimiter: bool) -> Result<string> {
+            let value = InputUntilRaw(delimiter, includeDelimiter);
+            if (LastStatusCode() == Status::Ok) {
+                return Result<string>(value);
+            }
+
+            return Result<string>(LastResultError());
+        }
+
+        fn InputUntil(delimiter: char) -> Result<string> {
+            let value = InputUntilRaw(delimiter);
+            if (LastStatusCode() == Status::Ok) {
+                return Result<string>(value);
+            }
+
+            return Result<string>(LastResultError());
         }
 
         fn Title() -> Result<string> {
@@ -825,7 +906,7 @@ realm std {
         @Native @CppName(wio::runtime::std_console::FlushError) fn TryFlushError() -> StatusCode;
         @Native @CppName(wio::runtime::std_console::FlushOut) fn TryFlushOut() -> StatusCode;
 
-        fn Capabilities() -> CapabilitiesInfo {
+        fn Capabilities() -> Result<CapabilitiesInfo> {
             mut result: CapabilitiesInfo = CapabilitiesInfo();
             mut colors = false;
             mut cursorPosition = false;
@@ -845,7 +926,7 @@ realm std {
             mut keyboardToggleState = false;
             mut treatControlCAsInput = false;
             mut encodingSet = false;
-            TryCapabilities(
+            let status = TryCapabilities(
                 ref colors,
                 ref cursorPosition,
                 ref cursorVisibility,
@@ -864,6 +945,9 @@ realm std {
                 ref keyboardToggleState,
                 ref treatControlCAsInput,
                 ref encodingSet);
+            if (not Ok(status)) {
+                return Result<CapabilitiesInfo>(LastResultError());
+            }
             result.colors = colors;
             result.cursorPosition = cursorPosition;
             result.cursorVisibility = cursorVisibility;
@@ -882,89 +966,107 @@ realm std {
             result.keyboardToggleState = keyboardToggleState;
             result.treatControlCAsInput = treatControlCAsInput;
             result.encodingSet = encodingSet;
-            return result;
+            return Result<CapabilitiesInfo>(result);
         }
 
-        fn GetCursorPositionInfo() -> CursorPositionInfo {
+        fn GetCursorPositionInfo() -> Result<CursorPositionInfo> {
             mut result: CursorPositionInfo = CursorPositionInfo();
             mut left = 0;
             mut top = 0;
-            TryGetCursorPosition(ref left, ref top);
+            let status = TryGetCursorPosition(ref left, ref top);
+            if (not Ok(status)) {
+                return Result<CursorPositionInfo>(LastResultError());
+            }
             result.left = left;
             result.top = top;
-            return result;
+            return Result<CursorPositionInfo>(result);
         }
 
-        fn GetStandardErrorInfo(bufferSize: usize) -> StandardStreamInfo {
+        fn GetStandardErrorInfo(bufferSize: usize) -> Result<StandardStreamInfo> {
             mut result: StandardStreamInfo = StandardStreamInfo();
             mut redirected = false;
             mut actualBufferSize = 0usize;
             mut hasReader = false;
             mut hasWriter = false;
             mut isOpen = false;
-            TryOpenStandardError(bufferSize, ref redirected, ref actualBufferSize, ref hasReader, ref hasWriter, ref isOpen);
+            let status = TryOpenStandardError(bufferSize, ref redirected, ref actualBufferSize, ref hasReader, ref hasWriter, ref isOpen);
+            if (not Ok(status)) {
+                return Result<StandardStreamInfo>(LastResultError());
+            }
             result.redirected = redirected;
             result.bufferSize = actualBufferSize;
             result.hasReader = hasReader;
             result.hasWriter = hasWriter;
             result.isOpen = isOpen;
-            return result;
+            return Result<StandardStreamInfo>(result);
         }
 
-        fn GetStandardInputInfo(bufferSize: usize) -> StandardStreamInfo {
+        fn GetStandardInputInfo(bufferSize: usize) -> Result<StandardStreamInfo> {
             mut result: StandardStreamInfo = StandardStreamInfo();
             mut redirected = false;
             mut actualBufferSize = 0usize;
             mut hasReader = false;
             mut hasWriter = false;
             mut isOpen = false;
-            TryOpenStandardInput(bufferSize, ref redirected, ref actualBufferSize, ref hasReader, ref hasWriter, ref isOpen);
+            let status = TryOpenStandardInput(bufferSize, ref redirected, ref actualBufferSize, ref hasReader, ref hasWriter, ref isOpen);
+            if (not Ok(status)) {
+                return Result<StandardStreamInfo>(LastResultError());
+            }
             result.redirected = redirected;
             result.bufferSize = actualBufferSize;
             result.hasReader = hasReader;
             result.hasWriter = hasWriter;
             result.isOpen = isOpen;
-            return result;
+            return Result<StandardStreamInfo>(result);
         }
 
-        fn GetStandardOutputInfo(bufferSize: usize) -> StandardStreamInfo {
+        fn GetStandardOutputInfo(bufferSize: usize) -> Result<StandardStreamInfo> {
             mut result: StandardStreamInfo = StandardStreamInfo();
             mut redirected = false;
             mut actualBufferSize = 0usize;
             mut hasReader = false;
             mut hasWriter = false;
             mut isOpen = false;
-            TryOpenStandardOutput(bufferSize, ref redirected, ref actualBufferSize, ref hasReader, ref hasWriter, ref isOpen);
+            let status = TryOpenStandardOutput(bufferSize, ref redirected, ref actualBufferSize, ref hasReader, ref hasWriter, ref isOpen);
+            if (not Ok(status)) {
+                return Result<StandardStreamInfo>(LastResultError());
+            }
             result.redirected = redirected;
             result.bufferSize = actualBufferSize;
             result.hasReader = hasReader;
             result.hasWriter = hasWriter;
             result.isOpen = isOpen;
-            return result;
+            return Result<StandardStreamInfo>(result);
         }
 
-        fn GetReadKeyInfo(intercept: bool) -> KeyInfo {
+        fn GetReadKeyInfo(intercept: bool) -> Result<KeyInfo> {
             mut result: KeyInfo = KeyInfo();
             mut keyChar = 0;
             mut key = Key::None;
             mut modifiers = Modifiers::None;
-            TryReadKey(intercept, ref keyChar, ref key, ref modifiers);
+            let status = TryReadKey(intercept, ref keyChar, ref key, ref modifiers);
+            if (not Ok(status)) {
+                return Result<KeyInfo>(LastResultError());
+            }
             result.keyChar = keyChar;
             result.key = key;
             result.modifiers = modifiers;
-            return result;
+            return Result<KeyInfo>(result);
         }
 
-        fn GetReadKeyInfo() -> KeyInfo {
+        fn GetReadKeyInfo() -> Result<KeyInfo> {
             mut result: KeyInfo = KeyInfo();
             mut keyChar = 0;
             mut key = Key::None;
             mut modifiers = Modifiers::None;
-            TryReadKey(ref keyChar, ref key, ref modifiers);
+            let status = TryReadKey(ref keyChar, ref key, ref modifiers);
+            if (not Ok(status)) {
+                return Result<KeyInfo>(LastResultError());
+            }
             result.keyChar = keyChar;
             result.key = key;
             result.modifiers = modifiers;
-            return result;
+            return Result<KeyInfo>(result);
         }
 
         fn BackgroundColorOr(fallback: Color) -> Color {

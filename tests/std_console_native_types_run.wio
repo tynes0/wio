@@ -28,8 +28,8 @@ fn Entry() -> i32 {
         return 6;
     }
 
-    console::WriteBuffer("WIO", 1, 2);
-    console::PrintSpace();
+    console::WriteBuffer!("WIO", 1, 2);
+    console::PrintSpace!();
     console::PrintLine("std-console-native-ok");
     return 0;
 }

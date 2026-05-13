@@ -65,6 +65,11 @@ Current v1 expectation:
   contained error from the enclosing `Result<U>`-returning function
 - this keeps fallible std APIs on one naming convention instead of splitting
   into `ReadAll` vs `ReadAllResult`
+- canonical public console helpers such as `Print`, `PrintLine`, `Write`,
+  `WriteJoined`, `PrintFormat`, `Capabilities`, and `GetStandardOutputInfo`
+  follow this `Result` model
+- `Try*` and `*Raw` names remain available as low-level escape hatches, but
+  they are no longer the recommended surface for normal Wio code
 
 ### 2.2 Mixed Stable Module
 
