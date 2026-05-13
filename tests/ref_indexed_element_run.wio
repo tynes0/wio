@@ -1,0 +1,39 @@
+use std::assert as assert;
+use std::console as console;
+
+component Pair {
+    x: i32;
+    y: i32;
+
+    OnConstruct(x: i32, y: i32) {
+        self.x = x;
+        self.y = y;
+    }
+}
+
+fn Bump(target: ref Pair) {
+    target.x += 10;
+}
+
+fn Read(target: view Pair) -> i32 {
+    return target.x + target.y;
+}
+
+fn Entry() -> i32 {
+    mut values: Pair[] = [Pair(1, 2), Pair(3, 4)];
+    mut fixed: [Pair; 2] = [Pair(5, 6), Pair(7, 8)];
+
+    Bump(ref values[0usize]);
+    Bump(ref fixed[1usize]);
+
+    let dynamicScore = Read(ref values[0usize]);
+    let staticScore = Read(ref fixed[1usize]);
+
+    assert::ExpectEqual(values[0usize].x, 11, "ref values[index] should keep dynamic array elements mutable");
+    assert::ExpectEqual(dynamicScore, 13, "view values[index] should read through the same element");
+    assert::ExpectEqual(fixed[1usize].x, 17, "ref fixed[index] should keep static array elements mutable");
+    assert::ExpectEqual(staticScore, 25, "view fixed[index] should read through the same static element");
+
+    console::Print("Ref indexed element: ok");
+    return 0;
+}

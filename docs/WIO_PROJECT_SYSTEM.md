@@ -691,6 +691,22 @@ The default user-owned place is:
 
 - `native/include`
 
+### 9.4 Binding Scaffold Helper
+
+Wio now ships a lightweight scaffold helper for native bridge modules:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\Wio\scripts\New-WioBindingModule.ps1 -ManifestPath C:\Projects\MyGame\native\raylib.binding.json
+```
+
+The manifest-driven helper is intentionally small and source-first:
+
+- it generates a `.wio` binding module skeleton,
+- it can emit `@CppHeader`, `@CppName`, `component`, `enum`, `flagset`, and
+  native function declarations,
+- it is meant to remove boilerplate for files like `raylib.wio`, not to be a
+  full C parser.
+
 ---
 
 ## 10. Practical Build Commands

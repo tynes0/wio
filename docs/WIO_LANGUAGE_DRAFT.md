@@ -946,6 +946,8 @@ symbol:
 
 - referencing a mutable symbol yields a mutable reference,
 - referencing an immutable symbol yields a read-only reference-like result.
+- referencing a mutable indexed element such as `ref values[i]` also yields a
+  mutable reference-like result.
 
 Examples:
 
@@ -955,6 +957,9 @@ let ra = ref a; // mutable reference behavior
 
 let b: i32 = 2;
 let rb = ref b; // read-only reference behavior
+
+mut values: i32[] = [1, 2, 3];
+let item = ref values[0usize]; // mutable reference behavior
 ```
 
 ### 7.5 Passing References to Functions
@@ -2892,6 +2897,8 @@ User modules are merged recursively before semantic analysis.
 - A non-aliased module merge exposes its top-level declarations normally.
 - `use path::*;` directly imports the target module or realm members into the
   current scope.
+- `use path::* as alias;` both imports those members directly and also keeps an
+  alias namespace entry point for the same module or realm.
 - When an aliased import targets a module file that does not declare a top-level
   `realm`, its declarations are exposed only through the alias namespace.
   Example: `use helper as hp;` gives `hp::GetValue()` but not bare `GetValue()`.

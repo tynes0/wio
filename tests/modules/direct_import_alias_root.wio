@@ -1,0 +1,7 @@
+use std::console as console;
+use std::math::* as math;
+
+fn Entry() -> i32 {
+    console::Print($"Direct import alias math: ${Abs(-5)}, ${math::Min(8, 3)}, ${Clamp(9, 1, 4)}");
+    return 0;
+}

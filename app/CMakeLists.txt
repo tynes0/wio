@@ -458,6 +458,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_direct_module_import_alias_run
+        "${CMAKE_SOURCE_DIR}/tests/modules/direct_import_alias_root.wio"
+        "Direct import alias math: 5, 3, 4"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_import_path_module_dir_run
         "${CMAKE_SOURCE_DIR}/tests/import_path_root.wio"
         "Import path threat: 45"
@@ -1158,6 +1165,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_direct_indexing_run
         "${CMAKE_SOURCE_DIR}/tests/direct_indexing_run.wio"
         "Direct indexing: ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_ref_indexed_element_run
+        "${CMAKE_SOURCE_DIR}/tests/ref_indexed_element_run.wio"
+        "Ref indexed element: ok"
         --run
     )
 

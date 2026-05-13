@@ -1895,8 +1895,6 @@ namespace wio
 
         if (match(TokenType::kwAs, true))
         {
-            if (importAllIntoScope)
-                utError("Direct-import use statements cannot also define an alias.", peek().loc);
             aliasName = consume(TokenType::identifier).value;
         }
 

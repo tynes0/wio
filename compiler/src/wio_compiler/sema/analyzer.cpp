@@ -665,6 +665,45 @@ namespace wio::sema
             return isMutableReferenceTypeChain(expression->refType.Lock());
         }
 
+        bool isMutableAddressableOperand(const NodePtr<Expression>& expression)
+        {
+            if (!expression)
+                return false;
+
+            if (auto receiverSymbol = expression->referencedSymbol.Lock(); receiverSymbol)
+            {
+                if (receiverSymbol->flags.get_isMutable())
+                    return true;
+
+                if (isMutableReferenceTypeChain(receiverSymbol->type))
+                    return true;
+            }
+
+            if (expression->is<ArrayAccessExpression>())
+            {
+                auto* arrayAccess = expression->as<ArrayAccessExpression>();
+                return isMutableAddressableOperand(arrayAccess->object) ||
+                       isMutableReferenceTypeChain(arrayAccess->object ? arrayAccess->object->refType.Lock() : nullptr);
+            }
+
+            if (auto* memberAccess = expression->as<MemberAccessExpression>())
+            {
+                if (auto memberSymbol = memberAccess->referencedSymbol.Lock(); memberSymbol)
+                {
+                    if (memberSymbol->flags.get_isMutable())
+                        return true;
+
+                    if (memberSymbol->flags.get_isReadOnly())
+                        return false;
+                }
+
+                return isMutableAddressableOperand(memberAccess->object) ||
+                       isMutableReferenceTypeChain(memberAccess->object ? memberAccess->object->refType.Lock() : nullptr);
+            }
+
+            return isMutableReferenceTypeChain(expression->refType.Lock());
+        }
+
         bool isUnsupportedStaticArrayMember(const Ref<Type>& type, std::string_view memberName)
         {
             Ref<Type> resolvedType = unwrapAliasType(type);
@@ -7693,12 +7732,7 @@ namespace wio::sema
             );
         }
         
-        bool isMut; 
-
-        if (auto lockedSym = node.operand->referencedSymbol.Lock(); lockedSym)
-            isMut = lockedSym->flags.get_isMutable();
-        else
-            isMut = false; 
+        bool isMut = isMutableAddressableOperand(node.operand);
 
         node.isMut = isMut;
         node.refType = Compiler::get().getTypeContext().getOrCreateReferenceType(node.operand->refType.Lock(), isMut);
@@ -11225,7 +11259,8 @@ namespace wio::sema
                 }
 
                 currentScope_->define(node.aliasName, importedNamespace);
-                return;
+                if (!node.importAllIntoScope)
+                    return;
             }
 
             if (!node.importAllIntoScope)
@@ -11298,7 +11333,9 @@ namespace wio::sema
 
                 aliasNamespace->innerScope->define(importedSymbol->name, importedSymbol);
             }
-            return;
+
+            if (!node.importAllIntoScope)
+                return;
         }
 
         for (const auto& importedSymbol : importedSymbols)
