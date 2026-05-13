@@ -68,7 +68,7 @@ realm std {
 
         @Native
         @Type(u8)
-        @CppName(wio::runtime::detail::io_helpers::ReadError)
+        @CppName(wio::runtime::detail::io::ReadError)
         enum ReadError {
             none = 0u8,
             null_file = 1u8,
@@ -81,7 +81,7 @@ realm std {
 
         @Native
         @Type(u8)
-        @CppName(wio::runtime::detail::io_helpers::WriteError)
+        @CppName(wio::runtime::detail::io::WriteError)
         enum WriteError {
             none = 0u8,
             null_file = 1u8,

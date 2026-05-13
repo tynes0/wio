@@ -2816,6 +2816,27 @@ fn Entry(args: string[]) -> i32 {
 }
 ```
 
+Result-oriented std modules may also use unwrap-call sugar:
+
+```wio
+use std::console as console;
+use std::io as io;
+
+fn Entry() -> i32 {
+    console::PrintLine!("hello");
+    let file = io::Open!("data.txt", io::OpenRead);
+    let text = io::ReadAll!(ref file);
+    return text.Count() fit i32;
+}
+```
+
+`Foo!()` currently means:
+
+- call `Foo(...)`
+- require the result to be `std::ResultValue<T>` or `std::result::Result<T>`
+- return the contained success value
+- panic at runtime if the result contains an error
+
 `use std::name as alias;` creates `alias` as a namespace alias in the current
 scope. If a local symbol already uses the requested alias name, the compiler
 reports a Wio diagnostic.

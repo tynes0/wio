@@ -13,11 +13,11 @@
 #endif
 
 #include "exception.h"
-#include "../src/detail/io_detail/io_helpers.h"
+#include "io_errors.h"
 
 namespace wio::runtime::std_io
 {
-    namespace io = ::wio::runtime::detail::io_helpers;
+    namespace io = ::wio::runtime::detail::io;
 
 #if defined(_WIN32)
     using NativeFileHandle = void*;

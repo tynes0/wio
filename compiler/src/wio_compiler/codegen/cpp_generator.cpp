@@ -5028,6 +5028,18 @@ namespace wio::codegen
 
     void CppGenerator::visit(FunctionCallExpression& node)
     {
+        auto beginResultUnwrap = [&]()
+        {
+            if (node.unwrapResult)
+                emit("(");
+        };
+
+        auto endResultUnwrap = [&]()
+        {
+            if (node.unwrapResult)
+                emit(")->_WF_Unwrap()");
+        };
+
         if (const auto* memberAccess = node.callee ? node.callee->as<MemberAccessExpression>() : nullptr;
             memberAccess && memberAccess->intrinsicMember == IntrinsicMember::PackToStaticArray)
         {
@@ -5051,17 +5063,21 @@ namespace wio::codegen
                     (packValueSymbol->kind == sema::SymbolKind::Parameter || packValueSymbol->kind == sema::SymbolKind::Variable)
                         ? sanitizeCppIdentifier(packValueSymbol->name)
                         : packTypeName;
+                beginResultUnwrap();
                 emit("wio::meta::PackToStaticArray<");
                 node.explicitTypeArguments.front()->accept(*this);
                 emit(common::formatString(">({}...)", packValueName));
+                endResultUnwrap();
                 return;
             }
 
+            beginResultUnwrap();
             emit("(");
             memberAccess->object->accept(*this);
             emit(").template ToStaticArray<");
             node.explicitTypeArguments.front()->accept(*this);
             emit(">()");
+            endResultUnwrap();
             return;
         }
 
@@ -5071,6 +5087,7 @@ namespace wio::codegen
         if (calleeType && calleeType->kind() == sema::TypeKind::Struct)
         {
             auto structType = calleeType.AsFast<sema::StructType>();
+            beginResultUnwrap();
             if (structType->isObject)
             {
                 emit("wio::runtime::Ref<" + mangleStructTypeName(structType) + ">::Create(");
@@ -5087,6 +5104,7 @@ namespace wio::codegen
                     emit(", ");
             }
             emit(")");
+            endResultUnwrap();
             return;
         }
 
@@ -5170,6 +5188,7 @@ namespace wio::codegen
             }
         }
 
+        beginResultUnwrap();
         if (shouldEmitDirectFunctionCallee)
         {
             std::string scopePath = calleeSym->scopePath;
@@ -5237,6 +5256,7 @@ namespace wio::codegen
                 emit(", ");
         }
         emit(")");
+        endResultUnwrap();
     }
 
     void CppGenerator::visit(LambdaExpression& node)

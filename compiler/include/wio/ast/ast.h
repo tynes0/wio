@@ -540,8 +540,13 @@ namespace wio
         NodePtr<Expression> callee;
         std::vector<NodePtr<TypeSpecifier>> explicitTypeArguments;
         std::vector<NodePtr<Expression>> arguments;
+        bool unwrapResult = false;
 
-        FunctionCallExpression(NodePtr<Expression> _callee, std::vector<NodePtr<TypeSpecifier>> _explicitTypeArguments, std::vector<NodePtr<Expression>> _args, common::Location _loc = common::Location::invalid());
+        FunctionCallExpression(NodePtr<Expression> _callee,
+            std::vector<NodePtr<TypeSpecifier>> _explicitTypeArguments,
+            std::vector<NodePtr<Expression>> _args,
+            bool _unwrapResult = false,
+            common::Location _loc = common::Location::invalid());
         ~FunctionCallExpression() override;
     };
 

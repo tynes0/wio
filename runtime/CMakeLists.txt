@@ -5,6 +5,7 @@ set(WIO_RUNTIME_HEADERS
     "${WIO_RUNTIME_INCLUDE_DIR}/fit.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/intrinsics.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/ref.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/io_errors.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_assert.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_console.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_fs.h"
@@ -116,6 +117,7 @@ add_custom_command(
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_io.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_io.h"
         "${WIO_RUNTIME_INCLUDE_DIR}/exception.h"
+        "${WIO_RUNTIME_INCLUDE_DIR}/io_errors.h"
     VERBATIM
 )
 

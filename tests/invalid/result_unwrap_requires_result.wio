@@ -1,0 +1,8 @@
+fn Value() -> i32 {
+    return 7;
+}
+
+fn Entry() -> i32 {
+    let value = Value!();
+    return value;
+}

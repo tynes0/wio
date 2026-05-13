@@ -1572,6 +1572,11 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/std_event_any_run.wio"
     )
 
+    add_wio_success_test(
+        wio_test_std_result_unwrap_sugar_dry_run
+        "${CMAKE_SOURCE_DIR}/tests/std_result_unwrap_sugar_run.wio"
+    )
+
     add_wio_output_test(
         wio_test_object_const_access_run
         "${CMAKE_SOURCE_DIR}/tests/object_const_access_run.wio"
@@ -1639,6 +1644,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_std_result_console_io_run
         "${CMAKE_SOURCE_DIR}/tests/std_result_console_io_run.wio"
         "std-result-console-io-ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_std_result_unwrap_sugar_run
+        "${CMAKE_SOURCE_DIR}/tests/std_result_unwrap_sugar_run.wio"
+        "std-result-unwrap-ok"
         --run
     )
 
@@ -1717,6 +1729,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_any_arithmetic_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/any_arithmetic_not_supported.wio"
         "Any values support only assignment, the 'is' operator, the 'fit' operator, and equality comparisons with null\\. Operator '\\+' is not supported\\."
+        "Generated C\\+\\+ output:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_result_unwrap_requires_result
+        "${CMAKE_SOURCE_DIR}/tests/invalid/result_unwrap_requires_result.wio"
+        "The '!\\(\\)' unwrap syntax requires the called function to return std::ResultValue<T> or std::result::Result<T>\\."
         "Generated C\\+\\+ output:"
     )
 

@@ -261,6 +261,25 @@ namespace wio
             left = parsePrimary();
         }
 
+        auto parseCallArguments = [&]() -> std::vector<NodePtr<Expression>>
+        {
+            consume(TokenType::leftParen);
+            std::vector<NodePtr<Expression>> args;
+
+            if (!match(TokenType::rightParen))
+            {
+                args.push_back(parseExpression());
+                while (match(TokenType::comma, true))
+                {
+                    expectElementAfterComma(TokenType::rightParen, "function call argument");
+                    args.push_back(parseExpression());
+                }
+            }
+
+            consume(TokenType::rightParen);
+            return args;
+        };
+
         while (true)
         {
             if (stopAtFit && peek().type == TokenType::kwFit)
@@ -299,44 +318,39 @@ namespace wio
                 canParseExplicitTypeArgumentCall())
             {
                 std::vector<NodePtr<TypeSpecifier>> explicitTypeArguments = parseExplicitTypeArgumentList();
-
-                consume(TokenType::leftParen);
-                std::vector<NodePtr<Expression>> args;
-
-                if (!match(TokenType::rightParen))
-                {
-                    args.push_back(parseExpression());
-                    while (match(TokenType::comma, true))
-                    {
-                        expectElementAfterComma(TokenType::rightParen, "function call argument");
-                        args.push_back(parseExpression());
-                    }
-                }
-
-                consume(TokenType::rightParen);
-
-                left = makeNodePtr<FunctionCallExpression>(std::move(left), std::move(explicitTypeArguments), std::move(args));
+                const bool unwrapResult = match(TokenType::opLogicalNot, true);
+                auto args = parseCallArguments();
+                left = makeNodePtr<FunctionCallExpression>(
+                    std::move(left),
+                    std::move(explicitTypeArguments),
+                    std::move(args),
+                    unwrapResult
+                );
                 continue;
             }
-            
-            if (match(TokenType::leftParen))
+
+            if (match(TokenType::opLogicalNot) && peek(1).type == TokenType::leftParen)
             {
                 advance();
-                std::vector<NodePtr<Expression>> args;
+                auto args = parseCallArguments();
+                left = makeNodePtr<FunctionCallExpression>(
+                    std::move(left),
+                    std::vector<NodePtr<TypeSpecifier>>{},
+                    std::move(args),
+                    true
+                );
+                continue;
+            }
 
-                if (!match(TokenType::rightParen))
-                {
-                    args.push_back(parseExpression());
-                    while (match(TokenType::comma, true))
-                    {
-                        expectElementAfterComma(TokenType::rightParen, "function call argument");
-                        args.push_back(parseExpression());
-                    }
-                }
-
-                consume(TokenType::rightParen);
-
-                left = makeNodePtr<FunctionCallExpression>(std::move(left), std::vector<NodePtr<TypeSpecifier>>{}, std::move(args));
+            if (match(TokenType::leftParen))
+            {
+                auto args = parseCallArguments();
+                left = makeNodePtr<FunctionCallExpression>(
+                    std::move(left),
+                    std::vector<NodePtr<TypeSpecifier>>{},
+                    std::move(args),
+                    false
+                );
                 continue;
             }
             if (match(TokenType::leftBracket))
@@ -2078,9 +2092,18 @@ namespace wio
 
                 --angleDepth;
                 if (angleDepth == 0)
-                    return sawInnerToken &&
-                           index + 1 < tokens_.size() &&
-                           tokens_[index + 1].type == TokenType::leftParen;
+                {
+                    if (!sawInnerToken || index + 1 >= tokens_.size())
+                        return false;
+
+                    const TokenType nextType = tokens_[index + 1].type;
+                    if (nextType == TokenType::leftParen)
+                        return true;
+
+                    return nextType == TokenType::opLogicalNot &&
+                           index + 2 < tokens_.size() &&
+                           tokens_[index + 2].type == TokenType::leftParen;
+                }
 
                 continue;
             }

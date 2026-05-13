@@ -65,6 +65,19 @@ realm std {
             return self.value;
         }
 
+        public fn Unwrap() -> T {
+            if (self.ok) {
+                return self.value;
+            }
+
+            if (self.error.message != "") {
+                Panic(self.error.message);
+            }
+
+            Panic("Result<T> does not contain a success value.");
+            return self.value;
+        }
+
         public fn ValueOr(fallback: T) -> T {
             if (self.ok) {
                 return self.value;

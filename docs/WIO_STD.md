@@ -36,6 +36,7 @@ That keeps repository builds and packaged toolchains aligned.
 ### 2.1 Runtime-Backed Stable Modules
 
 - `std::console`
+- `std::io`
 - `std::fs`
 - `std::path`
 
@@ -47,6 +48,19 @@ Current v1 expectation:
 - their implementation may evolve in runtime C++ without changing Wio call sites
 - diagnostics for missing native headers should come from Wio, not from generated
   C++
+- when an operation can fail, the canonical API direction is `Result`-returning
+  names such as `io::Open(...)` and `console::PrintLine(...)`
+- transitional `...Result` aliases may exist during migration, but the long-term
+  user-facing surface should prefer canonical names plus `Foo!()` / later `Foo?()`
+
+### 2.1.1 Shared Result Convention
+
+- `std::result` provides the shared `ResultValue<T>` model used by `std::io` and
+  `std::console`
+- `Foo!()` unwraps a `ResultValue<T>`-returning call and panics if it contains
+  an error
+- this keeps fallible std APIs on one naming convention instead of splitting
+  into `ReadAll` vs `ReadAllResult`
 
 ### 2.2 Mixed Stable Module
 

@@ -1,0 +1,35 @@
+use std::assert as assert;
+use std::console as console;
+use std::fs as fs;
+use std::io as io;
+use std::path as path;
+
+fn WrapGreeting(value: string) -> std::ResultValue<string> {
+    return std::OkResultValue<string>(value);
+}
+
+fn Entry() -> i32 {
+    let greeting = WrapGreeting!("unwrap");
+    assert::ExpectEqual(greeting, "unwrap", "unwrap sugar should return the success payload");
+
+    let filePath = path::JoinAll(["build", "wio_std", "result", "unwrap", "data.txt"]);
+    if (not fs::EnsureParentDirectory(filePath)) {
+        return 1;
+    }
+
+    mut writer = io::Open!(filePath, io::OpenWrite);
+    let written = io::Write!(ref writer, "unwrap-ok");
+    io::Close!(ref writer);
+
+    mut reader = io::Open!(filePath, io::OpenRead);
+    let text = io::ReadAll!(ref reader);
+    io::Close!(ref reader);
+
+    let printStatus = console::Print!("std-result-unwrap ");
+    assert::ExpectEqual(printStatus, 0, "Print! should unwrap success status");
+    console::PrintLine!("std-result-unwrap-ok");
+
+    assert::ExpectEqual(written fit i32, 9, "Write! should return written bytes");
+    assert::ExpectEqual(text, "unwrap-ok", "ReadAll! should return file contents");
+    return 0;
+}

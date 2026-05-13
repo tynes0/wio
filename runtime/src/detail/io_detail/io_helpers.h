@@ -9,6 +9,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "../../../include/io_errors.h"
+
 #if defined(_WIN32)
     #include <conio.h>
     #define WIO_RUNTIME_CONSOLE_HAS_POSIX_TERMINAL 0
@@ -22,27 +24,7 @@
 
 namespace wio::runtime::detail::io_helpers
 {
-    enum class WriteError : uint8_t
-    {
-        none = 0,
-        null_file,
-        null_data,
-        size_overflow,
-        io_error,
-        partial_write
-    };
-
-    enum class ReadError : uint8_t
-    {
-        none = 0,
-        null_file,
-        invalid_argument,
-        eof,
-        io_error,
-        partial_read,
-        platform_error
-    };
-
+    using namespace wio::runtime::detail::io;
     struct WriteResult
     {
         WriteError error = WriteError::none;

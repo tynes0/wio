@@ -681,6 +681,25 @@ namespace wio::sema
             return structType;
         }
 
+        std::optional<Ref<Type>> tryGetResultPayloadType(const Ref<Type>& type)
+        {
+            Ref<Type> resolved = unwrapAliasType(type);
+            if (!resolved || resolved->kind() != TypeKind::Struct)
+                return std::nullopt;
+
+            auto structType = resolved.AsFast<StructType>();
+            if (!structType ||
+                structType->name != "ResultValue" ||
+                structType->scopePath != "std" ||
+                structType->genericArguments.size() != 1 ||
+                !structType->genericArguments.front())
+            {
+                return std::nullopt;
+            }
+
+            return structType->genericArguments.front();
+        }
+
         bool isZeroIntegerLiteralExpression(const NodePtr<Expression>& expression)
         {
             if (!expression)
@@ -5443,6 +5462,28 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(FunctionCallExpression& node)
     {
+        auto finalizeCallResultType = [&](const Ref<Type>& resultType) -> bool
+        {
+            if (!node.unwrapResult)
+            {
+                node.refType = resultType;
+                return true;
+            }
+
+            if (auto payloadType = tryGetResultPayloadType(resultType))
+            {
+                node.refType = *payloadType;
+                return true;
+            }
+
+            WIO_LOG_ADD_ERROR(
+                node.location(),
+                "The '!()' unwrap syntax requires the called function to return std::ResultValue<T> or std::result::Result<T>."
+            );
+            node.refType = Compiler::get().getTypeContext().getUnknown();
+            return false;
+        };
+
         node.callee->accept(*this);
         Ref<Symbol> calleeSym = node.callee->referencedSymbol.Lock();
         Ref<Symbol> genericOwnerSym = calleeSym;
@@ -5485,11 +5526,11 @@ namespace wio::sema
             else if (receiverType->kind() == TypeKind::PackStorage)
                 arraySize = receiverType.AsFast<PackStorageType>()->elementTypes.size();
 
-            node.refType = Compiler::get().getTypeContext().getOrCreateArrayType(
+            finalizeCallResultType(Compiler::get().getTypeContext().getOrCreateArrayType(
                 explicitTypeArguments.front(),
                 ArrayType::ArrayKind::Static,
                 arraySize
-            );
+            ));
             return;
         }
 
@@ -6874,7 +6915,8 @@ namespace wio::sema
                 return;
             }
 
-            node.refType = isConstructorCall ? structReturnType : bestMatch->functionType.AsFast<FunctionType>()->returnType;
+            if (!finalizeCallResultType(isConstructorCall ? structReturnType : bestMatch->functionType.AsFast<FunctionType>()->returnType))
+                return;
             return; 
         }
 
@@ -6969,7 +7011,8 @@ namespace wio::sema
                 return;
             }
 
-            node.refType = calleeType.AsFast<FunctionType>()->returnType;
+            if (!finalizeCallResultType(calleeType.AsFast<FunctionType>()->returnType))
+                return;
             return;
         }
 
@@ -7067,7 +7110,7 @@ namespace wio::sema
             }
         }
 
-        node.refType = isConstructorCall ? structReturnType : funcType->returnType;
+        finalizeCallResultType(isConstructorCall ? structReturnType : funcType->returnType);
     }
 
     void SemanticAnalyzer::visit(LambdaExpression& node)
