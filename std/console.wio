@@ -451,11 +451,11 @@ realm std {
         @Instantiate(u64)
         @Instantiate(f32)
         @Instantiate(f64)
-        fn Print<T>(value: T) -> i32;
+        fn PrintRaw<T>(value: T) -> i32;
 
         @Native
         @CppName(wio::runtime::std_console::WriteLine)
-        fn PrintLine() -> i32;
+        fn PrintLineRaw() -> i32;
 
         @Native
         @CppName(wio::runtime::std_console::WriteLineValue)
@@ -472,7 +472,7 @@ realm std {
         @Instantiate(u64)
         @Instantiate(f32)
         @Instantiate(f64)
-        fn PrintLine<T>(value: T) -> i32;
+        fn PrintLineRaw<T>(value: T) -> i32;
 
         @Native
         @CppName(wio::runtime::std_console::WriteFormat)
@@ -515,21 +515,21 @@ realm std {
         fn WriteErrorLine(value: string) -> i32;
 
         fn PrintSpace() -> i32 {
-            return Print(" ");
+            return PrintRaw(" ");
         }
 
         fn Write<T>(value: T) -> i32 {
-            return Print(value);
+            return PrintRaw(value);
         }
 
         fn WriteLine<T>(value: T) -> i32 {
-            return PrintLine(value);
+            return PrintLineRaw(value);
         }
 
         fn WriteRepeat<T>(value: T, count: usize) -> i32 {
             mut index: usize = 0usize;
             while (index < count) {
-                let result = Print(value);
+                let result = PrintRaw(value);
                 if (result != 0) {
                     return result;
                 }
@@ -542,13 +542,13 @@ realm std {
             mut index: usize = 0usize;
             while (index < values.Count()) {
                 if (index > 0usize) {
-                    let separatorResult = Print(separator);
+                    let separatorResult = PrintRaw(separator);
                     if (separatorResult != 0) {
                         return separatorResult;
                     }
                 }
 
-                let valueResult = Print(values[index]);
+                let valueResult = PrintRaw(values[index]);
                 if (valueResult != 0) {
                     return valueResult;
                 }
@@ -561,7 +561,7 @@ realm std {
 
         fn WriteEachLine<T>(values: T[]) -> i32 {
             for value in values {
-                let result = PrintLine(value);
+                let result = PrintLineRaw(value);
                 if (result != 0) {
                     return result;
                 }
@@ -571,11 +571,11 @@ realm std {
 
         @Native
         @CppName(wio::runtime::std_console::Input)
-        fn Input(prompt: string) -> string;
+        fn InputRaw(prompt: string) -> string;
 
         @Native
         @CppName(wio::runtime::std_console::Input)
-        fn Input() -> string;
+        fn InputRaw() -> string;
 
         @Native
         @CppName(wio::runtime::std_console::InputN)
@@ -591,7 +591,7 @@ realm std {
 
         @Native
         @CppName(wio::runtime::std_console::InputWord)
-        fn InputWord() -> string;
+        fn InputWordRaw() -> string;
 
         @Native
         @CppName(wio::runtime::std_console::InputUntil)
@@ -601,8 +601,21 @@ realm std {
         @CppName(wio::runtime::std_console::InputUntil)
         fn InputUntil(delimiter: char) -> string;
 
+        fn Print<T>(value: T) -> ResultValue<i32> {
+            let status = PrintRaw(value);
+            if (status == 0) {
+                return ResultValue<i32>(status);
+            }
+
+            return ResultValue<i32>(LastResultError());
+        }
+
         fn PrintResult<T>(value: T) -> ResultValue<i32> {
-            let status = Print(value);
+            return Print(value);
+        }
+
+        fn PrintLine() -> ResultValue<i32> {
+            let status = PrintLineRaw();
             if (status == 0) {
                 return ResultValue<i32>(status);
             }
@@ -611,7 +624,11 @@ realm std {
         }
 
         fn PrintLineResult() -> ResultValue<i32> {
-            let status = PrintLine();
+            return PrintLine();
+        }
+
+        fn PrintLine<T>(value: T) -> ResultValue<i32> {
+            let status = PrintLineRaw(value);
             if (status == 0) {
                 return ResultValue<i32>(status);
             }
@@ -620,16 +637,24 @@ realm std {
         }
 
         fn PrintLineResult<T>(value: T) -> ResultValue<i32> {
-            let status = PrintLine(value);
-            if (status == 0) {
-                return ResultValue<i32>(status);
+            return PrintLine(value);
+        }
+
+        fn Input(prompt: string) -> ResultValue<string> {
+            let value = InputRaw(prompt);
+            if (LastStatusCode() == Status::Ok) {
+                return ResultValue<string>(value);
             }
 
-            return ResultValue<i32>(LastResultError());
+            return ResultValue<string>(LastResultError());
         }
 
         fn InputResult(prompt: string) -> ResultValue<string> {
-            let value = Input(prompt);
+            return Input(prompt);
+        }
+
+        fn Input() -> ResultValue<string> {
+            let value = InputRaw();
             if (LastStatusCode() == Status::Ok) {
                 return ResultValue<string>(value);
             }
@@ -638,15 +663,10 @@ realm std {
         }
 
         fn InputResult() -> ResultValue<string> {
-            let value = Input();
-            if (LastStatusCode() == Status::Ok) {
-                return ResultValue<string>(value);
-            }
-
-            return ResultValue<string>(LastResultError());
+            return Input();
         }
 
-        fn ReadLineResult() -> ResultValue<string> {
+        fn ReadLine() -> ResultValue<string> {
             mut value = "";
             let status = TryReadLine(ref value);
             if (Ok(status)) {
@@ -656,7 +676,11 @@ realm std {
             return ResultValue<string>(LastResultError());
         }
 
-        fn ReadWordResult() -> ResultValue<string> {
+        fn ReadLineResult() -> ResultValue<string> {
+            return ReadLine();
+        }
+
+        fn ReadWord() -> ResultValue<string> {
             mut value = "";
             let status = TryReadWord(ref value);
             if (Ok(status)) {
@@ -666,7 +690,11 @@ realm std {
             return ResultValue<string>(LastResultError());
         }
 
-        fn TitleResult() -> ResultValue<string> {
+        fn ReadWordResult() -> ResultValue<string> {
+            return ReadWord();
+        }
+
+        fn Title() -> ResultValue<string> {
             mut value = "";
             let status = TryGetTitle(ref value);
             if (Ok(status)) {
@@ -676,7 +704,11 @@ realm std {
             return ResultValue<string>(LastResultError());
         }
 
-        fn BackgroundColorResult() -> ResultValue<Color> {
+        fn TitleResult() -> ResultValue<string> {
+            return Title();
+        }
+
+        fn BackgroundColor() -> ResultValue<Color> {
             mut value = Color::Black;
             let status = TryGetBackgroundColor(ref value);
             if (Ok(status)) {
@@ -686,7 +718,11 @@ realm std {
             return ResultValue<Color>(LastResultError());
         }
 
-        fn ForegroundColorResult() -> ResultValue<Color> {
+        fn BackgroundColorResult() -> ResultValue<Color> {
+            return BackgroundColor();
+        }
+
+        fn ForegroundColor() -> ResultValue<Color> {
             mut value = Color::Gray;
             let status = TryGetForegroundColor(ref value);
             if (Ok(status)) {
@@ -694,6 +730,10 @@ realm std {
             }
 
             return ResultValue<Color>(LastResultError());
+        }
+
+        fn ForegroundColorResult() -> ResultValue<Color> {
+            return ForegroundColor();
         }
 
         @Native
