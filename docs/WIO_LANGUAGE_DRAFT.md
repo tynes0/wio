@@ -2845,6 +2845,9 @@ fn Entry() -> i32 {
 - return the contained success value
 - if the call returns an error, immediately propagate that error from the enclosing function
 
+The same sugar also works on explicit generic calls such as `Wrap<string>!(...)`
+and `Load<T>?(...)`.
+
 `use std::name as alias;` creates `alias` as a namespace alias in the current
 scope. If a local symbol already uses the requested alias name, the compiler
 reports a Wio diagnostic.

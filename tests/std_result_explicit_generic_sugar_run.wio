@@ -1,0 +1,22 @@
+use std::assert as assert;
+use std::console as console;
+
+fn Wrap<T>(value: T) -> std::ResultValue<T> {
+    return std::OkResultValue<T>(value);
+}
+
+fn ReadExplicitText() -> std::ResultValue<string> {
+    let inner = Wrap<string>?("explicit-ok");
+    return std::OkResultValue<string>(inner);
+}
+
+fn Entry() -> i32 {
+    let text = ReadExplicitText!();
+    let number = Wrap<i32>!(42);
+
+    assert::ExpectEqual(text, "explicit-ok", "explicit generic propagate sugar should work");
+    assert::ExpectEqual(number, 42, "explicit generic unwrap sugar should work");
+
+    console::PrintLine!("std-result-explicit-generic-ok");
+    return 0;
+}

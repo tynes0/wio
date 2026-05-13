@@ -2118,7 +2118,8 @@ namespace wio
                     if (nextType == TokenType::leftParen)
                         return true;
 
-                    return nextType == TokenType::opLogicalNot &&
+                    return ((nextType == TokenType::opLogicalNot) ||
+                            (nextType == TokenType::opQuestion)) &&
                            index + 2 < tokens_.size() &&
                            tokens_[index + 2].type == TokenType::leftParen;
                 }
