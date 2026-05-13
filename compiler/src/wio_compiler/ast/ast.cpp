@@ -174,12 +174,14 @@ namespace wio
         std::vector<NodePtr<TypeSpecifier>> _explicitTypeArguments,
         std::vector<NodePtr<Expression>> _args,
         bool _unwrapResult,
+        bool _propagateResult,
         common::Location _loc)
         : Expression(_loc.isValid() ? _loc : _callee->location()),
           callee(std::move(_callee)),
           explicitTypeArguments(std::move(_explicitTypeArguments)),
           arguments(std::move(_args)),
-          unwrapResult(_unwrapResult)
+          unwrapResult(_unwrapResult),
+          propagateResult(_propagateResult)
     {
     }
 

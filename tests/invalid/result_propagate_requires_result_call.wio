@@ -1,0 +1,12 @@
+fn MakeLabel() -> string {
+    return "plain";
+}
+
+fn WrapLabel() -> std::ResultValue<string> {
+    let label = MakeLabel?();
+    return std::OkResultValue<string>(label);
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

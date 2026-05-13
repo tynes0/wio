@@ -297,6 +297,20 @@ namespace wio
                 continue;
             }
 
+            if (match(TokenType::opQuestion) && peek(1).type == TokenType::leftParen)
+            {
+                advance();
+                auto args = parseCallArguments();
+                left = makeNodePtr<FunctionCallExpression>(
+                    std::move(left),
+                    std::vector<NodePtr<TypeSpecifier>>{},
+                    std::move(args),
+                    false,
+                    true
+                );
+                continue;
+            }
+
             int precedence = getPrecedence(peek().type);
             if (precedence < minPrecedence)
                 break;
@@ -319,12 +333,14 @@ namespace wio
             {
                 std::vector<NodePtr<TypeSpecifier>> explicitTypeArguments = parseExplicitTypeArgumentList();
                 const bool unwrapResult = match(TokenType::opLogicalNot, true);
+                const bool propagateResult = !unwrapResult && match(TokenType::opQuestion, true);
                 auto args = parseCallArguments();
                 left = makeNodePtr<FunctionCallExpression>(
                     std::move(left),
                     std::move(explicitTypeArguments),
                     std::move(args),
-                    unwrapResult
+                    unwrapResult,
+                    propagateResult
                 );
                 continue;
             }
@@ -337,7 +353,8 @@ namespace wio
                     std::move(left),
                     std::vector<NodePtr<TypeSpecifier>>{},
                     std::move(args),
-                    true
+                    true,
+                    false
                 );
                 continue;
             }
@@ -349,6 +366,7 @@ namespace wio
                     std::move(left),
                     std::vector<NodePtr<TypeSpecifier>>{},
                     std::move(args),
+                    false,
                     false
                 );
                 continue;

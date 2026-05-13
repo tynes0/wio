@@ -1577,6 +1577,16 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/std_result_unwrap_sugar_run.wio"
     )
 
+    add_wio_success_test(
+        wio_test_std_result_propagate_sugar_dry_run
+        "${CMAKE_SOURCE_DIR}/tests/std_result_propagate_sugar_run.wio"
+    )
+
+    add_wio_success_test(
+        wio_test_std_result_generic_helpers_dry_run
+        "${CMAKE_SOURCE_DIR}/tests/std_result_generic_helpers_run.wio"
+    )
+
     add_wio_output_test(
         wio_test_object_const_access_run
         "${CMAKE_SOURCE_DIR}/tests/object_const_access_run.wio"
@@ -1651,6 +1661,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_std_result_unwrap_sugar_run
         "${CMAKE_SOURCE_DIR}/tests/std_result_unwrap_sugar_run.wio"
         "std-result-unwrap-ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_std_result_propagate_sugar_run
+        "${CMAKE_SOURCE_DIR}/tests/std_result_propagate_sugar_run.wio"
+        "std-result-propagate-ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_std_result_generic_helpers_run
+        "${CMAKE_SOURCE_DIR}/tests/std_result_generic_helpers_run.wio"
+        "std-result-generic-helpers-ok"
         --run
     )
 
@@ -1736,6 +1760,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_result_unwrap_requires_result
         "${CMAKE_SOURCE_DIR}/tests/invalid/result_unwrap_requires_result.wio"
         "The '!\\(\\)' unwrap syntax requires the called function to return std::ResultValue<T> or std::result::Result<T>\\."
+        "Generated C\\+\\+ output:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_result_propagate_requires_result_context
+        "${CMAKE_SOURCE_DIR}/tests/invalid/result_propagate_requires_result_context.wio"
+        "The '\\?\\(\\)' propagation syntax requires the enclosing function to return std::ResultValue<T> or std::result::Result<T>\\."
+        "Generated C\\+\\+ output:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_result_propagate_requires_result_call
+        "${CMAKE_SOURCE_DIR}/tests/invalid/result_propagate_requires_result_call.wio"
+        "The '\\?\\(\\)' propagation syntax requires the called function to return std::ResultValue<T> or std::result::Result<T>\\."
         "Generated C\\+\\+ output:"
     )
 

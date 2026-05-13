@@ -1,0 +1,10 @@
+use std::io as io;
+
+fn ReadText(pathValue: string) -> string {
+    mut file = io::Open?(pathValue, io::OpenRead);
+    return io::ReadAll!(ref file);
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

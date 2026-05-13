@@ -538,6 +538,54 @@ function Get-FilesByExtensionFromDirectories {
     Write-Output -NoEnumerate @($resolved)
 }
 
+function Get-AllFilesForUpToDateCheck {
+    param(
+        [AllowEmptyCollection()]
+        [string[]]$Paths
+    )
+
+    $resolved = New-UniquePathList
+    foreach ($path in $Paths) {
+        if ([string]::IsNullOrWhiteSpace($path) -or -not (Test-Path -LiteralPath $path)) {
+            continue
+        }
+
+        $item = Get-Item -LiteralPath $path
+        if ($item.PSIsContainer) {
+            Get-ChildItem -LiteralPath $path -File -Recurse | ForEach-Object {
+                Add-UniquePath -List $resolved -Path $_.FullName
+            }
+            continue
+        }
+
+        Add-UniquePath -List $resolved -Path $item.FullName
+    }
+
+    Write-Output -NoEnumerate @($resolved)
+}
+
+function Test-OutputUpToDate {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$OutputPath,
+        [AllowEmptyCollection()]
+        [string[]]$InputPaths
+    )
+
+    if ([string]::IsNullOrWhiteSpace($OutputPath) -or -not (Test-Path -LiteralPath $OutputPath)) {
+        return $false
+    }
+
+    $outputTimestamp = (Get-Item -LiteralPath $OutputPath).LastWriteTimeUtc
+    foreach ($inputPath in (Get-AllFilesForUpToDateCheck -Paths $InputPaths)) {
+        if ((Get-Item -LiteralPath $inputPath).LastWriteTimeUtc -gt $outputTimestamp) {
+            return $false
+        }
+    }
+
+    return $true
+}
+
 function Find-FirstExistingPath {
     param(
         [Parameter(Mandatory = $true)]
@@ -1141,7 +1189,29 @@ if ($wioExtraArgs.Count -gt 0) {
     $wioCommand += $wioExtraArgs
 }
 
-Invoke-SanitizedCommand -Command $wioCommand
+$wioUpToDateInputs = [System.Collections.Generic.List[string]]::new()
+$wioUpToDateInputs.Add($projectFile)
+$wioUpToDateInputs.Add($resolvedWioEntry)
+$wioUpToDateInputs.Add($wioExe)
+$wioUpToDateInputs.Add((Join-Path $repoRoot "std"))
+$wioUpToDateInputs.Add((Join-Path $repoRoot "runtime\include"))
+$wioUpToDateInputs.Add((Join-Path $repoRoot "sdk\include"))
+foreach ($path in $wioSourceRoots + $wioIncludeDirs + $wioNativeSources) {
+    $wioUpToDateInputs.Add($path)
+}
+foreach ($linkLibrary in $wioLinkLibraries) {
+    if (Test-Path -LiteralPath $linkLibrary) {
+        $wioUpToDateInputs.Add($linkLibrary)
+    }
+}
+
+$wioNeedsBuild = $Configure -or -not (Test-OutputUpToDate -OutputPath $wioOutput -InputPaths $wioUpToDateInputs.ToArray())
+if ($wioNeedsBuild) {
+    Invoke-SanitizedCommand -Command $wioCommand
+}
+else {
+    Write-Host "Wio compile: up to date, skipping compiler invocation."
+}
 
 $runtimeStaticLibrary = $null
 if ($wioTarget -eq "static") {
@@ -1152,6 +1222,21 @@ if ($wioTarget -eq "static") {
 }
 
 if ($hostEnabled) {
+    $hostUpToDateInputs = [System.Collections.Generic.List[string]]::new()
+    $hostUpToDateInputs.Add($wioOutput)
+    $hostUpToDateInputs.Add((Join-Path $repoRoot "sdk\include"))
+    foreach ($path in $hostSourceFiles + $hostIncludeDirs) {
+        $hostUpToDateInputs.Add($path)
+    }
+    foreach ($linkLibrary in $hostLinkLibraries) {
+        if (Test-Path -LiteralPath $linkLibrary) {
+            $hostUpToDateInputs.Add($linkLibrary)
+        }
+    }
+    if ($wioTarget -eq "static" -and -not [string]::IsNullOrWhiteSpace($runtimeStaticLibrary)) {
+        $hostUpToDateInputs.Add($runtimeStaticLibrary)
+    }
+
     $hostCommand = @(
         $hostCompiler,
         "-std=c++20",
@@ -1188,7 +1273,14 @@ if ($hostEnabled) {
     }
 
     $hostCommand += @("-o", $hostOutput)
-    Invoke-SanitizedCommand -Command $hostCommand
+
+    $hostNeedsBuild = $Configure -or -not (Test-OutputUpToDate -OutputPath $hostOutput -InputPaths $hostUpToDateInputs.ToArray())
+    if ($hostNeedsBuild) {
+        Invoke-SanitizedCommand -Command $hostCommand
+    }
+    else {
+        Write-Host "Host compile: up to date, skipping host compiler invocation."
+    }
 }
 
 Write-Host "Project  :" $projectName

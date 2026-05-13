@@ -1,0 +1,23 @@
+use std::assert as assert;
+use std::console as console;
+
+fn Wrap<T>(value: T) -> std::ResultValue<T> {
+    return std::OkResultValue<T>(value);
+}
+
+fn WrapAlias<T>(value: T) -> std::result::Result<T> {
+    return std::result::Ok<T>(value);
+}
+
+fn Entry() -> i32 {
+    let number = Wrap!(42);
+    let text = WrapAlias!("helpers-ok");
+    let truth = Wrap!(true);
+
+    assert::ExpectEqual(number, 42, "generic Result helpers should preserve numeric payloads");
+    assert::ExpectEqual(text, "helpers-ok", "generic Result helpers should preserve string payloads");
+    assert::ExpectEqual(truth, true, "generic Result helpers should preserve bool payloads");
+
+    console::PrintLine!("std-result-generic-helpers-ok");
+    return 0;
+}

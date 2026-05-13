@@ -1,0 +1,35 @@
+use std::assert as assert;
+use std::console as console;
+use std::fs as fs;
+use std::io as io;
+use std::path as path;
+
+fn ReadMessage(pathValue: string) -> std::ResultValue<string> {
+    mut file = io::Open?(pathValue, io::OpenRead);
+    let text = io::ReadAll?(ref file);
+    io::Close?(ref file);
+    return std::OkResultValue<string>(text);
+}
+
+fn WriteMessage(pathValue: string, value: string) -> std::ResultValue<usize> {
+    mut file = io::Open?(pathValue, io::OpenWrite);
+    let written = io::Write?(ref file, value);
+    io::Close?(ref file);
+    return std::OkResultValue<usize>(written);
+}
+
+fn Entry() -> i32 {
+    let filePath = path::JoinAll(["build", "wio_std", "result", "propagate", "data.txt"]);
+    if (not fs::EnsureParentDirectory(filePath)) {
+        return 1;
+    }
+
+    let written = WriteMessage!(filePath, "propagate-ok");
+    let text = ReadMessage!(filePath);
+
+    assert::ExpectEqual(written fit i32, 12, "?() should propagate success payloads");
+    assert::ExpectEqual(text, "propagate-ok", "?() should propagate nested std::io results");
+
+    console::PrintLine!("std-result-propagate-ok");
+    return 0;
+}

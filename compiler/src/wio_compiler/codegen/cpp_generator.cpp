@@ -11,6 +11,7 @@
 #include <functional>
 #include <optional>
 #include <unordered_set>
+#include <utility>
 
 #define EMIT_TABS() do { for (int _____I_____ = 0; _____I_____ < indentationLevel_; ++_____I_____) buffer_ << "    "; } while(false)
 
@@ -5028,6 +5029,39 @@ namespace wio::codegen
 
     void CppGenerator::visit(FunctionCallExpression& node)
     {
+        if (node.propagateResult)
+        {
+            const auto payloadType = node.refType.Lock();
+            const std::string payloadCppType = payloadType ? toCppType(payloadType) : "void";
+
+            emit("([&]() -> " + payloadCppType + " ");
+            emitLine("{");
+            indent();
+
+            const bool previousPropagateResult = node.propagateResult;
+            node.propagateResult = false;
+
+            EMIT_TABS();
+            emit("auto _wio_result = ");
+            visit(node);
+            emit(";\n");
+
+            node.propagateResult = previousPropagateResult;
+
+            emitLine("if (_wio_result->_WF_IsError())");
+            indent();
+            emitLine("throw _wio_result->_WF_ErrorValue();");
+            dedent();
+
+            EMIT_TABS();
+            emit("return _wio_result->_WF_Unwrap();\n");
+
+            dedent();
+            EMIT_TABS();
+            emit("}())");
+            return;
+        }
+
         auto beginResultUnwrap = [&]()
         {
             if (node.unwrapResult)
@@ -6451,13 +6485,35 @@ namespace wio::codegen
         }
         else if (node.body)
         {
+            const bool catchesResultPropagation = [&]()
+            {
+                auto resolvedReturnType = unwrapAliasTypeForCodegen(currentFunctionReturnType_);
+                if (!resolvedReturnType || resolvedReturnType->kind() != sema::TypeKind::Struct)
+                    return false;
+
+                auto structType = resolvedReturnType.AsFast<sema::StructType>();
+                return structType &&
+                    structType->name == "ResultValue" &&
+                    structType->scopePath == "std" &&
+                    structType->genericArguments.size() == 1;
+            }();
+
             emitLine();
-            
-            if (node.whenCondition) 
+
+            if (catchesResultPropagation || node.whenCondition)
             {
                 emitLine("{");
                 indent();
-                
+            }
+
+            if (catchesResultPropagation)
+            {
+                emitLine("try {");
+                indent();
+            }
+
+            if (node.whenCondition)
+            {
                 EMIT_TABS();
                 emit("if (!(");
                 node.whenCondition->accept(*this);
@@ -6479,13 +6535,28 @@ namespace wio::codegen
                 {
                     node.body->accept(*this);
                 }
-                
+            }
+            else
+            {
+                node.body->accept(*this);
+            }
+
+            if (catchesResultPropagation)
+            {
+                dedent();
+                emitLine("}");
+                emitLine("catch (const decltype(std::declval<" + returnType + ">()->_WF_ErrorValue())& _wio_result_error)");
+                emitLine("{");
+                indent();
+                emitLine("return " + returnType + "::Create(_wio_result_error);");
                 dedent();
                 emitLine("}");
             }
-            else 
+
+            if (catchesResultPropagation || node.whenCondition)
             {
-                node.body->accept(*this);
+                dedent();
+                emitLine("}");
             }
         }
         else

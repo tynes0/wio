@@ -59,6 +59,8 @@ Current v1 expectation:
   `std::console`
 - `Foo!()` unwraps a `ResultValue<T>`-returning call and panics if it contains
   an error
+- `Foo?()` unwraps a `ResultValue<T>`-returning call and propagates the
+  contained error from the enclosing `ResultValue<U>`-returning function
 - this keeps fallible std APIs on one naming convention instead of splitting
   into `ReadAll` vs `ReadAllResult`
 

@@ -541,11 +541,13 @@ namespace wio
         std::vector<NodePtr<TypeSpecifier>> explicitTypeArguments;
         std::vector<NodePtr<Expression>> arguments;
         bool unwrapResult = false;
+        bool propagateResult = false;
 
         FunctionCallExpression(NodePtr<Expression> _callee,
             std::vector<NodePtr<TypeSpecifier>> _explicitTypeArguments,
             std::vector<NodePtr<Expression>> _args,
             bool _unwrapResult = false,
+            bool _propagateResult = false,
             common::Location _loc = common::Location::invalid());
         ~FunctionCallExpression() override;
     };
