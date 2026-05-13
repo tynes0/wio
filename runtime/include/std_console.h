@@ -2761,6 +2761,13 @@ namespace wio::runtime::std_console
     using KeyCode = std::int32_t;
     using ModifierMask = std::uint8_t;
     using SpecialKeyCode = std::int32_t;
+    using Status = console::ConsoleStatus;
+    using ErrorDomain = console::ConsoleErrorDomain;
+    using Color = console::ConsoleColor;
+    using Encoding = console::ConsoleEncoding;
+    using Key = console::ConsoleKey;
+    using Modifiers = console::ConsoleModifiers;
+    using SpecialKey = console::ConsoleSpecialKey;
 
     namespace detail
     {
@@ -2776,6 +2783,25 @@ namespace wio::runtime::std_console
     [[nodiscard]] std::string LastErrorFile();
     [[nodiscard]] std::string StatusName(StatusCode status);
     [[nodiscard]] std::string ErrorDomainName(ErrorDomainCode domain);
+    [[nodiscard]] inline Status LastStatusValue() noexcept
+    {
+        return static_cast<Status>(LastStatus());
+    }
+
+    [[nodiscard]] inline ErrorDomain LastErrorDomainValue() noexcept
+    {
+        return static_cast<ErrorDomain>(LastErrorDomain());
+    }
+
+    [[nodiscard]] inline std::string StatusName(const Status status)
+    {
+        return StatusName(static_cast<StatusCode>(status));
+    }
+
+    [[nodiscard]] inline std::string ErrorDomainName(const ErrorDomain domain)
+    {
+        return ErrorDomainName(static_cast<ErrorDomainCode>(domain));
+    }
 
     std::int32_t WriteValue(bool value);
     std::int32_t WriteValue(char value);
@@ -2889,6 +2915,31 @@ namespace wio::runtime::std_console
     [[nodiscard]] StatusCode SetBackgroundColor(ColorCode color) noexcept;
     [[nodiscard]] StatusCode GetForegroundColor(ColorCode& color) noexcept;
     [[nodiscard]] StatusCode SetForegroundColor(ColorCode color) noexcept;
+    [[nodiscard]] inline StatusCode GetBackgroundColor(Color& color) noexcept
+    {
+        ColorCode raw = 0;
+        const StatusCode status = GetBackgroundColor(raw);
+        color = static_cast<Color>(raw);
+        return status;
+    }
+
+    [[nodiscard]] inline StatusCode SetBackgroundColor(const Color color) noexcept
+    {
+        return SetBackgroundColor(static_cast<ColorCode>(color));
+    }
+
+    [[nodiscard]] inline StatusCode GetForegroundColor(Color& color) noexcept
+    {
+        ColorCode raw = 0;
+        const StatusCode status = GetForegroundColor(raw);
+        color = static_cast<Color>(raw);
+        return status;
+    }
+
+    [[nodiscard]] inline StatusCode SetForegroundColor(const Color color) noexcept
+    {
+        return SetForegroundColor(static_cast<ColorCode>(color));
+    }
 
     [[nodiscard]] StatusCode GetBufferHeight(int& value) noexcept;
     [[nodiscard]] StatusCode SetBufferHeight(int value) noexcept;
@@ -2907,6 +2958,32 @@ namespace wio::runtime::std_console
     [[nodiscard]] StatusCode SetInputEncoding(EncodingCode encoding) noexcept;
     [[nodiscard]] StatusCode GetOutputEncoding(EncodingCode& encoding) noexcept;
     [[nodiscard]] StatusCode SetOutputEncoding(EncodingCode encoding) noexcept;
+    [[nodiscard]] inline StatusCode GetInputEncoding(Encoding& encoding) noexcept
+    {
+        EncodingCode raw = 0;
+        const StatusCode status = GetInputEncoding(raw);
+        encoding = static_cast<Encoding>(raw);
+        return status;
+    }
+
+    [[nodiscard]] inline StatusCode SetInputEncoding(const Encoding encoding) noexcept
+    {
+        return SetInputEncoding(static_cast<EncodingCode>(encoding));
+    }
+
+    [[nodiscard]] inline StatusCode GetOutputEncoding(Encoding& encoding) noexcept
+    {
+        EncodingCode raw = 0;
+        const StatusCode status = GetOutputEncoding(raw);
+        encoding = static_cast<Encoding>(raw);
+        return status;
+    }
+
+    [[nodiscard]] inline StatusCode SetOutputEncoding(const Encoding encoding) noexcept
+    {
+        return SetOutputEncoding(static_cast<EncodingCode>(encoding));
+    }
+
     [[nodiscard]] StatusCode GetIsErrorRedirected(bool& value) noexcept;
     [[nodiscard]] StatusCode GetIsInputRedirected(bool& value) noexcept;
     [[nodiscard]] StatusCode GetIsOutputRedirected(bool& value) noexcept;
@@ -2950,6 +3027,29 @@ namespace wio::runtime::std_console
         std::int32_t sourceChar,
         ColorCode sourceForeColor,
         ColorCode sourceBackColor) noexcept;
+    [[nodiscard]] inline StatusCode MoveBufferArea(
+        const int sourceLeft,
+        const int sourceTop,
+        const int sourceWidth,
+        const int sourceHeight,
+        const int targetLeft,
+        const int targetTop,
+        const std::int32_t sourceChar,
+        const Color sourceForeColor,
+        const Color sourceBackColor) noexcept
+    {
+        return MoveBufferArea(
+            sourceLeft,
+            sourceTop,
+            sourceWidth,
+            sourceHeight,
+            targetLeft,
+            targetTop,
+            sourceChar,
+            static_cast<ColorCode>(sourceForeColor),
+            static_cast<ColorCode>(sourceBackColor)
+        );
+    }
 
     [[nodiscard]] StatusCode OpenStandardError(
         std::size_t bufferSize,
@@ -2978,6 +3078,26 @@ namespace wio::runtime::std_console
     [[nodiscard]] StatusCode ReadHidden(int& value) noexcept;
     [[nodiscard]] StatusCode ReadKey(std::int32_t& keyChar, KeyCode& key, ModifierMask& modifiers);
     [[nodiscard]] StatusCode ReadKey(bool intercept, std::int32_t& keyChar, KeyCode& key, ModifierMask& modifiers);
+    [[nodiscard]] inline StatusCode ReadKey(std::int32_t& keyChar, Key& key, Modifiers& modifiers)
+    {
+        KeyCode rawKey = 0;
+        ModifierMask rawModifiers = 0;
+        const StatusCode status = ReadKey(keyChar, rawKey, rawModifiers);
+        key = static_cast<Key>(rawKey);
+        modifiers = static_cast<Modifiers>(rawModifiers);
+        return status;
+    }
+
+    [[nodiscard]] inline StatusCode ReadKey(const bool intercept, std::int32_t& keyChar, Key& key, Modifiers& modifiers)
+    {
+        KeyCode rawKey = 0;
+        ModifierMask rawModifiers = 0;
+        const StatusCode status = ReadKey(intercept, keyChar, rawKey, rawModifiers);
+        key = static_cast<Key>(rawKey);
+        modifiers = static_cast<Modifiers>(rawModifiers);
+        return status;
+    }
+
     [[nodiscard]] StatusCode ReadLine(std::string& value);
     [[nodiscard]] StatusCode ReadUntil(char delimiter, bool includeDelimiter, std::string& value);
     [[nodiscard]] StatusCode ReadWord(std::string& value);

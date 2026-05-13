@@ -1,0 +1,35 @@
+use std::console as console;
+use std::reflect as reflect;
+
+fn Entry() -> i32 {
+    let combo = console::ModifierAlt | console::ModifierShift;
+
+    if (console::StatusName(console::Status::FormatError) != "FormatError") {
+        return 1;
+    }
+
+    if (console::ErrorDomainName(console::ErrorDomain::Formatting) != "Formatting") {
+        return 2;
+    }
+
+    if (reflect::Count<console::Status>() != 17usize) {
+        return 3;
+    }
+
+    if (reflect::Name(console::StatusOk) != "Ok") {
+        return 4;
+    }
+
+    if (reflect::Name(combo) != "Alt|Shift") {
+        return 5;
+    }
+
+    if (not console::HasModifier(combo, console::ModifierShift)) {
+        return 6;
+    }
+
+    console::WriteBuffer("WIO", 1, 2);
+    console::PrintSpace();
+    console::PrintLine("std-console-native-ok");
+    return 0;
+}

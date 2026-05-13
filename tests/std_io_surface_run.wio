@@ -1,0 +1,45 @@
+use std::console as console;
+use std::fs as fs;
+use std::io as io;
+use std::path as path;
+use std::reflect as reflect;
+
+fn Entry() -> i32 {
+    let base = path::Join4("build", "wio_std", "io", "surface");
+    let filePath = path::Join3(base, "data", "sample.bin");
+
+    if (not fs::EnsureParentDirectory(filePath)) {
+        return 1;
+    }
+
+    mut writer = io::OpenWriteBinaryFile(filePath);
+    let wroteText = io::Write(ref writer, "AB") fit i32;
+    let payload: u8[] = [1 fit u8, 2 fit u8, 3 fit u8];
+    let wroteBytes = io::WriteBytes(ref writer, payload) fit i32;
+    let wroteLine = io::WriteLine(ref writer, "CD") fit i32;
+    io::Close(ref writer);
+
+    mut reader = io::OpenReadBinaryFile(filePath);
+    let head = io::Read(ref reader, 2usize);
+    let bytes = io::ReadBytes(ref reader, 3usize);
+    let tail = io::ReadLine(ref reader, true);
+    let size = io::Size(reader) fit i32;
+    io::Close(ref reader);
+
+    if (head != "AB") {
+        return 2;
+    }
+
+    if (bytes.Count() != 3usize or bytes[0usize] != (1 fit u8) or bytes[1usize] != (2 fit u8) or bytes[2usize] != (3 fit u8)) {
+        return 3;
+    }
+
+    if (tail != "CD") {
+        return 4;
+    }
+
+    console::Print(
+        $"Std io surface: ${wroteText}/${wroteBytes}/${wroteLine}/${size}/${head}/${tail}/${reflect::Name(io::OpenRead)}/${io::FileErrorName(io::FileErrorNone)}"
+    );
+    return 0;
+}

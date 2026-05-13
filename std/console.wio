@@ -2,69 +2,300 @@ realm std {
     realm console {
         use @CppHeader("std_console.h");
 
-        type Status = u8;
-        type ErrorDomain = u8;
-        type Color = u8;
-        type Encoding = u8;
-        type Key = i32;
-        type Modifiers = u8;
-        type SpecialKey = i32;
+        type StatusCode = u8;
 
-        const StatusOk: Status = 0u8;
-        const StatusUnsupported: Status = 1u8;
-        const StatusUnavailable: Status = 2u8;
-        const StatusInvalidArgument: Status = 3u8;
-        const StatusInvalidRange: Status = 4u8;
-        const StatusNullArgument: Status = 5u8;
-        const StatusInputRedirected: Status = 6u8;
-        const StatusOutputRedirected: Status = 7u8;
-        const StatusErrorRedirected: Status = 8u8;
-        const StatusIoError: Status = 9u8;
-        const StatusPartialIo: Status = 10u8;
-        const StatusEndOfFile: Status = 11u8;
-        const StatusEncodingError: Status = 12u8;
-        const StatusFormatError: Status = 13u8;
-        const StatusPermissionDenied: Status = 14u8;
-        const StatusPlatformError: Status = 15u8;
-        const StatusUnknownError: Status = 16u8;
+        @Native
+        @Type(u8)
+        @CppName(wio::runtime::console::ConsoleStatus)
+        enum Status {
+            Ok = 0u8,
+            Unsupported = 1u8,
+            Unavailable = 2u8,
+            InvalidArgument = 3u8,
+            InvalidRange = 4u8,
+            NullArgument = 5u8,
+            InputRedirected = 6u8,
+            OutputRedirected = 7u8,
+            ErrorRedirected = 8u8,
+            IoError = 9u8,
+            PartialIo = 10u8,
+            EndOfFile = 11u8,
+            EncodingError = 12u8,
+            FormatError = 13u8,
+            PermissionDenied = 14u8,
+            PlatformError = 15u8,
+            UnknownError = 16u8
+        };
 
-        const DomainNone: ErrorDomain = 0u8;
-        const DomainGeneric: ErrorDomain = 1u8;
-        const DomainStdio: ErrorDomain = 2u8;
-        const DomainWin32: ErrorDomain = 3u8;
-        const DomainPosix: ErrorDomain = 4u8;
-        const DomainTerminal: ErrorDomain = 5u8;
-        const DomainFormatting: ErrorDomain = 6u8;
+        @Native
+        @Type(u8)
+        @CppName(wio::runtime::console::ConsoleErrorDomain)
+        enum ErrorDomain {
+            None = 0u8,
+            Generic = 1u8,
+            Stdio = 2u8,
+            Win32 = 3u8,
+            Posix = 4u8,
+            Terminal = 5u8,
+            Formatting = 6u8
+        };
 
-        const ColorBlack: Color = 0u8;
-        const ColorDarkBlue: Color = 1u8;
-        const ColorDarkGreen: Color = 2u8;
-        const ColorDarkCyan: Color = 3u8;
-        const ColorDarkRed: Color = 4u8;
-        const ColorDarkMagenta: Color = 5u8;
-        const ColorDarkYellow: Color = 6u8;
-        const ColorGray: Color = 7u8;
-        const ColorDarkGray: Color = 8u8;
-        const ColorBlue: Color = 9u8;
-        const ColorGreen: Color = 10u8;
-        const ColorCyan: Color = 11u8;
-        const ColorRed: Color = 12u8;
-        const ColorMagenta: Color = 13u8;
-        const ColorYellow: Color = 14u8;
-        const ColorWhite: Color = 15u8;
+        @Native
+        @Type(u8)
+        @CppName(wio::runtime::console::ConsoleColor)
+        enum Color {
+            Black = 0u8,
+            DarkBlue = 1u8,
+            DarkGreen = 2u8,
+            DarkCyan = 3u8,
+            DarkRed = 4u8,
+            DarkMagenta = 5u8,
+            DarkYellow = 6u8,
+            Gray = 7u8,
+            DarkGray = 8u8,
+            Blue = 9u8,
+            Green = 10u8,
+            Cyan = 11u8,
+            Red = 12u8,
+            Magenta = 13u8,
+            Yellow = 14u8,
+            White = 15u8
+        };
 
-        const EncodingUnknown: Encoding = 0u8;
-        const EncodingUtf8: Encoding = 1u8;
-        const EncodingUtf16: Encoding = 2u8;
-        const EncodingSystemDefault: Encoding = 3u8;
+        @Native
+        @Type(u8)
+        @CppName(wio::runtime::console::ConsoleEncoding)
+        enum Encoding {
+            Unknown = 0u8,
+            Utf8 = 1u8,
+            Utf16 = 2u8,
+            SystemDefault = 3u8
+        };
 
-        const ModifierNone: Modifiers = 0u8;
-        const ModifierAlt: Modifiers = 1u8;
-        const ModifierShift: Modifiers = 2u8;
-        const ModifierControl: Modifiers = 4u8;
+        @Native
+        @Type(i32)
+        @CppName(wio::runtime::console::ConsoleKey)
+        enum Key {
+            None = 0,
+            Backspace = 8,
+            Tab = 9,
+            Clear = 12,
+            Enter = 13,
+            Pause = 19,
+            Escape = 27,
+            Spacebar = 32,
+            PageUp = 33,
+            PageDown = 34,
+            End = 35,
+            Home = 36,
+            LeftArrow = 37,
+            UpArrow = 38,
+            RightArrow = 39,
+            DownArrow = 40,
+            Select = 41,
+            Print = 42,
+            Execute = 43,
+            PrintScreen = 44,
+            Insert = 45,
+            Delete = 46,
+            Help = 47,
+            D0 = 48,
+            D1 = 49,
+            D2 = 50,
+            D3 = 51,
+            D4 = 52,
+            D5 = 53,
+            D6 = 54,
+            D7 = 55,
+            D8 = 56,
+            D9 = 57,
+            A = 65,
+            B = 66,
+            C = 67,
+            D = 68,
+            E = 69,
+            F = 70,
+            G = 71,
+            H = 72,
+            I = 73,
+            J = 74,
+            K = 75,
+            L = 76,
+            M = 77,
+            N = 78,
+            O = 79,
+            P = 80,
+            Q = 81,
+            R = 82,
+            S = 83,
+            T = 84,
+            U = 85,
+            V = 86,
+            W = 87,
+            X = 88,
+            Y = 89,
+            Z = 90,
+            LeftWindows = 91,
+            RightWindows = 92,
+            Applications = 93,
+            Sleep = 95,
+            NumPad0 = 96,
+            NumPad1 = 97,
+            NumPad2 = 98,
+            NumPad3 = 99,
+            NumPad4 = 100,
+            NumPad5 = 101,
+            NumPad6 = 102,
+            NumPad7 = 103,
+            NumPad8 = 104,
+            NumPad9 = 105,
+            Multiply = 106,
+            Add = 107,
+            Separator = 108,
+            Subtract = 109,
+            Decimal = 110,
+            Divide = 111,
+            F1 = 112,
+            F2 = 113,
+            F3 = 114,
+            F4 = 115,
+            F5 = 116,
+            F6 = 117,
+            F7 = 118,
+            F8 = 119,
+            F9 = 120,
+            F10 = 121,
+            F11 = 122,
+            F12 = 123,
+            F13 = 124,
+            F14 = 125,
+            F15 = 126,
+            F16 = 127,
+            F17 = 128,
+            F18 = 129,
+            F19 = 130,
+            F20 = 131,
+            F21 = 132,
+            F22 = 133,
+            F23 = 134,
+            F24 = 135,
+            BrowserBack = 166,
+            BrowserForward = 167,
+            BrowserRefresh = 168,
+            BrowserStop = 169,
+            BrowserSearch = 170,
+            BrowserFavorites = 171,
+            BrowserHome = 172,
+            VolumeMute = 173,
+            VolumeDown = 174,
+            VolumeUp = 175,
+            MediaNext = 176,
+            MediaPrevious = 177,
+            MediaStop = 178,
+            MediaPlay = 179,
+            LaunchMail = 180,
+            LaunchMediaSelect = 181,
+            LaunchApp1 = 182,
+            LaunchApp2 = 183,
+            Oem1 = 186,
+            OemPlus = 187,
+            OemComma = 188,
+            OemMinus = 189,
+            OemPeriod = 190,
+            Oem2 = 191,
+            Oem3 = 192,
+            Oem4 = 219,
+            Oem5 = 220,
+            Oem6 = 221,
+            Oem7 = 222,
+            Oem8 = 223,
+            Oem102 = 226,
+            Process = 229,
+            Packet = 231,
+            Attention = 246,
+            CrSel = 247,
+            ExSel = 248,
+            EraseEndOfFile = 249,
+            Play = 250,
+            Zoom = 251,
+            NoName = 252,
+            Pa1 = 253,
+            OemClear = 254
+        };
 
-        const SpecialKeyControlC: SpecialKey = 0;
-        const SpecialKeyControlBreak: SpecialKey = 1;
+        @Native
+        @Type(u8)
+        @CppName(wio::runtime::console::ConsoleModifiers)
+        flagset Modifiers {
+            None = 0u8,
+            Alt = 1u8,
+            Shift = 2u8,
+            Control = 4u8
+        };
+
+        @Native
+        @Type(i32)
+        @CppName(wio::runtime::console::ConsoleSpecialKey)
+        enum SpecialKey {
+            ControlC = 0,
+            ControlBreak = 1
+        };
+
+        const StatusOk: Status = Status::Ok;
+        const StatusUnsupported: Status = Status::Unsupported;
+        const StatusUnavailable: Status = Status::Unavailable;
+        const StatusInvalidArgument: Status = Status::InvalidArgument;
+        const StatusInvalidRange: Status = Status::InvalidRange;
+        const StatusNullArgument: Status = Status::NullArgument;
+        const StatusInputRedirected: Status = Status::InputRedirected;
+        const StatusOutputRedirected: Status = Status::OutputRedirected;
+        const StatusErrorRedirected: Status = Status::ErrorRedirected;
+        const StatusIoError: Status = Status::IoError;
+        const StatusPartialIo: Status = Status::PartialIo;
+        const StatusEndOfFile: Status = Status::EndOfFile;
+        const StatusEncodingError: Status = Status::EncodingError;
+        const StatusFormatError: Status = Status::FormatError;
+        const StatusPermissionDenied: Status = Status::PermissionDenied;
+        const StatusPlatformError: Status = Status::PlatformError;
+        const StatusUnknownError: Status = Status::UnknownError;
+
+        const DomainNone: ErrorDomain = ErrorDomain::None;
+        const DomainGeneric: ErrorDomain = ErrorDomain::Generic;
+        const DomainStdio: ErrorDomain = ErrorDomain::Stdio;
+        const DomainWin32: ErrorDomain = ErrorDomain::Win32;
+        const DomainPosix: ErrorDomain = ErrorDomain::Posix;
+        const DomainTerminal: ErrorDomain = ErrorDomain::Terminal;
+        const DomainFormatting: ErrorDomain = ErrorDomain::Formatting;
+
+        const ColorBlack: Color = Color::Black;
+        const ColorDarkBlue: Color = Color::DarkBlue;
+        const ColorDarkGreen: Color = Color::DarkGreen;
+        const ColorDarkCyan: Color = Color::DarkCyan;
+        const ColorDarkRed: Color = Color::DarkRed;
+        const ColorDarkMagenta: Color = Color::DarkMagenta;
+        const ColorDarkYellow: Color = Color::DarkYellow;
+        const ColorGray: Color = Color::Gray;
+        const ColorDarkGray: Color = Color::DarkGray;
+        const ColorBlue: Color = Color::Blue;
+        const ColorGreen: Color = Color::Green;
+        const ColorCyan: Color = Color::Cyan;
+        const ColorRed: Color = Color::Red;
+        const ColorMagenta: Color = Color::Magenta;
+        const ColorYellow: Color = Color::Yellow;
+        const ColorWhite: Color = Color::White;
+
+        const EncodingUnknown: Encoding = Encoding::Unknown;
+        const EncodingUtf8: Encoding = Encoding::Utf8;
+        const EncodingUtf16: Encoding = Encoding::Utf16;
+        const EncodingSystemDefault: Encoding = Encoding::SystemDefault;
+
+        const ModifierNone: Modifiers = Modifiers::None;
+        const ModifierAlt: Modifiers = Modifiers::Alt;
+        const ModifierShift: Modifiers = Modifiers::Shift;
+        const ModifierControl: Modifiers = Modifiers::Control;
+
+        const SpecialKeyControlC: SpecialKey = SpecialKey::ControlC;
+        const SpecialKeyControlBreak: SpecialKey = SpecialKey::ControlBreak;
 
         component ErrorInfo {
             status: Status;
@@ -126,16 +357,16 @@ realm std {
             isOpen: bool;
         }
 
-        fn Ok(status: Status) -> bool {
-            return status == StatusOk;
+        fn Ok(status: StatusCode) -> bool {
+            return status == 0u8;
         }
 
-        fn Failed(status: Status) -> bool {
+        fn Failed(status: StatusCode) -> bool {
             return not Ok(status);
         }
 
         fn HasModifier(value: Modifiers, mask: Modifiers) -> bool {
-            return (value & mask) != 0u8;
+            return (value & mask) != Modifiers::None;
         }
 
         @Native
@@ -143,11 +374,11 @@ realm std {
         fn ClearLastError();
 
         @Native
-        @CppName(wio::runtime::std_console::LastStatus)
+        @CppName(wio::runtime::std_console::LastStatusValue)
         fn LastStatusCode() -> Status;
 
         @Native
-        @CppName(wio::runtime::std_console::LastErrorDomain)
+        @CppName(wio::runtime::std_console::LastErrorDomainValue)
         fn LastErrorDomainCode() -> ErrorDomain;
 
         @Native
@@ -220,11 +451,11 @@ realm std {
 
         @Native
         @CppName(wio::runtime::std_console::WriteFormat)
-        fn PrintFormat<Args...>(format: string, args: Args...) -> Status;
+        fn PrintFormat<Args...>(format: string, args: Args...) -> StatusCode;
 
         @Native
         @CppName(wio::runtime::std_console::WriteLineFormat)
-        fn PrintLineFormat<Args...>(format: string, args: Args...) -> Status;
+        fn PrintLineFormat<Args...>(format: string, args: Args...) -> StatusCode;
 
         @Native
         @CppName(wio::runtime::std_console::Format)
@@ -233,6 +464,10 @@ realm std {
         @Native
         @CppName(wio::runtime::std_console::WriteSegment)
         fn WriteSlice(value: string, index: usize, count: usize) -> i32;
+
+        @Native
+        @CppName(wio::runtime::std_console::WriteBuffer)
+        fn WriteBuffer(buffer: string, index: i32, count: i32) -> i32;
 
         @Native
         @CppName(wio::runtime::std_console::WriteTextDecimal)
@@ -361,74 +596,74 @@ realm std {
             beepFrequency: ref bool,
             keyboardToggleState: ref bool,
             treatControlCAsInput: ref bool,
-            encodingSet: ref bool) -> Status;
+            encodingSet: ref bool) -> StatusCode;
 
-        @Native @CppName(wio::runtime::std_console::GetBackgroundColor) fn TryGetBackgroundColor(color: ref Color) -> Status;
-        @Native @CppName(wio::runtime::std_console::SetBackgroundColor) fn TrySetBackgroundColor(color: Color) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetForegroundColor) fn TryGetForegroundColor(color: ref Color) -> Status;
-        @Native @CppName(wio::runtime::std_console::SetForegroundColor) fn TrySetForegroundColor(color: Color) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetBufferHeight) fn TryGetBufferHeight(value: ref i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::SetBufferHeight) fn TrySetBufferHeight(value: i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetBufferWidth) fn TryGetBufferWidth(value: ref i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::SetBufferWidth) fn TrySetBufferWidth(value: i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetCapsLock) fn TryGetCapsLock(value: ref bool) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetCursorLeft) fn TryGetCursorLeft(value: ref i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::SetCursorLeft) fn TrySetCursorLeft(value: i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetCursorSize) fn TryGetCursorSize(value: ref i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::SetCursorSize) fn TrySetCursorSize(value: i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetCursorTop) fn TryGetCursorTop(value: ref i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::SetCursorTop) fn TrySetCursorTop(value: i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetCursorVisible) fn TryGetCursorVisible(value: ref bool) -> Status;
-        @Native @CppName(wio::runtime::std_console::SetCursorVisible) fn TrySetCursorVisible(value: bool) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetInputEncoding) fn TryGetInputEncoding(value: ref Encoding) -> Status;
-        @Native @CppName(wio::runtime::std_console::SetInputEncoding) fn TrySetInputEncoding(value: Encoding) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetOutputEncoding) fn TryGetOutputEncoding(value: ref Encoding) -> Status;
-        @Native @CppName(wio::runtime::std_console::SetOutputEncoding) fn TrySetOutputEncoding(value: Encoding) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetIsErrorRedirected) fn TryGetIsErrorRedirected(value: ref bool) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetIsInputRedirected) fn TryGetIsInputRedirected(value: ref bool) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetIsOutputRedirected) fn TryGetIsOutputRedirected(value: ref bool) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetKeyAvailable) fn TryGetKeyAvailable(value: ref bool) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetLargestWindowHeight) fn TryGetLargestWindowHeight(value: ref i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetLargestWindowWidth) fn TryGetLargestWindowWidth(value: ref i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetNumberLock) fn TryGetNumberLock(value: ref bool) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetNewLine) fn TryGetNewLine(value: ref string) -> Status;
-        @Native @CppName(wio::runtime::std_console::SetNewLine) fn TrySetNewLine(value: string) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetTitle) fn TryGetTitle(value: ref string) -> Status;
-        @Native @CppName(wio::runtime::std_console::SetTitle) fn TrySetTitle(value: string) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetTreatControlCAsInput) fn TryGetTreatControlCAsInput(value: ref bool) -> Status;
-        @Native @CppName(wio::runtime::std_console::SetTreatControlCAsInput) fn TrySetTreatControlCAsInput(value: bool) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetWindowHeight) fn TryGetWindowHeight(value: ref i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::SetWindowHeight) fn TrySetWindowHeight(value: i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetWindowLeft) fn TryGetWindowLeft(value: ref i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::SetWindowLeft) fn TrySetWindowLeft(value: i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetWindowTop) fn TryGetWindowTop(value: ref i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::SetWindowTop) fn TrySetWindowTop(value: i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::GetWindowWidth) fn TryGetWindowWidth(value: ref i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::SetWindowWidth) fn TrySetWindowWidth(value: i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::Beep) fn TryBeep() -> Status;
-        @Native @CppName(wio::runtime::std_console::Beep) fn TryBeep(frequency: i32, durationMs: i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::Clear) fn TryClear() -> Status;
-        @Native @CppName(wio::runtime::std_console::GetCursorPosition) fn TryGetCursorPosition(left: ref i32, top: ref i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::MoveBufferArea) fn TryMoveBufferArea(sourceLeft: i32, sourceTop: i32, sourceWidth: i32, sourceHeight: i32, targetLeft: i32, targetTop: i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::MoveBufferArea) fn TryMoveBufferArea(sourceLeft: i32, sourceTop: i32, sourceWidth: i32, sourceHeight: i32, targetLeft: i32, targetTop: i32, sourceChar: i32, sourceForeColor: Color, sourceBackColor: Color) -> Status;
-        @Native @CppName(wio::runtime::std_console::OpenStandardError) fn TryOpenStandardError(bufferSize: usize, redirected: ref bool, actualBufferSize: ref usize, hasReader: ref bool, hasWriter: ref bool, isOpen: ref bool) -> Status;
-        @Native @CppName(wio::runtime::std_console::OpenStandardInput) fn TryOpenStandardInput(bufferSize: usize, redirected: ref bool, actualBufferSize: ref usize, hasReader: ref bool, hasWriter: ref bool, isOpen: ref bool) -> Status;
-        @Native @CppName(wio::runtime::std_console::OpenStandardOutput) fn TryOpenStandardOutput(bufferSize: usize, redirected: ref bool, actualBufferSize: ref usize, hasReader: ref bool, hasWriter: ref bool, isOpen: ref bool) -> Status;
-        @Native @CppName(wio::runtime::std_console::Read) fn TryRead(value: ref i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::ReadCount) fn TryReadCount(count: usize, value: ref string) -> Status;
-        @Native @CppName(wio::runtime::std_console::ReadHidden) fn TryReadHidden(value: ref i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::ReadKey) fn TryReadKey(keyChar: ref i32, key: ref Key, modifiers: ref Modifiers) -> Status;
-        @Native @CppName(wio::runtime::std_console::ReadKey) fn TryReadKey(intercept: bool, keyChar: ref i32, key: ref Key, modifiers: ref Modifiers) -> Status;
-        @Native @CppName(wio::runtime::std_console::ReadLine) fn TryReadLine(value: ref string) -> Status;
-        @Native @CppName(wio::runtime::std_console::ReadUntil) fn TryReadUntil(delimiter: char, includeDelimiter: bool, value: ref string) -> Status;
-        @Native @CppName(wio::runtime::std_console::ReadWord) fn TryReadWord(value: ref string) -> Status;
-        @Native @CppName(wio::runtime::std_console::ResetColor) fn TryResetColor() -> Status;
-        @Native @CppName(wio::runtime::std_console::SetBufferSize) fn TrySetBufferSize(width: i32, height: i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::SetCursorPosition) fn TrySetCursorPosition(left: i32, top: i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::SetWindowPosition) fn TrySetWindowPosition(left: i32, top: i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::SetWindowSize) fn TrySetWindowSize(width: i32, height: i32) -> Status;
-        @Native @CppName(wio::runtime::std_console::FlushError) fn TryFlushError() -> Status;
-        @Native @CppName(wio::runtime::std_console::FlushOut) fn TryFlushOut() -> Status;
+        @Native @CppName(wio::runtime::std_console::GetBackgroundColor) fn TryGetBackgroundColor(color: ref Color) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetBackgroundColor) fn TrySetBackgroundColor(color: Color) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetForegroundColor) fn TryGetForegroundColor(color: ref Color) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetForegroundColor) fn TrySetForegroundColor(color: Color) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetBufferHeight) fn TryGetBufferHeight(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetBufferHeight) fn TrySetBufferHeight(value: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetBufferWidth) fn TryGetBufferWidth(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetBufferWidth) fn TrySetBufferWidth(value: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetCapsLock) fn TryGetCapsLock(value: ref bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetCursorLeft) fn TryGetCursorLeft(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetCursorLeft) fn TrySetCursorLeft(value: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetCursorSize) fn TryGetCursorSize(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetCursorSize) fn TrySetCursorSize(value: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetCursorTop) fn TryGetCursorTop(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetCursorTop) fn TrySetCursorTop(value: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetCursorVisible) fn TryGetCursorVisible(value: ref bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetCursorVisible) fn TrySetCursorVisible(value: bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetInputEncoding) fn TryGetInputEncoding(value: ref Encoding) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetInputEncoding) fn TrySetInputEncoding(value: Encoding) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetOutputEncoding) fn TryGetOutputEncoding(value: ref Encoding) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetOutputEncoding) fn TrySetOutputEncoding(value: Encoding) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetIsErrorRedirected) fn TryGetIsErrorRedirected(value: ref bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetIsInputRedirected) fn TryGetIsInputRedirected(value: ref bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetIsOutputRedirected) fn TryGetIsOutputRedirected(value: ref bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetKeyAvailable) fn TryGetKeyAvailable(value: ref bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetLargestWindowHeight) fn TryGetLargestWindowHeight(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetLargestWindowWidth) fn TryGetLargestWindowWidth(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetNumberLock) fn TryGetNumberLock(value: ref bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetNewLine) fn TryGetNewLine(value: ref string) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetNewLine) fn TrySetNewLine(value: string) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetTitle) fn TryGetTitle(value: ref string) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetTitle) fn TrySetTitle(value: string) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetTreatControlCAsInput) fn TryGetTreatControlCAsInput(value: ref bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetTreatControlCAsInput) fn TrySetTreatControlCAsInput(value: bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetWindowHeight) fn TryGetWindowHeight(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetWindowHeight) fn TrySetWindowHeight(value: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetWindowLeft) fn TryGetWindowLeft(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetWindowLeft) fn TrySetWindowLeft(value: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetWindowTop) fn TryGetWindowTop(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetWindowTop) fn TrySetWindowTop(value: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetWindowWidth) fn TryGetWindowWidth(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetWindowWidth) fn TrySetWindowWidth(value: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::Beep) fn TryBeep() -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::Beep) fn TryBeep(frequency: i32, durationMs: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::Clear) fn TryClear() -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetCursorPosition) fn TryGetCursorPosition(left: ref i32, top: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::MoveBufferArea) fn TryMoveBufferArea(sourceLeft: i32, sourceTop: i32, sourceWidth: i32, sourceHeight: i32, targetLeft: i32, targetTop: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::MoveBufferArea) fn TryMoveBufferArea(sourceLeft: i32, sourceTop: i32, sourceWidth: i32, sourceHeight: i32, targetLeft: i32, targetTop: i32, sourceChar: i32, sourceForeColor: Color, sourceBackColor: Color) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::OpenStandardError) fn TryOpenStandardError(bufferSize: usize, redirected: ref bool, actualBufferSize: ref usize, hasReader: ref bool, hasWriter: ref bool, isOpen: ref bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::OpenStandardInput) fn TryOpenStandardInput(bufferSize: usize, redirected: ref bool, actualBufferSize: ref usize, hasReader: ref bool, hasWriter: ref bool, isOpen: ref bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::OpenStandardOutput) fn TryOpenStandardOutput(bufferSize: usize, redirected: ref bool, actualBufferSize: ref usize, hasReader: ref bool, hasWriter: ref bool, isOpen: ref bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::Read) fn TryRead(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::ReadCount) fn TryReadCount(count: usize, value: ref string) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::ReadHidden) fn TryReadHidden(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::ReadKey) fn TryReadKey(keyChar: ref i32, key: ref Key, modifiers: ref Modifiers) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::ReadKey) fn TryReadKey(intercept: bool, keyChar: ref i32, key: ref Key, modifiers: ref Modifiers) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::ReadLine) fn TryReadLine(value: ref string) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::ReadUntil) fn TryReadUntil(delimiter: char, includeDelimiter: bool, value: ref string) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::ReadWord) fn TryReadWord(value: ref string) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::ResetColor) fn TryResetColor() -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetBufferSize) fn TrySetBufferSize(width: i32, height: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetCursorPosition) fn TrySetCursorPosition(left: i32, top: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetWindowPosition) fn TrySetWindowPosition(left: i32, top: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetWindowSize) fn TrySetWindowSize(width: i32, height: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::FlushError) fn TryFlushError() -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::FlushOut) fn TryFlushOut() -> StatusCode;
 
         fn Capabilities() -> CapabilitiesInfo {
             mut result: CapabilitiesInfo = CapabilitiesInfo();
@@ -551,8 +786,8 @@ realm std {
         fn GetReadKeyInfo(intercept: bool) -> KeyInfo {
             mut result: KeyInfo = KeyInfo();
             mut keyChar = 0;
-            mut key = 0;
-            mut modifiers = 0u8;
+            mut key = Key::None;
+            mut modifiers = Modifiers::None;
             TryReadKey(intercept, ref keyChar, ref key, ref modifiers);
             result.keyChar = keyChar;
             result.key = key;
@@ -563,8 +798,8 @@ realm std {
         fn GetReadKeyInfo() -> KeyInfo {
             mut result: KeyInfo = KeyInfo();
             mut keyChar = 0;
-            mut key = 0;
-            mut modifiers = 0u8;
+            mut key = Key::None;
+            mut modifiers = Modifiers::None;
             TryReadKey(ref keyChar, ref key, ref modifiers);
             result.keyChar = keyChar;
             result.key = key;

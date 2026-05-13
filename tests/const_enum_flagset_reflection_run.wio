@@ -1,0 +1,56 @@
+use std::console as console;
+use std::reflect as reflect;
+
+enum Mode {
+    Idle = 0,
+    Play = 1,
+    Pause = 2
+};
+
+flagset Permission {
+    None = 0u32,
+    Read = 1u32 << 0u32,
+    Write = 1u32 << 1u32,
+    All = Read | Write
+};
+
+const DefaultMode: Mode = Mode::Play;
+const ReadOnly: Permission = Permission::Read;
+const FullAccess: Permission = Permission::Read | Permission::Write;
+
+fn Entry() -> i32 {
+    if (DefaultMode != Mode::Play) {
+        return 1;
+    }
+
+    if (ReadOnly != Permission::Read) {
+        return 2;
+    }
+
+    if (FullAccess != Permission::All) {
+        return 3;
+    }
+
+    if (reflect::Count<Mode>() != 3usize) {
+        return 4;
+    }
+
+    if (reflect::Count<Permission>() != 4usize) {
+        return 5;
+    }
+
+    if (reflect::Name(DefaultMode) != "Play") {
+        return 6;
+    }
+
+    if (reflect::Name(ReadOnly) != "Read") {
+        return 7;
+    }
+
+    if (reflect::Name(FullAccess) != "All") {
+        return 8;
+    }
+
+    console::PrintLine("enum-reflection-ok");
+    return 0;
+}

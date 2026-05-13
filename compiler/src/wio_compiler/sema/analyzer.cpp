@@ -493,7 +493,25 @@ namespace wio::sema
         bool isConstScalarType(const Ref<Type>& type)
         {
             Ref<Type> resolved = unwrapAliasType(type);
-            if (!resolved || resolved->kind() != TypeKind::Primitive)
+            if (!resolved)
+                return false;
+
+            if (resolved->kind() == TypeKind::Struct)
+            {
+                auto structType = resolved.AsFast<StructType>();
+                if (!structType || structType->isObject || structType->isInterface)
+                    return false;
+
+                if (auto structScope = structType->structScope.Lock())
+                {
+                    if (auto structSymbol = structScope->resolve(structType->name))
+                        return structSymbol->flags.get_isEnum() || structSymbol->flags.get_isFlagset();
+                }
+
+                return false;
+            }
+
+            if (resolved->kind() != TypeKind::Primitive)
                 return false;
 
             const std::string& name = resolved.AsFast<PrimitiveType>()->name;
@@ -575,7 +593,6 @@ namespace wio::sema
                 expression->is<MatchExpression>() ||
                 expression->is<AssignmentExpression>() ||
                 expression->is<ArrayAccessExpression>() ||
-                expression->is<MemberAccessExpression>() ||
                 expression->is<FunctionCallExpression>())
             {
                 return false;
@@ -585,6 +602,19 @@ namespace wio::sema
             {
                 auto symbol = identifier->referencedSymbol.Lock();
                 return symbol && symbol->flags.get_isConst();
+            }
+
+            if (const auto* memberAccess = expression->as<MemberAccessExpression>())
+            {
+                auto memberSymbol = memberAccess->referencedSymbol.Lock();
+                auto ownerSymbol = memberAccess->object ? memberAccess->object->referencedSymbol.Lock() : nullptr;
+                if (!memberSymbol || !ownerSymbol)
+                    return false;
+
+                return memberSymbol->flags.get_isReadOnly() &&
+                       memberSymbol->kind == SymbolKind::Variable &&
+                       ownerSymbol->kind == SymbolKind::Struct &&
+                       (ownerSymbol->flags.get_isEnum() || ownerSymbol->flags.get_isFlagset());
             }
 
             if (const auto* unary = expression->as<UnaryExpression>())
@@ -2535,6 +2565,44 @@ namespace wio::sema
             return resolved && resolved->isNumeric();
         }
 
+        bool isEnumConstraintType(const Ref<Type>& type)
+        {
+            Ref<Type> resolved = unwrapAliasType(type);
+            if (!resolved || resolved->kind() != TypeKind::Struct)
+                return false;
+
+            auto structType = resolved.AsFast<StructType>();
+            if (!structType || structType->isObject || structType->isInterface)
+                return false;
+
+            if (auto structScope = structType->structScope.Lock())
+            {
+                if (auto structSymbol = structScope->resolve(structType->name))
+                    return structSymbol->flags.get_isEnum();
+            }
+
+            return false;
+        }
+
+        bool isFlagsetConstraintType(const Ref<Type>& type)
+        {
+            Ref<Type> resolved = unwrapAliasType(type);
+            if (!resolved || resolved->kind() != TypeKind::Struct)
+                return false;
+
+            auto structType = resolved.AsFast<StructType>();
+            if (!structType || structType->isObject || structType->isInterface)
+                return false;
+
+            if (auto structScope = structType->structScope.Lock())
+            {
+                if (auto structSymbol = structScope->resolve(structType->name))
+                    return structSymbol->flags.get_isFlagset();
+            }
+
+            return false;
+        }
+
         std::vector<Ref<Type>> getIntegerConstraintCandidateTypes()
         {
             auto& ctx = Compiler::get().getTypeContext();
@@ -2554,10 +2622,17 @@ namespace wio::sema
             return candidates;
         }
 
+        std::vector<Ref<Type>> getNoConcreteConstraintCandidateTypes()
+        {
+            return {};
+        }
+
         enum class GenericConstraintTraitKind : uint8_t
         {
             IsInteger,
-            IsNumeric
+            IsNumeric,
+            IsEnum,
+            IsFlagset
         };
 
         using GenericConstraintPredicateFn = bool (*)(const Ref<Type>&);
@@ -2572,9 +2647,9 @@ namespace wio::sema
             GenericConstraintCandidatesFn candidateTypes;
         };
 
-        const std::array<GenericConstraintTraitDescriptor, 2>& getGenericConstraintTraitDescriptors()
+        const std::array<GenericConstraintTraitDescriptor, 4>& getGenericConstraintTraitDescriptors()
         {
-            static const std::array<GenericConstraintTraitDescriptor, 2> descriptors = {{
+            static const std::array<GenericConstraintTraitDescriptor, 4> descriptors = {{
                 {
                     .kind = GenericConstraintTraitKind::IsInteger,
                     .canonicalQualifiedName = "std::traits::IsInteger",
@@ -2588,6 +2663,20 @@ namespace wio::sema
                     .shortName = "IsNumeric",
                     .predicate = isNumericConstraintType,
                     .candidateTypes = getNumericConstraintCandidateTypes
+                },
+                {
+                    .kind = GenericConstraintTraitKind::IsEnum,
+                    .canonicalQualifiedName = "std::traits::IsEnum",
+                    .shortName = "IsEnum",
+                    .predicate = isEnumConstraintType,
+                    .candidateTypes = getNoConcreteConstraintCandidateTypes
+                },
+                {
+                    .kind = GenericConstraintTraitKind::IsFlagset,
+                    .canonicalQualifiedName = "std::traits::IsFlagset",
+                    .shortName = "IsFlagset",
+                    .predicate = isFlagsetConstraintType,
+                    .candidateTypes = getNoConcreteConstraintCandidateTypes
                 }
             }};
             return descriptors;
@@ -2628,6 +2717,33 @@ namespace wio::sema
         std::string_view getGenericConstraintTraitDisplayName(const GenericConstraintTraitDescriptor& descriptor)
         {
             return descriptor.canonicalQualifiedName;
+        }
+
+        bool isOpenNativeTemplateIntrinsic(const std::vector<NodePtr<AttributeStatement>>& attributes)
+        {
+            const Token* cppNameArg = getFirstAttributeArg(attributes, Attribute::CppName);
+            if (!cppNameArg)
+                return false;
+
+            return cppNameArg->value == "wio::runtime::EnumCount" ||
+                   cppNameArg->value == "wio::runtime::EnumName";
+        }
+
+        bool matchesOpenNativeTemplateIntrinsicConstraints(const std::vector<NodePtr<AttributeStatement>>& attributes,
+                                                           const std::vector<Ref<Type>>& bindingTypes)
+        {
+            const Token* cppNameArg = getFirstAttributeArg(attributes, Attribute::CppName);
+            if (!cppNameArg)
+                return true;
+
+            if (cppNameArg->value == "wio::runtime::EnumCount" ||
+                cppNameArg->value == "wio::runtime::EnumName")
+            {
+                return bindingTypes.size() == 1 &&
+                       (isEnumConstraintType(bindingTypes.front()) || isFlagsetConstraintType(bindingTypes.front()));
+            }
+
+            return true;
         }
 
         Ref<Type> getPreparedConstraintType(SemanticAnalyzer& analyzer, const NodePtr<TypeSpecifier>& typeSpecifier)
@@ -5911,11 +6027,11 @@ namespace wio::sema
             if (!functionType->hasParameterPack)
                 currentScore -= static_cast<int>((functionType->paramTypes.size() - actualArgumentTypes.size()) * 25);
 
-            if (genericParameterCount > 0)
-                currentScore -= 1;
+              if (genericParameterCount > 0)
+                  currentScore -= static_cast<int>(genericParameterCount * 25);
 
-            if (isGenericCandidate)
-                currentScore -= static_cast<int>(std::max<size_t>(1, genericParameterCount));
+              if (isGenericCandidate)
+                  currentScore -= static_cast<int>(std::max<size_t>(1, genericParameterCount) * 10);
 
             return currentScore;
         };
@@ -6132,12 +6248,41 @@ namespace wio::sema
                 );
             };
 
+            auto satisfiesOpenNativeTemplateIntrinsicBinding = [&](const Ref<Symbol>& symbol,
+                                                                   const std::vector<std::string>& activeGenericParameterNames,
+                                                                   const bool hasActiveGenericParameterPack,
+                                                                   const GenericBindingSet& bindings) -> bool
+            {
+                if (!symbol || activeGenericParameterNames.empty())
+                    return true;
+
+                auto attributeIt = attributeListsBySymbol_.find(symbol.Get());
+                if (attributeIt == attributeListsBySymbol_.end() || !attributeIt->second)
+                    return true;
+
+                if (!isOpenNativeTemplateIntrinsic(*attributeIt->second))
+                    return true;
+
+                auto resolvedBindingTypes = tryMaterializeConcreteInstantiation(
+                    activeGenericParameterNames,
+                    hasActiveGenericParameterPack,
+                    bindings
+                );
+                if (!resolvedBindingTypes.has_value())
+                    return true;
+
+                return matchesOpenNativeTemplateIntrinsicConstraints(*attributeIt->second, *resolvedBindingTypes);
+            };
+
             bool rejectedByInstantiationWhitelist = false;
             std::string rejectedInstantiationFunctionName;
             std::string rejectedInstantiationSignature;
             bool rejectedByApplyConstraints = false;
             std::string rejectedApplyTargetName;
             std::string rejectedApplySignature;
+            bool rejectedByOpenNativeTemplateIntrinsic = false;
+            std::string rejectedOpenNativeTemplateTargetName;
+            std::string rejectedOpenNativeTemplateSignature;
 
             auto tryResolveFunctionCandidate = [&](const Ref<Symbol>& overload) -> std::optional<ResolvedFunctionCandidate>
             {
@@ -6413,6 +6558,22 @@ namespace wio::sema
                             : "<unresolved>";
                         return std::nullopt;
                     }
+
+                    if (!satisfiesOpenNativeTemplateIntrinsicBinding(overload, activeGenericParameterNames, hasGenericParameterPack, bindingSet))
+                    {
+                        auto resolvedBindingTypes = tryMaterializeConcreteInstantiation(
+                            activeGenericParameterNames,
+                            hasGenericParameterPack,
+                            bindingSet
+                        );
+
+                        rejectedByOpenNativeTemplateIntrinsic = true;
+                        rejectedOpenNativeTemplateTargetName = overload->name;
+                        rejectedOpenNativeTemplateSignature = resolvedBindingTypes.has_value()
+                            ? formatInstantiationSignature(*resolvedBindingTypes)
+                            : "<unresolved>";
+                        return std::nullopt;
+                    }
                 }
 
                 if (!bindingSet.directBindings.empty() ||
@@ -6514,6 +6675,15 @@ namespace wio::sema
                         "Generic callable '{}' rejects type arguments {} because of @Apply constraints.",
                         rejectedApplyTargetName,
                         rejectedApplySignature
+                    );
+                }
+                else if (rejectedByOpenNativeTemplateIntrinsic)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "Generic native callable '{}' accepts only enum or flagset type arguments. Got {}.",
+                        rejectedOpenNativeTemplateTargetName,
+                        rejectedOpenNativeTemplateSignature
                     );
                 }
                 else
@@ -7565,7 +7735,7 @@ namespace wio::sema
                     const std::string actualType = sym->type ? sym->type->toString() : "<unknown>";
                     WIO_LOG_ADD_ERROR(
                         node.location(),
-                        "Const declarations currently support only scalar primitive types. Got '{}'.",
+                        "Const declarations currently support primitive scalar types plus enum/flagset values. Got '{}'.",
                         actualType
                     );
                 }
@@ -7821,7 +7991,11 @@ namespace wio::sema
                 WIO_LOG_ADD_ERROR(node.location(), "@Instantiate is currently supported only together with @Native or @Export.");
             }
 
-            if ((isNative || isExported) && !hasInstantiate && !isPackFunction)
+            const bool allowsOpenNativeTemplateByConstraint =
+                isNative && !isExported &&
+                (isPackFunction || hasApply || isOpenNativeTemplateIntrinsic(node.attributes));
+
+            if ((isNative || isExported) && !hasInstantiate && !allowsOpenNativeTemplateByConstraint)
             {
                 WIO_LOG_ADD_ERROR(
                     node.location(),
@@ -9891,11 +10065,63 @@ namespace wio::sema
             
             Ref<Type> enumType = Ref<StructType>::Create(node.name->token.value, enumScope);
             enumType.AsFast<StructType>()->scopePath = getCurrentNamespacePath();
+            const bool isNativeEnum = hasAttribute(node.attributes, Attribute::Native);
+            enumType.AsFast<StructType>()->isNativePodComponent = isNativeEnum;
+            enumType.AsFast<StructType>()->nativeCppName = node.name ? node.name->token.value : "";
+            enumType.AsFast<StructType>()->nativeCppHeader.clear();
+
+            if (isNativeEnum)
+            {
+                if (hasAttribute(node.attributes, Attribute::CppHeader))
+                {
+                    auto headerArgs = getAttributeArgs(node.attributes, Attribute::CppHeader);
+                    if (headerArgs.size() != 1 || headerArgs.front().type != TokenType::stringLiteral)
+                    {
+                        WIO_LOG_ADD_ERROR(node.location(), "@CppHeader on a native enum expects exactly one string literal argument.");
+                    }
+                    else
+                    {
+                        enumType.AsFast<StructType>()->nativeCppHeader = headerArgs.front().value;
+                    }
+                }
+
+                if (hasAttribute(node.attributes, Attribute::CppName))
+                {
+                    auto cppNameArgs = getAttributeArgs(node.attributes, Attribute::CppName);
+                    if (cppNameArgs.size() != 1)
+                    {
+                        WIO_LOG_ADD_ERROR(node.location(), "@CppName on a native enum expects exactly one target symbol argument.");
+                    }
+                    else if (const Token* cppNameArg = getFirstAttributeArg(node.attributes, Attribute::CppName); cppNameArg)
+                    {
+                        if (cppNameArg->type != TokenType::identifier && cppNameArg->type != TokenType::stringLiteral)
+                        {
+                            WIO_LOG_ADD_ERROR(node.location(), "@CppName on a native enum expects an identifier path like foo::bar or a string literal.");
+                        }
+                        else if (!isValidCppSymbolPath(cppNameArg->value, true))
+                        {
+                            WIO_LOG_ADD_ERROR(node.location(), "@CppName on a native enum must be a valid C++ identifier path like foo::bar.");
+                        }
+                        else
+                        {
+                            enumType.AsFast<StructType>()->nativeCppName = cppNameArg->value;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                if (hasAttribute(node.attributes, Attribute::CppHeader))
+                    WIO_LOG_ADD_ERROR(node.location(), "@CppHeader on enums currently requires declaration-level @Native.");
+                if (hasAttribute(node.attributes, Attribute::CppName))
+                    WIO_LOG_ADD_ERROR(node.location(), "@CppName on enums currently requires declaration-level @Native.");
+            }
+
             Ref<Symbol> enumSym = createSymbol(node.name->token.value, enumType, SymbolKind::Struct, node.location());
-            
+
             enumSym->innerScope = enumScope;
             enumSym->flags.set_isEnum(true);
-            
+
             currentScope_->define(node.name->token.value, enumSym);
             node.name->refType = enumType;
             node.name->referencedSymbol = enumSym;
@@ -9949,6 +10175,57 @@ namespace wio::sema
             
             Ref<Type> flagsetType = Ref<StructType>::Create(node.name->token.value, flagsetScope);
             flagsetType.AsFast<StructType>()->scopePath = getCurrentNamespacePath();
+            const bool isNativeFlagset = hasAttribute(node.attributes, Attribute::Native);
+            flagsetType.AsFast<StructType>()->isNativePodComponent = isNativeFlagset;
+            flagsetType.AsFast<StructType>()->nativeCppName = node.name ? node.name->token.value : "";
+            flagsetType.AsFast<StructType>()->nativeCppHeader.clear();
+
+            if (isNativeFlagset)
+            {
+                if (hasAttribute(node.attributes, Attribute::CppHeader))
+                {
+                    auto headerArgs = getAttributeArgs(node.attributes, Attribute::CppHeader);
+                    if (headerArgs.size() != 1 || headerArgs.front().type != TokenType::stringLiteral)
+                    {
+                        WIO_LOG_ADD_ERROR(node.location(), "@CppHeader on a native flagset expects exactly one string literal argument.");
+                    }
+                    else
+                    {
+                        flagsetType.AsFast<StructType>()->nativeCppHeader = headerArgs.front().value;
+                    }
+                }
+
+                if (hasAttribute(node.attributes, Attribute::CppName))
+                {
+                    auto cppNameArgs = getAttributeArgs(node.attributes, Attribute::CppName);
+                    if (cppNameArgs.size() != 1)
+                    {
+                        WIO_LOG_ADD_ERROR(node.location(), "@CppName on a native flagset expects exactly one target symbol argument.");
+                    }
+                    else if (const Token* cppNameArg = getFirstAttributeArg(node.attributes, Attribute::CppName); cppNameArg)
+                    {
+                        if (cppNameArg->type != TokenType::identifier && cppNameArg->type != TokenType::stringLiteral)
+                        {
+                            WIO_LOG_ADD_ERROR(node.location(), "@CppName on a native flagset expects an identifier path like foo::bar or a string literal.");
+                        }
+                        else if (!isValidCppSymbolPath(cppNameArg->value, true))
+                        {
+                            WIO_LOG_ADD_ERROR(node.location(), "@CppName on a native flagset must be a valid C++ identifier path like foo::bar.");
+                        }
+                        else
+                        {
+                            flagsetType.AsFast<StructType>()->nativeCppName = cppNameArg->value;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                if (hasAttribute(node.attributes, Attribute::CppHeader))
+                    WIO_LOG_ADD_ERROR(node.location(), "@CppHeader on flagsets currently requires declaration-level @Native.");
+                if (hasAttribute(node.attributes, Attribute::CppName))
+                    WIO_LOG_ADD_ERROR(node.location(), "@CppName on flagsets currently requires declaration-level @Native.");
+            }
             Ref<Symbol> flagsetSym = createSymbol(node.name->token.value, flagsetType, SymbolKind::Struct, node.location());
             
             flagsetSym->innerScope = flagsetScope;

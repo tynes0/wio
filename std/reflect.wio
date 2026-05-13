@@ -1,0 +1,13 @@
+realm std {
+    realm reflect {
+        use @CppHeader("enum_reflection.h");
+
+        @Native
+        @CppName(wio::runtime::EnumCount)
+        fn Count<T>() -> usize;
+
+        @Native
+        @CppName(wio::runtime::EnumName)
+        fn Name<T>(value: T) -> string;
+    }
+}

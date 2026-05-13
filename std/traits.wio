@@ -5,5 +5,11 @@ realm std {
 
         interface IsNumeric<T> {
         }
+
+        interface IsEnum<T> {
+        }
+
+        interface IsFlagset<T> {
+        }
     }
 }

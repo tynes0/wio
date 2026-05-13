@@ -1,8 +1,13 @@
 use std::console as Console;
 use std::vector;
+use std::io as io;
 
 fn Entry() -> void
 {
-    mut vec: std::Vector2 = std::Vector2();
-    std::PrintVec2(vec);
+    mut f = std::io::Open("test.txt", std::io::OpenReadWriteCreate);
+    if(std::io::IsOpen(f))
+    {
+        std::io::Write(ref f, "Hello, World!");
+        std::io::Close(ref f);
+    }
 }

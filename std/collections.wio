@@ -192,39 +192,35 @@ realm std {
         }
 
         fn With<K, V>(values: Dict<K, V>, key: K, value: V) -> Dict<K, V> {
-            mut current = values;
+            mut current = values.Clone();
             current.Set(key, value);
             return current;
         }
 
         fn With<V>(values: Dict<string, V>, key: string, value: V) -> Dict<string, V> {
-            mut current = values;
-            current.Set(key, value);
-            return current;
+            return With<string, V>(values, key, value);
         }
 
         fn Extended<K, V>(values: Dict<K, V>, extra: Dict<K, V>) -> Dict<K, V> {
-            mut current = values;
+            mut current = values.Clone();
             current.Extend(extra);
             return current;
         }
 
         fn Cleared<K, V>(values: Dict<K, V>) -> Dict<K, V> {
-            mut current = values;
+            mut current = values.Clone();
             current.Clear();
             return current;
         }
 
         fn Without<K, V>(values: Dict<K, V>, key: K) -> Dict<K, V> {
-            mut current = values;
+            mut current = values.Clone();
             current.Remove(key);
             return current;
         }
 
         fn Without<V>(values: Dict<string, V>, key: string) -> Dict<string, V> {
-            mut current = values;
-            current.Remove(key);
-            return current;
+            return Without<string, V>(values, key);
         }
 
         fn FirstKey<K, V>(values: Tree<K, V>) -> K {

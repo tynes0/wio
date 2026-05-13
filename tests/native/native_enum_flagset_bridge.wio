@@ -1,0 +1,45 @@
+use std::console as console;
+
+realm ffi {
+    use @CppHeader("native_enum_flagset_bridge.h");
+
+    @Native
+    @Type(u8)
+    @CppName(native_enum_flagset::state)
+    enum State {
+        idle = 0u8,
+        playing = 1u8,
+        paused = 2u8
+    };
+
+    @Native
+    @Type(u32)
+    @CppName(native_enum_flagset::feature)
+    flagset Feature {
+        none = 0u32,
+        audio = 1u32 << 0u32,
+        debug = 1u32 << 1u32,
+        all = audio | debug
+    };
+
+    @Native
+    @CppName(native_enum_flagset::Advance)
+    fn Advance(value: State) -> State;
+
+    @Native
+    @CppName(native_enum_flagset::HasFeature)
+    fn HasFeature(value: Feature, mask: Feature) -> bool;
+}
+
+fn Entry() -> i32 {
+    if (ffi::Advance(ffi::State::idle) != ffi::State::playing) {
+        return 1;
+    }
+
+    if (not ffi::HasFeature(ffi::Feature::all, ffi::Feature::debug)) {
+        return 2;
+    }
+
+    console::PrintLine("native-enum-flagset-ok");
+    return 0;
+}

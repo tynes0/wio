@@ -805,6 +805,15 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_native_enum_flagset_bridge_run
+        "${CMAKE_SOURCE_DIR}/tests/native/native_enum_flagset_bridge.wio"
+        "native-enum-flagset-ok"
+        --run
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
+    )
+
+    add_wio_output_test(
         wio_test_generic_native_predicate_bridge_run
         "${CMAKE_SOURCE_DIR}/tests/native/generic_native_predicate_bridge.wio"
         "Generic native predicate: 14, 18"
@@ -1220,6 +1229,27 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_std_console_surface_run
         "${CMAKE_SOURCE_DIR}/tests/std_console_surface_run.wio"
         "Std console surface: 1,2,3 xxx a/b"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_std_console_native_types_run
+        "${CMAKE_SOURCE_DIR}/tests/std_console_native_types_run.wio"
+        "IO std-console-native-ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_const_enum_flagset_reflection_run
+        "${CMAKE_SOURCE_DIR}/tests/const_enum_flagset_reflection_run.wio"
+        "enum-reflection-ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_std_io_surface_run
+        "${CMAKE_SOURCE_DIR}/tests/std_io_surface_run.wio"
+        "Std io surface: 2/3/3/8/AB/CD/read\\|share_read\\|sequential/none"
         --run
     )
 
@@ -1973,7 +2003,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_const_string_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/const_string_not_supported.wio"
-        "Const declarations currently support only scalar primitive types. Got 'string'."
+        "Const declarations currently support primitive scalar types plus enum/flagset values. Got 'string'."
     )
 
     add_wio_failure_test(
@@ -1991,7 +2021,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_const_array_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/const_array_not_supported.wio"
-        "Const declarations currently support only scalar primitive types. Got 'i32\\[\\]'."
+        "Const declarations currently support primitive scalar types plus enum/flagset values. Got 'i32\\[\\]'."
     )
 
     add_wio_failure_test(

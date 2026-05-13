@@ -2707,6 +2707,7 @@ namespace wio::codegen
         emitHeaderLine();
         emitHeaderLine("#include <exception.h>");
         emitHeaderLine("#include <any.h>");
+        emitHeaderLine("#include <enum_reflection.h>");
         emitHeaderLine("#include <fit.h>");
         emitHeaderLine("#include <intrinsics.h>");
         emitHeaderLine("#include <meta.h>");
@@ -3698,10 +3699,179 @@ namespace wio::codegen
             emitLine(templateLine);
         };
 
+        auto getEnumUnderlyingCppType = [&](const std::vector<NodePtr<AttributeStatement>>& attributes,
+                                            const std::string& fallbackType) -> std::string
+        {
+            auto typeArgs = getAttributeArgs(attributes, Attribute::Type);
+            if (typeArgs.empty())
+                return fallbackType;
+
+            switch (typeArgs[0].type)
+            {
+            case TokenType::kwI8: return "int8_t";
+            case TokenType::kwU8: return "uint8_t";
+            case TokenType::kwI16: return "int16_t";
+            case TokenType::kwU16: return "uint16_t";
+            case TokenType::kwI32: return "int32_t";
+            case TokenType::kwU32: return "uint32_t";
+            case TokenType::kwI64: return "int64_t";
+            case TokenType::kwU64: return "uint64_t";
+            default: return fallbackType;
+            }
+        };
+
+        auto emitEnumReflectionSpecialization = [&](const EnumDeclaration& declaration)
+        {
+            auto sym = declaration.name->referencedSymbol.Lock();
+            std::string enumName = Mangler::mangleStruct(declaration.name->token.value, sym ? sym->scopePath : "");
+
+            emitLine("template <>");
+            emitLine("struct wio::runtime::EnumReflection<" + enumName + ">");
+            emitLine("{");
+            indent();
+            emitLine("static constexpr std::size_t Count = " + std::to_string(declaration.members.size()) + "u;");
+            emitLine("static std::string Name(const " + enumName + " value)");
+            emitLine("{");
+            indent();
+            emitLine("switch (value)");
+            emitLine("{");
+            indent();
+            for (const auto& member : declaration.members)
+            {
+                emitLine("case " + enumName + "::" + member.name->token.value + ": return \"" +
+                         common::wioStringToEscapedCppString(member.name->token.value) + "\";");
+            }
+            emitLine("default: return \"<unknown>\";");
+            dedent();
+            emitLine("}");
+            dedent();
+            emitLine("}");
+            dedent();
+            emitLine("};");
+        };
+
+        auto emitFlagsetReflectionSpecialization = [&](const FlagsetDeclaration& declaration)
+        {
+            auto sym = declaration.name->referencedSymbol.Lock();
+            std::string flagsetName = Mangler::mangleStruct(declaration.name->token.value, sym ? sym->scopePath : "");
+            const std::string fallbackUnderType = getEnumUnderlyingCppType(declaration.attributes, "uint32_t");
+
+            emitLine("template <>");
+            emitLine("struct wio::runtime::EnumReflection<" + flagsetName + ">");
+            emitLine("{");
+            indent();
+            emitLine("static constexpr std::size_t Count = " + std::to_string(declaration.members.size()) + "u;");
+            emitLine("static std::string Name(const " + flagsetName + " value)");
+            emitLine("{");
+            indent();
+            emitLine("switch (value)");
+            emitLine("{");
+            indent();
+            for (const auto& member : declaration.members)
+            {
+                emitLine("case " + flagsetName + "::" + member.name->token.value + ": return \"" +
+                         common::wioStringToEscapedCppString(member.name->token.value) + "\";");
+            }
+            emitLine("default: break;");
+            dedent();
+            emitLine("}");
+            emitLine("using Under = std::underlying_type_t<" + flagsetName + ">;");
+            emitLine("const Under raw = static_cast<Under>(value);");
+            emitLine("std::string result;");
+            emitLine("bool first = true;");
+            emitLine("Under remaining = raw;");
+            for (const auto& member : declaration.members)
+            {
+                const std::string memberName = member.name->token.value;
+                emitLine("{");
+                indent();
+                emitLine("const Under memberValue = static_cast<Under>(" + flagsetName + "::" + memberName + ");");
+                emitLine("if (memberValue != 0 && (raw & memberValue) == memberValue)");
+                emitLine("{");
+                indent();
+                emitLine("if (!first) result += \"|\";");
+                emitLine("result += \"" + common::wioStringToEscapedCppString(memberName) + "\";");
+                emitLine("first = false;");
+                emitLine("remaining = static_cast<Under>(remaining & static_cast<Under>(~memberValue));");
+                dedent();
+                emitLine("}");
+                dedent();
+                emitLine("}");
+            }
+            emitLine("if (remaining != 0)");
+            emitLine("{");
+            indent();
+            emitLine("if (!result.empty()) result += \"|\";");
+            emitLine("result += \"<unknown>\";");
+            dedent();
+            emitLine("}");
+            emitLine("if (result.empty()) return raw == 0 ? \"0\" : \"<unknown>\";");
+            emitLine("return result;");
+            dedent();
+            emitLine("}");
+            dedent();
+            emitLine("};");
+        };
+
         emitPhase(emitPhase, statements, [&](const auto& stmt)
         {
             if (stmt->template is<UseStatement>())
                 stmt->accept(*this);
+        });
+
+        emitPhase(emitPhase, statements, [&](const auto& stmt)
+        {
+            if (stmt->template is<FlagDeclaration>())
+                stmt->accept(*this);
+
+            if (stmt->template is<FlagsetDeclaration>())
+            {
+                auto declaration = stmt->template as<FlagsetDeclaration>();
+                auto sym = declaration->name->referencedSymbol.Lock();
+                auto enumType = getStructTypeFromSymbol(sym);
+                if (enumType && usesNativePodAliasModelForCodegen(enumType))
+                {
+                    std::string nativeTypeName = enumType->nativeCppName.empty()
+                        ? enumType->name
+                        : enumType->nativeCppName;
+
+                    emitLine(std::format(
+                        "using {} = {};",
+                        Mangler::mangleStruct(declaration->name->token.value, sym ? sym->scopePath : ""),
+                        nativeTypeName
+                    ));
+                }
+                else
+                {
+                    stmt->accept(*this);
+                }
+
+                emitFlagsetReflectionSpecialization(*declaration);
+            }
+            else if (stmt->template is<EnumDeclaration>())
+            {
+                auto declaration = stmt->template as<EnumDeclaration>();
+                auto sym = declaration->name->referencedSymbol.Lock();
+                auto enumType = getStructTypeFromSymbol(sym);
+                if (enumType && usesNativePodAliasModelForCodegen(enumType))
+                {
+                    std::string nativeTypeName = enumType->nativeCppName.empty()
+                        ? enumType->name
+                        : enumType->nativeCppName;
+
+                    emitLine(std::format(
+                        "using {} = {};",
+                        Mangler::mangleStruct(declaration->name->token.value, sym ? sym->scopePath : ""),
+                        nativeTypeName
+                    ));
+                }
+                else
+                {
+                    stmt->accept(*this);
+                }
+
+                emitEnumReflectionSpecialization(*declaration);
+            }
         });
 
         emitPhase(emitPhase, statements, [&](const auto& stmt)
@@ -3712,12 +3882,6 @@ namespace wio::codegen
                 if (variableDecl->mutability == Mutability::Const)
                     stmt->accept(*this);
             }
-        });
-
-        emitPhase(emitPhase, statements, [&](const auto& stmt)
-        {
-            if (stmt->template is<EnumDeclaration>() || stmt->template is<FlagsetDeclaration>() || stmt->template is<FlagDeclaration>())
-                stmt->accept(*this);
         });
 
         emitPhase(emitPhase, statements, [&](const auto& stmt)
@@ -7006,6 +7170,15 @@ namespace wio::codegen
         emitSourceDirective(node.location());
         auto flagsetType = getStructTypeFromSymbol(node.name->referencedSymbol.Lock());
         std::string enumName = mangleStructTypeName(flagsetType);
+
+        if (flagsetType && usesNativePodAliasModelForCodegen(flagsetType))
+        {
+            std::string nativeTypeName = flagsetType->nativeCppName.empty() ? flagsetType->name : flagsetType->nativeCppName;
+            EMIT_TABS();
+            emitLine("using " + enumName + " = " + nativeTypeName + ";\n");
+            return;
+        }
+
         std::string underType = "uint32_t";
         
         auto typeArgs = getAttributeArgs(node.attributes, Attribute::Type);

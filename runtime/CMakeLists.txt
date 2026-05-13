@@ -9,6 +9,7 @@ set(WIO_RUNTIME_HEADERS
     "${WIO_RUNTIME_INCLUDE_DIR}/std_console.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_fs.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_math.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/std_io.h"
 )
 
 set(WIO_RUNTIME_SOURCES
@@ -16,6 +17,7 @@ set(WIO_RUNTIME_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/std_console.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/std_fs.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/std_math.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/std_io.cpp"
 )
 
 set(WIO_BACKEND_RUNTIME_DIR "${CMAKE_BINARY_DIR}/runtime/backend")
@@ -24,6 +26,7 @@ set(WIO_BACKEND_RUNTIME_OBJ_STD_ASSERT "${WIO_BACKEND_RUNTIME_DIR}/std_assert.o"
 set(WIO_BACKEND_RUNTIME_OBJ_STD_CONSOLE "${WIO_BACKEND_RUNTIME_DIR}/std_console.o")
 set(WIO_BACKEND_RUNTIME_OBJ_STD_FS "${WIO_BACKEND_RUNTIME_DIR}/std_fs.o")
 set(WIO_BACKEND_RUNTIME_OBJ_STD_MATH "${WIO_BACKEND_RUNTIME_DIR}/std_math.o")
+set(WIO_BACKEND_RUNTIME_OBJ_STD_IO "${WIO_BACKEND_RUNTIME_DIR}/std_io.o")
 
 file(MAKE_DIRECTORY "${WIO_BACKEND_RUNTIME_DIR}")
 
@@ -101,6 +104,23 @@ add_custom_command(
 
 add_custom_command(
     OUTPUT
+        "${WIO_BACKEND_RUNTIME_OBJ_STD_IO}"
+    COMMAND
+        ${WIO_BACKEND_CXX_COMPILER}
+        -std=c++20
+        -I "${WIO_RUNTIME_INCLUDE_DIR}"
+        -I "${CMAKE_CURRENT_SOURCE_DIR}/src"
+        -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_io.cpp"
+        -o "${WIO_BACKEND_RUNTIME_OBJ_STD_IO}"
+    DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/std_io.cpp"
+        "${WIO_RUNTIME_INCLUDE_DIR}/std_io.h"
+        "${WIO_RUNTIME_INCLUDE_DIR}/exception.h"
+    VERBATIM
+)
+
+add_custom_command(
+    OUTPUT
         "${WIO_BACKEND_RUNTIME_LIB}"
     COMMAND
         ${WIO_BACKEND_AR}
@@ -110,11 +130,13 @@ add_custom_command(
         "${WIO_BACKEND_RUNTIME_OBJ_STD_CONSOLE}"
         "${WIO_BACKEND_RUNTIME_OBJ_STD_FS}"
         "${WIO_BACKEND_RUNTIME_OBJ_STD_MATH}"
+        "${WIO_BACKEND_RUNTIME_OBJ_STD_IO}"
     DEPENDS
         "${WIO_BACKEND_RUNTIME_OBJ_STD_ASSERT}"
         "${WIO_BACKEND_RUNTIME_OBJ_STD_CONSOLE}"
         "${WIO_BACKEND_RUNTIME_OBJ_STD_FS}"
         "${WIO_BACKEND_RUNTIME_OBJ_STD_MATH}"
+        "${WIO_BACKEND_RUNTIME_OBJ_STD_IO}"
     VERBATIM
 )
 
