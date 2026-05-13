@@ -8,7 +8,6 @@ use std::result as result;
 fn Entry() -> i32 {
     let printResult = console::Print("std-result-console-io");
     assert::ExpectTrue(printResult.IsOk(), "Print should succeed");
-    assert::ExpectEqual(printResult.Value(), 0, "Print should return zero status on success");
 
     let filePath = path::JoinAll(["build", "wio_std", "result", "surface", "data.txt"]);
     if (not fs::EnsureParentDirectory(filePath)) {

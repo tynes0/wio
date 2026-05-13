@@ -1771,21 +1771,21 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test_clean(
         wio_invalid_result_unwrap_requires_result
         "${CMAKE_SOURCE_DIR}/tests/invalid/result_unwrap_requires_result.wio"
-        "The '!\\(\\)' unwrap syntax requires the called function to return std::ResultValue<T> or std::result::Result<T>\\."
+        "The '!\\(\\)' unwrap syntax requires the called function to return std::Result<T>\\."
         "Generated C\\+\\+ output:"
     )
 
     add_wio_failure_test_clean(
         wio_invalid_result_propagate_requires_result_context
         "${CMAKE_SOURCE_DIR}/tests/invalid/result_propagate_requires_result_context.wio"
-        "The '\\?\\(\\)' propagation syntax requires the enclosing function to return std::ResultValue<T> or std::result::Result<T>\\."
+        "The '\\?\\(\\)' propagation syntax requires the enclosing function to return std::Result<T>\\."
         "Generated C\\+\\+ output:"
     )
 
     add_wio_failure_test_clean(
         wio_invalid_result_propagate_requires_result_call
         "${CMAKE_SOURCE_DIR}/tests/invalid/result_propagate_requires_result_call.wio"
-        "The '\\?\\(\\)' propagation syntax requires the called function to return std::ResultValue<T> or std::result::Result<T>\\."
+        "The '\\?\\(\\)' propagation syntax requires the called function to return std::Result<T>\\."
         "Generated C\\+\\+ output:"
     )
 

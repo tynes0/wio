@@ -1,13 +1,12 @@
 use std::assert as assert;
 use std::console as console;
 
-fn Wrap<T>(value: T) -> std::ResultValue<T> {
-    return std::OkResultValue<T>(value);
+fn Wrap<T>(value: T) -> std::Result<T> {
+    return std::Ok<T>(value);
 }
-
-fn ReadExplicitText() -> std::ResultValue<string> {
+fn ReadExplicitText() -> std::Result<string> {
     let inner = Wrap<string>?("explicit-ok");
-    return std::OkResultValue<string>(inner);
+    return std::Ok<string>(inner);
 }
 
 fn Entry() -> i32 {

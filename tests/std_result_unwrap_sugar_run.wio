@@ -4,10 +4,9 @@ use std::fs as fs;
 use std::io as io;
 use std::path as path;
 
-fn WrapGreeting(value: string) -> std::ResultValue<string> {
-    return std::OkResultValue<string>(value);
+fn WrapGreeting(value: string) -> std::Result<string> {
+    return std::Ok<string>(value);
 }
-
 fn Entry() -> i32 {
     let greeting = WrapGreeting!("unwrap");
     assert::ExpectEqual(greeting, "unwrap", "unwrap sugar should return the success payload");
@@ -25,8 +24,7 @@ fn Entry() -> i32 {
     let text = io::ReadAll!(ref reader);
     io::Close!(ref reader);
 
-    let printStatus = console::Print!("std-result-unwrap ");
-    assert::ExpectEqual(printStatus, 0, "Print! should unwrap success status");
+    console::Print!("std-result-unwrap ");
     console::PrintLine!("std-result-unwrap-ok");
 
     assert::ExpectEqual(written fit i32, 9, "Write! should return written bytes");

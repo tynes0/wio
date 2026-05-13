@@ -55,12 +55,14 @@ Current v1 expectation:
 
 ### 2.1.1 Shared Result Convention
 
-- `std::result` provides the shared `ResultValue<T>` model used by `std::io` and
+- `std::Result<T>` is the shared fallible result model used by `std::io` and
   `std::console`
-- `Foo!()` unwraps a `ResultValue<T>`-returning call and panics if it contains
+- `std::result` remains as a helper/compatibility realm for factories and
+  legacy aliases
+- `Foo!()` unwraps a `Result<T>`-returning call and panics if it contains
   an error
-- `Foo?()` unwraps a `ResultValue<T>`-returning call and propagates the
-  contained error from the enclosing `ResultValue<U>`-returning function
+- `Foo?()` unwraps a `Result<T>`-returning call and propagates the
+  contained error from the enclosing `Result<U>`-returning function
 - this keeps fallible std APIs on one naming convention instead of splitting
   into `ReadAll` vs `ReadAllResult`
 

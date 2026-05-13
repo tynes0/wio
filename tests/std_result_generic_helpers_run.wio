@@ -1,10 +1,9 @@
 use std::assert as assert;
 use std::console as console;
 
-fn Wrap<T>(value: T) -> std::ResultValue<T> {
-    return std::OkResultValue<T>(value);
+fn Wrap<T>(value: T) -> std::Result<T> {
+    return std::Ok<T>(value);
 }
-
 fn WrapAlias<T>(value: T) -> std::result::Result<T> {
     return std::result::Ok<T>(value);
 }

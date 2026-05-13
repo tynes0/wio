@@ -1113,7 +1113,7 @@ namespace wio::sema
 
             auto structType = resolved.AsFast<StructType>();
             if (!structType ||
-                structType->name != "ResultValue" ||
+                structType->name != "Result" ||
                 structType->scopePath != "std" ||
                 structType->genericArguments.size() != 1 ||
                 !structType->genericArguments.front())
@@ -5906,7 +5906,7 @@ namespace wio::sema
                 {
                     WIO_LOG_ADD_ERROR(
                         node.location(),
-                        "The '?()' propagation syntax requires the enclosing function to return std::ResultValue<T> or std::result::Result<T>."
+                        "The '?()' propagation syntax requires the enclosing function to return std::Result<T>."
                     );
                     node.refType = Compiler::get().getTypeContext().getUnknown();
                     return false;
@@ -5920,14 +5920,14 @@ namespace wio::sema
             {
                 WIO_LOG_ADD_ERROR(
                     node.location(),
-                    "The '?()' propagation syntax requires the called function to return std::ResultValue<T> or std::result::Result<T>."
+                    "The '?()' propagation syntax requires the called function to return std::Result<T>."
                 );
             }
             else
             {
                 WIO_LOG_ADD_ERROR(
                     node.location(),
-                    "The '!()' unwrap syntax requires the called function to return std::ResultValue<T> or std::result::Result<T>."
+                    "The '!()' unwrap syntax requires the called function to return std::Result<T>."
                 );
             }
             node.refType = Compiler::get().getTypeContext().getUnknown();

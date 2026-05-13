@@ -428,12 +428,12 @@ realm std {
             );
         }
 
-        fn ResultFromStatus(status: StatusCode) -> ResultValue<ResultUnit> {
+        fn ResultFromStatus(status: StatusCode) -> Result<ResultUnit> {
             if (Ok(status)) {
-                return ResultValue<ResultUnit>(ResultUnit());
+                return Result<ResultUnit>(ResultUnit());
             }
 
-            return ResultValue<ResultUnit>(LastResultError());
+            return Result<ResultUnit>(LastResultError());
         }
 
         @Native
@@ -601,138 +601,138 @@ realm std {
         @CppName(wio::runtime::std_console::InputUntil)
         fn InputUntil(delimiter: char) -> string;
 
-        fn Print<T>(value: T) -> ResultValue<i32> {
+        fn Print<T>(value: T) -> Result<ResultUnit> {
             let status = PrintRaw(value);
             if (status == 0) {
-                return ResultValue<i32>(status);
+                return Result<ResultUnit>(ResultUnit());
             }
 
-            return ResultValue<i32>(LastResultError());
+            return Result<ResultUnit>(LastResultError());
         }
 
-        fn PrintResult<T>(value: T) -> ResultValue<i32> {
+        fn PrintResult<T>(value: T) -> Result<ResultUnit> {
             return Print(value);
         }
 
-        fn PrintLine() -> ResultValue<i32> {
+        fn PrintLine() -> Result<ResultUnit> {
             let status = PrintLineRaw();
             if (status == 0) {
-                return ResultValue<i32>(status);
+                return Result<ResultUnit>(ResultUnit());
             }
 
-            return ResultValue<i32>(LastResultError());
+            return Result<ResultUnit>(LastResultError());
         }
 
-        fn PrintLineResult() -> ResultValue<i32> {
+        fn PrintLineResult() -> Result<ResultUnit> {
             return PrintLine();
         }
 
-        fn PrintLine<T>(value: T) -> ResultValue<i32> {
+        fn PrintLine<T>(value: T) -> Result<ResultUnit> {
             let status = PrintLineRaw(value);
             if (status == 0) {
-                return ResultValue<i32>(status);
+                return Result<ResultUnit>(ResultUnit());
             }
 
-            return ResultValue<i32>(LastResultError());
+            return Result<ResultUnit>(LastResultError());
         }
 
-        fn PrintLineResult<T>(value: T) -> ResultValue<i32> {
+        fn PrintLineResult<T>(value: T) -> Result<ResultUnit> {
             return PrintLine(value);
         }
 
-        fn Input(prompt: string) -> ResultValue<string> {
+        fn Input(prompt: string) -> Result<string> {
             let value = InputRaw(prompt);
             if (LastStatusCode() == Status::Ok) {
-                return ResultValue<string>(value);
+                return Result<string>(value);
             }
 
-            return ResultValue<string>(LastResultError());
+            return Result<string>(LastResultError());
         }
 
-        fn InputResult(prompt: string) -> ResultValue<string> {
+        fn InputResult(prompt: string) -> Result<string> {
             return Input(prompt);
         }
 
-        fn Input() -> ResultValue<string> {
+        fn Input() -> Result<string> {
             let value = InputRaw();
             if (LastStatusCode() == Status::Ok) {
-                return ResultValue<string>(value);
+                return Result<string>(value);
             }
 
-            return ResultValue<string>(LastResultError());
+            return Result<string>(LastResultError());
         }
 
-        fn InputResult() -> ResultValue<string> {
+        fn InputResult() -> Result<string> {
             return Input();
         }
 
-        fn ReadLine() -> ResultValue<string> {
+        fn ReadLine() -> Result<string> {
             mut value = "";
             let status = TryReadLine(ref value);
             if (Ok(status)) {
-                return ResultValue<string>(value);
+                return Result<string>(value);
             }
 
-            return ResultValue<string>(LastResultError());
+            return Result<string>(LastResultError());
         }
 
-        fn ReadLineResult() -> ResultValue<string> {
+        fn ReadLineResult() -> Result<string> {
             return ReadLine();
         }
 
-        fn ReadWord() -> ResultValue<string> {
+        fn ReadWord() -> Result<string> {
             mut value = "";
             let status = TryReadWord(ref value);
             if (Ok(status)) {
-                return ResultValue<string>(value);
+                return Result<string>(value);
             }
 
-            return ResultValue<string>(LastResultError());
+            return Result<string>(LastResultError());
         }
 
-        fn ReadWordResult() -> ResultValue<string> {
+        fn ReadWordResult() -> Result<string> {
             return ReadWord();
         }
 
-        fn Title() -> ResultValue<string> {
+        fn Title() -> Result<string> {
             mut value = "";
             let status = TryGetTitle(ref value);
             if (Ok(status)) {
-                return ResultValue<string>(value);
+                return Result<string>(value);
             }
 
-            return ResultValue<string>(LastResultError());
+            return Result<string>(LastResultError());
         }
 
-        fn TitleResult() -> ResultValue<string> {
+        fn TitleResult() -> Result<string> {
             return Title();
         }
 
-        fn BackgroundColor() -> ResultValue<Color> {
+        fn BackgroundColor() -> Result<Color> {
             mut value = Color::Black;
             let status = TryGetBackgroundColor(ref value);
             if (Ok(status)) {
-                return ResultValue<Color>(value);
+                return Result<Color>(value);
             }
 
-            return ResultValue<Color>(LastResultError());
+            return Result<Color>(LastResultError());
         }
 
-        fn BackgroundColorResult() -> ResultValue<Color> {
+        fn BackgroundColorResult() -> Result<Color> {
             return BackgroundColor();
         }
 
-        fn ForegroundColor() -> ResultValue<Color> {
+        fn ForegroundColor() -> Result<Color> {
             mut value = Color::Gray;
             let status = TryGetForegroundColor(ref value);
             if (Ok(status)) {
-                return ResultValue<Color>(value);
+                return Result<Color>(value);
             }
 
-            return ResultValue<Color>(LastResultError());
+            return Result<Color>(LastResultError());
         }
 
-        fn ForegroundColorResult() -> ResultValue<Color> {
+        fn ForegroundColorResult() -> Result<Color> {
             return ForegroundColor();
         }
 

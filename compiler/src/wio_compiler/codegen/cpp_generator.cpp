@@ -6493,7 +6493,7 @@ namespace wio::codegen
 
                 auto structType = resolvedReturnType.AsFast<sema::StructType>();
                 return structType &&
-                    structType->name == "ResultValue" &&
+                    (structType->name == "Result" || structType->name == "ResultValue") &&
                     structType->scopePath == "std" &&
                     structType->genericArguments.size() == 1;
             }();

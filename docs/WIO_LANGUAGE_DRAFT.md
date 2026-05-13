@@ -69,7 +69,6 @@ fn Entry(args: string[]) -> i32 {
     return 0;
 }
 ```
-
 ### 2.2 Whitespace
 
 Whitespace is generally ignored except where it separates tokens.
@@ -2833,15 +2832,15 @@ fn Entry() -> i32 {
 `Foo!()` currently means:
 
 - call `Foo(...)`
-- require the result to be `std::ResultValue<T>` or `std::result::Result<T>`
+- require the result to be `std::Result<T>`
 - return the contained success value
 - panic at runtime if the result contains an error
 
 `Foo?()` currently means:
 
 - call `Foo(...)`
-- require the called function to return `std::ResultValue<T>` or `std::result::Result<T>`
-- require the enclosing function to return `std::ResultValue<U>` or `std::result::Result<U>`
+- require the called function to return `std::Result<T>`
+- require the enclosing function to return `std::Result<U>`
 - return the contained success value
 - if the call returns an error, immediately propagate that error from the enclosing function
 

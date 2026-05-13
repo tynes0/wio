@@ -24,7 +24,7 @@ realm std {
         message: string;
     }
 
-    object ResultValue<T> {
+    object Result<T> {
         private ok: bool;
         private value: T;
         private error: ResultError;
@@ -91,6 +91,8 @@ realm std {
         }
     }
 
+    type ResultValue<T> = Result<T>;
+
     fn MakeResultError(domain: ResultDomain, code: i32, message: string) -> ResultError {
         mut error = ResultError();
         error.domain = domain;
@@ -109,23 +111,35 @@ realm std {
         return error;
     }
 
-    fn OkResultValue<T>(value: T) -> ResultValue<T> {
-        return ResultValue<T>(value);
+    fn Ok<T>(value: T) -> Result<T> {
+        return Result<T>(value);
     }
 
-    fn OkUnitResult() -> ResultValue<ResultUnit> {
-        return ResultValue<ResultUnit>(ResultUnit());
+    fn OkUnit() -> Result<ResultUnit> {
+        return Result<ResultUnit>(ResultUnit());
     }
 
-    fn ErrResultValue<T>(error: ResultError) -> ResultValue<T> {
-        return ResultValue<T>(error);
+    fn Err<T>(error: ResultError) -> Result<T> {
+        return Result<T>(error);
+    }
+
+    fn OkResultValue<T>(value: T) -> Result<T> {
+        return Ok<T>(value);
+    }
+
+    fn OkUnitResult() -> Result<ResultUnit> {
+        return OkUnit();
+    }
+
+    fn ErrResultValue<T>(error: ResultError) -> Result<T> {
+        return Err<T>(error);
     }
 
     realm result {
         type Domain = ResultDomain;
         type Unit = ResultUnit;
         type Error = ResultError;
-        type Result<T> = ResultValue<T>;
+        type Result<T> = std::Result<T>;
 
         fn MakeError(domain: Domain, code: i32, message: string) -> Error {
             return MakeResultError(domain, code, message);
@@ -136,15 +150,15 @@ realm std {
         }
 
         fn Ok<T>(value: T) -> Result<T> {
-            return OkResultValue(value);
+            return std::Ok<T>(value);
         }
 
         fn OkUnit() -> Result<Unit> {
-            return OkUnitResult();
+            return std::OkUnit();
         }
 
         fn Err<T>(error: Error) -> Result<T> {
-            return ErrResultValue<T>(error);
+            return std::Err<T>(error);
         }
     }
 }

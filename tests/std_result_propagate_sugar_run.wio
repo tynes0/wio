@@ -4,18 +4,17 @@ use std::fs as fs;
 use std::io as io;
 use std::path as path;
 
-fn ReadMessage(pathValue: string) -> std::ResultValue<string> {
+fn ReadMessage(pathValue: string) -> std::Result<string> {
     mut file = io::Open?(pathValue, io::OpenRead);
     let text = io::ReadAll?(ref file);
     io::Close?(ref file);
-    return std::OkResultValue<string>(text);
+    return std::Ok<string>(text);
 }
-
-fn WriteMessage(pathValue: string, value: string) -> std::ResultValue<usize> {
+fn WriteMessage(pathValue: string, value: string) -> std::Result<usize> {
     mut file = io::Open?(pathValue, io::OpenWrite);
     let written = io::Write?(ref file, value);
     io::Close?(ref file);
-    return std::OkResultValue<usize>(written);
+    return std::Ok<usize>(written);
 }
 
 fn Entry() -> i32 {
