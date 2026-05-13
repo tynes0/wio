@@ -1415,4 +1415,413 @@ namespace wio::runtime::std_io
         const std::size_t lineBytes = WriteLine(file);
         return valueBytes + lineBytes;
     }
+
+    bool TryOpenStringArg(
+        const std::string_view path,
+        const OpenMode mode,
+        File& file,
+        FileError& error,
+        NativeErrorCode& nativeError,
+        std::string& message) noexcept
+    {
+        try
+        {
+            file = Open(path, mode);
+            error = FileError::none;
+            nativeError = 0;
+            message.clear();
+            return true;
+        }
+        catch (const FileException& exception)
+        {
+            error = exception.Error();
+            nativeError = exception.NativeError();
+            message = exception.what();
+            return false;
+        }
+        catch (const RuntimeException& exception)
+        {
+            error = FileError::open_failed;
+            nativeError = 0;
+            message = exception.what();
+            return false;
+        }
+        catch (const std::exception& exception)
+        {
+            error = FileError::open_failed;
+            nativeError = 0;
+            message = exception.what();
+            return false;
+        }
+        catch (...)
+        {
+            error = FileError::open_failed;
+            nativeError = 0;
+            message = "std_io open failed.";
+            return false;
+        }
+    }
+
+    bool TryCloseResult(
+        File& file,
+        FileError& error,
+        NativeErrorCode& nativeError,
+        std::string& message) noexcept
+    {
+        try
+        {
+            Close(file);
+            error = FileError::none;
+            nativeError = 0;
+            message.clear();
+            return true;
+        }
+        catch (const FileException& exception)
+        {
+            error = exception.Error();
+            nativeError = exception.NativeError();
+            message = exception.what();
+            return false;
+        }
+        catch (const RuntimeException& exception)
+        {
+            error = FileError::close_failed;
+            nativeError = 0;
+            message = exception.what();
+            return false;
+        }
+        catch (const std::exception& exception)
+        {
+            error = FileError::close_failed;
+            nativeError = 0;
+            message = exception.what();
+            return false;
+        }
+        catch (...)
+        {
+            error = FileError::close_failed;
+            nativeError = 0;
+            message = "std_io close failed.";
+            return false;
+        }
+    }
+
+    bool TrySizeResult(
+        const File& file,
+        std::uint64_t& value,
+        FileError& error,
+        NativeErrorCode& nativeError,
+        std::string& message) noexcept
+    {
+        try
+        {
+            value = Size(file);
+            error = FileError::none;
+            nativeError = 0;
+            message.clear();
+            return true;
+        }
+        catch (const FileException& exception)
+        {
+            error = exception.Error();
+            nativeError = exception.NativeError();
+            message = exception.what();
+            return false;
+        }
+        catch (const RuntimeException& exception)
+        {
+            error = FileError::size_failed;
+            nativeError = 0;
+            message = exception.what();
+            return false;
+        }
+        catch (const std::exception& exception)
+        {
+            error = FileError::size_failed;
+            nativeError = 0;
+            message = exception.what();
+            return false;
+        }
+        catch (...)
+        {
+            error = FileError::size_failed;
+            nativeError = 0;
+            message = "std_io size failed.";
+            return false;
+        }
+    }
+
+    bool TryReadResult(
+        File& file,
+        const std::size_t size,
+        std::string& value,
+        io::ReadError& error,
+        NativeErrorCode& nativeError,
+        std::string& message) noexcept
+    {
+        try
+        {
+            value = Read(file, size);
+            error = io::ReadError::none;
+            nativeError = 0;
+            message.clear();
+            return true;
+        }
+        catch (const FileReadException& exception)
+        {
+            error = exception.Error();
+            nativeError = exception.NativeError();
+            message = exception.what();
+            return false;
+        }
+        catch (const RuntimeException& exception)
+        {
+            error = io::ReadError::io_error;
+            nativeError = 0;
+            message = exception.what();
+            return false;
+        }
+        catch (const std::exception& exception)
+        {
+            error = io::ReadError::io_error;
+            nativeError = 0;
+            message = exception.what();
+            return false;
+        }
+        catch (...)
+        {
+            error = io::ReadError::io_error;
+            nativeError = 0;
+            message = "std_io read failed.";
+            return false;
+        }
+    }
+
+    bool TryReadAllResult(
+        File& file,
+        std::string& value,
+        io::ReadError& error,
+        NativeErrorCode& nativeError,
+        std::string& message) noexcept
+    {
+        try
+        {
+            value = ReadAll(file);
+            error = io::ReadError::none;
+            nativeError = 0;
+            message.clear();
+            return true;
+        }
+        catch (const FileReadException& exception)
+        {
+            error = exception.Error();
+            nativeError = exception.NativeError();
+            message = exception.what();
+            return false;
+        }
+        catch (const RuntimeException& exception)
+        {
+            error = io::ReadError::io_error;
+            nativeError = 0;
+            message = exception.what();
+            return false;
+        }
+        catch (const std::exception& exception)
+        {
+            error = io::ReadError::io_error;
+            nativeError = 0;
+            message = exception.what();
+            return false;
+        }
+        catch (...)
+        {
+            error = io::ReadError::io_error;
+            nativeError = 0;
+            message = "std_io read-all failed.";
+            return false;
+        }
+    }
+
+    bool TryReadLineResult(
+        File& file,
+        const bool trimCarriageReturn,
+        std::string& value,
+        io::ReadError& error,
+        NativeErrorCode& nativeError,
+        std::string& message) noexcept
+    {
+        try
+        {
+            value = ReadLine(file, trimCarriageReturn);
+            error = io::ReadError::none;
+            nativeError = 0;
+            message.clear();
+            return true;
+        }
+        catch (const FileReadException& exception)
+        {
+            error = exception.Error();
+            nativeError = exception.NativeError();
+            message = exception.what();
+            return false;
+        }
+        catch (const RuntimeException& exception)
+        {
+            error = io::ReadError::io_error;
+            nativeError = 0;
+            message = exception.what();
+            return false;
+        }
+        catch (const std::exception& exception)
+        {
+            error = io::ReadError::io_error;
+            nativeError = 0;
+            message = exception.what();
+            return false;
+        }
+        catch (...)
+        {
+            error = io::ReadError::io_error;
+            nativeError = 0;
+            message = "std_io read-line failed.";
+            return false;
+        }
+    }
+
+    bool TryWriteStringArgResult(
+        File& file,
+        const std::string_view value,
+        std::size_t& written,
+        io::WriteError& error,
+        NativeErrorCode& nativeError,
+        std::string& message) noexcept
+    {
+        try
+        {
+            written = Write(file, value);
+            error = io::WriteError::none;
+            nativeError = 0;
+            message.clear();
+            return true;
+        }
+        catch (const FileWriteException& exception)
+        {
+            error = exception.Error();
+            nativeError = exception.NativeError();
+            message = exception.what();
+            return false;
+        }
+        catch (const RuntimeException& exception)
+        {
+            error = io::WriteError::io_error;
+            nativeError = 0;
+            message = exception.what();
+            return false;
+        }
+        catch (const std::exception& exception)
+        {
+            error = io::WriteError::io_error;
+            nativeError = 0;
+            message = exception.what();
+            return false;
+        }
+        catch (...)
+        {
+            error = io::WriteError::io_error;
+            nativeError = 0;
+            message = "std_io write failed.";
+            return false;
+        }
+    }
+
+    bool TryWriteLineResult(
+        File& file,
+        std::size_t& written,
+        io::WriteError& error,
+        NativeErrorCode& nativeError,
+        std::string& message) noexcept
+    {
+        try
+        {
+            written = WriteLine(file);
+            error = io::WriteError::none;
+            nativeError = 0;
+            message.clear();
+            return true;
+        }
+        catch (const FileWriteException& exception)
+        {
+            error = exception.Error();
+            nativeError = exception.NativeError();
+            message = exception.what();
+            return false;
+        }
+        catch (const RuntimeException& exception)
+        {
+            error = io::WriteError::io_error;
+            nativeError = 0;
+            message = exception.what();
+            return false;
+        }
+        catch (const std::exception& exception)
+        {
+            error = io::WriteError::io_error;
+            nativeError = 0;
+            message = exception.what();
+            return false;
+        }
+        catch (...)
+        {
+            error = io::WriteError::io_error;
+            nativeError = 0;
+            message = "std_io write-line failed.";
+            return false;
+        }
+    }
+
+    bool TryWriteLineStringArgResult(
+        File& file,
+        const std::string_view value,
+        std::size_t& written,
+        io::WriteError& error,
+        NativeErrorCode& nativeError,
+        std::string& message) noexcept
+    {
+        try
+        {
+            written = WriteLine(file, value);
+            error = io::WriteError::none;
+            nativeError = 0;
+            message.clear();
+            return true;
+        }
+        catch (const FileWriteException& exception)
+        {
+            error = exception.Error();
+            nativeError = exception.NativeError();
+            message = exception.what();
+            return false;
+        }
+        catch (const RuntimeException& exception)
+        {
+            error = io::WriteError::io_error;
+            nativeError = 0;
+            message = exception.what();
+            return false;
+        }
+        catch (const std::exception& exception)
+        {
+            error = io::WriteError::io_error;
+            nativeError = 0;
+            message = exception.what();
+            return false;
+        }
+        catch (...)
+        {
+            error = io::WriteError::io_error;
+            nativeError = 0;
+            message = "std_io write-line failed.";
+            return false;
+        }
+    }
 }

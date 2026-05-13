@@ -10,6 +10,723 @@
 #include "detail/io_detail/windows_console_text_writer.h"
 #endif
 
+namespace wio::runtime::std_console
+{
+    namespace
+    {
+        [[nodiscard]] console::ConsoleError& LastStoredError() noexcept
+        {
+            static thread_local console::ConsoleError error {};
+            return error;
+        }
+
+        [[nodiscard]] StatusCode ToStatusCode(const console::ConsoleError error) noexcept
+        {
+            return static_cast<StatusCode>(error.Status);
+        }
+
+        [[nodiscard]] std::int32_t ToStatusI32(const console::ConsoleError error) noexcept
+        {
+            return static_cast<std::int32_t>(ToStatusCode(error));
+        }
+
+        template <typename T>
+        [[nodiscard]] StatusCode StoreResult(console::Result<T> result, T* out = nullptr) noexcept
+        {
+            if (!result)
+            {
+                detail::StoreLastError(result.Error());
+                return ToStatusCode(result.Error());
+            }
+
+            if (out != nullptr)
+                *out = std::move(result).Value();
+
+            detail::ClearStoredLastError();
+            return static_cast<StatusCode>(Status::Ok);
+        }
+
+        [[nodiscard]] StatusCode StoreResult(console::Result<void> result) noexcept
+        {
+            if (!result)
+            {
+                detail::StoreLastError(result.Error());
+                return ToStatusCode(result.Error());
+            }
+
+            detail::ClearStoredLastError();
+            return static_cast<StatusCode>(Status::Ok);
+        }
+
+        template <typename T, typename Transform>
+        [[nodiscard]] StatusCode StoreTransformed(console::Result<T> result, Transform&& transform) noexcept
+        {
+            if (!result)
+            {
+                detail::StoreLastError(result.Error());
+                return ToStatusCode(result.Error());
+            }
+
+            transform(std::move(result).Value());
+            detail::ClearStoredLastError();
+            return static_cast<StatusCode>(Status::Ok);
+        }
+
+        template <typename Callable>
+        [[nodiscard]] std::int32_t WriteStatus(Callable&& callable)
+        {
+            auto result = callable();
+            if (!result)
+            {
+                detail::StoreLastError(result.Error());
+                return ToStatusI32(result.Error());
+            }
+
+            detail::ClearStoredLastError();
+            return 0;
+        }
+
+        template <typename Callable>
+        [[nodiscard]] std::string StringResult(Callable&& callable)
+        {
+            auto result = callable();
+            if (!result)
+            {
+                detail::StoreLastError(result.Error());
+                return {};
+            }
+
+            detail::ClearStoredLastError();
+            return std::move(result).Value();
+        }
+
+        template <typename Callable>
+        [[nodiscard]] char CharResult(Callable&& callable)
+        {
+            auto result = callable();
+            if (!result)
+            {
+                detail::StoreLastError(result.Error());
+                return '\0';
+            }
+
+            detail::ClearStoredLastError();
+            return static_cast<char>(result.Value());
+        }
+    }
+
+    namespace detail
+    {
+        void StoreLastError(const console::ConsoleError& error) noexcept
+        {
+            LastStoredError() = error.Ok()
+                ? console::MakeConsoleError(console::ConsoleStatus::UnknownError)
+                : error;
+        }
+
+        void ClearStoredLastError() noexcept
+        {
+            LastStoredError() = {};
+        }
+    }
+
+    void ClearLastError() noexcept
+    {
+        detail::ClearStoredLastError();
+    }
+
+    [[nodiscard]] StatusCode LastStatus() noexcept
+    {
+        return static_cast<StatusCode>(LastStoredError().Status);
+    }
+
+    [[nodiscard]] ErrorDomainCode LastErrorDomain() noexcept
+    {
+        return static_cast<ErrorDomainCode>(LastStoredError().Domain);
+    }
+
+    [[nodiscard]] int LastNativeCode() noexcept
+    {
+        return LastStoredError().NativeCode;
+    }
+
+    [[nodiscard]] int LastErrorLine() noexcept
+    {
+        return LastStoredError().Line;
+    }
+
+    [[nodiscard]] std::string LastErrorFile()
+    {
+        return LastStoredError().File != nullptr
+            ? std::string(LastStoredError().File)
+            : std::string {};
+    }
+
+    [[nodiscard]] std::string StatusName(const StatusCode status)
+    {
+        return std::string(console::ToString(static_cast<Status>(status)));
+    }
+
+    [[nodiscard]] std::string ErrorDomainName(const ErrorDomainCode domain)
+    {
+        return std::string(console::ToString(static_cast<ErrorDomain>(domain)));
+    }
+
+    std::int32_t WriteValue(const bool value)
+    {
+        return WriteStatus([&] { return console::Write(value); });
+    }
+
+    std::int32_t WriteValue(const char value)
+    {
+        return WriteStatus([&] { return console::Write(value); });
+    }
+
+    std::int32_t WriteValue(const std::int8_t value)
+    {
+        return WriteStatus([&] { return console::Write(value); });
+    }
+
+    std::int32_t WriteValue(const std::int16_t value)
+    {
+        return WriteStatus([&] { return console::Write(value); });
+    }
+
+    std::int32_t WriteValue(const std::int32_t value)
+    {
+        return WriteStatus([&] { return console::Write(value); });
+    }
+
+    std::int32_t WriteValue(const std::int64_t value)
+    {
+        return WriteStatus([&] { return console::Write(value); });
+    }
+
+    std::int32_t WriteValue(const std::uint8_t value)
+    {
+        return WriteStatus([&] { return console::Write(value); });
+    }
+
+    std::int32_t WriteValue(const std::uint16_t value)
+    {
+        return WriteStatus([&] { return console::Write(value); });
+    }
+
+    std::int32_t WriteValue(const std::uint32_t value)
+    {
+        return WriteStatus([&] { return console::Write(value); });
+    }
+
+    std::int32_t WriteValue(const std::uint64_t value)
+    {
+        return WriteStatus([&] { return console::Write(value); });
+    }
+
+    std::int32_t WriteValue(const float value)
+    {
+        return WriteStatus([&] { return console::Write(value); });
+    }
+
+    std::int32_t WriteValue(const double value)
+    {
+        return WriteStatus([&] { return console::Write(value); });
+    }
+
+    std::int32_t WriteValue(const char* value)
+    {
+        return WriteStatus([&] { return console::Write(value); });
+    }
+
+    std::int32_t WriteValue(char* value)
+    {
+        return WriteValue(static_cast<const char*>(value));
+    }
+
+    std::int32_t WriteValue(const std::string& value)
+    {
+        return WriteStatus([&] { return console::Write(value); });
+    }
+
+    std::int32_t WriteValue(const std::string_view value)
+    {
+        return WriteStatus([&] { return console::Write(value); });
+    }
+
+    std::int32_t WriteLine() noexcept
+    {
+        return WriteStatus([] { return console::WriteLine(); });
+    }
+
+    std::int32_t WriteLineValue(const bool value)
+    {
+        return WriteStatus([&] { return console::WriteLine(value); });
+    }
+
+    std::int32_t WriteLineValue(const char value)
+    {
+        return WriteStatus([&] { return console::WriteLine(value); });
+    }
+
+    std::int32_t WriteLineValue(const std::int8_t value)
+    {
+        return WriteStatus([&] { return console::WriteLine(value); });
+    }
+
+    std::int32_t WriteLineValue(const std::int16_t value)
+    {
+        return WriteStatus([&] { return console::WriteLine(value); });
+    }
+
+    std::int32_t WriteLineValue(const std::int32_t value)
+    {
+        return WriteStatus([&] { return console::WriteLine(value); });
+    }
+
+    std::int32_t WriteLineValue(const std::int64_t value)
+    {
+        return WriteStatus([&] { return console::WriteLine(value); });
+    }
+
+    std::int32_t WriteLineValue(const std::uint8_t value)
+    {
+        return WriteStatus([&] { return console::WriteLine(value); });
+    }
+
+    std::int32_t WriteLineValue(const std::uint16_t value)
+    {
+        return WriteStatus([&] { return console::WriteLine(value); });
+    }
+
+    std::int32_t WriteLineValue(const std::uint32_t value)
+    {
+        return WriteStatus([&] { return console::WriteLine(value); });
+    }
+
+    std::int32_t WriteLineValue(const std::uint64_t value)
+    {
+        return WriteStatus([&] { return console::WriteLine(value); });
+    }
+
+    std::int32_t WriteLineValue(const float value)
+    {
+        return WriteStatus([&] { return console::WriteLine(value); });
+    }
+
+    std::int32_t WriteLineValue(const double value)
+    {
+        return WriteStatus([&] { return console::WriteLine(value); });
+    }
+
+    std::int32_t WriteLineValue(const char* value)
+    {
+        return WriteStatus([&] { return console::WriteLine(value); });
+    }
+
+    std::int32_t WriteLineValue(char* value)
+    {
+        return WriteLineValue(static_cast<const char*>(value));
+    }
+
+    std::int32_t WriteLineValue(const std::string& value)
+    {
+        return WriteStatus([&] { return console::WriteLine(value); });
+    }
+
+    std::int32_t WriteLineValue(const std::string_view value)
+    {
+        return WriteStatus([&] { return console::WriteLine(value); });
+    }
+
+    std::int32_t WriteSegment(const std::string_view value, const std::size_t index, const std::size_t count)
+    {
+        return WriteStatus([&] { return console::Write(value, index, count); });
+    }
+
+    std::int32_t WriteBuffer(const char* buffer, const int index, const int count) noexcept
+    {
+        return WriteStatus([&] { return console::Write(buffer, index, count); });
+    }
+
+    std::int32_t WriteTextDecimal(const std::string_view value)
+    {
+        return WriteStatus([&] { return console::Write(console::TextDecimal(std::string(value))); });
+    }
+
+    std::int32_t WriteLineTextDecimal(const std::string_view value)
+    {
+        return WriteStatus([&] { return console::WriteLine(console::TextDecimal(std::string(value))); });
+    }
+
+    std::int32_t WriteErrorText(const std::string_view value) noexcept
+    {
+        return WriteStatus([&]() -> console::Result<console::IoCount>
+        {
+            auto error = console::Error();
+            if (!error)
+                return error.Error();
+            return error.Value().Write(value);
+        });
+    }
+
+    std::int32_t WriteErrorLine() noexcept
+    {
+        return WriteStatus([&]() -> console::Result<console::IoCount>
+        {
+            auto error = console::Error();
+            if (!error)
+                return error.Error();
+
+            auto newline = console::NewLine();
+            if (!newline)
+                return newline.Error();
+
+            return error.Value().Write(newline.Value());
+        });
+    }
+
+    std::int32_t WriteErrorLineText(const std::string_view value) noexcept
+    {
+        return WriteStatus([&]() -> console::Result<console::IoCount>
+        {
+            auto error = console::Error();
+            if (!error)
+                return error.Error();
+
+            auto first = error.Value().Write(value);
+            if (!first)
+                return first;
+
+            auto newline = console::NewLine();
+            if (!newline)
+                return newline.Error();
+
+            auto second = error.Value().Write(newline.Value());
+            if (!second)
+                return second;
+
+            return console::detail::SumIoCount(first.Value(), second.Value());
+        });
+    }
+
+    std::string Input()
+    {
+        return StringResult([] { return console::ReadLine(); });
+    }
+
+    std::string Input(const std::string& prompt)
+    {
+        const auto status = WriteValue(prompt);
+        if (status != 0)
+            return {};
+
+        return Input();
+    }
+
+    std::string InputN(const std::size_t count)
+    {
+        return StringResult([&] { return console::ReadCount(count); });
+    }
+
+    char InputChar(const bool isHidden)
+    {
+        return isHidden
+            ? CharResult([] { return console::ReadHidden(); })
+            : CharResult([] { return console::Read(); });
+    }
+
+    char InputChar()
+    {
+        return InputChar(false);
+    }
+
+    std::string InputWord()
+    {
+        return StringResult([] { return console::ReadWord(); });
+    }
+
+    std::string InputUntil(const char delimiter, const bool includeDelimiter)
+    {
+        return StringResult([&] { return console::ReadUntil(delimiter, includeDelimiter); });
+    }
+
+    std::string InputUntil(const char delimiter)
+    {
+        return InputUntil(delimiter, false);
+    }
+
+    [[nodiscard]] StatusCode Capabilities(
+        bool& colors,
+        bool& cursorPosition,
+        bool& cursorVisibility,
+        bool& cursorSize,
+        bool& bufferSize,
+        bool& windowPosition,
+        bool& windowSizeGet,
+        bool& windowSizeSet,
+        bool& largestWindowSize,
+        bool& moveBufferArea,
+        bool& keyAvailable,
+        bool& readKey,
+        bool& title,
+        bool& beep,
+        bool& beepFrequency,
+        bool& keyboardToggleState,
+        bool& treatControlCAsInput,
+        bool& encodingSet) noexcept
+    {
+        return StoreTransformed(console::Capabilities(), [&](const console::ConsoleCapabilities& value)
+        {
+            colors = value.Colors;
+            cursorPosition = value.CursorPosition;
+            cursorVisibility = value.CursorVisibility;
+            cursorSize = value.CursorSize;
+            bufferSize = value.BufferSize;
+            windowPosition = value.WindowPosition;
+            windowSizeGet = value.WindowSizeGet;
+            windowSizeSet = value.WindowSizeSet;
+            largestWindowSize = value.LargestWindowSize;
+            moveBufferArea = value.MoveBufferArea;
+            keyAvailable = value.KeyAvailable;
+            readKey = value.ReadKey;
+            title = value.Title;
+            beep = value.Beep;
+            beepFrequency = value.BeepFrequency;
+            keyboardToggleState = value.KeyboardToggleState;
+            treatControlCAsInput = value.TreatControlCAsInput;
+            encodingSet = value.EncodingSet;
+        });
+    }
+
+    [[nodiscard]] StatusCode GetBackgroundColor(ColorCode& color) noexcept
+    {
+        return StoreTransformed(console::BackgroundColor(), [&](const console::ConsoleColor value)
+        {
+            color = static_cast<ColorCode>(value);
+        });
+    }
+
+    [[nodiscard]] StatusCode SetBackgroundColor(const ColorCode color) noexcept
+    {
+        return StoreResult(console::BackgroundColor(static_cast<Color>(color)));
+    }
+
+    [[nodiscard]] StatusCode GetForegroundColor(ColorCode& color) noexcept
+    {
+        return StoreTransformed(console::ForegroundColor(), [&](const console::ConsoleColor value)
+        {
+            color = static_cast<ColorCode>(value);
+        });
+    }
+
+    [[nodiscard]] StatusCode SetForegroundColor(const ColorCode color) noexcept
+    {
+        return StoreResult(console::ForegroundColor(static_cast<Color>(color)));
+    }
+
+    [[nodiscard]] StatusCode GetBufferHeight(int& value) noexcept { return StoreResult(console::BufferHeight(), &value); }
+    [[nodiscard]] StatusCode SetBufferHeight(const int value) noexcept { return StoreResult(console::BufferHeight(value)); }
+    [[nodiscard]] StatusCode GetBufferWidth(int& value) noexcept { return StoreResult(console::BufferWidth(), &value); }
+    [[nodiscard]] StatusCode SetBufferWidth(const int value) noexcept { return StoreResult(console::BufferWidth(value)); }
+    [[nodiscard]] StatusCode GetCapsLock(bool& value) noexcept { return StoreResult(console::CapsLock(), &value); }
+    [[nodiscard]] StatusCode GetCursorLeft(int& value) noexcept { return StoreResult(console::CursorLeft(), &value); }
+    [[nodiscard]] StatusCode SetCursorLeft(const int value) noexcept { return StoreResult(console::CursorLeft(value)); }
+    [[nodiscard]] StatusCode GetCursorSize(int& value) noexcept { return StoreResult(console::CursorSize(), &value); }
+    [[nodiscard]] StatusCode SetCursorSize(const int value) noexcept { return StoreResult(console::CursorSize(value)); }
+    [[nodiscard]] StatusCode GetCursorTop(int& value) noexcept { return StoreResult(console::CursorTop(), &value); }
+    [[nodiscard]] StatusCode SetCursorTop(const int value) noexcept { return StoreResult(console::CursorTop(value)); }
+    [[nodiscard]] StatusCode GetCursorVisible(bool& value) noexcept { return StoreResult(console::CursorVisible(), &value); }
+    [[nodiscard]] StatusCode SetCursorVisible(const bool value) noexcept { return StoreResult(console::CursorVisible(value)); }
+
+    [[nodiscard]] StatusCode GetInputEncoding(EncodingCode& encoding) noexcept
+    {
+        return StoreTransformed(console::InputEncoding(), [&](const console::ConsoleEncoding value)
+        {
+            encoding = static_cast<EncodingCode>(value);
+        });
+    }
+
+    [[nodiscard]] StatusCode SetInputEncoding(const EncodingCode encoding) noexcept
+    {
+        return StoreResult(console::InputEncoding(static_cast<Encoding>(encoding)));
+    }
+
+    [[nodiscard]] StatusCode GetOutputEncoding(EncodingCode& encoding) noexcept
+    {
+        return StoreTransformed(console::OutputEncoding(), [&](const console::ConsoleEncoding value)
+        {
+            encoding = static_cast<EncodingCode>(value);
+        });
+    }
+
+    [[nodiscard]] StatusCode SetOutputEncoding(const EncodingCode encoding) noexcept
+    {
+        return StoreResult(console::OutputEncoding(static_cast<Encoding>(encoding)));
+    }
+
+    [[nodiscard]] StatusCode GetIsErrorRedirected(bool& value) noexcept { return StoreResult(console::IsErrorRedirected(), &value); }
+    [[nodiscard]] StatusCode GetIsInputRedirected(bool& value) noexcept { return StoreResult(console::IsInputRedirected(), &value); }
+    [[nodiscard]] StatusCode GetIsOutputRedirected(bool& value) noexcept { return StoreResult(console::IsOutputRedirected(), &value); }
+    [[nodiscard]] StatusCode GetKeyAvailable(bool& value) noexcept { return StoreResult(console::KeyAvailable(), &value); }
+    [[nodiscard]] StatusCode GetLargestWindowHeight(int& value) noexcept { return StoreResult(console::LargestWindowHeight(), &value); }
+    [[nodiscard]] StatusCode GetLargestWindowWidth(int& value) noexcept { return StoreResult(console::LargestWindowWidth(), &value); }
+    [[nodiscard]] StatusCode GetNumberLock(bool& value) noexcept { return StoreResult(console::NumberLock(), &value); }
+    [[nodiscard]] StatusCode GetNewLine(std::string& value) { return StoreResult(console::NewLine(), &value); }
+    [[nodiscard]] StatusCode SetNewLine(std::string_view value) { return StoreResult(console::NewLine(value)); }
+    [[nodiscard]] StatusCode GetTitle(std::string& value) { return StoreResult(console::Title(), &value); }
+    [[nodiscard]] StatusCode SetTitle(std::string_view value) { return StoreResult(console::Title(value)); }
+    [[nodiscard]] StatusCode GetTreatControlCAsInput(bool& value) noexcept { return StoreResult(console::TreatControlCAsInput(), &value); }
+    [[nodiscard]] StatusCode SetTreatControlCAsInput(const bool value) noexcept { return StoreResult(console::TreatControlCAsInput(value)); }
+    [[nodiscard]] StatusCode GetWindowHeight(int& value) noexcept { return StoreResult(console::WindowHeight(), &value); }
+    [[nodiscard]] StatusCode SetWindowHeight(const int value) noexcept { return StoreResult(console::WindowHeight(value)); }
+    [[nodiscard]] StatusCode GetWindowLeft(int& value) noexcept { return StoreResult(console::WindowLeft(), &value); }
+    [[nodiscard]] StatusCode SetWindowLeft(const int value) noexcept { return StoreResult(console::WindowLeft(value)); }
+    [[nodiscard]] StatusCode GetWindowTop(int& value) noexcept { return StoreResult(console::WindowTop(), &value); }
+    [[nodiscard]] StatusCode SetWindowTop(const int value) noexcept { return StoreResult(console::WindowTop(value)); }
+    [[nodiscard]] StatusCode GetWindowWidth(int& value) noexcept { return StoreResult(console::WindowWidth(), &value); }
+    [[nodiscard]] StatusCode SetWindowWidth(const int value) noexcept { return StoreResult(console::WindowWidth(value)); }
+    [[nodiscard]] StatusCode Beep() noexcept { return StoreResult(console::Beep()); }
+    [[nodiscard]] StatusCode Beep(const int frequency, const int durationMs) noexcept { return StoreResult(console::Beep(frequency, durationMs)); }
+    [[nodiscard]] StatusCode Clear() noexcept { return StoreResult(console::Clear()); }
+
+    [[nodiscard]] StatusCode GetCursorPosition(int& left, int& top) noexcept
+    {
+        return StoreTransformed(console::GetCursorPosition(), [&](const console::CursorPosition& value)
+        {
+            left = value.Left;
+            top = value.Top;
+        });
+    }
+
+    [[nodiscard]] StatusCode MoveBufferArea(
+        const int sourceLeft,
+        const int sourceTop,
+        const int sourceWidth,
+        const int sourceHeight,
+        const int targetLeft,
+        const int targetTop) noexcept
+    {
+        return StoreResult(console::MoveBufferArea(
+            sourceLeft,
+            sourceTop,
+            sourceWidth,
+            sourceHeight,
+            targetLeft,
+            targetTop));
+    }
+
+    [[nodiscard]] StatusCode MoveBufferArea(
+        const int sourceLeft,
+        const int sourceTop,
+        const int sourceWidth,
+        const int sourceHeight,
+        const int targetLeft,
+        const int targetTop,
+        const std::int32_t sourceChar,
+        const ColorCode sourceForeColor,
+        const ColorCode sourceBackColor) noexcept
+    {
+        return StoreResult(console::MoveBufferArea(
+            sourceLeft,
+            sourceTop,
+            sourceWidth,
+            sourceHeight,
+            targetLeft,
+            targetTop,
+            static_cast<char32_t>(sourceChar),
+            static_cast<Color>(sourceForeColor),
+            static_cast<Color>(sourceBackColor)));
+    }
+
+    [[nodiscard]] StatusCode OpenStandardError(
+        const std::size_t bufferSize,
+        bool& redirected,
+        std::size_t& actualBufferSize,
+        bool& hasReader,
+        bool& hasWriter,
+        bool& isOpen) noexcept
+    {
+        return StoreTransformed(console::OpenStandardError(bufferSize), [&](const console::StandardStream& value)
+        {
+            redirected = value.Redirected;
+            actualBufferSize = value.BufferSize;
+            hasReader = static_cast<bool>(value.Reader);
+            hasWriter = static_cast<bool>(value.Writer);
+            isOpen = value.File != nullptr;
+        });
+    }
+
+    [[nodiscard]] StatusCode OpenStandardInput(
+        const std::size_t bufferSize,
+        bool& redirected,
+        std::size_t& actualBufferSize,
+        bool& hasReader,
+        bool& hasWriter,
+        bool& isOpen) noexcept
+    {
+        return StoreTransformed(console::OpenStandardInput(bufferSize), [&](const console::StandardStream& value)
+        {
+            redirected = value.Redirected;
+            actualBufferSize = value.BufferSize;
+            hasReader = static_cast<bool>(value.Reader);
+            hasWriter = static_cast<bool>(value.Writer);
+            isOpen = value.File != nullptr;
+        });
+    }
+
+    [[nodiscard]] StatusCode OpenStandardOutput(
+        const std::size_t bufferSize,
+        bool& redirected,
+        std::size_t& actualBufferSize,
+        bool& hasReader,
+        bool& hasWriter,
+        bool& isOpen) noexcept
+    {
+        return StoreTransformed(console::OpenStandardOutput(bufferSize), [&](const console::StandardStream& value)
+        {
+            redirected = value.Redirected;
+            actualBufferSize = value.BufferSize;
+            hasReader = static_cast<bool>(value.Reader);
+            hasWriter = static_cast<bool>(value.Writer);
+            isOpen = value.File != nullptr;
+        });
+    }
+
+    [[nodiscard]] StatusCode Read(int& value) noexcept { return StoreResult(console::Read(), &value); }
+    [[nodiscard]] StatusCode ReadCount(const std::size_t count, std::string& value) { return StoreResult(console::ReadCount(count), &value); }
+    [[nodiscard]] StatusCode ReadHidden(int& value) noexcept { return StoreResult(console::ReadHidden(), &value); }
+
+    [[nodiscard]] StatusCode ReadKey(std::int32_t& keyChar, KeyCode& key, ModifierMask& modifiers)
+    {
+        return StoreTransformed(console::ReadKey(), [&](const console::ConsoleKeyInfo& value)
+        {
+            keyChar = static_cast<std::int32_t>(value.KeyChar);
+            key = static_cast<KeyCode>(value.Key);
+            modifiers = static_cast<ModifierMask>(value.Modifiers);
+        });
+    }
+
+    [[nodiscard]] StatusCode ReadKey(const bool intercept, std::int32_t& keyChar, KeyCode& key, ModifierMask& modifiers)
+    {
+        return StoreTransformed(console::ReadKey(intercept), [&](const console::ConsoleKeyInfo& value)
+        {
+            keyChar = static_cast<std::int32_t>(value.KeyChar);
+            key = static_cast<KeyCode>(value.Key);
+            modifiers = static_cast<ModifierMask>(value.Modifiers);
+        });
+    }
+
+    [[nodiscard]] StatusCode ReadLine(std::string& value) { return StoreResult(console::ReadLine(), &value); }
+    [[nodiscard]] StatusCode ReadUntil(const char delimiter, const bool includeDelimiter, std::string& value) { return StoreResult(console::ReadUntil(delimiter, includeDelimiter), &value); }
+    [[nodiscard]] StatusCode ReadWord(std::string& value) { return StoreResult(console::ReadWord(), &value); }
+    [[nodiscard]] StatusCode ResetColor() noexcept { return StoreResult(console::ResetColor()); }
+    [[nodiscard]] StatusCode SetBufferSize(const int width, const int height) noexcept { return StoreResult(console::SetBufferSize(width, height)); }
+    [[nodiscard]] StatusCode SetCursorPosition(const int left, const int top) noexcept { return StoreResult(console::SetCursorPosition(left, top)); }
+    [[nodiscard]] StatusCode SetWindowPosition(const int left, const int top) noexcept { return StoreResult(console::SetWindowPosition(left, top)); }
+    [[nodiscard]] StatusCode SetWindowSize(const int width, const int height) noexcept { return StoreResult(console::SetWindowSize(width, height)); }
+    [[nodiscard]] StatusCode FlushError() noexcept { return StoreResult(console::FlushError()); }
+    [[nodiscard]] StatusCode FlushOut() noexcept { return StoreResult(console::FlushOut()); }
+}
+
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>

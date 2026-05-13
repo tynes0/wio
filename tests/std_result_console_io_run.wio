@@ -1,0 +1,46 @@
+use std::assert as assert;
+use std::console as console;
+use std::fs as fs;
+use std::io as io;
+use std::path as path;
+use std::result as result;
+
+fn Entry() -> i32 {
+    let printResult = console::PrintResult("std-result-console-io");
+    assert::ExpectTrue(printResult.IsOk(), "PrintResult should succeed");
+    assert::ExpectEqual(printResult.Value(), 0, "PrintResult should return zero status on success");
+
+    let filePath = path::JoinAll(["build", "wio_std", "result", "surface", "data.txt"]);
+    if (not fs::EnsureParentDirectory(filePath)) {
+        return 1;
+    }
+
+    let openResult = io::Open(filePath, io::OpenWrite);
+    assert::ExpectTrue(openResult.IsOk(), "Open should succeed for writable file");
+
+    mut writer = openResult.Value();
+    let writeResult = io::Write(ref writer, "hello-result");
+    assert::ExpectTrue(writeResult.IsOk(), "Write should succeed");
+    assert::ExpectEqual(writeResult.Value() fit i32, 12, "Write should report written bytes");
+
+    let closeResult = io::Close(ref writer);
+    assert::ExpectTrue(closeResult.IsOk(), "Close should succeed");
+
+    let readerResult = io::Open(filePath, io::OpenRead);
+    assert::ExpectTrue(readerResult.IsOk(), "Open should support read path");
+
+    mut reader = readerResult.Value();
+    let readResult = io::ReadAll(ref reader);
+    assert::ExpectTrue(readResult.IsOk(), "ReadAll should succeed");
+    assert::ExpectEqual(readResult.Value(), "hello-result", "ReadAll should preserve file contents");
+
+    let sizeResult = io::Size(reader);
+    assert::ExpectTrue(sizeResult.IsOk(), "Size should succeed");
+    assert::ExpectEqual(sizeResult.Value() fit i32, 12, "Size should match bytes written");
+
+    let closeReaderResult = io::Close(ref reader);
+    assert::ExpectTrue(closeReaderResult.IsOk(), "Close should close reader");
+
+    console::PrintLine("std-result-console-io-ok");
+    return 0;
+}

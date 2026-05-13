@@ -1,3 +1,5 @@
+use std::result;
+
 realm std {
     realm console {
         use @CppHeader("std_console.h");
@@ -401,6 +403,10 @@ realm std {
         @CppName(wio::runtime::std_console::ErrorDomainName)
         fn ErrorDomainName(domain: ErrorDomain) -> string;
 
+        @Native
+        @CppName(wio::runtime::std_console::StatusValue)
+        fn StatusCodeValue(status: Status) -> i32;
+
         fn LastError() -> ErrorInfo {
             mut result: ErrorInfo = ErrorInfo();
             result.status = LastStatusCode();
@@ -409,6 +415,25 @@ realm std {
             result.line = LastErrorLine();
             result.file = LastErrorFile();
             return result;
+        }
+
+        fn LastResultError() -> ResultError {
+            let error = LastError();
+            let message = $"console error ${StatusName(error.status)} (${ErrorDomainName(error.domain)})";
+            return MakeResultError(
+                ResultDomain::console,
+                StatusCodeValue(error.status),
+                error.nativeCode fit i64,
+                message
+            );
+        }
+
+        fn ResultFromStatus(status: StatusCode) -> ResultValue<ResultUnit> {
+            if (Ok(status)) {
+                return ResultValue<ResultUnit>(ResultUnit());
+            }
+
+            return ResultValue<ResultUnit>(LastResultError());
         }
 
         @Native
@@ -575,6 +600,101 @@ realm std {
         @Native
         @CppName(wio::runtime::std_console::InputUntil)
         fn InputUntil(delimiter: char) -> string;
+
+        fn PrintResult<T>(value: T) -> ResultValue<i32> {
+            let status = Print(value);
+            if (status == 0) {
+                return ResultValue<i32>(status);
+            }
+
+            return ResultValue<i32>(LastResultError());
+        }
+
+        fn PrintLineResult() -> ResultValue<i32> {
+            let status = PrintLine();
+            if (status == 0) {
+                return ResultValue<i32>(status);
+            }
+
+            return ResultValue<i32>(LastResultError());
+        }
+
+        fn PrintLineResult<T>(value: T) -> ResultValue<i32> {
+            let status = PrintLine(value);
+            if (status == 0) {
+                return ResultValue<i32>(status);
+            }
+
+            return ResultValue<i32>(LastResultError());
+        }
+
+        fn InputResult(prompt: string) -> ResultValue<string> {
+            let value = Input(prompt);
+            if (LastStatusCode() == Status::Ok) {
+                return ResultValue<string>(value);
+            }
+
+            return ResultValue<string>(LastResultError());
+        }
+
+        fn InputResult() -> ResultValue<string> {
+            let value = Input();
+            if (LastStatusCode() == Status::Ok) {
+                return ResultValue<string>(value);
+            }
+
+            return ResultValue<string>(LastResultError());
+        }
+
+        fn ReadLineResult() -> ResultValue<string> {
+            mut value = "";
+            let status = TryReadLine(ref value);
+            if (Ok(status)) {
+                return ResultValue<string>(value);
+            }
+
+            return ResultValue<string>(LastResultError());
+        }
+
+        fn ReadWordResult() -> ResultValue<string> {
+            mut value = "";
+            let status = TryReadWord(ref value);
+            if (Ok(status)) {
+                return ResultValue<string>(value);
+            }
+
+            return ResultValue<string>(LastResultError());
+        }
+
+        fn TitleResult() -> ResultValue<string> {
+            mut value = "";
+            let status = TryGetTitle(ref value);
+            if (Ok(status)) {
+                return ResultValue<string>(value);
+            }
+
+            return ResultValue<string>(LastResultError());
+        }
+
+        fn BackgroundColorResult() -> ResultValue<Color> {
+            mut value = Color::Black;
+            let status = TryGetBackgroundColor(ref value);
+            if (Ok(status)) {
+                return ResultValue<Color>(value);
+            }
+
+            return ResultValue<Color>(LastResultError());
+        }
+
+        fn ForegroundColorResult() -> ResultValue<Color> {
+            mut value = Color::Gray;
+            let status = TryGetForegroundColor(ref value);
+            if (Ok(status)) {
+                return ResultValue<Color>(value);
+            }
+
+            return ResultValue<Color>(LastResultError());
+        }
 
         @Native
         @CppName(wio::runtime::std_console::Capabilities)

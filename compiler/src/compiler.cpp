@@ -165,6 +165,7 @@ namespace wio
                 const std::filesystem::path executableDir = executablePath.parent_path();
                 appendCandidate(executableDir);
                 appendCandidate(executableDir.parent_path());
+                appendCandidate(executableDir.parent_path().parent_path());
             }
 
             appendCandidate(getCompileTimeDefaultRootDir());
@@ -306,6 +307,7 @@ namespace wio
                 std::filesystem::path{},
 #endif
                 {
+                    std::filesystem::path("runtime") / "backend" / "libwio_runtime.a",
                     std::filesystem::path("runtime") / "lib" / "libwio_runtime.a",
                     std::filesystem::path("lib") / "libwio_runtime.a",
                     std::filesystem::path("build") / "runtime" / "backend" / "libwio_runtime.a",

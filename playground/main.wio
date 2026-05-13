@@ -4,10 +4,13 @@ use std::io as io;
 
 fn Entry() -> void
 {
-    mut f = std::io::Open("test.txt", std::io::OpenReadWriteCreate);
-    if(std::io::IsOpen(f))
+    let openResult = std::io::Open("test.txt", std::io::OpenReadWriteCreate);
+    if (openResult.IsOk())
     {
-        std::io::Write(ref f, "Hello, World!");
-        std::io::Close(ref f);
+        mut f = openResult.Value();
+        let writeResult = std::io::Write(ref f, "Hello, World!");
+        if (writeResult.IsOk()) {
+            std::io::Close(ref f);
+        }
     }
 }

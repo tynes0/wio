@@ -1,0 +1,10 @@
+use std::result as result;
+
+fn Entry() -> i32 {
+    let value = result::Ok(7);
+    if (value.IsOk()) {
+        return value.Value();
+    }
+
+    return 1;
+}

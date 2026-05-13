@@ -1636,6 +1636,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_std_result_console_io_run
+        "${CMAKE_SOURCE_DIR}/tests/std_result_console_io_run.wio"
+        "std-result-console-io-ok"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_any_value_reference_semantics_run
         "${CMAKE_SOURCE_DIR}/tests/any_value_reference_semantics_run.wio"
         "any-value-reference-semantics-ok"

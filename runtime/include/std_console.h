@@ -2793,6 +2793,16 @@ namespace wio::runtime::std_console
         return static_cast<ErrorDomain>(LastErrorDomain());
     }
 
+    [[nodiscard]] inline int StatusValue(const Status status) noexcept
+    {
+        return static_cast<int>(status);
+    }
+
+    [[nodiscard]] inline int ErrorDomainValue(const ErrorDomain domain) noexcept
+    {
+        return static_cast<int>(domain);
+    }
+
     [[nodiscard]] inline std::string StatusName(const Status status)
     {
         return StatusName(static_cast<StatusCode>(status));

@@ -156,6 +156,10 @@ namespace wio::runtime::std_io
     [[nodiscard]] const char* ToString(FileError error) noexcept;
     [[nodiscard]] const char* ToString(io::ReadError error) noexcept;
     [[nodiscard]] const char* ToString(io::WriteError error) noexcept;
+    [[nodiscard]] inline int FileErrorValue(const FileError error) noexcept { return static_cast<int>(error); }
+    [[nodiscard]] inline int ReadErrorValue(const io::ReadError error) noexcept { return static_cast<int>(error); }
+    [[nodiscard]] inline int WriteErrorValue(const io::WriteError error) noexcept { return static_cast<int>(error); }
+    [[nodiscard]] inline std::int64_t NativeErrorCodeValue(const NativeErrorCode value) noexcept { return static_cast<std::int64_t>(value); }
 
     class FileException final : public ::wio::runtime::RuntimeException
     {
@@ -281,6 +285,73 @@ namespace wio::runtime::std_io
 
     [[nodiscard]] std::size_t WriteLine(File& file);
     [[nodiscard]] std::size_t WriteLine(File& file, std::string_view value);
+
+    [[nodiscard]] bool TryOpenStringArg(
+        std::string_view path,
+        OpenMode mode,
+        File& file,
+        FileError& error,
+        NativeErrorCode& nativeError,
+        std::string& message) noexcept;
+
+    [[nodiscard]] bool TryCloseResult(
+        File& file,
+        FileError& error,
+        NativeErrorCode& nativeError,
+        std::string& message) noexcept;
+
+    [[nodiscard]] bool TrySizeResult(
+        const File& file,
+        std::uint64_t& value,
+        FileError& error,
+        NativeErrorCode& nativeError,
+        std::string& message) noexcept;
+
+    [[nodiscard]] bool TryReadResult(
+        File& file,
+        std::size_t size,
+        std::string& value,
+        io::ReadError& error,
+        NativeErrorCode& nativeError,
+        std::string& message) noexcept;
+
+    [[nodiscard]] bool TryReadAllResult(
+        File& file,
+        std::string& value,
+        io::ReadError& error,
+        NativeErrorCode& nativeError,
+        std::string& message) noexcept;
+
+    [[nodiscard]] bool TryReadLineResult(
+        File& file,
+        bool trimCarriageReturn,
+        std::string& value,
+        io::ReadError& error,
+        NativeErrorCode& nativeError,
+        std::string& message) noexcept;
+
+    [[nodiscard]] bool TryWriteStringArgResult(
+        File& file,
+        std::string_view value,
+        std::size_t& written,
+        io::WriteError& error,
+        NativeErrorCode& nativeError,
+        std::string& message) noexcept;
+
+    [[nodiscard]] bool TryWriteLineResult(
+        File& file,
+        std::size_t& written,
+        io::WriteError& error,
+        NativeErrorCode& nativeError,
+        std::string& message) noexcept;
+
+    [[nodiscard]] bool TryWriteLineStringArgResult(
+        File& file,
+        std::string_view value,
+        std::size_t& written,
+        io::WriteError& error,
+        NativeErrorCode& nativeError,
+        std::string& message) noexcept;
 
     [[nodiscard]] inline std::uintptr_t InvalidNativeFileHandleValue() noexcept
     {

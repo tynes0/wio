@@ -1,3 +1,5 @@
+use std::result;
+
 realm std {
     realm io {
         use @CppHeader("std_io.h");
@@ -172,6 +174,22 @@ realm std {
         fn WriteErrorName(error: WriteError) -> string;
 
         @Native
+        @CppName(wio::runtime::std_io::FileErrorValue)
+        fn FileErrorCode(error: FileError) -> i32;
+
+        @Native
+        @CppName(wio::runtime::std_io::ReadErrorValue)
+        fn ReadErrorCode(error: ReadError) -> i32;
+
+        @Native
+        @CppName(wio::runtime::std_io::WriteErrorValue)
+        fn WriteErrorCode(error: WriteError) -> i32;
+
+        @Native
+        @CppName(wio::runtime::std_io::NativeErrorCodeValue)
+        fn NativeErrorCodeValue(value: NativeErrorCode) -> i64;
+
+        @Native
         @CppName(wio::runtime::std_io::InvalidNativeFileHandleValue)
         fn InvalidNativeHandle() -> usize;
 
@@ -193,7 +211,7 @@ realm std {
 
         @Native
         @CppName(wio::runtime::std_io::OpenStringArg)
-        fn Open(path: string, mode: OpenMode) -> File;
+        fn OpenRaw(path: string, mode: OpenMode) -> File;
 
         @Native
         @CppName(wio::runtime::std_io::AttachRaw)
@@ -209,7 +227,7 @@ realm std {
 
         @Native
         @CppName(wio::runtime::std_io::Close)
-        fn Close(file: ref File);
+        fn CloseRaw(file: ref File);
 
         @Native
         @CppName(wio::runtime::std_io::Sync)
@@ -229,7 +247,7 @@ realm std {
 
         @Native
         @CppName(wio::runtime::std_io::Size)
-        fn Size(file: File) -> u64;
+        fn SizeRaw(file: File) -> u64;
 
         @Native
         @CppName(wio::runtime::std_io::ReadSome)
@@ -241,7 +259,7 @@ realm std {
 
         @Native
         @CppName(wio::runtime::std_io::Read)
-        fn Read(file: ref File, size: usize) -> string;
+        fn ReadRaw(file: ref File, size: usize) -> string;
 
         @Native
         @CppName(wio::runtime::std_io::ReadByteValues)
@@ -257,7 +275,7 @@ realm std {
 
         @Native
         @CppName(wio::runtime::std_io::ReadAll)
-        fn ReadAll(file: ref File) -> string;
+        fn ReadAllRaw(file: ref File) -> string;
 
         @Native
         @CppName(wio::runtime::std_io::ReadUntil)
@@ -269,10 +287,10 @@ realm std {
 
         @Native
         @CppName(wio::runtime::std_io::ReadLine)
-        fn ReadLine(file: ref File, trimCarriageReturn: bool) -> string;
+        fn ReadLineRaw(file: ref File, trimCarriageReturn: bool) -> string;
 
-        fn ReadLine(file: ref File) -> string {
-            return ReadLine(file, true);
+        fn ReadLineRaw(file: ref File) -> string {
+            return ReadLineRaw(file, true);
         }
 
         @Native
@@ -281,7 +299,7 @@ realm std {
 
         @Native
         @CppName(wio::runtime::std_io::WriteStringArg)
-        fn Write(file: ref File, value: string) -> usize;
+        fn WriteRaw(file: ref File, value: string) -> usize;
 
         @Native
         @CppName(wio::runtime::std_io::WriteByteValues)
@@ -289,34 +307,242 @@ realm std {
 
         @Native
         @CppName(wio::runtime::std_io::WriteLine)
-        fn WriteLine(file: ref File) -> usize;
+        fn WriteLineRaw(file: ref File) -> usize;
 
         @Native
         @CppName(wio::runtime::std_io::WriteLine)
-        fn WriteLine(file: ref File, value: string) -> usize;
+        fn WriteLineRaw(file: ref File, value: string) -> usize;
 
-        fn OpenReadText(path: string) -> File {
+        @Native
+        @CppName(wio::runtime::std_io::TryOpenStringArg)
+        fn TryOpenResultNative(path: string, mode: OpenMode, file: ref File, error: ref FileError, nativeError: ref NativeErrorCode, message: ref string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_io::TryCloseResult)
+        fn TryCloseResultNative(file: ref File, error: ref FileError, nativeError: ref NativeErrorCode, message: ref string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_io::TrySizeResult)
+        fn TrySizeResultNative(file: File, value: ref u64, error: ref FileError, nativeError: ref NativeErrorCode, message: ref string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_io::TryReadResult)
+        fn TryReadResultNative(file: ref File, size: usize, value: ref string, error: ref ReadError, nativeError: ref NativeErrorCode, message: ref string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_io::TryReadAllResult)
+        fn TryReadAllResultNative(file: ref File, value: ref string, error: ref ReadError, nativeError: ref NativeErrorCode, message: ref string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_io::TryReadLineResult)
+        fn TryReadLineResultNative(file: ref File, trimCarriageReturn: bool, value: ref string, error: ref ReadError, nativeError: ref NativeErrorCode, message: ref string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_io::TryWriteStringArgResult)
+        fn TryWriteResultNative(file: ref File, value: string, written: ref usize, error: ref WriteError, nativeError: ref NativeErrorCode, message: ref string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_io::TryWriteLineResult)
+        fn TryWriteLineResultNative(file: ref File, written: ref usize, error: ref WriteError, nativeError: ref NativeErrorCode, message: ref string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_io::TryWriteLineStringArgResult)
+        fn TryWriteLineValueResultNative(file: ref File, value: string, written: ref usize, error: ref WriteError, nativeError: ref NativeErrorCode, message: ref string) -> bool;
+
+        fn FileResultError(error: FileError, nativeError: NativeErrorCode, message: string) -> ResultError {
+            return MakeResultError(ResultDomain::io, FileErrorCode(error), NativeErrorCodeValue(nativeError), message);
+        }
+
+        fn ReadResultError(error: ReadError, nativeError: NativeErrorCode, message: string) -> ResultError {
+            return MakeResultError(ResultDomain::io, ReadErrorCode(error), NativeErrorCodeValue(nativeError), message);
+        }
+
+        fn WriteResultError(error: WriteError, nativeError: NativeErrorCode, message: string) -> ResultError {
+            return MakeResultError(ResultDomain::io, WriteErrorCode(error), NativeErrorCodeValue(nativeError), message);
+        }
+
+        fn OpenReadText(path: string) -> ResultValue<File> {
             return Open(path, OpenRead);
         }
 
-        fn OpenReadBinaryFile(path: string) -> File {
+        fn OpenReadBinaryFile(path: string) -> ResultValue<File> {
             return Open(path, OpenReadBinary);
         }
 
-        fn OpenWriteText(path: string) -> File {
+        fn OpenWriteText(path: string) -> ResultValue<File> {
             return Open(path, OpenWrite);
         }
 
-        fn OpenWriteBinaryFile(path: string) -> File {
+        fn OpenWriteBinaryFile(path: string) -> ResultValue<File> {
             return Open(path, OpenWriteBinary);
         }
 
-        fn OpenAppendText(path: string) -> File {
+        fn OpenAppendText(path: string) -> ResultValue<File> {
             return Open(path, OpenAppend);
         }
 
-        fn OpenAppendBinaryFile(path: string) -> File {
+        fn OpenAppendBinaryFile(path: string) -> ResultValue<File> {
             return Open(path, OpenAppendBinary);
+        }
+
+        fn Open(path: string, mode: OpenMode) -> ResultValue<File> {
+            mut file = File();
+            mut error = FileError::none;
+            mut nativeError = 0u64;
+            mut message = "";
+
+            if (TryOpenResultNative(path, mode, ref file, ref error, ref nativeError, ref message)) {
+                return ResultValue<File>(file);
+            }
+
+            return ResultValue<File>(FileResultError(error, nativeError, message));
+        }
+
+        fn Close(file: ref File) -> ResultValue<ResultUnit> {
+            mut error = FileError::none;
+            mut nativeError = 0u64;
+            mut message = "";
+
+            if (TryCloseResultNative(file, ref error, ref nativeError, ref message)) {
+                return ResultValue<ResultUnit>(ResultUnit());
+            }
+
+            return ResultValue<ResultUnit>(FileResultError(error, nativeError, message));
+        }
+
+        fn Size(file: File) -> ResultValue<u64> {
+            mut value = 0u64;
+            mut error = FileError::none;
+            mut nativeError = 0u64;
+            mut message = "";
+
+            if (TrySizeResultNative(file, ref value, ref error, ref nativeError, ref message)) {
+                return ResultValue<u64>(value);
+            }
+
+            return ResultValue<u64>(FileResultError(error, nativeError, message));
+        }
+
+        fn Read(file: ref File, size: usize) -> ResultValue<string> {
+            mut value = "";
+            mut error = ReadError::none;
+            mut nativeError = 0u64;
+            mut message = "";
+
+            if (TryReadResultNative(file, size, ref value, ref error, ref nativeError, ref message)) {
+                return ResultValue<string>(value);
+            }
+
+            return ResultValue<string>(ReadResultError(error, nativeError, message));
+        }
+
+        fn ReadAll(file: ref File) -> ResultValue<string> {
+            mut value = "";
+            mut error = ReadError::none;
+            mut nativeError = 0u64;
+            mut message = "";
+
+            if (TryReadAllResultNative(file, ref value, ref error, ref nativeError, ref message)) {
+                return ResultValue<string>(value);
+            }
+
+            return ResultValue<string>(ReadResultError(error, nativeError, message));
+        }
+
+        fn ReadLine(file: ref File, trimCarriageReturn: bool) -> ResultValue<string> {
+            mut value = "";
+            mut error = ReadError::none;
+            mut nativeError = 0u64;
+            mut message = "";
+
+            if (TryReadLineResultNative(file, trimCarriageReturn, ref value, ref error, ref nativeError, ref message)) {
+                return ResultValue<string>(value);
+            }
+
+            return ResultValue<string>(ReadResultError(error, nativeError, message));
+        }
+
+        fn ReadLine(file: ref File) -> ResultValue<string> {
+            return ReadLine(file, true);
+        }
+
+        fn Write(file: ref File, value: string) -> ResultValue<usize> {
+            mut written = 0usize;
+            mut error = WriteError::none;
+            mut nativeError = 0u64;
+            mut message = "";
+
+            if (TryWriteResultNative(file, value, ref written, ref error, ref nativeError, ref message)) {
+                return ResultValue<usize>(written);
+            }
+
+            return ResultValue<usize>(WriteResultError(error, nativeError, message));
+        }
+
+        fn WriteLine(file: ref File) -> ResultValue<usize> {
+            mut written = 0usize;
+            mut error = WriteError::none;
+            mut nativeError = 0u64;
+            mut message = "";
+
+            if (TryWriteLineResultNative(file, ref written, ref error, ref nativeError, ref message)) {
+                return ResultValue<usize>(written);
+            }
+
+            return ResultValue<usize>(WriteResultError(error, nativeError, message));
+        }
+
+        fn WriteLine(file: ref File, value: string) -> ResultValue<usize> {
+            mut written = 0usize;
+            mut error = WriteError::none;
+            mut nativeError = 0u64;
+            mut message = "";
+
+            if (TryWriteLineValueResultNative(file, value, ref written, ref error, ref nativeError, ref message)) {
+                return ResultValue<usize>(written);
+            }
+
+            return ResultValue<usize>(WriteResultError(error, nativeError, message));
+        }
+
+        fn OpenResult(path: string, mode: OpenMode) -> ResultValue<File> {
+            return Open(path, mode);
+        }
+
+        fn CloseResult(file: ref File) -> ResultValue<ResultUnit> {
+            return Close(file);
+        }
+
+        fn SizeResult(file: File) -> ResultValue<u64> {
+            return Size(file);
+        }
+
+        fn ReadResult(file: ref File, size: usize) -> ResultValue<string> {
+            return Read(file, size);
+        }
+
+        fn ReadAllResult(file: ref File) -> ResultValue<string> {
+            return ReadAll(file);
+        }
+
+        fn ReadLineResult(file: ref File, trimCarriageReturn: bool) -> ResultValue<string> {
+            return ReadLine(file, trimCarriageReturn);
+        }
+
+        fn ReadLineResult(file: ref File) -> ResultValue<string> {
+            return ReadLine(file);
+        }
+
+        fn WriteResult(file: ref File, value: string) -> ResultValue<usize> {
+            return Write(file, value);
+        }
+
+        fn WriteLineResult(file: ref File) -> ResultValue<usize> {
+            return WriteLine(file);
+        }
+
+        fn WriteLineResult(file: ref File, value: string) -> ResultValue<usize> {
+            return WriteLine(file, value);
         }
     }
 }
