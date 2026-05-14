@@ -1,0 +1,40 @@
+use std::assert as assert;
+use std::console as console;
+use std::heap as heap;
+
+realm opaque_ffi {
+    @Native
+    @CppHeader("native_opaque_bridge.h")
+    @CppName(native_opaque::MakeTagged)
+    fn MakeTagged(value: i32) -> opaque;
+
+    @Native
+    @CppHeader("native_opaque_bridge.h")
+    @CppName(native_opaque::ReadTag)
+    fn ReadTag(value: opaque) -> i32;
+
+    @Native
+    @CppHeader("native_opaque_bridge.h")
+    @CppName(native_opaque::Same)
+    fn Same(lhs: opaque, rhs: opaque) -> bool;
+}
+
+fn Entry() -> i32 {
+    let first = opaque_ffi::MakeTagged(7);
+    let second = opaque_ffi::MakeTagged(9);
+
+    let opaquePayload: any = first;
+    assert::ExpectTrue(opaquePayload is opaque, "any should preserve opaque payloads as a dedicated runtime category");
+    assert::ExpectFalse(opaquePayload is i32, "opaque payloads should not masquerade as boxed integers inside any");
+
+    let recovered = opaquePayload fit opaque;
+    assert::ExpectEqual(opaque_ffi::ReadTag(recovered), 7, "fit should recover opaque payloads from any");
+    assert::ExpectTrue(opaque_ffi::Same(recovered, first), "recovered opaque payload should keep the original foreign handle");
+    assert::ExpectFalse(opaque_ffi::Same(recovered, second), "opaque payload recovery should not confuse distinct handles");
+
+    let boxedPayload: any = heap::box(11);
+    assert::ExpectFalse(boxedPayload is opaque, "boxed Wio values should remain separate from foreign opaque payloads");
+
+    console::PrintLine("any-opaque-boundary-ok");
+    return 0;
+}

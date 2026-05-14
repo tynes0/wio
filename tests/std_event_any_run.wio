@@ -3,24 +3,24 @@ use std::console as console;
 use std::event as event;
 use std::heap as heap;
 
-fn IncrementPayload(current: ref event::Event) {
+fn IncrementPayload(current: ref std::Event) {
     if (current.payload is i32 fit amount) {
         current.payload = amount + 1;
     }
 }
 
-fn AttachContext(current: ref event::Event) {
+fn AttachContext(current: ref std::Event) {
     current.context = heap::box("player-1");
 }
 
-fn StopOnString(current: ref event::Event) {
+fn StopOnString(current: ref std::Event) {
     if (current.payload is string) {
         current.Handle();
     }
 }
 
 fn Entry() -> i32 {
-    mut damage = event::Event("damage", 10, null);
+    mut damage: std::Event = event::Event("damage", 10, null);
     IncrementPayload(ref damage);
     AttachContext(ref damage);
 
@@ -33,13 +33,13 @@ fn Entry() -> i32 {
         return 1;
     }
 
-    if (damage.context is heap::box<string> fit contextBox) {
+    if (damage.context is std::Box<string> fit contextBox) {
         assert::ExpectEqual(contextBox.Get(), "player-1", "event context should preserve boxed userdata payloads");
     } else {
         return 2;
     }
 
-    mut message = event::Event("message", "hello", null);
+    mut message: std::Event = event::Event("message", "hello", null);
     StopOnString(ref message);
     if (not message.handled) {
         IncrementPayload(ref message);
@@ -60,7 +60,7 @@ fn Entry() -> i32 {
     damage.Reset("spawn", heap::box(3), "wave-1");
     assert::ExpectEqual(damage.name, "spawn", "Reset should replace the event name");
     assert::ExpectFalse(damage.handled, "Reset should clear the handled flag");
-    if (damage.payload is heap::box<i32> fit countBox) {
+    if (damage.payload is std::Box<i32> fit countBox) {
         assert::ExpectEqual(countBox.Get(), 3, "Reset should accept boxed any payloads");
     } else {
         return 4;

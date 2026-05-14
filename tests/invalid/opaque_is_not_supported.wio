@@ -1,0 +1,8 @@
+fn Entry() -> i32 {
+    let value: opaque = null;
+    if (value is opaque) {
+        return 1;
+    }
+
+    return 0;
+}

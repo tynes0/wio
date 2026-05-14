@@ -134,6 +134,38 @@ namespace wio::runtime
         Ref<TObject> value_;
     };
 
+    class AnyOpaqueCell final : public AnyCellBase
+    {
+    public:
+        explicit AnyOpaqueCell(void* value) noexcept
+            : value_(value)
+        {
+        }
+
+        [[nodiscard]] AnyStorageKind Kind() const noexcept override
+        {
+            return AnyStorageKind::OpaquePayload;
+        }
+
+        [[nodiscard]] const void* TypeToken() const noexcept override
+        {
+            return GetAnyTypeToken<void*>();
+        }
+
+        [[nodiscard]] std::string_view DebugTypeName() const noexcept override
+        {
+            return "opaque";
+        }
+
+        [[nodiscard]] void* Value() const noexcept
+        {
+            return value_;
+        }
+
+    private:
+        void* value_ = nullptr;
+    };
+
     class AnyRuntimeObjectCell final : public AnyCellBase
     {
     public:
@@ -180,6 +212,18 @@ namespace wio::runtime
         Any(std::nullptr_t) noexcept
             : cell_(nullptr)
         {
+        }
+
+        Any(RefCountedObject* runtimeObject)
+        {
+            if (runtimeObject)
+                cell_ = Ref<AnyRuntimeObjectCell>::Create(Ref<RefCountedObject>(runtimeObject));
+        }
+
+        Any(void* opaqueValue) noexcept
+        {
+            if (opaqueValue)
+                cell_ = Ref<AnyOpaqueCell>::Create(opaqueValue);
         }
 
         Any(const char* text)
@@ -269,6 +313,11 @@ namespace wio::runtime
             return FromRuntimeObject(Ref<RefCountedObject>(object));
         }
 
+        [[nodiscard]] static Any FromOpaque(void* value) noexcept
+        {
+            return Any(value);
+        }
+
         template <typename TInterface>
         [[nodiscard]] static Any FromInterface(TInterface* interfaceValue)
         {
@@ -326,6 +375,30 @@ namespace wio::runtime
         Any& operator=(std::nullptr_t) noexcept
         {
             cell_ = nullptr;
+            return *this;
+        }
+
+        Any& operator=(RefCountedObject* runtimeObject)
+        {
+            if (!runtimeObject)
+            {
+                cell_ = nullptr;
+                return *this;
+            }
+
+            cell_ = Ref<AnyRuntimeObjectCell>::Create(Ref<RefCountedObject>(runtimeObject));
+            return *this;
+        }
+
+        Any& operator=(void* opaqueValue) noexcept
+        {
+            if (!opaqueValue)
+            {
+                cell_ = nullptr;
+                return *this;
+            }
+
+            cell_ = Ref<AnyOpaqueCell>::Create(opaqueValue);
             return *this;
         }
 
@@ -407,6 +480,11 @@ namespace wio::runtime
                    cell_->TypeToken() == GetAnyTypeToken<StoredType>();
         }
 
+        [[nodiscard]] bool IsOpaque() const noexcept
+        {
+            return cell_ && cell_->Kind() == AnyStorageKind::OpaquePayload;
+        }
+
         template <typename TObject>
         requires std::is_base_of_v<RefCountedObject, TObject>
         [[nodiscard]] bool IsObject() const noexcept
@@ -449,6 +527,14 @@ namespace wio::runtime
                 throw RuntimeException("Any: boxed value type mismatch.");
 
             return static_cast<const AnyValueCell<StoredType>*>(cell_.Get())->Value();
+        }
+
+        [[nodiscard]] void* AsOpaque() const
+        {
+            if (!IsOpaque())
+                throw RuntimeException("Any: opaque payload type mismatch.");
+
+            return static_cast<const AnyOpaqueCell*>(cell_.Get())->Value();
         }
 
         template <typename TObject>

@@ -150,11 +150,13 @@ helpers.
 
 Current expectation:
 
-- `std::heap::box<T>` is the first source-level heap wrapper slice for typed
-  values
+- `std::heap::box<T>` is the implementation-facing heap wrapper object
+- `std::Box<T>` is the canonical public alias for heap-wrapped typed values
 - it is intentionally std-backed for now rather than a dedicated builtin
   keyword
-- `std::event` provides an `any`-powered event/context/payload surface for
+- `std::event` provides the implementation-facing `any`-powered
+  event/context/payload surface
+- `std::Event` is the canonical public alias for the std event object used for
   userdata-style flows, handler dispatch, and small message pipelines
 - both modules should currently be treated as implemented but still
   experimental/hardening-oriented, not frozen v1 core

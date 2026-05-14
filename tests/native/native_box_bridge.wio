@@ -1,0 +1,37 @@
+use std::assert as assert;
+use std::console as console;
+use std::heap as heap;
+
+realm ffi {
+    @Native
+    @CppHeader("native_box_bridge.h")
+    @CppName(native_box::Read)
+    fn Read(value: view heap::box<i32>) -> i32;
+
+    @Native
+    @CppHeader("native_box_bridge.h")
+    @CppName(native_box::Add)
+    fn Add(value: heap::box<i32>, delta: i32);
+
+    @Native
+    @CppHeader("native_box_bridge.h")
+    @CppName(native_box::Rebind)
+    fn Rebind(target: ref heap::box<i32>, value: i32);
+}
+
+fn Entry() -> i32 {
+    mut number: std::Box<i32> = heap::box(7);
+    let shared = number;
+
+    assert::ExpectEqual(ffi::Read(ref number), 7, "view std::Box parameters should read the current boxed value through native bridge");
+    ffi::Add(number, 5);
+    assert::ExpectEqual(number.Get(), 12, "by-value std::Box parameters should preserve shared handle mutation through native bridge");
+    assert::ExpectEqual(shared.Get(), 12, "shared std::Box handles should observe native by-value mutations");
+
+    ffi::Rebind(ref number, 99);
+    assert::ExpectEqual(number.Get(), 99, "ref std::Box parameters should be able to rebind the caller handle through native bridge");
+    assert::ExpectEqual(shared.Get(), 12, "rebinding std::Box through native bridge should not mutate previously shared handles");
+
+    console::PrintLine("native-box-ok");
+    return 0;
+}

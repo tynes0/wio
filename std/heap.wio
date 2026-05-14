@@ -21,6 +21,10 @@ realm std {
                 return previous;
             }
 
+            public fn Clone() -> box<T> {
+                return box<T>(self.value);
+            }
+
             public fn Swap(other: ref box<T>) {
                 let previous = self.value;
                 self.value = other.value;
@@ -30,4 +34,6 @@ realm std {
 
         type Box<T> = box<T>;
     }
+
+    type Box<T> = heap::box<T>;
 }

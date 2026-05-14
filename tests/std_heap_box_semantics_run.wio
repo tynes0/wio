@@ -15,25 +15,28 @@ fn Rebind(target: ref heap::box<i32>, value: i32) {
 }
 
 fn Entry() -> i32 {
-    mut first = heap::box(5);
+    mut first: std::Box<i32> = heap::box(5);
     let shared = first;
+    let clone = first.Clone();
 
     Mutate(shared, 9);
     assert::ExpectEqual(first.Get(), 9, "box value arguments should share the same heap handle");
     assert::ExpectEqual(shared.Get(), 9, "shared box handles should observe the same updated value");
     assert::ExpectEqual(Read(first), 9, "view box arguments should read the current boxed value");
+    assert::ExpectEqual(clone.Get(), 5, "Clone should create a new box handle with a copied boxed value");
 
     Rebind(ref first, 42);
     assert::ExpectEqual(first.Get(), 42, "ref box parameters should be able to rebind the caller handle");
     assert::ExpectEqual(shared.Get(), 9, "rebinding one box variable should not mutate previously shared handles");
+    assert::ExpectEqual(clone.Get(), 5, "rebinding one box handle should not affect independent clones");
 
-    mut other = heap::box(100);
+    mut other: std::Box<i32> = heap::box(100);
     first.Swap(ref other);
     assert::ExpectEqual(first.Get(), 100, "Swap should exchange boxed values through ref box parameters");
     assert::ExpectEqual(other.Get(), 42, "Swap should update the other boxed value too");
 
     let payload: any = first;
-    if (payload is heap::box<i32> fit recovered) {
+    if (payload is std::Box<i32> fit recovered) {
         recovered.Set(88);
     } else {
         return 1;

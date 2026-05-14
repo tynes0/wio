@@ -98,6 +98,14 @@ namespace wio::codegen
                    resolved.AsFast<sema::PrimitiveType>()->name == "any";
         }
 
+        bool isOpaqueTypeForCodegen(const Ref<sema::Type>& type)
+        {
+            Ref<sema::Type> resolved = unwrapAliasTypeForCodegen(type);
+            return resolved &&
+                   resolved->kind() == sema::TypeKind::Primitive &&
+                   resolved.AsFast<sema::PrimitiveType>()->name == "opaque";
+        }
+
         bool isStructMemberFunctionSymbol(const Ref<sema::Symbol>& symbol)
         {
             if (!symbol)
@@ -2608,6 +2616,14 @@ namespace wio::codegen
             return true;
         }
 
+        if (isOpaqueTypeForCodegen(resolvedActualType))
+        {
+            emit("wio::runtime::Any::FromOpaque(");
+            expression->accept(*this);
+            emit(")");
+            return true;
+        }
+
         if (resolvedActualType->kind() == sema::TypeKind::Primitive)
         {
             auto primitiveType = resolvedActualType.AsFast<sema::PrimitiveType>();
@@ -4093,6 +4109,10 @@ namespace wio::codegen
                         emit("_wio_any.IsBoxed<" + toCppType(targetType) + ">()");
                     }
                 }
+                else if (isOpaqueTypeForCodegen(targetType))
+                {
+                    emit("_wio_any.IsOpaque()");
+                }
                 else
                 {
                     emit("_wio_any.IsBoxed<" + toCppType(targetType) + ">()");
@@ -5385,6 +5405,14 @@ namespace wio::codegen
         if (isAnyTypeForCodegen(srcType))
         {
             Ref<sema::Type> resolvedDestType = unwrapAliasTypeForCodegen(destType);
+            if (isOpaqueTypeForCodegen(resolvedDestType))
+            {
+                emit("(");
+                node.operand->accept(*this);
+                emit(").AsOpaque()");
+                return;
+            }
+
             if (resolvedDestType && resolvedDestType->kind() == sema::TypeKind::Struct)
             {
                 auto structType = resolvedDestType.AsFast<sema::StructType>();
@@ -7374,6 +7402,14 @@ namespace wio::codegen
                         indent();
                         emitLine(targetCppType + " " + node.matchVar.value + " = _wio_any_match.AsBoxed<" + targetCppType + ">();");
                     }
+                }
+                else if (isOpaqueTypeForCodegen(resolvedTargetType))
+                {
+                    emit("_wio_any_match.IsOpaque()");
+                    emit(")\n");
+                    emitLine("{");
+                    indent();
+                    emitLine(targetCppType + " " + node.matchVar.value + " = _wio_any_match.AsOpaque();");
                 }
                 else
                 {

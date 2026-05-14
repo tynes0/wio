@@ -46,9 +46,9 @@ The rest of this document defines what each category means.
 | `component` | inline value / POD-like data | copied by value or passed by `ref` / `view` | structural POD bridge | partially implemented |
 | `object` | user-defined heap object with identity | reference/handle semantics | handle/bridge, not POD layout sharing | implemented direction, still evolving |
 | `string` / dynamic array / `Dict` / `Tree` | managed runtime containers | runtime-managed | dedicated bridge, not native POD | implemented direction |
-| `opaque` | foreign host payload / external handle | host-owned or externally owned | pass-through opaque ABI value | initial source-level and native pass-through slice implemented |
-| `box<T>` | heap allocation for value types | heap-owned wrapper around a value | wrapper/bridge, not POD | initial std-backed source slice implemented |
-| `any` | universal erased runtime payload | heap-backed wrapper cell | wrapper/bridge, not POD | initial source slice, native bridge, and std event/context helpers implemented |
+| `opaque` | foreign host payload / external handle | host-owned or externally owned | pass-through opaque ABI value | source-level and native pass-through slice implemented and hardened |
+| `box<T>` | heap allocation for value types | heap-owned wrapper around a value | wrapper/bridge, not POD | std-backed source slice implemented and stabilized through `std::Box<T>` |
+| `any` | universal erased runtime payload | heap-backed wrapper cell | wrapper/bridge, not POD | source slice, native bridge, and std event/context helpers implemented and hardened |
 
 ## 3. `component`
 
@@ -332,9 +332,10 @@ Use cases:
 
 ### 7.2 Current Slice
 
-The current first slice is available as:
+The current slice is available as:
 
 - `std::heap::box<T>`
+- `std::Box<T>`
 
 This keeps the model available today without prematurely freezing a dedicated
 builtin keyword. The current std-backed wrapper is still intended to represent
@@ -344,8 +345,10 @@ the long-term `box<T>` semantic direction:
 - reference/handle-style sharing
 - a typed wrapper around one known Wio value
 - not a POD/native layout bridge
+- `Clone()` creates a new independent box handle with a copied value
 - usable with `any is std::heap::box<T>` / `any fit std::heap::box<T>`-style
-  recovery on concrete generic specializations
+  recovery on concrete generic specializations, including the canonical
+  `std::Box<T>` alias
 
 ### 7.3 Why `box<T>` Matters
 
@@ -409,6 +412,8 @@ That header and compiler slice currently establish this model:
 - `Any` is a heap-backed wrapper handle,
 - plain values live in `AnyValueCell<T>`,
 - object references live in `AnyObjectCell<T>`,
+- foreign handles live in a dedicated opaque payload cell rather than as
+  ordinary boxed values,
 - interface-typed expressions box by first recovering their backing runtime object,
 - the payload itself does not need to inherit from `RefCountedObject`; only
   the heap cell does,
@@ -512,8 +517,10 @@ The current compiler/runtime direction already fits much of this design:
 
 The following items are still future-facing:
 
-- `box<T>`,
-- source-level `any`,
+- a dedicated builtin `box<T>` keyword if we decide to move beyond the current
+  `std::Box<T>` / `std::heap::box<T>` surface,
+- deeper `any` helper APIs and additional runtime utilities beyond the current
+  boxing / `is` / `fit` / native bridge surface,
 - final container/top-reference categorization details,
 - full native object policy beyond the current bridge slices.
 
@@ -527,8 +534,9 @@ The recommended long-term Wio runtime type model is:
    types.
 4. `opaque` is the foreign host payload category and replaces the old
    `userdata` naming idea.
-5. `box<T>` is the future heap wrapper for value types.
-6. `any` is the future universal runtime payload / userdata-like boxed type.
+5. `box<T>` is the heap wrapper for value types, currently exposed through the
+   std-backed `std::Box<T>` / `std::heap::box<T>` surface.
+6. `any` is the universal runtime payload / userdata-like boxed type.
 
 This keeps the language readable, the runtime model consistent, and native
 interop much easier to reason about.

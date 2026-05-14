@@ -63,12 +63,12 @@ fn Entry() -> i32 {
     assert::ExpectEqual(objectAfter.value, 8, "object payloads recovered from any should preserve shared identity");
 
     let boxedPayload: any = heap::box("hello");
-    if (boxedPayload is heap::box<string> fit textBox) {
+    if (boxedPayload is std::Box<string> fit textBox) {
         textBox.Set("changed");
     } else {
         return 5;
     }
-    let boxedAfter = boxedPayload fit heap::box<string>;
+    let boxedAfter = boxedPayload fit std::Box<string>;
     assert::ExpectEqual(boxedAfter.Get(), "changed", "boxed payloads recovered from any should preserve shared box identity");
 
     console::PrintLine("any-value-reference-semantics-ok");

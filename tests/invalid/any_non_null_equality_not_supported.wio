@@ -1,0 +1,6 @@
+fn Entry() -> i32 {
+    let left: any = 1;
+    let right: any = 2;
+    let same = left == right;
+    return 0;
+}

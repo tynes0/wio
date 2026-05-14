@@ -595,8 +595,10 @@ slice is now available for:
 - null assignment and null equality,
 - initial `@Native` interop by value and through `view any` / `ref any`,
 - object payload recovery through interface `is` / `fit`,
-- direct generic boxed target checks such as `payload is heap::box<string>` and
-  `payload fit heap::box<i32>`,
+- dedicated opaque payload handling so foreign `opaque` handles remain distinct
+  from ordinary boxed values inside `any`,
+- direct generic boxed target checks such as `payload is std::Box<string>` and
+  `payload fit std::Box<i32>`,
 - std-backed event/context helpers through `std::event`.
 
 For the wider runtime model and the current std-backed `std::heap::box<T>`

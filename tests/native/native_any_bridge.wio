@@ -38,6 +38,21 @@ realm ffi {
 
     @Native
     @CppHeader("native_any_bridge.h")
+    @CppName(native_any::IsOpaquePayload)
+    fn IsOpaquePayload(value: view any) -> bool;
+
+    @Native
+    @CppHeader("native_any_bridge.h")
+    @CppName(native_any::ReadOpaqueTag)
+    fn ReadOpaqueTag(value: view any) -> i32;
+
+    @Native
+    @CppHeader("native_any_bridge.h")
+    @CppName(native_any::ReplaceWithOpaqueTag)
+    fn ReplaceWithOpaqueTag(target: ref any, value: i32);
+
+    @Native
+    @CppHeader("native_any_bridge.h")
     @CppName(native_any::Echo)
     fn Echo(value: view any) -> any;
 }
@@ -67,6 +82,16 @@ fn Entry() -> i32 {
         assert::ExpectEqual(enemy.hp, 15, "native any echo should preserve exact object payloads");
     } else {
         return 2;
+    }
+
+    mut opaquePayload: any = null;
+    ffi::ReplaceWithOpaqueTag(ref opaquePayload, 33);
+    assert::ExpectTrue(ffi::IsOpaquePayload(ref opaquePayload), "native any ref should preserve dedicated opaque payloads");
+    assert::ExpectEqual(ffi::ReadOpaqueTag(ref opaquePayload), 33, "native any view should recover opaque payload tags");
+    if (opaquePayload is opaque fit handle) {
+        assert::ExpectTrue(handle != null, "opaque payloads recovered from native any should stay non-null");
+    } else {
+        return 3;
     }
 
     console::PrintLine("native-any-ok");

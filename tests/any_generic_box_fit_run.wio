@@ -6,17 +6,17 @@ fn Entry() -> i32 {
     let numberPayload: any = heap::box(42);
     let textPayload: any = heap::box("boxed");
 
-    assert::ExpectTrue(numberPayload is heap::box<i32>, "any should accept direct generic box checks");
-    assert::ExpectTrue(textPayload is heap::box<string>, "any should accept direct generic box string checks");
+    assert::ExpectTrue(numberPayload is std::Box<i32>, "any should accept direct generic box checks through the canonical std::Box alias");
+    assert::ExpectTrue(textPayload is std::Box<string>, "any should accept direct generic box string checks through the canonical std::Box alias");
 
-    if (numberPayload is heap::box<i32> fit numberBox) {
+    if (numberPayload is std::Box<i32> fit numberBox) {
         numberBox.Set(55);
         assert::ExpectEqual(numberBox.Get(), 55, "generic box fit should recover mutable boxed values");
     } else {
         return 1;
     }
 
-    if (textPayload is heap::box<string> fit textBox) {
+    if (textPayload is std::Box<string> fit textBox) {
         assert::ExpectEqual(textBox.Get(), "boxed", "generic box fit should recover boxed strings");
     } else {
         return 2;

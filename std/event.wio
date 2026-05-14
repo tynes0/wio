@@ -69,4 +69,6 @@ realm std {
             }
         }
     }
+
+    type Event = event::Event;
 }
