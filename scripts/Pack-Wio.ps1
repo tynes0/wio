@@ -17,6 +17,54 @@ $licensePath = Join-Path $repoRoot "LICENSE"
 $readmePath = Join-Path $repoRoot "README.md"
 $languageDraftPath = Join-Path $repoRoot "docs\WIO_LANGUAGE_DRAFT.md"
 
+function Get-WioCliPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot,
+        [Parameter(Mandatory = $true)]
+        [string]$BuildDir,
+        [Parameter(Mandatory = $true)]
+        [string]$Config
+    )
+
+    $candidates = @(
+        (Join-Path $RepoRoot "bin\wio.exe"),
+        (Join-Path $RepoRoot "bin\wio"),
+        (Join-Path $RepoRoot "$BuildDir\app\$Config\wio.exe"),
+        (Join-Path $RepoRoot "$BuildDir\app\wio.exe"),
+        (Join-Path $RepoRoot "$BuildDir\app\$Config\wio"),
+        (Join-Path $RepoRoot "$BuildDir\app\wio")
+    )
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate) {
+            return $candidate
+        }
+    }
+
+    return $null
+}
+
+$wioCli = Get-WioCliPath -RepoRoot $repoRoot -BuildDir $BuildDir -Config $Config
+if (-not [string]::IsNullOrWhiteSpace($wioCli)) {
+    $cliArgs = @("package", "--build-dir", $BuildDir, "--config", $Config, "--output-dir", $OutputDir)
+    if (-not [string]::IsNullOrWhiteSpace($VersionSuffix)) {
+        $cliArgs += @("--version-suffix", $VersionSuffix)
+    }
+    if (-not [string]::IsNullOrWhiteSpace($Generator)) {
+        $cliArgs += @("--generator", $Generator)
+    }
+    if ($NoZip) {
+        $cliArgs += "--no-zip"
+    }
+    if ($Clean) {
+        $cliArgs += "--clean"
+    }
+
+    & $wioCli @cliArgs
+    exit $LASTEXITCODE
+}
+
 function Get-WioVersion {
     param(
         [Parameter(Mandatory = $true)]

@@ -1,5 +1,6 @@
 #include "tooling_cli.h"
 #include "binding_cli.h"
+#include "package_cli.h"
 
 #include <argonaut.h>
 
@@ -218,6 +219,7 @@ namespace wio::tooling
                 << "  wio project run      [--project PATH] [--config CFG] [--build-dir DIR] [--configure]\n"
                 << "  wio bind new         --manifest FILE [--output FILE]\n"
                 << "  wio bind import      --header FILE --realm NAME [--output FILE] [--header-include FILE] [--prefer-flagset]\n"
+                << "  wio package          [--build-dir DIR] [--config CFG] [--output-dir DIR] [--version-suffix TAG] [--generator NAME] [--no-zip] [--clean]\n"
                 << "\n"
                 << "Alias forms:\n"
                 << "\n"
@@ -2232,6 +2234,9 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
 
         if (command == "bind")
             return binding::tryHandleBindCommand(argc, argv);
+
+        if (command == "package")
+            return package::tryHandlePackageCommand(argc, argv);
 
         if (command != "dev")
             return std::nullopt;

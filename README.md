@@ -26,6 +26,7 @@ build\app\Debug\wio.exe project build --project C:\Projects\MyGame
 build\app\Debug\wio.exe project run --project C:\Projects\MyGame
 build\app\Debug\wio.exe bind import --header .\tests\native\binding_import_smoke.h --realm binding_import_smoke --output .\build\generated\binding_import_smoke.wio
 build\app\Debug\wio.exe bind new --manifest .\tests\native\binding_manifest_smoke.json --output .\build\generated\binding_manifest_smoke.wio
+build\app\Debug\wio.exe package --build-dir build --config Debug --output-dir .\artifacts\packages-cli --no-zip
 ```
 
 ### Run
@@ -64,7 +65,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Test-Wio.ps1
 
 ### Package
 
-To produce a packaged Wio distribution quickly:
+To produce a packaged Wio distribution quickly, the preferred path is now:
+
+```powershell
+build\app\Debug\wio.exe package --build-dir build --config Debug --output-dir .\artifacts\packages
+```
+
+The older compatibility helper still exists:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Pack-Wio.ps1

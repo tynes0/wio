@@ -8,6 +8,8 @@ add_executable(wio_app
     main.cpp
     binding_cli.cpp
     binding_cli.h
+    package_cli.cpp
+    package_cli.h
     tooling_cli.cpp
     tooling_cli.h
     ${WIO_STD_FILES}
