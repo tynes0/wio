@@ -1,0 +1,1096 @@
+use std::result;
+
+realm std {
+    realm console {
+        use @CppHeader("std_console.h");
+
+        type StatusCode = u8;
+
+        @Native
+        @Type(u8)
+        @CppName(wio::runtime::console::ConsoleStatus)
+        enum Status {
+            Ok = 0u8,
+            Unsupported = 1u8,
+            Unavailable = 2u8,
+            InvalidArgument = 3u8,
+            InvalidRange = 4u8,
+            NullArgument = 5u8,
+            InputRedirected = 6u8,
+            OutputRedirected = 7u8,
+            ErrorRedirected = 8u8,
+            IoError = 9u8,
+            PartialIo = 10u8,
+            EndOfFile = 11u8,
+            EncodingError = 12u8,
+            FormatError = 13u8,
+            PermissionDenied = 14u8,
+            PlatformError = 15u8,
+            UnknownError = 16u8
+        };
+
+        @Native
+        @Type(u8)
+        @CppName(wio::runtime::console::ConsoleErrorDomain)
+        enum ErrorDomain {
+            None = 0u8,
+            Generic = 1u8,
+            Stdio = 2u8,
+            Win32 = 3u8,
+            Posix = 4u8,
+            Terminal = 5u8,
+            Formatting = 6u8
+        };
+
+        @Native
+        @Type(u8)
+        @CppName(wio::runtime::console::ConsoleColor)
+        enum Color {
+            Black = 0u8,
+            DarkBlue = 1u8,
+            DarkGreen = 2u8,
+            DarkCyan = 3u8,
+            DarkRed = 4u8,
+            DarkMagenta = 5u8,
+            DarkYellow = 6u8,
+            Gray = 7u8,
+            DarkGray = 8u8,
+            Blue = 9u8,
+            Green = 10u8,
+            Cyan = 11u8,
+            Red = 12u8,
+            Magenta = 13u8,
+            Yellow = 14u8,
+            White = 15u8
+        };
+
+        @Native
+        @Type(u8)
+        @CppName(wio::runtime::console::ConsoleEncoding)
+        enum Encoding {
+            Unknown = 0u8,
+            Utf8 = 1u8,
+            Utf16 = 2u8,
+            SystemDefault = 3u8
+        };
+
+        @Native
+        @Type(i32)
+        @CppName(wio::runtime::console::ConsoleKey)
+        enum Key {
+            None = 0,
+            Backspace = 8,
+            Tab = 9,
+            Clear = 12,
+            Enter = 13,
+            Pause = 19,
+            Escape = 27,
+            Spacebar = 32,
+            PageUp = 33,
+            PageDown = 34,
+            End = 35,
+            Home = 36,
+            LeftArrow = 37,
+            UpArrow = 38,
+            RightArrow = 39,
+            DownArrow = 40,
+            Select = 41,
+            Print = 42,
+            Execute = 43,
+            PrintScreen = 44,
+            Insert = 45,
+            Delete = 46,
+            Help = 47,
+            D0 = 48,
+            D1 = 49,
+            D2 = 50,
+            D3 = 51,
+            D4 = 52,
+            D5 = 53,
+            D6 = 54,
+            D7 = 55,
+            D8 = 56,
+            D9 = 57,
+            A = 65,
+            B = 66,
+            C = 67,
+            D = 68,
+            E = 69,
+            F = 70,
+            G = 71,
+            H = 72,
+            I = 73,
+            J = 74,
+            K = 75,
+            L = 76,
+            M = 77,
+            N = 78,
+            O = 79,
+            P = 80,
+            Q = 81,
+            R = 82,
+            S = 83,
+            T = 84,
+            U = 85,
+            V = 86,
+            W = 87,
+            X = 88,
+            Y = 89,
+            Z = 90,
+            LeftWindows = 91,
+            RightWindows = 92,
+            Applications = 93,
+            Sleep = 95,
+            NumPad0 = 96,
+            NumPad1 = 97,
+            NumPad2 = 98,
+            NumPad3 = 99,
+            NumPad4 = 100,
+            NumPad5 = 101,
+            NumPad6 = 102,
+            NumPad7 = 103,
+            NumPad8 = 104,
+            NumPad9 = 105,
+            Multiply = 106,
+            Add = 107,
+            Separator = 108,
+            Subtract = 109,
+            Decimal = 110,
+            Divide = 111,
+            F1 = 112,
+            F2 = 113,
+            F3 = 114,
+            F4 = 115,
+            F5 = 116,
+            F6 = 117,
+            F7 = 118,
+            F8 = 119,
+            F9 = 120,
+            F10 = 121,
+            F11 = 122,
+            F12 = 123,
+            F13 = 124,
+            F14 = 125,
+            F15 = 126,
+            F16 = 127,
+            F17 = 128,
+            F18 = 129,
+            F19 = 130,
+            F20 = 131,
+            F21 = 132,
+            F22 = 133,
+            F23 = 134,
+            F24 = 135,
+            BrowserBack = 166,
+            BrowserForward = 167,
+            BrowserRefresh = 168,
+            BrowserStop = 169,
+            BrowserSearch = 170,
+            BrowserFavorites = 171,
+            BrowserHome = 172,
+            VolumeMute = 173,
+            VolumeDown = 174,
+            VolumeUp = 175,
+            MediaNext = 176,
+            MediaPrevious = 177,
+            MediaStop = 178,
+            MediaPlay = 179,
+            LaunchMail = 180,
+            LaunchMediaSelect = 181,
+            LaunchApp1 = 182,
+            LaunchApp2 = 183,
+            Oem1 = 186,
+            OemPlus = 187,
+            OemComma = 188,
+            OemMinus = 189,
+            OemPeriod = 190,
+            Oem2 = 191,
+            Oem3 = 192,
+            Oem4 = 219,
+            Oem5 = 220,
+            Oem6 = 221,
+            Oem7 = 222,
+            Oem8 = 223,
+            Oem102 = 226,
+            Process = 229,
+            Packet = 231,
+            Attention = 246,
+            CrSel = 247,
+            ExSel = 248,
+            EraseEndOfFile = 249,
+            Play = 250,
+            Zoom = 251,
+            NoName = 252,
+            Pa1 = 253,
+            OemClear = 254
+        };
+
+        @Native
+        @Type(u8)
+        @CppName(wio::runtime::console::ConsoleModifiers)
+        flagset Modifiers {
+            None = 0u8,
+            Alt = 1u8,
+            Shift = 2u8,
+            Control = 4u8
+        };
+
+        @Native
+        @Type(i32)
+        @CppName(wio::runtime::console::ConsoleSpecialKey)
+        enum SpecialKey {
+            ControlC = 0,
+            ControlBreak = 1
+        };
+
+        const StatusOk: Status = Status::Ok;
+        const StatusUnsupported: Status = Status::Unsupported;
+        const StatusUnavailable: Status = Status::Unavailable;
+        const StatusInvalidArgument: Status = Status::InvalidArgument;
+        const StatusInvalidRange: Status = Status::InvalidRange;
+        const StatusNullArgument: Status = Status::NullArgument;
+        const StatusInputRedirected: Status = Status::InputRedirected;
+        const StatusOutputRedirected: Status = Status::OutputRedirected;
+        const StatusErrorRedirected: Status = Status::ErrorRedirected;
+        const StatusIoError: Status = Status::IoError;
+        const StatusPartialIo: Status = Status::PartialIo;
+        const StatusEndOfFile: Status = Status::EndOfFile;
+        const StatusEncodingError: Status = Status::EncodingError;
+        const StatusFormatError: Status = Status::FormatError;
+        const StatusPermissionDenied: Status = Status::PermissionDenied;
+        const StatusPlatformError: Status = Status::PlatformError;
+        const StatusUnknownError: Status = Status::UnknownError;
+
+        const DomainNone: ErrorDomain = ErrorDomain::None;
+        const DomainGeneric: ErrorDomain = ErrorDomain::Generic;
+        const DomainStdio: ErrorDomain = ErrorDomain::Stdio;
+        const DomainWin32: ErrorDomain = ErrorDomain::Win32;
+        const DomainPosix: ErrorDomain = ErrorDomain::Posix;
+        const DomainTerminal: ErrorDomain = ErrorDomain::Terminal;
+        const DomainFormatting: ErrorDomain = ErrorDomain::Formatting;
+
+        const ColorBlack: Color = Color::Black;
+        const ColorDarkBlue: Color = Color::DarkBlue;
+        const ColorDarkGreen: Color = Color::DarkGreen;
+        const ColorDarkCyan: Color = Color::DarkCyan;
+        const ColorDarkRed: Color = Color::DarkRed;
+        const ColorDarkMagenta: Color = Color::DarkMagenta;
+        const ColorDarkYellow: Color = Color::DarkYellow;
+        const ColorGray: Color = Color::Gray;
+        const ColorDarkGray: Color = Color::DarkGray;
+        const ColorBlue: Color = Color::Blue;
+        const ColorGreen: Color = Color::Green;
+        const ColorCyan: Color = Color::Cyan;
+        const ColorRed: Color = Color::Red;
+        const ColorMagenta: Color = Color::Magenta;
+        const ColorYellow: Color = Color::Yellow;
+        const ColorWhite: Color = Color::White;
+
+        const EncodingUnknown: Encoding = Encoding::Unknown;
+        const EncodingUtf8: Encoding = Encoding::Utf8;
+        const EncodingUtf16: Encoding = Encoding::Utf16;
+        const EncodingSystemDefault: Encoding = Encoding::SystemDefault;
+
+        const ModifierNone: Modifiers = Modifiers::None;
+        const ModifierAlt: Modifiers = Modifiers::Alt;
+        const ModifierShift: Modifiers = Modifiers::Shift;
+        const ModifierControl: Modifiers = Modifiers::Control;
+
+        const SpecialKeyControlC: SpecialKey = SpecialKey::ControlC;
+        const SpecialKeyControlBreak: SpecialKey = SpecialKey::ControlBreak;
+
+        component ErrorInfo {
+            status: Status;
+            domain: ErrorDomain;
+            nativeCode: i32;
+            line: i32;
+            file: string;
+        }
+
+        component CapabilitiesInfo {
+            colors: bool;
+            cursorPosition: bool;
+            cursorVisibility: bool;
+            cursorSize: bool;
+            bufferSize: bool;
+            windowPosition: bool;
+            windowSizeGet: bool;
+            windowSizeSet: bool;
+            largestWindowSize: bool;
+            moveBufferArea: bool;
+            keyAvailable: bool;
+            readKey: bool;
+            title: bool;
+            beep: bool;
+            beepFrequency: bool;
+            keyboardToggleState: bool;
+            treatControlCAsInput: bool;
+            encodingSet: bool;
+        }
+
+        component CursorPositionInfo {
+            left: i32;
+            top: i32;
+        }
+
+        component SizeInfo {
+            width: i32;
+            height: i32;
+        }
+
+        component RectInfo {
+            left: i32;
+            top: i32;
+            width: i32;
+            height: i32;
+        }
+
+        component KeyInfo {
+            keyChar: i32;
+            key: Key;
+            modifiers: Modifiers;
+        }
+
+        component StandardStreamInfo {
+            redirected: bool;
+            bufferSize: usize;
+            hasReader: bool;
+            hasWriter: bool;
+            isOpen: bool;
+        }
+
+        fn Ok(status: StatusCode) -> bool {
+            return status == 0u8;
+        }
+
+        fn Failed(status: StatusCode) -> bool {
+            return not Ok(status);
+        }
+
+        fn HasModifier(value: Modifiers, mask: Modifiers) -> bool {
+            return (value & mask) != Modifiers::None;
+        }
+
+        @Native
+        @CppName(wio::runtime::std_console::ClearLastError)
+        fn ClearLastError();
+
+        @Native
+        @CppName(wio::runtime::std_console::LastStatusValue)
+        fn LastStatusCode() -> Status;
+
+        @Native
+        @CppName(wio::runtime::std_console::LastErrorDomainValue)
+        fn LastErrorDomainCode() -> ErrorDomain;
+
+        @Native
+        @CppName(wio::runtime::std_console::LastNativeCode)
+        fn LastNativeCode() -> i32;
+
+        @Native
+        @CppName(wio::runtime::std_console::LastErrorLine)
+        fn LastErrorLine() -> i32;
+
+        @Native
+        @CppName(wio::runtime::std_console::LastErrorFile)
+        fn LastErrorFile() -> string;
+
+        @Native
+        @CppName(wio::runtime::std_console::StatusName)
+        fn StatusName(status: Status) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_console::ErrorDomainName)
+        fn ErrorDomainName(domain: ErrorDomain) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_console::StatusValue)
+        fn StatusCodeValue(status: Status) -> i32;
+
+        fn LastError() -> ErrorInfo {
+            mut result: ErrorInfo = ErrorInfo();
+            result.status = LastStatusCode();
+            result.domain = LastErrorDomainCode();
+            result.nativeCode = LastNativeCode();
+            result.line = LastErrorLine();
+            result.file = LastErrorFile();
+            return result;
+        }
+
+        fn LastResultError() -> ResultError {
+            let error = LastError();
+            let message = $"console error ${StatusName(error.status)} (${ErrorDomainName(error.domain)})";
+            return MakeResultError(
+                ResultDomain::console,
+                StatusCodeValue(error.status),
+                error.nativeCode fit i64,
+                message
+            );
+        }
+
+        fn ResultFromStatus(status: StatusCode) -> Result<ResultUnit> {
+            if (Ok(status)) {
+                return Result<ResultUnit>(ResultUnit());
+            }
+
+            return Result<ResultUnit>(LastResultError());
+        }
+
+        @Native
+        @CppName(wio::runtime::std_console::WriteValue)
+        @Instantiate(string)
+        @Instantiate(bool)
+        @Instantiate(char)
+        @Instantiate(i8)
+        @Instantiate(i16)
+        @Instantiate(i32)
+        @Instantiate(i64)
+        @Instantiate(u8)
+        @Instantiate(u16)
+        @Instantiate(u32)
+        @Instantiate(u64)
+        @Instantiate(f32)
+        @Instantiate(f64)
+        fn PrintRaw<T>(value: T) -> i32;
+
+        @Native
+        @CppName(wio::runtime::std_console::WriteLine)
+        fn PrintLineRaw() -> i32;
+
+        @Native
+        @CppName(wio::runtime::std_console::WriteLineValue)
+        @Instantiate(string)
+        @Instantiate(bool)
+        @Instantiate(char)
+        @Instantiate(i8)
+        @Instantiate(i16)
+        @Instantiate(i32)
+        @Instantiate(i64)
+        @Instantiate(u8)
+        @Instantiate(u16)
+        @Instantiate(u32)
+        @Instantiate(u64)
+        @Instantiate(f32)
+        @Instantiate(f64)
+        fn PrintLineRaw<T>(value: T) -> i32;
+
+        @Native
+        @CppName(wio::runtime::std_console::WriteFormat)
+        fn PrintFormatRaw<Args...>(format: string, args: Args...) -> StatusCode;
+
+        @Native
+        @CppName(wio::runtime::std_console::WriteLineFormat)
+        fn PrintLineFormatRaw<Args...>(format: string, args: Args...) -> StatusCode;
+
+        @Native
+        @CppName(wio::runtime::std_console::Format)
+        fn Format<Args...>(format: string, args: Args...) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_console::WriteSegment)
+        fn WriteSliceRaw(value: string, index: usize, count: usize) -> i32;
+
+        @Native
+        @CppName(wio::runtime::std_console::WriteBuffer)
+        fn WriteBufferRaw(buffer: string, index: i32, count: i32) -> i32;
+
+        @Native
+        @CppName(wio::runtime::std_console::WriteTextDecimal)
+        fn WriteDecimalRaw(value: string) -> i32;
+
+        @Native
+        @CppName(wio::runtime::std_console::WriteLineTextDecimal)
+        fn WriteDecimalLineRaw(value: string) -> i32;
+
+        @Native
+        @CppName(wio::runtime::std_console::WriteErrorText)
+        fn WriteErrorRaw(value: string) -> i32;
+
+        @Native
+        @CppName(wio::runtime::std_console::WriteErrorLine)
+        fn WriteErrorLineRaw() -> i32;
+
+        @Native
+        @CppName(wio::runtime::std_console::WriteErrorLineText)
+        fn WriteErrorLineRaw(value: string) -> i32;
+
+        fn PrintSpace() -> Result<ResultUnit> {
+            return Print(" ");
+        }
+
+        fn Write<T>(value: T) -> Result<ResultUnit> {
+            return Print(value);
+        }
+
+        fn WriteLine<T>(value: T) -> Result<ResultUnit> {
+            return PrintLine(value);
+        }
+
+        fn WriteRepeat<T>(value: T, count: usize) -> Result<ResultUnit> {
+            mut index: usize = 0usize;
+            while (index < count) {
+                let result = Print(value);
+                if (result.IsError()) {
+                    return result;
+                }
+                index += 1usize;
+            }
+            return OkUnit();
+        }
+
+        fn WriteJoined<T>(values: T[], separator: string) -> Result<ResultUnit> {
+            mut index: usize = 0usize;
+            while (index < values.Count()) {
+                if (index > 0usize) {
+                    let separatorResult = Write(separator);
+                    if (separatorResult.IsError()) {
+                        return separatorResult;
+                    }
+                }
+
+                let valueResult = Write(values[index]);
+                if (valueResult.IsError()) {
+                    return valueResult;
+                }
+
+                index += 1usize;
+            }
+
+            return OkUnit();
+        }
+
+        fn WriteEachLine<T>(values: T[]) -> Result<ResultUnit> {
+            for value in values {
+                let result = WriteLine(value);
+                if (result.IsError()) {
+                    return result;
+                }
+            }
+            return OkUnit();
+        }
+
+        @Native
+        @CppName(wio::runtime::std_console::Input)
+        fn InputRaw(prompt: string) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_console::Input)
+        fn InputRaw() -> string;
+
+        @Native
+        @CppName(wio::runtime::std_console::InputN)
+        fn InputNRaw(count: usize) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_console::InputChar)
+        fn InputCharRaw(isHidden: bool) -> char;
+
+        @Native
+        @CppName(wio::runtime::std_console::InputChar)
+        fn InputCharRaw() -> char;
+
+        @Native
+        @CppName(wio::runtime::std_console::InputWord)
+        fn InputWordRaw() -> string;
+
+        @Native
+        @CppName(wio::runtime::std_console::InputUntil)
+        fn InputUntilRaw(delimiter: char, includeDelimiter: bool) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_console::InputUntil)
+        fn InputUntilRaw(delimiter: char) -> string;
+
+        fn Print<T>(value: T) -> Result<ResultUnit> {
+            let status = PrintRaw(value);
+            if (status == 0) {
+                return Result<ResultUnit>(ResultUnit());
+            }
+
+            return Result<ResultUnit>(LastResultError());
+        }
+
+        fn PrintResult<T>(value: T) -> Result<ResultUnit> {
+            return Print(value);
+        }
+
+        fn PrintLine() -> Result<ResultUnit> {
+            let status = PrintLineRaw();
+            if (status == 0) {
+                return Result<ResultUnit>(ResultUnit());
+            }
+
+            return Result<ResultUnit>(LastResultError());
+        }
+
+        fn PrintLineResult() -> Result<ResultUnit> {
+            return PrintLine();
+        }
+
+        fn PrintLine<T>(value: T) -> Result<ResultUnit> {
+            let status = PrintLineRaw(value);
+            if (status == 0) {
+                return Result<ResultUnit>(ResultUnit());
+            }
+
+            return Result<ResultUnit>(LastResultError());
+        }
+
+        fn PrintLineResult<T>(value: T) -> Result<ResultUnit> {
+            return PrintLine(value);
+        }
+
+        fn PrintFormat<Args...>(format: string, args: Args...) -> Result<ResultUnit> {
+            return ResultFromStatus(PrintFormatRaw(format, args...));
+        }
+
+        fn PrintLineFormat<Args...>(format: string, args: Args...) -> Result<ResultUnit> {
+            return ResultFromStatus(PrintLineFormatRaw(format, args...));
+        }
+
+        fn WriteSlice(value: string, index: usize, count: usize) -> Result<ResultUnit> {
+            return ResultFromStatus(WriteSliceRaw(value, index, count) fit u8);
+        }
+
+        fn WriteBuffer(buffer: string, index: i32, count: i32) -> Result<ResultUnit> {
+            return ResultFromStatus(WriteBufferRaw(buffer, index, count) fit u8);
+        }
+
+        fn WriteDecimal(value: string) -> Result<ResultUnit> {
+            return ResultFromStatus(WriteDecimalRaw(value) fit u8);
+        }
+
+        fn WriteDecimalLine(value: string) -> Result<ResultUnit> {
+            return ResultFromStatus(WriteDecimalLineRaw(value) fit u8);
+        }
+
+        fn WriteError(value: string) -> Result<ResultUnit> {
+            return ResultFromStatus(WriteErrorRaw(value) fit u8);
+        }
+
+        fn WriteErrorLine() -> Result<ResultUnit> {
+            return ResultFromStatus(WriteErrorLineRaw() fit u8);
+        }
+
+        fn WriteErrorLine(value: string) -> Result<ResultUnit> {
+            return ResultFromStatus(WriteErrorLineRaw(value) fit u8);
+        }
+
+        fn Input(prompt: string) -> Result<string> {
+            let value = InputRaw(prompt);
+            if (LastStatusCode() == Status::Ok) {
+                return Result<string>(value);
+            }
+
+            return Result<string>(LastResultError());
+        }
+
+        fn InputResult(prompt: string) -> Result<string> {
+            return Input(prompt);
+        }
+
+        fn Input() -> Result<string> {
+            let value = InputRaw();
+            if (LastStatusCode() == Status::Ok) {
+                return Result<string>(value);
+            }
+
+            return Result<string>(LastResultError());
+        }
+
+        fn InputResult() -> Result<string> {
+            return Input();
+        }
+
+        fn InputN(count: usize) -> Result<string> {
+            let value = InputNRaw(count);
+            if (LastStatusCode() == Status::Ok) {
+                return Result<string>(value);
+            }
+
+            return Result<string>(LastResultError());
+        }
+
+        fn InputChar(isHidden: bool) -> Result<char> {
+            let value = InputCharRaw(isHidden);
+            if (LastStatusCode() == Status::Ok) {
+                return Result<char>(value);
+            }
+
+            return Result<char>(LastResultError());
+        }
+
+        fn InputChar() -> Result<char> {
+            let value = InputCharRaw();
+            if (LastStatusCode() == Status::Ok) {
+                return Result<char>(value);
+            }
+
+            return Result<char>(LastResultError());
+        }
+
+        fn ReadLine() -> Result<string> {
+            mut value = "";
+            let status = TryReadLine(ref value);
+            if (Ok(status)) {
+                return Result<string>(value);
+            }
+
+            return Result<string>(LastResultError());
+        }
+
+        fn ReadLineResult() -> Result<string> {
+            return ReadLine();
+        }
+
+        fn ReadWord() -> Result<string> {
+            mut value = "";
+            let status = TryReadWord(ref value);
+            if (Ok(status)) {
+                return Result<string>(value);
+            }
+
+            return Result<string>(LastResultError());
+        }
+
+        fn ReadWordResult() -> Result<string> {
+            return ReadWord();
+        }
+
+        fn InputUntil(delimiter: char, includeDelimiter: bool) -> Result<string> {
+            let value = InputUntilRaw(delimiter, includeDelimiter);
+            if (LastStatusCode() == Status::Ok) {
+                return Result<string>(value);
+            }
+
+            return Result<string>(LastResultError());
+        }
+
+        fn InputUntil(delimiter: char) -> Result<string> {
+            let value = InputUntilRaw(delimiter);
+            if (LastStatusCode() == Status::Ok) {
+                return Result<string>(value);
+            }
+
+            return Result<string>(LastResultError());
+        }
+
+        fn Title() -> Result<string> {
+            mut value = "";
+            let status = TryGetTitle(ref value);
+            if (Ok(status)) {
+                return Result<string>(value);
+            }
+
+            return Result<string>(LastResultError());
+        }
+
+        fn TitleResult() -> Result<string> {
+            return Title();
+        }
+
+        fn BackgroundColor() -> Result<Color> {
+            mut value = Color::Black;
+            let status = TryGetBackgroundColor(ref value);
+            if (Ok(status)) {
+                return Result<Color>(value);
+            }
+
+            return Result<Color>(LastResultError());
+        }
+
+        fn BackgroundColorResult() -> Result<Color> {
+            return BackgroundColor();
+        }
+
+        fn ForegroundColor() -> Result<Color> {
+            mut value = Color::Gray;
+            let status = TryGetForegroundColor(ref value);
+            if (Ok(status)) {
+                return Result<Color>(value);
+            }
+
+            return Result<Color>(LastResultError());
+        }
+
+        fn ForegroundColorResult() -> Result<Color> {
+            return ForegroundColor();
+        }
+
+        @Native
+        @CppName(wio::runtime::std_console::Capabilities)
+        fn TryCapabilities(
+            colors: ref bool,
+            cursorPosition: ref bool,
+            cursorVisibility: ref bool,
+            cursorSize: ref bool,
+            bufferSize: ref bool,
+            windowPosition: ref bool,
+            windowSizeGet: ref bool,
+            windowSizeSet: ref bool,
+            largestWindowSize: ref bool,
+            moveBufferArea: ref bool,
+            keyAvailable: ref bool,
+            readKey: ref bool,
+            title: ref bool,
+            beep: ref bool,
+            beepFrequency: ref bool,
+            keyboardToggleState: ref bool,
+            treatControlCAsInput: ref bool,
+            encodingSet: ref bool) -> StatusCode;
+
+        @Native @CppName(wio::runtime::std_console::GetBackgroundColor) fn TryGetBackgroundColor(color: ref Color) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetBackgroundColor) fn TrySetBackgroundColor(color: Color) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetForegroundColor) fn TryGetForegroundColor(color: ref Color) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetForegroundColor) fn TrySetForegroundColor(color: Color) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetBufferHeight) fn TryGetBufferHeight(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetBufferHeight) fn TrySetBufferHeight(value: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetBufferWidth) fn TryGetBufferWidth(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetBufferWidth) fn TrySetBufferWidth(value: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetCapsLock) fn TryGetCapsLock(value: ref bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetCursorLeft) fn TryGetCursorLeft(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetCursorLeft) fn TrySetCursorLeft(value: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetCursorSize) fn TryGetCursorSize(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetCursorSize) fn TrySetCursorSize(value: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetCursorTop) fn TryGetCursorTop(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetCursorTop) fn TrySetCursorTop(value: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetCursorVisible) fn TryGetCursorVisible(value: ref bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetCursorVisible) fn TrySetCursorVisible(value: bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetInputEncoding) fn TryGetInputEncoding(value: ref Encoding) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetInputEncoding) fn TrySetInputEncoding(value: Encoding) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetOutputEncoding) fn TryGetOutputEncoding(value: ref Encoding) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetOutputEncoding) fn TrySetOutputEncoding(value: Encoding) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetIsErrorRedirected) fn TryGetIsErrorRedirected(value: ref bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetIsInputRedirected) fn TryGetIsInputRedirected(value: ref bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetIsOutputRedirected) fn TryGetIsOutputRedirected(value: ref bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetKeyAvailable) fn TryGetKeyAvailable(value: ref bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetLargestWindowHeight) fn TryGetLargestWindowHeight(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetLargestWindowWidth) fn TryGetLargestWindowWidth(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetNumberLock) fn TryGetNumberLock(value: ref bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetNewLine) fn TryGetNewLine(value: ref string) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetNewLine) fn TrySetNewLine(value: string) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetTitle) fn TryGetTitle(value: ref string) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetTitle) fn TrySetTitle(value: string) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetTreatControlCAsInput) fn TryGetTreatControlCAsInput(value: ref bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetTreatControlCAsInput) fn TrySetTreatControlCAsInput(value: bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetWindowHeight) fn TryGetWindowHeight(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetWindowHeight) fn TrySetWindowHeight(value: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetWindowLeft) fn TryGetWindowLeft(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetWindowLeft) fn TrySetWindowLeft(value: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetWindowTop) fn TryGetWindowTop(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetWindowTop) fn TrySetWindowTop(value: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetWindowWidth) fn TryGetWindowWidth(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetWindowWidth) fn TrySetWindowWidth(value: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::Beep) fn TryBeep() -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::Beep) fn TryBeep(frequency: i32, durationMs: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::Clear) fn TryClear() -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::GetCursorPosition) fn TryGetCursorPosition(left: ref i32, top: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::MoveBufferArea) fn TryMoveBufferArea(sourceLeft: i32, sourceTop: i32, sourceWidth: i32, sourceHeight: i32, targetLeft: i32, targetTop: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::MoveBufferArea) fn TryMoveBufferArea(sourceLeft: i32, sourceTop: i32, sourceWidth: i32, sourceHeight: i32, targetLeft: i32, targetTop: i32, sourceChar: i32, sourceForeColor: Color, sourceBackColor: Color) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::OpenStandardError) fn TryOpenStandardError(bufferSize: usize, redirected: ref bool, actualBufferSize: ref usize, hasReader: ref bool, hasWriter: ref bool, isOpen: ref bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::OpenStandardInput) fn TryOpenStandardInput(bufferSize: usize, redirected: ref bool, actualBufferSize: ref usize, hasReader: ref bool, hasWriter: ref bool, isOpen: ref bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::OpenStandardOutput) fn TryOpenStandardOutput(bufferSize: usize, redirected: ref bool, actualBufferSize: ref usize, hasReader: ref bool, hasWriter: ref bool, isOpen: ref bool) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::Read) fn TryRead(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::ReadCount) fn TryReadCount(count: usize, value: ref string) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::ReadHidden) fn TryReadHidden(value: ref i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::ReadKey) fn TryReadKey(keyChar: ref i32, key: ref Key, modifiers: ref Modifiers) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::ReadKey) fn TryReadKey(intercept: bool, keyChar: ref i32, key: ref Key, modifiers: ref Modifiers) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::ReadLine) fn TryReadLine(value: ref string) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::ReadUntil) fn TryReadUntil(delimiter: char, includeDelimiter: bool, value: ref string) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::ReadWord) fn TryReadWord(value: ref string) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::ResetColor) fn TryResetColor() -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetBufferSize) fn TrySetBufferSize(width: i32, height: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetCursorPosition) fn TrySetCursorPosition(left: i32, top: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetWindowPosition) fn TrySetWindowPosition(left: i32, top: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::SetWindowSize) fn TrySetWindowSize(width: i32, height: i32) -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::FlushError) fn TryFlushError() -> StatusCode;
+        @Native @CppName(wio::runtime::std_console::FlushOut) fn TryFlushOut() -> StatusCode;
+
+        fn Capabilities() -> Result<CapabilitiesInfo> {
+            mut result: CapabilitiesInfo = CapabilitiesInfo();
+            mut colors = false;
+            mut cursorPosition = false;
+            mut cursorVisibility = false;
+            mut cursorSize = false;
+            mut bufferSize = false;
+            mut windowPosition = false;
+            mut windowSizeGet = false;
+            mut windowSizeSet = false;
+            mut largestWindowSize = false;
+            mut moveBufferArea = false;
+            mut keyAvailable = false;
+            mut readKey = false;
+            mut title = false;
+            mut beep = false;
+            mut beepFrequency = false;
+            mut keyboardToggleState = false;
+            mut treatControlCAsInput = false;
+            mut encodingSet = false;
+            let status = TryCapabilities(
+                ref colors,
+                ref cursorPosition,
+                ref cursorVisibility,
+                ref cursorSize,
+                ref bufferSize,
+                ref windowPosition,
+                ref windowSizeGet,
+                ref windowSizeSet,
+                ref largestWindowSize,
+                ref moveBufferArea,
+                ref keyAvailable,
+                ref readKey,
+                ref title,
+                ref beep,
+                ref beepFrequency,
+                ref keyboardToggleState,
+                ref treatControlCAsInput,
+                ref encodingSet);
+            if (not Ok(status)) {
+                return Result<CapabilitiesInfo>(LastResultError());
+            }
+            result.colors = colors;
+            result.cursorPosition = cursorPosition;
+            result.cursorVisibility = cursorVisibility;
+            result.cursorSize = cursorSize;
+            result.bufferSize = bufferSize;
+            result.windowPosition = windowPosition;
+            result.windowSizeGet = windowSizeGet;
+            result.windowSizeSet = windowSizeSet;
+            result.largestWindowSize = largestWindowSize;
+            result.moveBufferArea = moveBufferArea;
+            result.keyAvailable = keyAvailable;
+            result.readKey = readKey;
+            result.title = title;
+            result.beep = beep;
+            result.beepFrequency = beepFrequency;
+            result.keyboardToggleState = keyboardToggleState;
+            result.treatControlCAsInput = treatControlCAsInput;
+            result.encodingSet = encodingSet;
+            return Result<CapabilitiesInfo>(result);
+        }
+
+        fn GetCursorPositionInfo() -> Result<CursorPositionInfo> {
+            mut result: CursorPositionInfo = CursorPositionInfo();
+            mut left = 0;
+            mut top = 0;
+            let status = TryGetCursorPosition(ref left, ref top);
+            if (not Ok(status)) {
+                return Result<CursorPositionInfo>(LastResultError());
+            }
+            result.left = left;
+            result.top = top;
+            return Result<CursorPositionInfo>(result);
+        }
+
+        fn GetStandardErrorInfo(bufferSize: usize) -> Result<StandardStreamInfo> {
+            mut result: StandardStreamInfo = StandardStreamInfo();
+            mut redirected = false;
+            mut actualBufferSize = 0usize;
+            mut hasReader = false;
+            mut hasWriter = false;
+            mut isOpen = false;
+            let status = TryOpenStandardError(bufferSize, ref redirected, ref actualBufferSize, ref hasReader, ref hasWriter, ref isOpen);
+            if (not Ok(status)) {
+                return Result<StandardStreamInfo>(LastResultError());
+            }
+            result.redirected = redirected;
+            result.bufferSize = actualBufferSize;
+            result.hasReader = hasReader;
+            result.hasWriter = hasWriter;
+            result.isOpen = isOpen;
+            return Result<StandardStreamInfo>(result);
+        }
+
+        fn GetStandardInputInfo(bufferSize: usize) -> Result<StandardStreamInfo> {
+            mut result: StandardStreamInfo = StandardStreamInfo();
+            mut redirected = false;
+            mut actualBufferSize = 0usize;
+            mut hasReader = false;
+            mut hasWriter = false;
+            mut isOpen = false;
+            let status = TryOpenStandardInput(bufferSize, ref redirected, ref actualBufferSize, ref hasReader, ref hasWriter, ref isOpen);
+            if (not Ok(status)) {
+                return Result<StandardStreamInfo>(LastResultError());
+            }
+            result.redirected = redirected;
+            result.bufferSize = actualBufferSize;
+            result.hasReader = hasReader;
+            result.hasWriter = hasWriter;
+            result.isOpen = isOpen;
+            return Result<StandardStreamInfo>(result);
+        }
+
+        fn GetStandardOutputInfo(bufferSize: usize) -> Result<StandardStreamInfo> {
+            mut result: StandardStreamInfo = StandardStreamInfo();
+            mut redirected = false;
+            mut actualBufferSize = 0usize;
+            mut hasReader = false;
+            mut hasWriter = false;
+            mut isOpen = false;
+            let status = TryOpenStandardOutput(bufferSize, ref redirected, ref actualBufferSize, ref hasReader, ref hasWriter, ref isOpen);
+            if (not Ok(status)) {
+                return Result<StandardStreamInfo>(LastResultError());
+            }
+            result.redirected = redirected;
+            result.bufferSize = actualBufferSize;
+            result.hasReader = hasReader;
+            result.hasWriter = hasWriter;
+            result.isOpen = isOpen;
+            return Result<StandardStreamInfo>(result);
+        }
+
+        fn GetReadKeyInfo(intercept: bool) -> Result<KeyInfo> {
+            mut result: KeyInfo = KeyInfo();
+            mut keyChar = 0;
+            mut key = Key::None;
+            mut modifiers = Modifiers::None;
+            let status = TryReadKey(intercept, ref keyChar, ref key, ref modifiers);
+            if (not Ok(status)) {
+                return Result<KeyInfo>(LastResultError());
+            }
+            result.keyChar = keyChar;
+            result.key = key;
+            result.modifiers = modifiers;
+            return Result<KeyInfo>(result);
+        }
+
+        fn GetReadKeyInfo() -> Result<KeyInfo> {
+            mut result: KeyInfo = KeyInfo();
+            mut keyChar = 0;
+            mut key = Key::None;
+            mut modifiers = Modifiers::None;
+            let status = TryReadKey(ref keyChar, ref key, ref modifiers);
+            if (not Ok(status)) {
+                return Result<KeyInfo>(LastResultError());
+            }
+            result.keyChar = keyChar;
+            result.key = key;
+            result.modifiers = modifiers;
+            return Result<KeyInfo>(result);
+        }
+
+        fn BackgroundColorOr(fallback: Color) -> Color {
+            mut value = fallback;
+            TryGetBackgroundColor(ref value);
+            return value;
+        }
+
+        fn ForegroundColorOr(fallback: Color) -> Color {
+            mut value = fallback;
+            TryGetForegroundColor(ref value);
+            return value;
+        }
+
+        fn NewLineOr(fallback: string) -> string {
+            mut value = fallback;
+            TryGetNewLine(ref value);
+            return value;
+        }
+
+        fn TitleOr(fallback: string) -> string {
+            mut value = fallback;
+            TryGetTitle(ref value);
+            return value;
+        }
+    }
+}

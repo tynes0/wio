@@ -165,6 +165,28 @@ function Convert-CppTypeToWioType {
     }
 }
 
+function Convert-CppFieldDeclarationToWioType {
+    param([string]$FieldText)
+
+    $fieldText = Collapse-Whitespace $FieldText
+
+    if ($fieldText -match '^(?<type>.+?)\s+(?<name>[A-Za-z_]\w*)\s*\[\s*(?<size>\d+)\s*\]$') {
+        return [pscustomobject]@{
+            name = $Matches.name
+            type = "[$(Convert-CppTypeToWioType $Matches.type); $($Matches.size)]"
+        }
+    }
+
+    if ($fieldText -match '^(?<type>.+?)\s+(?<name>[A-Za-z_]\w*)$') {
+        return [pscustomobject]@{
+            name = $Matches.name
+            type = Convert-CppTypeToWioType $Matches.type
+        }
+    }
+
+    return $null
+}
+
 function Convert-CppDeclarationParameter {
     param([string]$ParameterText)
 
@@ -300,6 +322,7 @@ function Parse-FlatDeclarations {
     )
 
     $results = [pscustomobject]@{
+        constants = [System.Collections.Generic.List[object]]::new()
         enums = [System.Collections.Generic.List[object]]::new()
         structs = [System.Collections.Generic.List[object]]::new()
         functions = [System.Collections.Generic.List[object]]::new()
@@ -323,6 +346,19 @@ function Parse-FlatDeclarations {
     }
     $working = $enumPattern.Replace($working, ' ')
 
+    $constexprPattern = [System.Text.RegularExpressions.Regex]::new(
+        '(?:(?:inline|static)\s+)*constexpr\s+(?<type>[A-Za-z_:\s\*&<>\d,]+?)\s+(?<name>[A-Za-z_]\w*)\s*=\s*(?<value>[^;{}]+)\s*;',
+        [System.Text.RegularExpressions.RegexOptions]::Singleline
+    )
+    foreach ($match in $constexprPattern.Matches($working)) {
+        $results.constants.Add([pscustomobject]@{
+                name = $match.Groups['name'].Value
+                type = Convert-CppTypeToWioType $match.Groups['type'].Value
+                value = Collapse-Whitespace $match.Groups['value'].Value
+            }) | Out-Null
+    }
+    $working = $constexprPattern.Replace($working, ' ')
+
     $structPattern = [System.Text.RegularExpressions.Regex]::new(
         'struct\s+(?<name>[A-Za-z_]\w*)\s*\{(?<body>.*?)\}\s*;',
         [System.Text.RegularExpressions.RegexOptions]::Singleline
@@ -334,11 +370,9 @@ function Parse-FlatDeclarations {
             Where-Object { $_ -ne '' }
 
         foreach ($fieldLine in $fieldLines) {
-            if ($fieldLine -match '^(?<type>.+?)\s+(?<name>[A-Za-z_]\w*)$') {
-                $fields.Add([pscustomobject]@{
-                        name = $Matches.name
-                        type = Convert-CppTypeToWioType $Matches.type
-                    }) | Out-Null
+            $fieldSpec = Convert-CppFieldDeclarationToWioType $fieldLine
+            if ($null -ne $fieldSpec) {
+                $fields.Add($fieldSpec) | Out-Null
             }
         }
 
@@ -386,6 +420,7 @@ function Parse-NamespaceAwareDeclarations {
     )
 
     $aggregate = [pscustomobject]@{
+        constants = [System.Collections.Generic.List[object]]::new()
         enums = [System.Collections.Generic.List[object]]::new()
         structs = [System.Collections.Generic.List[object]]::new()
         functions = [System.Collections.Generic.List[object]]::new()
@@ -401,6 +436,7 @@ function Parse-NamespaceAwareDeclarations {
 
         $prefix = $Text.Substring($cursor, $match.Index - $cursor)
         $flatResults = Parse-FlatDeclarations -Text $prefix -NamespaceStack $NamespaceStack
+        foreach ($constSpec in $flatResults.constants) { $aggregate.constants.Add($constSpec) | Out-Null }
         foreach ($enumSpec in $flatResults.enums) { $aggregate.enums.Add($enumSpec) | Out-Null }
         foreach ($structSpec in $flatResults.structs) { $aggregate.structs.Add($structSpec) | Out-Null }
         foreach ($functionSpec in $flatResults.functions) { $aggregate.functions.Add($functionSpec) | Out-Null }
@@ -409,6 +445,7 @@ function Parse-NamespaceAwareDeclarations {
         $closeBraceIndex = Get-MatchingBraceIndex -Text $Text -OpenBraceIndex $openBraceIndex
         $body = $Text.Substring($openBraceIndex + 1, $closeBraceIndex - $openBraceIndex - 1)
         $childResults = Parse-NamespaceAwareDeclarations -Text $body -NamespaceStack ($NamespaceStack + @($match.Groups['name'].Value))
+        foreach ($constSpec in $childResults.constants) { $aggregate.constants.Add($constSpec) | Out-Null }
         foreach ($enumSpec in $childResults.enums) { $aggregate.enums.Add($enumSpec) | Out-Null }
         foreach ($structSpec in $childResults.structs) { $aggregate.structs.Add($structSpec) | Out-Null }
         foreach ($functionSpec in $childResults.functions) { $aggregate.functions.Add($functionSpec) | Out-Null }
@@ -419,6 +456,7 @@ function Parse-NamespaceAwareDeclarations {
     if ($cursor -lt $Text.Length) {
         $tail = $Text.Substring($cursor)
         $tailResults = Parse-FlatDeclarations -Text $tail -NamespaceStack $NamespaceStack
+        foreach ($constSpec in $tailResults.constants) { $aggregate.constants.Add($constSpec) | Out-Null }
         foreach ($enumSpec in $tailResults.enums) { $aggregate.enums.Add($enumSpec) | Out-Null }
         foreach ($structSpec in $tailResults.structs) { $aggregate.structs.Add($structSpec) | Out-Null }
         foreach ($functionSpec in $tailResults.functions) { $aggregate.functions.Add($functionSpec) | Out-Null }
@@ -453,6 +491,14 @@ Add-Line $lines
 Add-Line $lines "realm $RealmName {"
 Add-Line $lines ("    use @CppHeader(" + (Quote-WioString $HeaderInclude) + ");")
 Add-Line $lines
+
+foreach ($constantSpec in $parsed.constants) {
+    Add-Line $lines "    const $($constantSpec.name): $($constantSpec.type) = $($constantSpec.value);"
+}
+
+if ($parsed.constants.Count -gt 0) {
+    Add-Line $lines
+}
 
 foreach ($enumSpec in $parsed.enums) {
     Add-Line $lines "    @Native"

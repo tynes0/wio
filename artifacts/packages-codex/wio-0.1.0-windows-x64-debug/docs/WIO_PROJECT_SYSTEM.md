@@ -31,10 +31,6 @@ Once the compiler has been built at least once, the preferred source-checkout wo
 ```powershell
 build\app\Debug\wio.exe build --build-dir build --config Debug --configure
 build\app\Debug\wio.exe test --build-dir build --config Debug --configure
-build\app\Debug\wio.exe project new MyGame --output-dir C:\Projects --template wio-app
-build\app\Debug\wio.exe project describe --project C:\Projects\MyGame
-build\app\Debug\wio.exe project build --project C:\Projects\MyGame
-build\app\Debug\wio.exe project run --project C:\Projects\MyGame
 ```
 
 Equivalent alias forms also exist:
@@ -54,21 +50,7 @@ Wio now supports two practical workflows.
 
 ### 1.1 The Easy Path
 
-Create a project from a template directly through the Wio CLI:
-
-```powershell
-build\app\Debug\wio.exe project new MyGame --output-dir C:\Projects --template hybrid-module
-```
-
-Then inspect, build, or run it directly:
-
-```powershell
-build\app\Debug\wio.exe project describe --project C:\Projects\MyGame
-build\app\Debug\wio.exe project build --project C:\Projects\MyGame
-build\app\Debug\wio.exe project run --project C:\Projects\MyGame
-```
-
-The older compatibility helper still exists:
+Create a project from a template:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\New-WioProject.ps1 -Name MyGame -OutputDir C:\Projects

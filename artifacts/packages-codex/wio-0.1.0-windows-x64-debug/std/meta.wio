@@ -1,0 +1,80 @@
+realm std {
+    realm meta {
+        use @CppHeader("meta.h");
+
+        type Head<T, Tail...> = T;
+        type First<Ts...> = Ts[0usize];
+        type Last<Ts...> = Ts[Ts.size - 1usize];
+
+        @Native
+        @CppName(wio::meta::CountTypesValue)
+        fn TypeCount<Ts...>() -> usize;
+
+        @Native
+        @CppName(wio::meta::ContainsTypeValue)
+        fn ContainsType<T, Ts...>() -> bool;
+
+        fn CountValues<Args...>(args: Args...) -> usize {
+            return args.size;
+        }
+
+        fn FirstValue<Args...>(args: Args...) -> Args[0usize] {
+            return args[0usize];
+        }
+
+        fn LastValue<Args...>(args: Args...) -> Args[Args.size - 1usize] {
+            return args[args.size - 1usize];
+        }
+
+        object Types<Ts...> {
+            public fn Count() -> usize {
+                return Ts.size;
+            }
+
+            public fn Empty() -> bool {
+                return Ts.size == 0usize;
+            }
+
+            public fn Contains<T>() -> bool {
+                return ContainsType<T, Ts...>();
+            }
+        }
+
+        object Values<Args...> {
+            public pack data: Args...;
+
+            public fn OnConstruct(args: Args...) {
+                self.Set(args...);
+            }
+
+            public fn Count() -> usize {
+                return self.data.size;
+            }
+
+            public fn Empty() -> bool {
+                return self.data.size == 0usize;
+            }
+
+            public fn First() -> Args[0usize] {
+                return self.data[0usize];
+            }
+
+            public fn Last() -> Args[Args.size - 1usize] {
+                return self.data[self.data.size - 1usize];
+            }
+
+            public fn Set(args: Args...) {
+                self.data = args.array;
+            }
+
+            public fn ReplaceFirst(value: Args[0usize]) {
+                self.data[0usize] = value;
+            }
+
+            public fn ReplaceLast(value: Args[Args.size - 1usize]) {
+                self.data[self.data.size - 1usize] = value;
+            }
+        }
+
+    }
+}

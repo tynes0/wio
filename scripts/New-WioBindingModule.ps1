@@ -163,6 +163,14 @@ foreach ($realm in $spec.realms) {
         Add-Line $lines
     }
 
+    foreach ($constSpec in (Get-OptionalCollection $realm 'consts')) {
+        Add-Line $lines "    const $($constSpec.name): $($constSpec.type) = $($constSpec.value);"
+    }
+
+    if ((Get-OptionalCollection $realm 'consts').Count -gt 0) {
+        Add-Line $lines
+    }
+
     foreach ($enumSpec in (Get-OptionalCollection $realm 'enums')) {
         $enumBackingType = Get-OptionalPropertyValue $enumSpec 'backingType'
         if ($null -ne $enumBackingType -and [string]::IsNullOrWhiteSpace([string]$enumBackingType) -eq $false) {

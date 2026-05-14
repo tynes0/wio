@@ -64,7 +64,7 @@ add_custom_command(
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_CONSOLE}"
     DEPENDS
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_console.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/detail/io_helpers.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/detail/io_detail/io_helpers.h"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_console.h"
     VERBATIM
 )

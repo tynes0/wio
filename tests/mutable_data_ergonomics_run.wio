@@ -1,0 +1,59 @@
+use std::assert as assert;
+use std::console as console;
+
+component Stat {
+    value: i32;
+
+    OnConstruct(value: i32) {
+        self.value = value;
+    }
+}
+
+object Bag {
+    public stats: Stat[];
+    public grid: i32[][];
+    public weights: Dict<string, i32>;
+
+    OnConstruct() {
+        self.stats = [Stat(1), Stat(2)];
+        self.grid = [[1, 2], [3, 4]];
+        self.weights = {
+            "hp": 10,
+            "mp": 5
+        };
+    }
+}
+
+fn BumpStat(target: ref Stat) {
+    target.value += 10;
+}
+
+fn BumpInt(target: ref i32) {
+    target += 7;
+}
+
+fn Entry() -> i32 {
+    mut bag = Bag();
+
+    BumpStat(ref bag.stats[1usize]);
+    BumpInt(ref bag.stats[0usize].value);
+    BumpInt(ref bag.grid[1usize][0usize]);
+
+    for view key | ref value in bag.weights {
+        if (key == "hp") {
+            value += 2;
+        }
+        else {
+            value += 1;
+        }
+    }
+
+    assert::ExpectEqual(bag.stats[0usize].value, 8, "ref object.array[index].field should stay mutable");
+    assert::ExpectEqual(bag.stats[1usize].value, 12, "ref object.array[index] should mutate the underlying element");
+    assert::ExpectEqual(bag.grid[1usize][0usize], 10, "ref nested array indexing should mutate in place");
+    assert::ExpectEqual(bag.weights.Get("hp"), 12, "for view key | ref value should allow mutating dictionary values");
+    assert::ExpectEqual(bag.weights.Get("mp"), 6, "dictionary value ref binding should keep non-selected values mutable too");
+
+    console::Print("Mutable ergonomics: ok");
+    return 0;
+}

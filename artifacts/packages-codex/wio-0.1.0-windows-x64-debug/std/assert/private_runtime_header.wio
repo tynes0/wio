@@ -1,0 +1,9 @@
+realm std {
+    realm assert {
+        use @CppHeader("../../runtime/src/detail/io_helpers.h");
+
+        fn TouchPrivateRuntimeHeader() -> i32 {
+            return 1;
+        }
+    }
+}

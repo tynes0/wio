@@ -1,0 +1,164 @@
+realm std {
+    use @CppHeader("std_assert.h");
+
+    @Native
+    @CppName(wio::runtime::std_assert::Fail)
+    fn Panic(message: string);
+
+    @Type(i32)
+    enum ResultDomain {
+        none = 0,
+        console = 1,
+        io = 2,
+        fs = 3,
+        runtime = 4,
+        custom = 5
+    };
+
+    component ResultUnit {}
+
+    component ResultError {
+        domain: ResultDomain;
+        code: i32;
+        nativeCode: i64;
+        message: string;
+    }
+
+    object Result<T> {
+        private ok: bool;
+        private value: T;
+        private error: ResultError;
+
+        OnConstruct(value: T) {
+            self.ok = true;
+            self.value = value;
+            self.error = ResultError();
+            self.error.domain = ResultDomain::none;
+            self.error.code = 0;
+            self.error.nativeCode = 0;
+            self.error.message = "";
+        }
+
+        OnConstruct(error: ResultError) {
+            self.ok = false;
+            self.error = error;
+        }
+
+        public fn IsOk() -> bool {
+            return self.ok;
+        }
+
+        public fn IsError() -> bool {
+            return not self.ok;
+        }
+
+        public fn HasValue() -> bool {
+            return self.ok;
+        }
+
+        public fn Value() -> T {
+            if (self.ok) {
+                return self.value;
+            }
+
+            Panic("Result<T> does not contain a success value.");
+            return self.value;
+        }
+
+        public fn Unwrap() -> T {
+            if (self.ok) {
+                return self.value;
+            }
+
+            if (self.error.message != "") {
+                Panic(self.error.message);
+            }
+
+            Panic("Result<T> does not contain a success value.");
+            return self.value;
+        }
+
+        public fn ValueOr(fallback: T) -> T {
+            if (self.ok) {
+                return self.value;
+            }
+
+            return fallback;
+        }
+
+        public fn ErrorValue() -> ResultError {
+            return self.error;
+        }
+    }
+
+    type ResultValue<T> = Result<T>;
+
+    fn MakeResultError(domain: ResultDomain, code: i32, message: string) -> ResultError {
+        mut error = ResultError();
+        error.domain = domain;
+        error.code = code;
+        error.nativeCode = 0;
+        error.message = message;
+        return error;
+    }
+
+    fn MakeResultError(domain: ResultDomain, code: i32, nativeCode: i64, message: string) -> ResultError {
+        mut error = ResultError();
+        error.domain = domain;
+        error.code = code;
+        error.nativeCode = nativeCode;
+        error.message = message;
+        return error;
+    }
+
+    fn Ok<T>(value: T) -> Result<T> {
+        return Result<T>(value);
+    }
+
+    fn OkUnit() -> Result<ResultUnit> {
+        return Result<ResultUnit>(ResultUnit());
+    }
+
+    fn Err<T>(error: ResultError) -> Result<T> {
+        return Result<T>(error);
+    }
+
+    fn OkResultValue<T>(value: T) -> Result<T> {
+        return Ok<T>(value);
+    }
+
+    fn OkUnitResult() -> Result<ResultUnit> {
+        return OkUnit();
+    }
+
+    fn ErrResultValue<T>(error: ResultError) -> Result<T> {
+        return Err<T>(error);
+    }
+
+    realm result {
+        type Domain = ResultDomain;
+        type Unit = ResultUnit;
+        type Error = ResultError;
+        type Result<T> = std::Result<T>;
+
+        fn MakeError(domain: Domain, code: i32, message: string) -> Error {
+            return MakeResultError(domain, code, message);
+        }
+
+        fn MakeError(domain: Domain, code: i32, nativeCode: i64, message: string) -> Error {
+            return MakeResultError(domain, code, nativeCode, message);
+        }
+
+        fn Ok<T>(value: T) -> Result<T> {
+            return std::Ok<T>(value);
+        }
+
+        fn OkUnit() -> Result<Unit> {
+            return std::OkUnit();
+        }
+
+        fn Err<T>(error: Error) -> Result<T> {
+            return std::Err<T>(error);
+        }
+    }
+}

@@ -1,0 +1,39 @@
+realm std {
+    realm heap {
+        object box<T> {
+            public value: T;
+
+            OnConstruct(value: T) {
+                self.value = value;
+            }
+
+            public fn Get() -> T {
+                return self.value;
+            }
+
+            public fn Set(value: T) {
+                self.value = value;
+            }
+
+            public fn Replace(value: T) -> T {
+                let previous = self.value;
+                self.value = value;
+                return previous;
+            }
+
+            public fn Clone() -> box<T> {
+                return box<T>(self.value);
+            }
+
+            public fn Swap(other: ref box<T>) {
+                let previous = self.value;
+                self.value = other.value;
+                other.value = previous;
+            }
+        }
+
+        type Box<T> = box<T>;
+    }
+
+    type Box<T> = heap::box<T>;
+}

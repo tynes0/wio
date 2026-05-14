@@ -17,15 +17,6 @@ is now the Wio CLI itself:
 build\app\Debug\wio.exe build --build-dir build --config Debug --configure
 ```
 
-The next direct tooling slice is also live:
-
-```powershell
-build\app\Debug\wio.exe project new MyGame --output-dir C:\Projects --template wio-native-app
-build\app\Debug\wio.exe project describe --project C:\Projects\MyGame
-build\app\Debug\wio.exe project build --project C:\Projects\MyGame
-build\app\Debug\wio.exe project run --project C:\Projects\MyGame
-```
-
 ### Run
 
 ```powershell
