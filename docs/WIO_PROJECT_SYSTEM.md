@@ -19,8 +19,12 @@ The design goal is straightforward:
 The repository is also in the middle of a tooling transition:
 
 - `wio build ...` and `wio test ...` are now the preferred repo-local entrypoints once `wio.exe` exists,
+- `wio file ...` now covers the old single-file runner workflow directly from the CLI,
 - `wio bind import ...` and `wio bind new ...` now cover the binding bootstrap path directly from the CLI,
+- `wio env print ...` and `wio env setup ...` now cover the package install / environment path directly from the CLI,
 - `wio package ...` now covers versioned distribution staging directly from the CLI,
+- `scripts/wio/*.wio` now hosts source-based workflow tools such as host-interop
+  and demo runners,
 - the PowerShell helpers remain as compatibility wrappers,
 - and the medium-term goal is to move project and binding flows behind direct Wio CLI subcommands instead of treating `scripts/` as the main user interface.
 
@@ -33,12 +37,18 @@ Once the compiler has been built at least once, the preferred source-checkout wo
 ```powershell
 build\app\Debug\wio.exe build --build-dir build --config Debug --configure
 build\app\Debug\wio.exe test --build-dir build --config Debug --configure
+build\app\Debug\wio.exe file run .\playground\main.wio
+build\app\Debug\wio.exe file check .\playground\main.wio
+build\app\Debug\wio.exe file run .\scripts\wio\run_host_interop.wio -- --help
+build\app\Debug\wio.exe file run .\scripts\wio\run_hybrid_arena_demo.wio -- --help
 build\app\Debug\wio.exe project new MyGame --output-dir C:\Projects --template wio-app
 build\app\Debug\wio.exe project describe --project C:\Projects\MyGame
 build\app\Debug\wio.exe project build --project C:\Projects\MyGame
 build\app\Debug\wio.exe project run --project C:\Projects\MyGame
 build\app\Debug\wio.exe bind import --header .\tests\native\binding_import_smoke.h --realm binding_import_smoke --output .\build\generated\binding_import_smoke.wio
 build\app\Debug\wio.exe bind new --manifest .\tests\native\binding_manifest_smoke.json --output .\build\generated\binding_manifest_smoke.wio
+build\app\Debug\wio.exe env print --wio-root . --shell powershell --add-path
+build\app\Debug\wio.exe env setup --wio-root . --no-prompt
 build\app\Debug\wio.exe package --build-dir build --config Debug --output-dir .\artifacts\packages --no-zip
 ```
 
@@ -50,6 +60,11 @@ build\app\Debug\wio.exe dev test --build-dir build --config Debug --configure
 ```
 
 `Build-Wio.ps1` and `Test-Wio.ps1` are still shipped so existing setups do not break, but they now prefer routing through the Wio CLI when the compiler executable is already available.
+
+`Run-WioFile.ps1`, `Run-WioHostInterop.ps1`, `Run-HybridArenaDemo.ps1`,
+`Invoke-WioProject.ps1`, `New-WioProject.ps1`, `Import-CHeaderToWioBinding.ps1`,
+`New-WioBindingModule.ps1`, and `Pack-Wio.ps1` are now in the same compatibility
+state: they prefer delegating to `wio ...` instead of owning the workflow.
 
 ---
 
@@ -653,9 +668,16 @@ Expected layout:
   sdk/
     include/
   scripts/
+    Build-Wio.ps1
     Invoke-WioProject.ps1
     Invoke-WithSanitizedPath.ps1
+    Import-CHeaderToWioBinding.ps1
+    New-WioBindingModule.ps1
     New-WioProject.ps1
+    Pack-Wio.ps1
+    wio/
+      run_host_interop.wio
+      run_hybrid_arena_demo.wio
   std/
 ```
 
@@ -666,7 +688,7 @@ Important points:
 - `Invoke-WioProject.ps1` supports both layouts:
   - source checkout with a build tree
   - packaged distribution with a prebuilt `bin/wio`
-- packaged builds now also include an `Install-Wio.ps1` helper that can optionally persist `WIO_ROOT` and `WIO_HOME` for the current user after asking for consent
+- packaged builds now also include `Install-Wio.ps1` and `install-wio.sh` wrappers that delegate to `wio env setup --wio-root <package-root>`
 
 ### 8.1 Building A Package From The Source Tree
 
@@ -698,12 +720,23 @@ Or, if you want the packaged toolchain to persist those environment variables fo
 powershell -ExecutionPolicy Bypass -File C:\Wio\dist\Install-Wio.ps1
 ```
 
+Or from a POSIX shell:
+
+```sh
+sh /opt/wio/install-wio.sh
+```
+
 That helper may set:
 
 - `WIO_ROOT`
 - `WIO_HOME`
 
-The packaged compiler does not require those variables for direct CLI use; they mainly help external tooling such as CMake or compatibility scripts find the toolchain consistently.
+The packaged compiler does not require those variables for direct CLI use; they mainly help external tooling such as CMake or compatibility scripts find the toolchain consistently. The canonical implementation now lives behind the CLI:
+
+```powershell
+bin\wio.exe env setup --wio-root <package-root>
+bin\wio.exe env print --wio-root <package-root> --shell powershell --add-path
+```
 
 Then all of these work:
 

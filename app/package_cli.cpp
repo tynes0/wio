@@ -454,51 +454,57 @@ namespace wio::tooling::package
             return !values.empty() && values.front();
         }
 
-        std::string buildInstallScript()
+        std::string buildPowerShellInstallScript()
         {
             return R"(param(
     [switch]$SetUserEnvironment,
-    [switch]$NoPrompt
+    [switch]$NoPrompt,
+    [switch]$AddPath
 )
 
 $ErrorActionPreference = "Stop"
 
 $packageRoot = Split-Path $MyInvocation.MyCommand.Path -Parent
-$binDir = Join-Path $packageRoot "bin"
+$wioExe = Join-Path $packageRoot "bin\wio.exe"
 
-if (-not (Test-Path -LiteralPath $binDir)) {
-    throw "The packaged Wio bin directory was not found under '$packageRoot'."
+if (-not (Test-Path -LiteralPath $wioExe)) {
+    throw "The packaged wio executable was not found under '$packageRoot\bin'."
 }
 
-$shouldSetEnvironment = $SetUserEnvironment
-if (-not $shouldSetEnvironment -and -not $NoPrompt) {
-    $choice = Read-Host "Set WIO_ROOT and WIO_HOME for the current user? [y/N]"
-    if ($choice -match '^(y|yes)$') {
-        $shouldSetEnvironment = $true
-    }
+$cliArgs = @("env", "setup", "--wio-root", $packageRoot)
+
+if ($SetUserEnvironment) {
+    $cliArgs += "--set-user"
 }
 
-if ($shouldSetEnvironment) {
-    [Environment]::SetEnvironmentVariable("WIO_ROOT", $packageRoot, "User")
-    [Environment]::SetEnvironmentVariable("WIO_HOME", $packageRoot, "User")
-    $env:WIO_ROOT = $packageRoot
-    $env:WIO_HOME = $packageRoot
-    Write-Host "Set user environment variables:"
-    Write-Host "  WIO_ROOT=$packageRoot"
-    Write-Host "  WIO_HOME=$packageRoot"
-} else {
-    Write-Host "Skipped persistent WIO_ROOT/WIO_HOME configuration."
+if ($NoPrompt) {
+    $cliArgs += "--no-prompt"
 }
 
-Write-Host ""
-Write-Host "Wio package root: $packageRoot"
-Write-Host "Binary directory : $binDir"
-Write-Host ""
-Write-Host "Recommended next steps:"
-Write-Host "  1. Run '$binDir\wio.exe --help' (or 'wio --help' if already on PATH)."
-Write-Host "  2. Use the packaged scripts only as compatibility helpers while the Wio CLI grows."
-Write-Host "  3. Point CMake projects at WIO_ROOT='$packageRoot' when using WioProject.cmake."
+if ($AddPath) {
+    $cliArgs += "--add-path"
+}
+
+& $wioExe @cliArgs
+exit $LASTEXITCODE
 )";
+        }
+
+        std::string buildShellInstallScript()
+        {
+            return R"WIOINSTALL(#!/usr/bin/env sh
+set -eu
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+WIO_EXE="$SCRIPT_DIR/bin/wio"
+
+if [ ! -x "$WIO_EXE" ]; then
+    echo "The packaged wio executable was not found under '$SCRIPT_DIR/bin'." >&2
+    exit 1
+fi
+
+exec "$WIO_EXE" env setup --wio-root "$SCRIPT_DIR" "$@"
+)WIOINSTALL";
         }
 
         int handlePackageCommand(std::vector<std::string> args)
@@ -643,7 +649,8 @@ Write-Host "  3. Point CMake projects at WIO_ROOT='$packageRoot' when using WioP
                     << "}\n";
 
                 writeUtf8File(packageRoot / "WIO_PACKAGE_INFO.json", packageInfo.str());
-                writeUtf8File(packageRoot / "Install-Wio.ps1", buildInstallScript());
+                writeUtf8File(packageRoot / "Install-Wio.ps1", buildPowerShellInstallScript());
+                writeUtf8File(packageRoot / "install-wio.sh", buildShellInstallScript());
 
                 if (!noZip)
                 {

@@ -1,0 +1,79 @@
+use std::result as result;
+
+realm std {
+    realm process {
+        use @CppHeader("std_process.h");
+
+        @Native
+        @Type(u8)
+        @CppName(wio::runtime::std_process::ProcessError)
+        enum Error {
+            none = 0u8,
+            empty_program = 1u8,
+            invalid_working_directory = 2u8,
+            launch_failed = 3u8
+        };
+
+        const ErrorNone: Error = Error::none;
+        const ErrorEmptyProgram: Error = Error::empty_program;
+        const ErrorInvalidWorkingDirectory: Error = Error::invalid_working_directory;
+        const ErrorLaunchFailed: Error = Error::launch_failed;
+
+        @Native
+        @CppName(wio::runtime::std_process::ToString)
+        fn ErrorName(error: Error) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_process::ProcessErrorValue)
+        fn ErrorCode(error: Error) -> i32;
+
+        @Native
+        @CppName(wio::runtime::std_process::ExecutableSuffix)
+        fn ExecutableSuffix() -> string;
+
+        @Native
+        @CppName(wio::runtime::std_process::SharedLibrarySuffix)
+        fn SharedLibrarySuffix() -> string;
+
+        @Native
+        @CppName(wio::runtime::std_process::StaticLibrarySuffix)
+        fn StaticLibrarySuffix() -> string;
+
+        @Native
+        @CppName(wio::runtime::std_process::TryRunResult)
+        fn TryRunResultNative(
+            command: string,
+            args: string[],
+            workingDirectory: string,
+            exitCode: ref i32,
+            error: ref Error,
+            nativeError: ref i32,
+            message: ref string) -> bool;
+
+        fn MakeProcessResultError(error: Error, nativeError: i32, message: string) -> std::ResultError {
+            mut finalMessage = message;
+            if (finalMessage == "") {
+                finalMessage = "process error " + ErrorName(error);
+            }
+
+            return std::MakeResultError(std::ResultDomain::runtime, ErrorCode(error), nativeError fit i64, finalMessage);
+        }
+
+        fn Run(command: string, args: string[], workingDirectory: string) -> std::Result<i32> {
+            mut exitCode = 0;
+            mut error = Error::none;
+            mut nativeError = 0;
+            mut message = "";
+
+            if (TryRunResultNative(command, args, workingDirectory, ref exitCode, ref error, ref nativeError, ref message)) {
+                return std::Ok<i32>(exitCode);
+            }
+
+            return std::Err<i32>(MakeProcessResultError(error, nativeError, message));
+        }
+
+        fn Run(command: string, args: string[]) -> std::Result<i32> {
+            return Run(command, args, "");
+        }
+    }
+}

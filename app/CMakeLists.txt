@@ -8,6 +8,10 @@ add_executable(wio_app
     main.cpp
     binding_cli.cpp
     binding_cli.h
+    env_cli.cpp
+    env_cli.h
+    file_cli.cpp
+    file_cli.h
     package_cli.cpp
     package_cli.h
     tooling_cli.cpp
@@ -475,6 +479,73 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_mutable_data_ergonomics_run
         "${CMAKE_SOURCE_DIR}/tests/mutable_data_ergonomics_run.wio"
         "Mutable ergonomics: ok"
+        --run
+    )
+
+    add_test(
+        NAME wio_test_file_cli_check
+        COMMAND $<TARGET_FILE:wio_app> file check "${CMAKE_SOURCE_DIR}/tests/test1.wio"
+    )
+    set_tests_properties(
+        wio_test_file_cli_check
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
+        NAME wio_test_file_cli_tokens
+        COMMAND $<TARGET_FILE:wio_app> file tokens "${CMAKE_SOURCE_DIR}/tests/test1.wio"
+    )
+    set_tests_properties(
+        wio_test_file_cli_tokens
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
+        NAME wio_test_file_cli_run_args_forwarding
+        COMMAND $<TARGET_FILE:wio_app> file run "${CMAKE_SOURCE_DIR}/tests/file_run_args_forwarding_run.wio" -- alpha beta
+    )
+    set_tests_properties(
+        wio_test_file_cli_run_args_forwarding
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
+        NAME wio_test_env_cli_print
+        COMMAND $<TARGET_FILE:wio_app> env print --wio-root "${CMAKE_SOURCE_DIR}" --shell powershell --add-path
+    )
+    set_tests_properties(
+        wio_test_env_cli_print
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
+        NAME wio_test_env_cli_setup_preview
+        COMMAND $<TARGET_FILE:wio_app> env setup --wio-root "${CMAKE_SOURCE_DIR}" --no-prompt --add-path
+    )
+    set_tests_properties(
+        wio_test_env_cli_setup_preview
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_success_test(
+        wio_test_wio_tool_run_host_interop_dry_run
+        "${CMAKE_SOURCE_DIR}/scripts/wio/run_host_interop.wio"
+    )
+
+    add_wio_success_test(
+        wio_test_wio_tool_run_hybrid_arena_demo_dry_run
+        "${CMAKE_SOURCE_DIR}/scripts/wio/run_hybrid_arena_demo.wio"
+    )
+
+    add_wio_output_test(
+        wio_test_std_process_run_smoke_run
+        "${CMAKE_SOURCE_DIR}/tests/std_process_run_smoke.wio"
+        "std-process-run-ok"
         --run
     )
 

@@ -425,6 +425,56 @@ namespace wio
             return "\"" + value + "\"";
         }
 
+        std::string quoteRunArgument(const std::string& value)
+        {
+#if defined(_WIN32)
+            if (value.empty())
+                return "\"\"";
+
+            bool needsQuotes = false;
+            for (const char ch : value)
+            {
+                if (std::isspace(static_cast<unsigned char>(ch)) != 0 || ch == '"' || ch == '&' || ch == '(' || ch == ')' || ch == ';')
+                {
+                    needsQuotes = true;
+                    break;
+                }
+            }
+
+            if (!needsQuotes)
+                return value;
+
+            std::string result;
+            result.reserve(value.size() + 2);
+            result.push_back('"');
+            for (const char ch : value)
+            {
+                if (ch == '"')
+                    result += "\\\"";
+                else
+                    result.push_back(ch);
+            }
+            result.push_back('"');
+            return result;
+#else
+            if (value.empty())
+                return "''";
+
+            std::string result;
+            result.reserve(value.size() + 2);
+            result.push_back('\'');
+            for (const char ch : value)
+            {
+                if (ch == '\'')
+                    result += "'\\''";
+                else
+                    result.push_back(ch);
+            }
+            result.push_back('\'');
+            return result;
+#endif
+        }
+
         std::string escapeTokenValueForDisplay(std::string_view value)
         {
             return common::wioStringToEscapedCppString(std::string(value));
@@ -2059,6 +2109,12 @@ namespace wio
                     .SetDescription("Compiles and then runs the output executable.")
             )
             .Add(
+                Argonaut::Argument("RUN-ARG")
+                    .AddAlias("--run-arg")
+                    .MultiValue()
+                    .SetDescription("Adds a runtime argument when --run launches the output executable.")
+            )
+            .Add(
                 Argonaut::Argument("TARGET")
                     .AddAlias("--target")
                     .SetDescription("Selects backend output kind: exe, static, or shared.")
@@ -2546,6 +2602,9 @@ namespace wio
                 const std::filesystem::path& finalExePath = outputPath;
                 
                 runCmd << "\"" << finalExePath.string() << "\"";
+
+                for (const auto& runArg : gAppData.argParser.GetValuesOf<std::string>("RUN-ARG"))
+                    runCmd << " " << quoteRunArgument(runArg);
                 
                 // NOLINTNEXTLINE(concurrency-mt-unsafe)
                 int runExitCode = std::system(runCmd.str().c_str());

@@ -1,0 +1,16 @@
+use std::console as console;
+use std::io as io;
+
+fn Entry() -> i32 {
+    console::PrintLine!("Wio source tool: print_file");
+    console::PrintLine!("Enter a path to print:");
+
+    let path = console::ReadLine!();
+    mut file = io::OpenReadText!(path);
+    let content = io::ReadAll!(ref file);
+    io::Close!(ref file);
+
+    console::PrintLine!();
+    console::PrintLine!(content);
+    return 0;
+}

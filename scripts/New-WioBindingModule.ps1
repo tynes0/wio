@@ -8,22 +8,27 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
 $repoRoot = Split-Path $PSScriptRoot -Parent
+$buildScript = Join-Path $PSScriptRoot "Build-Wio.ps1"
 
 function Get-WioCliPath {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$RepoRoot
+        [string]$RepoRoot,
+        [Parameter(Mandatory = $true)]
+        [string]$BuildDir,
+        [Parameter(Mandatory = $true)]
+        [string]$Config
     )
 
     $candidates = @(
         (Join-Path $RepoRoot "bin\wio.exe"),
         (Join-Path $RepoRoot "bin\wio"),
-        (Join-Path $RepoRoot "build\app\Debug\wio.exe"),
-        (Join-Path $RepoRoot "build\app\Release\wio.exe"),
-        (Join-Path $RepoRoot "build\app\wio.exe"),
-        (Join-Path $RepoRoot "build-codex-import\app\Debug\wio.exe"),
-        (Join-Path $RepoRoot "build-codex-runtime-types\app\Debug\wio.exe")
+        (Join-Path $RepoRoot "$BuildDir\app\$Config\wio.exe"),
+        (Join-Path $RepoRoot "$BuildDir\app\wio.exe"),
+        (Join-Path $RepoRoot "$BuildDir\app\$Config\wio"),
+        (Join-Path $RepoRoot "$BuildDir\app\wio")
     )
 
     foreach ($candidate in $candidates) {
@@ -35,261 +40,42 @@ function Get-WioCliPath {
     return $null
 }
 
-$wioCli = Get-WioCliPath -RepoRoot $repoRoot
-if (-not [string]::IsNullOrWhiteSpace($wioCli)) {
-    $cliArgs = @("bind", "new", "--manifest", $ManifestPath)
-    if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
-        $cliArgs += @("--output", $OutputPath)
-    }
-
-    & $wioCli @cliArgs
-    exit $LASTEXITCODE
-}
-
-function Resolve-RequiredPath {
-    param([string]$PathValue)
-
-    $resolved = Resolve-Path -LiteralPath $PathValue -ErrorAction Stop
-    return $resolved.Path
-}
-
-function Add-Line {
+function Resolve-WioCli {
     param(
-        [System.Collections.Generic.List[string]]$Lines,
-        [string]$Text = ''
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot,
+        [Parameter(Mandatory = $true)]
+        [string]$BuildDir,
+        [Parameter(Mandatory = $true)]
+        [string]$Config,
+        [Parameter(Mandatory = $true)]
+        [string]$BuildScript
     )
 
-    $Lines.Add($Text) | Out-Null
+    $wioCli = Get-WioCliPath -RepoRoot $RepoRoot -BuildDir $BuildDir -Config $Config
+    if (-not [string]::IsNullOrWhiteSpace($wioCli)) {
+        return $wioCli
+    }
+
+    & powershell -ExecutionPolicy Bypass -File $BuildScript -BuildDir $BuildDir -Config $Config -Configure
+    if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
+    }
+
+    $wioCli = Get-WioCliPath -RepoRoot $RepoRoot -BuildDir $BuildDir -Config $Config
+    if (-not [string]::IsNullOrWhiteSpace($wioCli)) {
+        return $wioCli
+    }
+
+    throw "Could not resolve the built wio executable."
 }
 
-function Quote-WioString {
-    param([string]$Value)
-    return '"' + ($Value -replace '\\', '\\' -replace '"', '\"') + '"'
+$wioCli = Resolve-WioCli -RepoRoot $repoRoot -BuildDir "build" -Config "Debug" -BuildScript $buildScript
+$cliArgs = @("bind", "new", "--manifest", $ManifestPath)
+
+if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
+    $cliArgs += @("--output", $OutputPath)
 }
 
-function Get-OptionalPropertyValue {
-    param(
-        $Object,
-        [string]$Name
-    )
-
-    if ($null -eq $Object) {
-        return $null
-    }
-
-    $property = $Object.PSObject.Properties[$Name]
-    if ($null -eq $property) {
-        return $null
-    }
-
-    return $property.Value
-}
-
-function Get-OptionalCollection {
-    param(
-        $Object,
-        [string]$Name
-    )
-
-    $value = Get-OptionalPropertyValue $Object $Name
-    if ($null -eq $value) {
-        return @()
-    }
-
-    return @($value)
-}
-
-function Get-CppName {
-    param(
-        $RealmSpec,
-        $Item
-    )
-
-    $itemCppName = Get-OptionalPropertyValue $Item 'cppName'
-    if ($null -ne $itemCppName -and [string]::IsNullOrWhiteSpace([string]$itemCppName) -eq $false) {
-        return [string]$itemCppName
-    }
-
-    $prefix = ''
-    $realmCppNamespace = Get-OptionalPropertyValue $RealmSpec 'cppNamespace'
-    if ($null -ne $realmCppNamespace -and [string]::IsNullOrWhiteSpace([string]$realmCppNamespace) -eq $false) {
-        $prefix = [string]$realmCppNamespace
-    }
-
-    if ([string]::IsNullOrWhiteSpace($prefix)) {
-        return [string]$Item.name
-    }
-
-    return "$prefix::$($Item.name)"
-}
-
-function Render-FieldList {
-    param(
-        [System.Collections.Generic.List[string]]$Lines,
-        $Fields,
-        [string]$Indent
-    )
-
-    foreach ($field in $Fields) {
-        Add-Line $Lines ($Indent + "$($field.name): $($field.type);")
-    }
-}
-
-function Render-ParameterList {
-    param($Parameters)
-
-    if ($null -eq $Parameters) {
-        return ''
-    }
-
-    $rendered = foreach ($parameter in $Parameters) {
-        "$($parameter.name): $($parameter.type)"
-    }
-
-    return ($rendered -join ', ')
-}
-
-$manifestFile = Resolve-RequiredPath $ManifestPath
-$manifestDir = Split-Path -Parent $manifestFile
-$manifestText = Get-Content -LiteralPath $manifestFile -Raw
-$spec = $manifestText | ConvertFrom-Json
-
-if ([string]::IsNullOrWhiteSpace($OutputPath)) {
-    $specOutputPath = Get-OptionalPropertyValue $spec 'outputPath'
-    if ($null -ne $specOutputPath -and [string]::IsNullOrWhiteSpace([string]$specOutputPath) -eq $false) {
-        $OutputPath = [string]$specOutputPath
-    }
-    else {
-        throw "Manifest must define 'outputPath' or you must pass -OutputPath."
-    }
-}
-
-if (-not [System.IO.Path]::IsPathRooted($OutputPath)) {
-    $OutputPath = [System.IO.Path]::GetFullPath((Join-Path $manifestDir $OutputPath))
-}
-
-$lines = [System.Collections.Generic.List[string]]::new()
-
-Add-Line $lines "// Generated by New-WioBindingModule.ps1"
-Add-Line $lines "// Manifest: $manifestFile"
-Add-Line $lines
-
-foreach ($realm in $spec.realms) {
-    Add-Line $lines "realm $($realm.name) {"
-
-    $headers = @()
-    $realmHeaders = Get-OptionalPropertyValue $realm 'headers'
-    $specHeaders = Get-OptionalPropertyValue $spec 'headers'
-    $specHeader = Get-OptionalPropertyValue $spec 'header'
-
-    if ($null -ne $realmHeaders) {
-        $headers += @($realmHeaders)
-    }
-    elseif ($null -ne $specHeaders) {
-        $headers += @($specHeaders)
-    }
-    elseif ($null -ne $specHeader) {
-        $headers += @($specHeader)
-    }
-
-    foreach ($header in $headers) {
-        Add-Line $lines ("    use @CppHeader(" + (Quote-WioString ([string]$header)) + ");")
-    }
-
-    if ($headers.Count -gt 0) {
-        Add-Line $lines
-    }
-
-    foreach ($constSpec in (Get-OptionalCollection $realm 'consts')) {
-        Add-Line $lines "    const $($constSpec.name): $($constSpec.type) = $($constSpec.value);"
-    }
-
-    if ((Get-OptionalCollection $realm 'consts').Count -gt 0) {
-        Add-Line $lines
-    }
-
-    foreach ($enumSpec in (Get-OptionalCollection $realm 'enums')) {
-        $enumBackingType = Get-OptionalPropertyValue $enumSpec 'backingType'
-        if ($null -ne $enumBackingType -and [string]::IsNullOrWhiteSpace([string]$enumBackingType) -eq $false) {
-            Add-Line $lines "    @Type($enumBackingType)"
-        }
-        Add-Line $lines "    enum $($enumSpec.name) {"
-        foreach ($member in @($enumSpec.members)) {
-            $memberValue = Get-OptionalPropertyValue $member 'value'
-            if ($null -ne $memberValue) {
-                Add-Line $lines "        $($member.name) = $memberValue,"
-            }
-            else {
-                Add-Line $lines "        $($member.name),"
-            }
-        }
-        Add-Line $lines "    };"
-        Add-Line $lines
-    }
-
-    foreach ($flagsetSpec in (Get-OptionalCollection $realm 'flagsets')) {
-        $flagsetBackingType = Get-OptionalPropertyValue $flagsetSpec 'backingType'
-        if ($null -ne $flagsetBackingType -and [string]::IsNullOrWhiteSpace([string]$flagsetBackingType) -eq $false) {
-            Add-Line $lines "    @Type($flagsetBackingType)"
-        }
-        Add-Line $lines "    flagset $($flagsetSpec.name) {"
-        foreach ($member in @($flagsetSpec.members)) {
-            $memberValue = Get-OptionalPropertyValue $member 'value'
-            if ($null -ne $memberValue) {
-                Add-Line $lines "        $($member.name) = $memberValue,"
-            }
-            else {
-                Add-Line $lines "        $($member.name),"
-            }
-        }
-        Add-Line $lines "    };"
-        Add-Line $lines
-    }
-
-    foreach ($componentSpec in (Get-OptionalCollection $realm 'components')) {
-        Add-Line $lines "    @Native"
-        Add-Line $lines "    @CppName($(Get-CppName $realm $componentSpec))"
-        Add-Line $lines "    component $($componentSpec.name) {"
-        Render-FieldList -Lines $lines -Fields @($componentSpec.fields) -Indent '        '
-        Add-Line $lines "    }"
-        Add-Line $lines
-    }
-
-    foreach ($functionSpec in (Get-OptionalCollection $realm 'functions')) {
-        Add-Line $lines "    @Native"
-        Add-Line $lines "    @CppName($(Get-CppName $realm $functionSpec))"
-
-        foreach ($typeArgument in (Get-OptionalCollection $functionSpec 'instantiate')) {
-            Add-Line $lines "    @Instantiate($typeArgument)"
-        }
-
-        foreach ($applyArgument in (Get-OptionalCollection $functionSpec 'apply')) {
-            Add-Line $lines "    @Apply($applyArgument)"
-        }
-
-        $parameterList = Render-ParameterList (Get-OptionalPropertyValue $functionSpec 'parameters')
-        if ([string]::IsNullOrWhiteSpace($parameterList)) {
-            $parameterList = ''
-        }
-
-        $returnType = Get-OptionalPropertyValue $functionSpec 'returnType'
-        if ($null -ne $returnType -and [string]::IsNullOrWhiteSpace([string]$returnType) -eq $false) {
-            Add-Line $lines "    fn $($functionSpec.name)($parameterList) -> $returnType;"
-        }
-        else {
-            Add-Line $lines "    fn $($functionSpec.name)($parameterList);"
-        }
-        Add-Line $lines
-    }
-
-    Add-Line $lines "}"
-    Add-Line $lines
-}
-
-$parent = Split-Path -Parent $OutputPath
-if (-not [string]::IsNullOrWhiteSpace($parent)) {
-    New-Item -ItemType Directory -Force -Path $parent | Out-Null
-}
-
-Set-Content -LiteralPath $OutputPath -Value $lines -Encoding UTF8
-Write-Output "Generated Wio binding module: $OutputPath"
+& $wioCli @cliArgs
+exit $LASTEXITCODE

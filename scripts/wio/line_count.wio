@@ -1,0 +1,23 @@
+use std::console as console;
+use std::io as io;
+use std::strings as strings;
+
+fn Entry() -> i32 {
+    console::PrintLine!("Wio source tool: line_count");
+    console::PrintLine!("Enter a path to inspect:");
+
+    let path = console::ReadLine!();
+    mut file = io::OpenReadText!(path);
+    let content = io::ReadAll!(ref file);
+    io::Close!(ref file);
+
+    let lines = strings::Lines(content);
+    let characterCount: u64 = strings::Count(content) fit u64;
+    let lineCount: u64 = lines.Count() fit u64;
+
+    console::Print!("Characters: ");
+    console::PrintLine!(characterCount);
+    console::Print!("Lines: ");
+    console::PrintLine!(lineCount);
+    return 0;
+}

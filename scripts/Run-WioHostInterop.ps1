@@ -20,18 +20,6 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path $PSScriptRoot -Parent
 $buildScript = Join-Path $PSScriptRoot "Build-Wio.ps1"
-$invokeScript = Join-Path $PSScriptRoot "Invoke-WithSanitizedPath.ps1"
-
-$resolvedWioFile = [System.IO.Path]::GetFullPath((Join-Path $repoRoot $WioFile))
-$resolvedHostSource = [System.IO.Path]::GetFullPath((Join-Path $repoRoot $HostSource))
-
-if (-not (Test-Path -LiteralPath $resolvedWioFile)) {
-    throw "Wio source file not found: $resolvedWioFile"
-}
-
-if (-not (Test-Path -LiteralPath $resolvedHostSource)) {
-    throw "Host C++ source file not found: $resolvedHostSource"
-}
 
 $buildArgs = @(
     "-ExecutionPolicy", "Bypass",
@@ -40,11 +28,15 @@ $buildArgs = @(
     "-Config", $Config
 )
 
-$defaultExe = Join-Path $repoRoot "$BuildDir\\app\\$Config\\wio_app.exe"
-$fallbackExe = Join-Path $repoRoot "$BuildDir\\app\\wio_app.exe"
+$defaultExe = Join-Path $repoRoot "$BuildDir\\app\\$Config\\wio.exe"
+$fallbackExe = Join-Path $repoRoot "$BuildDir\\app\\wio.exe"
+$legacyDefaultExe = Join-Path $repoRoot "$BuildDir\\app\\$Config\\wio_app.exe"
+$legacyFallbackExe = Join-Path $repoRoot "$BuildDir\\app\\wio_app.exe"
 $shouldConfigure = $Configure -or (
     -not (Test-Path -LiteralPath $defaultExe) -and
-    -not (Test-Path -LiteralPath $fallbackExe)
+    -not (Test-Path -LiteralPath $fallbackExe) -and
+    -not (Test-Path -LiteralPath $legacyDefaultExe) -and
+    -not (Test-Path -LiteralPath $legacyFallbackExe)
 )
 
 if ($shouldConfigure) {
@@ -60,93 +52,50 @@ $wioExe = $defaultExe
 if (-not (Test-Path -LiteralPath $wioExe)) {
     $wioExe = $fallbackExe
 }
+if (-not (Test-Path -LiteralPath $wioExe)) {
+    $wioExe = $legacyDefaultExe
+}
+if (-not (Test-Path -LiteralPath $wioExe)) {
+    $wioExe = $legacyFallbackExe
+}
 
 if (-not (Test-Path -LiteralPath $wioExe)) {
-    throw "Compiled wio_app executable was not found under '$BuildDir'."
+    throw "Compiled wio executable was not found under '$BuildDir'."
 }
 
-if ([string]::IsNullOrWhiteSpace($OutputName)) {
-    $OutputName = [System.IO.Path]::GetFileNameWithoutExtension($resolvedWioFile)
-}
-
-$interopDir = Join-Path $repoRoot "$BuildDir\\interop"
-New-Item -ItemType Directory -Force -Path $interopDir | Out-Null
-
-switch ($Target) {
-    "static" {
-        $libraryOutput = Join-Path $interopDir ($OutputName + ".a")
-        $hostOutput = Join-Path $interopDir ($OutputName + ".host.exe")
-    }
-    "shared" {
-        $libraryOutput = Join-Path $interopDir ($OutputName + ".dll")
-        $hostOutput = Join-Path $interopDir ($OutputName + ".host.exe")
-    }
-}
-
-$compilerArgs = @(
-    $wioExe,
-    $resolvedWioFile,
-    "--target", $Target,
-    "--output", $libraryOutput
+$toolScript = Join-Path $repoRoot "scripts\\wio\\run_host_interop.wio"
+$toolArgs = @(
+    "file", "run", $toolScript, "--",
+    "--wio-file", $WioFile,
+    "--host-source", $HostSource,
+    "--build-dir", $BuildDir,
+    "--config", $Config,
+    "--target", $Target
 )
 
-if ($ExtraCompilerArgs) {
-    $compilerArgs += $ExtraCompilerArgs
+if (-not [string]::IsNullOrWhiteSpace($OutputName)) {
+    $toolArgs += @("--output-name", $OutputName)
 }
 
-& $invokeScript -Command $compilerArgs
-if ($LASTEXITCODE -ne 0) {
-    exit $LASTEXITCODE
+if ($Configure) {
+    $toolArgs += "--configure"
 }
 
-$hostCompileArgs = @(
-    "g++",
-    "-std=c++20",
-    "-I",
-    (Join-Path $repoRoot "sdk\\include"),
-    $resolvedHostSource
-)
-
-if ($Target -eq "static") {
-    $hostCompileArgs += $libraryOutput
-
-    $runtimeLibrary = Join-Path $repoRoot "$BuildDir\\runtime\\backend\\libwio_runtime.a"
-    if (-not (Test-Path -LiteralPath $runtimeLibrary)) {
-        $runtimeLibrary = Join-Path $repoRoot "$BuildDir\\runtime\\libwio_runtime.a"
-    }
-
-    if (Test-Path -LiteralPath $runtimeLibrary) {
-        $hostCompileArgs += $runtimeLibrary
-    }
+if ($NoRun) {
+    $toolArgs += "--no-run"
 }
 
-$hostCompileArgs += @("-o", $hostOutput)
-
-if ($HostArgs) {
-    $hostCompileArgs += $HostArgs
+foreach ($value in $LibraryArgs) {
+    $toolArgs += @("--library-arg", $value)
 }
 
-& $invokeScript -Command $hostCompileArgs
-if ($LASTEXITCODE -ne 0) {
-    exit $LASTEXITCODE
+foreach ($value in $HostArgs) {
+    $toolArgs += @("--host-arg", $value)
 }
 
-Write-Host "Library :" $libraryOutput
-Write-Host "Host EXE:" $hostOutput
-
-if (-not $NoRun) {
-    $runArgs = @($hostOutput)
-
-    if ($Target -eq "shared") {
-        $runArgs += $libraryOutput
-        if ($LibraryArgs) {
-            $runArgs += $LibraryArgs
-        }
-    }
-    elseif ($LibraryArgs) {
-        $runArgs += $LibraryArgs
-    }
-
-    & $invokeScript -Command $runArgs
-    exit $LASTEXITCODE
+foreach ($value in $ExtraCompilerArgs) {
+    $toolArgs += @("--wio-arg", $value)
 }
+
+& $wioExe @toolArgs
+exit $LASTEXITCODE

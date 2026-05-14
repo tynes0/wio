@@ -1,0 +1,143 @@
+use std::console as console;
+use std::fs as fs;
+use std::path as path;
+use std::process as process;
+use std::result as result;
+use tooling_support as tools;
+
+fn PrintUsage() {
+    console::PrintLine!("Wio source tool: run_hybrid_arena_demo");
+    console::PrintLine!("Optional:");
+    console::PrintLine!("  --build-dir <dir>   (default: build)");
+    console::PrintLine!("  --config <cfg>      (default: Debug)");
+    console::PrintLine!("  --configure");
+}
+
+fn ExecutableName(baseName: string) -> string {
+    return baseName + process::ExecutableSuffix();
+}
+
+fn SharedLibraryName(baseName: string) -> string {
+    return baseName + process::SharedLibrarySuffix();
+}
+
+fn FindWioExecutable(repoRoot: string, buildDir: string, config: string) -> string {
+    return tools::FindExistingPath([
+        path::JoinAll([repoRoot, buildDir, "app", config, ExecutableName("wio")]),
+        path::JoinAll([repoRoot, buildDir, "app", ExecutableName("wio")]),
+        path::JoinAll([repoRoot, buildDir, "app", config, ExecutableName("wio_app")]),
+        path::JoinAll([repoRoot, buildDir, "app", ExecutableName("wio_app")])
+    ]);
+}
+
+fn RunChecked(command: string, args: string[], workingDirectory: string, label: string) -> std::Result<std::ResultUnit> {
+    let runResult = process::Run(command, args, workingDirectory);
+    if (runResult.IsError()) {
+        return std::Err<std::ResultUnit>(runResult.ErrorValue());
+    }
+
+    let exitCode = runResult.Value();
+    if (exitCode != 0) {
+        return tools::ToolError<std::ResultUnit>($"{label} failed with exit code ${exitCode}");
+    }
+
+    return std::OkUnit();
+}
+
+fn EnsureToolchain(repoRoot: string, buildDir: string, config: string, configure: bool) -> std::Result<tools::ToolchainInfo> {
+    let buildRoot = path::Join(repoRoot, buildDir);
+    let interopDir = path::Join(buildRoot, "interop");
+    if (not fs::EnsureDirectory(interopDir)) {
+        return tools::ToolError<tools::ToolchainInfo>($"Could not create interop directory: ${interopDir}");
+    }
+
+    mut wioExe = FindWioExecutable(repoRoot, buildDir, config);
+    let cmakeCache = path::Join(buildRoot, "CMakeCache.txt");
+    if (configure or wioExe == "") {
+        if (configure or not fs::Exists(cmakeCache)) {
+            RunChecked?("cmake", ["-S", repoRoot, "-B", buildRoot], repoRoot, "CMake configure");
+        }
+
+        RunChecked?("cmake", ["--build", buildRoot, "--config", config], repoRoot, "CMake build");
+        wioExe = FindWioExecutable(repoRoot, buildDir, config);
+    }
+
+    if (wioExe == "") {
+        return tools::ToolError<tools::ToolchainInfo>($"Could not locate a built wio executable under ${buildRoot}");
+    }
+
+    mut info = tools::ToolchainInfo();
+    info.repoRoot = repoRoot;
+    info.buildDir = buildDir;
+    info.config = config;
+    info.buildRoot = buildRoot;
+    info.interopDir = interopDir;
+    info.wioExe = wioExe;
+    info.runtimeStaticLibrary = tools::FindRuntimeStaticLibrary(repoRoot, buildDir);
+    return std::Ok<tools::ToolchainInfo>(info);
+}
+
+fn Run(args: string[]) -> std::Result<i32> {
+    if (tools::HasFlag(args, "--help")) {
+        PrintUsage();
+        return std::Ok<i32>(0);
+    }
+
+    let repoRoot = fs::CurrentPath();
+    let buildDir = tools::OptionValueOr(args, "--build-dir", "build");
+    let config = tools::OptionValueOr(args, "--config", "Debug");
+    let configure = tools::HasFlag(args, "--configure");
+    let toolchain = EnsureToolchain?(repoRoot, buildDir, config, configure);
+
+    let exampleDir = path::JoinAll([repoRoot, "examples", "hybrid_arena"]);
+    let moduleSource = path::Join(exampleDir, "arena_module.wio");
+    let nativeSource = path::Join(exampleDir, "hybrid_arena_native.cpp");
+    let hostSource = path::Join(exampleDir, "hybrid_arena_host.cpp");
+    let moduleA = path::Join(toolchain.interopDir, "hybrid_arena_demo.a" + SharedLibraryName(""));
+    let moduleB = path::Join(toolchain.interopDir, "hybrid_arena_demo.b" + SharedLibraryName(""));
+    let hostExe = path::Join(toolchain.interopDir, ExecutableName("hybrid_arena_demo.host"));
+
+    tools::ResolveExistingFile?(repoRoot, moduleSource, "Hybrid arena module source");
+    tools::ResolveExistingFile?(repoRoot, nativeSource, "Hybrid arena native source");
+    tools::ResolveExistingFile?(repoRoot, hostSource, "Hybrid arena host source");
+
+    let commonCompilerArgs = ["--include-dir", exampleDir, "--backend-arg", nativeSource];
+
+    mut moduleAArgs: string[] = [moduleSource, "--target", "shared", "--output", moduleA];
+    for value in commonCompilerArgs {
+        moduleAArgs.Push(value);
+    }
+    RunChecked?(toolchain.wioExe, moduleAArgs, repoRoot, "Hybrid arena module A compile");
+
+    mut moduleBArgs: string[] = [moduleSource, "--target", "shared", "--output", moduleB];
+    for value in commonCompilerArgs {
+        moduleBArgs.Push(value);
+    }
+    RunChecked?(toolchain.wioExe, moduleBArgs, repoRoot, "Hybrid arena module B compile");
+
+    let hostCompileArgs = [
+        "-std=c++20",
+        "-I", path::JoinAll([repoRoot, "sdk", "include"]),
+        hostSource,
+        "-o", hostExe
+    ];
+    RunChecked?("g++", hostCompileArgs, repoRoot, "Hybrid arena host compile");
+
+    console::PrintLine!($"Module A: ${moduleA}");
+    console::PrintLine!($"Module B: ${moduleB}");
+    console::PrintLine!($"Host EXE: ${hostExe}");
+
+    RunChecked?(hostExe, [moduleA, moduleB], repoRoot, "Hybrid arena host run");
+    return std::Ok<i32>(0);
+}
+
+fn Entry(args: string[]) -> i32 {
+    let result = Run(args);
+    if (result.IsError()) {
+        let error = result.ErrorValue();
+        console::PrintLine!(error.message);
+        return 1;
+    }
+
+    return result.Value();
+}

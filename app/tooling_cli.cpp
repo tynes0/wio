@@ -1,5 +1,7 @@
 #include "tooling_cli.h"
 #include "binding_cli.h"
+#include "env_cli.h"
+#include "file_cli.h"
 #include "package_cli.h"
 
 #include <argonaut.h>
@@ -213,12 +215,18 @@ namespace wio::tooling
                 << "\n"
                 << "  wio build     [--build-dir DIR] [--config CFG] [--configure] [--test]\n"
                 << "  wio test      [--build-dir DIR] [--config CFG] [--filter REGEX] [--list] [--configure]\n"
+                << "  wio file run    [FILE] [compiler args...] [-- program args...]\n"
+                << "  wio file check  [FILE] [extra compiler args...]\n"
+                << "  wio file tokens [FILE] [extra compiler args...]\n"
+                << "  wio file ast    [FILE] [extra compiler args...]\n"
                 << "  wio project new <NAME> [--output-dir DIR] [--template NAME] [--force]\n"
                 << "  wio project describe [--project PATH] [--config CFG] [--build-dir DIR]\n"
                 << "  wio project build    [--project PATH] [--config CFG] [--build-dir DIR] [--configure]\n"
                 << "  wio project run      [--project PATH] [--config CFG] [--build-dir DIR] [--configure]\n"
                 << "  wio bind new         --manifest FILE [--output FILE]\n"
                 << "  wio bind import      --header FILE --realm NAME [--output FILE] [--header-include FILE] [--prefer-flagset]\n"
+                << "  wio env print        [--wio-root DIR] [--shell powershell|cmd|sh] [--add-path]\n"
+                << "  wio env setup        [--wio-root DIR] [--set-user] [--no-prompt] [--add-path]\n"
                 << "  wio package          [--build-dir DIR] [--config CFG] [--output-dir DIR] [--version-suffix TAG] [--generator NAME] [--no-zip] [--clean]\n"
                 << "\n"
                 << "Alias forms:\n"
@@ -2210,6 +2218,9 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
         if (command == "test")
             return handleTestCommand(collectCommandArgs("wio test", argc, argv, 2));
 
+        if (command == "file")
+            return file::tryHandleFileCommand(argc, argv);
+
         if (command == "project")
         {
             if (argc < 3 || argv[2] == nullptr)
@@ -2234,6 +2245,9 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
 
         if (command == "bind")
             return binding::tryHandleBindCommand(argc, argv);
+
+        if (command == "env")
+            return env::tryHandleEnvCommand(argc, argv);
 
         if (command == "package")
             return package::tryHandlePackageCommand(argc, argv);

@@ -15,6 +15,8 @@ is now the Wio CLI itself:
 
 ```powershell
 build\app\Debug\wio.exe build --build-dir build --config Debug --configure
+build\app\Debug\wio.exe file check .\playground\main.wio
+build\app\Debug\wio.exe file run .\playground\main.wio
 ```
 
 The next direct tooling slice is also live:
@@ -26,6 +28,8 @@ build\app\Debug\wio.exe project build --project C:\Projects\MyGame
 build\app\Debug\wio.exe project run --project C:\Projects\MyGame
 build\app\Debug\wio.exe bind import --header .\tests\native\binding_import_smoke.h --realm binding_import_smoke --output .\build\generated\binding_import_smoke.wio
 build\app\Debug\wio.exe bind new --manifest .\tests\native\binding_manifest_smoke.json --output .\build\generated\binding_manifest_smoke.wio
+build\app\Debug\wio.exe env print --wio-root . --shell powershell --add-path
+build\app\Debug\wio.exe env setup --wio-root . --no-prompt
 build\app\Debug\wio.exe package --build-dir build --config Debug --output-dir .\artifacts\packages-cli --no-zip
 ```
 
@@ -77,13 +81,7 @@ The older compatibility helper still exists:
 powershell -ExecutionPolicy Bypass -File .\scripts\Pack-Wio.ps1
 ```
 
-That script currently remains the main packaging path:
-
-- configures the repo build if needed,
-- builds the `wio_dist` target,
-- stages a versioned package folder under `artifacts\packages`,
-- writes an optional `Install-Wio.ps1` helper into the package root,
-- and also creates a zip archive by default.
+That script is now only a thin compatibility wrapper over `wio package`.
 
 Example with an explicit configuration:
 
@@ -91,9 +89,20 @@ Example with an explicit configuration:
 powershell -ExecutionPolicy Bypass -File .\scripts\Pack-Wio.ps1 -Config Debug
 ```
 
-The generated package installer can optionally persist `WIO_ROOT` and
-`WIO_HOME` for the current user, but the packaged compiler still works without
-them thanks to executable-relative toolchain discovery.
+The generated package now includes thin installer wrappers:
+
+- `Install-Wio.ps1`
+- `install-wio.sh`
+
+They delegate to:
+
+```powershell
+bin\wio.exe env setup --wio-root <package-root>
+```
+
+So the persistent environment story now lives in the CLI itself. The packaged
+compiler still works without `WIO_ROOT` or `WIO_HOME` thanks to
+executable-relative toolchain discovery.
 
 ### IDE and Playground
 
@@ -102,22 +111,45 @@ For quick language experiments, use `playground/main.wio`.
 You can build and run it directly with:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Run-WioFile.ps1
+build\app\Debug\wio.exe file run .\playground\main.wio
 ```
 
 You can also point the runner at any `.wio` file:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Run-WioFile.ps1 -File .\playground\combat_scratch.wio -Mode run
+build\app\Debug\wio.exe file run .\playground\combat_scratch.wio
 ```
 
-Supported modes are `run`, `check`, `tokens`, and `ast`.
-
-Any extra arguments after the script parameters are forwarded directly to
-`wio.exe`, which is useful for experimental interop and backend tuning:
+Supported modes are `run`, `check`, `tokens`, and `ast`:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Run-WioFile.ps1 -File .\tests\native\native_bridge.wio -Mode run --include-dir .\tests\native --backend-arg .\tests\native\native_math.cpp
+build\app\Debug\wio.exe file check .\playground\combat_scratch.wio
+build\app\Debug\wio.exe file tokens .\playground\combat_scratch.wio
+build\app\Debug\wio.exe file ast .\playground\combat_scratch.wio
+```
+
+Any extra arguments after the file path are forwarded directly to the compiler,
+which is useful for experimental interop and backend tuning:
+
+```powershell
+build\app\Debug\wio.exe file run .\tests\native\native_bridge.wio --include-dir .\tests\native --backend-arg .\tests\native\native_math.cpp
+```
+
+The older `Run-WioFile.ps1` helper still exists as a compatibility wrapper, but
+it now prefers delegating to `wio file ...`.
+
+### Wio Source Tools
+
+The first source-based tooling files now live under `scripts/wio/`:
+
+- `scripts/wio/print_file.wio`
+- `scripts/wio/line_count.wio`
+
+Run them through the same CLI:
+
+```powershell
+build\app\Debug\wio.exe file run .\scripts\wio\print_file.wio
+build\app\Debug\wio.exe file run .\scripts\wio\line_count.wio
 ```
 
 If you use the CMake project inside Rider or Visual Studio, these IDE-friendly

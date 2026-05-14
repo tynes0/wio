@@ -1,0 +1,11 @@
+use std::assert as assert;
+use std::console as console;
+
+fn Entry(args: string[]) -> i32 {
+    assert::ExpectEqual(args.Count() fit i32, 3, "run args should include argv0 and forwarded values");
+    assert::ExpectEqual(args[1usize], "alpha", "first forwarded arg mismatch");
+    assert::ExpectEqual(args[2usize], "beta", "second forwarded arg mismatch");
+
+    console::PrintLine!("file-run-args-ok");
+    return 0;
+}

@@ -1,0 +1,184 @@
+use std::console as console;
+use std::fs as fs;
+use std::path as path;
+use std::process as process;
+use std::result as result;
+use tooling_support as tools;
+
+fn PrintUsage() {
+    console::PrintLine!("Wio source tool: run_host_interop");
+    console::PrintLine!("Required:");
+    console::PrintLine!("  --wio-file <path>");
+    console::PrintLine!("  --host-source <path>");
+    console::PrintLine!("Optional:");
+    console::PrintLine!("  --build-dir <dir>     (default: build)");
+    console::PrintLine!("  --config <cfg>        (default: Debug)");
+    console::PrintLine!("  --target <shared|static> (default: shared)");
+    console::PrintLine!("  --output-name <name>");
+    console::PrintLine!("  --configure");
+    console::PrintLine!("  --no-run");
+    console::PrintLine!("  --library-arg <value> (repeatable; passed to the host executable)");
+    console::PrintLine!("  --host-arg <value>    (repeatable; passed to g++)");
+    console::PrintLine!("  --wio-arg <value>     (repeatable; passed to the Wio compiler)");
+}
+
+fn ExecutableName(baseName: string) -> string {
+    return baseName + process::ExecutableSuffix();
+}
+
+fn SharedLibraryName(baseName: string) -> string {
+    return baseName + process::SharedLibrarySuffix();
+}
+
+fn StaticLibraryName(baseName: string) -> string {
+    return baseName + process::StaticLibrarySuffix();
+}
+
+fn FindWioExecutable(repoRoot: string, buildDir: string, config: string) -> string {
+    return tools::FindExistingPath([
+        path::JoinAll([repoRoot, buildDir, "app", config, ExecutableName("wio")]),
+        path::JoinAll([repoRoot, buildDir, "app", ExecutableName("wio")]),
+        path::JoinAll([repoRoot, buildDir, "app", config, ExecutableName("wio_app")]),
+        path::JoinAll([repoRoot, buildDir, "app", ExecutableName("wio_app")])
+    ]);
+}
+
+fn RunChecked(command: string, args: string[], workingDirectory: string, label: string) -> std::Result<std::ResultUnit> {
+    let runResult = process::Run(command, args, workingDirectory);
+    if (runResult.IsError()) {
+        return std::Err<std::ResultUnit>(runResult.ErrorValue());
+    }
+
+    let exitCode = runResult.Value();
+    if (exitCode != 0) {
+        return tools::ToolError<std::ResultUnit>($"${label} failed with exit code ${exitCode}");
+    }
+
+    return std::OkUnit();
+}
+
+fn EnsureToolchain(repoRoot: string, buildDir: string, config: string, configure: bool) -> std::Result<tools::ToolchainInfo> {
+    let buildRoot = path::Join(repoRoot, buildDir);
+    let interopDir = path::Join(buildRoot, "interop");
+    if (not fs::EnsureDirectory(interopDir)) {
+        return tools::ToolError<tools::ToolchainInfo>($"Could not create interop directory: ${interopDir}");
+    }
+
+    mut wioExe = FindWioExecutable(repoRoot, buildDir, config);
+    let cmakeCache = path::Join(buildRoot, "CMakeCache.txt");
+    if (configure or wioExe == "") {
+        if (configure or not fs::Exists(cmakeCache)) {
+            RunChecked?("cmake", ["-S", repoRoot, "-B", buildRoot], repoRoot, "CMake configure");
+        }
+
+        RunChecked?("cmake", ["--build", buildRoot, "--config", config], repoRoot, "CMake build");
+        wioExe = FindWioExecutable(repoRoot, buildDir, config);
+    }
+
+    if (wioExe == "") {
+        return tools::ToolError<tools::ToolchainInfo>($"Could not locate a built wio executable under ${buildRoot}");
+    }
+
+    mut info = tools::ToolchainInfo();
+    info.repoRoot = repoRoot;
+    info.buildDir = buildDir;
+    info.config = config;
+    info.buildRoot = buildRoot;
+    info.interopDir = interopDir;
+    info.wioExe = wioExe;
+    info.runtimeStaticLibrary = tools::FindRuntimeStaticLibrary(repoRoot, buildDir);
+    return std::Ok<tools::ToolchainInfo>(info);
+}
+
+fn Run(args: string[]) -> std::Result<i32> {
+    if (tools::HasFlag(args, "--help")) {
+        PrintUsage();
+        return std::Ok<i32>(0);
+    }
+
+    let repoRoot = fs::CurrentPath();
+    let buildDir = tools::OptionValueOr(args, "--build-dir", "build");
+    let config = tools::OptionValueOr(args, "--config", "Debug");
+    let target = tools::OptionValueOr(args, "--target", "shared");
+    let configure = tools::HasFlag(args, "--configure");
+    let noRun = tools::HasFlag(args, "--no-run");
+
+    if (target != "shared" and target != "static") {
+        return tools::ToolError<i32>($"Unsupported target '${target}'. Expected 'shared' or 'static'.");
+    }
+
+    let wioFile = tools::RequireOption?(args, "--wio-file", "--wio-file");
+    let hostSource = tools::RequireOption?(args, "--host-source", "--host-source");
+    let resolvedWioFile = tools::ResolveExistingFile?(repoRoot, wioFile, "Wio source file");
+    let resolvedHostSource = tools::ResolveExistingFile?(repoRoot, hostSource, "Host source file");
+    let toolchain = EnsureToolchain?(repoRoot, buildDir, config, configure);
+
+    mut outputName = tools::OptionValueOr(args, "--output-name", "");
+    if (outputName == "") {
+        outputName = path::FileNameWithoutExtension(resolvedWioFile);
+    }
+
+    mut libraryOutput = path::Join(toolchain.interopDir, StaticLibraryName(outputName));
+    if (target == "shared") {
+        libraryOutput = path::Join(toolchain.interopDir, SharedLibraryName(outputName));
+    }
+    let hostOutput = path::Join(toolchain.interopDir, ExecutableName(outputName + ".host"));
+
+    mut wioCompilerArgs: string[] = [
+        resolvedWioFile,
+        "--target", target,
+        "--output", libraryOutput
+    ];
+    for extraArg in tools::CollectOptionValues(args, "--wio-arg") {
+        wioCompilerArgs.Push(extraArg);
+    }
+
+    RunChecked?(toolchain.wioExe, wioCompilerArgs, repoRoot, "Wio host-interop compile");
+
+    mut hostCompilerArgs: string[] = [
+        "-std=c++20",
+        "-I", path::JoinAll([repoRoot, "sdk", "include"]),
+        resolvedHostSource
+    ];
+    if (target == "static") {
+        hostCompilerArgs.Push(libraryOutput);
+        if (toolchain.runtimeStaticLibrary != "") {
+            hostCompilerArgs.Push(toolchain.runtimeStaticLibrary);
+        }
+    }
+    for extraArg in tools::CollectOptionValues(args, "--host-arg") {
+        hostCompilerArgs.Push(extraArg);
+    }
+    hostCompilerArgs.Push("-o");
+    hostCompilerArgs.Push(hostOutput);
+
+    RunChecked?("g++", hostCompilerArgs, repoRoot, "Host C++ compile");
+
+    console::PrintLine!($"Library : ${libraryOutput}");
+    console::PrintLine!($"Host EXE: ${hostOutput}");
+
+    if (not noRun) {
+        mut hostRuntimeArgs: string[] = [];
+        if (target == "shared") {
+            hostRuntimeArgs.Push(libraryOutput);
+        }
+        for extraArg in tools::CollectOptionValues(args, "--library-arg") {
+            hostRuntimeArgs.Push(extraArg);
+        }
+
+        RunChecked?(hostOutput, hostRuntimeArgs, repoRoot, "Host executable run");
+    }
+
+    return std::Ok<i32>(0);
+}
+
+fn Entry(args: string[]) -> i32 {
+    let result = Run(args);
+    if (result.IsError()) {
+        let error = result.ErrorValue();
+        console::PrintLine!(error.message);
+        return 1;
+    }
+
+    return result.Value();
+}

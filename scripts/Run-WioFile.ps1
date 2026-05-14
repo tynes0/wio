@@ -58,26 +58,11 @@ if (-not (Test-Path -LiteralPath $wioExe)) {
 
 $compilerArgs = @($resolvedFile)
 
-switch ($Mode) {
-    "run" {
-        $compilerArgs += "--run"
-    }
-    "check" {
-        $compilerArgs += "--dry-run"
-    }
-    "tokens" {
-        $compilerArgs += "--show-tokens"
-        $compilerArgs += "--dry-run"
-    }
-    "ast" {
-        $compilerArgs += "--show-ast"
-        $compilerArgs += "--dry-run"
-    }
-}
-
 if ($ExtraCompilerArgs) {
-    $compilerArgs += $ExtraCompilerArgs
+    $compilerArgs = $ExtraCompilerArgs
+} else {
+    $compilerArgs = @()
 }
 
-& $invokeScript -Command (@($wioExe) + $compilerArgs)
+& $wioExe "file" $Mode $resolvedFile @compilerArgs
 exit $LASTEXITCODE

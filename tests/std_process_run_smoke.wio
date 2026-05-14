@@ -1,0 +1,11 @@
+use std::assert as assert;
+use std::console as console;
+use std::process as process;
+
+fn Entry() -> i32 {
+    let exitCode = process::Run!("g++", ["--version"]);
+    assert::ExpectEqual(exitCode, 0, "std::process should return the child exit code");
+
+    console::PrintLine!("std-process-run-ok");
+    return 0;
+}

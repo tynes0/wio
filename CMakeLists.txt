@@ -48,11 +48,23 @@ install(FILES
 )
 
 install(FILES
+    "${CMAKE_SOURCE_DIR}/scripts/Build-Wio.ps1"
+    "${CMAKE_SOURCE_DIR}/scripts/Test-Wio.ps1"
+    "${CMAKE_SOURCE_DIR}/scripts/Run-WioFile.ps1"
+    "${CMAKE_SOURCE_DIR}/scripts/Run-WioHostInterop.ps1"
+    "${CMAKE_SOURCE_DIR}/scripts/Run-HybridArenaDemo.ps1"
     "${CMAKE_SOURCE_DIR}/scripts/Invoke-WioProject.ps1"
     "${CMAKE_SOURCE_DIR}/scripts/Invoke-WithSanitizedPath.ps1"
     "${CMAKE_SOURCE_DIR}/scripts/New-WioProject.ps1"
+    "${CMAKE_SOURCE_DIR}/scripts/Import-CHeaderToWioBinding.ps1"
+    "${CMAKE_SOURCE_DIR}/scripts/New-WioBindingModule.ps1"
     "${CMAKE_SOURCE_DIR}/scripts/Pack-Wio.ps1"
     DESTINATION scripts
+)
+
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/scripts/wio/"
+    DESTINATION scripts/wio
+    FILES_MATCHING PATTERN "*.wio" PATTERN "README.md"
 )
 
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/std/"

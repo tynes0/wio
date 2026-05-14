@@ -1,0 +1,110 @@
+realm tooling_support {
+    use std::result as result;
+    use std::fs as fs;
+    use std::path as path;
+
+    component ToolchainInfo {
+        repoRoot: string;
+        buildDir: string;
+        config: string;
+        buildRoot: string;
+        interopDir: string;
+        wioExe: string;
+        runtimeStaticLibrary: string;
+    }
+
+    fn ToolError<T>(message: string) -> std::Result<T> {
+        return std::Err<T>(std::MakeResultError(std::ResultDomain::runtime, 1, message));
+    }
+
+    fn HasFlag(args: string[], name: string) -> bool {
+        for arg in args {
+            if (arg == name) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    fn OptionValueOr(args: string[], name: string, fallback: string) -> string {
+        mut index = 0usize;
+        while (index < args.Count()) {
+            if (args[index] == name) {
+                let nextIndex = index + 1usize;
+                if (nextIndex < args.Count()) {
+                    return args[nextIndex];
+                }
+
+                return fallback;
+            }
+
+            index += 1usize;
+        }
+
+        return fallback;
+    }
+
+    fn RequireOption(args: string[], name: string, label: string) -> std::Result<string> {
+        mut index = 0usize;
+        while (index < args.Count()) {
+            if (args[index] == name) {
+                let nextIndex = index + 1usize;
+                if (nextIndex < args.Count()) {
+                    return std::Ok<string>(args[nextIndex]);
+                }
+
+                return ToolError<string>($"Missing value for ${label}.");
+            }
+
+            index += 1usize;
+        }
+
+        return ToolError<string>($"Missing required ${label} option.");
+    }
+
+    fn CollectOptionValues(args: string[], name: string) -> string[] {
+        mut values: string[] = [];
+        mut index = 0usize;
+        while (index < args.Count()) {
+            if (args[index] == name) {
+                let nextIndex = index + 1usize;
+                if (nextIndex < args.Count()) {
+                    values.Push(args[nextIndex]);
+                    index = nextIndex + 1usize;
+                    continue;
+                }
+            }
+
+            index += 1usize;
+        }
+
+        return values;
+    }
+
+    fn ResolveExistingFile(repoRoot: string, value: string, label: string) -> std::Result<string> {
+        let resolved = path::AbsoluteFrom(repoRoot, value);
+        if (not fs::Exists(resolved) or not fs::IsFile(resolved)) {
+            return ToolError<string>($"${label} was not found: ${resolved}");
+        }
+
+        return std::Ok<string>(resolved);
+    }
+
+    fn FindExistingPath(candidates: string[]) -> string {
+        for candidate in candidates {
+            if (candidate != "" and fs::Exists(candidate)) {
+                return candidate;
+            }
+        }
+
+        return "";
+    }
+
+    fn FindRuntimeStaticLibrary(repoRoot: string, buildDir: string) -> string {
+        return FindExistingPath([
+            path::JoinAll([repoRoot, buildDir, "runtime", "backend", "libwio_runtime.a"]),
+            path::JoinAll([repoRoot, buildDir, "runtime", "libwio_runtime.a"])
+        ]);
+    }
+}

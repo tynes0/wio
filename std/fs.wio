@@ -1,3 +1,5 @@
+use std::path as path;
+
 realm std {
     realm fs {
         use @CppHeader("std_fs.h");
@@ -83,7 +85,7 @@ realm std {
         }
 
         fn EnsureParentDirectory(filePath: string) -> bool {
-            let parent = std::path::ParentPath(filePath);
+            let parent = path::ParentPath(filePath);
             if (parent == "") {
                 return true;
             }
