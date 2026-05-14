@@ -2,20 +2,12 @@ if(NOT DEFINED WIO_EXE)
     message(FATAL_ERROR "WIO_EXE was not provided.")
 endif()
 
-if(NOT DEFINED WIO_POWERSHELL)
-    message(FATAL_ERROR "WIO_POWERSHELL was not provided.")
-endif()
-
-if(NOT DEFINED WIO_SCRIPT)
-    message(FATAL_ERROR "WIO_SCRIPT was not provided.")
-endif()
-
 if(NOT DEFINED WIO_OUTPUT)
     message(FATAL_ERROR "WIO_OUTPUT was not provided.")
 endif()
 
-if(NOT DEFINED WIO_SCRIPT_ARGS)
-    set(WIO_SCRIPT_ARGS)
+if(NOT DEFINED WIO_TOOL_ARGS)
+    set(WIO_TOOL_ARGS)
 endif()
 
 if(NOT DEFINED WIO_COMPILER_ARGS)
@@ -25,19 +17,19 @@ endif()
 file(REMOVE "${WIO_OUTPUT}")
 
 execute_process(
-    COMMAND "${WIO_POWERSHELL}" -ExecutionPolicy Bypass -File "${WIO_SCRIPT}" ${WIO_SCRIPT_ARGS}
+    COMMAND "${WIO_EXE}" ${WIO_TOOL_ARGS}
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-    RESULT_VARIABLE wio_script_result
-    OUTPUT_VARIABLE wio_script_stdout
-    ERROR_VARIABLE wio_script_stderr
+    RESULT_VARIABLE wio_tool_result
+    OUTPUT_VARIABLE wio_tool_stdout
+    ERROR_VARIABLE wio_tool_stderr
 )
 
-set(wio_script_output "${wio_script_stdout}${wio_script_stderr}")
+set(wio_tool_output "${wio_tool_stdout}${wio_tool_stderr}")
 
-if(NOT wio_script_result EQUAL 0)
+if(NOT wio_tool_result EQUAL 0)
     message(FATAL_ERROR
-        "Binding generation failed for '${WIO_SCRIPT}' with code ${wio_script_result}.\n"
-        "Script output:\n${wio_script_output}"
+        "Binding generation failed with code ${wio_tool_result}.\n"
+        "Tool output:\n${wio_tool_output}"
     )
 endif()
 
@@ -77,4 +69,4 @@ if(NOT wio_compile_result EQUAL 0)
     )
 endif()
 
-message(STATUS "Binding smoke generation and compile succeeded for: ${WIO_SCRIPT}")
+message(STATUS "Binding smoke generation and compile succeeded for: ${WIO_OUTPUT}")

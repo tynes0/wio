@@ -15,6 +15,49 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$repoRoot = Split-Path $PSScriptRoot -Parent
+
+function Get-WioCliPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot
+    )
+
+    $candidates = @(
+        (Join-Path $RepoRoot "bin\wio.exe"),
+        (Join-Path $RepoRoot "bin\wio"),
+        (Join-Path $RepoRoot "build\app\Debug\wio.exe"),
+        (Join-Path $RepoRoot "build\app\Release\wio.exe"),
+        (Join-Path $RepoRoot "build\app\wio.exe"),
+        (Join-Path $RepoRoot "build-codex-import\app\Debug\wio.exe"),
+        (Join-Path $RepoRoot "build-codex-runtime-types\app\Debug\wio.exe")
+    )
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate) {
+            return $candidate
+        }
+    }
+
+    return $null
+}
+
+$wioCli = Get-WioCliPath -RepoRoot $repoRoot
+if (-not [string]::IsNullOrWhiteSpace($wioCli)) {
+    $cliArgs = @("bind", "import", "--header", $HeaderPath, "--realm", $RealmName)
+    if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
+        $cliArgs += @("--output", $OutputPath)
+    }
+    if (-not [string]::IsNullOrWhiteSpace($HeaderInclude)) {
+        $cliArgs += @("--header-include", $HeaderInclude)
+    }
+    if ($PreferFlagset) {
+        $cliArgs += "--prefer-flagset"
+    }
+
+    & $wioCli @cliArgs
+    exit $LASTEXITCODE
+}
 
 function Resolve-RequiredPath {
     param([string]$PathValue)

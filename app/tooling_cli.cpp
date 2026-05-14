@@ -1,4 +1,5 @@
 #include "tooling_cli.h"
+#include "binding_cli.h"
 
 #include <argonaut.h>
 
@@ -10,7 +11,9 @@
 #include <iostream>
 #include <map>
 #include <optional>
+#include <regex>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -213,6 +216,8 @@ namespace wio::tooling
                 << "  wio project describe [--project PATH] [--config CFG] [--build-dir DIR]\n"
                 << "  wio project build    [--project PATH] [--config CFG] [--build-dir DIR] [--configure]\n"
                 << "  wio project run      [--project PATH] [--config CFG] [--build-dir DIR] [--configure]\n"
+                << "  wio bind new         --manifest FILE [--output FILE]\n"
+                << "  wio bind import      --header FILE --realm NAME [--output FILE] [--header-include FILE] [--prefer-flagset]\n"
                 << "\n"
                 << "Alias forms:\n"
                 << "\n"
@@ -2224,6 +2229,9 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
             std::cerr << "Unknown project subcommand: " << subcommand << '\n';
             return EXIT_FAILURE;
         }
+
+        if (command == "bind")
+            return binding::tryHandleBindCommand(argc, argv);
 
         if (command != "dev")
             return std::nullopt;

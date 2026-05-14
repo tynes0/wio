@@ -19,6 +19,7 @@ The design goal is straightforward:
 The repository is also in the middle of a tooling transition:
 
 - `wio build ...` and `wio test ...` are now the preferred repo-local entrypoints once `wio.exe` exists,
+- `wio bind import ...` and `wio bind new ...` now cover the binding bootstrap path directly from the CLI,
 - the PowerShell helpers remain as compatibility wrappers,
 - and the medium-term goal is to move project and binding flows behind direct Wio CLI subcommands instead of treating `scripts/` as the main user interface.
 
@@ -35,6 +36,8 @@ build\app\Debug\wio.exe project new MyGame --output-dir C:\Projects --template w
 build\app\Debug\wio.exe project describe --project C:\Projects\MyGame
 build\app\Debug\wio.exe project build --project C:\Projects\MyGame
 build\app\Debug\wio.exe project run --project C:\Projects\MyGame
+build\app\Debug\wio.exe bind import --header .\tests\native\binding_import_smoke.h --realm binding_import_smoke --output .\build\generated\binding_import_smoke.wio
+build\app\Debug\wio.exe bind new --manifest .\tests\native\binding_manifest_smoke.json --output .\build\generated\binding_manifest_smoke.wio
 ```
 
 Equivalent alias forms also exist:

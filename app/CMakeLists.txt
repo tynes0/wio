@@ -6,6 +6,8 @@ source_group("std" FILES ${WIO_STD_FILES})
 
 add_executable(wio_app
     main.cpp
+    binding_cli.cpp
+    binding_cli.h
     tooling_cli.cpp
     tooling_cli.h
     ${WIO_STD_FILES}
@@ -150,12 +152,6 @@ foreach (wio_playground_file IN LISTS WIO_PLAYGROUND_FILES)
 endforeach()
 
 if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
-    if (WIN32)
-        find_program(WIO_TEST_POWERSHELL NAMES powershell pwsh REQUIRED)
-    else()
-        find_program(WIO_TEST_POWERSHELL NAMES pwsh powershell REQUIRED)
-    endif()
-
     function(add_wio_success_test test_name source_file)
         add_test(
             NAME ${test_name}
@@ -485,10 +481,8 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         COMMAND
             ${CMAKE_COMMAND}
             -DWIO_EXE=$<TARGET_FILE:wio_app>
-            -DWIO_POWERSHELL=${WIO_TEST_POWERSHELL}
-            -DWIO_SCRIPT=${CMAKE_SOURCE_DIR}/scripts/Import-CHeaderToWioBinding.ps1
             -DWIO_OUTPUT=${CMAKE_BINARY_DIR}/generated/binding_import_smoke.wio
-            "-DWIO_SCRIPT_ARGS=-HeaderPath;${CMAKE_SOURCE_DIR}/tests/native/binding_import_smoke.h;-RealmName;binding_import_smoke;-OutputPath;${CMAKE_BINARY_DIR}/generated/binding_import_smoke.wio"
+            "-DWIO_TOOL_ARGS=bind;import;--header;${CMAKE_SOURCE_DIR}/tests/native/binding_import_smoke.h;--realm;binding_import_smoke;--output;${CMAKE_BINARY_DIR}/generated/binding_import_smoke.wio"
             "-DWIO_COMPILER_ARGS=--dry-run;--target;static;--include-dir;${CMAKE_SOURCE_DIR}/tests/native"
             "-DWIO_EXPECT_1=const DefaultPort: i32 = 8080;"
             "-DWIO_EXPECT_2=component color3 {"
@@ -507,10 +501,8 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         COMMAND
             ${CMAKE_COMMAND}
             -DWIO_EXE=$<TARGET_FILE:wio_app>
-            -DWIO_POWERSHELL=${WIO_TEST_POWERSHELL}
-            -DWIO_SCRIPT=${CMAKE_SOURCE_DIR}/scripts/New-WioBindingModule.ps1
             -DWIO_OUTPUT=${CMAKE_BINARY_DIR}/generated/binding_manifest_smoke.wio
-            "-DWIO_SCRIPT_ARGS=-ManifestPath;${CMAKE_SOURCE_DIR}/tests/native/binding_manifest_smoke.json;-OutputPath;${CMAKE_BINARY_DIR}/generated/binding_manifest_smoke.wio"
+            "-DWIO_TOOL_ARGS=bind;new;--manifest;${CMAKE_SOURCE_DIR}/tests/native/binding_manifest_smoke.json;--output;${CMAKE_BINARY_DIR}/generated/binding_manifest_smoke.wio"
             "-DWIO_COMPILER_ARGS=--dry-run;--target;static;--include-dir;${CMAKE_SOURCE_DIR}/tests/native"
             "-DWIO_EXPECT_1=const DefaultPort: i32 = 8080;"
             "-DWIO_EXPECT_2=component color3 {"
