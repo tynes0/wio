@@ -1,0 +1,49 @@
+use std::assert as assert;
+use std::console as console;
+use std::reflect as reflect;
+
+enum State {
+    Menu = 0,
+    Playing = 1,
+    Paused = 2
+};
+
+flagset Feature {
+    None = 0u32,
+    Audio = 1u32 << 0u32,
+    Debug = 1u32 << 1u32,
+    Cheats = 1u32 << 2u32,
+    All = Audio | Debug | Cheats
+};
+
+const DefaultState: State = State::Playing;
+const DefaultFlags: Feature = Feature::Audio | Feature::Debug;
+
+fn Entry() -> i32 {
+    if (reflect::Count<State>() != 3usize) {
+        return 1;
+    }
+
+    if (reflect::Name(DefaultState) != "Playing") {
+        return 2;
+    }
+
+    assert::ExpectTrue(reflect::Has(DefaultFlags, Feature::Audio), "Has should report present flag bits");
+    assert::ExpectTrue(reflect::HasAny(DefaultFlags, Feature::Audio | Feature::Cheats), "HasAny should report partial overlap");
+    assert::ExpectFalse(reflect::Has(DefaultFlags, Feature::All), "Has should require the full mask");
+
+    let expanded = reflect::With(DefaultFlags, Feature::Cheats);
+    assert::ExpectEqual(expanded, Feature::All, "With should add new bits");
+
+    let trimmed = reflect::Without(expanded, Feature::Debug);
+    assert::ExpectEqual(trimmed, Feature::Audio | Feature::Cheats, "Without should clear selected bits");
+
+    let toggled = reflect::Toggle(trimmed, Feature::Audio | Feature::Debug);
+    assert::ExpectEqual(toggled, Feature::Debug | Feature::Cheats, "Toggle should flip each requested bit");
+
+    let cleared = reflect::Clear(expanded);
+    assert::ExpectEqual(cleared, Feature::None, "Clear should yield the zero value of the same flagset type");
+
+    console::PrintLine("enum-flagset-surface-ok");
+    return 0;
+}

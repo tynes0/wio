@@ -195,6 +195,8 @@ namespace wio
             std::vector<std::string> trustedTypeKeys;
             bool isObject;
             bool isInterface;
+            bool isEnum = false;
+            bool isFlagset = false;
             bool isFinal = false;
             bool isNativePodComponent = false;
             std::string nativeCppName;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "exception.h"
+#include "enum_reflection.h"
 
 #include <algorithm>
 #include <array>
@@ -230,6 +231,48 @@ namespace wio::intrinsics
     inline std::string* NativeFallbackArg(const NativeStringRefArg& value) noexcept
     {
         return value.AsPointer();
+    }
+
+    template <typename T>
+    std::string EnumName(const T value)
+    {
+        return runtime::EnumName(value);
+    }
+
+    template <typename T>
+    [[nodiscard]] bool FlagsetHasAll(const T value, const T mask) noexcept
+    {
+        return (value & mask) == mask;
+    }
+
+    template <typename T>
+    [[nodiscard]] bool FlagsetHasAny(const T value, const T mask) noexcept
+    {
+        return (value & mask) != (mask ^ mask);
+    }
+
+    template <typename T>
+    [[nodiscard]] T FlagsetWith(const T value, const T mask) noexcept
+    {
+        return value | mask;
+    }
+
+    template <typename T>
+    [[nodiscard]] T FlagsetWithout(const T value, const T mask) noexcept
+    {
+        return value & ~mask;
+    }
+
+    template <typename T>
+    [[nodiscard]] T FlagsetToggle(const T value, const T mask) noexcept
+    {
+        return value ^ mask;
+    }
+
+    template <typename T>
+    [[nodiscard]] T FlagsetClear(const T value) noexcept
+    {
+        return value ^ value;
     }
 
     template <typename F, typename... Args>

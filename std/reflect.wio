@@ -9,5 +9,29 @@ realm std {
         @Native
         @CppName(wio::runtime::EnumName)
         fn Name<T>(value: T) -> string;
+
+        fn Has<T>(value: T, mask: T) -> bool {
+            return (value & mask) == mask;
+        }
+
+        fn HasAny<T>(value: T, mask: T) -> bool {
+            return (value & mask) != (mask ^ mask);
+        }
+
+        fn With<T>(value: T, mask: T) -> T {
+            return value | mask;
+        }
+
+        fn Without<T>(value: T, mask: T) -> T {
+            return value & ~mask;
+        }
+
+        fn Toggle<T>(value: T, mask: T) -> T {
+            return value ^ mask;
+        }
+
+        fn Clear<T>(value: T) -> T {
+            return value ^ value;
+        }
     }
 }

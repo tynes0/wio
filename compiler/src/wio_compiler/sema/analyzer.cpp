@@ -808,6 +808,8 @@ namespace wio::sema
 
             return resolvedType->kind() == TypeKind::Array ||
                    resolvedType->kind() == TypeKind::Dictionary ||
+                   (resolvedType->kind() == TypeKind::Struct &&
+                    (resolvedType.AsFast<StructType>()->isEnum || resolvedType.AsFast<StructType>()->isFlagset)) ||
                    isStringType(resolvedType);
         }
 
@@ -5804,6 +5806,8 @@ namespace wio::sema
             {
                 actualStructType = baseType;
                 foundMember = findMemberInHierarchy(actualStructType, node.member->token.value, &actualStructType);
+                if (!foundMember && resolveIntrinsicMemberOnType(actualStructType))
+                    return;
             }
             else if (isIntrinsicReceiverType(baseType))
             {
@@ -5832,6 +5836,8 @@ namespace wio::sema
                 {
                     actualStructType = referredType;
                     foundMember = findMemberInHierarchy(actualStructType, node.member->token.value, &actualStructType);
+                    if (!foundMember && resolveIntrinsicMemberOnType(actualStructType))
+                        return;
                 }
                 else if (referredType && isIntrinsicReceiverType(referredType))
                 {
@@ -10592,6 +10598,7 @@ namespace wio::sema
             
             Ref<Type> enumType = Ref<StructType>::Create(node.name->token.value, enumScope);
             enumType.AsFast<StructType>()->scopePath = getCurrentNamespacePath();
+            enumType.AsFast<StructType>()->isEnum = true;
             const bool isNativeEnum = hasAttribute(node.attributes, Attribute::Native);
             enumType.AsFast<StructType>()->isNativePodComponent = isNativeEnum;
             enumType.AsFast<StructType>()->nativeCppName = node.name ? node.name->token.value : "";
@@ -10702,6 +10709,7 @@ namespace wio::sema
             
             Ref<Type> flagsetType = Ref<StructType>::Create(node.name->token.value, flagsetScope);
             flagsetType.AsFast<StructType>()->scopePath = getCurrentNamespacePath();
+            flagsetType.AsFast<StructType>()->isFlagset = true;
             const bool isNativeFlagset = hasAttribute(node.attributes, Attribute::Native);
             flagsetType.AsFast<StructType>()->isNativePodComponent = isNativeFlagset;
             flagsetType.AsFast<StructType>()->nativeCppName = node.name ? node.name->token.value : "";

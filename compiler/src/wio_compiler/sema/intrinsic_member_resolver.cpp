@@ -367,6 +367,48 @@ namespace wio::sema
 
             return overloads;
         }
+
+        std::vector<IntrinsicMemberResolution> resolveEnumIntrinsicMember(TypeContext& typeContext,
+                                                                          const Ref<StructType>& structType,
+                                                                          const std::string_view memberName)
+        {
+            std::vector<IntrinsicMemberResolution> overloads;
+            if (!structType || !structType->isEnum)
+                return overloads;
+
+            if (memberName == "Name")
+                appendMethodResolution(overloads, IntrinsicMember::EnumName, typeContext.getString(), {}, typeContext, false);
+
+            return overloads;
+        }
+
+        std::vector<IntrinsicMemberResolution> resolveFlagsetIntrinsicMember(TypeContext& typeContext,
+                                                                             const Ref<StructType>& structType,
+                                                                             const std::string_view memberName)
+        {
+            std::vector<IntrinsicMemberResolution> overloads;
+            if (!structType || !structType->isFlagset)
+                return overloads;
+
+            const Ref<Type> ownerType = structType;
+
+            if (memberName == "Name")
+                appendMethodResolution(overloads, IntrinsicMember::FlagsetName, typeContext.getString(), {}, typeContext, false);
+            else if (memberName == "Has")
+                appendMethodResolution(overloads, IntrinsicMember::FlagsetHasAll, typeContext.getBool(), { ownerType }, typeContext, false);
+            else if (memberName == "HasAny")
+                appendMethodResolution(overloads, IntrinsicMember::FlagsetHasAny, typeContext.getBool(), { ownerType }, typeContext, false);
+            else if (memberName == "With")
+                appendMethodResolution(overloads, IntrinsicMember::FlagsetWith, ownerType, { ownerType }, typeContext, false);
+            else if (memberName == "Without")
+                appendMethodResolution(overloads, IntrinsicMember::FlagsetWithout, ownerType, { ownerType }, typeContext, false);
+            else if (memberName == "Toggle")
+                appendMethodResolution(overloads, IntrinsicMember::FlagsetToggle, ownerType, { ownerType }, typeContext, false);
+            else if (memberName == "Clear")
+                appendMethodResolution(overloads, IntrinsicMember::FlagsetClear, ownerType, {}, typeContext, false);
+
+            return overloads;
+        }
     }
 
     std::vector<IntrinsicMemberResolution> resolveIntrinsicMemberOverloads(TypeContext& typeContext,
@@ -382,6 +424,18 @@ namespace wio::sema
 
         if (resolvedOwnerType->kind() == TypeKind::Dictionary)
             return resolveDictionaryIntrinsicMember(typeContext, resolvedOwnerType.AsFast<DictionaryType>(), memberName);
+
+        if (resolvedOwnerType->kind() == TypeKind::Struct)
+        {
+            auto structType = resolvedOwnerType.AsFast<StructType>();
+            auto overloads = resolveEnumIntrinsicMember(typeContext, structType, memberName);
+            if (!overloads.empty())
+                return overloads;
+
+            overloads = resolveFlagsetIntrinsicMember(typeContext, structType, memberName);
+            if (!overloads.empty())
+                return overloads;
+        }
 
         if (isStringType(resolvedOwnerType))
             return resolveStringIntrinsicMember(typeContext, memberName);

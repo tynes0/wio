@@ -1414,6 +1414,21 @@ namespace wio::codegen
                 return "StringToLowerInPlace";
             case IntrinsicMember::StringToUpperInPlace:
                 return "StringToUpperInPlace";
+            case IntrinsicMember::EnumName:
+            case IntrinsicMember::FlagsetName:
+                return "EnumName";
+            case IntrinsicMember::FlagsetHasAll:
+                return "FlagsetHasAll";
+            case IntrinsicMember::FlagsetHasAny:
+                return "FlagsetHasAny";
+            case IntrinsicMember::FlagsetWith:
+                return "FlagsetWith";
+            case IntrinsicMember::FlagsetWithout:
+                return "FlagsetWithout";
+            case IntrinsicMember::FlagsetToggle:
+                return "FlagsetToggle";
+            case IntrinsicMember::FlagsetClear:
+                return "FlagsetClear";
             case IntrinsicMember::None:
                 return {};
             }

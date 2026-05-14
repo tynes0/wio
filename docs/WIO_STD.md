@@ -101,6 +101,7 @@ Current v1 expectation:
 - `std::collections`
 - `std::strings`
 - `std::algorithms`
+- `std::reflect`
 
 These modules are currently pure Wio source and do not require native bridge
 headers.
@@ -113,6 +114,26 @@ Current v1 expectation:
   container implementation
 - if a feature already belongs to the language, `std` should wrap it rather than
   re-implement a competing version
+
+### 2.3.1 Enum And Flagset Surface
+
+`enum` and `flagset` now have a small first-class convenience layer, even though
+the implementation currently lives in
+[`std/reflect.wio`](C:/Users/cihan/RiderProjects/wio/std/reflect.wio).
+
+The intended ergonomic surface is:
+
+- `reflect::Count<T>()`
+- `reflect::Name(value)`
+- `reflect::Has(flags, mask)`
+- `reflect::HasAny(flags, mask)`
+- `reflect::With(flags, mask)`
+- `reflect::Without(flags, mask)`
+- `reflect::Toggle(flags, mask)`
+- `reflect::Clear(flags)`
+
+This keeps common state/kind/mode style code readable without forcing all
+flag-oriented operations back to raw integer math.
 
 ### 2.4 Experimental Pure-Wio Meta Module
 

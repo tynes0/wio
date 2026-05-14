@@ -707,6 +707,28 @@ The manifest-driven helper is intentionally small and source-first:
 - it is meant to remove boilerplate for files like `raylib.wio`, not to be a
   full C parser.
 
+### 9.5 Direct Header Import Helper
+
+Wio now also ships a pragmatic direct importer for common C-style headers:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\Wio\scripts\Import-CHeaderToWioBinding.ps1 `
+  -HeaderPath C:\Projects\MyGame\native\my_api.h `
+  -RealmName ffi `
+  -OutputPath C:\Projects\MyGame\wio\my_api.wio
+```
+
+Current intent:
+
+- it parses common `struct`, `enum`, `enum class`, and plain function prototype
+  forms,
+- it maps simple references such as `const T&` to `view T` and `T&` to `ref T`,
+- it can infer `flagset` for obvious bitmask-style declarations,
+- it is still intentionally lighter than a full C/C++ frontend.
+
+This helper is best treated as a fast bootstrap for native bridge files, not as
+an authoritative parser for arbitrary modern C++ headers.
+
 ---
 
 ## 10. Practical Build Commands

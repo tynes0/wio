@@ -6,17 +6,17 @@ realm ffi {
     @Native
     @CppHeader("native_box_bridge.h")
     @CppName(native_box::Read)
-    fn Read(value: view heap::box<i32>) -> i32;
+    fn Read(value: view std::Box<i32>) -> i32;
 
     @Native
     @CppHeader("native_box_bridge.h")
     @CppName(native_box::Add)
-    fn Add(value: heap::box<i32>, delta: i32);
+    fn Add(value: std::Box<i32>, delta: i32);
 
     @Native
     @CppHeader("native_box_bridge.h")
     @CppName(native_box::Rebind)
-    fn Rebind(target: ref heap::box<i32>, value: i32);
+    fn Rebind(target: ref std::Box<i32>, value: i32);
 }
 
 fn Entry() -> i32 {

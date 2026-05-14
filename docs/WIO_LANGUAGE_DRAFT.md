@@ -2940,6 +2940,21 @@ use gameplay::inventory as inv;
 Alias names are local to the importing scope. Reusing an alias name that already
 belongs to a different symbol is an error.
 
+### 22.7 Enum And Flagset Convenience
+
+Wio's core `enum` and `flagset` declarations are language features, and their
+current convenience layer is intentionally lightweight:
+
+```wio
+let count = reflect::Count<State>();
+let name = reflect::Name(State::Playing);
+let withDebug = reflect::With(flags, Feature::Debug);
+let hasAudio = reflect::Has(flags, Feature::Audio);
+```
+
+This keeps common state/mode/kind code lightweight while still leaving enum
+cardinality, naming, and flag manipulation under `std::reflect`.
+
 ### 22.6 `realm`
 
 `realm` declares a namespace-like scope.

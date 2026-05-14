@@ -216,7 +216,15 @@ namespace wio
         StringReplaceInPlace,
         StringTrimInPlace,
         StringToLowerInPlace,
-        StringToUpperInPlace
+        StringToUpperInPlace,
+        EnumName,
+        FlagsetName,
+        FlagsetHasAll,
+        FlagsetHasAny,
+        FlagsetWith,
+        FlagsetWithout,
+        FlagsetToggle,
+        FlagsetClear
     );
 
     struct ASTNode;
