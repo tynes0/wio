@@ -1,6 +1,7 @@
 ﻿#include "wio/codegen/cpp_generator.h"
 
 #include "wio/common/filesystem/filesystem.h"
+#include "wio/common/operator_overload.h"
 #include "wio/common/utility.h"
 #include "compiler.h"
 #include "wio/common/logger.h"
@@ -4082,6 +4083,123 @@ namespace wio::codegen
             emitReadableExpression(expression);
         };
 
+        auto emitOperatorArgumentWithImplicitCast = [&](const Ref<Expression>& argument, const Ref<sema::Type>& expectedType)
+        {
+            auto actualType = argument ? argument->refType.Lock() : nullptr;
+            auto resolvedExpected = unwrapAliasType(expectedType);
+            auto resolvedActual = unwrapAliasType(actualType);
+
+            if (emitAnyBoxingIfNeeded(argument, expectedType))
+                return;
+
+            if (resolvedExpected &&
+                resolvedExpected->kind() == sema::TypeKind::Function &&
+                argument &&
+                argument->is<LambdaExpression>())
+            {
+                emit(toCppType(expectedType));
+                emit("(");
+                argument->accept(*this);
+                emit(")");
+                return;
+            }
+
+            if (resolvedExpected && resolvedActual &&
+                resolvedExpected->kind() == sema::TypeKind::Reference &&
+                !resolvedExpected->isCompatibleWith(resolvedActual))
+            {
+                auto expectedRef = resolvedExpected.AsFast<sema::ReferenceType>();
+                auto expectedTarget = unwrapAliasType(expectedRef->referredType);
+
+                if (expectedTarget && expectedTarget->kind() == sema::TypeKind::Struct)
+                {
+                    auto expectedStruct = expectedTarget.AsFast<sema::StructType>();
+                    if (expectedStruct->isInterface)
+                    {
+                        bool canCastObjectHandle = resolvedActual->kind() == sema::TypeKind::Struct;
+                        if (!canCastObjectHandle && resolvedActual->kind() == sema::TypeKind::Reference)
+                            canCastObjectHandle = true;
+
+                        if (canCastObjectHandle)
+                        {
+                            emit("static_cast<" + toCppType(expectedType) + ">((");
+                            argument->accept(*this);
+                            emit(")->_WF_CastTo(" + mangleInterfaceTypeName(expectedStruct) + "::TYPE_ID))");
+                            return;
+                        }
+                    }
+                }
+            }
+
+            argument->accept(*this);
+        };
+
+        auto emitOperatorReceiverAndAccess = [&](const NodePtr<Expression>& receiver)
+        {
+            std::string accessOperator = ".";
+            std::size_t referenceDepth = 0;
+            Ref<sema::Type> terminalType = nullptr;
+
+            if (auto receiverType = receiver ? receiver->refType.Lock() : nullptr)
+            {
+                auto baseType = receiverType;
+                while (baseType && baseType->kind() == sema::TypeKind::Alias)
+                    baseType = baseType.AsFast<sema::AliasType>()->aliasedType;
+
+                while (baseType && baseType->kind() == sema::TypeKind::Reference)
+                {
+                    referenceDepth++;
+                    baseType = baseType.AsFast<sema::ReferenceType>()->referredType;
+                    while (baseType && baseType->kind() == sema::TypeKind::Alias)
+                        baseType = baseType.AsFast<sema::AliasType>()->aliasedType;
+                }
+
+                terminalType = baseType;
+                if (referenceDepth > 0)
+                {
+                    accessOperator = "->";
+                }
+                else if (terminalType && terminalType->kind() == sema::TypeKind::Struct)
+                {
+                    auto structType = terminalType.AsFast<sema::StructType>();
+                    if (structType->isObject || structType->isInterface)
+                        accessOperator = "->";
+                }
+            }
+
+            if (referenceDepth <= 1)
+            {
+                receiver->accept(*this);
+            }
+            else
+            {
+                emit("(");
+                for (std::size_t i = 0; i < referenceDepth - 1; ++i)
+                    emit("*");
+                emit("(");
+                receiver->accept(*this);
+                emit("))");
+            }
+
+            emit(accessOperator);
+        };
+
+        if (auto operatorSymbol = node.referencedSymbol.Lock();
+            operatorSymbol && common::isOperatorOverloadName(operatorSymbol->name))
+        {
+            auto operatorFunctionType = operatorSymbol->type ? operatorSymbol->type.AsFast<sema::FunctionType>() : nullptr;
+            emit("(");
+            emitOperatorReceiverAndAccess(node.left);
+            emit(Mangler::mangleFunction(operatorSymbol->name, operatorFunctionType ? operatorFunctionType->paramTypes : std::vector<Ref<sema::Type>>{}));
+            emit("(");
+            if (operatorFunctionType && !operatorFunctionType->paramTypes.empty())
+                emitOperatorArgumentWithImplicitCast(node.right, operatorFunctionType->paramTypes[0]);
+            else
+                emitReadableExpression(node.right);
+            emit("))");
+            return;
+        }
+
         if (node.op.type == TokenType::kwIn)
         {
             if (node.right->is<RangeExpression>())
@@ -4210,6 +4328,67 @@ namespace wio::codegen
 
     void CppGenerator::visit(UnaryExpression& node)
     {
+        auto emitOperatorReceiverAndAccess = [&](const NodePtr<Expression>& receiver)
+        {
+            std::string accessOperator = ".";
+            std::size_t referenceDepth = 0;
+            Ref<sema::Type> terminalType = nullptr;
+
+            if (auto receiverType = receiver ? receiver->refType.Lock() : nullptr)
+            {
+                auto baseType = receiverType;
+                while (baseType && baseType->kind() == sema::TypeKind::Alias)
+                    baseType = baseType.AsFast<sema::AliasType>()->aliasedType;
+
+                while (baseType && baseType->kind() == sema::TypeKind::Reference)
+                {
+                    referenceDepth++;
+                    baseType = baseType.AsFast<sema::ReferenceType>()->referredType;
+                    while (baseType && baseType->kind() == sema::TypeKind::Alias)
+                        baseType = baseType.AsFast<sema::AliasType>()->aliasedType;
+                }
+
+                terminalType = baseType;
+                if (referenceDepth > 0)
+                {
+                    accessOperator = "->";
+                }
+                else if (terminalType && terminalType->kind() == sema::TypeKind::Struct)
+                {
+                    auto structType = terminalType.AsFast<sema::StructType>();
+                    if (structType->isObject || structType->isInterface)
+                        accessOperator = "->";
+                }
+            }
+
+            if (referenceDepth <= 1)
+            {
+                receiver->accept(*this);
+            }
+            else
+            {
+                emit("(");
+                for (std::size_t i = 0; i < referenceDepth - 1; ++i)
+                    emit("*");
+                emit("(");
+                receiver->accept(*this);
+                emit("))");
+            }
+
+            emit(accessOperator);
+        };
+
+        if (auto operatorSymbol = node.referencedSymbol.Lock();
+            operatorSymbol && common::isOperatorOverloadName(operatorSymbol->name))
+        {
+            auto operatorFunctionType = operatorSymbol->type ? operatorSymbol->type.AsFast<sema::FunctionType>() : nullptr;
+            emit("(");
+            emitOperatorReceiverAndAccess(node.operand);
+            emit(Mangler::mangleFunction(operatorSymbol->name, operatorFunctionType ? operatorFunctionType->paramTypes : std::vector<Ref<sema::Type>>{}));
+            emit("())");
+            return;
+        }
+
         std::string opStr = node.op.value;
         if (node.op.type == TokenType::kwNot) opStr = "!";
         
@@ -5152,10 +5331,11 @@ namespace wio::codegen
 
         auto calleeType = node.callee->refType.Lock();
         auto calleeSym = node.callee->referencedSymbol.Lock();
-        
-        if (calleeType && calleeType->kind() == sema::TypeKind::Struct)
+
+        Ref<sema::Type> resolvedConstructorType = unwrapAliasType(calleeType);
+        if (resolvedConstructorType && resolvedConstructorType->kind() == sema::TypeKind::Struct)
         {
-            auto structType = calleeType.AsFast<sema::StructType>();
+            auto structType = resolvedConstructorType.AsFast<sema::StructType>();
             beginResultUnwrap();
             if (structType->isObject)
             {

@@ -10,6 +10,7 @@
 #include "wio/codegen/mangler.h"
 #include "wio/common/exception.h"
 #include "wio/common/logger.h"
+#include "wio/common/operator_overload.h"
 #include "wio/common/utility.h"
 #include "wio/sema/intrinsic_member_resolver.h"
 
@@ -2885,6 +2886,97 @@ namespace wio::sema
             return structType->scopePath + "::" + structType->name;
         }
 
+        Ref<Symbol> findStructMemberInHierarchy(const Ref<Type>& type, const std::string& name, Ref<Type>* ownerType)
+        {
+            if (!type || type->kind() != TypeKind::Struct)
+                return nullptr;
+
+            auto structType = type.AsFast<StructType>();
+            if (!structType)
+                return nullptr;
+
+            if (auto lockedScope = structType->structScope.Lock(); lockedScope)
+            {
+                if (auto found = lockedScope->resolveLocally(name); found)
+                {
+                    if (ownerType)
+                        *ownerType = type;
+                    return found;
+                }
+            }
+
+            for (const auto& baseType : structType->baseTypes)
+            {
+                if (auto found = findStructMemberInHierarchy(baseType, name, ownerType); found)
+                    return found;
+            }
+
+            return nullptr;
+        }
+
+        bool validateStructMemberAccess(const Ref<Type>& currentStructType,
+                                        const Ref<Type>& ownerType,
+                                        const Ref<Symbol>& member,
+                                        const common::Location& location)
+        {
+            if (!member)
+                return false;
+
+            bool isInsideHierarchy = false;
+            bool isInsideSameObject = false;
+            bool isTrustedAccess = false;
+
+            if (currentStructType && ownerType)
+            {
+                if (currentStructType == ownerType ||
+                    isTypeDerivedFrom(currentStructType, ownerType) ||
+                    isTypeDerivedFrom(ownerType, currentStructType))
+                {
+                    isInsideHierarchy = true;
+                }
+
+                isInsideSameObject = currentStructType == ownerType;
+
+                if (auto ownerStruct = ownerType.AsFast<StructType>(); ownerStruct)
+                {
+                    const std::string trustedKey = getStructIdentityKey(currentStructType.AsFast<StructType>());
+                    isTrustedAccess =
+                        !trustedKey.empty() &&
+                        std::ranges::find(ownerStruct->trustedTypeKeys, trustedKey) != ownerStruct->trustedTypeKeys.end();
+                }
+            }
+
+            const std::string ownerTypeName = formatAccessContextType(ownerType);
+            const std::string currentContextTypeName = formatAccessContextType(currentStructType);
+            bool isAccessible = true;
+
+            if (member->flags.get_isPrivate() && !isInsideSameObject && !isTrustedAccess)
+            {
+                WIO_LOG_ADD_ERROR(
+                    location,
+                    "Cannot access private member '{}' declared on '{}' from '{}'.",
+                    member->name,
+                    ownerTypeName,
+                    currentContextTypeName
+                );
+                isAccessible = false;
+            }
+
+            if (member->flags.get_isProtected() && !isInsideHierarchy && !isTrustedAccess)
+            {
+                WIO_LOG_ADD_ERROR(
+                    location,
+                    "Cannot access protected member '{}' declared on '{}' from '{}'.",
+                    member->name,
+                    ownerTypeName,
+                    currentContextTypeName
+                );
+                isAccessible = false;
+            }
+
+            return isAccessible;
+        }
+
         std::vector<const AttributeStatement*> getAttributeStatements(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
         {
             std::vector<const AttributeStatement*> matches;
@@ -4768,6 +4860,165 @@ namespace wio::sema
             return;
         }
 
+        auto tryResolveBinaryOperatorOverload = [&]() -> bool
+        {
+            auto overloadName = common::getBinaryOperatorOverloadName(node.op.type);
+            if (!overloadName.has_value())
+                return false;
+
+            Ref<Type> lhsType = node.left->refType.Lock();
+            Ref<Type> rhsType = node.right->refType.Lock();
+            Ref<Type> readableLhsType = getAutoReadableType(lhsType);
+            Ref<Type> readableRhsType = getAutoReadableType(rhsType);
+            Ref<Type> receiverType = unwrapAliasType(readableLhsType ? readableLhsType : lhsType);
+            if (!receiverType || receiverType->kind() != TypeKind::Struct)
+                return false;
+
+            Ref<Type> ownerType = nullptr;
+            Ref<Symbol> operatorSymbol = findStructMemberInHierarchy(receiverType, std::string(*overloadName), &ownerType);
+            if (!operatorSymbol)
+                return false;
+
+            if (!validateStructMemberAccess(currentStructType_, ownerType, operatorSymbol, node.location()))
+            {
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return true;
+            }
+
+            auto instantiateMethodTypeForOwner = [&](const Ref<Symbol>& candidateSymbol) -> Ref<FunctionType>
+            {
+                if (!candidateSymbol || !candidateSymbol->type || candidateSymbol->type->kind() != TypeKind::Function)
+                    return nullptr;
+
+                Ref<Type> candidateType = candidateSymbol->type;
+                if (auto instantiatedOwnerType = ownerType ? ownerType.AsFast<StructType>() : nullptr;
+                    instantiatedOwnerType && !instantiatedOwnerType->genericParameterNames.empty() && !instantiatedOwnerType->genericArguments.empty())
+                {
+                    auto bindings = buildExtendedGenericBindings(
+                        instantiatedOwnerType->genericParameterNames,
+                        instantiatedOwnerType->hasGenericParameterPack,
+                        instantiatedOwnerType->genericArguments
+                    );
+                    candidateType = instantiateGenericType(candidateType, bindings);
+                }
+
+                return candidateType ? candidateType.AsFast<FunctionType>() : nullptr;
+            };
+
+            auto scoreArgumentAgainstParameter = [&](const Ref<Type>& parameterType, const Ref<Type>& argumentType) -> std::optional<int>
+            {
+                if (!parameterType || !argumentType)
+                    return std::nullopt;
+
+                if (isExactType(argumentType, parameterType))
+                    return 1000;
+
+                if (isAssignmentLikeCompatible(parameterType, argumentType))
+                    return 100;
+
+                Ref<Type> readableArgumentType = readableRhsType ? readableRhsType : getAutoReadableType(argumentType);
+                Ref<Type> resolvedParameterType = unwrapAliasType(parameterType);
+                if (resolvedParameterType && resolvedParameterType->kind() == TypeKind::Reference)
+                {
+                    auto referredType = resolvedParameterType.AsFast<ReferenceType>()->referredType;
+                    if (referredType)
+                    {
+                        if (isExactType(readableArgumentType, referredType) || isExactType(argumentType, referredType))
+                            return 900;
+
+                        if (readableArgumentType && isAssignmentLikeCompatible(referredType, readableArgumentType))
+                            return 80;
+
+                        if (isAssignmentLikeCompatible(referredType, argumentType))
+                            return 75;
+                    }
+                }
+
+                Ref<Type> readableParameterType = getAutoReadableType(parameterType);
+                if (readableParameterType && readableArgumentType && isExactType(readableArgumentType, readableParameterType))
+                    return 850;
+                if (readableParameterType && readableArgumentType && isAssignmentLikeCompatible(readableParameterType, readableArgumentType))
+                    return 70;
+
+                return std::nullopt;
+            };
+
+            struct OperatorCandidate
+            {
+                Ref<Symbol> symbol = nullptr;
+                Ref<FunctionType> functionType = nullptr;
+                int score = -1;
+            };
+
+            std::vector<Ref<Symbol>> candidates;
+            if (operatorSymbol->kind == SymbolKind::FunctionGroup)
+                candidates = operatorSymbol->overloads;
+            else if (operatorSymbol->kind == SymbolKind::Function)
+                candidates.push_back(operatorSymbol);
+            else
+                return false;
+
+            std::optional<OperatorCandidate> bestCandidate;
+            bool isAmbiguous = false;
+            for (const auto& candidateSymbol : candidates)
+            {
+                auto candidateFunctionType = instantiateMethodTypeForOwner(candidateSymbol);
+                if (!candidateFunctionType || candidateFunctionType->paramTypes.size() != 1)
+                    continue;
+
+                auto score = scoreArgumentAgainstParameter(candidateFunctionType->paramTypes[0], rhsType);
+                if (!score.has_value())
+                    continue;
+
+                if (!bestCandidate.has_value() || *score > bestCandidate->score)
+                {
+                    bestCandidate = OperatorCandidate{
+                        .symbol = candidateSymbol,
+                        .functionType = candidateFunctionType,
+                        .score = *score
+                    };
+                    isAmbiguous = false;
+                }
+                else if (*score == bestCandidate->score)
+                {
+                    isAmbiguous = true;
+                }
+            }
+
+            if (!bestCandidate.has_value())
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "No matching overload found for operator '{}' with operand types '{}' and '{}'.",
+                    node.op.value,
+                    lhsType ? lhsType->toString() : "<unknown>",
+                    rhsType ? rhsType->toString() : "<unknown>"
+                );
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return true;
+            }
+
+            if (isAmbiguous)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Ambiguous overload for operator '{}' with operand types '{}' and '{}'.",
+                    node.op.value,
+                    lhsType ? lhsType->toString() : "<unknown>",
+                    rhsType ? rhsType->toString() : "<unknown>"
+                );
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return true;
+            }
+
+            node.referencedSymbol = bestCandidate->symbol;
+            node.refType = bestCandidate->functionType->returnType;
+            return true;
+        };
+
+        if (tryResolveBinaryOperatorOverload())
+            return;
+
         Ref<Type> lhsType = node.left->refType.Lock();
         Ref<Type> rhsType = node.right->refType.Lock();
         Ref<Type> readableLhsType = getAutoReadableType(lhsType);
@@ -4894,6 +5145,107 @@ namespace wio::sema
             node.refType = Compiler::get().getTypeContext().getUnknown();
             return;
         }
+
+        auto tryResolveUnaryOperatorOverload = [&]() -> bool
+        {
+            auto overloadName = common::getUnaryOperatorOverloadName(node.op.type);
+            if (!overloadName.has_value())
+                return false;
+
+            Ref<Type> readableOperandType = getAutoReadableType(opType);
+            Ref<Type> receiverType = unwrapAliasType(readableOperandType ? readableOperandType : opType);
+            if (!receiverType || receiverType->kind() != TypeKind::Struct)
+                return false;
+
+            Ref<Type> ownerType = nullptr;
+            Ref<Symbol> operatorSymbol = findStructMemberInHierarchy(receiverType, std::string(*overloadName), &ownerType);
+            if (!operatorSymbol)
+                return false;
+
+            if (!validateStructMemberAccess(currentStructType_, ownerType, operatorSymbol, node.location()))
+            {
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return true;
+            }
+
+            auto instantiateMethodTypeForOwner = [&](const Ref<Symbol>& candidateSymbol) -> Ref<FunctionType>
+            {
+                if (!candidateSymbol || !candidateSymbol->type || candidateSymbol->type->kind() != TypeKind::Function)
+                    return nullptr;
+
+                Ref<Type> candidateType = candidateSymbol->type;
+                if (auto instantiatedOwnerType = ownerType ? ownerType.AsFast<StructType>() : nullptr;
+                    instantiatedOwnerType && !instantiatedOwnerType->genericParameterNames.empty() && !instantiatedOwnerType->genericArguments.empty())
+                {
+                    auto bindings = buildExtendedGenericBindings(
+                        instantiatedOwnerType->genericParameterNames,
+                        instantiatedOwnerType->hasGenericParameterPack,
+                        instantiatedOwnerType->genericArguments
+                    );
+                    candidateType = instantiateGenericType(candidateType, bindings);
+                }
+
+                return candidateType ? candidateType.AsFast<FunctionType>() : nullptr;
+            };
+
+            std::vector<Ref<Symbol>> candidates;
+            if (operatorSymbol->kind == SymbolKind::FunctionGroup)
+                candidates = operatorSymbol->overloads;
+            else if (operatorSymbol->kind == SymbolKind::Function)
+                candidates.push_back(operatorSymbol);
+            else
+                return false;
+
+            Ref<Symbol> selectedSymbol = nullptr;
+            Ref<FunctionType> selectedFunctionType = nullptr;
+            bool isAmbiguous = false;
+            for (const auto& candidateSymbol : candidates)
+            {
+                auto candidateFunctionType = instantiateMethodTypeForOwner(candidateSymbol);
+                if (!candidateFunctionType || !candidateFunctionType->paramTypes.empty())
+                    continue;
+
+                if (selectedSymbol)
+                {
+                    isAmbiguous = true;
+                    break;
+                }
+
+                selectedSymbol = candidateSymbol;
+                selectedFunctionType = candidateFunctionType;
+            }
+
+            if (isAmbiguous)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Ambiguous overload for unary operator '{}' with operand type '{}'.",
+                    node.op.value,
+                    opType ? opType->toString() : "<unknown>"
+                );
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return true;
+            }
+
+            if (!selectedSymbol || !selectedFunctionType)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "No matching overload found for unary operator '{}' with operand type '{}'.",
+                    node.op.value,
+                    opType ? opType->toString() : "<unknown>"
+                );
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return true;
+            }
+
+            node.referencedSymbol = selectedSymbol;
+            node.refType = selectedFunctionType->returnType;
+            return true;
+        };
+
+        if (tryResolveUnaryOperatorOverload())
+            return;
 
         if (node.op.type == TokenType::kwNot || node.op.type == TokenType::opLogicalNot)
         {
@@ -5937,6 +6289,52 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(FunctionCallExpression& node)
     {
+        auto formatAppliedTypeName = [](const std::string& baseName, const std::vector<Ref<Type>>& typeArguments) -> std::string
+        {
+            if (typeArguments.empty())
+                return baseName;
+
+            std::string result = baseName + "<";
+            for (size_t i = 0; i < typeArguments.size(); ++i)
+            {
+                result += typeArguments[i] ? typeArguments[i]->toString() : "<unknown>";
+                if (i + 1 < typeArguments.size())
+                    result += ", ";
+            }
+            result += ">";
+            return result;
+        };
+
+        auto satisfiesApplyForSymbol = [&](const Ref<Symbol>& symbol,
+                                           const std::vector<Ref<Type>>& explicitTypeArguments,
+                                           std::string_view declarationKind) -> bool
+        {
+            if (!symbol || symbol->genericParameterNames.empty())
+                return true;
+
+            auto attributeIt = attributeListsBySymbol_.find(symbol.Get());
+            if (attributeIt == attributeListsBySymbol_.end() || !attributeIt->second)
+                return true;
+
+            if (!matchesApplyConstraints(
+                    *attributeIt->second,
+                    symbol->genericParameterNames,
+                    symbol->hasGenericParameterPack,
+                    explicitTypeArguments))
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Generic {} '{}' rejects type arguments {} because of @Apply constraints.",
+                    declarationKind,
+                    symbol->name,
+                    formatConcreteInstantiationSignature(explicitTypeArguments)
+                );
+                return false;
+            }
+
+            return true;
+        };
+
         auto finalizeCallResultType = [&](const Ref<Type>& resultType) -> bool
         {
             if (!node.unwrapResult && !node.propagateResult)
@@ -6036,6 +6434,108 @@ namespace wio::sema
         std::unordered_map<std::string, Ref<Type>> constructorGenericBindings;
         GenericBindingSet constructorGenericBindingSet;
         bool useExplicitFunctionTypeArguments = false;
+
+        if (calleeSym && calleeSym->kind == SymbolKind::TypeAlias)
+        {
+            Ref<Type> resolvedAliasTargetType = nullptr;
+            Ref<Type> resolvedAliasResultType = calleeSym->type;
+
+            if (!calleeSym->genericParameterNames.empty())
+            {
+                const size_t minimumArgumentCount = getMinimumGenericArgumentCount(
+                    calleeSym->genericParameterNames,
+                    calleeSym->hasGenericParameterPack
+                );
+                const bool invalidGenericArity =
+                    calleeSym->hasGenericParameterPack
+                        ? explicitTypeArguments.size() < minimumArgumentCount
+                        : explicitTypeArguments.size() != calleeSym->genericParameterNames.size();
+                if (invalidGenericArity)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        calleeSym->hasGenericParameterPack
+                            ? "Type alias '{}' expects at least {} generic arguments, but got {}."
+                            : "Type alias '{}' expects {} generic arguments, but got {}.",
+                        calleeSym->name,
+                        calleeSym->hasGenericParameterPack ? minimumArgumentCount : calleeSym->genericParameterNames.size(),
+                        explicitTypeArguments.size()
+                    );
+                    node.refType = Compiler::get().getTypeContext().getUnknown();
+                    return;
+                }
+
+                if (!satisfiesApplyForSymbol(calleeSym, explicitTypeArguments, "type alias"))
+                {
+                    node.refType = Compiler::get().getTypeContext().getUnknown();
+                    return;
+                }
+
+                constructorGenericBindingSet = buildExtendedGenericBindings(
+                    calleeSym->genericParameterNames,
+                    calleeSym->hasGenericParameterPack,
+                    explicitTypeArguments
+                );
+                constructorGenericBindings = constructorGenericBindingSet.directBindings;
+                resolvedAliasTargetType = instantiateGenericType(calleeSym->aliasTargetType, constructorGenericBindingSet);
+                resolvedAliasResultType = Compiler::get().getTypeContext().getOrCreateAliasType(
+                    formatAppliedTypeName(calleeSym->name, explicitTypeArguments),
+                    resolvedAliasTargetType
+                );
+            }
+            else
+            {
+                if (!explicitTypeArguments.empty())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "Type alias '{}' does not accept generic arguments.",
+                        calleeSym->name
+                    );
+                    node.refType = Compiler::get().getTypeContext().getUnknown();
+                    return;
+                }
+
+                resolvedAliasTargetType = calleeSym->aliasTargetType
+                    ? calleeSym->aliasTargetType
+                    : unwrapAliasType(calleeSym->type);
+            }
+
+            Ref<Type> resolvedConstructorTarget = unwrapAliasType(resolvedAliasTargetType);
+            if (resolvedConstructorTarget && resolvedConstructorTarget->kind() == TypeKind::Struct)
+            {
+                isConstructorCall = true;
+                auto structType = resolvedConstructorTarget.AsFast<StructType>();
+                constructorStructType = structType;
+                constructorGenericParameterNames = structType->genericParameterNames;
+                structReturnType = resolvedAliasResultType;
+                node.callee->refType = structReturnType;
+
+                if (!constructorStructType->genericParameterNames.empty() &&
+                    !constructorStructType->genericArguments.empty())
+                {
+                    constructorGenericBindings = buildGenericTypeBindings(
+                        constructorStructType->genericParameterNames,
+                        constructorStructType->genericArguments
+                    );
+                    constructorGenericBindingSet = buildExtendedGenericBindings(
+                        constructorStructType->genericParameterNames,
+                        constructorStructType->hasGenericParameterPack,
+                        constructorStructType->genericArguments
+                    );
+                }
+
+                if (auto lockedScope = constructorStructType->structScope.Lock())
+                    calleeSym = lockedScope->resolveLocally("OnConstruct");
+
+                if (!calleeSym)
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "No constructor found for type '{}'.", constructorStructType->name);
+                    node.refType = Compiler::get().getTypeContext().getUnknown();
+                    return;
+                }
+            }
+        }
 
         if (calleeSym && calleeSym->kind == SymbolKind::Struct)
         {
@@ -8460,6 +8960,8 @@ namespace wio::sema
         auto currentStruct = currentStructType_ ? currentStructType_.AsFast<StructType>() : nullptr;
         const bool isLifecycleMethod =
             node.name->token.value == "OnConstruct" || node.name->token.value == "OnDestruct";
+        const bool isOperatorMethod = common::isOperatorOverloadName(node.name->token.value);
+        const bool isUnaryOperatorMethod = common::isUnaryOperatorOverloadName(node.name->token.value);
         const bool isComponentMethodContext = currentStruct && !currentStruct->isObject && !currentStruct->isInterface;
         bool hasInstantiate = hasAttribute(node.attributes, Attribute::Instantiate);
         const bool hasFunctionParameterPack = std::ranges::any_of(node.parameters, [](const Parameter& parameter)
@@ -8490,6 +8992,67 @@ namespace wio::sema
             WIO_LOG_ADD_ERROR(node.location(), "@Apply can only be used on generic functions.");
         }
 
+        if (isOperatorMethod)
+        {
+            if (!isStructMethod)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Operator overloads are currently supported only on object, component, and interface methods.");
+            }
+
+            if (node.whenCondition || node.whenFallback)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Operator overloads do not support when/else clauses.");
+            }
+
+            if (hasFunctionParameterPack || node.hasGenericParameterPack)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Operator overloads cannot use parameter packs.");
+            }
+
+            const size_t expectedParameterCount = isUnaryOperatorMethod ? 0u : 1u;
+            if (node.parameters.size() != expectedParameterCount)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    isUnaryOperatorMethod
+                        ? "Unary operator overloads must declare zero parameters."
+                        : "Binary operator overloads must declare exactly one parameter."
+                );
+            }
+
+            for (const auto& parameter : node.parameters)
+            {
+                if (parameter.defaultValue)
+                {
+                    WIO_LOG_ADD_ERROR(parameter.name->location(), "Operator overload parameters cannot declare default values.");
+                }
+            }
+
+            if (!funcType->returnType || isExactType(funcType->returnType, Compiler::get().getTypeContext().getVoid()))
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Operator overloads must return a value.");
+            }
+
+            const bool requiresBoolReturn =
+                node.name->token.value == "__op_equal" ||
+                node.name->token.value == "__op_not_equal" ||
+                node.name->token.value == "__op_less" ||
+                node.name->token.value == "__op_less_equal" ||
+                node.name->token.value == "__op_greater" ||
+                node.name->token.value == "__op_greater_equal" ||
+                node.name->token.value == "__op_logical_not";
+            if (requiresBoolReturn &&
+                !isExactType(funcType->returnType, Compiler::get().getTypeContext().getBool()))
+            {
+                auto operatorDisplay = common::getOperatorDisplayText(node.name->token.value);
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Operator '{}' must return bool.",
+                    operatorDisplay.has_value() ? std::string(*operatorDisplay) : node.name->token.value
+                );
+            }
+        }
+
         if (isGenericFunction)
         {
             if (isPackFunction && isStructMethod)
@@ -8499,7 +9062,11 @@ namespace wio::sema
 
             if (isStructMethod)
             {
-                if (!currentStruct || !currentStruct->isObject)
+                if (isOperatorMethod)
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "Generic operator overloads are not supported yet.");
+                }
+                else if (!currentStruct || !currentStruct->isObject)
                 {
                     WIO_LOG_ADD_ERROR(node.location(), "Generic methods are currently supported only on object methods.");
                 }
@@ -8752,7 +9319,7 @@ namespace wio::sema
                         "@Native methods are currently supported only on object methods and on object/component OnConstruct/OnDestruct lifecycle functions."
                     );
                 }
-                else if (isComponentMethodContext && !isLifecycleMethod)
+                else if (isComponentMethodContext && !isLifecycleMethod && !isOperatorMethod)
                 {
                     WIO_LOG_ADD_ERROR(
                         node.location(),
@@ -9770,12 +10337,13 @@ namespace wio::sema
                     auto funcDecl = member.declaration->as<FunctionDeclaration>();
                     auto memberSym = funcDecl->name->referencedSymbol.Lock();
                     std::string funcName = funcDecl->name->token.value;
+                    const bool isOperatorMethod = common::isOperatorOverloadName(funcName);
 
-                    if (funcName != "OnConstruct" && funcName != "OnDestruct")
+                    if (funcName != "OnConstruct" && funcName != "OnDestruct" && !isOperatorMethod)
                     {
                         WIO_LOG_ADD_ERROR(
                             funcDecl->location(),
-                            "Components cannot define ordinary methods. Use an object for behavior or OnConstruct/OnDestruct for lifecycle."
+                            "Components cannot define ordinary methods. Use an object for behavior, an operator overload, or OnConstruct/OnDestruct for lifecycle."
                         );
                     }
                     

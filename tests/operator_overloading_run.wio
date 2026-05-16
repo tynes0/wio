@@ -1,0 +1,30 @@
+use std::assert as assert;
+use std::console as console;
+
+component Int2 {
+    x: i32;
+    y: i32;
+
+    fn operator +(rhs: Int2) -> Int2 {
+        return Int2(self.x + rhs.x, self.y + rhs.y);
+    }
+
+    fn operator -() -> Int2 {
+        return Int2(-self.x, -self.y);
+    }
+
+    fn operator ==(rhs: Int2) -> bool {
+        return self.x == rhs.x and self.y == rhs.y;
+    }
+}
+
+fn Entry() -> i32 {
+    let sum = Int2(2, 3) + Int2(4, 5);
+    let negated = -sum;
+
+    assert::ExpectTrue(sum == Int2(6, 8), "binary operator overloads should dispatch to component methods");
+    assert::ExpectTrue(negated == Int2(-6, -8), "unary operator overloads should dispatch to component methods");
+
+    console::Print!("operator-overload-ok");
+    return 0;
+}

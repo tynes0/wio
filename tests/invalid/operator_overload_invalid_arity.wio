@@ -1,0 +1,8 @@
+component Int2 {
+    x: i32;
+    y: i32;
+
+    fn operator +(lhs: Int2, rhs: Int2) -> Int2 {
+        return Int2(self.x + lhs.x + rhs.x, self.y + lhs.y + rhs.y);
+    }
+}

@@ -1,0 +1,31 @@
+use std::assert as assert;
+use std::console as console;
+
+@Apply(f32, f64)
+component LocalVectorBase<T> {
+    x: T;
+    y: T;
+}
+
+type Vector2 = LocalVectorBase<f64>;
+type Vector2f = LocalVectorBase<f32>;
+type LocalVector = LocalVectorBase<f64>;
+type LocalVectorf = LocalVectorBase<f32>;
+type GenericVector<T> = LocalVectorBase<T>;
+
+fn Entry() -> i32 {
+    let stdVec: Vector2 = Vector2(12, 15);
+    let localVec: LocalVector = LocalVector(2.0, 3.5);
+    let localVecf: LocalVectorf = LocalVectorf(4.0f, 5.0f);
+    let genericVec: GenericVector<f32> = GenericVector<f32>(6.0f, 7.0f);
+
+    assert::ExpectNear(stdVec.x, 12.0, 0.0001, "std alias constructors should resolve");
+    assert::ExpectNear(stdVec.y, 15.0, 0.0001, "std alias constructors should preserve the second field");
+    assert::ExpectNear(localVec.x, 2.0, 0.0001, "local alias constructors should resolve");
+    assert::ExpectNear(localVec.y, 3.5, 0.0001, "local alias constructors should preserve concrete alias fields");
+    assert::ExpectNear(localVecf.x, 4.0f, 0.0001f, "f32 alias constructors should resolve");
+    assert::ExpectNear(genericVec.y, 7.0f, 0.0001f, "generic alias constructors should resolve explicit type arguments");
+
+    console::Print("type-alias-ctor-ok");
+    return 0;
+}

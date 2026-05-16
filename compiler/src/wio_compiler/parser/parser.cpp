@@ -1,6 +1,7 @@
 #include "wio/parser/parser.h"
 
 #include "wio/common/exception.h"
+#include "wio/common/operator_overload.h"
 #include "wio/common/utility.h"
 #include "wio/common/logger.h"
 
@@ -1143,8 +1144,40 @@ namespace wio
     NodePtr<FunctionDeclaration> Parser::parseFunctionDeclaration(std::vector<NodePtr<AttributeStatement>> attributes, bool isLifecycle)
     {
         Token startTok = !isLifecycle ? consume(TokenType::kwFn) : peek();
-        
-        NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+
+        std::optional<Token> operatorToken;
+        NodePtr<Identifier> name = nullptr;
+        if (!isLifecycle && match(TokenType::identifier, "operator", false))
+        {
+            advance();
+            operatorToken = advance();
+            if (!common::getBinaryOperatorOverloadName(operatorToken->type).has_value() &&
+                !common::getUnaryOperatorOverloadName(operatorToken->type).has_value())
+            {
+                utError("Expected an overloadable operator after 'operator'.", operatorToken->loc);
+            }
+
+            Token syntheticNameToken = *operatorToken;
+            syntheticNameToken.type = TokenType::identifier;
+            syntheticNameToken.value = "__op_pending";
+            name = makeNodePtr<Identifier>(std::move(syntheticNameToken));
+        }
+        else if (!isLifecycle &&
+                 (common::getBinaryOperatorOverloadName(peek().type).has_value() ||
+                  common::getUnaryOperatorOverloadName(peek().type).has_value()))
+        {
+            operatorToken = advance();
+
+            Token syntheticNameToken = *operatorToken;
+            syntheticNameToken.type = TokenType::identifier;
+            syntheticNameToken.value = "__op_pending";
+            name = makeNodePtr<Identifier>(std::move(syntheticNameToken));
+        }
+        else
+        {
+            name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+        }
+
         std::vector<NodePtr<Identifier>> genericParameters;
         bool hasGenericParameterPack = false;
 
@@ -1214,6 +1247,17 @@ namespace wio
             }
         }
         consume(TokenType::rightParen);
+
+        if (operatorToken.has_value())
+        {
+            auto overloadName = common::getOperatorOverloadName(operatorToken->type, parameters.size());
+            if (!overloadName.has_value())
+            {
+                utError("Operator overloads must declare either zero parameters (unary) or one parameter (binary).", operatorToken->loc);
+            }
+
+            name->token.value = std::string(*overloadName);
+        }
 
         NodePtr<TypeSpecifier> returnType = nullptr;
         if (match(TokenType::opArrow, true)) // '->'

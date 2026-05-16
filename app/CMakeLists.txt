@@ -1556,6 +1556,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_type_alias_constructor_run
+        "${CMAKE_SOURCE_DIR}/tests/type_alias_constructor_run.wio"
+        "type-alias-ctor-ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_operator_overloading_run
+        "${CMAKE_SOURCE_DIR}/tests/operator_overloading_run.wio"
+        "operator-overload-ok"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_generic_apply_type_and_object_run
         "${CMAKE_SOURCE_DIR}/tests/generic_apply_type_and_object_run.wio"
         "Generic apply types: 3, 1.5"
@@ -1943,6 +1957,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_any_non_null_equality_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/any_non_null_equality_not_supported.wio"
         "Any values support only assignment, the 'is' operator, the 'fit' operator, and equality comparisons with null\\. Operator '==' is not supported\\."
+        "Generated C\\+\\+ output:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_operator_overload_invalid_arity
+        "${CMAKE_SOURCE_DIR}/tests/invalid/operator_overload_invalid_arity.wio"
+        "Operator overloads must declare either zero parameters \\(unary\\) or one parameter \\(binary\\)\\."
         "Generated C\\+\\+ output:"
     )
 
