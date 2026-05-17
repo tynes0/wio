@@ -55,6 +55,41 @@ namespace wio::sema
                 WeakRef<Symbol> referencedSymbol;
             };
 
+            struct BinaryExpressionState
+            {
+                BinaryExpression* node;
+                OperatorDispatchKind operatorDispatchKind;
+                WeakRef<Type> overloadFunctionType;
+            };
+
+            struct UnaryExpressionState
+            {
+                UnaryExpression* node;
+                OperatorDispatchKind operatorDispatchKind;
+                WeakRef<Type> overloadFunctionType;
+            };
+
+            struct AssignmentExpressionState
+            {
+                AssignmentExpression* node;
+                OperatorDispatchKind operatorDispatchKind;
+                WeakRef<Type> overloadFunctionType;
+            };
+
+            struct ArrayAccessExpressionState
+            {
+                ArrayAccessExpression* node;
+                OperatorDispatchKind operatorDispatchKind;
+                WeakRef<Type> overloadFunctionType;
+            };
+
+            struct FitExpressionState
+            {
+                FitExpression* node;
+                OperatorDispatchKind operatorDispatchKind;
+                WeakRef<Type> overloadFunctionType;
+            };
+
             struct MemberAccessState
             {
                 MemberAccessExpression* node;
@@ -65,6 +100,11 @@ namespace wio::sema
 
             std::vector<NodeState> nodeStates;
             std::vector<ExpressionState> expressionStates;
+            std::vector<BinaryExpressionState> binaryExpressionStates;
+            std::vector<UnaryExpressionState> unaryExpressionStates;
+            std::vector<AssignmentExpressionState> assignmentExpressionStates;
+            std::vector<ArrayAccessExpressionState> arrayAccessExpressionStates;
+            std::vector<FitExpressionState> fitExpressionStates;
             std::vector<MemberAccessState> memberAccessStates;
 
             void capture(ASTNode* root)
@@ -79,6 +119,36 @@ namespace wio::sema
 
                 for (const auto& state : expressionStates)
                     state.node->referencedSymbol = state.referencedSymbol;
+
+                for (const auto& state : binaryExpressionStates)
+                {
+                    state.node->operatorDispatchKind = state.operatorDispatchKind;
+                    state.node->overloadFunctionType = state.overloadFunctionType;
+                }
+
+                for (const auto& state : unaryExpressionStates)
+                {
+                    state.node->operatorDispatchKind = state.operatorDispatchKind;
+                    state.node->overloadFunctionType = state.overloadFunctionType;
+                }
+
+                for (const auto& state : assignmentExpressionStates)
+                {
+                    state.node->operatorDispatchKind = state.operatorDispatchKind;
+                    state.node->overloadFunctionType = state.overloadFunctionType;
+                }
+
+                for (const auto& state : arrayAccessExpressionStates)
+                {
+                    state.node->operatorDispatchKind = state.operatorDispatchKind;
+                    state.node->overloadFunctionType = state.overloadFunctionType;
+                }
+
+                for (const auto& state : fitExpressionStates)
+                {
+                    state.node->operatorDispatchKind = state.operatorDispatchKind;
+                    state.node->overloadFunctionType = state.overloadFunctionType;
+                }
 
                 for (const auto& state : memberAccessStates)
                 {
@@ -101,6 +171,51 @@ namespace wio::sema
 
                 if (auto* expression = dynamic_cast<Expression*>(&node))
                     expressionStates.push_back(ExpressionState{ expression, expression->referencedSymbol });
+
+                if (auto* binaryExpression = node.as<BinaryExpression>())
+                {
+                    binaryExpressionStates.push_back(BinaryExpressionState{
+                        binaryExpression,
+                        binaryExpression->operatorDispatchKind,
+                        binaryExpression->overloadFunctionType
+                    });
+                }
+
+                if (auto* unaryExpression = node.as<UnaryExpression>())
+                {
+                    unaryExpressionStates.push_back(UnaryExpressionState{
+                        unaryExpression,
+                        unaryExpression->operatorDispatchKind,
+                        unaryExpression->overloadFunctionType
+                    });
+                }
+
+                if (auto* assignmentExpression = node.as<AssignmentExpression>())
+                {
+                    assignmentExpressionStates.push_back(AssignmentExpressionState{
+                        assignmentExpression,
+                        assignmentExpression->operatorDispatchKind,
+                        assignmentExpression->overloadFunctionType
+                    });
+                }
+
+                if (auto* arrayAccessExpression = node.as<ArrayAccessExpression>())
+                {
+                    arrayAccessExpressionStates.push_back(ArrayAccessExpressionState{
+                        arrayAccessExpression,
+                        arrayAccessExpression->operatorDispatchKind,
+                        arrayAccessExpression->overloadFunctionType
+                    });
+                }
+
+                if (auto* fitExpression = node.as<FitExpression>())
+                {
+                    fitExpressionStates.push_back(FitExpressionState{
+                        fitExpression,
+                        fitExpression->operatorDispatchKind,
+                        fitExpression->overloadFunctionType
+                    });
+                }
 
                 if (auto* memberAccess = node.as<MemberAccessExpression>())
                 {
@@ -924,8 +1039,24 @@ namespace wio::sema
                 }
             }
 
-            return destination->isCompatibleWith(source) ||
-                   (destination->isNumeric() && source->isNumeric());
+            if (destination->isCompatibleWith(source) ||
+                (destination->isNumeric() && source->isNumeric()))
+            {
+                return true;
+            }
+
+            if (shouldAutoReadReferenceType(source))
+            {
+                Ref<Type> readableSource = getAutoReadableType(source);
+                if (readableSource &&
+                    (destination->isCompatibleWith(readableSource) ||
+                     (destination->isNumeric() && readableSource->isNumeric())))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         bool areMatchTypesCompatible(const Ref<Type>& lhs, const Ref<Type>& rhs)
@@ -1123,7 +1254,14 @@ namespace wio::sema
                 return false;
 
             if (expression->is<ArrayAccessExpression>())
-                return true;
+            {
+                auto* arrayAccess = expression->as<ArrayAccessExpression>();
+                if (arrayAccess->operatorDispatchKind == OperatorDispatchKind::None)
+                    return true;
+
+                Ref<Type> indexedType = unwrapAliasType(arrayAccess->refType.Lock());
+                return indexedType && indexedType->kind() == TypeKind::Reference;
+            }
 
             if (expression->is<Identifier>() || expression->is<MemberAccessExpression>())
                 return isVariableLikeSymbol(expression->referencedSymbol.Lock());
@@ -4870,42 +5008,65 @@ namespace wio::sema
             Ref<Type> rhsType = node.right->refType.Lock();
             Ref<Type> readableLhsType = getAutoReadableType(lhsType);
             Ref<Type> readableRhsType = getAutoReadableType(rhsType);
-            Ref<Type> receiverType = unwrapAliasType(readableLhsType ? readableLhsType : lhsType);
-            if (!receiverType || receiverType->kind() != TypeKind::Struct)
-                return false;
 
-            Ref<Type> ownerType = nullptr;
-            Ref<Symbol> operatorSymbol = findStructMemberInHierarchy(receiverType, std::string(*overloadName), &ownerType);
-            if (!operatorSymbol)
-                return false;
-
-            if (!validateStructMemberAccess(currentStructType_, ownerType, operatorSymbol, node.location()))
+            struct OperatorCandidate
             {
-                node.refType = Compiler::get().getTypeContext().getUnknown();
-                return true;
-            }
-
-            auto instantiateMethodTypeForOwner = [&](const Ref<Symbol>& candidateSymbol) -> Ref<FunctionType>
-            {
-                if (!candidateSymbol || !candidateSymbol->type || candidateSymbol->type->kind() != TypeKind::Function)
-                    return nullptr;
-
-                Ref<Type> candidateType = candidateSymbol->type;
-                if (auto instantiatedOwnerType = ownerType ? ownerType.AsFast<StructType>() : nullptr;
-                    instantiatedOwnerType && !instantiatedOwnerType->genericParameterNames.empty() && !instantiatedOwnerType->genericArguments.empty())
-                {
-                    auto bindings = buildExtendedGenericBindings(
-                        instantiatedOwnerType->genericParameterNames,
-                        instantiatedOwnerType->hasGenericParameterPack,
-                        instantiatedOwnerType->genericArguments
-                    );
-                    candidateType = instantiateGenericType(candidateType, bindings);
-                }
-
-                return candidateType ? candidateType.AsFast<FunctionType>() : nullptr;
+                Ref<Symbol> symbol = nullptr;
+                Ref<FunctionType> functionType = nullptr;
+                Ref<Type> ownerType = nullptr;
+                OperatorDispatchKind dispatchKind = OperatorDispatchKind::None;
+                int score = -1;
             };
 
-            auto scoreArgumentAgainstParameter = [&](const Ref<Type>& parameterType, const Ref<Type>& argumentType) -> std::optional<int>
+            auto deduceBindingsFromOperatorArgument = [&](const Ref<Type>& expectedType,
+                                                          const Ref<Type>& argumentType,
+                                                          const NodePtr<Expression>& argumentExpression,
+                                                          std::unordered_map<std::string, Ref<Type>>& bindings) -> bool
+            {
+                if (!expectedType || !argumentType)
+                    return false;
+
+                if (deduceGenericBindings(expectedType, argumentType, bindings))
+                    return true;
+
+                if (shouldAutoReadReferenceType(argumentType))
+                {
+                    Ref<Type> readableArgumentType = getAutoReadableType(argumentType);
+                    if (readableArgumentType && deduceGenericBindings(expectedType, readableArgumentType, bindings))
+                        return true;
+                }
+
+                Ref<Type> resolvedExpectedType = unwrapAliasType(expectedType);
+                if (resolvedExpectedType && resolvedExpectedType->kind() == TypeKind::Reference)
+                {
+                    auto referenceType = resolvedExpectedType.AsFast<ReferenceType>();
+                    Ref<Type> referredType = referenceType ? referenceType->referredType : nullptr;
+                    if (referredType)
+                    {
+                        if (deduceGenericBindings(referredType, argumentType, bindings))
+                            return true;
+
+                        Ref<Type> readableArgumentType = getAutoReadableType(argumentType);
+                        if (readableArgumentType && deduceGenericBindings(referredType, readableArgumentType, bindings))
+                            return true;
+
+                        if (argumentExpression &&
+                            isAddressableRefOperand(argumentExpression) &&
+                            (!referenceType->isMutable || isMutableAddressableOperand(argumentExpression)))
+                        {
+                            if (deduceGenericBindings(referredType, unwrapAliasType(argumentType), bindings))
+                                return true;
+                        }
+                    }
+                }
+
+                return false;
+            };
+
+            auto scoreOperatorArgumentAgainstParameter = [&](const Ref<Type>& parameterType,
+                                                            const Ref<Type>& argumentType,
+                                                            const Ref<Type>& readableArgumentType,
+                                                            const NodePtr<Expression>& argumentExpression) -> std::optional<int>
             {
                 if (!parameterType || !argumentType)
                     return std::nullopt;
@@ -4916,15 +5077,29 @@ namespace wio::sema
                 if (isAssignmentLikeCompatible(parameterType, argumentType))
                     return 100;
 
-                Ref<Type> readableArgumentType = readableRhsType ? readableRhsType : getAutoReadableType(argumentType);
                 Ref<Type> resolvedParameterType = unwrapAliasType(parameterType);
                 if (resolvedParameterType && resolvedParameterType->kind() == TypeKind::Reference)
                 {
-                    auto referredType = resolvedParameterType.AsFast<ReferenceType>()->referredType;
+                    auto referenceType = resolvedParameterType.AsFast<ReferenceType>();
+                    auto referredType = referenceType ? referenceType->referredType : nullptr;
                     if (referredType)
                     {
                         if (isExactType(readableArgumentType, referredType) || isExactType(argumentType, referredType))
                             return 900;
+
+                        if (argumentExpression &&
+                            isAddressableRefOperand(argumentExpression) &&
+                            (!referenceType->isMutable || isMutableAddressableOperand(argumentExpression)))
+                        {
+                            if (isExactType(argumentType, referredType))
+                                return 950;
+
+                            if (isAssignmentLikeCompatible(referredType, argumentType))
+                                return referenceType->isMutable ? 880 : 860;
+
+                            if (readableArgumentType && isAssignmentLikeCompatible(referredType, readableArgumentType))
+                                return referenceType->isMutable ? 840 : 820;
+                        }
 
                         if (readableArgumentType && isAssignmentLikeCompatible(referredType, readableArgumentType))
                             return 80;
@@ -4943,60 +5118,213 @@ namespace wio::sema
                 return std::nullopt;
             };
 
-            struct OperatorCandidate
+            auto collectFreeOperatorCandidates = [&]() -> std::vector<Ref<Symbol>>
             {
-                Ref<Symbol> symbol = nullptr;
-                Ref<FunctionType> functionType = nullptr;
-                int score = -1;
+                std::vector<Ref<Symbol>> collected;
+                std::unordered_set<const Symbol*> seen;
+
+                auto appendCandidate = [&](const Ref<Symbol>& symbol)
+                {
+                    if (!symbol || seen.contains(symbol.Get()))
+                        return;
+
+                    seen.insert(symbol.Get());
+                    collected.push_back(symbol);
+                };
+
+                appendCandidate(currentScope_ ? currentScope_->resolve(std::string(*overloadName)) : nullptr);
+
+                Ref<Scope> globalScope = scopes_.empty() ? nullptr : scopes_.front();
+                auto appendAssociatedScopeCandidate = [&](const Ref<Type>& type)
+                {
+                    Ref<Type> associatedType = unwrapAliasType(type);
+                    while (associatedType && associatedType->kind() == TypeKind::Reference)
+                        associatedType = unwrapAliasType(associatedType.AsFast<ReferenceType>()->referredType);
+
+                    if (!associatedType || associatedType->kind() != TypeKind::Struct)
+                        return;
+
+                    auto structType = associatedType.AsFast<StructType>();
+                    if (!structType)
+                        return;
+
+                    std::string qualifiedName = structType->scopePath.empty()
+                        ? std::string(*overloadName)
+                        : structType->scopePath + "::" + std::string(*overloadName);
+                    appendCandidate(resolveQualifiedSymbol(globalScope, qualifiedName));
+                };
+
+                appendAssociatedScopeCandidate(lhsType);
+                appendAssociatedScopeCandidate(rhsType);
+                appendAssociatedScopeCandidate(readableLhsType);
+                appendAssociatedScopeCandidate(readableRhsType);
+
+                return collected;
             };
 
-            std::vector<Ref<Symbol>> candidates;
-            if (operatorSymbol->kind == SymbolKind::FunctionGroup)
-                candidates = operatorSymbol->overloads;
-            else if (operatorSymbol->kind == SymbolKind::Function)
-                candidates.push_back(operatorSymbol);
-            else
-                return false;
+            std::vector<OperatorCandidate> candidates;
+
+            Ref<Type> receiverType = unwrapAliasType(readableLhsType ? readableLhsType : lhsType);
+            if (receiverType && receiverType->kind() == TypeKind::Struct)
+            {
+                Ref<Type> ownerType = nullptr;
+                if (Ref<Symbol> memberOperatorSymbol = findStructMemberInHierarchy(receiverType, std::string(*overloadName), &ownerType))
+                {
+                    if (!validateStructMemberAccess(currentStructType_, ownerType, memberOperatorSymbol, node.location()))
+                    {
+                        node.refType = Compiler::get().getTypeContext().getUnknown();
+                        return true;
+                    }
+
+                    std::vector<Ref<Symbol>> memberSymbols;
+                    if (memberOperatorSymbol->kind == SymbolKind::FunctionGroup)
+                        memberSymbols = memberOperatorSymbol->overloads;
+                    else if (memberOperatorSymbol->kind == SymbolKind::Function)
+                        memberSymbols.push_back(memberOperatorSymbol);
+
+                    for (const auto& candidateSymbol : memberSymbols)
+                    {
+                        if (!candidateSymbol || !candidateSymbol->type || candidateSymbol->type->kind() != TypeKind::Function)
+                            continue;
+
+                        Ref<Type> candidateType = candidateSymbol->type;
+                        if (auto instantiatedOwnerType = ownerType ? ownerType.AsFast<StructType>() : nullptr;
+                            instantiatedOwnerType && !instantiatedOwnerType->genericParameterNames.empty() && !instantiatedOwnerType->genericArguments.empty())
+                        {
+                            auto ownerBindings = buildExtendedGenericBindings(
+                                instantiatedOwnerType->genericParameterNames,
+                                instantiatedOwnerType->hasGenericParameterPack,
+                                instantiatedOwnerType->genericArguments
+                            );
+                            candidateType = instantiateGenericType(candidateType, ownerBindings);
+                        }
+
+                        std::unordered_map<std::string, Ref<Type>> genericBindings;
+                        if (!candidateSymbol->genericParameterNames.empty())
+                        {
+                            auto declaredFunctionType = candidateType.AsFast<FunctionType>();
+                            if (!declaredFunctionType || declaredFunctionType->paramTypes.size() != 1)
+                                continue;
+
+                            if (!deduceBindingsFromOperatorArgument(
+                                    declaredFunctionType->paramTypes[0],
+                                    rhsType,
+                                    node.right,
+                                    genericBindings))
+                            {
+                                continue;
+                            }
+
+                            candidateType = instantiateGenericType(candidateType, genericBindings);
+                        }
+
+                        auto candidateFunctionType = candidateType ? candidateType.AsFast<FunctionType>() : nullptr;
+                        if (!candidateFunctionType || candidateFunctionType->paramTypes.size() != 1)
+                            continue;
+
+                        auto score = scoreOperatorArgumentAgainstParameter(
+                            candidateFunctionType->paramTypes[0],
+                            rhsType,
+                            readableRhsType ? readableRhsType : getAutoReadableType(rhsType),
+                            node.right
+                        );
+                        if (!score.has_value())
+                            continue;
+
+                        candidates.push_back(OperatorCandidate{
+                            .symbol = candidateSymbol,
+                            .functionType = candidateFunctionType,
+                            .ownerType = ownerType,
+                            .dispatchKind = OperatorDispatchKind::Member,
+                            .score = *score + 2
+                        });
+                    }
+                }
+            }
+
+            for (const auto& candidateSymbol : collectFreeOperatorCandidates())
+            {
+                if (!candidateSymbol)
+                    continue;
+
+                std::vector<Ref<Symbol>> overloads;
+                if (candidateSymbol->kind == SymbolKind::FunctionGroup)
+                    overloads = candidateSymbol->overloads;
+                else if (candidateSymbol->kind == SymbolKind::Function)
+                    overloads.push_back(candidateSymbol);
+                else
+                    continue;
+
+                for (const auto& overload : overloads)
+                {
+                    if (!overload || !overload->type || overload->type->kind() != TypeKind::Function)
+                        continue;
+
+                    Ref<Type> candidateType = overload->type;
+                    std::unordered_map<std::string, Ref<Type>> genericBindings;
+                    auto candidateFunctionType = candidateType.AsFast<FunctionType>();
+                    if (!candidateFunctionType || candidateFunctionType->paramTypes.size() != 2)
+                        continue;
+
+                    if (!overload->genericParameterNames.empty())
+                    {
+                        if (!deduceBindingsFromOperatorArgument(candidateFunctionType->paramTypes[0], lhsType, node.left, genericBindings) ||
+                            !deduceBindingsFromOperatorArgument(candidateFunctionType->paramTypes[1], rhsType, node.right, genericBindings))
+                        {
+                            continue;
+                        }
+
+                        candidateType = instantiateGenericType(candidateType, genericBindings);
+                        candidateFunctionType = candidateType ? candidateType.AsFast<FunctionType>() : nullptr;
+                        if (!candidateFunctionType || candidateFunctionType->paramTypes.size() != 2)
+                            continue;
+                    }
+
+                    auto lhsScore = scoreOperatorArgumentAgainstParameter(
+                        candidateFunctionType->paramTypes[0],
+                        lhsType,
+                        readableLhsType ? readableLhsType : getAutoReadableType(lhsType),
+                        node.left
+                    );
+                    if (!lhsScore.has_value())
+                        continue;
+
+                    auto rhsScore = scoreOperatorArgumentAgainstParameter(
+                        candidateFunctionType->paramTypes[1],
+                        rhsType,
+                        readableRhsType ? readableRhsType : getAutoReadableType(rhsType),
+                        node.right
+                    );
+                    if (!rhsScore.has_value())
+                        continue;
+
+                    candidates.push_back(OperatorCandidate{
+                        .symbol = overload,
+                        .functionType = candidateFunctionType,
+                        .ownerType = nullptr,
+                        .dispatchKind = OperatorDispatchKind::Free,
+                        .score = *lhsScore + *rhsScore
+                    });
+                }
+            }
 
             std::optional<OperatorCandidate> bestCandidate;
             bool isAmbiguous = false;
-            for (const auto& candidateSymbol : candidates)
+            for (const auto& candidate : candidates)
             {
-                auto candidateFunctionType = instantiateMethodTypeForOwner(candidateSymbol);
-                if (!candidateFunctionType || candidateFunctionType->paramTypes.size() != 1)
-                    continue;
-
-                auto score = scoreArgumentAgainstParameter(candidateFunctionType->paramTypes[0], rhsType);
-                if (!score.has_value())
-                    continue;
-
-                if (!bestCandidate.has_value() || *score > bestCandidate->score)
+                if (!bestCandidate.has_value() || candidate.score > bestCandidate->score)
                 {
-                    bestCandidate = OperatorCandidate{
-                        .symbol = candidateSymbol,
-                        .functionType = candidateFunctionType,
-                        .score = *score
-                    };
+                    bestCandidate = candidate;
                     isAmbiguous = false;
                 }
-                else if (*score == bestCandidate->score)
+                else if (candidate.score == bestCandidate->score)
                 {
                     isAmbiguous = true;
                 }
             }
 
             if (!bestCandidate.has_value())
-            {
-                WIO_LOG_ADD_ERROR(
-                    node.location(),
-                    "No matching overload found for operator '{}' with operand types '{}' and '{}'.",
-                    node.op.value,
-                    lhsType ? lhsType->toString() : "<unknown>",
-                    rhsType ? rhsType->toString() : "<unknown>"
-                );
-                node.refType = Compiler::get().getTypeContext().getUnknown();
-                return true;
-            }
+                return false;
 
             if (isAmbiguous)
             {
@@ -5012,7 +5340,9 @@ namespace wio::sema
             }
 
             node.referencedSymbol = bestCandidate->symbol;
-            node.refType = bestCandidate->functionType->returnType;
+            node.operatorDispatchKind = bestCandidate->dispatchKind;
+            node.overloadFunctionType = bestCandidate->functionType.AsFast<Type>();
+            node.refType = bestCandidate->functionType ? bestCandidate->functionType->returnType : Compiler::get().getTypeContext().getUnknown();
             return true;
         };
 
@@ -5153,66 +5483,205 @@ namespace wio::sema
                 return false;
 
             Ref<Type> readableOperandType = getAutoReadableType(opType);
-            Ref<Type> receiverType = unwrapAliasType(readableOperandType ? readableOperandType : opType);
-            if (!receiverType || receiverType->kind() != TypeKind::Struct)
-                return false;
-
-            Ref<Type> ownerType = nullptr;
-            Ref<Symbol> operatorSymbol = findStructMemberInHierarchy(receiverType, std::string(*overloadName), &ownerType);
-            if (!operatorSymbol)
-                return false;
-
-            if (!validateStructMemberAccess(currentStructType_, ownerType, operatorSymbol, node.location()))
+            struct OperatorCandidate
             {
-                node.refType = Compiler::get().getTypeContext().getUnknown();
-                return true;
-            }
-
-            auto instantiateMethodTypeForOwner = [&](const Ref<Symbol>& candidateSymbol) -> Ref<FunctionType>
-            {
-                if (!candidateSymbol || !candidateSymbol->type || candidateSymbol->type->kind() != TypeKind::Function)
-                    return nullptr;
-
-                Ref<Type> candidateType = candidateSymbol->type;
-                if (auto instantiatedOwnerType = ownerType ? ownerType.AsFast<StructType>() : nullptr;
-                    instantiatedOwnerType && !instantiatedOwnerType->genericParameterNames.empty() && !instantiatedOwnerType->genericArguments.empty())
-                {
-                    auto bindings = buildExtendedGenericBindings(
-                        instantiatedOwnerType->genericParameterNames,
-                        instantiatedOwnerType->hasGenericParameterPack,
-                        instantiatedOwnerType->genericArguments
-                    );
-                    candidateType = instantiateGenericType(candidateType, bindings);
-                }
-
-                return candidateType ? candidateType.AsFast<FunctionType>() : nullptr;
+                Ref<Symbol> symbol = nullptr;
+                Ref<FunctionType> functionType = nullptr;
+                OperatorDispatchKind dispatchKind = OperatorDispatchKind::None;
+                int score = -1;
             };
 
-            std::vector<Ref<Symbol>> candidates;
-            if (operatorSymbol->kind == SymbolKind::FunctionGroup)
-                candidates = operatorSymbol->overloads;
-            else if (operatorSymbol->kind == SymbolKind::Function)
-                candidates.push_back(operatorSymbol);
-            else
-                return false;
-
-            Ref<Symbol> selectedSymbol = nullptr;
-            Ref<FunctionType> selectedFunctionType = nullptr;
-            bool isAmbiguous = false;
-            for (const auto& candidateSymbol : candidates)
+            auto scoreUnaryArgumentAgainstParameter = [&](const Ref<Type>& parameterType,
+                                                          const Ref<Type>& argumentType,
+                                                          const Ref<Type>& readableArgumentType,
+                                                          const NodePtr<Expression>& argumentExpression) -> std::optional<int>
             {
-                auto candidateFunctionType = instantiateMethodTypeForOwner(candidateSymbol);
-                if (!candidateFunctionType || !candidateFunctionType->paramTypes.empty())
-                    continue;
+                if (!parameterType || !argumentType)
+                    return std::nullopt;
 
-                if (selectedSymbol)
+                if (isExactType(argumentType, parameterType))
+                    return 1000;
+
+                if (isAssignmentLikeCompatible(parameterType, argumentType))
+                    return 100;
+
+                Ref<Type> resolvedParameterType = unwrapAliasType(parameterType);
+                if (resolvedParameterType && resolvedParameterType->kind() == TypeKind::Reference)
                 {
-                    isAmbiguous = true;
-                    break;
+                    auto referenceType = resolvedParameterType.AsFast<ReferenceType>();
+                    auto referredType = referenceType ? referenceType->referredType : nullptr;
+                    if (referredType)
+                    {
+                        if (isExactType(readableArgumentType, referredType) || isExactType(argumentType, referredType))
+                            return 900;
+
+                        if (argumentExpression &&
+                            isAddressableRefOperand(argumentExpression) &&
+                            (!referenceType->isMutable || isMutableAddressableOperand(argumentExpression)))
+                        {
+                            if (isExactType(argumentType, referredType))
+                                return 950;
+
+                            if (isAssignmentLikeCompatible(referredType, argumentType))
+                                return referenceType->isMutable ? 880 : 860;
+
+                            if (readableArgumentType && isAssignmentLikeCompatible(referredType, readableArgumentType))
+                                return referenceType->isMutable ? 840 : 820;
+                        }
+                    }
                 }
 
-                selectedSymbol = candidateSymbol;
-                selectedFunctionType = candidateFunctionType;
+                return std::nullopt;
+            };
+
+            std::vector<OperatorCandidate> candidates;
+
+            Ref<Type> receiverType = unwrapAliasType(readableOperandType ? readableOperandType : opType);
+            if (receiverType && receiverType->kind() == TypeKind::Struct)
+            {
+                Ref<Type> ownerType = nullptr;
+                if (Ref<Symbol> memberOperatorSymbol = findStructMemberInHierarchy(receiverType, std::string(*overloadName), &ownerType))
+                {
+                    if (!validateStructMemberAccess(currentStructType_, ownerType, memberOperatorSymbol, node.location()))
+                    {
+                        node.refType = Compiler::get().getTypeContext().getUnknown();
+                        return true;
+                    }
+
+                    std::vector<Ref<Symbol>> memberSymbols;
+                    if (memberOperatorSymbol->kind == SymbolKind::FunctionGroup)
+                        memberSymbols = memberOperatorSymbol->overloads;
+                    else if (memberOperatorSymbol->kind == SymbolKind::Function)
+                        memberSymbols.push_back(memberOperatorSymbol);
+
+                    for (const auto& candidateSymbol : memberSymbols)
+                    {
+                        if (!candidateSymbol || !candidateSymbol->type || candidateSymbol->type->kind() != TypeKind::Function)
+                            continue;
+
+                        Ref<Type> candidateType = candidateSymbol->type;
+                        if (auto instantiatedOwnerType = ownerType ? ownerType.AsFast<StructType>() : nullptr;
+                            instantiatedOwnerType && !instantiatedOwnerType->genericParameterNames.empty() && !instantiatedOwnerType->genericArguments.empty())
+                        {
+                            auto ownerBindings = buildExtendedGenericBindings(
+                                instantiatedOwnerType->genericParameterNames,
+                                instantiatedOwnerType->hasGenericParameterPack,
+                                instantiatedOwnerType->genericArguments
+                            );
+                            candidateType = instantiateGenericType(candidateType, ownerBindings);
+                        }
+
+                        auto candidateFunctionType = candidateType ? candidateType.AsFast<FunctionType>() : nullptr;
+                        if (!candidateFunctionType || !candidateFunctionType->paramTypes.empty())
+                            continue;
+
+                        candidates.push_back(OperatorCandidate{
+                            .symbol = candidateSymbol,
+                            .functionType = candidateFunctionType,
+                            .dispatchKind = OperatorDispatchKind::Member,
+                            .score = 1002
+                        });
+                    }
+                }
+            }
+
+            std::unordered_set<const Symbol*> seenFreeSymbols;
+            auto appendFreeSymbol = [&](const Ref<Symbol>& symbol)
+            {
+                if (!symbol || seenFreeSymbols.contains(symbol.Get()))
+                    return;
+                seenFreeSymbols.insert(symbol.Get());
+
+                std::vector<Ref<Symbol>> overloads;
+                if (symbol->kind == SymbolKind::FunctionGroup)
+                    overloads = symbol->overloads;
+                else if (symbol->kind == SymbolKind::Function)
+                    overloads.push_back(symbol);
+                else
+                    return;
+
+                for (const auto& overload : overloads)
+                {
+                    if (!overload || !overload->type || overload->type->kind() != TypeKind::Function)
+                        continue;
+
+                    Ref<Type> candidateType = overload->type;
+                    std::unordered_map<std::string, Ref<Type>> genericBindings;
+                    auto candidateFunctionType = candidateType.AsFast<FunctionType>();
+                    if (!candidateFunctionType || candidateFunctionType->paramTypes.size() != 1)
+                        continue;
+
+                    if (!overload->genericParameterNames.empty())
+                    {
+                        if (!deduceGenericBindings(candidateFunctionType->paramTypes[0], opType, genericBindings))
+                        {
+                            if (!(readableOperandType && deduceGenericBindings(candidateFunctionType->paramTypes[0], readableOperandType, genericBindings)))
+                                continue;
+                        }
+
+                        candidateType = instantiateGenericType(candidateType, genericBindings);
+                        candidateFunctionType = candidateType ? candidateType.AsFast<FunctionType>() : nullptr;
+                        if (!candidateFunctionType || candidateFunctionType->paramTypes.size() != 1)
+                            continue;
+                    }
+
+                    auto score = scoreUnaryArgumentAgainstParameter(
+                        candidateFunctionType->paramTypes[0],
+                        opType,
+                        readableOperandType ? readableOperandType : getAutoReadableType(opType),
+                        node.operand
+                    );
+                    if (!score.has_value())
+                        continue;
+
+                    candidates.push_back(OperatorCandidate{
+                        .symbol = overload,
+                        .functionType = candidateFunctionType,
+                        .dispatchKind = OperatorDispatchKind::Free,
+                        .score = *score
+                    });
+                }
+            };
+
+            appendFreeSymbol(currentScope_ ? currentScope_->resolve(std::string(*overloadName)) : nullptr);
+            if (Ref<Scope> globalScope = scopes_.empty() ? nullptr : scopes_.front())
+            {
+                auto appendAssociatedScopeSymbol = [&](const Ref<Type>& type)
+                {
+                    Ref<Type> associatedType = unwrapAliasType(type);
+                    while (associatedType && associatedType->kind() == TypeKind::Reference)
+                        associatedType = unwrapAliasType(associatedType.AsFast<ReferenceType>()->referredType);
+
+                    if (!associatedType || associatedType->kind() != TypeKind::Struct)
+                        return;
+
+                    auto structType = associatedType.AsFast<StructType>();
+                    if (!structType)
+                        return;
+
+                    std::string qualifiedName = structType->scopePath.empty()
+                        ? std::string(*overloadName)
+                        : structType->scopePath + "::" + std::string(*overloadName);
+                    appendFreeSymbol(resolveQualifiedSymbol(globalScope, qualifiedName));
+                };
+
+                appendAssociatedScopeSymbol(opType);
+                appendAssociatedScopeSymbol(readableOperandType);
+            }
+
+            std::optional<OperatorCandidate> bestCandidate;
+            bool isAmbiguous = false;
+            for (const auto& candidate : candidates)
+            {
+                if (!bestCandidate.has_value() || candidate.score > bestCandidate->score)
+                {
+                    bestCandidate = candidate;
+                    isAmbiguous = false;
+                }
+                else if (candidate.score == bestCandidate->score)
+                {
+                    isAmbiguous = true;
+                }
             }
 
             if (isAmbiguous)
@@ -5227,25 +5696,32 @@ namespace wio::sema
                 return true;
             }
 
-            if (!selectedSymbol || !selectedFunctionType)
-            {
-                WIO_LOG_ADD_ERROR(
-                    node.location(),
-                    "No matching overload found for unary operator '{}' with operand type '{}'.",
-                    node.op.value,
-                    opType ? opType->toString() : "<unknown>"
-                );
-                node.refType = Compiler::get().getTypeContext().getUnknown();
-                return true;
-            }
+            if (!bestCandidate.has_value())
+                return false;
 
-            node.referencedSymbol = selectedSymbol;
-            node.refType = selectedFunctionType->returnType;
+            node.referencedSymbol = bestCandidate->symbol;
+            node.operatorDispatchKind = bestCandidate->dispatchKind;
+            node.overloadFunctionType = bestCandidate->functionType.AsFast<Type>();
+            node.refType = bestCandidate->functionType ? bestCandidate->functionType->returnType : Compiler::get().getTypeContext().getUnknown();
             return true;
         };
 
         if (tryResolveUnaryOperatorOverload())
             return;
+
+        if (node.op.type == TokenType::kwDeref)
+        {
+            Ref<Type> resolvedType = unwrapAliasType(opType);
+            if (!resolvedType || resolvedType->kind() != TypeKind::Reference || !shouldAutoReadReferenceType(opType))
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "The 'deref' operator requires a readable reference to a value-like type.");
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+
+            node.refType = resolvedType.AsFast<ReferenceType>()->referredType;
+            return;
+        }
 
         if (node.op.type == TokenType::kwNot || node.op.type == TokenType::opLogicalNot)
         {
@@ -5283,6 +5759,373 @@ namespace wio::sema
 
         Ref<Type> lhsType = node.left->refType.Lock();
         Ref<Type> rhsType = node.right->refType.Lock();
+
+        auto emitWriteabilityDiagnosticsForSymbol = [&](const Ref<Symbol>& referSym)
+        {
+            if (!referSym)
+                return;
+
+            if (!referSym->flags.get_isMutable() && !referSym->flags.get_isReadOnly())
+            {
+                WIO_LOG_ADD_ERROR(node.op.loc, "Cannot assign to immutable variable '{0}'. Hint: Declare it as 'mut {0}'.", referSym->name);
+            }
+            if (referSym->flags.get_isReadOnly())
+            {
+                bool isInsideObject = false;
+                auto currentSearch = currentScope_;
+                while (currentSearch)
+                {
+                    if (currentSearch->resolveLocally(referSym->name)) { isInsideObject = true; break; }
+                    currentSearch = currentSearch->getParent().Lock();
+                }
+
+                if (!isInsideObject)
+                    WIO_LOG_ADD_ERROR(node.op.loc, "Cannot modify @Readonly member '{0}' from outside its object.", referSym->name);
+            }
+        };
+
+        auto tryResolveAssignmentOperatorOverload = [&]() -> bool
+        {
+            auto overloadName = common::getAssignmentOperatorOverloadName(node.op.type);
+            if (!overloadName.has_value())
+                return false;
+
+            Ref<Type> readableLhsType = getAutoReadableType(lhsType);
+            Ref<Type> readableRhsType = getAutoReadableType(rhsType);
+
+            struct OperatorCandidate
+            {
+                Ref<Symbol> symbol = nullptr;
+                Ref<FunctionType> functionType = nullptr;
+                Ref<Type> ownerType = nullptr;
+                OperatorDispatchKind dispatchKind = OperatorDispatchKind::None;
+                int score = -1;
+            };
+
+            auto deduceBindingsFromAssignmentArgument = [&](const Ref<Type>& expectedType,
+                                                           const Ref<Type>& argumentType,
+                                                           const NodePtr<Expression>& argumentExpression,
+                                                           std::unordered_map<std::string, Ref<Type>>& bindings) -> bool
+            {
+                if (!expectedType || !argumentType)
+                    return false;
+
+                if (deduceGenericBindings(expectedType, argumentType, bindings))
+                    return true;
+
+                if (shouldAutoReadReferenceType(argumentType))
+                {
+                    Ref<Type> readableArgumentType = getAutoReadableType(argumentType);
+                    if (readableArgumentType && deduceGenericBindings(expectedType, readableArgumentType, bindings))
+                        return true;
+                }
+
+                Ref<Type> resolvedExpectedType = unwrapAliasType(expectedType);
+                if (resolvedExpectedType && resolvedExpectedType->kind() == TypeKind::Reference)
+                {
+                    auto referenceType = resolvedExpectedType.AsFast<ReferenceType>();
+                    auto referredType = referenceType ? referenceType->referredType : nullptr;
+                    if (referredType)
+                    {
+                        if (deduceGenericBindings(referredType, argumentType, bindings))
+                            return true;
+
+                        Ref<Type> readableArgumentType = getAutoReadableType(argumentType);
+                        if (readableArgumentType && deduceGenericBindings(referredType, readableArgumentType, bindings))
+                            return true;
+
+                        if (argumentExpression &&
+                            isAddressableRefOperand(argumentExpression) &&
+                            (!referenceType->isMutable || isMutableAddressableOperand(argumentExpression)))
+                        {
+                            if (deduceGenericBindings(referredType, unwrapAliasType(argumentType), bindings))
+                                return true;
+                        }
+                    }
+                }
+
+                return false;
+            };
+
+            auto scoreAssignmentArgumentAgainstParameter = [&](const Ref<Type>& parameterType,
+                                                               const Ref<Type>& argumentType,
+                                                               const Ref<Type>& readableArgumentType,
+                                                               const NodePtr<Expression>& argumentExpression) -> std::optional<int>
+            {
+                if (!parameterType || !argumentType)
+                    return std::nullopt;
+
+                if (isExactType(argumentType, parameterType))
+                    return 1000;
+
+                if (isAssignmentLikeCompatible(parameterType, argumentType))
+                    return 100;
+
+                Ref<Type> resolvedParameterType = unwrapAliasType(parameterType);
+                if (resolvedParameterType && resolvedParameterType->kind() == TypeKind::Reference)
+                {
+                    auto referenceType = resolvedParameterType.AsFast<ReferenceType>();
+                    auto referredType = referenceType ? referenceType->referredType : nullptr;
+                    if (referredType)
+                    {
+                        if (isExactType(readableArgumentType, referredType) || isExactType(argumentType, referredType))
+                            return 900;
+
+                        if (argumentExpression &&
+                            isAddressableRefOperand(argumentExpression) &&
+                            (!referenceType->isMutable || isMutableAddressableOperand(argumentExpression)))
+                        {
+                            if (isExactType(argumentType, referredType))
+                                return 950;
+
+                            if (isAssignmentLikeCompatible(referredType, argumentType))
+                                return referenceType->isMutable ? 900 : 860;
+
+                            if (readableArgumentType && isAssignmentLikeCompatible(referredType, readableArgumentType))
+                                return referenceType->isMutable ? 860 : 820;
+                        }
+
+                        if (readableArgumentType && isAssignmentLikeCompatible(referredType, readableArgumentType))
+                            return 80;
+                    }
+                }
+
+                return std::nullopt;
+            };
+
+            auto collectFreeOperatorCandidates = [&]() -> std::vector<Ref<Symbol>>
+            {
+                std::vector<Ref<Symbol>> collected;
+                std::unordered_set<const Symbol*> seen;
+
+                auto appendCandidate = [&](const Ref<Symbol>& symbol)
+                {
+                    if (!symbol || seen.contains(symbol.Get()))
+                        return;
+
+                    seen.insert(symbol.Get());
+                    collected.push_back(symbol);
+                };
+
+                appendCandidate(currentScope_ ? currentScope_->resolve(std::string(*overloadName)) : nullptr);
+
+                Ref<Scope> globalScope = scopes_.empty() ? nullptr : scopes_.front();
+                auto appendAssociatedScopeCandidate = [&](const Ref<Type>& type)
+                {
+                    Ref<Type> associatedType = unwrapAliasType(type);
+                    while (associatedType && associatedType->kind() == TypeKind::Reference)
+                        associatedType = unwrapAliasType(associatedType.AsFast<ReferenceType>()->referredType);
+
+                    if (!associatedType || associatedType->kind() != TypeKind::Struct)
+                        return;
+
+                    auto structType = associatedType.AsFast<StructType>();
+                    if (!structType)
+                        return;
+
+                    std::string qualifiedName = structType->scopePath.empty()
+                        ? std::string(*overloadName)
+                        : structType->scopePath + "::" + std::string(*overloadName);
+                    appendCandidate(resolveQualifiedSymbol(globalScope, qualifiedName));
+                };
+
+                appendAssociatedScopeCandidate(lhsType);
+                appendAssociatedScopeCandidate(rhsType);
+                appendAssociatedScopeCandidate(readableLhsType);
+                appendAssociatedScopeCandidate(readableRhsType);
+
+                return collected;
+            };
+
+            std::vector<OperatorCandidate> candidates;
+
+            Ref<Type> receiverType = unwrapAliasType(readableLhsType ? readableLhsType : lhsType);
+            if (receiverType && receiverType->kind() == TypeKind::Struct)
+            {
+                Ref<Type> ownerType = nullptr;
+                if (Ref<Symbol> memberOperatorSymbol = findStructMemberInHierarchy(receiverType, std::string(*overloadName), &ownerType))
+                {
+                    if (!validateStructMemberAccess(currentStructType_, ownerType, memberOperatorSymbol, node.location()))
+                    {
+                        node.refType = Compiler::get().getTypeContext().getUnknown();
+                        return true;
+                    }
+
+                    std::vector<Ref<Symbol>> memberSymbols;
+                    if (memberOperatorSymbol->kind == SymbolKind::FunctionGroup)
+                        memberSymbols = memberOperatorSymbol->overloads;
+                    else if (memberOperatorSymbol->kind == SymbolKind::Function)
+                        memberSymbols.push_back(memberOperatorSymbol);
+
+                    for (const auto& candidateSymbol : memberSymbols)
+                    {
+                        if (!candidateSymbol || !candidateSymbol->type || candidateSymbol->type->kind() != TypeKind::Function)
+                            continue;
+
+                        Ref<Type> candidateType = candidateSymbol->type;
+                        if (auto instantiatedOwnerType = ownerType ? ownerType.AsFast<StructType>() : nullptr;
+                            instantiatedOwnerType && !instantiatedOwnerType->genericParameterNames.empty() && !instantiatedOwnerType->genericArguments.empty())
+                        {
+                            auto ownerBindings = buildExtendedGenericBindings(
+                                instantiatedOwnerType->genericParameterNames,
+                                instantiatedOwnerType->hasGenericParameterPack,
+                                instantiatedOwnerType->genericArguments
+                            );
+                            candidateType = instantiateGenericType(candidateType, ownerBindings);
+                        }
+
+                        std::unordered_map<std::string, Ref<Type>> genericBindings;
+                        auto candidateFunctionType = candidateType.AsFast<FunctionType>();
+                        if (!candidateFunctionType || candidateFunctionType->paramTypes.size() != 1)
+                            continue;
+
+                        if (!candidateSymbol->genericParameterNames.empty())
+                        {
+                            if (!deduceBindingsFromAssignmentArgument(candidateFunctionType->paramTypes[0], rhsType, node.right, genericBindings))
+                                continue;
+
+                            candidateType = instantiateGenericType(candidateType, genericBindings);
+                            candidateFunctionType = candidateType ? candidateType.AsFast<FunctionType>() : nullptr;
+                            if (!candidateFunctionType || candidateFunctionType->paramTypes.size() != 1)
+                                continue;
+                        }
+
+                        auto score = scoreAssignmentArgumentAgainstParameter(
+                            candidateFunctionType->paramTypes[0],
+                            rhsType,
+                            readableRhsType ? readableRhsType : getAutoReadableType(rhsType),
+                            node.right
+                        );
+                        if (!score.has_value())
+                            continue;
+
+                        candidates.push_back(OperatorCandidate{
+                            .symbol = candidateSymbol,
+                            .functionType = candidateFunctionType,
+                            .ownerType = ownerType,
+                            .dispatchKind = OperatorDispatchKind::Member,
+                            .score = *score + 2
+                        });
+                    }
+                }
+            }
+
+            for (const auto& candidateSymbol : collectFreeOperatorCandidates())
+            {
+                if (!candidateSymbol)
+                    continue;
+
+                std::vector<Ref<Symbol>> overloads;
+                if (candidateSymbol->kind == SymbolKind::FunctionGroup)
+                    overloads = candidateSymbol->overloads;
+                else if (candidateSymbol->kind == SymbolKind::Function)
+                    overloads.push_back(candidateSymbol);
+                else
+                    continue;
+
+                for (const auto& overload : overloads)
+                {
+                    if (!overload || !overload->type || overload->type->kind() != TypeKind::Function)
+                        continue;
+
+                    Ref<Type> candidateType = overload->type;
+                    std::unordered_map<std::string, Ref<Type>> genericBindings;
+                    auto candidateFunctionType = candidateType.AsFast<FunctionType>();
+                    if (!candidateFunctionType || candidateFunctionType->paramTypes.size() != 2)
+                        continue;
+
+                    if (!overload->genericParameterNames.empty())
+                    {
+                        if (!deduceBindingsFromAssignmentArgument(candidateFunctionType->paramTypes[0], lhsType, node.left, genericBindings) ||
+                            !deduceBindingsFromAssignmentArgument(candidateFunctionType->paramTypes[1], rhsType, node.right, genericBindings))
+                        {
+                            continue;
+                        }
+
+                        candidateType = instantiateGenericType(candidateType, genericBindings);
+                        candidateFunctionType = candidateType ? candidateType.AsFast<FunctionType>() : nullptr;
+                        if (!candidateFunctionType || candidateFunctionType->paramTypes.size() != 2)
+                            continue;
+                    }
+
+                    auto lhsScore = scoreAssignmentArgumentAgainstParameter(
+                        candidateFunctionType->paramTypes[0],
+                        lhsType,
+                        readableLhsType ? readableLhsType : getAutoReadableType(lhsType),
+                        node.left
+                    );
+                    if (!lhsScore.has_value())
+                        continue;
+
+                    auto rhsScore = scoreAssignmentArgumentAgainstParameter(
+                        candidateFunctionType->paramTypes[1],
+                        rhsType,
+                        readableRhsType ? readableRhsType : getAutoReadableType(rhsType),
+                        node.right
+                    );
+                    if (!rhsScore.has_value())
+                        continue;
+
+                    candidates.push_back(OperatorCandidate{
+                        .symbol = overload,
+                        .functionType = candidateFunctionType,
+                        .ownerType = nullptr,
+                        .dispatchKind = OperatorDispatchKind::Free,
+                        .score = *lhsScore + *rhsScore
+                    });
+                }
+            }
+
+            std::optional<OperatorCandidate> bestCandidate;
+            bool isAmbiguous = false;
+            for (const auto& candidate : candidates)
+            {
+                if (!bestCandidate.has_value() || candidate.score > bestCandidate->score)
+                {
+                    bestCandidate = candidate;
+                    isAmbiguous = false;
+                }
+                else if (candidate.score == bestCandidate->score)
+                {
+                    isAmbiguous = true;
+                }
+            }
+
+            if (!bestCandidate.has_value())
+                return false;
+
+            if (!isAddressableRefOperand(node.left))
+            {
+                WIO_LOG_ADD_ERROR(node.op.loc, "Operator-assignment requires an assignable left operand.");
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return true;
+            }
+
+            if (auto referSym = node.left->referencedSymbol.Lock(); referSym)
+                emitWriteabilityDiagnosticsForSymbol(referSym);
+
+            if (isAmbiguous)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Ambiguous overload for operator '{}' with operand types '{}' and '{}'.",
+                    node.op.value,
+                    lhsType ? lhsType->toString() : "<unknown>",
+                    rhsType ? rhsType->toString() : "<unknown>"
+                );
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return true;
+            }
+
+            node.referencedSymbol = bestCandidate->symbol;
+            node.operatorDispatchKind = bestCandidate->dispatchKind;
+            node.overloadFunctionType = bestCandidate->functionType.AsFast<Type>();
+            node.refType = bestCandidate->functionType ? bestCandidate->functionType->returnType : Compiler::get().getTypeContext().getUnknown();
+            return true;
+        };
+
+        if (tryResolveAssignmentOperatorOverload())
+            return;
 
         bool isCompatible = false;
         bool isAutoDeref = false;
@@ -5323,30 +6166,6 @@ namespace wio::sema
             );
         }
 
-        auto emitWriteabilityDiagnosticsForSymbol = [&](const Ref<Symbol>& referSym)
-        {
-            if (!referSym)
-                return;
-
-            if (!referSym->flags.get_isMutable() && !referSym->flags.get_isReadOnly())
-            {
-                WIO_LOG_ADD_ERROR(node.op.loc, "Cannot assign to immutable variable '{0}'. Hint: Declare it as 'mut {0}'.", referSym->name);
-            }
-            if (referSym->flags.get_isReadOnly())
-            {
-                bool isInsideObject = false;
-                auto currentSearch = currentScope_;
-                while (currentSearch)
-                {
-                    if (currentSearch->resolveLocally(referSym->name)) { isInsideObject = true; break; }
-                    currentSearch = currentSearch->getParent().Lock();
-                }
-
-                if (!isInsideObject)
-                    WIO_LOG_ADD_ERROR(node.op.loc, "Cannot modify @Readonly member '{0}' from outside its object.", referSym->name);
-            }
-        };
-
         if (auto* arrayAccess = node.left->as<ArrayAccessExpression>())
         {
             Ref<Type> receiverType = unwrapAliasType(arrayAccess->object ? arrayAccess->object->refType.Lock() : nullptr);
@@ -5364,6 +6183,25 @@ namespace wio::sema
                 else if (receiverType->kind() == TypeKind::PackStorage)
                 {
                     emitWriteabilityDiagnosticsForSymbol(arrayAccess->object ? arrayAccess->object->referencedSymbol.Lock() : nullptr);
+                }
+            }
+
+            if (arrayAccess->operatorDispatchKind != OperatorDispatchKind::None)
+            {
+                Ref<Type> indexedType = unwrapAliasType(arrayAccess->refType.Lock());
+                if (!indexedType || indexedType->kind() != TypeKind::Reference)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.op.loc,
+                        "Subscript assignment requires operator '[]' to return a mutable reference."
+                    );
+                }
+                else if (!indexedType.AsFast<ReferenceType>()->isMutable)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.op.loc,
+                        "Cannot assign through a read-only subscript result."
+                    );
                 }
             }
         }
@@ -5771,7 +6609,7 @@ namespace wio::sema
         node.referencedSymbol = referencedSymbol;
         node.refType = referencedSymbol->type;
     }
-    
+
     void SemanticAnalyzer::visit(NullExpression& node)
     {
         auto& typeContext = Compiler::get().getTypeContext();
@@ -5806,6 +6644,323 @@ namespace wio::sema
             node.refType = Compiler::get().getTypeContext().getUnknown();
             return;
         }
+
+        auto tryResolveIndexOperatorOverload = [&]() -> bool
+        {
+            const auto overloadName = common::getIndexOperatorOverloadName(TokenType::leftBracket);
+            if (!overloadName.has_value())
+                return false;
+
+            struct OperatorCandidate
+            {
+                Ref<Symbol> symbol;
+                Ref<FunctionType> functionType;
+                Ref<StructType> ownerType;
+                OperatorDispatchKind dispatchKind = OperatorDispatchKind::None;
+                int score = 0;
+            };
+
+            auto deduceBindingsFromIndexArgument = [&](const Ref<Type>& expectedType,
+                                                       const Ref<Type>& argumentType,
+                                                       const NodePtr<Expression>& argumentExpression,
+                                                       std::unordered_map<std::string, Ref<Type>>& bindings) -> bool
+            {
+                if (!expectedType || !argumentType)
+                    return false;
+
+                if (deduceGenericBindings(expectedType, argumentType, bindings))
+                    return true;
+
+                Ref<Type> readableArgumentType = getAutoReadableType(argumentType);
+                if (argumentExpression)
+                    readableArgumentType = getAutoReadableType(argumentType);
+
+                if (argumentType != readableArgumentType)
+                {
+                    if (readableArgumentType && deduceGenericBindings(expectedType, readableArgumentType, bindings))
+                        return true;
+                }
+
+                Ref<Type> resolvedExpectedType = unwrapAliasType(expectedType);
+                if (resolvedExpectedType && resolvedExpectedType->kind() == TypeKind::Reference)
+                {
+                    auto expectedReferenceType = resolvedExpectedType.AsFast<ReferenceType>();
+                    if (expectedReferenceType)
+                    {
+                        Ref<Type> referredType = expectedReferenceType->referredType;
+                        if (deduceGenericBindings(referredType, argumentType, bindings))
+                            return true;
+
+                        if (readableArgumentType && deduceGenericBindings(referredType, readableArgumentType, bindings))
+                            return true;
+
+                        if (argumentExpression && isAddressableRefOperand(argumentExpression))
+                        {
+                            Ref<Type> resolvedArgumentType = unwrapAliasType(argumentType);
+                            if (resolvedArgumentType && resolvedArgumentType->kind() == TypeKind::Reference)
+                                resolvedArgumentType = resolvedArgumentType.AsFast<ReferenceType>()->referredType;
+
+                            if (resolvedArgumentType && deduceGenericBindings(referredType, resolvedArgumentType, bindings))
+                                return true;
+                        }
+                    }
+                }
+
+                return false;
+            };
+
+            auto scoreIndexArgumentAgainstParameter = [&](const Ref<Type>& parameterType,
+                                                          const Ref<Type>& rawArgumentType,
+                                                          const Ref<Type>& readableArgumentType,
+                                                          const NodePtr<Expression>& argumentExpression) -> std::optional<int>
+            {
+                if (!parameterType || !rawArgumentType)
+                    return std::nullopt;
+
+                Ref<Type> resolvedParameterType = unwrapAliasType(parameterType);
+                if (resolvedParameterType && resolvedParameterType->kind() == TypeKind::Reference)
+                {
+                    auto referenceType = resolvedParameterType.AsFast<ReferenceType>();
+                    if (argumentExpression && isAddressableRefOperand(argumentExpression))
+                    {
+                        Ref<Type> addressableArgumentType = rawArgumentType;
+                        Ref<Type> resolvedAddressableType = unwrapAliasType(addressableArgumentType);
+                        if (resolvedAddressableType && resolvedAddressableType->kind() == TypeKind::Reference)
+                            addressableArgumentType = resolvedAddressableType.AsFast<ReferenceType>()->referredType;
+
+                        if (isAssignmentLikeCompatible(parameterType, addressableArgumentType))
+                            return referenceType->isMutable ? 4 : 3;
+                    }
+
+                    if (readableArgumentType && isAssignmentLikeCompatible(referenceType->referredType, readableArgumentType))
+                        return referenceType->isMutable ? 2 : 1;
+
+                    return std::nullopt;
+                }
+
+                if (isAssignmentLikeCompatible(parameterType, rawArgumentType))
+                    return 4;
+                if (readableArgumentType && isAssignmentLikeCompatible(parameterType, readableArgumentType))
+                    return 2;
+                return std::nullopt;
+            };
+
+            std::vector<OperatorCandidate> candidates;
+
+            auto appendMemberCandidates = [&](const Ref<Type>& candidateReceiverType)
+            {
+                Ref<Type> currentType = unwrapAliasType(candidateReceiverType);
+                while (currentType && currentType->kind() == TypeKind::Reference)
+                    currentType = unwrapAliasType(currentType.AsFast<ReferenceType>()->referredType);
+
+                if (!currentType || currentType->kind() != TypeKind::Struct)
+                    return;
+
+                Ref<Type> ownerType = nullptr;
+                Ref<Symbol> candidateSymbol = findStructMemberInHierarchy(currentType, std::string(*overloadName), &ownerType);
+                if (!candidateSymbol)
+                    return;
+
+                if (!validateStructMemberAccess(currentStructType_, ownerType, candidateSymbol, node.location()))
+                {
+                    node.refType = Compiler::get().getTypeContext().getUnknown();
+                    return;
+                }
+
+                auto ownerStructType = ownerType ? unwrapAliasType(ownerType).AsFast<StructType>() : nullptr;
+                if (!ownerStructType)
+                    return;
+
+                std::vector<Ref<Symbol>> overloads;
+                if (candidateSymbol->kind == SymbolKind::FunctionGroup)
+                    overloads = candidateSymbol->overloads;
+                else if (candidateSymbol->kind == SymbolKind::Function)
+                    overloads.push_back(candidateSymbol);
+                else
+                    return;
+
+                for (const auto& overload : overloads)
+                {
+                    if (!overload || !overload->type || overload->type->kind() != TypeKind::Function)
+                        continue;
+
+                    Ref<Type> candidateType = overload->type;
+                    std::unordered_map<std::string, Ref<Type>> genericBindings;
+                    auto candidateFunctionType = candidateType.AsFast<FunctionType>();
+                    if (!candidateFunctionType || candidateFunctionType->paramTypes.size() != 1)
+                        continue;
+
+                    if (!overload->genericParameterNames.empty())
+                    {
+                        if (!deduceBindingsFromIndexArgument(candidateFunctionType->paramTypes[0], idxType, node.index, genericBindings))
+                            continue;
+
+                        candidateType = instantiateGenericType(candidateType, genericBindings);
+                        candidateFunctionType = candidateType ? candidateType.AsFast<FunctionType>() : nullptr;
+                        if (!candidateFunctionType || candidateFunctionType->paramTypes.size() != 1)
+                            continue;
+                    }
+
+                    auto score = scoreIndexArgumentAgainstParameter(
+                        candidateFunctionType->paramTypes[0],
+                        idxType,
+                        getAutoReadableType(idxType),
+                        node.index
+                    );
+                    if (!score.has_value())
+                        continue;
+
+                    candidates.push_back(OperatorCandidate{
+                        .symbol = overload,
+                        .functionType = candidateFunctionType,
+                        .ownerType = ownerStructType,
+                        .dispatchKind = OperatorDispatchKind::Member,
+                        .score = *score + 2
+                    });
+                }
+            };
+
+            appendMemberCandidates(objType);
+            if (resolvedObjType != objType)
+                appendMemberCandidates(resolvedObjType);
+
+            std::unordered_set<const Symbol*> seenFreeSymbols;
+            auto appendFreeSymbol = [&](const Ref<Symbol>& candidateSymbol)
+            {
+                if (!candidateSymbol || seenFreeSymbols.contains(candidateSymbol.Get()))
+                    return;
+
+                seenFreeSymbols.insert(candidateSymbol.Get());
+
+                std::vector<Ref<Symbol>> overloads;
+                if (candidateSymbol->kind == SymbolKind::FunctionGroup)
+                    overloads = candidateSymbol->overloads;
+                else if (candidateSymbol->kind == SymbolKind::Function)
+                    overloads.push_back(candidateSymbol);
+                else
+                    return;
+
+                for (const auto& overload : overloads)
+                {
+                    if (!overload || !overload->type || overload->type->kind() != TypeKind::Function)
+                        continue;
+
+                    Ref<Type> candidateType = overload->type;
+                    std::unordered_map<std::string, Ref<Type>> genericBindings;
+                    auto candidateFunctionType = candidateType.AsFast<FunctionType>();
+                    if (!candidateFunctionType || candidateFunctionType->paramTypes.size() != 2)
+                        continue;
+
+                    if (!overload->genericParameterNames.empty())
+                    {
+                        if (!deduceBindingsFromIndexArgument(candidateFunctionType->paramTypes[0], objType, node.object, genericBindings) ||
+                            !deduceBindingsFromIndexArgument(candidateFunctionType->paramTypes[1], idxType, node.index, genericBindings))
+                        {
+                            continue;
+                        }
+
+                        candidateType = instantiateGenericType(candidateType, genericBindings);
+                        candidateFunctionType = candidateType ? candidateType.AsFast<FunctionType>() : nullptr;
+                        if (!candidateFunctionType || candidateFunctionType->paramTypes.size() != 2)
+                            continue;
+                    }
+
+                    auto objectScore = scoreIndexArgumentAgainstParameter(
+                        candidateFunctionType->paramTypes[0],
+                        objType,
+                        getAutoReadableType(objType),
+                        node.object
+                    );
+                    if (!objectScore.has_value())
+                        continue;
+
+                    auto indexScore = scoreIndexArgumentAgainstParameter(
+                        candidateFunctionType->paramTypes[1],
+                        idxType,
+                        getAutoReadableType(idxType),
+                        node.index
+                    );
+                    if (!indexScore.has_value())
+                        continue;
+
+                    candidates.push_back(OperatorCandidate{
+                        .symbol = overload,
+                        .functionType = candidateFunctionType,
+                        .ownerType = nullptr,
+                        .dispatchKind = OperatorDispatchKind::Free,
+                        .score = *objectScore + *indexScore
+                    });
+                }
+            };
+
+            appendFreeSymbol(currentScope_ ? currentScope_->resolve(std::string(*overloadName)) : nullptr);
+            if (Ref<Scope> globalScope = scopes_.empty() ? nullptr : scopes_.front())
+            {
+                auto appendAssociatedScopeSymbol = [&](const Ref<Type>& type)
+                {
+                    Ref<Type> associatedType = unwrapAliasType(type);
+                    while (associatedType && associatedType->kind() == TypeKind::Reference)
+                        associatedType = unwrapAliasType(associatedType.AsFast<ReferenceType>()->referredType);
+
+                    if (!associatedType || associatedType->kind() != TypeKind::Struct)
+                        return;
+
+                    auto structType = associatedType.AsFast<StructType>();
+                    if (!structType)
+                        return;
+
+                    std::string qualifiedName = structType->scopePath.empty()
+                        ? std::string(*overloadName)
+                        : structType->scopePath + "::" + std::string(*overloadName);
+                    appendFreeSymbol(resolveQualifiedSymbol(globalScope, qualifiedName));
+                };
+
+                appendAssociatedScopeSymbol(objType);
+                appendAssociatedScopeSymbol(resolvedObjType);
+                appendAssociatedScopeSymbol(idxType);
+            }
+
+            std::optional<OperatorCandidate> bestCandidate;
+            bool isAmbiguous = false;
+            for (const auto& candidate : candidates)
+            {
+                if (!bestCandidate.has_value() || candidate.score > bestCandidate->score)
+                {
+                    bestCandidate = candidate;
+                    isAmbiguous = false;
+                }
+                else if (candidate.score == bestCandidate->score)
+                {
+                    isAmbiguous = true;
+                }
+            }
+
+            if (!bestCandidate.has_value())
+                return false;
+
+            if (isAmbiguous)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Ambiguous overload for operator '[]' with operand types '{}' and '{}'.",
+                    objType ? objType->toString() : "<unknown>",
+                    idxType ? idxType->toString() : "<unknown>"
+                );
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return true;
+            }
+
+            node.referencedSymbol = bestCandidate->symbol;
+            node.operatorDispatchKind = bestCandidate->dispatchKind;
+            node.overloadFunctionType = bestCandidate->functionType.AsFast<Type>();
+            node.refType = bestCandidate->functionType
+                ? bestCandidate->functionType->returnType
+                : Compiler::get().getTypeContext().getUnknown();
+            return true;
+        };
+
+        if (tryResolveIndexOperatorOverload())
+            return;
 
         const auto resolvePackElementType = [&](const std::string& packName,
                                                 const std::vector<Ref<Type>>& elementTypes) -> Ref<Type>
@@ -8074,7 +9229,7 @@ namespace wio::sema
             auto expectedType = funcType->paramTypes[i];
             const auto& actualType = argTypes[i];
 
-            if (!expectedType->isCompatibleWith(actualType) && 
+            if (!isAssignmentLikeCompatible(expectedType, actualType) &&
                 !isImplicitObjectViewBridge(expectedType, actualType) &&
                 !isSafeRefCast(expectedType, actualType) &&
                 !(expectedType->isNumeric() && actualType->isNumeric()))
@@ -8251,6 +9406,323 @@ namespace wio::sema
 
         auto srcType = node.operand->refType.Lock();
         auto destType = node.targetType->refType.Lock();
+
+        auto tryResolveFitOperatorOverload = [&]() -> bool
+        {
+            const auto overloadName = common::getConversionOperatorOverloadName(TokenType::kwFit);
+            if (!overloadName.has_value() || !srcType || !destType)
+                return false;
+
+            struct OperatorCandidate
+            {
+                Ref<Symbol> symbol;
+                Ref<FunctionType> functionType;
+                Ref<StructType> ownerType;
+                OperatorDispatchKind dispatchKind = OperatorDispatchKind::None;
+                int score = 0;
+            };
+
+            auto deduceBindingsFromFitArgument = [&](const Ref<Type>& expectedType,
+                                                     const Ref<Type>& argumentType,
+                                                     const NodePtr<Expression>& argumentExpression,
+                                                     std::unordered_map<std::string, Ref<Type>>& bindings) -> bool
+            {
+                if (!expectedType || !argumentType)
+                    return false;
+
+                if (deduceGenericBindings(expectedType, argumentType, bindings))
+                    return true;
+
+                Ref<Type> readableArgumentType = getAutoReadableType(argumentType);
+                if (argumentType != readableArgumentType)
+                {
+                    if (readableArgumentType && deduceGenericBindings(expectedType, readableArgumentType, bindings))
+                        return true;
+                }
+
+                Ref<Type> resolvedExpectedType = unwrapAliasType(expectedType);
+                if (resolvedExpectedType && resolvedExpectedType->kind() == TypeKind::Reference)
+                {
+                    auto expectedReferenceType = resolvedExpectedType.AsFast<ReferenceType>();
+                    if (expectedReferenceType)
+                    {
+                        Ref<Type> referredType = expectedReferenceType->referredType;
+                        if (deduceGenericBindings(referredType, argumentType, bindings))
+                            return true;
+
+                        if (readableArgumentType && deduceGenericBindings(referredType, readableArgumentType, bindings))
+                            return true;
+
+                        if (argumentExpression && isAddressableRefOperand(argumentExpression))
+                        {
+                            Ref<Type> resolvedArgumentType = unwrapAliasType(argumentType);
+                            if (resolvedArgumentType && resolvedArgumentType->kind() == TypeKind::Reference)
+                                resolvedArgumentType = resolvedArgumentType.AsFast<ReferenceType>()->referredType;
+
+                            if (resolvedArgumentType && deduceGenericBindings(referredType, resolvedArgumentType, bindings))
+                                return true;
+                        }
+                    }
+                }
+
+                return false;
+            };
+
+            auto scoreFitArgumentAgainstParameter = [&](const Ref<Type>& parameterType,
+                                                        const Ref<Type>& rawArgumentType,
+                                                        const Ref<Type>& readableArgumentType,
+                                                        const NodePtr<Expression>& argumentExpression) -> std::optional<int>
+            {
+                if (!parameterType || !rawArgumentType)
+                    return std::nullopt;
+
+                Ref<Type> resolvedParameterType = unwrapAliasType(parameterType);
+                if (resolvedParameterType && resolvedParameterType->kind() == TypeKind::Reference)
+                {
+                    auto referenceType = resolvedParameterType.AsFast<ReferenceType>();
+                    if (argumentExpression && isAddressableRefOperand(argumentExpression))
+                    {
+                        Ref<Type> addressableArgumentType = rawArgumentType;
+                        Ref<Type> resolvedAddressableType = unwrapAliasType(addressableArgumentType);
+                        if (resolvedAddressableType && resolvedAddressableType->kind() == TypeKind::Reference)
+                            addressableArgumentType = resolvedAddressableType.AsFast<ReferenceType>()->referredType;
+
+                        if (isAssignmentLikeCompatible(parameterType, addressableArgumentType))
+                            return referenceType->isMutable ? 4 : 3;
+                    }
+
+                    if (readableArgumentType && isAssignmentLikeCompatible(referenceType->referredType, readableArgumentType))
+                        return referenceType->isMutable ? 2 : 1;
+
+                    return std::nullopt;
+                }
+
+                if (isAssignmentLikeCompatible(parameterType, rawArgumentType))
+                    return 4;
+                if (readableArgumentType && isAssignmentLikeCompatible(parameterType, readableArgumentType))
+                    return 2;
+                return std::nullopt;
+            };
+
+            auto scoreFitReturnAgainstTarget = [&](const Ref<Type>& targetType, const Ref<Type>& returnType) -> std::optional<int>
+            {
+                if (!targetType || !returnType)
+                    return std::nullopt;
+
+                if (isExactType(targetType, returnType))
+                    return 4;
+                if (isAssignmentLikeCompatible(targetType, returnType))
+                    return 2;
+                return std::nullopt;
+            };
+
+            std::vector<OperatorCandidate> candidates;
+
+            auto appendMemberCandidates = [&](const Ref<Type>& candidateReceiverType)
+            {
+                Ref<Type> currentType = unwrapAliasType(candidateReceiverType);
+                while (currentType && currentType->kind() == TypeKind::Reference)
+                    currentType = unwrapAliasType(currentType.AsFast<ReferenceType>()->referredType);
+
+                if (!currentType || currentType->kind() != TypeKind::Struct)
+                    return;
+
+                Ref<Type> ownerType = nullptr;
+                Ref<Symbol> candidateSymbol = findStructMemberInHierarchy(currentType, std::string(*overloadName), &ownerType);
+                if (!candidateSymbol)
+                    return;
+
+                if (!validateStructMemberAccess(currentStructType_, ownerType, candidateSymbol, node.location()))
+                {
+                    node.refType = Compiler::get().getTypeContext().getUnknown();
+                    return;
+                }
+
+                auto ownerStructType = ownerType ? unwrapAliasType(ownerType).AsFast<StructType>() : nullptr;
+                if (!ownerStructType)
+                    return;
+
+                std::vector<Ref<Symbol>> overloads;
+                if (candidateSymbol->kind == SymbolKind::FunctionGroup)
+                    overloads = candidateSymbol->overloads;
+                else if (candidateSymbol->kind == SymbolKind::Function)
+                    overloads.push_back(candidateSymbol);
+                else
+                    return;
+
+                for (const auto& overload : overloads)
+                {
+                    if (!overload || !overload->type || overload->type->kind() != TypeKind::Function)
+                        continue;
+
+                    Ref<Type> candidateType = overload->type;
+                    std::unordered_map<std::string, Ref<Type>> genericBindings;
+                    auto candidateFunctionType = candidateType.AsFast<FunctionType>();
+                    if (!candidateFunctionType || !candidateFunctionType->paramTypes.empty())
+                        continue;
+
+                    if (!overload->genericParameterNames.empty())
+                    {
+                        if (!deduceGenericBindings(candidateFunctionType->returnType, destType, genericBindings))
+                            continue;
+
+                        candidateType = instantiateGenericType(candidateType, genericBindings);
+                        candidateFunctionType = candidateType ? candidateType.AsFast<FunctionType>() : nullptr;
+                        if (!candidateFunctionType || !candidateFunctionType->paramTypes.empty())
+                            continue;
+                    }
+
+                    auto returnScore = scoreFitReturnAgainstTarget(destType, candidateFunctionType->returnType);
+                    if (!returnScore.has_value())
+                        continue;
+
+                    candidates.push_back(OperatorCandidate{
+                        .symbol = overload,
+                        .functionType = candidateFunctionType,
+                        .ownerType = ownerStructType,
+                        .dispatchKind = OperatorDispatchKind::Member,
+                        .score = *returnScore + 2
+                    });
+                }
+            };
+
+            appendMemberCandidates(srcType);
+            Ref<Type> readableSrcType = getAutoReadableType(srcType);
+            if (readableSrcType != srcType)
+                appendMemberCandidates(readableSrcType);
+
+            std::unordered_set<const Symbol*> seenFreeSymbols;
+            auto appendFreeSymbol = [&](const Ref<Symbol>& candidateSymbol)
+            {
+                if (!candidateSymbol || seenFreeSymbols.contains(candidateSymbol.Get()))
+                    return;
+
+                seenFreeSymbols.insert(candidateSymbol.Get());
+
+                std::vector<Ref<Symbol>> overloads;
+                if (candidateSymbol->kind == SymbolKind::FunctionGroup)
+                    overloads = candidateSymbol->overloads;
+                else if (candidateSymbol->kind == SymbolKind::Function)
+                    overloads.push_back(candidateSymbol);
+                else
+                    return;
+
+                for (const auto& overload : overloads)
+                {
+                    if (!overload || !overload->type || overload->type->kind() != TypeKind::Function)
+                        continue;
+
+                    Ref<Type> candidateType = overload->type;
+                    std::unordered_map<std::string, Ref<Type>> genericBindings;
+                    auto candidateFunctionType = candidateType.AsFast<FunctionType>();
+                    if (!candidateFunctionType || candidateFunctionType->paramTypes.size() != 1)
+                        continue;
+
+                    if (!overload->genericParameterNames.empty())
+                    {
+                        if (!deduceBindingsFromFitArgument(candidateFunctionType->paramTypes[0], srcType, node.operand, genericBindings) ||
+                            !deduceGenericBindings(candidateFunctionType->returnType, destType, genericBindings))
+                        {
+                            continue;
+                        }
+
+                        candidateType = instantiateGenericType(candidateType, genericBindings);
+                        candidateFunctionType = candidateType ? candidateType.AsFast<FunctionType>() : nullptr;
+                        if (!candidateFunctionType || candidateFunctionType->paramTypes.size() != 1)
+                            continue;
+                    }
+
+                    auto argumentScore = scoreFitArgumentAgainstParameter(
+                        candidateFunctionType->paramTypes[0],
+                        srcType,
+                        getAutoReadableType(srcType),
+                        node.operand
+                    );
+                    if (!argumentScore.has_value())
+                        continue;
+
+                    auto returnScore = scoreFitReturnAgainstTarget(destType, candidateFunctionType->returnType);
+                    if (!returnScore.has_value())
+                        continue;
+
+                    candidates.push_back(OperatorCandidate{
+                        .symbol = overload,
+                        .functionType = candidateFunctionType,
+                        .ownerType = nullptr,
+                        .dispatchKind = OperatorDispatchKind::Free,
+                        .score = *argumentScore + *returnScore
+                    });
+                }
+            };
+
+            appendFreeSymbol(currentScope_ ? currentScope_->resolve(std::string(*overloadName)) : nullptr);
+            if (Ref<Scope> globalScope = scopes_.empty() ? nullptr : scopes_.front())
+            {
+                auto appendAssociatedScopeSymbol = [&](const Ref<Type>& type)
+                {
+                    Ref<Type> associatedType = unwrapAliasType(type);
+                    while (associatedType && associatedType->kind() == TypeKind::Reference)
+                        associatedType = unwrapAliasType(associatedType.AsFast<ReferenceType>()->referredType);
+
+                    if (!associatedType || associatedType->kind() != TypeKind::Struct)
+                        return;
+
+                    auto structType = associatedType.AsFast<StructType>();
+                    if (!structType)
+                        return;
+
+                    std::string qualifiedName = structType->scopePath.empty()
+                        ? std::string(*overloadName)
+                        : structType->scopePath + "::" + std::string(*overloadName);
+                    appendFreeSymbol(resolveQualifiedSymbol(globalScope, qualifiedName));
+                };
+
+                appendAssociatedScopeSymbol(srcType);
+                appendAssociatedScopeSymbol(readableSrcType);
+                appendAssociatedScopeSymbol(destType);
+            }
+
+            std::optional<OperatorCandidate> bestCandidate;
+            bool isAmbiguous = false;
+            for (const auto& candidate : candidates)
+            {
+                if (!bestCandidate.has_value() || candidate.score > bestCandidate->score)
+                {
+                    bestCandidate = candidate;
+                    isAmbiguous = false;
+                }
+                else if (candidate.score == bestCandidate->score)
+                {
+                    isAmbiguous = true;
+                }
+            }
+
+            if (!bestCandidate.has_value())
+                return false;
+
+            if (isAmbiguous)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Ambiguous overload for operator 'fit' from '{}' to '{}'.",
+                    srcType ? srcType->toString() : "<unknown>",
+                    destType ? destType->toString() : "<unknown>"
+                );
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return true;
+            }
+
+            node.referencedSymbol = bestCandidate->symbol;
+            node.operatorDispatchKind = bestCandidate->dispatchKind;
+            node.overloadFunctionType = bestCandidate->functionType.AsFast<Type>();
+            node.refType = bestCandidate->functionType
+                ? bestCandidate->functionType->returnType
+                : Compiler::get().getTypeContext().getUnknown();
+            return true;
+        };
+
+        if (tryResolveFitOperatorOverload())
+            return;
 
         struct GenericFitConstraintInfo
         {
@@ -8750,7 +10222,7 @@ namespace wio::sema
             currentExpectedExpressionType_ = previousExpectedExpressionType;
             allowContextualNumericLiteralTyping_ = previousAllowContextualNumericLiteralTyping;
             Ref<Type> initType = node.initializer->refType.Lock();
-    
+
             if (!sym->type || sym->type->isUnknown()) 
             {
                 sym->type = initType;
@@ -8962,6 +10434,8 @@ namespace wio::sema
             node.name->token.value == "OnConstruct" || node.name->token.value == "OnDestruct";
         const bool isOperatorMethod = common::isOperatorOverloadName(node.name->token.value);
         const bool isUnaryOperatorMethod = common::isUnaryOperatorOverloadName(node.name->token.value);
+        const bool isConversionOperatorMethod = common::isConversionOperatorOverloadName(node.name->token.value);
+        const bool isIndexOperatorMethod = common::isIndexOperatorOverloadName(node.name->token.value);
         const bool isComponentMethodContext = currentStruct && !currentStruct->isObject && !currentStruct->isInterface;
         bool hasInstantiate = hasAttribute(node.attributes, Attribute::Instantiate);
         const bool hasFunctionParameterPack = std::ranges::any_of(node.parameters, [](const Parameter& parameter)
@@ -8994,11 +10468,6 @@ namespace wio::sema
 
         if (isOperatorMethod)
         {
-            if (!isStructMethod)
-            {
-                WIO_LOG_ADD_ERROR(node.location(), "Operator overloads are currently supported only on object, component, and interface methods.");
-            }
-
             if (node.whenCondition || node.whenFallback)
             {
                 WIO_LOG_ADD_ERROR(node.location(), "Operator overloads do not support when/else clauses.");
@@ -9009,14 +10478,33 @@ namespace wio::sema
                 WIO_LOG_ADD_ERROR(node.location(), "Operator overloads cannot use parameter packs.");
             }
 
-            const size_t expectedParameterCount = isUnaryOperatorMethod ? 0u : 1u;
+            const bool isAssignmentOperator = common::isAssignmentOperatorOverloadName(node.name->token.value);
+            const size_t expectedParameterCount = isStructMethod
+                ? (isUnaryOperatorMethod || isConversionOperatorMethod ? 0u : 1u)
+                : (isUnaryOperatorMethod || isConversionOperatorMethod ? 1u : 2u);
             if (node.parameters.size() != expectedParameterCount)
             {
                 WIO_LOG_ADD_ERROR(
                     node.location(),
-                    isUnaryOperatorMethod
-                        ? "Unary operator overloads must declare zero parameters."
-                        : "Binary operator overloads must declare exactly one parameter."
+                    isStructMethod
+                        ? (isUnaryOperatorMethod
+                            ? "Member unary operator overloads must declare zero parameters."
+                            : (isConversionOperatorMethod
+                                ? "Member conversion operator overloads must declare zero parameters."
+                                : (isIndexOperatorMethod
+                                    ? "Member subscript operator overloads must declare exactly one parameter."
+                                    : (isAssignmentOperator
+                                        ? "Member assignment operator overloads must declare exactly one parameter."
+                                        : "Member binary operator overloads must declare exactly one parameter."))))
+                        : (isUnaryOperatorMethod
+                            ? "Free unary operator overloads must declare exactly one parameter."
+                            : (isConversionOperatorMethod
+                                ? "Free conversion operator overloads must declare exactly one parameter."
+                                : (isIndexOperatorMethod
+                                    ? "Free subscript operator overloads must declare exactly two parameters."
+                                    : (isAssignmentOperator
+                                        ? "Free assignment operator overloads must declare exactly two parameters."
+                                        : "Free binary operator overloads must declare exactly two parameters."))))
                 );
             }
 
@@ -9062,15 +10550,11 @@ namespace wio::sema
 
             if (isStructMethod)
             {
-                if (isOperatorMethod)
-                {
-                    WIO_LOG_ADD_ERROR(node.location(), "Generic operator overloads are not supported yet.");
-                }
-                else if (!currentStruct || !currentStruct->isObject)
+                if (!isOperatorMethod && (!currentStruct || !currentStruct->isObject))
                 {
                     WIO_LOG_ADD_ERROR(node.location(), "Generic methods are currently supported only on object methods.");
                 }
-                else if (node.name->token.value == "OnConstruct" || node.name->token.value == "OnDestruct")
+                else if (!isOperatorMethod && (node.name->token.value == "OnConstruct" || node.name->token.value == "OnDestruct"))
                 {
                     WIO_LOG_ADD_ERROR(node.location(), "Generic constructors and destructors are not supported yet.");
                 }

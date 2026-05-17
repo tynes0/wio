@@ -1,0 +1,41 @@
+use std::assert as assert;
+use std::console as console;
+
+fn First(values: ref i32[]) -> ref i32 {
+    return ref values[0usize];
+}
+
+fn Second(values: ref i32[]) -> ref i32 {
+    return ref values[1usize];
+}
+
+fn Increment(value: i32) -> i32 {
+    return value + 1;
+}
+
+fn Combine(left: i32, right: i32) -> i32 {
+    return left + right;
+}
+
+fn ReadFirstValue(values: ref i32[]) -> i32 {
+    return First(values);
+}
+
+fn Entry() -> i32 {
+    mut values = [10, 20];
+
+    let copied: i32 = First(ref values);
+    let incremented = Increment(First(ref values));
+    let combined = Combine(First(ref values), 5);
+    let explicit = deref Second(ref values);
+    let returned = ReadFirstValue(ref values);
+
+    assert::ExpectEqual(copied, 10, "ref-returning expressions should auto-read into typed local values");
+    assert::ExpectEqual(incremented, 11, "ref-returning expressions should auto-read in function argument positions");
+    assert::ExpectEqual(combined, 15, "ref-returning expressions should participate in normal value calls");
+    assert::ExpectEqual(explicit, 20, "deref should explicitly dereference a readable reference");
+    assert::ExpectEqual(returned, 10, "ref-returning expressions should auto-read in return statements");
+
+    console::PrintLine("read-reference-flow-ok");
+    return 0;
+}

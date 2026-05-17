@@ -1,0 +1,4 @@
+fn Entry() -> void {
+    let value = 10;
+    let broken = deref value;
+}

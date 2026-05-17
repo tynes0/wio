@@ -37,6 +37,7 @@ namespace wio
        case TokenType::kwType: return "kwType";
        case TokenType::kwRef: return "kwRef";
        case TokenType::kwView: return "kwView";
+       case TokenType::kwDeref: return "kwDeref";
        case TokenType::kwFit: return "kwFit";
        case TokenType::kwEnum: return "kwEnum";
        case TokenType::kwFlag: return "kwFlag";
@@ -292,6 +293,7 @@ namespace wio
    bool Token::isUnary() const
    {
        return (type == TokenType::kwRef ||
+          type == TokenType::kwDeref ||
           type == TokenType::kwNot ||
           type == TokenType::opBitNot ||
           type == TokenType::opPlus ||

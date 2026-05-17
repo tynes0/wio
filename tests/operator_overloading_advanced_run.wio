@@ -1,0 +1,69 @@
+use std::assert as assert;
+use std::console as console;
+use std::traits as traits;
+
+component Int2 {
+    x: i32;
+    y: i32;
+
+    fn operator +(rhs: Int2) -> Int2 {
+        return Int2(self.x + rhs.x, self.y + rhs.y);
+    }
+
+    fn operator +=(rhs: Int2) -> Int2 {
+        self.x += rhs.x;
+        self.y += rhs.y;
+        return self;
+    }
+
+    fn operator ==(rhs: Int2) -> bool {
+        return self.x == rhs.x and self.y == rhs.y;
+    }
+}
+
+@Apply(traits::IsNumeric<T>)
+component Scalar<T> {
+    value: T;
+
+    fn operator +(rhs: Scalar<T>) -> Scalar<T> {
+        return Scalar<T>(self.value + rhs.value);
+    }
+
+    fn operator +=(rhs: Scalar<T>) -> Scalar<T> {
+        self.value += rhs.value;
+        return Scalar<T>(self.value);
+    }
+}
+
+fn operator +(lhs: i32, rhs: Int2) -> Int2 {
+    return Int2(lhs + rhs.x, lhs + rhs.y);
+}
+
+@Apply(traits::IsNumeric<T>)
+fn operator +<T>(lhs: T, rhs: Scalar<T>) -> Scalar<T> {
+    return Scalar<T>(lhs + rhs.value);
+}
+
+type Scalarf = Scalar<f32>;
+
+fn Entry() -> i32 {
+    let lifted = 10 + Int2(2, 4);
+    assert::ExpectTrue(lifted == Int2(12, 14), "free operator overloads should support mixed external dispatch");
+
+    mut sum = Int2(1, 3);
+    sum += Int2(4, 5);
+    assert::ExpectTrue(sum == Int2(5, 8), "member assignment operators should mutate the left operand");
+
+    let genericSum = Scalarf(1.5f) + Scalarf(2.5f);
+    assert::ExpectEqual(genericSum.value, 4.0f, "generic member operator overloads should resolve correctly");
+
+    let liftedGeneric = 3.0f + Scalarf(2.5f);
+    assert::ExpectEqual(liftedGeneric.value, 5.5f, "generic free operator overloads should resolve correctly");
+
+    mut genericAssigned = Scalarf(2.0f);
+    genericAssigned += Scalarf(0.5f);
+    assert::ExpectEqual(genericAssigned.value, 2.5f, "generic assignment operators should dispatch through component methods");
+
+    console::PrintLine("operator-overload-advanced-ok");
+    return 0;
+}

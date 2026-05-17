@@ -1,0 +1,12 @@
+component ValueIndexer {
+    value: i32;
+
+    fn operator [](index: usize) -> i32 {
+        return self.value + (index fit i32);
+    }
+}
+
+fn Entry() -> void {
+    mut values = ValueIndexer(1);
+    values[0usize] = 5;
+}

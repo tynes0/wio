@@ -117,6 +117,12 @@ namespace wio
         ReferenceView
     );
 
+    FrenumClassInNamespace(wio, OperatorDispatchKind, uint8_t,
+        None,
+        Member,
+        Free
+    );
+
     FrenumClassInNamespace(wio, IntrinsicMember, uint8_t,
         None,
         PackSize,
@@ -353,6 +359,8 @@ namespace wio
         NodePtr<Expression> left;
         Token op;
         NodePtr<Expression> right;
+        OperatorDispatchKind operatorDispatchKind = OperatorDispatchKind::None;
+        WeakRef<sema::Type> overloadFunctionType = nullptr;
         
         BinaryExpression(NodePtr<Expression> _left, Token _op, NodePtr<Expression> _right, common::Location _loc = common::Location::invalid());
         ~BinaryExpression() override;
@@ -367,6 +375,8 @@ namespace wio
         Token op;
         NodePtr<Expression> operand;
         UnaryOperatorType opType;
+        OperatorDispatchKind operatorDispatchKind = OperatorDispatchKind::None;
+        WeakRef<sema::Type> overloadFunctionType = nullptr;
 
         UnaryExpression(Token _op, NodePtr<Expression> _operand, UnaryOperatorType _opType = UnaryOperatorType::Prefix, common::Location _loc = common::Location::invalid());
         ~UnaryExpression() override;
@@ -379,6 +389,8 @@ namespace wio
         NodePtr<Expression> left;
         Token op;
         NodePtr<Expression> right;
+        OperatorDispatchKind operatorDispatchKind = OperatorDispatchKind::None;
+        WeakRef<sema::Type> overloadFunctionType = nullptr;
         
         AssignmentExpression(NodePtr<Expression> _left, Token _op, NodePtr<Expression> _right, common::Location _loc = common::Location::invalid());
         ~AssignmentExpression() override;
@@ -521,6 +533,8 @@ namespace wio
 
         NodePtr<Expression> object;
         NodePtr<Expression> index;
+        OperatorDispatchKind operatorDispatchKind = OperatorDispatchKind::None;
+        WeakRef<sema::Type> overloadFunctionType = nullptr;
 
         ArrayAccessExpression(NodePtr<Expression> _object, NodePtr<Expression> _index, common::Location _loc = common::Location::invalid());
         ~ArrayAccessExpression() override;
@@ -613,6 +627,8 @@ namespace wio
 
         NodePtr<Expression> operand;
         NodePtrUnchecked<TypeSpecifier> targetType;
+        OperatorDispatchKind operatorDispatchKind = OperatorDispatchKind::None;
+        WeakRef<sema::Type> overloadFunctionType = nullptr;
 
         FitExpression(NodePtr<Expression> _operand, NodePtrUnchecked<TypeSpecifier> _targetType, common::Location _loc);
         ~FitExpression() override;

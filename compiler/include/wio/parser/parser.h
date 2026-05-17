@@ -50,7 +50,7 @@ namespace wio
         NodePtr<AttributeStatement> parseAttributeStatement();
         NodePtr<VariableDeclaration> parseVariableDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
         NodePtr<TypeAliasDeclaration> parseTypeAliasDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
-        NodePtr<FunctionDeclaration> parseFunctionDeclaration(std::vector<NodePtr<AttributeStatement>> attributes, bool isLifecycle = false);
+        NodePtr<FunctionDeclaration> parseFunctionDeclaration(std::vector<NodePtr<AttributeStatement>> attributes, bool isLifecycle = false, bool isStructMethod = false);
         NodePtr<Statement> parseInterfaceDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
         NodePtr<Statement> parseComponentDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
         NodePtr<Statement> parseObjectDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);

@@ -1,0 +1,30 @@
+use std::assert as assert;
+use std::console as console;
+use std::traits as traits;
+
+@Apply(traits::IsNumeric<T>)
+component Vector2Base<T> {
+    x: T;
+    y: T;
+}
+
+fn One<T>() -> Vector2Base<T> {
+    return Vector2Base<T>(1 fit T, 1 fit T);
+}
+
+fn Down<T>() -> Vector2Base<T> {
+    return Vector2Base<T>(0 fit T, -1 fit T);
+}
+
+fn Entry() -> i32 {
+    let one = One<f32>();
+    let down = Down<f64>();
+
+    assert::ExpectEqual(one.x, 1.0f, "generic fit targets should use numeric conversions for constrained numeric parameters");
+    assert::ExpectEqual(one.y, 1.0f, "generic fit targets should convert each argument independently");
+    assert::ExpectEqual(down.x, 0.0, "generic fit targets should support zero literals");
+    assert::ExpectEqual(down.y, -1.0, "generic fit targets should support signed numeric literals");
+
+    console::PrintLine("generic-fit-target-ok");
+    return 0;
+}

@@ -623,6 +623,16 @@ ref ref i32
 
 `view T` means a read-only reference-like type.
 
+`deref expr` explicitly reads one reference layer and produces the referred
+value in expression position.
+
+Examples:
+
+```wio
+let value: i32 = deref someRef;
+let next = Increment(deref someRef);
+```
+
 #### Edge Case: Nested Reference Types
 
 Nested forms such as:
@@ -1428,6 +1438,66 @@ x += 5;
 x -= 1;
 x <<= 2;
 ```
+
+### 11.2.1 Operator Overloading
+
+Wio supports both member and free operator overloads.
+
+- Member unary overloads declare `0` parameters.
+- Member binary and assignment overloads declare `1` parameter.
+- Member conversion overloads declare `0` parameters and are invoked through `fit`.
+- Member subscript overloads declare `1` parameter and are invoked through `[]`.
+- Free unary overloads declare `1` parameter.
+- Free binary and assignment overloads declare `2` parameters.
+- Free conversion overloads declare `1` parameter and are invoked through `fit`.
+- Free subscript overloads declare `2` parameters and are invoked through `[]`.
+
+Examples:
+
+```wio
+component Int2 {
+    x: i32;
+    y: i32;
+
+    fn operator +(rhs: Int2) -> Int2 {
+        return Int2(self.x + rhs.x, self.y + rhs.y);
+    }
+
+    fn operator +=(rhs: Int2) -> Int2 {
+        self.x += rhs.x;
+        self.y += rhs.y;
+        return Int2(self.x, self.y);
+    }
+}
+
+fn operator +(lhs: i32, rhs: Int2) -> Int2 {
+    return Int2(lhs + rhs.x, lhs + rhs.y);
+}
+
+component Scalarf {
+    value: f32;
+
+    fn operator fit() -> f32 {
+        return self.value;
+    }
+}
+
+component Pair {
+    x: i32;
+    y: i32;
+
+    fn operator [](index: usize) -> ref i32 {
+        if (index == 0usize) {
+            return ref self.x;
+        }
+
+        return ref self.y;
+    }
+}
+```
+
+Generic operator overloads are also supported on ordinary generic functions and
+generic component/object methods.
 
 ### 11.3 Comparison Operators
 

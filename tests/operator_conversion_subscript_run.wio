@@ -1,0 +1,46 @@
+use std::assert as assert;
+use std::console as console;
+
+component Scalarf {
+    value: f32;
+
+    fn operator fit() -> f32 {
+        return self.value;
+    }
+}
+
+component Pair {
+    x: i32;
+    y: i32;
+
+    fn operator [](index: usize) -> ref i32 {
+        if (index == 0usize) {
+            return ref self.x;
+        }
+
+        return ref self.y;
+    }
+}
+
+fn operator fit(value: i32) -> Scalarf {
+    return Scalarf(value fit f32);
+}
+
+fn Entry() -> i32 {
+    let scalar = Scalarf(2.5f) fit f32;
+    let wrapped = 7 fit Scalarf;
+
+    mut pair = Pair(3, 4);
+    pair[1usize] = 9;
+
+    let first = pair[0usize];
+    let second = pair[1usize];
+
+    assert::ExpectEqual(scalar, 2.5f, "member conversion operators should dispatch through fit");
+    assert::ExpectEqual(wrapped.value, 7.0f, "free conversion operators should dispatch through fit");
+    assert::ExpectEqual(first, 3, "subscript overloads should expose readable reference results");
+    assert::ExpectEqual(second, 9, "subscript assignment should mutate through ref-returning overloads");
+
+    console::PrintLine("operator-conversion-subscript-ok");
+    return 0;
+}

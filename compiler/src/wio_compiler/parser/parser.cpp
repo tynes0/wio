@@ -1141,7 +1141,7 @@ namespace wio
         );
     }
 
-    NodePtr<FunctionDeclaration> Parser::parseFunctionDeclaration(std::vector<NodePtr<AttributeStatement>> attributes, bool isLifecycle)
+    NodePtr<FunctionDeclaration> Parser::parseFunctionDeclaration(std::vector<NodePtr<AttributeStatement>> attributes, bool isLifecycle, bool isStructMethod)
     {
         Token startTok = !isLifecycle ? consume(TokenType::kwFn) : peek();
 
@@ -1151,11 +1151,12 @@ namespace wio
         {
             advance();
             operatorToken = advance();
-            if (!common::getBinaryOperatorOverloadName(operatorToken->type).has_value() &&
-                !common::getUnaryOperatorOverloadName(operatorToken->type).has_value())
+            if (!common::isOverloadableOperatorToken(operatorToken->type))
             {
                 utError("Expected an overloadable operator after 'operator'.", operatorToken->loc);
             }
+            if (operatorToken->type == TokenType::leftBracket)
+                consume(TokenType::rightBracket);
 
             Token syntheticNameToken = *operatorToken;
             syntheticNameToken.type = TokenType::identifier;
@@ -1163,10 +1164,11 @@ namespace wio
             name = makeNodePtr<Identifier>(std::move(syntheticNameToken));
         }
         else if (!isLifecycle &&
-                 (common::getBinaryOperatorOverloadName(peek().type).has_value() ||
-                  common::getUnaryOperatorOverloadName(peek().type).has_value()))
+                 common::isOverloadableOperatorToken(peek().type))
         {
             operatorToken = advance();
+            if (operatorToken->type == TokenType::leftBracket)
+                consume(TokenType::rightBracket);
 
             Token syntheticNameToken = *operatorToken;
             syntheticNameToken.type = TokenType::identifier;
@@ -1250,10 +1252,17 @@ namespace wio
 
         if (operatorToken.has_value())
         {
-            auto overloadName = common::getOperatorOverloadName(operatorToken->type, parameters.size());
+            auto overloadName = isStructMethod
+                ? common::getMemberOperatorOverloadName(operatorToken->type, parameters.size())
+                : common::getFreeOperatorOverloadName(operatorToken->type, parameters.size());
             if (!overloadName.has_value())
             {
-                utError("Operator overloads must declare either zero parameters (unary) or one parameter (binary).", operatorToken->loc);
+                utError(
+                    isStructMethod
+                        ? "Invalid member operator overload arity for the selected operator."
+                        : "Invalid free operator overload arity for the selected operator.",
+                    operatorToken->loc
+                );
             }
 
             name->token.value = std::string(*overloadName);
@@ -1330,7 +1339,7 @@ namespace wio
             while (peek().type == TokenType::atSign)
                 methodAttrs.push_back(parseAttributeStatement());
 
-            auto method = parseFunctionDeclaration(std::move(methodAttrs), false);
+            auto method = parseFunctionDeclaration(std::move(methodAttrs), false, true);
             
             if (method->body != nullptr) {
                 utError("Interface methods cannot have a body. Use ';' instead of '{...}'.", method->location());
@@ -1391,7 +1400,7 @@ namespace wio
                 match(TokenType::identifier, "OnDestruct", false))
             {
                 bool isLifecycle = !match(TokenType::kwFn);
-                auto method = parseFunctionDeclaration(std::move(memberAttrs), isLifecycle);
+                auto method = parseFunctionDeclaration(std::move(memberAttrs), isLifecycle, true);
                 
                 members.push_back(ComponentMember{
                     .attributes = std::vector<NodePtr<AttributeStatement>>{},
@@ -1497,7 +1506,7 @@ namespace wio
                 match(TokenType::identifier, "OnDestruct", false))
             {
                 bool isLifecycle = !match(TokenType::kwFn);
-                auto method = parseFunctionDeclaration(std::move(memberAttrs), isLifecycle);
+                auto method = parseFunctionDeclaration(std::move(memberAttrs), isLifecycle, true);
                 
                 members.push_back(ObjectMember{
                     .attributes = std::vector<NodePtr<AttributeStatement>>{},
@@ -1993,6 +2002,7 @@ namespace wio
         // Prefix (unary)
         // ---------------------------------
         case TokenType::kwRef:
+        case TokenType::kwDeref:
         case TokenType::kwNot:        // not
         case TokenType::opLogicalNot: // !
         case TokenType::opBitNot:     // ~

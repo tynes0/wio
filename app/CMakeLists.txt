@@ -1570,6 +1570,34 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_operator_overloading_advanced_run
+        "${CMAKE_SOURCE_DIR}/tests/operator_overloading_advanced_run.wio"
+        "operator-overload-advanced-ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_read_reference_value_flow_run
+        "${CMAKE_SOURCE_DIR}/tests/read_reference_value_flow_run.wio"
+        "read-reference-flow-ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_operator_conversion_subscript_run
+        "${CMAKE_SOURCE_DIR}/tests/operator_conversion_subscript_run.wio"
+        "operator-conversion-subscript-ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_generic_fit_target_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_fit_target_run.wio"
+        "generic-fit-target-ok"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_generic_apply_type_and_object_run
         "${CMAKE_SOURCE_DIR}/tests/generic_apply_type_and_object_run.wio"
         "Generic apply types: 3, 1.5"
@@ -1963,7 +1991,21 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test_clean(
         wio_invalid_operator_overload_invalid_arity
         "${CMAKE_SOURCE_DIR}/tests/invalid/operator_overload_invalid_arity.wio"
-        "Operator overloads must declare either zero parameters \\(unary\\) or one parameter \\(binary\\)\\."
+        "Invalid member operator overload arity for the selected operator\\."
+        "Generated C\\+\\+ output:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_read_requires_reference
+        "${CMAKE_SOURCE_DIR}/tests/invalid/read_requires_reference.wio"
+        "The 'deref' operator requires a readable reference to a value-like type\\."
+        "Generated C\\+\\+ output:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_operator_subscript_assignment_requires_ref
+        "${CMAKE_SOURCE_DIR}/tests/invalid/operator_subscript_assignment_requires_ref.wio"
+        "Subscript assignment requires operator '\\[\\]' to return a mutable reference\\."
         "Generated C\\+\\+ output:"
     )
 
