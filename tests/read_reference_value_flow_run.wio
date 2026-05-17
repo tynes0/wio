@@ -25,12 +25,14 @@ fn Entry() -> i32 {
     mut values = [10, 20];
 
     let copied: i32 = First(ref values);
+    let inferred = First(ref values);
     let incremented = Increment(First(ref values));
     let combined = Combine(First(ref values), 5);
     let explicit = deref Second(ref values);
     let returned = ReadFirstValue(ref values);
 
     assert::ExpectEqual(copied, 10, "ref-returning expressions should auto-read into typed local values");
+    assert::ExpectEqual(inferred, 10, "ref-returning expressions should auto-read into inferred local values");
     assert::ExpectEqual(incremented, 11, "ref-returning expressions should auto-read in function argument positions");
     assert::ExpectEqual(combined, 15, "ref-returning expressions should participate in normal value calls");
     assert::ExpectEqual(explicit, 20, "deref should explicitly dereference a readable reference");

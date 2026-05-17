@@ -633,6 +633,12 @@ let value: i32 = deref someRef;
 let next = Increment(deref someRef);
 ```
 
+Readable reference results also auto-read in ordinary value contexts such as
+inferred local declarations, typed local declarations, value parameters, and
+return statements. If you want to preserve the reference layer itself, use an
+explicit `ref` type or an explicit `deref` chain that leaves the desired number
+of reference layers.
+
 #### Edge Case: Nested Reference Types
 
 Nested forms such as:

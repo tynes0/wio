@@ -10214,6 +10214,24 @@ namespace wio::sema
     
         if (node.initializer)
         {
+            auto shouldAutoReadInferredInitializer = [&](const NodePtr<Expression>& initializer,
+                                                         const Ref<Type>& initializerType) -> bool
+            {
+                if (!initializer || !shouldAutoReadReferenceType(initializerType))
+                    return false;
+
+                if (initializer->is<RefExpression>())
+                    return false;
+
+                if (const auto* unary = initializer->as<UnaryExpression>())
+                {
+                    if (unary->op.type == TokenType::kwDeref)
+                        return false;
+                }
+
+                return true;
+            };
+
             Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
             bool previousAllowContextualNumericLiteralTyping = allowContextualNumericLiteralTyping_;
             currentExpectedExpressionType_ = sym->type;
@@ -10225,8 +10243,12 @@ namespace wio::sema
 
             if (!sym->type || sym->type->isUnknown()) 
             {
-                sym->type = initType;
-                node.name->refType = initType;
+                Ref<Type> inferredType = initType;
+                if (shouldAutoReadInferredInitializer(node.initializer, initType))
+                    inferredType = getAutoReadableType(initType);
+
+                sym->type = inferredType;
+                node.name->refType = inferredType;
             }
             else if (initType && !initType->isUnknown() && !isAssignmentLikeCompatible(sym->type, initType)) 
             {
