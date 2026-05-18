@@ -3,6 +3,14 @@
 Wio is a C++20-based language experiment with a pipeline that lexes, parses,
 analyzes, and lowers `.wio` files into generated C++.
 
+Useful reference docs:
+
+- [Language reference](C:/Users/cihan/RiderProjects/wio/docs/WIO_LANGUAGE_DRAFT.md)
+- [v1 freeze snapshot](C:/Users/cihan/RiderProjects/wio/docs/WIO_V1_FREEZE.md)
+- [Project system](C:/Users/cihan/RiderProjects/wio/docs/WIO_PROJECT_SYSTEM.md)
+- [Standard library](C:/Users/cihan/RiderProjects/wio/docs/WIO_STD.md)
+- [Host SDK](C:/Users/cihan/RiderProjects/wio/docs/WIO_SDK.md)
+
 ### Build
 
 ```powershell

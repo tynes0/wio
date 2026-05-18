@@ -136,5 +136,13 @@ Notes:
 ## Recent Partial Foundation
 
 - [x] The first member-operator overloading slice landed.
+- [x] Operator overloading was fully closed:
+      member/free unary-binary-assignment operators, `fit`, `[]`, `()`,
+      generic overloads, and the explicit `deref` ergonomics slice now work
+      together.
+- [x] Generic validation hardening landed:
+      generic bodies keep symbolic validation for codegen, gain concrete
+      call-site validation, and now understand numeric/integer constraint
+      predicates like `std::traits::IsNumeric<T>` during semantic checks.
       Unary/binary member operator resolution and codegen are working.
       Final hardening continues to be tracked in `TODOLIST.md`.

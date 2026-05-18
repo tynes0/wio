@@ -14,10 +14,10 @@ Status markers:
 
 ## Work Required For Version 1.0.0
 
-1. [~] Finish operator overloading.
-   The first member unary/binary slice landed; the remaining semantics, diagnostics, docs, and broader test matrix still need to close.
+1. [x] Finish operator overloading.
+   Member/free unary-binary-assignment operators, `fit`, `[]`, `()`, generic overloads, and the `deref` ergonomics pass are now in place.
 2. [~] Freeze the language surface.
-   A stable contract must be written for `component / object / interface / native / Result / any / Box / opaque / enum / flagset / reflection / pack`.
+   A stable contract must be written for `component / object / interface / native / Result / any / Box / opaque / enum / flagset / reflection / pack`, and the generic surface should now move into freeze / polish mode.
 3. [~] Declare `makewio` as the official primary project format.
    `wio.project.json` should remain clearly marked as legacy / compatibility only.
 4. [~] Make the CLI first-class and freeze its behavior.
