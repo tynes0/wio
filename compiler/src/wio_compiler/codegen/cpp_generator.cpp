@@ -5612,6 +5612,89 @@ namespace wio::codegen
             return;
         }
 
+        if (auto operatorSymbol = node.referencedSymbol.Lock();
+            operatorSymbol &&
+            common::isCallOperatorOverloadName(operatorSymbol->name) &&
+            node.operatorDispatchKind != OperatorDispatchKind::None)
+        {
+            auto operatorFunctionType = node.overloadFunctionType.Lock().AsFast<sema::FunctionType>();
+            auto mangledOperatorFunctionType = getMangledCallableFunctionType(
+                operatorSymbol,
+                operatorFunctionType,
+                node.operatorDispatchKind == OperatorDispatchKind::Member
+                    ? node.arguments.size()
+                    : node.arguments.size() + 1u
+            );
+
+            auto emitOperatorReceiverAndAccess = [&](const NodePtr<Expression>& receiver)
+            {
+                Ref<sema::Type> receiverType = receiver ? receiver->refType.Lock() : nullptr;
+                Ref<sema::Type> resolvedReceiverType = unwrapAliasTypeForCodegen(receiverType);
+
+                bool usePointerAccess =
+                    resolvedReceiverType && resolvedReceiverType->kind() == sema::TypeKind::Reference;
+                if (usePointerAccess)
+                {
+                    auto receiverReferenceType = resolvedReceiverType.AsFast<sema::ReferenceType>();
+                    Ref<sema::Type> referredType = unwrapAliasTypeForCodegen(receiverReferenceType->referredType);
+                    if (referredType && referredType->kind() == sema::TypeKind::Struct)
+                    {
+                        auto referredStructType = referredType.AsFast<sema::StructType>();
+                        if (referredStructType && (referredStructType->isObject || referredStructType->isInterface))
+                            usePointerAccess = false;
+                    }
+                }
+
+                emit("(");
+                receiver->accept(*this);
+                emit(")");
+                emit(usePointerAccess ? "->" : ".");
+            };
+
+            beginResultUnwrap();
+            if (node.operatorDispatchKind == OperatorDispatchKind::Member)
+            {
+                emit("(");
+                emitOperatorReceiverAndAccess(node.callee);
+                emit(Mangler::mangleFunction(operatorSymbol->name, mangledOperatorFunctionType ? mangledOperatorFunctionType->paramTypes : std::vector<Ref<sema::Type>>{}));
+                emit("(");
+                for (size_t i = 0; i < node.arguments.size(); ++i)
+                {
+                    if (operatorFunctionType && i < operatorFunctionType->paramTypes.size())
+                        emitExpressionWithExpectedType(node.arguments[i], operatorFunctionType->paramTypes[i], true);
+                    else
+                        emitReadableExpression(node.arguments[i]);
+
+                    if (i + 1 < node.arguments.size())
+                        emit(", ");
+                }
+                emit("))");
+            }
+            else
+            {
+                emit(Mangler::mangleFunction(operatorSymbol->name,
+                                             mangledOperatorFunctionType ? mangledOperatorFunctionType->paramTypes : std::vector<Ref<sema::Type>>{},
+                                             operatorSymbol->scopePath));
+                emit("(");
+                if (operatorFunctionType && !operatorFunctionType->paramTypes.empty())
+                    emitExpressionWithExpectedType(node.callee, operatorFunctionType->paramTypes[0], true);
+                else
+                    emitReadableExpression(node.callee);
+
+                for (size_t i = 0; i < node.arguments.size(); ++i)
+                {
+                    emit(", ");
+                    if (operatorFunctionType && i + 1 < operatorFunctionType->paramTypes.size())
+                        emitExpressionWithExpectedType(node.arguments[i], operatorFunctionType->paramTypes[i + 1], true);
+                    else
+                        emitReadableExpression(node.arguments[i]);
+                }
+                emit(")");
+            }
+            endResultUnwrap();
+            return;
+        }
+
         auto calleeType = node.callee->refType.Lock();
         auto calleeSym = node.callee->referencedSymbol.Lock();
 

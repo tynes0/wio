@@ -1591,9 +1591,23 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_operator_call_run
+        "${CMAKE_SOURCE_DIR}/tests/operator_call_run.wio"
+        "operator-call-ok"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_generic_fit_target_run
         "${CMAKE_SOURCE_DIR}/tests/generic_fit_target_run.wio"
         "generic-fit-target-ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_generic_operator_body_validation_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_operator_body_validation_run.wio"
+        "generic-operator-body-validation-ok"
         --run
     )
 
@@ -2006,6 +2020,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_operator_subscript_assignment_requires_ref
         "${CMAKE_SOURCE_DIR}/tests/invalid/operator_subscript_assignment_requires_ref.wio"
         "Subscript assignment requires operator '\\[\\]' to return a mutable reference\\."
+        "Generated C\\+\\+ output:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_operator_call_requires_member
+        "${CMAKE_SOURCE_DIR}/tests/invalid/operator_call_requires_member.wio"
+        "Call operator overloads must be declared as member functions\\."
         "Generated C\\+\\+ output:"
     )
 

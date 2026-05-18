@@ -1,0 +1,23 @@
+use std::assert as assert;
+use std::console as console;
+use std::traits as traits;
+
+@Apply(traits::IsNumeric<T>)
+component Vector2Base<T> {
+    x: T;
+    y: T;
+
+    fn operator -() -> Vector2Base<T> {
+        mut x = -self.x;
+        return Vector2Base<T>(x, -self.y);
+    }
+}
+
+fn Entry() -> i32 {
+    let vecValue = Vector2Base<f32>(12.0f, 15.0f);
+    let vec = -vecValue;
+    assert::ExpectEqual(vec.x, -12.0f, "generic component operator bodies should validate with concrete numeric instantiations");
+    assert::ExpectEqual(vec.y, -15.0f, "generic component operator bodies should preserve concrete owner bindings");
+    console::PrintLine("generic-operator-body-validation-ok");
+    return 0;
+}

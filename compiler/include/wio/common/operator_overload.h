@@ -88,6 +88,16 @@ namespace wio::common
         }
     }
 
+    inline std::optional<std::string_view> getCallOperatorOverloadName(TokenType type)
+    {
+        switch (type)
+        {
+        case TokenType::leftParen: return "__op_call";
+        default:
+            return std::nullopt;
+        }
+    }
+
     inline std::optional<std::string_view> getAssignmentOperatorOverloadName(TokenType type)
     {
         switch (type)
@@ -114,6 +124,7 @@ namespace wio::common
                getUnaryOperatorOverloadName(type).has_value() ||
                getConversionOperatorOverloadName(type).has_value() ||
                getIndexOperatorOverloadName(type).has_value() ||
+               getCallOperatorOverloadName(type).has_value() ||
                isAssignmentOperatorToken(type);
     }
 
@@ -132,6 +143,8 @@ namespace wio::common
             return parameterCount == 0 ? getConversionOperatorOverloadName(type) : std::nullopt;
         if (type == TokenType::leftBracket)
             return parameterCount == 1 ? getIndexOperatorOverloadName(type) : std::nullopt;
+        if (type == TokenType::leftParen)
+            return getCallOperatorOverloadName(type);
         if (parameterCount == 0)
             return getUnaryOperatorOverloadName(type);
         if (parameterCount == 1)
@@ -147,6 +160,8 @@ namespace wio::common
             return parameterCount == 1 ? getConversionOperatorOverloadName(type) : std::nullopt;
         if (type == TokenType::leftBracket)
             return parameterCount == 2 ? getIndexOperatorOverloadName(type) : std::nullopt;
+        if (type == TokenType::leftParen)
+            return getCallOperatorOverloadName(type);
         if (parameterCount == 1)
             return getUnaryOperatorOverloadName(type);
         if (parameterCount == 2)
@@ -214,6 +229,11 @@ namespace wio::common
         return name == "__op_index";
     }
 
+    inline bool isCallOperatorOverloadName(std::string_view name)
+    {
+        return name == "__op_call";
+    }
+
     inline std::optional<std::string_view> getOperatorDisplayText(std::string_view name)
     {
         if (name == "__op_binary_plus" || name == "__op_unary_plus") return "+";
@@ -247,6 +267,7 @@ namespace wio::common
         if (name == "__op_logical_not") return "!";
         if (name == "__op_fit") return "fit";
         if (name == "__op_index") return "[]";
+        if (name == "__op_call") return "()";
         return std::nullopt;
     }
 }

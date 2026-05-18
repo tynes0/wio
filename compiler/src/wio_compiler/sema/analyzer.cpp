@@ -90,6 +90,13 @@ namespace wio::sema
                 WeakRef<Type> overloadFunctionType;
             };
 
+            struct FunctionCallExpressionState
+            {
+                FunctionCallExpression* node;
+                OperatorDispatchKind operatorDispatchKind;
+                WeakRef<Type> overloadFunctionType;
+            };
+
             struct MemberAccessState
             {
                 MemberAccessExpression* node;
@@ -105,6 +112,7 @@ namespace wio::sema
             std::vector<AssignmentExpressionState> assignmentExpressionStates;
             std::vector<ArrayAccessExpressionState> arrayAccessExpressionStates;
             std::vector<FitExpressionState> fitExpressionStates;
+            std::vector<FunctionCallExpressionState> functionCallExpressionStates;
             std::vector<MemberAccessState> memberAccessStates;
 
             void capture(ASTNode* root)
@@ -145,6 +153,12 @@ namespace wio::sema
                 }
 
                 for (const auto& state : fitExpressionStates)
+                {
+                    state.node->operatorDispatchKind = state.operatorDispatchKind;
+                    state.node->overloadFunctionType = state.overloadFunctionType;
+                }
+
+                for (const auto& state : functionCallExpressionStates)
                 {
                     state.node->operatorDispatchKind = state.operatorDispatchKind;
                     state.node->overloadFunctionType = state.overloadFunctionType;
@@ -214,6 +228,15 @@ namespace wio::sema
                         fitExpression,
                         fitExpression->operatorDispatchKind,
                         fitExpression->overloadFunctionType
+                    });
+                }
+
+                if (auto* functionCallExpression = node.as<FunctionCallExpression>())
+                {
+                    functionCallExpressionStates.push_back(FunctionCallExpressionState{
+                        functionCallExpression,
+                        functionCallExpression->operatorDispatchKind,
+                        functionCallExpression->overloadFunctionType
                     });
                 }
 
@@ -1261,6 +1284,12 @@ namespace wio::sema
 
                 Ref<Type> indexedType = unwrapAliasType(arrayAccess->refType.Lock());
                 return indexedType && indexedType->kind() == TypeKind::Reference;
+            }
+
+            if (expression->is<FunctionCallExpression>())
+            {
+                Ref<Type> callType = unwrapAliasType(expression->refType.Lock());
+                return callType && callType->kind() == TypeKind::Reference;
             }
 
             if (expression->is<Identifier>() || expression->is<MemberAccessExpression>())
@@ -4346,11 +4375,24 @@ namespace wio::sema
         const FunctionDeclaration& node,
         const Ref<Symbol>& funcSym,
         const Ref<FunctionType>& declaredFunctionType,
+        const Ref<StructType>& concreteOwnerType,
         const std::unordered_map<std::string, Ref<Type>>& directBindings,
         const std::unordered_map<std::string, std::vector<Ref<Type>>>& packBindings,
         const std::unordered_map<std::string, std::string>& packAliases)
     {
-        if (!funcSym || !declaredFunctionType || funcSym->genericParameterNames.empty())
+        if (!funcSym || !declaredFunctionType)
+            return true;
+
+        const bool hasFunctionGenericContext = !funcSym->genericParameterNames.empty();
+        const bool hasOwnerGenericContext =
+            concreteOwnerType &&
+            !concreteOwnerType->genericParameterNames.empty() &&
+            concreteOwnerType->genericArguments.size() == concreteOwnerType->genericParameterNames.size() &&
+            std::ranges::all_of(concreteOwnerType->genericArguments, [](const Ref<Type>& type)
+            {
+                return type && !type->isUnknown() && !containsGenericParameterType(type);
+            });
+        if (!hasFunctionGenericContext && !hasOwnerGenericContext)
             return true;
 
         GenericBindingSet bindingSet;
@@ -4363,19 +4405,24 @@ namespace wio::sema
         annotationSnapshot.capture(node.whenFallback.Get());
         annotationSnapshot.capture(node.body.Get());
 
-        auto materializedInstantiation = tryMaterializeConcreteInstantiation(
-            funcSym->genericParameterNames,
-            funcSym->hasGenericParameterPack,
-            bindingSet
-        );
-        if (!materializedInstantiation.has_value())
-            return true;
+        std::optional<std::vector<Ref<Type>>> materializedInstantiation;
+        if (hasFunctionGenericContext)
+        {
+            materializedInstantiation = tryMaterializeConcreteInstantiation(
+                funcSym->genericParameterNames,
+                funcSym->hasGenericParameterPack,
+                bindingSet
+            );
+            if (!materializedInstantiation.has_value())
+                return true;
+        }
 
         std::string validationKey = common::formatString(
-            "{}::{}<{}>",
+            "{}::{}::owner<{}>::func<{}>",
             funcSym.Get(),
             node.name ? node.name->token.value : "<function>",
-            formatDiagnosticTypeList(*materializedInstantiation)
+            hasOwnerGenericContext ? concreteOwnerType->toString() : std::string("<none>"),
+            materializedInstantiation.has_value() ? formatDiagnosticTypeList(*materializedInstantiation) : std::string("<none>")
         );
         if (validatedGenericFunctionBodyKeys_.contains(validationKey))
             return true;
@@ -4391,27 +4438,44 @@ namespace wio::sema
                 validatedGenericFunctionBodyKeys_.insert(validationKey);
         };
 
-        std::unordered_map<std::string, Ref<Type>> concreteGenericScope;
-        concreteGenericScope.reserve(node.genericParameters.size());
-        for (size_t genericIndex = 0; genericIndex < node.genericParameters.size(); ++genericIndex)
+        std::unordered_map<std::string, Ref<Type>> ownerGenericScope;
+        if (hasOwnerGenericContext)
         {
-            const auto& genericParameter = node.genericParameters[genericIndex];
-            if (!genericParameter)
-                continue;
+            ownerGenericScope.reserve(concreteOwnerType->genericParameterNames.size());
+            for (size_t genericIndex = 0; genericIndex < concreteOwnerType->genericParameterNames.size(); ++genericIndex)
+            {
+                const auto& parameterName = concreteOwnerType->genericParameterNames[genericIndex];
+                if (genericIndex < concreteOwnerType->genericArguments.size())
+                    ownerGenericScope.emplace(parameterName, concreteOwnerType->genericArguments[genericIndex]);
+            }
+        }
 
-            const std::string& parameterName = genericParameter->token.value;
-            const bool isGenericParameterPack =
-                node.hasGenericParameterPack &&
-                genericIndex + 1 == node.genericParameters.size();
+        std::unordered_map<std::string, Ref<Type>> functionGenericScope;
+        if (hasFunctionGenericContext)
+        {
+            functionGenericScope.reserve(node.genericParameters.size());
+            for (size_t genericIndex = 0; genericIndex < node.genericParameters.size(); ++genericIndex)
+            {
+                const auto& genericParameter = node.genericParameters[genericIndex];
+                if (!genericParameter)
+                    continue;
 
-            Ref<Type> parameterType = isGenericParameterPack
-                ? Compiler::get().getTypeContext().getOrCreateGenericParameterPackType(parameterName)
-                : Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
-            concreteGenericScope.emplace(parameterName, instantiateGenericType(parameterType, bindingSet));
+                const std::string& parameterName = genericParameter->token.value;
+                const bool isGenericParameterPack =
+                    node.hasGenericParameterPack &&
+                    genericIndex + 1 == node.genericParameters.size();
+
+                Ref<Type> parameterType = isGenericParameterPack
+                    ? Compiler::get().getTypeContext().getOrCreateGenericParameterPackType(parameterName)
+                    : Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
+                functionGenericScope.emplace(parameterName, instantiateGenericType(parameterType, bindingSet));
+            }
         }
 
         Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
         Ref<Type> previousFunctionReturnType = currentFunctionReturnType_;
+        Ref<Type> previousCurrentStructType = currentStructType_;
+        Ref<Type> previousCurrentBaseStructType = currentBaseStructType_;
         Ref<Symbol> previousFunctionParameterPackSymbol = currentFunctionParameterPackSymbol_;
         Ref<Type> previousFunctionParameterPackType = currentFunctionParameterPackType_;
         Ref<Scope> previousScope = currentScope_;
@@ -4419,11 +4483,45 @@ namespace wio::sema
 
         currentExpectedExpressionType_ = nullptr;
         currentFunctionReturnType_ = instantiateGenericType(declaredFunctionType->returnType, bindingSet);
+        currentStructType_ = concreteOwnerType;
+        currentBaseStructType_ = nullptr;
+        if (concreteOwnerType)
+        {
+            for (const auto& baseType : concreteOwnerType->baseTypes)
+            {
+                if (!baseType || baseType->kind() != TypeKind::Struct)
+                    continue;
+
+                auto structBase = baseType.AsFast<StructType>();
+                if (!structBase->isInterface && !(structBase->name == "object" && structBase->scopePath.empty()))
+                {
+                    currentBaseStructType_ = structBase;
+                    break;
+                }
+            }
+        }
         currentFunctionParameterPackSymbol_ = nullptr;
         currentFunctionParameterPackType_ = nullptr;
 
-        genericTypeParameterScopes_.push_back(concreteGenericScope);
-        activeGenericConstraintSymbols_.push_back(funcSym);
+        if (hasOwnerGenericContext)
+            genericTypeParameterScopes_.push_back(ownerGenericScope);
+        if (hasFunctionGenericContext)
+            genericTypeParameterScopes_.push_back(functionGenericScope);
+
+        Ref<Symbol> ownerConstraintSymbol = nullptr;
+        if (hasOwnerGenericContext && !scopes_.empty())
+        {
+            Ref<Scope> globalScope = scopes_.front();
+            const std::string qualifiedOwnerName = concreteOwnerType->scopePath.empty()
+                ? concreteOwnerType->name
+                : concreteOwnerType->scopePath + "::" + concreteOwnerType->name;
+            ownerConstraintSymbol = resolveQualifiedSymbol(globalScope, qualifiedOwnerName);
+        }
+
+        if (ownerConstraintSymbol)
+            activeGenericConstraintSymbols_.push_back(ownerConstraintSymbol);
+        if (hasFunctionGenericContext)
+            activeGenericConstraintSymbols_.push_back(funcSym);
         if (funcSym->innerScope)
             currentScope_ = funcSym->innerScope;
         enterScope(ScopeKind::Function);
@@ -4459,7 +4557,10 @@ namespace wio::sema
         {
             node.whenCondition->accept(*this);
 
-            if (auto conditionType = node.whenCondition->refType.Lock(); !isGuardConditionTypeAllowed(conditionType))
+            if (auto conditionType = node.whenCondition->refType.Lock();
+                !(conditionType == Compiler::get().getTypeContext().getBool() ||
+                  allowsNumericSemantics(conditionType) ||
+                  (conditionType && (conditionType->kind() == TypeKind::Reference || conditionType->kind() == TypeKind::Null))))
             {
                 WIO_LOG_ADD_ERROR(
                     node.whenCondition->location(),
@@ -4517,10 +4618,18 @@ namespace wio::sema
         const bool succeeded = Logger::get().getErrorCount() == previousErrorCount;
 
         exitScope();
-        activeGenericConstraintSymbols_.pop_back();
-        genericTypeParameterScopes_.pop_back();
+        if (hasFunctionGenericContext)
+            activeGenericConstraintSymbols_.pop_back();
+        if (ownerConstraintSymbol)
+            activeGenericConstraintSymbols_.pop_back();
+        if (hasFunctionGenericContext)
+            genericTypeParameterScopes_.pop_back();
+        if (hasOwnerGenericContext)
+            genericTypeParameterScopes_.pop_back();
         currentExpectedExpressionType_ = previousExpectedExpressionType;
         currentFunctionReturnType_ = previousFunctionReturnType;
+        currentStructType_ = previousCurrentStructType;
+        currentBaseStructType_ = previousCurrentBaseStructType;
         currentFunctionParameterPackSymbol_ = previousFunctionParameterPackSymbol;
         currentFunctionParameterPackType_ = previousFunctionParameterPackType;
         currentScope_ = previousScope;
@@ -4529,6 +4638,231 @@ namespace wio::sema
 
         finalizeValidation(succeeded);
         return succeeded;
+    }
+
+    SemanticAnalyzer::GenericConstraintCapabilities SemanticAnalyzer::resolveGenericConstraintCapabilities(const Ref<Type>& type) const
+    {
+        GenericConstraintCapabilities info;
+
+        Ref<Type> resolvedType = unwrapAliasType(type);
+        if (!resolvedType || resolvedType->kind() != TypeKind::GenericParameter)
+            return info;
+
+        const std::string& genericParameterName = resolvedType.AsFast<GenericParameterType>()->name;
+
+        for (auto symbolIt = activeGenericConstraintSymbols_.rbegin();
+             symbolIt != activeGenericConstraintSymbols_.rend();
+             ++symbolIt)
+        {
+            const Ref<Symbol>& activeSymbol = *symbolIt;
+            if (!activeSymbol)
+                continue;
+
+            auto genericParameterIt = std::ranges::find(activeSymbol->genericParameterNames, genericParameterName);
+            if (genericParameterIt == activeSymbol->genericParameterNames.end())
+                continue;
+
+            const size_t genericParameterIndex = static_cast<size_t>(std::distance(activeSymbol->genericParameterNames.begin(), genericParameterIt));
+
+            auto attributeIt = attributeListsBySymbol_.find(activeSymbol.Get());
+            if (attributeIt == attributeListsBySymbol_.end() || !attributeIt->second)
+                return info;
+
+            std::vector<const AttributeStatement*> applyAttributes;
+            for (const auto& attributeNode : *attributeIt->second)
+            {
+                if (!attributeNode || attributeNode->attribute != Attribute::Apply)
+                    continue;
+
+                applyAttributes.push_back(attributeNode.Get());
+            }
+
+            if (applyAttributes.empty())
+                return info;
+
+            bool sawApplicableConstraint = false;
+            bool allConstraintsCompatible = true;
+            auto& typeContext = Compiler::get().getTypeContext();
+
+            for (const auto* applyAttribute : applyAttributes)
+            {
+                if (!applyAttribute)
+                    continue;
+
+                if (activeSymbol->genericParameterNames.size() != 1 &&
+                    applyAttribute->args.size() != activeSymbol->genericParameterNames.size())
+                {
+                    continue;
+                }
+
+                const auto constraintArguments =
+                    getApplyConstraintArguments(*applyAttribute, activeSymbol->genericParameterNames, genericParameterIndex);
+                if (constraintArguments.empty())
+                    continue;
+
+                sawApplicableConstraint = true;
+                bool attributeAllowsInteger = false;
+                bool attributeAllowsNumeric = false;
+                bool attributeAllowsEnum = false;
+                bool attributeAllowsFlagset = false;
+                bool attributeAllowsObjectLike = false;
+                bool attributeIsCompatible = true;
+
+                for (const auto& argument : constraintArguments)
+                {
+                    if (argument.typeSpecifier)
+                    {
+                        if (const auto* predicateTrait =
+                                findGenericConstraintTraitDescriptor(argument.typeSpecifier->name.value,
+                                                                     argument.typeSpecifier->refType.Lock()))
+                        {
+                            switch (predicateTrait->kind)
+                            {
+                            case GenericConstraintTraitKind::IsInteger:
+                                attributeAllowsInteger = true;
+                                attributeAllowsNumeric = true;
+                                continue;
+                            case GenericConstraintTraitKind::IsNumeric:
+                                attributeAllowsNumeric = true;
+                                continue;
+                            case GenericConstraintTraitKind::IsEnum:
+                                attributeAllowsEnum = true;
+                                continue;
+                            case GenericConstraintTraitKind::IsFlagset:
+                                attributeAllowsFlagset = true;
+                                continue;
+                            }
+                        }
+
+                        Ref<Type> exactType = unwrapAliasType(argument.typeSpecifier->refType.Lock());
+                        if (!exactType || exactType->isUnknown() || containsGenericParameterType(exactType))
+                        {
+                            attributeIsCompatible = false;
+                            break;
+                        }
+
+                        if (isIntegerConstraintType(exactType))
+                        {
+                            attributeAllowsInteger = true;
+                            attributeAllowsNumeric = true;
+                            continue;
+                        }
+
+                        if (isNumericConstraintType(exactType))
+                        {
+                            attributeAllowsNumeric = true;
+                            continue;
+                        }
+
+                        if (isEnumConstraintType(exactType))
+                        {
+                            attributeAllowsEnum = true;
+                            continue;
+                        }
+
+                        if (isFlagsetConstraintType(exactType))
+                        {
+                            attributeAllowsFlagset = true;
+                            continue;
+                        }
+
+                        if (getObjectOrInterfaceStructType(exactType) || isExactType(exactType, typeContext.getObject()))
+                        {
+                            attributeAllowsObjectLike = true;
+                            continue;
+                        }
+                    }
+
+                    attributeIsCompatible = false;
+                    break;
+                }
+
+                const bool attributeAllowsAny =
+                    attributeAllowsInteger ||
+                    attributeAllowsNumeric ||
+                    attributeAllowsEnum ||
+                    attributeAllowsFlagset ||
+                    attributeAllowsObjectLike;
+
+                const bool hasConflictingCategories =
+                    (attributeAllowsObjectLike &&
+                     (attributeAllowsInteger || attributeAllowsNumeric || attributeAllowsEnum || attributeAllowsFlagset)) ||
+                    (attributeAllowsEnum && attributeAllowsFlagset);
+
+                if (!attributeIsCompatible || !attributeAllowsAny || hasConflictingCategories)
+                {
+                    allConstraintsCompatible = false;
+                    break;
+                }
+
+                if ((info.allowsObjectLike &&
+                     (attributeAllowsInteger || attributeAllowsNumeric || attributeAllowsEnum || attributeAllowsFlagset)) ||
+                    (attributeAllowsObjectLike &&
+                     (info.allowsInteger || info.allowsNumeric || info.allowsEnum || info.allowsFlagset)) ||
+                    (info.allowsEnum && attributeAllowsFlagset) ||
+                    (info.allowsFlagset && attributeAllowsEnum))
+                {
+                    allConstraintsCompatible = false;
+                    break;
+                }
+
+                if (attributeAllowsInteger)
+                    info.allowsInteger = true;
+                if (attributeAllowsNumeric)
+                    info.allowsNumeric = true;
+                if (attributeAllowsEnum)
+                    info.allowsEnum = true;
+                if (attributeAllowsFlagset)
+                    info.allowsFlagset = true;
+                if (attributeAllowsObjectLike)
+                    info.allowsObjectLike = true;
+            }
+
+            if (!sawApplicableConstraint || !allConstraintsCompatible)
+            {
+                info.hasApplicableConstraints = sawApplicableConstraint;
+                info.isIncompatible = sawApplicableConstraint;
+                return info;
+            }
+
+            info.hasApplicableConstraints = true;
+            info.isKnown =
+                info.allowsInteger ||
+                info.allowsNumeric ||
+                info.allowsEnum ||
+                info.allowsFlagset ||
+                info.allowsObjectLike;
+            info.isIncompatible = !info.isKnown;
+            return info;
+        }
+
+        return info;
+    }
+
+    bool SemanticAnalyzer::allowsNumericSemantics(const Ref<Type>& type) const
+    {
+        Ref<Type> resolvedType = unwrapAliasType(type);
+        if (!resolvedType)
+            return false;
+
+        if (resolvedType->isNumeric())
+            return true;
+
+        const GenericConstraintCapabilities capabilities = resolveGenericConstraintCapabilities(resolvedType);
+        return capabilities.allowsNumeric || capabilities.allowsInteger;
+    }
+
+    bool SemanticAnalyzer::allowsIntegerSemantics(const Ref<Type>& type) const
+    {
+        Ref<Type> resolvedType = unwrapAliasType(type);
+        if (!resolvedType)
+            return false;
+
+        if (isIntegralLikeType(resolvedType))
+            return true;
+
+        const GenericConstraintCapabilities capabilities = resolveGenericConstraintCapabilities(resolvedType);
+        return capabilities.allowsInteger;
     }
 
     void SemanticAnalyzer::visit(Program& node)
@@ -4946,7 +5280,7 @@ namespace wio::sema
         if (node.op.type == TokenType::kwIn && node.right->is<RangeExpression>())
         {
             auto leftType = node.left->refType.Lock();
-            if (leftType && !leftType->isNumeric())
+            if (leftType && !allowsNumericSemantics(leftType))
             {
                 WIO_LOG_ADD_ERROR(node.location(), "The left operand of 'in' operator must be numeric when used with a range.");
             }
@@ -5733,9 +6067,17 @@ namespace wio::sema
         }
         else if (node.op.type == TokenType::opMinus)
         {
-            if (!opType->isNumeric())
+            if (!allowsNumericSemantics(opType))
             {
                 WIO_LOG_ADD_ERROR(node.location(), "Unary minus (-) operator requires numeric operand.");
+            }
+            node.refType = opType;
+        }
+        else if (node.op.type == TokenType::opBitNot)
+        {
+            if (!allowsIntegerSemantics(opType))
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Bitwise NOT (~) operator requires integer operand.");
             }
             node.refType = opType;
         }
@@ -7043,7 +7385,7 @@ namespace wio::sema
             return;
         }
         
-        if (!isIntegralLikeType(idxType))
+        if (!allowsIntegerSemantics(idxType))
         {
             WIO_LOG_ADD_ERROR(node.index->location(), "Array and string indices must be integer values.");
         }
@@ -7535,6 +7877,8 @@ namespace wio::sema
         node.callee->accept(*this);
         Ref<Symbol> calleeSym = node.callee->referencedSymbol.Lock();
         Ref<Symbol> genericOwnerSym = calleeSym;
+        node.operatorDispatchKind = OperatorDispatchKind::None;
+        node.overloadFunctionType = nullptr;
         std::vector<Ref<Type>> explicitTypeArguments;
         explicitTypeArguments.reserve(node.explicitTypeArguments.size());
         for (auto& explicitTypeArgument : node.explicitTypeArguments)
@@ -8094,10 +8438,19 @@ namespace wio::sema
             return resolvedArgumentTypes;
         };
 
+        std::vector<Ref<Symbol>> candidateSymbols;
+        bool requiresOverloadResolution = false;
+        bool isCallOperatorInvocation = false;
+        bool callOperatorLookupFailed = false;
+        OperatorDispatchKind callOperatorDispatchKind = OperatorDispatchKind::None;
+
         auto getCallableDisplayName = [&]() -> std::string
         {
             if (isConstructorCall && constructorStructType)
                 return constructorStructType->name;
+
+            if (isCallOperatorInvocation)
+                return "operator()";
 
             if (calleeSym)
                 return calleeSym->name;
@@ -8227,8 +8580,82 @@ namespace wio::sema
             return currentScore;
         };
 
-        std::vector<Ref<Symbol>> candidateSymbols;
-        bool requiresOverloadResolution = false;
+        auto appendMemberCallOperatorCandidates = [&]() -> bool
+        {
+            const auto overloadName = common::getCallOperatorOverloadName(TokenType::leftParen);
+            if (!overloadName.has_value())
+                return false;
+
+            std::unordered_set<const Symbol*> seenSymbols;
+            bool accessViolation = false;
+
+            auto appendCandidateSymbol = [&](const Ref<Type>& candidateReceiverType)
+            {
+                Ref<Type> currentType = unwrapAliasType(candidateReceiverType);
+                while (currentType && currentType->kind() == TypeKind::Reference)
+                    currentType = unwrapAliasType(currentType.AsFast<ReferenceType>()->referredType);
+
+                if (!currentType || currentType->kind() != TypeKind::Struct)
+                    return;
+
+                Ref<Type> ownerType = nullptr;
+                Ref<Symbol> candidateSymbol = findStructMemberInHierarchy(currentType, std::string(*overloadName), &ownerType);
+                if (!candidateSymbol || seenSymbols.contains(candidateSymbol.Get()))
+                    return;
+
+                seenSymbols.insert(candidateSymbol.Get());
+
+                if (!validateStructMemberAccess(currentStructType_, ownerType, candidateSymbol, node.location()))
+                {
+                    accessViolation = true;
+                    return;
+                }
+
+                auto ownerStructType = ownerType ? unwrapAliasType(ownerType).AsFast<StructType>() : nullptr;
+                if (!ownerStructType)
+                    return;
+
+                if (candidateSymbol->kind == SymbolKind::FunctionGroup)
+                    candidateSymbols = candidateSymbol->overloads;
+                else if (candidateSymbol->kind == SymbolKind::Function)
+                    candidateSymbols = { candidateSymbol };
+                else
+                    return;
+
+                isCallOperatorInvocation = !candidateSymbols.empty();
+                callOperatorDispatchKind = OperatorDispatchKind::Member;
+            };
+
+            Ref<Type> calleeTypeForCallOperator = node.callee ? node.callee->refType.Lock() : nullptr;
+            appendCandidateSymbol(calleeTypeForCallOperator);
+            if (!isCallOperatorInvocation)
+            {
+                Ref<Type> readableCalleeType = getAutoReadableType(calleeTypeForCallOperator);
+                if (readableCalleeType != calleeTypeForCallOperator)
+                    appendCandidateSymbol(readableCalleeType);
+            }
+
+            if (accessViolation)
+            {
+                callOperatorLookupFailed = true;
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return true;
+            }
+
+            if (isCallOperatorInvocation)
+                requiresOverloadResolution = true;
+
+            return isCallOperatorInvocation;
+        };
+
+        const bool calleeAlreadyCallable =
+            (calleeSym && (calleeSym->kind == SymbolKind::Function || calleeSym->kind == SymbolKind::FunctionGroup)) ||
+            (node.callee->refType.Lock() && node.callee->refType.Lock()->kind() == TypeKind::Function);
+        if (!calleeAlreadyCallable)
+            appendMemberCallOperatorCandidates();
+        if (callOperatorLookupFailed)
+            return;
+
         if (calleeSym && calleeSym->kind == SymbolKind::FunctionGroup)
         {
             candidateSymbols = calleeSym->overloads;
@@ -8270,6 +8697,7 @@ namespace wio::sema
             {
                 Ref<Symbol> symbol = nullptr;
                 Ref<Type> functionType = nullptr;
+                Ref<FunctionType> fullFunctionType = nullptr;
                 int score = -1;
                 std::unordered_map<std::string, Ref<Type>> genericBindings;
                 GenericBindingSet bindingSet;
@@ -8283,9 +8711,13 @@ namespace wio::sema
                 const auto functionType = overload->type.AsFast<FunctionType>();
                 const auto& genericParameterNames =
                     isConstructorCall ? constructorGenericParameterNames : overload->genericParameterNames;
+                const std::string callableName =
+                    isConstructorCall && constructorStructType ? constructorStructType->name :
+                    isCallOperatorInvocation ? std::string("operator()") :
+                    overload->name;
 
                 return formatFunctionDiagnosticSignature(
-                    isConstructorCall && constructorStructType ? constructorStructType->name : overload->name,
+                    callableName,
                     genericParameterNames,
                     functionType,
                     isConstructorCall,
@@ -8794,6 +9226,7 @@ namespace wio::sema
                     return ResolvedFunctionCandidate{
                         .symbol = overload,
                         .functionType = callableSurfaceType ? callableSurfaceType : resolvedFunctionType,
+                        .fullFunctionType = resolvedFunctionType.AsFast<FunctionType>(),
                         .score = *score,
                         .genericBindings = bindings,
                         .bindingSet = bindingSet
@@ -8996,22 +9429,39 @@ namespace wio::sema
                 return;
             }
 
-            if (!isConstructorCall &&
-                bestMatch->symbol &&
-                !bestMatch->symbol->genericParameterNames.empty() &&
-                bestMatch->symbol->type &&
-                bestMatch->symbol->type->kind() == TypeKind::Function &&
-                containsGenericParameterType(bestMatch->symbol->type.AsFast<FunctionType>()->returnType))
+            auto getConcreteCallableOwnerType = [&]() -> Ref<StructType>
+            {
+                auto resolveStructReceiverType = [&](const Ref<Type>& candidateType) -> Ref<StructType>
+                {
+                    Ref<Type> resolvedType = unwrapAliasType(candidateType);
+                    while (resolvedType && resolvedType->kind() == TypeKind::Reference)
+                        resolvedType = unwrapAliasType(resolvedType.AsFast<ReferenceType>()->referredType);
+                    return resolvedType && resolvedType->kind() == TypeKind::Struct
+                        ? resolvedType.AsFast<StructType>()
+                        : nullptr;
+                };
+
+                if (isConstructorCall)
+                    return resolveStructReceiverType(structReturnType);
+                if (isCallOperatorInvocation)
+                    return resolveStructReceiverType(node.callee ? node.callee->refType.Lock() : nullptr);
+                if (const auto* memberAccess = node.callee ? node.callee->as<MemberAccessExpression>() : nullptr)
+                    return resolveStructReceiverType(memberAccess->object ? memberAccess->object->refType.Lock() : nullptr);
+                return nullptr;
+            };
+
+            if (bestMatch->symbol)
             {
                 auto declarationIt = functionDeclarationsBySymbol_.find(bestMatch->symbol.Get());
-                auto declaredFunctionType = bestMatch->symbol->type ? bestMatch->symbol->type.AsFast<FunctionType>() : nullptr;
+                Ref<StructType> concreteOwnerType = getConcreteCallableOwnerType();
                 if (declarationIt != functionDeclarationsBySymbol_.end() &&
                     declarationIt->second &&
-                    declaredFunctionType &&
+                    bestMatch->fullFunctionType &&
                     !validateConcreteGenericFunctionBody(
                         *declarationIt->second,
                         bestMatch->symbol,
-                        declaredFunctionType,
+                        bestMatch->fullFunctionType,
+                        concreteOwnerType,
                         bestMatch->bindingSet.directBindings,
                         bestMatch->bindingSet.packBindings,
                         bestMatch->bindingSet.packAliases))
@@ -9021,7 +9471,13 @@ namespace wio::sema
                 }
             }
 
-            if (!isConstructorCall)
+            if (isCallOperatorInvocation)
+            {
+                node.referencedSymbol = bestMatch->symbol;
+                node.operatorDispatchKind = callOperatorDispatchKind;
+                node.overloadFunctionType = bestMatch->functionType.AsFast<Type>();
+            }
+            else if (!isConstructorCall)
             {
                 node.callee->referencedSymbol = bestMatch->symbol;
                 node.callee->refType = bestMatch->functionType;
@@ -9981,7 +10437,7 @@ namespace wio::sema
         auto sType = node.start->refType.Lock();
         auto eType = node.end->refType.Lock();
         
-        if (sType && eType && (!sType->isNumeric() || !eType->isNumeric()))
+        if (sType && eType && (!allowsNumericSemantics(sType) || !allowsNumericSemantics(eType)))
         {
             WIO_LOG_ADD_ERROR(node.location(), "Range bounds must be numeric types.");
         }
@@ -10043,7 +10499,7 @@ namespace wio::sema
 
                 if (val->is<RangeExpression>())
                 {
-                    if (!matchValueType->isNumeric())
+                    if (!allowsNumericSemantics(matchValueType))
                     {
                         WIO_LOG_ADD_ERROR(
                             val->location(),
@@ -10206,14 +10662,44 @@ namespace wio::sema
               SymbolFlags flags = SymbolFlags::createAllFalse();
             if (node.mutability == Mutability::Mutable) flags.set_isMutable(true);
             if (node.mutability == Mutability::Const) flags.set_isConst(true);
-            
-            sym = createSymbol(node.name->token.value, declaredType, SymbolKind::Variable, node.location(), flags);
-            currentScope_->define(node.name->token.value, sym);
-            node.name->referencedSymbol = sym;
-        }
-    
-        if (node.initializer)
-        {
+
+              sym = createSymbol(node.name->token.value, declaredType, SymbolKind::Variable, node.location(), flags);
+              currentScope_->define(node.name->token.value, sym);
+              node.name->referencedSymbol = sym;
+          }
+          else if (sym->type && containsGenericParameterType(sym->type))
+          {
+              GenericBindingSet bindingSet;
+              for (const auto& genericScope : genericTypeParameterScopes_)
+              {
+                  for (const auto& [name, boundType] : genericScope)
+                      bindingSet.directBindings.insert_or_assign(name, boundType);
+              }
+
+              Ref<Type> instantiatedType = instantiateGenericType(sym->type, bindingSet);
+              if (instantiatedType && !instantiatedType->isUnknown() && !containsGenericParameterType(instantiatedType))
+              {
+                  SymbolFlags flags = SymbolFlags::createAllFalse();
+                  if (node.mutability == Mutability::Mutable) flags.set_isMutable(true);
+                  if (node.mutability == Mutability::Const) flags.set_isConst(true);
+
+                  sym = createSymbol(node.name->token.value, instantiatedType, SymbolKind::Variable, node.location(), flags);
+                  currentScope_->define(node.name->token.value, sym);
+                  node.name->referencedSymbol = sym;
+                  node.name->refType = instantiatedType;
+              }
+              else if (!currentScope_->resolveLocally(node.name->token.value))
+              {
+                  currentScope_->define(node.name->token.value, sym);
+              }
+          }
+          else if (!currentScope_->resolveLocally(node.name->token.value))
+          {
+              currentScope_->define(node.name->token.value, sym);
+          }
+
+          if (node.initializer)
+          {
             auto shouldAutoReadInferredInitializer = [&](const NodePtr<Expression>& initializer,
                                                          const Ref<Type>& initializerType) -> bool
             {
@@ -10458,6 +10944,7 @@ namespace wio::sema
         const bool isUnaryOperatorMethod = common::isUnaryOperatorOverloadName(node.name->token.value);
         const bool isConversionOperatorMethod = common::isConversionOperatorOverloadName(node.name->token.value);
         const bool isIndexOperatorMethod = common::isIndexOperatorOverloadName(node.name->token.value);
+        const bool isCallOperatorMethod = common::isCallOperatorOverloadName(node.name->token.value);
         const bool isComponentMethodContext = currentStruct && !currentStruct->isObject && !currentStruct->isInterface;
         bool hasInstantiate = hasAttribute(node.attributes, Attribute::Instantiate);
         const bool hasFunctionParameterPack = std::ranges::any_of(node.parameters, [](const Parameter& parameter)
@@ -10501,33 +10988,43 @@ namespace wio::sema
             }
 
             const bool isAssignmentOperator = common::isAssignmentOperatorOverloadName(node.name->token.value);
-            const size_t expectedParameterCount = isStructMethod
-                ? (isUnaryOperatorMethod || isConversionOperatorMethod ? 0u : 1u)
-                : (isUnaryOperatorMethod || isConversionOperatorMethod ? 1u : 2u);
-            if (node.parameters.size() != expectedParameterCount)
+            if (isCallOperatorMethod && !isStructMethod)
             {
                 WIO_LOG_ADD_ERROR(
                     node.location(),
-                    isStructMethod
-                        ? (isUnaryOperatorMethod
-                            ? "Member unary operator overloads must declare zero parameters."
-                            : (isConversionOperatorMethod
-                                ? "Member conversion operator overloads must declare zero parameters."
-                                : (isIndexOperatorMethod
-                                    ? "Member subscript operator overloads must declare exactly one parameter."
-                                    : (isAssignmentOperator
-                                        ? "Member assignment operator overloads must declare exactly one parameter."
-                                        : "Member binary operator overloads must declare exactly one parameter."))))
-                        : (isUnaryOperatorMethod
-                            ? "Free unary operator overloads must declare exactly one parameter."
-                            : (isConversionOperatorMethod
-                                ? "Free conversion operator overloads must declare exactly one parameter."
-                                : (isIndexOperatorMethod
-                                    ? "Free subscript operator overloads must declare exactly two parameters."
-                                    : (isAssignmentOperator
-                                        ? "Free assignment operator overloads must declare exactly two parameters."
-                                        : "Free binary operator overloads must declare exactly two parameters."))))
+                    "Call operator overloads must be declared as member functions."
                 );
+            }
+            else if (!isCallOperatorMethod)
+            {
+                const size_t expectedParameterCount = isStructMethod
+                    ? (isUnaryOperatorMethod || isConversionOperatorMethod ? 0u : 1u)
+                    : (isUnaryOperatorMethod || isConversionOperatorMethod ? 1u : 2u);
+                if (node.parameters.size() != expectedParameterCount)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        isStructMethod
+                            ? (isUnaryOperatorMethod
+                                ? "Member unary operator overloads must declare zero parameters."
+                                : (isConversionOperatorMethod
+                                    ? "Member conversion operator overloads must declare zero parameters."
+                                    : (isIndexOperatorMethod
+                                        ? "Member subscript operator overloads must declare exactly one parameter."
+                                        : (isAssignmentOperator
+                                            ? "Member assignment operator overloads must declare exactly one parameter."
+                                            : "Member binary operator overloads must declare exactly one parameter."))))
+                            : (isUnaryOperatorMethod
+                                ? "Free unary operator overloads must declare exactly one parameter."
+                                : (isConversionOperatorMethod
+                                    ? "Free conversion operator overloads must declare exactly one parameter."
+                                    : (isIndexOperatorMethod
+                                        ? "Free subscript operator overloads must declare exactly two parameters."
+                                        : (isAssignmentOperator
+                                            ? "Free assignment operator overloads must declare exactly two parameters."
+                                            : "Free binary operator overloads must declare exactly two parameters."))))
+                    );
+                }
             }
 
             for (const auto& parameter : node.parameters)
@@ -11385,7 +11882,10 @@ namespace wio::sema
         {
             node.whenCondition->accept(*this);
 
-            if (auto conditionType = node.whenCondition->refType.Lock(); !isGuardConditionTypeAllowed(conditionType))
+            if (auto conditionType = node.whenCondition->refType.Lock();
+                !(conditionType == Compiler::get().getTypeContext().getBool() ||
+                  allowsNumericSemantics(conditionType) ||
+                  (conditionType && (conditionType->kind() == TypeKind::Reference || conditionType->kind() == TypeKind::Null))))
             {
                 WIO_LOG_ADD_ERROR(
                     node.whenCondition->location(),
@@ -12940,7 +13440,7 @@ namespace wio::sema
         if (auto condType = node.condition->refType.Lock(); condType != Compiler::get().getTypeContext().getBool())
         {
             // Todo: Check null (i.g. it's not works well)
-            if (!condType->isNumeric() && condType->kind() != TypeKind::Reference && condType->kind() != TypeKind::Null) 
+            if (!allowsNumericSemantics(condType) && condType->kind() != TypeKind::Reference && condType->kind() != TypeKind::Null)
             {
                 WIO_LOG_ADD_ERROR(
                     node.condition->location(),
@@ -13027,11 +13527,11 @@ namespace wio::sema
             {
                 WIO_LOG_ADD_ERROR(node.location(), "Range iteration does not support 'ref' or 'view' bindings.");
             }
-            else if (!isIntegralLikeType(startType) || !isIntegralLikeType(endType))
+            else if (!allowsIntegerSemantics(startType) || !allowsIntegerSemantics(endType))
             {
                 WIO_LOG_ADD_ERROR(node.location(), "Range iteration currently requires integer bounds.");
             }
-            else if (node.step && !isIntegralLikeType(stepType))
+            else if (node.step && !allowsIntegerSemantics(stepType))
             {
                 WIO_LOG_ADD_ERROR(node.location(), "Range step expressions must be integer values.");
             }
@@ -13054,7 +13554,7 @@ namespace wio::sema
             Ref<Type> elementType = arrayType->elementType;
             Ref<Type> indexType = Compiler::get().getTypeContext().getUSize();
 
-            if (node.step && !isIntegralLikeType(stepType))
+            if (node.step && !allowsIntegerSemantics(stepType))
             {
                 WIO_LOG_ADD_ERROR(node.location(), "Array step expressions must be integer values.");
             }
@@ -13200,7 +13700,7 @@ namespace wio::sema
 
             if (auto condType = node.condition->refType.Lock(); condType != Compiler::get().getTypeContext().getBool())
             {
-                if (!condType->isNumeric() && condType->kind() != TypeKind::Reference && condType->kind() != TypeKind::Null)
+                if (!allowsNumericSemantics(condType) && condType->kind() != TypeKind::Reference && condType->kind() != TypeKind::Null)
                 {
                     WIO_LOG_ADD_ERROR(
                         node.condition->location(),

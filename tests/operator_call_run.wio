@@ -1,0 +1,52 @@
+use std::assert as assert;
+use std::console as console;
+
+component Accumulator {
+    base: i32;
+
+    fn operator ()(value: i32) -> i32 {
+        return self.base + value;
+    }
+}
+
+component Slot {
+    first: i32;
+    second: i32;
+
+    fn operator ()(index: usize) -> ref i32 {
+        if (index == 0usize) {
+            return ref self.first;
+        }
+
+        return ref self.second;
+    }
+}
+
+component Identity {
+    fn operator ()<T>(value: T) -> T {
+        return value;
+    }
+}
+
+fn Entry() -> i32 {
+    let add = Accumulator(7);
+    let sum = add(5);
+    assert::ExpectEqual(sum, 12, "member call operator should dispatch like an ordinary function");
+
+    mut slot = Slot(3, 4);
+    slot(1usize) = 9;
+    let picked = slot(1usize);
+    assert::ExpectEqual(picked, 9, "call operators returning ref should support assignment and auto-read");
+
+    let id = Identity();
+    let sameInt = id(11);
+    let sameFloat = id<f32>(2.5f);
+    assert::ExpectEqual(sameInt, 11, "generic call operators should deduce argument types");
+    assert::ExpectEqual(sameFloat, 2.5f, "generic call operators should accept explicit type arguments");
+
+    let temporaryCall = Identity()(42);
+    assert::ExpectEqual(temporaryCall, 42, "temporary receivers should also dispatch through operator()");
+
+    console::PrintLine("operator-call-ok");
+    return 0;
+}

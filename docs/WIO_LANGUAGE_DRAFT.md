@@ -19,6 +19,9 @@ so explicitly.
 For representative conformance tests tied to the stabilized language surface,
 see [`WIO_TRACEABILITY.md`](./WIO_TRACEABILITY.md).
 
+For the short release-oriented stability snapshot, see
+[`WIO_V1_FREEZE.md`](./WIO_V1_FREEZE.md).
+
 ## 1. Document Scope and Status
 
 Wio is currently best described as an experimental statically typed language
@@ -1453,10 +1456,12 @@ Wio supports both member and free operator overloads.
 - Member binary and assignment overloads declare `1` parameter.
 - Member conversion overloads declare `0` parameters and are invoked through `fit`.
 - Member subscript overloads declare `1` parameter and are invoked through `[]`.
+- Member call overloads are declared as `fn operator ()(...)` and are invoked through ordinary call syntax.
 - Free unary overloads declare `1` parameter.
 - Free binary and assignment overloads declare `2` parameters.
 - Free conversion overloads declare `1` parameter and are invoked through `fit`.
 - Free subscript overloads declare `2` parameters and are invoked through `[]`.
+- Free call overloads are currently not supported.
 
 Examples:
 
@@ -1498,6 +1503,14 @@ component Pair {
         }
 
         return ref self.y;
+    }
+}
+
+component Accumulator {
+    base: i32;
+
+    fn operator ()(value: i32) -> i32 {
+        return self.base + value;
     }
 }
 ```

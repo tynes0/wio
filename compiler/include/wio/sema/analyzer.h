@@ -21,6 +21,18 @@ namespace wio::sema
 #include "../ast/visitor_overloads.def"
 
     private:
+        struct GenericConstraintCapabilities
+        {
+            bool isKnown = false;
+            bool hasApplicableConstraints = false;
+            bool isIncompatible = false;
+            bool allowsInteger = false;
+            bool allowsNumeric = false;
+            bool allowsEnum = false;
+            bool allowsFlagset = false;
+            bool allowsObjectLike = false;
+        };
+
         std::vector<Ref<Scope>> scopes_;
         std::vector<Ref<Symbol>> symbols_;
         std::unordered_map<const Symbol*, const FunctionDeclaration*> functionDeclarationsBySymbol_;
@@ -58,10 +70,14 @@ namespace wio::sema
             const FunctionDeclaration& node,
             const Ref<Symbol>& funcSym,
             const Ref<FunctionType>& declaredFunctionType,
+            const Ref<StructType>& concreteOwnerType,
             const std::unordered_map<std::string, Ref<Type>>& directBindings,
             const std::unordered_map<std::string, std::vector<Ref<Type>>>& packBindings,
             const std::unordered_map<std::string, std::string>& packAliases
         );
+        [[nodiscard]] GenericConstraintCapabilities resolveGenericConstraintCapabilities(const Ref<Type>& type) const;
+        [[nodiscard]] bool allowsNumericSemantics(const Ref<Type>& type) const;
+        [[nodiscard]] bool allowsIntegerSemantics(const Ref<Type>& type) const;
 
         std::unordered_set<std::string> validatedGenericFunctionBodyKeys_;
         std::unordered_set<std::string> validatingGenericFunctionBodyKeys_;

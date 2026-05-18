@@ -1145,18 +1145,33 @@ namespace wio
     {
         Token startTok = !isLifecycle ? consume(TokenType::kwFn) : peek();
 
+        auto consumeOperatorToken = [&]() -> Token
+        {
+            if (match(TokenType::leftParen, false))
+            {
+                if (peek(1).type != TokenType::rightParen)
+                    utError("Expected '()' for the call operator overload.", peek().loc);
+                Token callOperatorToken = advance();
+                consume(TokenType::rightParen);
+                return callOperatorToken;
+            }
+
+            Token consumed = advance();
+            if (consumed.type == TokenType::leftBracket)
+                consume(TokenType::rightBracket);
+            return consumed;
+        };
+
         std::optional<Token> operatorToken;
         NodePtr<Identifier> name = nullptr;
         if (!isLifecycle && match(TokenType::identifier, "operator", false))
         {
             advance();
-            operatorToken = advance();
+            operatorToken = consumeOperatorToken();
             if (!common::isOverloadableOperatorToken(operatorToken->type))
             {
                 utError("Expected an overloadable operator after 'operator'.", operatorToken->loc);
             }
-            if (operatorToken->type == TokenType::leftBracket)
-                consume(TokenType::rightBracket);
 
             Token syntheticNameToken = *operatorToken;
             syntheticNameToken.type = TokenType::identifier;
@@ -1164,11 +1179,10 @@ namespace wio
             name = makeNodePtr<Identifier>(std::move(syntheticNameToken));
         }
         else if (!isLifecycle &&
-                 common::isOverloadableOperatorToken(peek().type))
+                 ((peek().type != TokenType::leftParen && common::isOverloadableOperatorToken(peek().type)) ||
+                  (peek().type == TokenType::leftParen && peek(1).type == TokenType::rightParen)))
         {
-            operatorToken = advance();
-            if (operatorToken->type == TokenType::leftBracket)
-                consume(TokenType::rightBracket);
+            operatorToken = consumeOperatorToken();
 
             Token syntheticNameToken = *operatorToken;
             syntheticNameToken.type = TokenType::identifier;

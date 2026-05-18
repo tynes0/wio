@@ -562,6 +562,8 @@ namespace wio
         NodePtr<Expression> callee;
         std::vector<NodePtr<TypeSpecifier>> explicitTypeArguments;
         std::vector<NodePtr<Expression>> arguments;
+        OperatorDispatchKind operatorDispatchKind = OperatorDispatchKind::None;
+        WeakRef<sema::Type> overloadFunctionType = nullptr;
         bool unwrapResult = false;
         bool propagateResult = false;
 
