@@ -2,6 +2,7 @@
 
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "wio/ast/ast.h"
@@ -28,6 +29,7 @@ namespace wio::codegen
         bool isEmittingPrototypes_ = false;
         std::string currentClassName_;
         Ref<sema::Type> currentFunctionReturnType_;
+        std::unordered_map<const sema::Symbol*, const VariableDeclaration*> variableDeclarationsBySymbol_;
 
         void emitStatements(const std::vector<NodePtr<Statement>>& statements);
         void generateHeader();

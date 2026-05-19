@@ -1,0 +1,7 @@
+let DynamicIndex: usize = 1usize;
+
+type Bad<Ts...> = Ts[DynamicIndex];
+
+fn Entry() -> i32 {
+    return 0;
+}

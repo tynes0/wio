@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <optional>
 #include <unordered_set>
 #include <utility>
@@ -58,6 +59,177 @@ namespace wio::codegen
                 type = type.AsFast<sema::AliasType>()->aliasedType;
 
             return type;
+        }
+
+        using ConstVariableDeclarationMap = std::unordered_map<const sema::Symbol*, const VariableDeclaration*>;
+
+        std::optional<int64_t> tryEvaluateStaticIntegerExpression(
+            const NodePtr<Expression>& expression,
+            const ConstVariableDeclarationMap& variableDeclarationsBySymbol,
+            std::unordered_set<const sema::Symbol*>& activeSymbols)
+        {
+            if (!expression)
+                return std::nullopt;
+
+            auto convertIntegerLiteral = [](const IntegerLiteral& literal) -> std::optional<int64_t>
+            {
+                const IntegerResult result = common::getInteger(literal.token.value);
+                if (!result.isValid)
+                    return std::nullopt;
+
+                switch (result.type)
+                {
+                case IntegerType::i8: return static_cast<int64_t>(result.value.v_i8);
+                case IntegerType::i16: return static_cast<int64_t>(result.value.v_i16);
+                case IntegerType::i32: return static_cast<int64_t>(result.value.v_i32);
+                case IntegerType::i64: return result.value.v_i64;
+                case IntegerType::u8: return static_cast<int64_t>(result.value.v_u8);
+                case IntegerType::u16: return static_cast<int64_t>(result.value.v_u16);
+                case IntegerType::u32: return static_cast<int64_t>(result.value.v_u32);
+                case IntegerType::u64:
+                    if (result.value.v_u64 > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+                        return std::nullopt;
+                    return static_cast<int64_t>(result.value.v_u64);
+                case IntegerType::isize: return static_cast<int64_t>(result.value.v_isize);
+                case IntegerType::usize:
+                    if (result.value.v_usize > static_cast<size_t>(std::numeric_limits<int64_t>::max()))
+                        return std::nullopt;
+                    return static_cast<int64_t>(result.value.v_usize);
+                case IntegerType::Unknown: return std::nullopt;
+                }
+
+                return std::nullopt;
+            };
+
+            if (const auto* literal = expression->as<IntegerLiteral>())
+                return convertIntegerLiteral(*literal);
+
+            if (const auto* identifier = expression->as<Identifier>())
+            {
+                Ref<sema::Symbol> symbol = identifier->referencedSymbol.Lock();
+                if (!symbol || !symbol->flags.get_isConst())
+                    return std::nullopt;
+
+                auto declarationIt = variableDeclarationsBySymbol.find(symbol.Get());
+                if (declarationIt == variableDeclarationsBySymbol.end() || !declarationIt->second || !declarationIt->second->initializer)
+                    return std::nullopt;
+
+                if (!activeSymbols.insert(symbol.Get()).second)
+                    return std::nullopt;
+
+                auto value = tryEvaluateStaticIntegerExpression(
+                    declarationIt->second->initializer,
+                    variableDeclarationsBySymbol,
+                    activeSymbols
+                );
+                activeSymbols.erase(symbol.Get());
+                return value;
+            }
+
+            if (const auto* unary = expression->as<UnaryExpression>())
+            {
+                auto operandValue = tryEvaluateStaticIntegerExpression(
+                    unary->operand,
+                    variableDeclarationsBySymbol,
+                    activeSymbols
+                );
+                if (!operandValue.has_value())
+                    return std::nullopt;
+
+                switch (unary->op.type)
+                {
+                case TokenType::opPlus:
+                    return *operandValue;
+                case TokenType::opMinus:
+                    if (*operandValue == std::numeric_limits<int64_t>::min())
+                        return std::nullopt;
+                    return -*operandValue;
+                case TokenType::opBitNot:
+                    return ~*operandValue;
+                default:
+                    return std::nullopt;
+                }
+            }
+
+            if (const auto* fit = expression->as<FitExpression>())
+            {
+                return tryEvaluateStaticIntegerExpression(
+                    fit->operand,
+                    variableDeclarationsBySymbol,
+                    activeSymbols
+                );
+            }
+
+            if (const auto* binary = expression->as<BinaryExpression>())
+            {
+                auto lhs = tryEvaluateStaticIntegerExpression(binary->left, variableDeclarationsBySymbol, activeSymbols);
+                auto rhs = tryEvaluateStaticIntegerExpression(binary->right, variableDeclarationsBySymbol, activeSymbols);
+                if (!lhs.has_value() || !rhs.has_value())
+                    return std::nullopt;
+
+                switch (binary->op.type)
+                {
+                case TokenType::opPlus: return *lhs + *rhs;
+                case TokenType::opMinus: return *lhs - *rhs;
+                case TokenType::opStar: return *lhs * *rhs;
+                case TokenType::opSlash:
+                    if (*rhs == 0)
+                        return std::nullopt;
+                    return *lhs / *rhs;
+                case TokenType::opPercent:
+                    if (*rhs == 0)
+                        return std::nullopt;
+                    return *lhs % *rhs;
+                case TokenType::opBitAnd: return *lhs & *rhs;
+                case TokenType::opBitOr: return *lhs | *rhs;
+                case TokenType::opBitXor: return *lhs ^ *rhs;
+                case TokenType::opShiftLeft:
+                    if (*rhs < 0 || *rhs >= 63)
+                        return std::nullopt;
+                    return *lhs << *rhs;
+                case TokenType::opShiftRight:
+                    if (*rhs < 0 || *rhs >= 63)
+                        return std::nullopt;
+                    return *lhs >> *rhs;
+                default:
+                    return std::nullopt;
+                }
+            }
+
+            return std::nullopt;
+        }
+
+        void collectVariableDeclarationsBySymbol(const Ref<Program>& program, ConstVariableDeclarationMap& variableDeclarationsBySymbol)
+        {
+            if (!program)
+                return;
+
+            auto collectFromStatementList = [&](const std::vector<NodePtr<Statement>>& statements, auto&& collectFromStatementListRef) -> void
+            {
+                for (const auto& statement : statements)
+                {
+                    if (!statement)
+                        continue;
+
+                    if (auto* variableDeclaration = statement->as<VariableDeclaration>())
+                    {
+                        if (variableDeclaration->name)
+                        {
+                            Ref<sema::Symbol> symbol = variableDeclaration->name->referencedSymbol.Lock();
+                            if (symbol)
+                                variableDeclarationsBySymbol[symbol.Get()] = variableDeclaration;
+                        }
+                        continue;
+                    }
+
+                    if (auto* realmDeclaration = statement->as<RealmDeclaration>())
+                    {
+                        collectFromStatementListRef(realmDeclaration->statements, collectFromStatementListRef);
+                    }
+                }
+            };
+
+            collectFromStatementList(program->statements, collectFromStatementList);
         }
 
         std::string getBackendTypeEquivalenceKey(const Ref<sema::Type>& type)
@@ -574,44 +746,16 @@ namespace wio::codegen
             return bindings;
         }
 
-        std::optional<size_t> tryEvaluateStaticPackIndex(const NodePtr<Expression>& expression)
+        std::optional<size_t> tryEvaluateStaticPackIndex(
+            const NodePtr<Expression>& expression,
+            const ConstVariableDeclarationMap& variableDeclarationsBySymbol)
         {
-            if (!expression)
+            std::unordered_set<const sema::Symbol*> activeSymbols;
+            auto value = tryEvaluateStaticIntegerExpression(expression, variableDeclarationsBySymbol, activeSymbols);
+            if (!value.has_value() || *value < 0)
                 return std::nullopt;
 
-            if (const auto* literal = expression->as<IntegerLiteral>())
-            {
-                const IntegerResult result = common::getInteger(literal->token.value);
-                if (!result.isValid)
-                    return std::nullopt;
-
-                switch (result.type)
-                {
-                case IntegerType::i8: if (result.value.v_i8 >= 0) return static_cast<size_t>(result.value.v_i8); break;
-                case IntegerType::i16: if (result.value.v_i16 >= 0) return static_cast<size_t>(result.value.v_i16); break;
-                case IntegerType::i32: if (result.value.v_i32 >= 0) return static_cast<size_t>(result.value.v_i32); break;
-                case IntegerType::i64: if (result.value.v_i64 >= 0) return static_cast<size_t>(result.value.v_i64); break;
-                case IntegerType::u8: return static_cast<size_t>(result.value.v_u8);
-                case IntegerType::u16: return static_cast<size_t>(result.value.v_u16);
-                case IntegerType::u32: return static_cast<size_t>(result.value.v_u32);
-                case IntegerType::u64: return static_cast<size_t>(result.value.v_u64);
-                case IntegerType::isize: if (result.value.v_isize >= 0) return static_cast<size_t>(result.value.v_isize); break;
-                case IntegerType::usize: return static_cast<size_t>(result.value.v_usize);
-                case IntegerType::Unknown: break;
-                }
-            }
-
-            if (const auto* unary = expression->as<UnaryExpression>())
-            {
-                if (unary->op.type == TokenType::opPlus)
-                    return tryEvaluateStaticPackIndex(unary->operand);
-                return std::nullopt;
-            }
-
-            if (const auto* fit = expression->as<FitExpression>())
-                return tryEvaluateStaticPackIndex(fit->operand);
-
-            return std::nullopt;
+            return static_cast<size_t>(*value);
         }
 
         struct PackSizeReference
@@ -679,12 +823,13 @@ namespace wio::codegen
 
         std::optional<ParsedPackElementBinding> tryEvaluatePackIndexBinding(
             const NodePtr<Expression>& expression,
+            const ConstVariableDeclarationMap& variableDeclarationsBySymbol,
             const std::optional<std::string_view> expectedPackName = std::nullopt)
         {
             if (!expression)
                 return std::nullopt;
 
-            if (auto absoluteIndex = tryEvaluateStaticPackIndex(expression))
+            if (auto absoluteIndex = tryEvaluateStaticPackIndex(expression, variableDeclarationsBySymbol))
             {
                 ParsedPackElementBinding binding;
                 binding.packName = expectedPackName ? std::string(*expectedPackName) : std::string();
@@ -698,7 +843,7 @@ namespace wio::codegen
                 return std::nullopt;
 
             auto packSizeReference = tryResolvePackSizeReference(binary->left);
-            auto rhsIndex = tryEvaluateStaticPackIndex(binary->right);
+            auto rhsIndex = tryEvaluateStaticPackIndex(binary->right, variableDeclarationsBySymbol);
             if (!packSizeReference || !rhsIndex.has_value())
                 return std::nullopt;
 
@@ -2848,7 +2993,11 @@ namespace wio::codegen
     std::string CppGenerator::generate(const Ref<Program>& program)
     {
         buffer_.str("");
+        header_.str("");
         indentationLevel_ = 0;
+        variableDeclarationsBySymbol_.clear();
+
+        collectVariableDeclarationsBySymbol(program, variableDeclarationsBySymbol_);
 
         generateHeader();
 
@@ -4439,7 +4588,7 @@ namespace wio::codegen
                 return;
             }
 
-            if (auto indexValue = tryEvaluateStaticPackIndex(node.packIndex))
+            if (auto indexValue = tryEvaluateStaticPackIndex(node.packIndex, variableDeclarationsBySymbol_))
             {
                 emit(common::formatString(
                     "typename wio::meta::TypePackView<{}...>::template At<{}>",
@@ -5289,7 +5438,7 @@ namespace wio::codegen
             (objectType && objectType->kind() == sema::TypeKind::PackStorage) ? std::optional<std::string_view>(objectType.AsFast<sema::PackStorageType>()->packName) :
             (objectType && objectType->kind() == sema::TypeKind::TypePackView) ? std::optional<std::string_view>(objectType.AsFast<sema::TypePackViewType>()->packName) :
             std::nullopt;
-        const auto indexBinding = tryEvaluatePackIndexBinding(node.index, expectedPackName);
+        const auto indexBinding = tryEvaluatePackIndexBinding(node.index, variableDeclarationsBySymbol_, expectedPackName);
         if (objectType && indexBinding.has_value())
         {
             auto buildTemplateIndexExpr = [&](const ParsedPackElementBinding& binding, std::string_view sizeExpr) -> std::string
@@ -7155,6 +7304,9 @@ namespace wio::codegen
                     auto cppNameArg = getSingleAttributeArg(node.attributes, Attribute::CppName);
                     if (!cppNameArg.has_value())
                         return false;
+
+                    if (funcType && funcType->paramTypes.empty())
+                        return true;
 
                     return cppNameArg->value == "wio::runtime::EnumCount" ||
                            cppNameArg->value == "wio::runtime::EnumName" ||

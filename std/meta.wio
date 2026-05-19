@@ -2,9 +2,14 @@ realm std {
     realm meta {
         use @CppHeader("meta.h");
 
+        const SecondIndex: usize = 1usize;
+        const PenultimateDistance: usize = 2usize;
+
         type Head<T, Tail...> = T;
         type First<Ts...> = Ts[0usize];
+        type Second<Ts...> = Ts[SecondIndex];
         type Last<Ts...> = Ts[Ts.size - 1usize];
+        type Penultimate<Ts...> = Ts[Ts.size - PenultimateDistance];
 
         @Native
         @CppName(wio::meta::CountTypesValue)
@@ -22,8 +27,16 @@ realm std {
             return args[0usize];
         }
 
+        fn SecondValue<Args...>(args: Args...) -> Args[SecondIndex] {
+            return args[SecondIndex];
+        }
+
         fn LastValue<Args...>(args: Args...) -> Args[Args.size - 1usize] {
             return args[args.size - 1usize];
+        }
+
+        fn PenultimateValue<Args...>(args: Args...) -> Args[Args.size - PenultimateDistance] {
+            return args[Args.size - PenultimateDistance];
         }
 
         object Types<Ts...> {
@@ -44,7 +57,7 @@ realm std {
             public pack data: Args...;
 
             public fn OnConstruct(args: Args...) {
-                self.Set(args...);
+                self.data = args.array;
             }
 
             public fn Count() -> usize {
@@ -59,8 +72,16 @@ realm std {
                 return self.data[0usize];
             }
 
+            public fn Second() -> Args[SecondIndex] {
+                return self.data[SecondIndex];
+            }
+
             public fn Last() -> Args[Args.size - 1usize] {
                 return self.data[self.data.size - 1usize];
+            }
+
+            public fn Penultimate() -> Args[Args.size - PenultimateDistance] {
+                return self.data[self.data.size - PenultimateDistance];
             }
 
             public fn Set(args: Args...) {
@@ -71,8 +92,16 @@ realm std {
                 self.data[0usize] = value;
             }
 
+            public fn ReplaceSecond(value: Args[SecondIndex]) {
+                self.data[SecondIndex] = value;
+            }
+
             public fn ReplaceLast(value: Args[Args.size - 1usize]) {
                 self.data[self.data.size - 1usize] = value;
+            }
+
+            public fn ReplacePenultimate(value: Args[Args.size - PenultimateDistance]) {
+                self.data[self.data.size - PenultimateDistance] = value;
             }
         }
 

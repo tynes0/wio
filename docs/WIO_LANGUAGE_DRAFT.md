@@ -1956,16 +1956,21 @@ The source-level `std::meta` bootstrap layer currently includes:
 
 - `type Head<T, Tail...> = T;`
 - `type First<Ts...> = Ts[0usize];`
+- `type Second<Ts...> = Ts[SecondIndex];`
 - `type Last<Ts...> = Ts[Ts.size - 1usize];`
+- `type Penultimate<Ts...> = Ts[Ts.size - PenultimateDistance];`
 - `fn TypeCount<Ts...>() -> usize`
 - `fn ContainsType<T, Ts...>() -> bool`
 - `fn CountValues<Args...>(args: Args...) -> usize`
 - `fn FirstValue<Args...>(args: Args...) -> Args[0usize]`
+- `fn SecondValue<Args...>(args: Args...) -> Args[SecondIndex]`
 - `fn LastValue<Args...>(args: Args...) -> Args[Args.size - 1usize]`
+- `fn PenultimateValue<Args...>(args: Args...) -> Args[Args.size - PenultimateDistance]`
 - `object Types<Ts...>` with `Count()` / `Empty()` / `Contains<T>()`
 - `object Values<Args...>` with a public `pack data: Args...;` field and
-  `First()` / `Last()` / `Set(...)` / `ReplaceFirst(...)` /
-  `ReplaceLast(...)` helpers
+  `First()` / `Second()` / `Last()` / `Penultimate()` / `Set(...)` /
+  `ReplaceFirst(...)` / `ReplaceSecond(...)` / `ReplaceLast(...)` /
+  `ReplacePenultimate(...)` helpers
 
 Current v1 limitations:
 
@@ -1976,12 +1981,18 @@ Current v1 limitations:
   such as `@Apply(traits::IsInteger<Args...>)`,
 - generic pack export surfaces currently rely on concrete `@Instantiate(...)`
   rows rather than open-ended ABI generation,
-- pack indexing currently accepts non-negative compile-time integer literals and
-  same-pack `.size - N` expressions such as `Args[Args.size - 1usize]`,
+- pack indexing currently accepts:
+  - non-negative compile-time integer literals,
+  - same-pack `.size - N` expressions such as `Args[Args.size - 1usize]`,
+  - top-level `const` integer declarations such as `Ts[SecondIndex]`,
+  - and simple compile-time integer expressions over those constants such as
+    `Args[Args.size - PenultimateDistance]`,
 - pack storage is intentionally compile-time-shaped; it is not a normal mutable
   runtime array surface with methods like `Push` or `Remove`,
+- this is a narrow v1-scoped const-generic slice for pack/meta ergonomics, not
+  a full non-type generic system such as `Vector<T, N>`,
 - `std::meta` currently wraps the existing pack surface rather than providing a
-  full const-generic transformation language,
+  full compile-time transformation language,
 - array conversion for pack-backed `std::meta::Values` still flows through the
   underlying pack field or value-pack surface, such as `values.data.ToStaticArray<T>()`,
 - richer pack meta transforms such as `Take`, `Drop`, `Zip`, `MapTypes`, and

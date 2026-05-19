@@ -23,6 +23,11 @@ Notes:
 - [x] The first two `std::meta` waves landed:
       `Head`, `First`, `Last`, `Types`, `Values`, `ContainsType`, `TypeCount`,
       plus related mutation/helper surface.
+- [x] The `v1`-scoped `const generics` / `std::meta` wave 3 slice landed:
+      top-level `const` integer declarations now work in pack index positions,
+      simple compile-time integer expressions over those constants are accepted
+      for pack indexing, and `std::meta` gained `Second`, `Penultimate`,
+      `SecondValue`, `PenultimateValue`, and matching `Values<...>` helpers.
 - [x] The first loop slice landed:
       `for`, `foreach`, `in`, range iteration, dictionary iteration,
       component-binding iteration, and parenthesized `for (...)`.

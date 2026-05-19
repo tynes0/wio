@@ -57,8 +57,8 @@ Status markers:
     Plain app, native app, hybrid module, host interop, binding import, and packaged quickstart examples should all be polished.
 21. [x] Write versioning and compatibility policy.
     Stable / experimental / deprecated boundaries and the post-`1.0.0` contract are now written down explicitly.
-22. [ ] Make the `v1` decision for `const generics` / `std::meta` wave 3.
-    If they are not part of `v1`, that should be stated clearly; if they are, their scope must be frozen.
+22. [x] Freeze the `v1`-scoped `const generics` / `std::meta` wave 3 slice.
+    `v1` now includes the narrow compile-time index slice used by packs and `std::meta`: top-level `const` integer declarations in pack index positions, simple compile-time integer expressions over those constants, and the current `std::meta` wave 3 helpers such as `Second`, `Penultimate`, `SecondValue`, `PenultimateValue`, and the matching `Values<...>` helpers.
 23. [x] Add a performance and memory story note.
     The intended `v1` cost model for `view/ref/value`, `Box`, `any`, containers, and native passing is now documented.
 24. [x] Add first-class enum/flagset support on the SDK side.
@@ -77,9 +77,9 @@ This section collects the larger backlog items that belong after `v1`.
 3. [ ] Implement or formally settle generic defaults and partial specialization.
 4. [ ] Expand the variadic/pack metaprogramming surface.
    Add deeper compile-time transforms such as `Take`, `Drop`, `Zip`, and `MapTypes`.
-5. [ ] Implement `const generics` for real.
-   Open up non-type generic use cases such as `Vector<T, N>`.
-6. [ ] Continue with `std::meta` wave 3 and richer compile-time type/value tooling.
+5. [ ] Expand const generics beyond the v1-scoped pack/meta slice.
+   This includes broader non-type generic use cases such as `Vector<T, N>`, arbitrary value parameters, and richer compile-time integer substitution outside the current pack-index model.
+6. [ ] Continue beyond the v1 `std::meta` wave 3 slice with richer compile-time type/value tooling.
 7. [ ] Design the concurrency model.
    This includes `async`, `await`, `yield`, `thread`, and scheduler/host interaction.
 8. [ ] Evaluate time/game scheduling keywords.

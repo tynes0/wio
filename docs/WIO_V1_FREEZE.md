@@ -135,6 +135,11 @@ The following generic slice is intended to be in `v1`:
 - constructor deduction for generic `object` and `component` declarations
 - `@Apply(...)`-based constraint checking
 - the current variadic/pack slice
+- the `v1`-scoped const-generic pack/meta slice:
+  - top-level `const` integer declarations used in pack index positions
+  - simple compile-time integer expressions over those constants for pack
+    indexing
+  - the current `std::meta` wave 3 helpers built on that indexing model
 - call-site concrete validation for generic bodies
 
 The current `v1` generic intent is:
@@ -262,8 +267,8 @@ install model.
 The following should currently be treated as post-`v1` unless a later release
 decision changes that on purpose.
 
-- `const generics`
-- `std::meta` wave 3 as a full compile-time system
+- const generics beyond the current pack/meta indexing slice
+- `std::meta` beyond the current `v1` wave 3 helper surface
 - generic defaults
 - partial specialization
 - generalized implicit user-defined conversions

@@ -195,31 +195,43 @@ This keeps common state/kind/mode style code readable without forcing all
 flag-oriented operations back to raw integer math, while also giving enum and
 flagset types enough metadata for stable `v1` reflection code.
 
-### 2.4 Experimental Pure-Wio Meta Module
+### 2.4 Stable-With-Caveats Pure-Wio Meta Module
 
 - `std::meta`
 
-`std::meta` is the current bootstrap surface for generic-pack ergonomics.
+`std::meta` is the current compile-time pack/meta surface for `v1`.
 
 Current `v1` expectation:
 
-- it is intentionally smaller and more experimental than the main stable module
-  families
-- it currently focuses on pack counting, pack storage, first/last pack indexing
-  aliases, explicit `Values<Args...>` / `Types<Ts...>` wrappers, simple
-  value/type helpers, source-level pack capture/reset helpers, and pack-storage
-  mutation helpers
-- the current second wave includes:
+- it is intentionally narrower than a full future const-generic transformation
+  system
+- it currently focuses on pack counting, pack storage, indexed pack aliases,
+  explicit `Values<Args...>` / `Types<Ts...>` wrappers, simple value/type
+  helpers, source-level pack capture/reset helpers, and pack-storage mutation
+  helpers
+- the stable `v1` wave now includes:
   - `TypeCount<Ts...>()`
   - `ContainsType<T, Ts...>()`
+  - `type Second<Ts...>`
+  - `type Penultimate<Ts...>`
   - `Types<Ts...>.Contains<T>()`
+  - `SecondValue<Args...>(...)`
+  - `PenultimateValue<Args...>(...)`
   - `Values<Args...>.Set(...)`
+  - `Values<Args...>.Second()`
+  - `Values<Args...>.Penultimate()`
   - `Values<Args...>.ReplaceFirst(...)`
+  - `Values<Args...>.ReplaceSecond(...)`
   - `Values<Args...>.ReplaceLast(...)`
+- `std::meta` pack indexing now accepts:
+  - non-negative compile-time integer literals
+  - same-pack `.size - N` expressions
+  - top-level `const` integer declarations
+  - simple compile-time integer expressions over those `const` declarations
 - compile-time array conversion still uses the existing pack surface directly:
   `args.ToStaticArray<T>()` or `values.data.ToStaticArray<T>()`
-- richer transforms such as `Take`, `Drop`, `Zip`, `MapTypes`, and future
-  const-generic style helpers are still future work
+- richer transforms such as `Take`, `Drop`, `Zip`, `MapTypes`, and broader
+  non-pack const-generic helpers are still future work
 
 ### 2.5 Experimental Runtime-Model Helper Modules
 
@@ -295,9 +307,13 @@ explicit caveat:
 
 - `std::reflect`
 
-The following is available but still experimental / hardening-oriented:
+The following is part of the intended stable surface, but still carries an
+explicit caveat:
 
 - `std::meta`
+
+The following is available but still experimental / hardening-oriented:
+
 - `std::heap`
 - `std::event`
 
