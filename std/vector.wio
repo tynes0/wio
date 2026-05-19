@@ -1,14 +1,1489 @@
-realm std {
-    use @CppHeader("std_vector.h");
+use std::math;
 
-    @Native
-    @CppName(wio::runtime::std_vector::Vec2)
+realm std {
+    const Epsilon: f64 = 1.0e-9f64;
+
+    realm vector_internal {
+        fn SafeDivValue(numerator: f64, denominator: f64) -> f64 {
+            return match (std::math::ApproxZero(denominator)) {
+                true: 0.0f64;
+                assumed: numerator / denominator;
+            };
+        }
+
+        fn SafeModValue(left: f64, right: f64) -> f64 {
+            if (std::math::ApproxZero(right)) {
+                return 0.0f64;
+            }
+
+            return std::math::Fmod(left, right);
+        }
+    }
+
+    @GenerateCtors
     component Vector2 {
         x: f64;
         y: f64;
+
+        fn OnConstruct(scalar: f64) {
+            x = scalar;
+            y = scalar;
+        }
+
+        fn operator-() -> Vector2 {
+            return Vector2(-self.x, -self.y);
+        }
+
+        fn operator+(right: Vector2) -> Vector2 {
+            return Vector2(self.x + right.x, self.y + right.y);
+        }
+
+        fn operator+(scalar: f64) -> Vector2 {
+            return Vector2(self.x + scalar, self.y + scalar);
+        }
+
+        fn operator-(right: Vector2) -> Vector2 {
+            return Vector2(self.x - right.x, self.y - right.y);
+        }
+
+        fn operator-(scalar: f64) -> Vector2 {
+            return Vector2(self.x - scalar, self.y - scalar);
+        }
+
+        fn operator*(right: Vector2) -> Vector2 {
+            return Vector2(self.x * right.x, self.y * right.y);
+        }
+
+        fn operator*(scalar: f64) -> Vector2 {
+            return Vector2(self.x * scalar, self.y * scalar);
+        }
+
+        fn operator/(right: Vector2) -> Vector2 {
+            return Vector2(
+                vector_internal::SafeDivValue(self.x, right.x),
+                vector_internal::SafeDivValue(self.y, right.y)
+            );
+        }
+
+        fn operator/(scalar: f64) -> Vector2 {
+            return Vector2(
+                vector_internal::SafeDivValue(self.x, scalar),
+                vector_internal::SafeDivValue(self.y, scalar)
+            );
+        }
+
+        fn operator%(right: Vector2) -> Vector2 {
+            return Vector2(
+                vector_internal::SafeModValue(self.x, right.x),
+                vector_internal::SafeModValue(self.y, right.y)
+            );
+        }
+
+        fn operator%(scalar: f64) -> Vector2 {
+            return Vector2(
+                vector_internal::SafeModValue(self.x, scalar),
+                vector_internal::SafeModValue(self.y, scalar)
+            );
+        }
+
+        fn operator+=(right: Vector2) -> ref Vector2 {
+            x += right.x;
+            y += right.y;
+            return self;
+        }
+
+        fn operator+=(scalar: f64) -> ref Vector2 {
+            x += scalar;
+            y += scalar;
+            return self;
+        }
+
+        fn operator-=(right: Vector2) -> ref Vector2 {
+            x -= right.x;
+            y -= right.y;
+            return self;
+        }
+
+        fn operator-=(scalar: f64) -> ref Vector2 {
+            x -= scalar;
+            y -= scalar;
+            return self;
+        }
+
+        fn operator*=(right: Vector2) -> ref Vector2 {
+            x *= right.x;
+            y *= right.y;
+            return self;
+        }
+
+        fn operator*=(scalar: f64) -> ref Vector2 {
+            x *= scalar;
+            y *= scalar;
+            return self;
+        }
+
+        fn operator/=(right: Vector2) -> ref Vector2 {
+            x = vector_internal::SafeDivValue(x, right.x);
+            y = vector_internal::SafeDivValue(y, right.y);
+            return self;
+        }
+
+        fn operator/=(scalar: f64) -> ref Vector2 {
+            x = vector_internal::SafeDivValue(x, scalar);
+            y = vector_internal::SafeDivValue(y, scalar);
+            return self;
+        }
+
+        fn operator%=(right: Vector2) -> ref Vector2 {
+            x = vector_internal::SafeModValue(x, right.x);
+            y = vector_internal::SafeModValue(y, right.y);
+            return self;
+        }
+
+        fn operator%=(scalar: f64) -> ref Vector2 {
+            x = vector_internal::SafeModValue(x, scalar);
+            y = vector_internal::SafeModValue(y, scalar);
+            return self;
+        }
+
+        fn operator fit() -> string {
+            return $"Vector2(${self.x}, ${self.y})";
+        }
     }
 
-    @Native
-    @CppName(wio::runtime::std_vector::PrintVec)
-    fn PrintVec2(vec: Vector2);
+    fn operator+(left: f64, right: Vector2) -> Vector2 {
+        return right + left;
+    }
+
+    fn operator-(left: f64, right: Vector2) -> Vector2 {
+        return Vector2(left - right.x, left - right.y);
+    }
+
+    fn operator*(left: f64, right: Vector2) -> Vector2 {
+        return right * left;
+    }
+
+    fn operator/(left: f64, right: Vector2) -> Vector2 {
+        return Vector2(
+            vector_internal::SafeDivValue(left, right.x),
+            vector_internal::SafeDivValue(left, right.y)
+        );
+    }
+
+    fn operator%(left: f64, right: Vector2) -> Vector2 {
+        return Vector2(
+            vector_internal::SafeModValue(left, right.x),
+            vector_internal::SafeModValue(left, right.y)
+        );
+    }
+
+    realm vector2 {
+        fn Zero() -> Vector2 {
+            return Vector2(0.0f64, 0.0f64);
+        }
+
+        fn One() -> Vector2 {
+            return Vector2(1.0f64, 1.0f64);
+        }
+
+        fn UnitX() -> Vector2 {
+            return Vector2(1.0f64, 0.0f64);
+        }
+
+        fn UnitY() -> Vector2 {
+            return Vector2(0.0f64, 1.0f64);
+        }
+
+        fn Up() -> Vector2 {
+            return Vector2(0.0f64, 1.0f64);
+        }
+
+        fn Down() -> Vector2 {
+            return Vector2(0.0f64, -1.0f64);
+        }
+
+        fn Right() -> Vector2 {
+            return Vector2(1.0f64, 0.0f64);
+        }
+
+        fn Left() -> Vector2 {
+            return Vector2(-1.0f64, 0.0f64);
+        }
+
+        fn Abs(value: Vector2) -> Vector2 {
+            return Vector2(std::math::Abs(value.x), std::math::Abs(value.y));
+        }
+
+        fn Min(left: Vector2, right: Vector2) -> Vector2 {
+            return Vector2(
+                std::math::Min(left.x, right.x),
+                std::math::Min(left.y, right.y)
+            );
+        }
+
+        fn Max(left: Vector2, right: Vector2) -> Vector2 {
+            return Vector2(
+                std::math::Max(left.x, right.x),
+                std::math::Max(left.y, right.y)
+            );
+        }
+
+        fn Clamp(value: Vector2, minValue: Vector2, maxValue: Vector2) -> Vector2 {
+            return Vector2(
+                std::math::Clamp(value.x, minValue.x, maxValue.x),
+                std::math::Clamp(value.y, minValue.y, maxValue.y)
+            );
+        }
+
+        fn ClampScalar(value: Vector2, minValue: f64, maxValue: f64) -> Vector2 {
+            return Vector2(
+                std::math::Clamp(value.x, minValue, maxValue),
+                std::math::Clamp(value.y, minValue, maxValue)
+            );
+        }
+
+        fn Dot(left: Vector2, right: Vector2) -> f64 {
+            return left.x * right.x + left.y * right.y;
+        }
+
+        fn Cross(left: Vector2, right: Vector2) -> f64 {
+            return left.x * right.y - left.y * right.x;
+        }
+
+        fn LengthSquared(value: Vector2) -> f64 {
+            return Dot(value, value);
+        }
+
+        fn Length(value: Vector2) -> f64 {
+            return std::math::Sqrt(LengthSquared(value));
+        }
+
+        fn LengthFast(value: Vector2) -> f64 {
+            return std::math::FastSqrt(LengthSquared(value));
+        }
+
+        fn DistanceSquared(left: Vector2, right: Vector2) -> f64 {
+            return LengthSquared(left - right);
+        }
+
+        fn Distance(left: Vector2, right: Vector2) -> f64 {
+            return std::math::Sqrt(DistanceSquared(left, right));
+        }
+
+        fn IsZero(value: Vector2) -> bool {
+            return std::math::ApproxZero(value.x) and std::math::ApproxZero(value.y);
+        }
+
+        fn IsFinite(value: Vector2) -> bool {
+            return std::math::IsFinite(value.x) and std::math::IsFinite(value.y);
+        }
+
+        fn IsNan(value: Vector2) -> bool {
+            return std::math::IsNan(value.x) or std::math::IsNan(value.y);
+        }
+
+        fn ApproxEq(left: Vector2, right: Vector2) -> bool {
+            return ApproxEq(left, right, Epsilon);
+        }
+
+        fn ApproxEq(left: Vector2, right: Vector2, epsilon: f64) -> bool {
+            return std::math::ApproxEq(left.x, right.x, epsilon)
+                and std::math::ApproxEq(left.y, right.y, epsilon);
+        }
+
+        fn Normalize(value: Vector2) -> Vector2 {
+            let len = Length(value);
+
+            if (std::math::ApproxZero(len)) {
+                return Zero();
+            }
+
+            return value / len;
+        }
+
+        fn NormalizeFast(value: Vector2) -> Vector2 {
+            let lenSq = LengthSquared(value);
+
+            if (std::math::ApproxZero(lenSq)) {
+                return Zero();
+            }
+
+            return value * std::math::FastRsqrt(lenSq);
+        }
+
+        fn NormalizeOr(value: Vector2, fallback: Vector2) -> Vector2 {
+            let len = Length(value);
+
+            if (std::math::ApproxZero(len)) {
+                return fallback;
+            }
+
+            return value / len;
+        }
+
+        fn WithLength(value: Vector2, length: f64) -> Vector2 {
+            return Normalize(value) * length;
+        }
+
+        fn ClampLength(value: Vector2, maxLength: f64) -> Vector2 {
+            let lenSq = LengthSquared(value);
+            let maxSq = maxLength * maxLength;
+
+            if (lenSq <= maxSq) {
+                return value;
+            }
+
+            return Normalize(value) * maxLength;
+        }
+
+        fn ClampLength(value: Vector2, minLength: f64, maxLength: f64) -> Vector2 {
+            let len = Length(value);
+
+            if (std::math::ApproxZero(len)) {
+                return Zero();
+            }
+
+            if (len < minLength) {
+                return value * (minLength / len);
+            }
+
+            if (len > maxLength) {
+                return value * (maxLength / len);
+            }
+
+            return value;
+        }
+
+        fn Lerp(from: Vector2, to: Vector2, t: f64) -> Vector2 {
+            return from + ((to - from) * t);
+        }
+
+        fn LerpClamped(from: Vector2, to: Vector2, t: f64) -> Vector2 {
+            return Lerp(from, to, std::math::Clamp01(t));
+        }
+
+        fn MoveTowards(current: Vector2, target: Vector2, maxDistanceDelta: f64) -> Vector2 {
+            let delta = target - current;
+            let dist = Length(delta);
+
+            if (dist <= maxDistanceDelta or std::math::ApproxZero(dist)) {
+                return target;
+            }
+
+            return current + (delta * (maxDistanceDelta / dist));
+        }
+
+        fn PerpendicularClockwise(value: Vector2) -> Vector2 {
+            return Vector2(value.y, -value.x);
+        }
+
+        fn PerpendicularCounterClockwise(value: Vector2) -> Vector2 {
+            return Vector2(-value.y, value.x);
+        }
+
+        fn Reflect(direction: Vector2, normal: Vector2) -> Vector2 {
+            let n = Normalize(normal);
+            return direction - (n * (2.0f64 * Dot(direction, n)));
+        }
+
+        fn Project(value: Vector2, onto: Vector2) -> Vector2 {
+            let denom = LengthSquared(onto);
+
+            if (std::math::ApproxZero(denom)) {
+                return Zero();
+            }
+
+            return onto * (Dot(value, onto) / denom);
+        }
+
+        fn Reject(value: Vector2, onto: Vector2) -> Vector2 {
+            return value - Project(value, onto);
+        }
+
+        fn AngleRadians(value: Vector2) -> f64 {
+            return std::math::Atan2(value.y, value.x);
+        }
+
+        fn AngleDegrees(value: Vector2) -> f64 {
+            return std::math::RadToDeg(AngleRadians(value));
+        }
+
+        fn AngleBetweenRadians(left: Vector2, right: Vector2) -> f64 {
+            let leftLen = Length(left);
+            let rightLen = Length(right);
+
+            if (std::math::ApproxZero(leftLen) or std::math::ApproxZero(rightLen)) {
+                return 0.0f64;
+            }
+
+            let c = Dot(left, right) / (leftLen * rightLen);
+            return std::math::Acos(std::math::Clamp(c, -1.0f64, 1.0f64));
+        }
+
+        fn AngleBetweenDegrees(left: Vector2, right: Vector2) -> f64 {
+            return std::math::RadToDeg(AngleBetweenRadians(left, right));
+        }
+
+        fn SignedAngleRadians(from: Vector2, to: Vector2) -> f64 {
+            return std::math::Atan2(Cross(from, to), Dot(from, to));
+        }
+
+        fn SignedAngleDegrees(from: Vector2, to: Vector2) -> f64 {
+            return std::math::RadToDeg(SignedAngleRadians(from, to));
+        }
+
+        fn FromAngleRadians(angle: f64) -> Vector2 {
+            return Vector2(std::math::Cos(angle), std::math::Sin(angle));
+        }
+
+        fn FromAngleDegrees(angle: f64) -> Vector2 {
+            return FromAngleRadians(std::math::DegToRad(angle));
+        }
+
+        fn RotateRadians(value: Vector2, angle: f64) -> Vector2 {
+            let c = std::math::Cos(angle);
+            let s = std::math::Sin(angle);
+
+            return Vector2(
+                value.x * c - value.y * s,
+                value.x * s + value.y * c
+            );
+        }
+
+        fn RotateDegrees(value: Vector2, angle: f64) -> Vector2 {
+            return RotateRadians(value, std::math::DegToRad(angle));
+        }
+
+        fn Floor(value: Vector2) -> Vector2 {
+            return Vector2(std::math::Floor(value.x), std::math::Floor(value.y));
+        }
+
+        fn Ceil(value: Vector2) -> Vector2 {
+            return Vector2(std::math::Ceil(value.x), std::math::Ceil(value.y));
+        }
+
+        fn Round(value: Vector2) -> Vector2 {
+            return Vector2(std::math::Round(value.x), std::math::Round(value.y));
+        }
+
+        fn Trunc(value: Vector2) -> Vector2 {
+            return Vector2(std::math::Trunc(value.x), std::math::Trunc(value.y));
+        }
+
+        fn Sign(value: Vector2) -> Vector2 {
+            return Vector2(std::math::Sign(value.x), std::math::Sign(value.y));
+        }
+
+        fn Slope(value: Vector2) -> f64 {
+            return vector_internal::SafeDivValue(value.y, value.x);
+        }
+
+        fn Aspect(value: Vector2) -> f64 {
+            return vector_internal::SafeDivValue(value.x, value.y);
+        }
+
+        fn Area(value: Vector2) -> f64 {
+            return value.x * value.y;
+        }
+
+        fn Hadamard(left: Vector2, right: Vector2) -> Vector2 {
+            return left * right;
+        }
+
+        fn Inverse(value: Vector2) -> Vector2 {
+            return Vector2(
+                vector_internal::SafeDivValue(1.0f64, value.x),
+                vector_internal::SafeDivValue(1.0f64, value.y)
+            );
+        }
+    }
+
+    @GenerateCtors
+    component Vector3 {
+        x: f64;
+        y: f64;
+        z: f64;
+
+        fn OnConstruct(scalar: f64) {
+            x = scalar;
+            y = scalar;
+            z = scalar;
+        }
+
+        fn operator-() -> Vector3 {
+            return Vector3(-self.x, -self.y, -self.z);
+        }
+
+        fn operator+(right: Vector3) -> Vector3 {
+            return Vector3(self.x + right.x, self.y + right.y, self.z + right.z);
+        }
+
+        fn operator+(scalar: f64) -> Vector3 {
+            return Vector3(self.x + scalar, self.y + scalar, self.z + scalar);
+        }
+
+        fn operator-(right: Vector3) -> Vector3 {
+            return Vector3(self.x - right.x, self.y - right.y, self.z - right.z);
+        }
+
+        fn operator-(scalar: f64) -> Vector3 {
+            return Vector3(self.x - scalar, self.y - scalar, self.z - scalar);
+        }
+
+        fn operator*(right: Vector3) -> Vector3 {
+            return Vector3(self.x * right.x, self.y * right.y, self.z * right.z);
+        }
+
+        fn operator*(scalar: f64) -> Vector3 {
+            return Vector3(self.x * scalar, self.y * scalar, self.z * scalar);
+        }
+
+        fn operator/(right: Vector3) -> Vector3 {
+            return Vector3(
+                vector_internal::SafeDivValue(self.x, right.x),
+                vector_internal::SafeDivValue(self.y, right.y),
+                vector_internal::SafeDivValue(self.z, right.z)
+            );
+        }
+
+        fn operator/(scalar: f64) -> Vector3 {
+            return Vector3(
+                vector_internal::SafeDivValue(self.x, scalar),
+                vector_internal::SafeDivValue(self.y, scalar),
+                vector_internal::SafeDivValue(self.z, scalar)
+            );
+        }
+
+        fn operator%(right: Vector3) -> Vector3 {
+            return Vector3(
+                vector_internal::SafeModValue(self.x, right.x),
+                vector_internal::SafeModValue(self.y, right.y),
+                vector_internal::SafeModValue(self.z, right.z)
+            );
+        }
+
+        fn operator%(scalar: f64) -> Vector3 {
+            return Vector3(
+                vector_internal::SafeModValue(self.x, scalar),
+                vector_internal::SafeModValue(self.y, scalar),
+                vector_internal::SafeModValue(self.z, scalar)
+            );
+        }
+
+        fn operator+=(right: Vector3) -> ref Vector3 {
+            x += right.x;
+            y += right.y;
+            z += right.z;
+            return self;
+        }
+
+        fn operator+=(scalar: f64) -> ref Vector3 {
+            x += scalar;
+            y += scalar;
+            z += scalar;
+            return self;
+        }
+
+        fn operator-=(right: Vector3) -> ref Vector3 {
+            x -= right.x;
+            y -= right.y;
+            z -= right.z;
+            return self;
+        }
+
+        fn operator-=(scalar: f64) -> ref Vector3 {
+            x -= scalar;
+            y -= scalar;
+            z -= scalar;
+            return self;
+        }
+
+        fn operator*=(right: Vector3) -> ref Vector3 {
+            x *= right.x;
+            y *= right.y;
+            z *= right.z;
+            return self;
+        }
+
+        fn operator*=(scalar: f64) -> ref Vector3 {
+            x *= scalar;
+            y *= scalar;
+            z *= scalar;
+            return self;
+        }
+
+        fn operator/=(right: Vector3) -> ref Vector3 {
+            x = vector_internal::SafeDivValue(x, right.x);
+            y = vector_internal::SafeDivValue(y, right.y);
+            z = vector_internal::SafeDivValue(z, right.z);
+            return self;
+        }
+
+        fn operator/=(scalar: f64) -> ref Vector3 {
+            x = vector_internal::SafeDivValue(x, scalar);
+            y = vector_internal::SafeDivValue(y, scalar);
+            z = vector_internal::SafeDivValue(z, scalar);
+            return self;
+        }
+
+        fn operator%=(right: Vector3) -> ref Vector3 {
+            x = vector_internal::SafeModValue(x, right.x);
+            y = vector_internal::SafeModValue(y, right.y);
+            z = vector_internal::SafeModValue(z, right.z);
+            return self;
+        }
+
+        fn operator%=(scalar: f64) -> ref Vector3 {
+            x = vector_internal::SafeModValue(x, scalar);
+            y = vector_internal::SafeModValue(y, scalar);
+            z = vector_internal::SafeModValue(z, scalar);
+            return self;
+        }
+
+        fn operator fit() -> string {
+            return $"Vector3(${self.x}, ${self.y}, ${self.z})";
+        }
+    }
+
+    fn operator+(left: f64, right: Vector3) -> Vector3 {
+        return right + left;
+    }
+
+    fn operator-(left: f64, right: Vector3) -> Vector3 {
+        return Vector3(left - right.x, left - right.y, left - right.z);
+    }
+
+    fn operator*(left: f64, right: Vector3) -> Vector3 {
+        return right * left;
+    }
+
+    fn operator/(left: f64, right: Vector3) -> Vector3 {
+        return Vector3(
+            vector_internal::SafeDivValue(left, right.x),
+            vector_internal::SafeDivValue(left, right.y),
+            vector_internal::SafeDivValue(left, right.z)
+        );
+    }
+
+    fn operator%(left: f64, right: Vector3) -> Vector3 {
+        return Vector3(
+            vector_internal::SafeModValue(left, right.x),
+            vector_internal::SafeModValue(left, right.y),
+            vector_internal::SafeModValue(left, right.z)
+        );
+    }
+
+    realm vector3 {
+        fn Zero() -> Vector3 {
+            return Vector3(0.0f64, 0.0f64, 0.0f64);
+        }
+
+        fn One() -> Vector3 {
+            return Vector3(1.0f64, 1.0f64, 1.0f64);
+        }
+
+        fn UnitX() -> Vector3 {
+            return Vector3(1.0f64, 0.0f64, 0.0f64);
+        }
+
+        fn UnitY() -> Vector3 {
+            return Vector3(0.0f64, 1.0f64, 0.0f64);
+        }
+
+        fn UnitZ() -> Vector3 {
+            return Vector3(0.0f64, 0.0f64, 1.0f64);
+        }
+
+        fn Up() -> Vector3 {
+            return UnitY();
+        }
+
+        fn Down() -> Vector3 {
+            return Vector3(0.0f64, -1.0f64, 0.0f64);
+        }
+
+        fn Right() -> Vector3 {
+            return UnitX();
+        }
+
+        fn Left() -> Vector3 {
+            return Vector3(-1.0f64, 0.0f64, 0.0f64);
+        }
+
+        fn Forward() -> Vector3 {
+            return UnitZ();
+        }
+
+        fn Backward() -> Vector3 {
+            return Vector3(0.0f64, 0.0f64, -1.0f64);
+        }
+
+        fn Abs(value: Vector3) -> Vector3 {
+            return Vector3(std::math::Abs(value.x), std::math::Abs(value.y), std::math::Abs(value.z));
+        }
+
+        fn Min(left: Vector3, right: Vector3) -> Vector3 {
+            return Vector3(
+                std::math::Min(left.x, right.x),
+                std::math::Min(left.y, right.y),
+                std::math::Min(left.z, right.z)
+            );
+        }
+
+        fn Max(left: Vector3, right: Vector3) -> Vector3 {
+            return Vector3(
+                std::math::Max(left.x, right.x),
+                std::math::Max(left.y, right.y),
+                std::math::Max(left.z, right.z)
+            );
+        }
+
+        fn Clamp(value: Vector3, minValue: Vector3, maxValue: Vector3) -> Vector3 {
+            return Vector3(
+                std::math::Clamp(value.x, minValue.x, maxValue.x),
+                std::math::Clamp(value.y, minValue.y, maxValue.y),
+                std::math::Clamp(value.z, minValue.z, maxValue.z)
+            );
+        }
+
+        fn ClampScalar(value: Vector3, minValue: f64, maxValue: f64) -> Vector3 {
+            return Vector3(
+                std::math::Clamp(value.x, minValue, maxValue),
+                std::math::Clamp(value.y, minValue, maxValue),
+                std::math::Clamp(value.z, minValue, maxValue)
+            );
+        }
+
+        fn Dot(left: Vector3, right: Vector3) -> f64 {
+            return left.x * right.x + left.y * right.y + left.z * right.z;
+        }
+
+        fn Cross(left: Vector3, right: Vector3) -> Vector3 {
+            return Vector3(
+                left.y * right.z - left.z * right.y,
+                left.z * right.x - left.x * right.z,
+                left.x * right.y - left.y * right.x
+            );
+        }
+
+        fn LengthSquared(value: Vector3) -> f64 {
+            return Dot(value, value);
+        }
+
+        fn Length(value: Vector3) -> f64 {
+            return std::math::Sqrt(LengthSquared(value));
+        }
+
+        fn LengthFast(value: Vector3) -> f64 {
+            return std::math::FastSqrt(LengthSquared(value));
+        }
+
+        fn DistanceSquared(left: Vector3, right: Vector3) -> f64 {
+            return LengthSquared(left - right);
+        }
+
+        fn Distance(left: Vector3, right: Vector3) -> f64 {
+            return std::math::Sqrt(DistanceSquared(left, right));
+        }
+
+        fn IsZero(value: Vector3) -> bool {
+            return std::math::ApproxZero(value.x)
+                and std::math::ApproxZero(value.y)
+                and std::math::ApproxZero(value.z);
+        }
+
+        fn IsFinite(value: Vector3) -> bool {
+            return std::math::IsFinite(value.x)
+                and std::math::IsFinite(value.y)
+                and std::math::IsFinite(value.z);
+        }
+
+        fn IsNan(value: Vector3) -> bool {
+            return std::math::IsNan(value.x)
+                or std::math::IsNan(value.y)
+                or std::math::IsNan(value.z);
+        }
+
+        fn ApproxEq(left: Vector3, right: Vector3) -> bool {
+            return ApproxEq(left, right, Epsilon);
+        }
+
+        fn ApproxEq(left: Vector3, right: Vector3, epsilon: f64) -> bool {
+            return std::math::ApproxEq(left.x, right.x, epsilon)
+                and std::math::ApproxEq(left.y, right.y, epsilon)
+                and std::math::ApproxEq(left.z, right.z, epsilon);
+        }
+
+        fn Normalize(value: Vector3) -> Vector3 {
+            let len = Length(value);
+
+            if (std::math::ApproxZero(len)) {
+                return Zero();
+            }
+
+            return value / len;
+        }
+
+        fn NormalizeFast(value: Vector3) -> Vector3 {
+            let lenSq = LengthSquared(value);
+
+            if (std::math::ApproxZero(lenSq)) {
+                return Zero();
+            }
+
+            return value * std::math::FastRsqrt(lenSq);
+        }
+
+        fn NormalizeOr(value: Vector3, fallback: Vector3) -> Vector3 {
+            let len = Length(value);
+
+            if (std::math::ApproxZero(len)) {
+                return fallback;
+            }
+
+            return value / len;
+        }
+
+        fn WithLength(value: Vector3, length: f64) -> Vector3 {
+            return Normalize(value) * length;
+        }
+
+        fn ClampLength(value: Vector3, maxLength: f64) -> Vector3 {
+            let lenSq = LengthSquared(value);
+            let maxSq = maxLength * maxLength;
+
+            if (lenSq <= maxSq) {
+                return value;
+            }
+
+            return Normalize(value) * maxLength;
+        }
+
+        fn ClampLength(value: Vector3, minLength: f64, maxLength: f64) -> Vector3 {
+            let len = Length(value);
+
+            if (std::math::ApproxZero(len)) {
+                return Zero();
+            }
+
+            if (len < minLength) {
+                return value * (minLength / len);
+            }
+
+            if (len > maxLength) {
+                return value * (maxLength / len);
+            }
+
+            return value;
+        }
+
+        fn Lerp(from: Vector3, to: Vector3, t: f64) -> Vector3 {
+            return from + ((to - from) * t);
+        }
+
+        fn LerpClamped(from: Vector3, to: Vector3, t: f64) -> Vector3 {
+            return Lerp(from, to, std::math::Clamp01(t));
+        }
+
+        fn MoveTowards(current: Vector3, target: Vector3, maxDistanceDelta: f64) -> Vector3 {
+            let delta = target - current;
+            let dist = Length(delta);
+
+            if (dist <= maxDistanceDelta or std::math::ApproxZero(dist)) {
+                return target;
+            }
+
+            return current + (delta * (maxDistanceDelta / dist));
+        }
+
+        fn Reflect(direction: Vector3, normal: Vector3) -> Vector3 {
+            let n = Normalize(normal);
+            return direction - (n * (2.0f64 * Dot(direction, n)));
+        }
+
+        fn Project(value: Vector3, onto: Vector3) -> Vector3 {
+            let denom = LengthSquared(onto);
+
+            if (std::math::ApproxZero(denom)) {
+                return Zero();
+            }
+
+            return onto * (Dot(value, onto) / denom);
+        }
+
+        fn Reject(value: Vector3, onto: Vector3) -> Vector3 {
+            return value - Project(value, onto);
+        }
+
+        fn AngleBetweenRadians(left: Vector3, right: Vector3) -> f64 {
+            let leftLen = Length(left);
+            let rightLen = Length(right);
+
+            if (std::math::ApproxZero(leftLen) or std::math::ApproxZero(rightLen)) {
+                return 0.0f64;
+            }
+
+            let c = Dot(left, right) / (leftLen * rightLen);
+            return std::math::Acos(std::math::Clamp(c, -1.0f64, 1.0f64));
+        }
+
+        fn AngleBetweenDegrees(left: Vector3, right: Vector3) -> f64 {
+            return std::math::RadToDeg(AngleBetweenRadians(left, right));
+        }
+
+        fn Floor(value: Vector3) -> Vector3 {
+            return Vector3(
+                std::math::Floor(value.x),
+                std::math::Floor(value.y),
+                std::math::Floor(value.z)
+            );
+        }
+
+        fn Ceil(value: Vector3) -> Vector3 {
+            return Vector3(
+                std::math::Ceil(value.x),
+                std::math::Ceil(value.y),
+                std::math::Ceil(value.z)
+            );
+        }
+
+        fn Round(value: Vector3) -> Vector3 {
+            return Vector3(
+                std::math::Round(value.x),
+                std::math::Round(value.y),
+                std::math::Round(value.z)
+            );
+        }
+
+        fn Trunc(value: Vector3) -> Vector3 {
+            return Vector3(
+                std::math::Trunc(value.x),
+                std::math::Trunc(value.y),
+                std::math::Trunc(value.z)
+            );
+        }
+
+        fn Sign(value: Vector3) -> Vector3 {
+            return Vector3(
+                std::math::Sign(value.x),
+                std::math::Sign(value.y),
+                std::math::Sign(value.z)
+            );
+        }
+
+        fn Volume(value: Vector3) -> f64 {
+            return value.x * value.y * value.z;
+        }
+
+        fn Hadamard(left: Vector3, right: Vector3) -> Vector3 {
+            return left * right;
+        }
+
+        fn Inverse(value: Vector3) -> Vector3 {
+            return Vector3(
+                vector_internal::SafeDivValue(1.0f64, value.x),
+                vector_internal::SafeDivValue(1.0f64, value.y),
+                vector_internal::SafeDivValue(1.0f64, value.z)
+            );
+        }
+    }
+
+    @GenerateCtors
+    component Vector4 {
+        x: f64;
+        y: f64;
+        z: f64;
+        w: f64;
+
+        fn OnConstruct(scalar: f64) {
+            x = scalar;
+            y = scalar;
+            z = scalar;
+            w = scalar;
+        }
+
+        fn operator-() -> Vector4 {
+            return Vector4(-self.x, -self.y, -self.z, -self.w);
+        }
+
+        fn operator+(right: Vector4) -> Vector4 {
+            return Vector4(self.x + right.x, self.y + right.y, self.z + right.z, self.w + right.w);
+        }
+
+        fn operator+(scalar: f64) -> Vector4 {
+            return Vector4(self.x + scalar, self.y + scalar, self.z + scalar, self.w + scalar);
+        }
+
+        fn operator-(right: Vector4) -> Vector4 {
+            return Vector4(self.x - right.x, self.y - right.y, self.z - right.z, self.w - right.w);
+        }
+
+        fn operator-(scalar: f64) -> Vector4 {
+            return Vector4(self.x - scalar, self.y - scalar, self.z - scalar, self.w - scalar);
+        }
+
+        fn operator*(right: Vector4) -> Vector4 {
+            return Vector4(self.x * right.x, self.y * right.y, self.z * right.z, self.w * right.w);
+        }
+
+        fn operator*(scalar: f64) -> Vector4 {
+            return Vector4(self.x * scalar, self.y * scalar, self.z * scalar, self.w * scalar);
+        }
+
+        fn operator/(right: Vector4) -> Vector4 {
+            return Vector4(
+                vector_internal::SafeDivValue(self.x, right.x),
+                vector_internal::SafeDivValue(self.y, right.y),
+                vector_internal::SafeDivValue(self.z, right.z),
+                vector_internal::SafeDivValue(self.w, right.w)
+            );
+        }
+
+        fn operator/(scalar: f64) -> Vector4 {
+            return Vector4(
+                vector_internal::SafeDivValue(self.x, scalar),
+                vector_internal::SafeDivValue(self.y, scalar),
+                vector_internal::SafeDivValue(self.z, scalar),
+                vector_internal::SafeDivValue(self.w, scalar)
+            );
+        }
+
+        fn operator%(right: Vector4) -> Vector4 {
+            return Vector4(
+                vector_internal::SafeModValue(self.x, right.x),
+                vector_internal::SafeModValue(self.y, right.y),
+                vector_internal::SafeModValue(self.z, right.z),
+                vector_internal::SafeModValue(self.w, right.w)
+            );
+        }
+
+        fn operator%(scalar: f64) -> Vector4 {
+            return Vector4(
+                vector_internal::SafeModValue(self.x, scalar),
+                vector_internal::SafeModValue(self.y, scalar),
+                vector_internal::SafeModValue(self.z, scalar),
+                vector_internal::SafeModValue(self.w, scalar)
+            );
+        }
+
+        fn operator+=(right: Vector4) -> ref Vector4 {
+            x += right.x;
+            y += right.y;
+            z += right.z;
+            w += right.w;
+            return self;
+        }
+
+        fn operator+=(scalar: f64) -> ref Vector4 {
+            x += scalar;
+            y += scalar;
+            z += scalar;
+            w += scalar;
+            return self;
+        }
+
+        fn operator-=(right: Vector4) -> ref Vector4 {
+            x -= right.x;
+            y -= right.y;
+            z -= right.z;
+            w -= right.w;
+            return self;
+        }
+
+        fn operator-=(scalar: f64) -> ref Vector4 {
+            x -= scalar;
+            y -= scalar;
+            z -= scalar;
+            w -= scalar;
+            return self;
+        }
+
+        fn operator*=(right: Vector4) -> ref Vector4 {
+            x *= right.x;
+            y *= right.y;
+            z *= right.z;
+            w *= right.w;
+            return self;
+        }
+
+        fn operator*=(scalar: f64) -> ref Vector4 {
+            x *= scalar;
+            y *= scalar;
+            z *= scalar;
+            w *= scalar;
+            return self;
+        }
+
+        fn operator/=(right: Vector4) -> ref Vector4 {
+            x = vector_internal::SafeDivValue(x, right.x);
+            y = vector_internal::SafeDivValue(y, right.y);
+            z = vector_internal::SafeDivValue(z, right.z);
+            w = vector_internal::SafeDivValue(w, right.w);
+            return self;
+        }
+
+        fn operator/=(scalar: f64) -> ref Vector4 {
+            x = vector_internal::SafeDivValue(x, scalar);
+            y = vector_internal::SafeDivValue(y, scalar);
+            z = vector_internal::SafeDivValue(z, scalar);
+            w = vector_internal::SafeDivValue(w, scalar);
+            return self;
+        }
+
+        fn operator%=(right: Vector4) -> ref Vector4 {
+            x = vector_internal::SafeModValue(x, right.x);
+            y = vector_internal::SafeModValue(y, right.y);
+            z = vector_internal::SafeModValue(z, right.z);
+            w = vector_internal::SafeModValue(w, right.w);
+            return self;
+        }
+
+        fn operator%=(scalar: f64) -> ref Vector4 {
+            x = vector_internal::SafeModValue(x, scalar);
+            y = vector_internal::SafeModValue(y, scalar);
+            z = vector_internal::SafeModValue(z, scalar);
+            w = vector_internal::SafeModValue(w, scalar);
+            return self;
+        }
+
+        fn operator fit() -> string {
+            return $"Vector4(${self.x}, ${self.y}, ${self.z}, ${self.w})";
+        }
+    }
+
+    fn operator+(left: f64, right: Vector4) -> Vector4 {
+        return right + left;
+    }
+
+    fn operator-(left: f64, right: Vector4) -> Vector4 {
+        return Vector4(left - right.x, left - right.y, left - right.z, left - right.w);
+    }
+
+    fn operator*(left: f64, right: Vector4) -> Vector4 {
+        return right * left;
+    }
+
+    fn operator/(left: f64, right: Vector4) -> Vector4 {
+        return Vector4(
+            vector_internal::SafeDivValue(left, right.x),
+            vector_internal::SafeDivValue(left, right.y),
+            vector_internal::SafeDivValue(left, right.z),
+            vector_internal::SafeDivValue(left, right.w)
+        );
+    }
+
+    fn operator%(left: f64, right: Vector4) -> Vector4 {
+        return Vector4(
+            vector_internal::SafeModValue(left, right.x),
+            vector_internal::SafeModValue(left, right.y),
+            vector_internal::SafeModValue(left, right.z),
+            vector_internal::SafeModValue(left, right.w)
+        );
+    }
+
+    realm vector4 {
+        fn Zero() -> Vector4 {
+            return Vector4(0.0f64, 0.0f64, 0.0f64, 0.0f64);
+        }
+
+        fn One() -> Vector4 {
+            return Vector4(1.0f64, 1.0f64, 1.0f64, 1.0f64);
+        }
+
+        fn UnitX() -> Vector4 {
+            return Vector4(1.0f64, 0.0f64, 0.0f64, 0.0f64);
+        }
+
+        fn UnitY() -> Vector4 {
+            return Vector4(0.0f64, 1.0f64, 0.0f64, 0.0f64);
+        }
+
+        fn UnitZ() -> Vector4 {
+            return Vector4(0.0f64, 0.0f64, 1.0f64, 0.0f64);
+        }
+
+        fn UnitW() -> Vector4 {
+            return Vector4(0.0f64, 0.0f64, 0.0f64, 1.0f64);
+        }
+
+        fn Abs(value: Vector4) -> Vector4 {
+            return Vector4(
+                std::math::Abs(value.x),
+                std::math::Abs(value.y),
+                std::math::Abs(value.z),
+                std::math::Abs(value.w)
+            );
+        }
+
+        fn Min(left: Vector4, right: Vector4) -> Vector4 {
+            return Vector4(
+                std::math::Min(left.x, right.x),
+                std::math::Min(left.y, right.y),
+                std::math::Min(left.z, right.z),
+                std::math::Min(left.w, right.w)
+            );
+        }
+
+        fn Max(left: Vector4, right: Vector4) -> Vector4 {
+            return Vector4(
+                std::math::Max(left.x, right.x),
+                std::math::Max(left.y, right.y),
+                std::math::Max(left.z, right.z),
+                std::math::Max(left.w, right.w)
+            );
+        }
+
+        fn Clamp(value: Vector4, minValue: Vector4, maxValue: Vector4) -> Vector4 {
+            return Vector4(
+                std::math::Clamp(value.x, minValue.x, maxValue.x),
+                std::math::Clamp(value.y, minValue.y, maxValue.y),
+                std::math::Clamp(value.z, minValue.z, maxValue.z),
+                std::math::Clamp(value.w, minValue.w, maxValue.w)
+            );
+        }
+
+        fn ClampScalar(value: Vector4, minValue: f64, maxValue: f64) -> Vector4 {
+            return Vector4(
+                std::math::Clamp(value.x, minValue, maxValue),
+                std::math::Clamp(value.y, minValue, maxValue),
+                std::math::Clamp(value.z, minValue, maxValue),
+                std::math::Clamp(value.w, minValue, maxValue)
+            );
+        }
+
+        fn Dot(left: Vector4, right: Vector4) -> f64 {
+            return left.x * right.x + left.y * right.y + left.z * right.z + left.w * right.w;
+        }
+
+        fn LengthSquared(value: Vector4) -> f64 {
+            return Dot(value, value);
+        }
+
+        fn Length(value: Vector4) -> f64 {
+            return std::math::Sqrt(LengthSquared(value));
+        }
+
+        fn LengthFast(value: Vector4) -> f64 {
+            return std::math::FastSqrt(LengthSquared(value));
+        }
+
+        fn DistanceSquared(left: Vector4, right: Vector4) -> f64 {
+            return LengthSquared(left - right);
+        }
+
+        fn Distance(left: Vector4, right: Vector4) -> f64 {
+            return std::math::Sqrt(DistanceSquared(left, right));
+        }
+
+        fn IsZero(value: Vector4) -> bool {
+            return std::math::ApproxZero(value.x)
+                and std::math::ApproxZero(value.y)
+                and std::math::ApproxZero(value.z)
+                and std::math::ApproxZero(value.w);
+        }
+
+        fn IsFinite(value: Vector4) -> bool {
+            return std::math::IsFinite(value.x)
+                and std::math::IsFinite(value.y)
+                and std::math::IsFinite(value.z)
+                and std::math::IsFinite(value.w);
+        }
+
+        fn IsNan(value: Vector4) -> bool {
+            return std::math::IsNan(value.x)
+                or std::math::IsNan(value.y)
+                or std::math::IsNan(value.z)
+                or std::math::IsNan(value.w);
+        }
+
+        fn ApproxEq(left: Vector4, right: Vector4) -> bool {
+            return ApproxEq(left, right, Epsilon);
+        }
+
+        fn ApproxEq(left: Vector4, right: Vector4, epsilon: f64) -> bool {
+            return std::math::ApproxEq(left.x, right.x, epsilon)
+                and std::math::ApproxEq(left.y, right.y, epsilon)
+                and std::math::ApproxEq(left.z, right.z, epsilon)
+                and std::math::ApproxEq(left.w, right.w, epsilon);
+        }
+
+        fn Normalize(value: Vector4) -> Vector4 {
+            let len = Length(value);
+
+            if (std::math::ApproxZero(len)) {
+                return Zero();
+            }
+
+            return value / len;
+        }
+
+        fn NormalizeFast(value: Vector4) -> Vector4 {
+            let lenSq = LengthSquared(value);
+
+            if (std::math::ApproxZero(lenSq)) {
+                return Zero();
+            }
+
+            return value * std::math::FastRsqrt(lenSq);
+        }
+
+        fn NormalizeOr(value: Vector4, fallback: Vector4) -> Vector4 {
+            let len = Length(value);
+
+            if (std::math::ApproxZero(len)) {
+                return fallback;
+            }
+
+            return value / len;
+        }
+
+        fn WithLength(value: Vector4, length: f64) -> Vector4 {
+            return Normalize(value) * length;
+        }
+
+        fn ClampLength(value: Vector4, maxLength: f64) -> Vector4 {
+            let lenSq = LengthSquared(value);
+            let maxSq = maxLength * maxLength;
+
+            if (lenSq <= maxSq) {
+                return value;
+            }
+
+            return Normalize(value) * maxLength;
+        }
+
+        fn ClampLength(value: Vector4, minLength: f64, maxLength: f64) -> Vector4 {
+            let len = Length(value);
+
+            if (std::math::ApproxZero(len)) {
+                return Zero();
+            }
+
+            if (len < minLength) {
+                return value * (minLength / len);
+            }
+
+            if (len > maxLength) {
+                return value * (maxLength / len);
+            }
+
+            return value;
+        }
+
+        fn Lerp(from: Vector4, to: Vector4, t: f64) -> Vector4 {
+            return from + ((to - from) * t);
+        }
+
+        fn LerpClamped(from: Vector4, to: Vector4, t: f64) -> Vector4 {
+            return Lerp(from, to, std::math::Clamp01(t));
+        }
+
+        fn MoveTowards(current: Vector4, target: Vector4, maxDistanceDelta: f64) -> Vector4 {
+            let delta = target - current;
+            let dist = Length(delta);
+
+            if (dist <= maxDistanceDelta or std::math::ApproxZero(dist)) {
+                return target;
+            }
+
+            return current + (delta * (maxDistanceDelta / dist));
+        }
+
+        fn Reflect(direction: Vector4, normal: Vector4) -> Vector4 {
+            let n = Normalize(normal);
+            return direction - (n * (2.0f64 * Dot(direction, n)));
+        }
+
+        fn Project(value: Vector4, onto: Vector4) -> Vector4 {
+            let denom = LengthSquared(onto);
+
+            if (std::math::ApproxZero(denom)) {
+                return Zero();
+            }
+
+            return onto * (Dot(value, onto) / denom);
+        }
+
+        fn Reject(value: Vector4, onto: Vector4) -> Vector4 {
+            return value - Project(value, onto);
+        }
+
+        fn AngleBetweenRadians(left: Vector4, right: Vector4) -> f64 {
+            let leftLen = Length(left);
+            let rightLen = Length(right);
+
+            if (std::math::ApproxZero(leftLen) or std::math::ApproxZero(rightLen)) {
+                return 0.0f64;
+            }
+
+            let c = Dot(left, right) / (leftLen * rightLen);
+            return std::math::Acos(std::math::Clamp(c, -1.0f64, 1.0f64));
+        }
+
+        fn AngleBetweenDegrees(left: Vector4, right: Vector4) -> f64 {
+            return std::math::RadToDeg(AngleBetweenRadians(left, right));
+        }
+
+        fn Floor(value: Vector4) -> Vector4 {
+            return Vector4(
+                std::math::Floor(value.x),
+                std::math::Floor(value.y),
+                std::math::Floor(value.z),
+                std::math::Floor(value.w)
+            );
+        }
+
+        fn Ceil(value: Vector4) -> Vector4 {
+            return Vector4(
+                std::math::Ceil(value.x),
+                std::math::Ceil(value.y),
+                std::math::Ceil(value.z),
+                std::math::Ceil(value.w)
+            );
+        }
+
+        fn Round(value: Vector4) -> Vector4 {
+            return Vector4(
+                std::math::Round(value.x),
+                std::math::Round(value.y),
+                std::math::Round(value.z),
+                std::math::Round(value.w)
+            );
+        }
+
+        fn Trunc(value: Vector4) -> Vector4 {
+            return Vector4(
+                std::math::Trunc(value.x),
+                std::math::Trunc(value.y),
+                std::math::Trunc(value.z),
+                std::math::Trunc(value.w)
+            );
+        }
+
+        fn Sign(value: Vector4) -> Vector4 {
+            return Vector4(
+                std::math::Sign(value.x),
+                std::math::Sign(value.y),
+                std::math::Sign(value.z),
+                std::math::Sign(value.w)
+            );
+        }
+
+        fn Product(value: Vector4) -> f64 {
+            return value.x * value.y * value.z * value.w;
+        }
+
+        fn Hadamard(left: Vector4, right: Vector4) -> Vector4 {
+            return left * right;
+        }
+
+        fn Inverse(value: Vector4) -> Vector4 {
+            return Vector4(
+                vector_internal::SafeDivValue(1.0f64, value.x),
+                vector_internal::SafeDivValue(1.0f64, value.y),
+                vector_internal::SafeDivValue(1.0f64, value.z),
+                vector_internal::SafeDivValue(1.0f64, value.w)
+            );
+        }
+    }
 }

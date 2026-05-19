@@ -1,0 +1,49 @@
+use std::console as console;
+use std::math;
+use std::vector;
+
+fn Entry() -> i32 {
+    let safeDiv2 = std::Vector2(10.0f64, 8.0f64) / std::Vector2(2.0f64, 0.0f64);
+    if (!std::vector2::ApproxEq(safeDiv2, std::Vector2(5.0f64, 0.0f64))) {
+        return 1;
+    }
+
+    mut accum2 = std::Vector2(6.0f64, 8.0f64);
+    accum2 /= 0.0f64;
+    if (!std::vector2::ApproxEq(accum2, std::vector2::Zero())) {
+        return 2;
+    }
+
+    let cross2 = std::vector2::Cross(std::Vector2(2.0f64, 0.0f64), std::Vector2(0.0f64, 3.0f64));
+    if (!std::math::ApproxEq(cross2, 6.0f64, std::Epsilon)) {
+        return 3;
+    }
+
+    let cross3 = std::vector3::Cross(std::vector3::Right(), std::vector3::Up());
+    if (!std::vector3::ApproxEq(cross3, std::vector3::Forward())) {
+        return 4;
+    }
+
+    let normalized3 = std::vector3::Normalize(std::Vector3(0.0f64, 3.0f64, 4.0f64));
+    if (!std::vector3::ApproxEq(normalized3, std::Vector3(0.0f64, 0.6f64, 0.8f64))) {
+        return 5;
+    }
+
+    let reflected3 = std::vector3::Reflect(std::Vector3(1.0f64, -2.0f64, 0.0f64), std::vector3::Up());
+    if (!std::vector3::ApproxEq(reflected3, std::Vector3(1.0f64, 2.0f64, 0.0f64))) {
+        return 6;
+    }
+
+    let lerped4 = std::vector4::Lerp(std::vector4::Zero(), std::Vector4(2.0f64), 0.5f64);
+    if (!std::vector4::ApproxEq(lerped4, std::Vector4(1.0f64))) {
+        return 7;
+    }
+
+    let inverse4 = std::vector4::Inverse(std::Vector4(2.0f64, 0.0f64, -4.0f64, 8.0f64));
+    if (!std::vector4::ApproxEq(inverse4, std::Vector4(0.5f64, 0.0f64, -0.25f64, 0.125f64))) {
+        return 8;
+    }
+
+    console::PrintLine("std-vector-surface-ok");
+    return 0;
+}

@@ -1440,6 +1440,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_std_vector_surface_run
+        "${CMAKE_SOURCE_DIR}/tests/std_vector_surface_run.wio"
+        "std-vector-surface-ok"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_const_enum_flagset_reflection_run
         "${CMAKE_SOURCE_DIR}/tests/const_enum_flagset_reflection_run.wio"
         "enum-reflection-ok"

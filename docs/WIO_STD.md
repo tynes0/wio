@@ -130,6 +130,7 @@ Current v1 expectation:
 - `std::collections`
 - `std::strings`
 - `std::algorithms`
+- `std::vector`
 - `std::result`
 - `std::traits`
 
@@ -144,6 +145,19 @@ Current v1 expectation:
   container implementation
 - if a feature already belongs to the language, `std` should wrap it rather than
   re-implement a competing version
+
+The vector family also lives here:
+
+- `std::Vector2`
+- `std::Vector3`
+- `std::Vector4`
+- helper realms such as `std::vector2`, `std::vector3`, and `std::vector4`
+
+The intended stable direction is:
+
+- value-type math components at the root `std::` level
+- utility helpers grouped under dedicated sub-realms
+- predictable scalar safety behavior for divide/modulo-oriented helpers
 
 ### 2.3.1 Pure-Wio Stable Module
 
