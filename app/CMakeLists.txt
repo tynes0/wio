@@ -1556,6 +1556,14 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         --run
     )
 
+    add_wio_non_dry_failure_test_clean(
+        wio_runtime_std_assert_not_implemented_yet
+        "${CMAKE_SOURCE_DIR}/tests/std_assert_not_implemented_yet_runtime_failure.wio"
+        "Runtime Error: Assertion failed: Not implemented yet: vector swizzle assignment"
+        "Unhandled exception|segmentation fault|Assertion '__n < this->size"
+        --run
+    )
+
     add_wio_output_test(
         wio_test_std_contract_v1_run
         "${CMAKE_SOURCE_DIR}/tests/std_contract_v1_run.wio"

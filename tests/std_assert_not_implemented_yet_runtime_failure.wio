@@ -1,0 +1,6 @@
+use std::assert as assert;
+
+fn Entry() -> i32 {
+    assert::NotImplementedYet("vector swizzle assignment");
+    return 0;
+}

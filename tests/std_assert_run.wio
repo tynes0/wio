@@ -39,6 +39,11 @@ fn Entry() -> i32 {
     assert::ExpectRangeInclusive(1.5f32, 1.0f32, 2.0f32, "f32 range mismatch");
     assert::ExpectRangeInclusive(1.5, 1.0, 2.0, "f64 range mismatch");
 
+    if (false) {
+        assert::NotImplementedYet();
+        assert::NotImplementedYet("std assert smoke");
+    }
+
     assert::ExpectDictHasKey(scores, "hp", "hp should exist");
     assert::ExpectDictMissingKey(scores, "armor", "armor should be missing");
     assert::ExpectTreeCount(ordered, 2, "tree count mismatch");

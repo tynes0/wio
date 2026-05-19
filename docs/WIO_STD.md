@@ -122,6 +122,8 @@ explicit caveat:
 Current v1 expectation:
 
 - `Fail`, `Require`, and `Unreachable` are the runtime boundary
+- `NotImplementedYet()` and `NotImplementedYet(message)` are the intentional
+  development-time trap helpers for unfinished code paths
 - expectation helpers such as `ExpectEqual`, `ExpectNear`, and collection/string
   assertions are part of the stable testing-oriented std surface
 - math convenience wrappers should stay thin over the runtime-backed contract

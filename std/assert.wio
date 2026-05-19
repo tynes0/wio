@@ -24,6 +24,14 @@ realm std {
             }
         }
 
+        fn NotImplementedYet() {
+            Fail("Not implemented yet.");
+        }
+
+        fn NotImplementedYet(message: string) {
+            Fail("Not implemented yet: " + message);
+        }
+
         fn Equal<T>(left: T, right: T, message: string) {
             if (left != right) {
                 Fail(message);
