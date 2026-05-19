@@ -22,6 +22,18 @@ shipped.
 For current syntax and stabilized semantics, see
 [`WIO_LANGUAGE_DRAFT.md`](./WIO_LANGUAGE_DRAFT.md).
 
+For the current `v1` freeze, this document should be read in three layers:
+
+- the **category split itself** is intended to be stable,
+- some categories already have a stable source/runtime boundary even if helper
+  APIs around them are still being polished,
+- some surrounding convenience layers remain intentionally std-backed or
+  SDK-backed instead of being treated as builtin language promises.
+
+That means this document is no longer only a loose roadmap note: for `component`,
+`object`, managed containers, `opaque`, `std::Box<T>`, and `any`, the broad
+runtime model is now part of the intended `v1` direction.
+
 ## 1. Core Decision
 
 Wio should model runtime values in distinct categories instead of forcing
@@ -43,12 +55,12 @@ The rest of this document defines what each category means.
 
 | Category | Role | Ownership Style | Native Interop Style | Status |
 | --- | --- | --- | --- | --- |
-| `component` | inline value / POD-like data | copied by value or passed by `ref` / `view` | structural POD bridge | partially implemented |
-| `object` | user-defined heap object with identity | reference/handle semantics | handle/bridge, not POD layout sharing | implemented direction, still evolving |
-| `string` / dynamic array / `Dict` / `Tree` | managed runtime containers | runtime-managed | dedicated bridge, not native POD | implemented direction |
-| `opaque` | foreign host payload / external handle | host-owned or externally owned | pass-through opaque ABI value | source-level and native pass-through slice implemented and hardened |
-| `box<T>` | heap allocation for value types | heap-owned wrapper around a value | wrapper/bridge, not POD | std-backed source slice implemented and stabilized through `std::Box<T>` |
-| `any` | universal erased runtime payload | heap-backed wrapper cell | wrapper/bridge, not POD | source slice, native bridge, and std event/context helpers implemented and hardened |
+| `component` | inline value / POD-like data | copied by value or passed by `ref` / `view` | structural POD bridge | stable `v1` direction |
+| `object` | user-defined heap object with identity | reference/handle semantics | handle/bridge, not POD layout sharing | stable `v1` direction with remaining polish |
+| `string` / dynamic array / `Dict` / `Tree` | managed runtime containers | runtime-managed | dedicated bridge, not native POD | stable category split with runtime-behavior caveats |
+| `opaque` | foreign host payload / external handle | host-owned or externally owned | pass-through opaque ABI value | stable boundary in the current `v1` model |
+| `box<T>` | heap allocation for value types | heap-owned wrapper around a value | wrapper/bridge, not POD | stable boundary through `std::Box<T>` |
+| `any` | universal erased runtime payload | heap-backed wrapper cell | wrapper/bridge, not POD | stable boundary with std-backed helpers still polishing |
 
 ## 3. `component`
 
@@ -510,6 +522,8 @@ The current compiler/runtime direction already fits much of this design:
 - native POD bridging is already the natural home of `component`,
 - exported object/component reflection already treats the categories
   differently,
+- exported enum/flagset reflection identity now survives through both the
+  normal Wio reflection surface and the host SDK wrappers,
 - managed containers already behave like special runtime-backed types rather
   than ordinary user-defined objects.
 

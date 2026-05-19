@@ -167,7 +167,11 @@ Enums and flagsets are in `v1` with:
 - `const` compatibility
 - reflection support
 
-The remaining freeze work is to finish the exact reflection and SDK contract.
+This surface now includes:
+
+- stable `std::reflect` helpers for `name`, `value`, `underlying_type`,
+  `size`, and `index`
+- stable SDK-side enum/flagset wrappers through `WioEnum` and `WioFlagset`
 
 ### 3.5 Generated Code and Tool Output Policy
 
@@ -210,8 +214,6 @@ These are the main language-adjacent items still expected to move before the
 
 - generic diagnostics and edge-case validation
 - doc/spec tightening
-- std module stability labeling
-- SDK enum/flagset reflection surface
 - cross-platform tooling validation
 
 ---

@@ -36,8 +36,8 @@ Status markers:
     `wio package`, installer wrappers, `env print/setup`, and the `WIO_ROOT`, `WIO_HOME`, and `PATH` story should reach release quality.
 11. [ ] Validate the cross-platform flow for real.
     At minimum, Windows and Linux should both be covered across `project`, `bind`, `package`, `env`, and `std::process`.
-12. [~] Stabilize the std surface.
-    The stable vs experimental boundary should be clear for `std::Result<T>`, `std::console`, `std::io`, `std::process`, `std::fs`, `std::path`, `std::reflect`, `std::traits`, and `std::meta`.
+12. [x] Stabilize the std surface.
+    The stable vs experimental boundary is now documented for `std::Result<T>`, `std::console`, `std::io`, `std::process`, `std::fs`, `std::path`, `std::reflect`, `std::traits`, and `std::meta`.
 13. [~] Fully seal the `Result` model.
     `std::Result<T>`, `Foo!()`, and `Foo?()` should be frozen as the official error model together with docs and tests.
 14. [~] Freeze the native interop contract.
@@ -46,7 +46,7 @@ Status markers:
     Boxing rules, foreign-handle rules, the `is/fit` matrix, and native representation should be stabilized.
 16. [~] Finalize mutable data ergonomics.
     `ref values[i]`, nested `ref`, dict mutation, and container mutability rules should stop surprising users.
-17. [~] Make enum/flagset fully first-class.
+17. [x] Make enum/flagset fully first-class.
     Native support, const compatibility, helper APIs, and everyday state/kind/mode usage should be fully closed.
 18. [ ] Expand the tooling test suite.
     CLI smoke, package smoke, binding smoke, project smoke, Wio tool smoke, and packaged smoke should all have release-level coverage.
@@ -60,9 +60,9 @@ Status markers:
     If they are not part of `v1`, that should be stated clearly; if they are, their scope must be frozen.
 23. [ ] Add a performance and memory story note.
     Users should understand the cost model for `view/ref/value`, `Box`, `any`, containers, and native passing.
-24. [ ] Add first-class enum/flagset support on the SDK side.
+24. [x] Add first-class enum/flagset support on the SDK side.
     `WioObject` / `WioComponent` should preserve reflection identity through `WioEnum` and `WioFlagset`.
-25. [ ] Finish the normal Wio reflection API for enum/flagset.
+25. [x] Finish the normal Wio reflection API for enum/flagset.
     `name`, `value`, `underlying_type`, `size`, and `index` support should become stable.
 
 ## Remaining Work After Version 1

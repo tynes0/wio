@@ -27,6 +27,7 @@ The current SDK covers:
 - constructing exported `object` and `component` instances from C++
 - reading metadata for exported fields and methods
 - typed and dynamic field access for all currently supported exported field kinds
+- first-class enum/flagset field identity through `WioEnum` and `WioFlagset`
 
 The current SDK does not expose compiler internals such as AST, parser, sema,
 or codegen APIs.
@@ -34,6 +35,23 @@ or codegen APIs.
 `WioObject` and `WioComponent` are runtime reflection wrappers. They are not a
 host-side registration DSL and they are not intended to expose compiler
 internals.
+
+---
+
+## 1.1 Stability Reading
+
+For the current `v1` freeze, the SDK should be read in three buckets:
+
+- **Stable now**: raw ABI loading, ergonomic C++ wrappers, exports, commands,
+  events, reload helpers, exported object/component reflection for the
+  currently documented field kinds, and `WioEnum` / `WioFlagset`.
+- **Stable with explicit caveats**: areas whose broad direction is frozen, but
+  whose narrow ABI surface is still intentionally documented as incomplete.
+- **Not yet part of the stable SDK boundary**: future-facing reflection layers
+  or wrappers that are planned but not yet documented as part of `v1`.
+
+That means “available in the SDK codebase” and “part of the public `v1`
+contract” should not be treated as the same thing automatically.
 
 ---
 
@@ -487,6 +505,14 @@ For the current SDK version, the public and documented boundary is:
 - `wio_sdk.h` for the ergonomic C++ layer
 - shared-module loading, static-module consumption, reload helpers, exports,
   commands, events, exported object/component reflection, and dynamic field access
+
+The following should be treated as stable with explicit caveats:
+
+- `ref` / `view` exported field semantics are intentionally documented as
+  outside the stable host ABI for now
+- enum/flagset wrappers are stable at the `WioEnum` / `WioFlagset` level, but
+  deeper host-side reflection growth beyond that should still be treated as
+  future-facing
 
 Future SDK work can still grow from here, but this is the intended "complete
 enough to build against" baseline for the current Wio SDK generation.

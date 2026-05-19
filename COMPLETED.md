@@ -65,6 +65,8 @@ Notes:
 - [x] The first enum/flagset reflection slice landed.
 - [x] The enum/flagset helper surface expanded with
       `Count`, `Name`, `Has`, `HasAny`, `With`, `Without`, `Toggle`, and `Clear`.
+- [x] The normal Wio enum/flagset reflection surface was closed with
+      `Value`, `Index`, `UnderlyingType`, and `Size`.
 
 ## Native Interop and ABI
 
@@ -97,6 +99,8 @@ Notes:
 
 - [x] The public host SDK surface gained its own identity.
 - [x] The higher-level `WioObject` / `WioComponent` direction was opened.
+- [x] SDK-side enum/flagset identity landed through `WioEnum` and
+      `WioFlagset`, including exported field metadata and dynamic access.
 - [x] Host-side exported types, interop, lifecycle, hot-reload, and
       stale-wrapper tests landed as the first serious wave.
 - [x] SDK examples and packaged host-interop flows received real repo coverage.

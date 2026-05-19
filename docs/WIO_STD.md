@@ -10,6 +10,24 @@ For representative conformance tests tied to that stable surface, see
 
 ---
 
+## 0. Stability Reading
+
+For the current `v1` freeze, the std surface should be read in four buckets:
+
+- **Stable now**: public module names and basic behavior should be treated as
+  part of the intended `v1` contract.
+- **Stable with explicit caveats**: the module belongs to `v1`, but a narrow
+  hardening edge is still documented on purpose.
+- **Experimental**: implemented and usable, but not yet frozen as part of the
+  main `v1` library contract.
+- **Not part of the stable surface**: helper realms, private scaffolding, or
+  future-facing bootstrap areas.
+
+That status split matters more than whether the implementation happens to live
+in pure Wio source or behind runtime-backed native helpers.
+
+---
+
 ## 1. Design Boundary
 
 The current Wio standard library is source-based:
@@ -71,6 +89,17 @@ Current v1 expectation:
 - `Try*` and `*Raw` names remain available as low-level escape hatches, but
   they are no longer the recommended surface for normal Wio code
 
+### 2.1.2 Runtime-Backed Stable Module With Explicit Caveat
+
+- `std::process`
+
+`std::process` is part of the intended `v1` std surface, but it carries one
+explicit caveat:
+
+- the public `Result`-based orchestration surface is intended to be stable,
+- the remaining hardening work is cross-platform behavior and packaged-toolchain
+  validation, not a different public API direction.
+
 ### 2.2 Mixed Stable Module
 
 - `std::assert`
@@ -101,7 +130,8 @@ Current v1 expectation:
 - `std::collections`
 - `std::strings`
 - `std::algorithms`
-- `std::reflect`
+- `std::result`
+- `std::traits`
 
 These modules are currently pure Wio source and do not require native bridge
 headers.
@@ -115,16 +145,26 @@ Current v1 expectation:
 - if a feature already belongs to the language, `std` should wrap it rather than
   re-implement a competing version
 
-### 2.3.1 Enum And Flagset Surface
+### 2.3.1 Pure-Wio Stable Module
 
-`enum` and `flagset` now have a small first-class convenience layer, even though
-the implementation currently lives in
+- `std::reflect`
+
+`std::reflect` is part of the intended `v1` std surface.
+
+### 2.3.2 Enum And Flagset Surface
+
+`enum` and `flagset` now have a stable first-class convenience layer, even
+though the implementation currently lives in
 [`std/reflect.wio`](C:/Users/cihan/RiderProjects/wio/std/reflect.wio).
 
-The intended ergonomic surface is:
+The stable ergonomic surface is:
 
 - `reflect::Count<T>()`
 - `reflect::Name(value)`
+- `reflect::Value<T>(index)`
+- `reflect::Index(value)`
+- `reflect::UnderlyingType<T>()`
+- `reflect::Size<T>()`
 - `reflect::Has(flags, mask)`
 - `reflect::HasAny(flags, mask)`
 - `reflect::With(flags, mask)`
@@ -133,7 +173,8 @@ The intended ergonomic surface is:
 - `reflect::Clear(flags)`
 
 This keeps common state/kind/mode style code readable without forcing all
-flag-oriented operations back to raw integer math.
+flag-oriented operations back to raw integer math, while also giving enum and
+flagset types enough metadata for stable `v1` reflection code.
 
 ### 2.4 Experimental Pure-Wio Meta Module
 
@@ -213,15 +254,24 @@ The following should be treated as stable user-facing module names in the curren
 v1 direction:
 
 - `std::console`
+- `std::io`
 - `std::assert`
 - `std::fs`
 - `std::path`
+- `std::process`
 - `std::math`
 - `std::collections`
 - `std::strings`
 - `std::algorithms`
+- `std::result`
+- `std::traits`
 
-The following is available but still experimental:
+The following is part of the intended stable surface, but still carries an
+explicit caveat:
+
+- `std::reflect`
+
+The following is available but still experimental / hardening-oriented:
 
 - `std::meta`
 - `std::heap`
