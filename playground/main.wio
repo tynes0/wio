@@ -2,9 +2,22 @@ use std::console as Console;
 use std::vector;
 use std::io as io;
 
+    @Apply(f32, f64)
+    component Vector2Base<T> {
+        x: T;
+        y: T;
+    }
+
+    type Vector2 = Vector2Base<f64>;
+    type Vector2f = Vector2Base<f32>;
+
 fn Entry() -> void
 {
-    mut f = std::io::Open!("test.txt", std::io::OpenReadWriteCreate);
-    std::io::Write!(ref f, "Hello, World!");
-    std::io::Close!(ref f);
+    mut vec = std::Vector2(12,15);
+    mut vec2 = std::Vector2(5.2,0);
+    mut scalar = 8.4f64;
+
+    mut newVec = -vec;
+    mut test = newVec fit string;
+    Console::Write(test);
 }
