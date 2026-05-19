@@ -2,9 +2,12 @@
 
 #include "compiler.h"
 
+#include <cctype>
 #include <filesystem>
+#include <functional>
 #include <iostream>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -71,6 +74,65 @@ namespace wio::tooling::file
             return std::filesystem::absolute(std::filesystem::path("playground") / "main.wio").make_preferred();
         }
 
+        std::string sanitizePathStem(std::string stem)
+        {
+            for (char& ch : stem)
+            {
+                const unsigned char value = static_cast<unsigned char>(ch);
+                if (!std::isalnum(value) && ch != '_' && ch != '-')
+                    ch = '_';
+            }
+
+            if (stem.empty())
+                return "file";
+
+            return stem;
+        }
+
+        std::filesystem::path resolveFileRunOutputRoot()
+        {
+            if (const auto repoRoot = tryFindRepoRoot(); repoRoot.has_value())
+                return std::filesystem::absolute(*repoRoot / ".wio-build" / "file-run").make_preferred();
+
+            std::error_code ec;
+            std::filesystem::path current = std::filesystem::current_path(ec);
+            if (ec || current.empty())
+                current = std::filesystem::path(".");
+
+            return std::filesystem::absolute(current / ".wio-build" / "file-run").make_preferred();
+        }
+
+        std::filesystem::path buildDefaultFileRunOutputPath(const std::filesystem::path& sourcePath)
+        {
+            const std::filesystem::path root = resolveFileRunOutputRoot();
+            const std::string stem = sanitizePathStem(sourcePath.stem().string());
+            const size_t sourceHash = std::hash<std::string>{}(sourcePath.string());
+
+            std::ostringstream nameBuilder;
+            nameBuilder << stem << "-" << std::hex << sourceHash;
+
+            std::filesystem::path outputPath = root / nameBuilder.str();
+#if defined(_WIN32)
+            outputPath += ".exe";
+#endif
+            return outputPath.make_preferred();
+        }
+
+        bool hasExplicitOutputOverride(const std::vector<std::string>& compilerArgs)
+        {
+            for (size_t i = 0; i < compilerArgs.size(); ++i)
+            {
+                const std::string_view arg = compilerArgs[i];
+                if (arg == "-o" || arg == "--output")
+                    return true;
+
+                if (arg.starts_with("--output="))
+                    return true;
+            }
+
+            return false;
+        }
+
         std::vector<std::string> buildCompilerArgs(const std::filesystem::path& executablePath,
                                                    const std::string& mode,
                                                    const std::filesystem::path& sourcePath,
@@ -100,6 +162,12 @@ namespace wio::tooling::file
             {
                 args.push_back("--show-ast");
                 args.push_back("--dry-run");
+            }
+
+            if (mode == "run" && !hasExplicitOutputOverride(compilerArgs))
+            {
+                args.push_back("--output");
+                args.push_back(buildDefaultFileRunOutputPath(sourcePath).string());
             }
 
             args.insert(args.end(), compilerArgs.begin(), compilerArgs.end());

@@ -507,6 +507,51 @@ exec "$WIO_EXE" env setup --wio-root "$SCRIPT_DIR" "$@"
 )WIOINSTALL";
         }
 
+        std::string buildPackageQuickstart(const std::string& packageName)
+        {
+            std::ostringstream stream;
+            stream
+                << "# Wio Package Quickstart\n\n"
+                << "This packaged toolchain was staged as `" << packageName << "`.\n\n"
+                << "## 1. Try the CLI directly\n\n"
+                << "From the package root:\n\n"
+                << "```powershell\n"
+                << "bin\\wio.exe --help\n"
+                << "bin\\wio.exe env print --wio-root . --shell powershell --add-path\n"
+                << "```\n\n"
+                << "Or from a POSIX shell:\n\n"
+                << "```sh\n"
+                << "./bin/wio --help\n"
+                << "./bin/wio env print --wio-root . --shell sh --add-path\n"
+                << "```\n\n"
+                << "## 2. Optional persistent install\n\n"
+                << "PowerShell:\n\n"
+                << "```powershell\n"
+                << ".\\Install-Wio.ps1 -SetUserEnvironment -AddPath\n"
+                << "```\n\n"
+                << "POSIX shell:\n\n"
+                << "```sh\n"
+                << "sh ./install-wio.sh --set-user --add-path\n"
+                << "```\n\n"
+                << "You can also call the CLI directly instead of the wrapper scripts:\n\n"
+                << "```powershell\n"
+                << "bin\\wio.exe env setup --wio-root . --set-user --add-path\n"
+                << "```\n\n"
+                << "## 3. Create and run a project\n\n"
+                << "```powershell\n"
+                << "bin\\wio.exe project new MyGame --output-dir C:\\Projects --template wio-app\n"
+                << "bin\\wio.exe project build --project C:\\Projects\\MyGame\n"
+                << "bin\\wio.exe project run --project C:\\Projects\\MyGame\n"
+                << "```\n\n"
+                << "## 4. Useful references\n\n"
+                << "- `README.md`\n"
+                << "- `docs/README.md`\n"
+                << "- `docs/WIO_PROJECT_SYSTEM.md`\n"
+                << "- `docs/WIO_LANGUAGE_DRAFT.md`\n";
+
+            return stream.str();
+        }
+
         int handlePackageCommand(std::vector<std::string> args)
         {
             Argonaut::Parser parser = makePackageParser();
@@ -541,6 +586,8 @@ exec "$WIO_EXE" env setup --wio-root "$SCRIPT_DIR" "$@"
                 const std::filesystem::path licensePath = *repoRoot / "LICENSE";
                 const std::filesystem::path readmePath = *repoRoot / "README.md";
                 const std::filesystem::path languageDraftPath = *repoRoot / "docs" / "WIO_LANGUAGE_DRAFT.md";
+                const std::filesystem::path docsIndexPath = *repoRoot / "docs" / "README.md";
+                const std::filesystem::path projectSystemPath = *repoRoot / "docs" / "WIO_PROJECT_SYSTEM.md";
 
                 const std::string version = getWioVersion(cmakeListsPath);
                 const std::string platformTag = getPlatformTag();
@@ -634,6 +681,26 @@ exec "$WIO_EXE" env setup --wio-root "$SCRIPT_DIR" "$@"
                                                ec);
                 }
                 ec.clear();
+                if (std::filesystem::exists(docsIndexPath, ec))
+                {
+                    std::filesystem::create_directories((packageRoot / "docs"), ec);
+                    ec.clear();
+                    std::filesystem::copy_file(docsIndexPath,
+                                               packageRoot / "docs" / "README.md",
+                                               std::filesystem::copy_options::overwrite_existing,
+                                               ec);
+                }
+                ec.clear();
+                if (std::filesystem::exists(projectSystemPath, ec))
+                {
+                    std::filesystem::create_directories((packageRoot / "docs"), ec);
+                    ec.clear();
+                    std::filesystem::copy_file(projectSystemPath,
+                                               packageRoot / "docs" / "WIO_PROJECT_SYSTEM.md",
+                                               std::filesystem::copy_options::overwrite_existing,
+                                               ec);
+                }
+                ec.clear();
 
                 std::ostringstream packageInfo;
                 packageInfo
@@ -651,6 +718,7 @@ exec "$WIO_EXE" env setup --wio-root "$SCRIPT_DIR" "$@"
                 writeUtf8File(packageRoot / "WIO_PACKAGE_INFO.json", packageInfo.str());
                 writeUtf8File(packageRoot / "Install-Wio.ps1", buildPowerShellInstallScript());
                 writeUtf8File(packageRoot / "install-wio.sh", buildShellInstallScript());
+                writeUtf8File(packageRoot / "QUICKSTART.md", buildPackageQuickstart(packageName));
 
                 if (!noZip)
                 {
@@ -679,6 +747,10 @@ exec "$WIO_EXE" env setup --wio-root "$SCRIPT_DIR" "$@"
                 std::cout << "Wio package root : " << packageRoot.string() << '\n';
                 if (!noZip)
                     std::cout << "Wio package zip  : " << archivePath.string() << '\n';
+                std::cout << "Next steps:\n";
+                std::cout << "  1. Open " << (packageRoot / "QUICKSTART.md").string() << '\n';
+                std::cout << "  2. Run " << (packageRoot / "Install-Wio.ps1").string() << " -SetUserEnvironment -AddPath\n";
+                std::cout << "  3. Or run " << (packageRoot / "bin" / "wio.exe").string() << " env setup --wio-root " << packageRoot.string() << " --set-user --add-path\n";
 
                 return EXIT_SUCCESS;
             }

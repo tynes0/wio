@@ -1,0 +1,85 @@
+if(NOT DEFINED WIO_EXE)
+    message(FATAL_ERROR "WIO_EXE was not provided.")
+endif()
+
+if(NOT DEFINED WIO_BUILD_DIR OR WIO_BUILD_DIR STREQUAL "")
+    message(FATAL_ERROR "WIO_BUILD_DIR was not provided.")
+endif()
+
+if(NOT DEFINED WIO_OUTPUT_DIR OR WIO_OUTPUT_DIR STREQUAL "")
+    message(FATAL_ERROR "WIO_OUTPUT_DIR was not provided.")
+endif()
+
+if(NOT DEFINED WIO_CONFIG OR WIO_CONFIG STREQUAL "")
+    set(WIO_CONFIG Debug)
+endif()
+
+file(MAKE_DIRECTORY "${WIO_OUTPUT_DIR}")
+
+file(GLOB existing_entries LIST_DIRECTORIES true "${WIO_OUTPUT_DIR}/wio-*")
+foreach(existing_entry IN LISTS existing_entries)
+    file(REMOVE_RECURSE "${existing_entry}")
+endforeach()
+
+execute_process(
+    COMMAND "${WIO_EXE}" package --build-dir "${WIO_BUILD_DIR}" --config "${WIO_CONFIG}" --output-dir "${WIO_OUTPUT_DIR}" --no-zip --clean
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    RESULT_VARIABLE wio_result
+    OUTPUT_VARIABLE wio_stdout
+    ERROR_VARIABLE wio_stderr
+)
+
+set(wio_output "${wio_stdout}${wio_stderr}")
+
+if(NOT wio_result EQUAL 0)
+    message(FATAL_ERROR
+        "Package smoke failed with code ${wio_result}.\n"
+        "Tool output:\n${wio_output}"
+    )
+endif()
+
+file(GLOB package_roots LIST_DIRECTORIES true "${WIO_OUTPUT_DIR}/wio-*")
+list(LENGTH package_roots package_root_count)
+if(NOT package_root_count EQUAL 1)
+    message(FATAL_ERROR
+        "Expected exactly one staged package root under '${WIO_OUTPUT_DIR}', but found ${package_root_count}.\n"
+        "Tool output:\n${wio_output}"
+    )
+endif()
+
+list(GET package_roots 0 package_root)
+
+set(required_files
+    "${package_root}/WIO_PACKAGE_INFO.json"
+    "${package_root}/Install-Wio.ps1"
+    "${package_root}/install-wio.sh"
+    "${package_root}/QUICKSTART.md"
+    "${package_root}/README.md"
+    "${package_root}/docs/README.md"
+)
+
+if(WIN32)
+    list(APPEND required_files "${package_root}/bin/wio.exe")
+else()
+    list(APPEND required_files "${package_root}/bin/wio")
+endif()
+
+foreach(required_file IN LISTS required_files)
+    if(NOT EXISTS "${required_file}")
+        message(FATAL_ERROR
+            "Expected packaged file was not found: ${required_file}\n"
+            "Tool output:\n${wio_output}"
+        )
+    endif()
+endforeach()
+
+file(READ "${package_root}/QUICKSTART.md" quickstart_text)
+string(FIND "${quickstart_text}" "Install-Wio.ps1" quickstart_install_index)
+if(quickstart_install_index EQUAL -1)
+    message(FATAL_ERROR
+        "Packaged QUICKSTART.md did not contain the expected install guidance.\n"
+        "Contents:\n${quickstart_text}"
+    )
+endif()
+
+message(STATUS "Package smoke succeeded for ${package_root}")

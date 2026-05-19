@@ -169,6 +169,19 @@ Enums and flagsets are in `v1` with:
 
 The remaining freeze work is to finish the exact reflection and SDK contract.
 
+### 3.5 Generated Code and Tool Output Policy
+
+The intended `v1` tooling behavior is:
+
+- ordinary compiles treat generated `.wio.cpp` files as intermediate artifacts,
+- `--emit-cpp` is the explicit opt-in path that keeps generated C++ on disk,
+- `wio file run ...` and source-based Wio workflow tools use hidden
+  `.wio-build/file-run/` outputs instead of dropping executables beside source
+  files.
+
+The remaining work here is mainly cross-platform validation and packaging
+polish, not a search for a different model.
+
 ---
 
 ## 4. Explicitly Outside v1
@@ -200,7 +213,6 @@ These are the main language-adjacent items still expected to move before the
 - std module stability labeling
 - SDK enum/flagset reflection surface
 - cross-platform tooling validation
-- generated-code / cache / output policy
 
 ---
 

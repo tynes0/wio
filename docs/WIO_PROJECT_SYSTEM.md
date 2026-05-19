@@ -52,6 +52,15 @@ build\app\Debug\wio.exe env setup --wio-root . --no-prompt
 build\app\Debug\wio.exe package --build-dir build --config Debug --output-dir .\artifacts\packages --no-zip
 ```
 
+For single-file execution and source-based Wio workflow tools:
+
+- `wio file run ...` uses cached backend outputs under `.wio-build/file-run/`
+  instead of dropping executables beside the source file,
+- ordinary compile-and-run flows treat generated `.wio.cpp` files as
+  intermediates and clean them up after the backend step,
+- `--emit-cpp` is the explicit escape hatch when you intentionally want to keep
+  the generated C++ file on disk.
+
 Equivalent alias forms also exist:
 
 ```powershell
@@ -479,7 +488,12 @@ wio .\wio\main.wio --emit-cpp
 - runtime / SDK / std paths
 - normalized include dirs, link dirs, backend args, and link libraries
 
-`--emit-cpp` writes `<source>.wio.cpp` and stops before native compilation.
+`--emit-cpp` writes `<source>.wio.cpp`, keeps it on disk, and stops before
+native compilation.
+
+Ordinary non-`--emit-cpp` compiles still use the same generated C++ path
+internally, but treat it as an intermediate file and remove it after the
+backend compile step completes.
 
 Rules:
 
@@ -737,6 +751,9 @@ The packaged compiler does not require those variables for direct CLI use; they 
 bin\wio.exe env setup --wio-root <package-root>
 bin\wio.exe env print --wio-root <package-root> --shell powershell --add-path
 ```
+
+Every staged package now also includes a root-level `QUICKSTART.md` that points
+to the exact install and first-project commands for that packaged toolchain.
 
 Then all of these work:
 

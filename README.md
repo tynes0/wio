@@ -5,6 +5,7 @@ analyzes, and lowers `.wio` files into generated C++.
 
 Useful reference docs:
 
+- [Documentation index](C:/Users/cihan/RiderProjects/wio/docs/README.md)
 - [Language reference](C:/Users/cihan/RiderProjects/wio/docs/WIO_LANGUAGE_DRAFT.md)
 - [v1 freeze snapshot](C:/Users/cihan/RiderProjects/wio/docs/WIO_V1_FREEZE.md)
 - [Project system](C:/Users/cihan/RiderProjects/wio/docs/WIO_PROJECT_SYSTEM.md)

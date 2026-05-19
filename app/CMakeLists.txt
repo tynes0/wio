@@ -513,6 +513,42 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_test(
+        NAME wio_test_generated_cpp_cleanup
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/test1.wio
+            -DWIO_MODE=compiler
+            -DWIO_WORK_DIR=${CMAKE_BINARY_DIR}/artifact-policy/generated-cpp-cleanup
+            -DWIO_EXPECT_OUTPUT=${CMAKE_BINARY_DIR}/artifact-policy/generated-cpp-cleanup/test1-built${CMAKE_EXECUTABLE_SUFFIX}
+            "-DWIO_ARGS=--output;${CMAKE_BINARY_DIR}/artifact-policy/generated-cpp-cleanup/test1-built${CMAKE_EXECUTABLE_SUFFIX}"
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioArtifactPolicy.cmake"
+    )
+    set_tests_properties(
+        wio_test_generated_cpp_cleanup
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
+        NAME wio_test_file_cli_run_uses_hidden_output
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/file_run_args_forwarding_run.wio
+            -DWIO_MODE=file-run
+            -DWIO_WORK_DIR=${CMAKE_BINARY_DIR}/artifact-policy/file-cli-run
+            -DWIO_EXPECT=file-run-args-ok
+            "-DWIO_ARGS=--;alpha;beta"
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioArtifactPolicy.cmake"
+    )
+    set_tests_properties(
+        wio_test_file_cli_run_uses_hidden_output
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
         NAME wio_test_env_cli_print
         COMMAND $<TARGET_FILE:wio_app> env print --wio-root "${CMAKE_SOURCE_DIR}" --shell powershell --add-path
     )
@@ -528,6 +564,22 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
     set_tests_properties(
         wio_test_env_cli_setup_preview
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
+        NAME wio_test_package_cli_smoke
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DWIO_BUILD_DIR=${CMAKE_BINARY_DIR}
+            -DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/package-smoke
+            -DWIO_CONFIG=$<CONFIG>
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioPackageSmoke.cmake"
+    )
+    set_tests_properties(
+        wio_test_package_cli_smoke
         PROPERTIES
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )
