@@ -197,6 +197,7 @@ namespace wio
             bool isInterface;
             bool isEnum = false;
             bool isFlagset = false;
+            Ref<Type> enumUnderlyingType = nullptr;
             bool isFinal = false;
             bool isNativePodComponent = false;
             std::string nativeCppName;

@@ -7,6 +7,21 @@
 #include <module_api.h>
 #include <wio_sdk.h>
 
+enum class HostPhase : std::int32_t
+{
+    Boot = 0,
+    Ready = 1,
+    Boss = 2
+};
+
+enum class HostAbility : std::uint32_t
+{
+    None = 0u,
+    Dash = 1u,
+    Fly = 2u,
+    All = 3u
+};
+
 int main(int argc, char** argv)
 {
     if (argc < 2)
@@ -28,9 +43,11 @@ int main(int argc, char** argv)
         const auto fixedField = complexType.field_info("fixed");
         const auto profileField = complexType.field_info("profile");
         const auto positionField = complexType.field_info("position");
+        const auto modeField = complexType.field_info("mode");
+        const auto abilitiesField = complexType.field_info("abilities");
         const auto callbackField = complexType.field_info("callback");
 
-        if (fields.size() != 8u ||
+        if (fields.size() != 10u ||
             titleField.access != wio::sdk::FieldAccess::Public ||
             !titleField.can_read() ||
             !titleField.can_write() ||
@@ -61,6 +78,18 @@ int main(int argc, char** argv)
             !positionField.is_component() ||
             !positionField.supports_dynamic_value() ||
             positionField.logical_type_name() != "Position" ||
+            !modeField.is_enum() ||
+            !modeField.supports_dynamic_value() ||
+            modeField.logical_type_name() != "Phase" ||
+            modeField.abi_type() != WIO_ABI_I32 ||
+            modeField.type.enum_member_count() != 3u ||
+            modeField.type.enum_member_name(1) != "Ready" ||
+            !abilitiesField.is_flagset() ||
+            !abilitiesField.supports_dynamic_value() ||
+            abilitiesField.logical_type_name() != "Ability" ||
+            abilitiesField.abi_type() != WIO_ABI_U32 ||
+            abilitiesField.type.enum_member_count() != 4u ||
+            abilitiesField.type.enum_member_name(3) != "All" ||
             !callbackField.is_function() ||
             !callbackField.supports_dynamic_value() ||
             !callbackField.type.has_return_type() ||
@@ -77,6 +106,8 @@ int main(int argc, char** argv)
         auto state = complexType.create();
         auto titleAccessor = state.field("title");
         auto tagsAccessor = state.field("tags");
+        auto modeAccessor = state.field("mode");
+        auto abilitiesAccessor = state.field("abilities");
         auto callbackAccessor = state.field("callback");
         auto title = state.get<wio::string>("title");
         auto tags = state.get_array<wio::string>("tags");
@@ -86,6 +117,8 @@ int main(int argc, char** argv)
 
         auto profile = state.get_object("profile");
         auto position = state.get_component("position");
+        auto mode = state.get_enum("mode");
+        auto abilities = state.get_flagset("abilities");
 
         if (!titleAccessor ||
             !state.owns_handle() ||
@@ -97,9 +130,19 @@ int main(int argc, char** argv)
             titleAccessor.can_access_as<std::int32_t>() ||
             !titleAccessor.supports_dynamic_value() ||
             !tagsAccessor.supports_dynamic_value() ||
+            !modeAccessor.supports_dynamic_value() ||
+            !abilitiesAccessor.supports_dynamic_value() ||
             !callbackAccessor.supports_dynamic_value() ||
             titleAccessor.get_string() != "arena" ||
             tagsAccessor.get_array<wio::string>().count() != 3u ||
+            mode.name() != "Ready" ||
+            mode.index() != 1 ||
+            mode.underlying_type_name() != "i32" ||
+            mode.as<HostPhase>() != HostPhase::Ready ||
+            abilities.name() != "All" ||
+            abilities.index() != 3 ||
+            abilities.underlying_type_name() != "u32" ||
+            abilities.as<HostAbility>() != HostAbility::All ||
             !callbackAccessor.can_access_as<std::function<std::int32_t(std::int32_t)>>() ||
             title != "arena" ||
             tags.count() != 3u ||
@@ -111,7 +154,9 @@ int main(int argc, char** argv)
             fixed[1] != 4 ||
             fixed[2] != 5 ||
             profile.get<std::int32_t>("level") != 9 ||
-            position.get<std::int32_t>("x") != 3)
+            position.get<std::int32_t>("x") != 3 ||
+            state.get<HostPhase>("mode") != HostPhase::Ready ||
+            state.get<HostAbility>("abilities") != HostAbility::All)
         {
             std::cerr << "Initial complex field values did not round-trip through the SDK." << '\n';
             return EXIT_FAILURE;
@@ -121,6 +166,8 @@ int main(int argc, char** argv)
         auto dynamicTags = tagsAccessor.get_dynamic();
         auto dynamicProfile = state.field("profile").get_dynamic();
         auto dynamicPosition = state.field("position").get_dynamic();
+        auto dynamicMode = modeAccessor.get_dynamic();
+        auto dynamicAbilities = abilitiesAccessor.get_dynamic();
         auto dynamicCallback = callbackAccessor.get_dynamic();
 
         if (!dynamicTitle.is_string() ||
@@ -131,6 +178,10 @@ int main(int argc, char** argv)
             dynamicProfile.as_object().get<std::int32_t>("level") != 9 ||
             !dynamicPosition.is_component() ||
             dynamicPosition.as_component().get<std::int32_t>("y") != 7 ||
+            !dynamicMode.is_enum() ||
+            dynamicMode.as_enum().name() != "Ready" ||
+            !dynamicAbilities.is_flagset() ||
+            dynamicAbilities.as_flagset().name() != "All" ||
             !dynamicCallback.is_function() ||
             dynamicCallback.as_dynamic_function().as_function<std::int32_t(std::int32_t)>().valid())
         {
@@ -192,6 +243,8 @@ int main(int argc, char** argv)
         auto profileType = module.load_object("Profile");
         titleAccessor.set_dynamic(wio::sdk::WioDynamicValue(wio::string("captain")));
         position.field("y").set_dynamic(wio::sdk::WioDynamicValue(std::int32_t{ 13 }));
+        modeAccessor.set_dynamic(wio::sdk::WioDynamicValue(wio::sdk::WioEnum(modeField.type, WioMakeAbiIntegerValue(WIO_ABI_I32, 2u))));
+        abilitiesAccessor.set_dynamic(wio::sdk::WioDynamicValue(wio::sdk::WioFlagset(abilitiesField.type, WioMakeAbiIntegerValue(WIO_ABI_U32, 1u))));
         tagsAccessor.set_dynamic(wio::sdk::WioDynamicValue(wio::DArray<wio::string>{ "left", "right" }));
         state.field("fixed").set_dynamic(wio::sdk::WioDynamicValue(wio::SArray<std::int32_t, 3>{ 6, 7, 8 }));
         state.field("scores").set_dynamic(wio::sdk::WioDynamicValue(wio::Dict<wio::string, std::int32_t>{ {"hp", 22}, {"mp", 9} }));
@@ -215,6 +268,8 @@ int main(int argc, char** argv)
         if (state.get<wio::string>("title") != "captain" ||
             state.method<std::int32_t(std::int32_t)>("RunCallback")(7) != 12 ||
             state.get_component("position").get<std::int32_t>("y") != 13 ||
+            state.get<HostPhase>("mode") != HostPhase::Boss ||
+            state.get<HostAbility>("abilities") != HostAbility::Dash ||
             !afterDynamicTags.is_dynamic_array() ||
             afterDynamicTags.as_dynamic_array().as_array<wio::string>().count() != 2u ||
             !afterDynamicFixed.is_static_array() ||
@@ -248,6 +303,8 @@ int main(int argc, char** argv)
         state.set_dict("scores", wio::sdk::WioDict<wio::string, std::int32_t>{ {"hp", 30}, {"mp", 8} });
         state.set_tree("order", wio::sdk::WioTree<wio::string, std::int32_t>{ {"gold", 3}, {"platinum", 4} });
         state.set_static_array("fixed", wio::sdk::WioStaticArray<std::int32_t, 3>{ 9, 8, 7 });
+        state.set("mode", HostPhase::Boot);
+        state.set("abilities", HostAbility::Fly);
         state.set_function<std::int32_t(std::int32_t)>("callback", wio::sdk::WioFunction<std::int32_t(std::int32_t)>([](const std::int32_t value)
         {
             return value * 3;
@@ -277,6 +334,8 @@ int main(int argc, char** argv)
             updatedProfile.get<wio::string>("title") != "elite" ||
             updatedPosition.get<std::int32_t>("x") != 11 ||
             updatedPosition.get<std::int32_t>("y") != 22 ||
+            state.get<HostPhase>("mode") != HostPhase::Boot ||
+            state.get<HostAbility>("abilities") != HostAbility::Fly ||
             callbackResult != 21 ||
             !callback.valid() ||
             callback(5) != 15)
@@ -290,6 +349,7 @@ int main(int argc, char** argv)
                   << " tags=" << updatedTags.count()
                   << " hp=" << updatedScores.at("hp")
                   << " callback=" << callbackResult
+                  << " mode=" << static_cast<std::int32_t>(state.get<HostPhase>("mode"))
                   << " profile=" << updatedProfile.get<std::int32_t>("level")
                   << " position=" << updatedPosition.get<std::int32_t>("x")
                   << " fixedSum=" << (updatedFixed[0] + updatedFixed[1] + updatedFixed[2])

@@ -10,6 +10,22 @@ realm std {
         @CppName(wio::runtime::EnumName)
         fn Name<T>(value: T) -> string;
 
+        @Native
+        @CppName(wio::runtime::EnumValue)
+        fn Value<T>(index: usize) -> T;
+
+        @Native
+        @CppName(wio::runtime::EnumIndex)
+        fn Index<T>(value: T) -> isize;
+
+        @Native
+        @CppName(wio::runtime::EnumUnderlyingTypeName)
+        fn UnderlyingType<T>() -> string;
+
+        @Native
+        @CppName(wio::runtime::EnumSize)
+        fn Size<T>() -> usize;
+
         fn Has<T>(value: T, mask: T) -> bool {
             return (value & mask) == mask;
         }
@@ -23,7 +39,7 @@ realm std {
         }
 
         fn Without<T>(value: T, mask: T) -> T {
-            return value & ~mask;
+            return value ^ (value & mask);
         }
 
         fn Toggle<T>(value: T, mask: T) -> T {

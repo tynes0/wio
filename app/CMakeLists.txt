@@ -1116,7 +1116,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_sdk_exported_complex_fields_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/exported_complex_fields_library.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_exported_complex_fields_host.cpp"
-        "SDK complex fields: fields=8 title=boss tags=2 hp=30 callback=21 profile=77 position=11 fixedSum=24"
+        "SDK complex fields: fields=10 title=boss tags=2 hp=30 callback=21 mode=0 profile=77 position=11 fixedSum=24"
     )
 
     add_wio_shared_reload_interop_test(

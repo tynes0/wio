@@ -177,6 +177,8 @@ namespace
         nullptr,
         nullptr,
         0u,
+        nullptr,
+        0u,
         nullptr
     };
 

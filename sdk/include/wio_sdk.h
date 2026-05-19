@@ -224,10 +224,21 @@ namespace wio::sdk
             return kind() == WIO_MODULE_TYPE_DESC_OPAQUE;
         }
 
+        [[nodiscard]] bool is_enum() const noexcept
+        {
+            return kind() == WIO_MODULE_TYPE_DESC_ENUM;
+        }
+
+        [[nodiscard]] bool is_flagset() const noexcept
+        {
+            return kind() == WIO_MODULE_TYPE_DESC_FLAGSET;
+        }
+
         [[nodiscard]] bool is_dynamic_value_supported() const noexcept
         {
             return is_primitive() || is_string() || is_object() || is_component() ||
-                is_dynamic_array() || is_static_array() || is_dict() || is_tree() || is_function();
+                is_dynamic_array() || is_static_array() || is_dict() || is_tree() || is_function() ||
+                is_enum() || is_flagset();
         }
 
         [[nodiscard]] WioAbiType abi_type() const noexcept
@@ -417,6 +428,72 @@ namespace wio::sdk
             return TypeDescriptorView(descriptor_->parameterTypes[index]);
         }
 
+        [[nodiscard]] std::uint32_t enum_member_count() const noexcept
+        {
+            return descriptor_ != nullptr ? descriptor_->enumMemberCount : 0u;
+        }
+
+        [[nodiscard]] bool has_enum_members() const noexcept
+        {
+            return descriptor_ != nullptr && descriptor_->enumMemberCount > 0u && descriptor_->enumMembers != nullptr;
+        }
+
+        [[nodiscard]] std::string_view enum_member_name(const std::uint32_t index) const noexcept
+        {
+            if (descriptor_ == nullptr || descriptor_->enumMembers == nullptr || index >= descriptor_->enumMemberCount)
+                return std::string_view{};
+            return descriptor_->enumMembers[index].name != nullptr
+                ? std::string_view(descriptor_->enumMembers[index].name)
+                : std::string_view{};
+        }
+
+        [[nodiscard]] WioValue enum_member_scalar_value(const std::uint32_t index) const noexcept
+        {
+            if (descriptor_ == nullptr || descriptor_->enumMembers == nullptr || index >= descriptor_->enumMemberCount)
+                return {};
+            return descriptor_->enumMembers[index].value;
+        }
+
+        [[nodiscard]] std::ptrdiff_t enum_index_of(const WioValue& value) const noexcept
+        {
+            if (descriptor_ == nullptr || descriptor_->enumMembers == nullptr)
+                return -1;
+
+            for (std::uint32_t index = 0; index < descriptor_->enumMemberCount; ++index)
+            {
+                const WioValue memberValue = descriptor_->enumMembers[index].value;
+                if (memberValue.type != value.type)
+                    continue;
+
+                bool matches = false;
+                switch (value.type)
+                {
+                case WIO_ABI_BOOL: matches = memberValue.value.v_bool == value.value.v_bool; break;
+                case WIO_ABI_CHAR: matches = memberValue.value.v_char == value.value.v_char; break;
+                case WIO_ABI_UCHAR: matches = memberValue.value.v_uchar == value.value.v_uchar; break;
+                case WIO_ABI_BYTE: matches = memberValue.value.v_byte == value.value.v_byte; break;
+                case WIO_ABI_I8: matches = memberValue.value.v_i8 == value.value.v_i8; break;
+                case WIO_ABI_I16: matches = memberValue.value.v_i16 == value.value.v_i16; break;
+                case WIO_ABI_I32: matches = memberValue.value.v_i32 == value.value.v_i32; break;
+                case WIO_ABI_I64: matches = memberValue.value.v_i64 == value.value.v_i64; break;
+                case WIO_ABI_U8: matches = memberValue.value.v_u8 == value.value.v_u8; break;
+                case WIO_ABI_U16: matches = memberValue.value.v_u16 == value.value.v_u16; break;
+                case WIO_ABI_U32: matches = memberValue.value.v_u32 == value.value.v_u32; break;
+                case WIO_ABI_U64: matches = memberValue.value.v_u64 == value.value.v_u64; break;
+                case WIO_ABI_ISIZE: matches = memberValue.value.v_isize == value.value.v_isize; break;
+                case WIO_ABI_USIZE: matches = memberValue.value.v_usize == value.value.v_usize; break;
+                case WIO_ABI_F32: matches = memberValue.value.v_f32 == value.value.v_f32; break;
+                case WIO_ABI_F64: matches = memberValue.value.v_f64 == value.value.v_f64; break;
+                default: break;
+                }
+
+                if (matches)
+                    return static_cast<std::ptrdiff_t>(index);
+            }
+
+            return -1;
+        }
+
     private:
         const WioModuleTypeDescriptor* descriptor_ = nullptr;
     };
@@ -484,6 +561,16 @@ namespace wio::sdk
         [[nodiscard]] bool is_component() const noexcept
         {
             return type.is_component();
+        }
+
+        [[nodiscard]] bool is_enum() const noexcept
+        {
+            return type.is_enum();
+        }
+
+        [[nodiscard]] bool is_flagset() const noexcept
+        {
+            return type.is_flagset();
         }
 
         [[nodiscard]] bool is_dynamic_array() const noexcept
@@ -1271,6 +1358,14 @@ namespace wio::sdk
         template <typename T>
         using Decay = std::remove_cv_t<std::remove_reference_t<T>>;
 
+        template <typename T>
+        WioValue toWioValue(T&& value);
+
+        template <typename T>
+        T fromWioValue(const WioValue& value);
+
+        const char* abiTypeName(WioAbiType type) noexcept;
+
         inline FieldAccess toFieldAccess(const WioModuleAccessModifier accessModifier) noexcept
         {
             switch (accessModifier)
@@ -1291,7 +1386,8 @@ namespace wio::sdk
             std::is_same_v<Decay<T>, std::intptr_t> ||
             std::is_same_v<Decay<T>, std::uintptr_t> ||
             std::is_floating_point_v<Decay<T>> ||
-            std::is_integral_v<Decay<T>>;
+            std::is_integral_v<Decay<T>> ||
+            std::is_enum_v<Decay<T>>;
 
         inline std::string dynamicLibraryErrorMessage()
         {
@@ -1459,6 +1555,10 @@ namespace wio::sdk
                 else if constexpr (sizeof(U) == sizeof(double))
                     return WIO_ABI_F64;
             }
+            else if constexpr (std::is_enum_v<U>)
+            {
+                return getAbiType<std::underlying_type_t<U>>();
+            }
             else if constexpr (std::is_integral_v<U>)
             {
                 if constexpr (std::is_same_v<U, signed char>)
@@ -1550,6 +1650,10 @@ namespace wio::sdk
             {
                 return "string";
             }
+            else if constexpr (std::is_enum_v<U>)
+            {
+                return std::string("enum<") + abiTypeName(getAbiType<U>()) + ">";
+            }
             else if constexpr (IsAbiScalarType<U>)
             {
                 return std::string(abiTypeName(getAbiType<U>()));
@@ -1632,6 +1736,10 @@ namespace wio::sdk
             else if constexpr (std::is_same_v<U, wio::string>)
             {
                 return type.is_string();
+            }
+            else if constexpr (std::is_enum_v<U>)
+            {
+                return (type.is_enum() || type.is_flagset()) && type.abi_type() == getAbiType<U>();
             }
             else if constexpr (IsAbiScalarType<U>)
             {
@@ -1747,6 +1855,10 @@ namespace wio::sdk
             {
                 result.value.v_usize = value;
             }
+            else if constexpr (std::is_enum_v<U>)
+            {
+                return toWioValue(static_cast<std::underlying_type_t<U>>(value));
+            }
             else if constexpr (std::is_floating_point_v<U>)
             {
                 if constexpr (sizeof(U) == sizeof(float))
@@ -1821,6 +1933,10 @@ namespace wio::sdk
             else if constexpr (std::is_same_v<U, std::uintptr_t>)
             {
                 return static_cast<T>(value.value.v_usize);
+            }
+            else if constexpr (std::is_enum_v<U>)
+            {
+                return static_cast<T>(fromWioValue<std::underlying_type_t<U>>(value));
             }
             else if constexpr (std::is_floating_point_v<U>)
             {
@@ -2296,6 +2412,21 @@ namespace wio::sdk
                     throwInvalidApiDescriptor(context, problem.str());
                 }
                 break;
+            case WIO_MODULE_TYPE_DESC_ENUM:
+            case WIO_MODULE_TYPE_DESC_FLAGSET:
+                if (!TypeDescriptorView(descriptor).is_integer())
+                {
+                    std::ostringstream problem;
+                    problem << "Enum-like type descriptor '" << descriptor->displayName << "' must use an integer ABI type.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+                if (descriptor->enumMemberCount > 0u && descriptor->enumMembers == nullptr)
+                {
+                    std::ostringstream problem;
+                    problem << "Enum-like type descriptor '" << descriptor->displayName << "' declares members but does not provide enumMembers.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+                break;
             case WIO_MODULE_TYPE_DESC_OPAQUE:
                 break;
             case WIO_MODULE_TYPE_DESC_UNKNOWN:
@@ -2761,12 +2892,12 @@ namespace wio::sdk
                     }
 
                     const TypeDescriptorView fieldType(fieldEntry.typeDescriptor);
-                    if (fieldType.is_primitive())
+                    if (fieldType.is_primitive() || fieldType.is_enum() || fieldType.is_flagset())
                     {
                         if (fieldEntry.fieldType == WIO_ABI_UNKNOWN || fieldEntry.fieldType != fieldType.abi_type())
                         {
                             std::ostringstream problem;
-                            problem << "Field '" << fieldEntry.fieldName << "' on exported type '" << typeEntry.logicalName << "' has a primitive descriptor/ABI mismatch.";
+                            problem << "Field '" << fieldEntry.fieldName << "' on exported type '" << typeEntry.logicalName << "' has a scalar descriptor/ABI mismatch.";
                             throwInvalidApiDescriptor(context, problem.str());
                         }
                     }
@@ -2816,7 +2947,7 @@ namespace wio::sdk
 
                     if ((fieldEntry.flags & WIO_MODULE_FIELD_READABLE) != 0u)
                     {
-                        if (fieldType.is_primitive())
+                        if (fieldType.is_primitive() || fieldType.is_enum() || fieldType.is_flagset())
                         {
                             validateExactExportContract(fieldEntry.getterExport, context, "Field getter", fieldEntry.fieldName, fieldEntry.fieldType, 1u, fieldGetterParameters, true, false);
                         }
@@ -2833,7 +2964,7 @@ namespace wio::sdk
 
                     if ((fieldEntry.flags & WIO_MODULE_FIELD_WRITABLE) != 0u)
                     {
-                        if (fieldType.is_primitive())
+                        if (fieldType.is_primitive() || fieldType.is_enum() || fieldType.is_flagset())
                         {
                             validateExactExportContract(fieldEntry.setterExport, context, "Field setter", fieldEntry.fieldName, WIO_ABI_VOID, 2u, fieldSetterPrimitiveParameters, true, false);
                         }
@@ -3514,11 +3645,129 @@ namespace wio::sdk
     }
 
     class WioDynamicValue;
+    class WioEnum;
+    class WioFlagset;
     class WioFieldAccessor;
     class WioObject;
     class WioComponent;
     class WioObjectType;
     class WioComponentType;
+
+    class WioEnum
+    {
+    public:
+        WioEnum() = default;
+
+        WioEnum(TypeDescriptorView type, WioValue value) noexcept
+            : type_(type),
+              value_(value)
+        {
+        }
+
+        [[nodiscard]] explicit operator bool() const noexcept
+        {
+            return type_.is_enum();
+        }
+
+        [[nodiscard]] TypeDescriptorView type() const noexcept
+        {
+            return type_;
+        }
+
+        [[nodiscard]] WioValue scalar_value() const noexcept
+        {
+            return value_;
+        }
+
+        [[nodiscard]] std::string_view name() const noexcept
+        {
+            const std::ptrdiff_t index = type_.enum_index_of(value_);
+            return index >= 0 ? type_.enum_member_name(static_cast<std::uint32_t>(index)) : std::string_view{};
+        }
+
+        [[nodiscard]] std::ptrdiff_t index() const noexcept
+        {
+            return type_.enum_index_of(value_);
+        }
+
+        [[nodiscard]] std::string_view underlying_type_name() const noexcept
+        {
+            return detail::abiTypeName(type_.abi_type());
+        }
+
+        [[nodiscard]] std::uint32_t member_count() const noexcept
+        {
+            return type_.enum_member_count();
+        }
+
+        template <typename T>
+        [[nodiscard]] T as() const
+        {
+            return detail::fromWioValue<T>(value_);
+        }
+
+    private:
+        TypeDescriptorView type_{};
+        WioValue value_{};
+    };
+
+    class WioFlagset
+    {
+    public:
+        WioFlagset() = default;
+
+        WioFlagset(TypeDescriptorView type, WioValue value) noexcept
+            : type_(type),
+              value_(value)
+        {
+        }
+
+        [[nodiscard]] explicit operator bool() const noexcept
+        {
+            return type_.is_flagset();
+        }
+
+        [[nodiscard]] TypeDescriptorView type() const noexcept
+        {
+            return type_;
+        }
+
+        [[nodiscard]] WioValue scalar_value() const noexcept
+        {
+            return value_;
+        }
+
+        [[nodiscard]] std::string_view name() const noexcept
+        {
+            const std::ptrdiff_t index = type_.enum_index_of(value_);
+            return index >= 0 ? type_.enum_member_name(static_cast<std::uint32_t>(index)) : std::string_view{};
+        }
+
+        [[nodiscard]] std::ptrdiff_t index() const noexcept
+        {
+            return type_.enum_index_of(value_);
+        }
+
+        [[nodiscard]] std::string_view underlying_type_name() const noexcept
+        {
+            return detail::abiTypeName(type_.abi_type());
+        }
+
+        [[nodiscard]] std::uint32_t member_count() const noexcept
+        {
+            return type_.enum_member_count();
+        }
+
+        template <typename T>
+        [[nodiscard]] T as() const
+        {
+            return detail::fromWioValue<T>(value_);
+        }
+
+    private:
+        TypeDescriptorView type_{};
+        WioValue value_{};
+    };
 
     class WioFieldAccessor
     {
@@ -3610,6 +3859,10 @@ namespace wio::sdk
         void set_scalar_value(const WioValue& value) const;
         [[nodiscard]] WioDynamicValue get_dynamic() const;
         void set_dynamic(WioDynamicValue value) const;
+        [[nodiscard]] WioEnum get_enum() const;
+        void set_enum(WioEnum value) const;
+        [[nodiscard]] WioFlagset get_flagset() const;
+        void set_flagset(WioFlagset value) const;
 
         [[nodiscard]] wio::string get_string() const
         {
@@ -3826,6 +4079,16 @@ namespace wio::sdk
             return WioFunction<Signature>(get<RawFunction>(fieldName));
         }
 
+        [[nodiscard]] WioEnum get_enum(std::string_view fieldName) const
+        {
+            return field(fieldName).get_enum();
+        }
+
+        [[nodiscard]] WioFlagset get_flagset(std::string_view fieldName) const
+        {
+            return field(fieldName).get_flagset();
+        }
+
         template <typename T>
         void set(std::string_view fieldName, T&& value) const
         {
@@ -3898,6 +4161,16 @@ namespace wio::sdk
         [[nodiscard]] WioComponent get_component(std::string_view fieldName) const;
         void set_object(std::string_view fieldName, const WioObject& value) const;
         void set_component(std::string_view fieldName, const WioComponent& value) const;
+
+        void set_enum(std::string_view fieldName, WioEnum value) const
+        {
+            field(fieldName).set_enum(std::move(value));
+        }
+
+        void set_flagset(std::string_view fieldName, WioFlagset value) const
+        {
+            field(fieldName).set_flagset(std::move(value));
+        }
 
         template <typename Signature>
         auto method(std::string_view methodName) const -> typename detail::FunctionTraits<Signature>::StdFunction
@@ -4011,6 +4284,16 @@ namespace wio::sdk
             return WioFunction<Signature>(get<RawFunction>(fieldName));
         }
 
+        [[nodiscard]] WioEnum get_enum(std::string_view fieldName) const
+        {
+            return field(fieldName).get_enum();
+        }
+
+        [[nodiscard]] WioFlagset get_flagset(std::string_view fieldName) const
+        {
+            return field(fieldName).get_flagset();
+        }
+
         template <typename T>
         void set(std::string_view fieldName, T&& value) const
         {
@@ -4083,6 +4366,16 @@ namespace wio::sdk
         [[nodiscard]] WioComponent get_component(std::string_view fieldName) const;
         void set_object(std::string_view fieldName, const WioObject& value) const;
         void set_component(std::string_view fieldName, const WioComponent& value) const;
+
+        void set_enum(std::string_view fieldName, WioEnum value) const
+        {
+            field(fieldName).set_enum(std::move(value));
+        }
+
+        void set_flagset(std::string_view fieldName, WioFlagset value) const
+        {
+            field(fieldName).set_flagset(std::move(value));
+        }
 
         void reset() noexcept;
 
@@ -4437,6 +4730,8 @@ namespace wio::sdk
     {
         Empty,
         Primitive,
+        Enum,
+        Flagset,
         String,
         Object,
         Component,
@@ -4466,6 +4761,16 @@ namespace wio::sdk
                   typename = std::enable_if_t<detail::IsAbiScalarType<T>>>
         explicit WioDynamicValue(T value)
             : value_(detail::toWioValue(value))
+        {
+        }
+
+        explicit WioDynamicValue(WioEnum value)
+            : value_(std::move(value))
+        {
+        }
+
+        explicit WioDynamicValue(WioFlagset value)
+            : value_(std::move(value))
         {
         }
 
@@ -4543,6 +4848,10 @@ namespace wio::sdk
         {
             if (std::holds_alternative<WioValue>(value_))
                 return WioDynamicValueKind::Primitive;
+            if (std::holds_alternative<WioEnum>(value_))
+                return WioDynamicValueKind::Enum;
+            if (std::holds_alternative<WioFlagset>(value_))
+                return WioDynamicValueKind::Flagset;
             if (std::holds_alternative<wio::string>(value_))
                 return WioDynamicValueKind::String;
             if (std::holds_alternative<WioObject>(value_))
@@ -4575,6 +4884,16 @@ namespace wio::sdk
         [[nodiscard]] bool is_string() const noexcept
         {
             return kind() == WioDynamicValueKind::String;
+        }
+
+        [[nodiscard]] bool is_enum() const noexcept
+        {
+            return kind() == WioDynamicValueKind::Enum;
+        }
+
+        [[nodiscard]] bool is_flagset() const noexcept
+        {
+            return kind() == WioDynamicValueKind::Flagset;
         }
 
         [[nodiscard]] bool is_object() const noexcept
@@ -4630,6 +4949,34 @@ namespace wio::sdk
             if (!is_string())
                 throw Error(ErrorCode::SignatureMismatch, "Wio SDK dynamic value does not hold a string.");
             return std::get<wio::string>(value_);
+        }
+
+        [[nodiscard]] const WioEnum& as_enum() const
+        {
+            if (!is_enum())
+                throw Error(ErrorCode::SignatureMismatch, "Wio SDK dynamic value does not hold an enum.");
+            return std::get<WioEnum>(value_);
+        }
+
+        [[nodiscard]] WioEnum take_enum() &&
+        {
+            if (!is_enum())
+                throw Error(ErrorCode::SignatureMismatch, "Wio SDK dynamic value does not hold an enum.");
+            return std::get<WioEnum>(std::move(value_));
+        }
+
+        [[nodiscard]] const WioFlagset& as_flagset() const
+        {
+            if (!is_flagset())
+                throw Error(ErrorCode::SignatureMismatch, "Wio SDK dynamic value does not hold a flagset.");
+            return std::get<WioFlagset>(value_);
+        }
+
+        [[nodiscard]] WioFlagset take_flagset() &&
+        {
+            if (!is_flagset())
+                throw Error(ErrorCode::SignatureMismatch, "Wio SDK dynamic value does not hold a flagset.");
+            return std::get<WioFlagset>(std::move(value_));
         }
 
         [[nodiscard]] wio::string take_string() &&
@@ -4741,6 +5088,8 @@ namespace wio::sdk
         std::variant<
             std::monostate,
             WioValue,
+            WioEnum,
+            WioFlagset,
             wio::string,
             WioObject,
             WioComponent,
@@ -5108,8 +5457,8 @@ namespace wio::sdk
     inline WioValue WioFieldAccessor::get_scalar_value() const
     {
         ensure_live();
-        if (!info_.is_primitive())
-            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a primitive field descriptor for scalar access.");
+        if (!info_.is_primitive() && !info_.is_enum() && !info_.is_flagset())
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a scalar-backed field descriptor for scalar access.");
 
         if (!info_.can_read() || fieldEntry_ == nullptr || fieldEntry_->getterExport == nullptr || fieldEntry_->getterExport->invoke == nullptr)
             throw Error(ErrorCode::FieldNotFound, "Wio SDK scalar field is not readable.");
@@ -5134,8 +5483,8 @@ namespace wio::sdk
     inline void WioFieldAccessor::set_scalar_value(const WioValue& value) const
     {
         ensure_live();
-        if (!info_.is_primitive())
-            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a primitive field descriptor for scalar access.");
+        if (!info_.is_primitive() && !info_.is_enum() && !info_.is_flagset())
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a scalar-backed field descriptor for scalar access.");
 
         if (!info_.can_write() || fieldEntry_ == nullptr || fieldEntry_->setterExport == nullptr || fieldEntry_->setterExport->invoke == nullptr)
             throw Error(ErrorCode::FieldNotWritable, "Wio SDK scalar field is not writable.");
@@ -5167,6 +5516,10 @@ namespace wio::sdk
     inline WioDynamicValue WioFieldAccessor::get_dynamic() const
     {
         ensure_live();
+        if (info_.is_enum())
+            return WioDynamicValue(get_enum());
+        if (info_.is_flagset())
+            return WioDynamicValue(get_flagset());
         if (info_.is_primitive())
             return WioDynamicValue(get_scalar_value());
         if (info_.is_string())
@@ -5227,6 +5580,12 @@ namespace wio::sdk
         {
         case WioDynamicValueKind::Primitive:
             set_scalar_value(value.as_scalar_value());
+            return;
+        case WioDynamicValueKind::Enum:
+            set_enum(value.as_enum());
+            return;
+        case WioDynamicValueKind::Flagset:
+            set_flagset(value.as_flagset());
             return;
         case WioDynamicValueKind::String:
             set_string(std::move(value).take_string());
@@ -5313,6 +5672,42 @@ namespace wio::sdk
         const WioModuleType* nestedType = detail::requireModuleType(api_, typeDescriptor->logicalTypeName, WIO_MODULE_TYPE_COMPONENT);
         const std::uintptr_t nestedHandle = detail::getModuleFieldHandle(type_, handle_, name(), bindingKind_);
         return WioComponent(api_, nestedType, nestedHandle, false, bindingState_, bindingGeneration_);
+    }
+
+    inline WioEnum WioFieldAccessor::get_enum() const
+    {
+        ensure_live();
+        if (!info_.is_enum())
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected an enum field descriptor.");
+        return WioEnum(type(), get_scalar_value());
+    }
+
+    inline void WioFieldAccessor::set_enum(WioEnum value) const
+    {
+        ensure_live();
+        if (!info_.is_enum())
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected an enum field descriptor.");
+        if (!value || value.type().logical_name() != type().logical_name())
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK enum field assignment type mismatch.");
+        set_scalar_value(value.scalar_value());
+    }
+
+    inline WioFlagset WioFieldAccessor::get_flagset() const
+    {
+        ensure_live();
+        if (!info_.is_flagset())
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a flagset field descriptor.");
+        return WioFlagset(type(), get_scalar_value());
+    }
+
+    inline void WioFieldAccessor::set_flagset(WioFlagset value) const
+    {
+        ensure_live();
+        if (!info_.is_flagset())
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a flagset field descriptor.");
+        if (!value || value.type().logical_name() != type().logical_name())
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK flagset field assignment type mismatch.");
+        set_scalar_value(value.scalar_value());
     }
 
     inline void WioFieldAccessor::set_object(const WioObject& value) const

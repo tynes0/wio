@@ -51,6 +51,38 @@ fn Entry() -> i32 {
         return 8;
     }
 
+    if (reflect::UnderlyingType<Mode>() != "i32") {
+        return 9;
+    }
+
+    if (reflect::UnderlyingType<Permission>() != "u32") {
+        return 10;
+    }
+
+    if (reflect::Size<Mode>() != 4usize) {
+        return 11;
+    }
+
+    if (reflect::Size<Permission>() != 4usize) {
+        return 12;
+    }
+
+    if (reflect::Value<Mode>(1usize) != Mode::Play) {
+        return 13;
+    }
+
+    if (reflect::Value<Permission>(2usize) != Permission::Write) {
+        return 14;
+    }
+
+    if (reflect::Index(DefaultMode) != 1isize) {
+        return 15;
+    }
+
+    if (reflect::Index(FullAccess) != 3isize) {
+        return 16;
+    }
+
     console::PrintLine("enum-reflection-ok");
     return 0;
 }

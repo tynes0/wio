@@ -28,6 +28,30 @@ fn Entry() -> i32 {
         return 2;
     }
 
+    if (reflect::UnderlyingType<State>() != "i32") {
+        return 3;
+    }
+
+    if (reflect::UnderlyingType<Feature>() != "u32") {
+        return 4;
+    }
+
+    if (reflect::Value<State>(0usize) != State::Menu) {
+        return 5;
+    }
+
+    if (reflect::Value<Feature>(4usize) != Feature::All) {
+        return 6;
+    }
+
+    if (reflect::Index(DefaultState) != 1isize) {
+        return 7;
+    }
+
+    if (reflect::Index(Feature::All) != 4isize) {
+        return 8;
+    }
+
     assert::ExpectTrue(reflect::Has(DefaultFlags, Feature::Audio), "Has should report present flag bits");
     assert::ExpectTrue(reflect::HasAny(DefaultFlags, Feature::Audio | Feature::Cheats), "HasAny should report partial overlap");
     assert::ExpectFalse(reflect::Has(DefaultFlags, Feature::All), "Has should require the full mask");

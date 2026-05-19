@@ -1610,6 +1610,7 @@ namespace wio::codegen
             std::string memberCppTypeName;
             bool ownerIsObject = false;
             FieldAccessorKind fieldAccessorKind = FieldAccessorKind::Value;
+            bool valueRequiresBridgeCast = false;
         };
 
         struct ExportedFieldInfo
@@ -1663,6 +1664,13 @@ namespace wio::codegen
             if (resolvedType->isVoid())
                 return "WIO_ABI_VOID";
 
+            if (resolvedType->kind() == sema::TypeKind::Struct)
+            {
+                auto structType = resolvedType.AsFast<sema::StructType>();
+                if (structType && (structType->isEnum || structType->isFlagset) && structType->enumUnderlyingType)
+                    return getAbiTypeEnumName(structType->enumUnderlyingType);
+            }
+
             if (resolvedType->kind() != sema::TypeKind::Primitive)
                 return "WIO_ABI_UNKNOWN";
 
@@ -1689,7 +1697,17 @@ namespace wio::codegen
         std::string getAbiValueFieldName(const Ref<sema::Type>& type)
         {
             Ref<sema::Type> resolvedType = unwrapAliasType(type);
-            if (!resolvedType || resolvedType->kind() != sema::TypeKind::Primitive)
+            if (!resolvedType)
+                return {};
+
+            if (resolvedType->kind() == sema::TypeKind::Struct)
+            {
+                auto structType = resolvedType.AsFast<sema::StructType>();
+                if (structType && (structType->isEnum || structType->isFlagset) && structType->enumUnderlyingType)
+                    return getAbiValueFieldName(structType->enumUnderlyingType);
+            }
+
+            if (resolvedType->kind() != sema::TypeKind::Primitive)
                 return {};
 
             const std::string primitiveName = resolvedType.AsFast<sema::PrimitiveType>()->name;
@@ -1960,12 +1978,18 @@ namespace wio::codegen
                     ExportedFunctionInfo::FieldAccessorKind accessorKind = ExportedFunctionInfo::FieldAccessorKind::Value;
                     Ref<sema::Type> accessorBridgeType = fieldType;
                     std::string fieldBridgeCppTypeName = toCppType(fieldType);
+                    bool valueRequiresBridgeCast = false;
 
                     if (resolvedFieldType && resolvedFieldType->kind() == sema::TypeKind::Struct)
                     {
                         if (auto structType = resolvedFieldType.AsFast<sema::StructType>(); structType)
                         {
-                            if (objectDeclarations.contains(structType.Get()))
+                            if ((structType->isEnum || structType->isFlagset) && structType->enumUnderlyingType)
+                            {
+                                accessorBridgeType = structType->enumUnderlyingType;
+                                valueRequiresBridgeCast = true;
+                            }
+                            else if (objectDeclarations.contains(structType.Get()))
                             {
                                 accessorKind = ExportedFunctionInfo::FieldAccessorKind::ObjectHandle;
                                 accessorBridgeType = typeContext.getUSize();
@@ -2015,6 +2039,7 @@ namespace wio::codegen
                     getterExport.memberCppTypeName = fieldInfo.memberCppTypeName;
                     getterExport.ownerIsObject = isObjectType;
                     getterExport.fieldAccessorKind = fieldInfo.accessorKind;
+                    getterExport.valueRequiresBridgeCast = valueRequiresBridgeCast;
                     fieldInfo.getterExportIndex = exportedFunctions.size();
                     exportedFunctions.push_back(std::move(getterExport));
 
@@ -2030,6 +2055,7 @@ namespace wio::codegen
                         setterExport.memberCppTypeName = fieldInfo.memberCppTypeName;
                         setterExport.ownerIsObject = isObjectType;
                         setterExport.fieldAccessorKind = fieldInfo.accessorKind;
+                        setterExport.valueRequiresBridgeCast = valueRequiresBridgeCast;
                         fieldInfo.setterExportIndex = exportedFunctions.size();
                         exportedFunctions.push_back(std::move(setterExport));
                     }
@@ -3029,7 +3055,12 @@ namespace wio::codegen
             {
                 emitLine("auto* instance = reinterpret_cast<" + exportInfo.ownerCppTypeName + "*>(_wio_arg0);");
                 if (exportInfo.fieldAccessorKind == ExportedFunctionInfo::FieldAccessorKind::Value)
-                    emitLine("return instance->" + exportInfo.memberCppName + ";");
+                {
+                    if (exportInfo.valueRequiresBridgeCast)
+                        emitLine("return static_cast<" + toCppType(exportFunctionType->returnType) + ">(instance->" + exportInfo.memberCppName + ");");
+                    else
+                        emitLine("return instance->" + exportInfo.memberCppName + ";");
+                }
                 else if (exportInfo.fieldAccessorKind == ExportedFunctionInfo::FieldAccessorKind::ObjectHandle)
                     emitLine("return reinterpret_cast<std::uintptr_t>(instance->" + exportInfo.memberCppName + ".Get());");
                 else
@@ -3040,7 +3071,12 @@ namespace wio::codegen
             {
                 emitLine("auto* instance = reinterpret_cast<" + exportInfo.ownerCppTypeName + "*>(_wio_arg0);");
                 if (exportInfo.fieldAccessorKind == ExportedFunctionInfo::FieldAccessorKind::Value)
-                    emitLine("instance->" + exportInfo.memberCppName + " = _wio_arg1;");
+                {
+                    if (exportInfo.valueRequiresBridgeCast)
+                        emitLine("instance->" + exportInfo.memberCppName + " = static_cast<" + exportInfo.memberCppTypeName + ">(_wio_arg1);");
+                    else
+                        emitLine("instance->" + exportInfo.memberCppName + " = _wio_arg1;");
+                }
                 else if (exportInfo.fieldAccessorKind == ExportedFunctionInfo::FieldAccessorKind::ObjectHandle)
                     emitLine("instance->" + exportInfo.memberCppName + " = wio::runtime::Ref<" + exportInfo.memberCppTypeName + ">(reinterpret_cast<" + exportInfo.memberCppTypeName + "*>(_wio_arg1));");
                 else
@@ -3168,9 +3204,14 @@ namespace wio::codegen
                     emitLine("if (instance == nullptr) return WIO_INVOKE_BAD_ARGUMENTS;");
                     if (exportInfo.fieldAccessorKind == ExportedFunctionInfo::FieldAccessorKind::Value)
                     {
-                        emitLine("auto result = instance->" + exportInfo.memberCppName + ";");
                         emitLine("outResult->type = " + getAbiTypeEnumName(exportFunctionType->returnType) + ";");
-                        emitLine("outResult->value." + getAbiValueFieldName(exportFunctionType->returnType) + " = result;");
+                        if (exportInfo.valueRequiresBridgeCast)
+                            emitLine("outResult->value." + getAbiValueFieldName(exportFunctionType->returnType) + " = static_cast<" + toCppType(exportFunctionType->returnType) + ">(instance->" + exportInfo.memberCppName + ");");
+                        else
+                        {
+                            emitLine("auto result = instance->" + exportInfo.memberCppName + ";");
+                            emitLine("outResult->value." + getAbiValueFieldName(exportFunctionType->returnType) + " = result;");
+                        }
                     }
                     else if (exportInfo.fieldAccessorKind == ExportedFunctionInfo::FieldAccessorKind::ObjectHandle)
                     {
@@ -3189,7 +3230,12 @@ namespace wio::codegen
                     emitLine("auto* instance = reinterpret_cast<" + exportInfo.ownerCppTypeName + "*>(args[0].value.v_usize);");
                     emitLine("if (instance == nullptr) return WIO_INVOKE_BAD_ARGUMENTS;");
                     if (exportInfo.fieldAccessorKind == ExportedFunctionInfo::FieldAccessorKind::Value)
-                        emitLine("instance->" + exportInfo.memberCppName + " = args[1].value." + getAbiValueFieldName(exportFunctionType->paramTypes[1]) + ";");
+                    {
+                        if (exportInfo.valueRequiresBridgeCast)
+                            emitLine("instance->" + exportInfo.memberCppName + " = static_cast<" + exportInfo.memberCppTypeName + ">(args[1].value." + getAbiValueFieldName(exportFunctionType->paramTypes[1]) + ");");
+                        else
+                            emitLine("instance->" + exportInfo.memberCppName + " = args[1].value." + getAbiValueFieldName(exportFunctionType->paramTypes[1]) + ";");
+                    }
                     else if (exportInfo.fieldAccessorKind == ExportedFunctionInfo::FieldAccessorKind::ObjectHandle)
                         emitLine("instance->" + exportInfo.memberCppName + " = wio::runtime::Ref<" + exportInfo.memberCppTypeName + ">(reinterpret_cast<" + exportInfo.memberCppTypeName + "*>(args[1].value.v_usize));");
                     else
@@ -3329,6 +3375,12 @@ namespace wio::codegen
 
         struct TypeDescriptorEmissionInfo
         {
+            struct EnumMemberInfo
+            {
+                std::string name;
+                std::string valueExpr;
+            };
+
             std::string displayName;
             std::string logicalTypeName;
             std::string kindExpr = "WIO_MODULE_TYPE_DESC_UNKNOWN";
@@ -3339,6 +3391,7 @@ namespace wio::codegen
             std::optional<size_t> valueIndex;
             std::optional<size_t> returnIndex;
             std::vector<size_t> parameterIndices;
+            std::vector<EnumMemberInfo> enumMembers;
         };
 
         std::vector<TypeDescriptorEmissionInfo> emittedTypeDescriptors;
@@ -3352,6 +3405,67 @@ namespace wio::codegen
             return structType->scopePath.empty()
                 ? structType->name
                 : common::formatString("{}::{}", structType->scopePath, structType->name);
+        };
+
+        std::unordered_map<std::string, const EnumDeclaration*> enumDeclarationsByLogicalName;
+        std::unordered_map<std::string, const FlagsetDeclaration*> flagsetDeclarationsByLogicalName;
+
+        std::function<void(const std::vector<NodePtr<Statement>>&, const std::string&)> collectEnumLikeDeclarations =
+            [&](const std::vector<NodePtr<Statement>>& nodes, const std::string& scopePath)
+        {
+            for (const auto& stmt : nodes)
+            {
+                if (!stmt)
+                    continue;
+
+                if (const auto* realmDecl = stmt->as<RealmDeclaration>())
+                {
+                    const std::string nextScopePath = scopePath.empty()
+                        ? realmDecl->name->token.value
+                        : common::formatString("{}::{}", scopePath, realmDecl->name->token.value);
+                    collectEnumLikeDeclarations(realmDecl->statements, nextScopePath);
+                    continue;
+                }
+
+                if (const auto* enumDecl = stmt->as<EnumDeclaration>())
+                {
+                    const std::string logicalName = scopePath.empty()
+                        ? enumDecl->name->token.value
+                        : common::formatString("{}::{}", scopePath, enumDecl->name->token.value);
+                    enumDeclarationsByLogicalName.emplace(logicalName, enumDecl);
+                    continue;
+                }
+
+                if (const auto* flagsetDecl = stmt->as<FlagsetDeclaration>())
+                {
+                    const std::string logicalName = scopePath.empty()
+                        ? flagsetDecl->name->token.value
+                        : common::formatString("{}::{}", scopePath, flagsetDecl->name->token.value);
+                    flagsetDeclarationsByLogicalName.emplace(logicalName, flagsetDecl);
+                }
+            }
+        };
+        collectEnumLikeDeclarations(program->statements, "");
+
+        auto getEnumUnderlyingAbiExpr = [](const std::vector<NodePtr<AttributeStatement>>& attributes,
+                                           std::string_view fallbackAbiExpr) -> std::string
+        {
+            auto typeArgs = getAttributeArgs(attributes, Attribute::Type);
+            if (typeArgs.empty())
+                return std::string(fallbackAbiExpr);
+
+            switch (typeArgs[0].type)
+            {
+            case TokenType::kwI8: return "WIO_ABI_I8";
+            case TokenType::kwU8: return "WIO_ABI_U8";
+            case TokenType::kwI16: return "WIO_ABI_I16";
+            case TokenType::kwU16: return "WIO_ABI_U16";
+            case TokenType::kwI32: return "WIO_ABI_I32";
+            case TokenType::kwU32: return "WIO_ABI_U32";
+            case TokenType::kwI64: return "WIO_ABI_I64";
+            case TokenType::kwU64: return "WIO_ABI_U64";
+            default: return std::string(fallbackAbiExpr);
+            }
         };
 
         std::function<size_t(const Ref<sema::Type>&)> ensureTypeDescriptor = [&](const Ref<sema::Type>& type) -> size_t
@@ -3416,7 +3530,55 @@ namespace wio::codegen
             {
                 auto structType = resolvedType.AsFast<sema::StructType>();
                 info.logicalTypeName = getLogicalTypeName(structType);
-                if (objectDeclarations.contains(structType.Get()))
+                if (structType->isEnum)
+                {
+                    info.kindExpr = "WIO_MODULE_TYPE_DESC_ENUM";
+                    const auto declarationIt = enumDeclarationsByLogicalName.find(info.logicalTypeName);
+                    const auto* declaration = declarationIt != enumDeclarationsByLogicalName.end() ? declarationIt->second : nullptr;
+                    info.abiExpr = structType->enumUnderlyingType
+                        ? getAbiTypeEnumName(structType->enumUnderlyingType)
+                        : (declaration ? getEnumUnderlyingAbiExpr(declaration->attributes, "WIO_ABI_I32") : "WIO_ABI_I32");
+
+                    const std::string enumCppName = mangleStructTypeName(structType);
+                    if (declaration)
+                    {
+                        info.enumMembers.reserve(declaration->members.size());
+                        for (const auto& member : declaration->members)
+                        {
+                            info.enumMembers.push_back({
+                                member.name->token.value,
+                                "WioMakeAbiIntegerValue(" + info.abiExpr +
+                                    ", static_cast<std::uint64_t>(static_cast<std::underlying_type_t<" + enumCppName + ">>(" +
+                                    enumCppName + "::" + member.name->token.value + ")))"
+                            });
+                        }
+                    }
+                }
+                else if (structType->isFlagset)
+                {
+                    info.kindExpr = "WIO_MODULE_TYPE_DESC_FLAGSET";
+                    const auto declarationIt = flagsetDeclarationsByLogicalName.find(info.logicalTypeName);
+                    const auto* declaration = declarationIt != flagsetDeclarationsByLogicalName.end() ? declarationIt->second : nullptr;
+                    info.abiExpr = structType->enumUnderlyingType
+                        ? getAbiTypeEnumName(structType->enumUnderlyingType)
+                        : (declaration ? getEnumUnderlyingAbiExpr(declaration->attributes, "WIO_ABI_U32") : "WIO_ABI_U32");
+
+                    const std::string flagsetCppName = mangleStructTypeName(structType);
+                    if (declaration)
+                    {
+                        info.enumMembers.reserve(declaration->members.size());
+                        for (const auto& member : declaration->members)
+                        {
+                            info.enumMembers.push_back({
+                                member.name->token.value,
+                                "WioMakeAbiIntegerValue(" + info.abiExpr +
+                                    ", static_cast<std::uint64_t>(static_cast<std::underlying_type_t<" + flagsetCppName + ">>(" +
+                                    flagsetCppName + "::" + member.name->token.value + ")))"
+                            });
+                        }
+                    }
+                }
+                else if (objectDeclarations.contains(structType.Get()))
                     info.kindExpr = "WIO_MODULE_TYPE_DESC_OBJECT";
                 else if (componentDeclarations.contains(structType.Get()))
                     info.kindExpr = "WIO_MODULE_TYPE_DESC_COMPONENT";
@@ -3467,6 +3629,27 @@ namespace wio::codegen
             for (size_t descriptorIndex = 0; descriptorIndex < emittedTypeDescriptors.size(); ++descriptorIndex)
             {
                 const auto& descriptor = emittedTypeDescriptors[descriptorIndex];
+                if (descriptor.enumMembers.empty())
+                    continue;
+
+                emitLine("static const WioModuleEnumMemberDescriptor WIO_TYPE_DESCRIPTOR_ENUM_MEMBERS_" + std::to_string(descriptorIndex) + "[] =");
+                emitLine("{");
+                indent();
+                for (size_t memberIndex = 0; memberIndex < descriptor.enumMembers.size(); ++memberIndex)
+                {
+                    const auto& member = descriptor.enumMembers[memberIndex];
+                    const std::string suffix = (memberIndex + 1 < descriptor.enumMembers.size()) ? "," : "";
+                    emitLine(
+                        "{ \"" + common::wioStringToEscapedCppString(member.name) + "\", " + member.valueExpr + " }" + suffix
+                    );
+                }
+                dedent();
+                emitLine("};");
+            }
+
+            for (size_t descriptorIndex = 0; descriptorIndex < emittedTypeDescriptors.size(); ++descriptorIndex)
+            {
+                const auto& descriptor = emittedTypeDescriptors[descriptorIndex];
                 const std::string logicalTypeExpr = descriptor.logicalTypeName.empty()
                     ? "nullptr"
                     : ("\"" + common::wioStringToEscapedCppString(descriptor.logicalTypeName) + "\"");
@@ -3485,6 +3668,9 @@ namespace wio::codegen
                 const std::string paramExpr = descriptor.parameterIndices.empty()
                     ? "nullptr"
                     : ("WIO_TYPE_DESCRIPTOR_PARAMS_" + std::to_string(descriptorIndex));
+                const std::string enumMembersExpr = descriptor.enumMembers.empty()
+                    ? "nullptr"
+                    : ("WIO_TYPE_DESCRIPTOR_ENUM_MEMBERS_" + std::to_string(descriptorIndex));
 
                 emitLine(
                     "const WioModuleTypeDescriptor WIO_TYPE_DESCRIPTOR_" + std::to_string(descriptorIndex) +
@@ -3494,7 +3680,8 @@ namespace wio::codegen
                     ", " + descriptor.abiExpr +
                     ", " + std::to_string(descriptor.staticArraySize) + "ull, " +
                     elementExpr + ", " + keyExpr + ", " + valueExpr + ", " + returnExpr +
-                    ", " + std::to_string(descriptor.parameterIndices.size()) + "u, " + paramExpr + " };"
+                    ", " + std::to_string(descriptor.parameterIndices.size()) + "u, " + paramExpr +
+                    ", " + std::to_string(descriptor.enumMembers.size()) + "u, " + enumMembersExpr + " };"
                 );
                 }
             }
@@ -3882,16 +4069,40 @@ namespace wio::codegen
             }
         };
 
+        auto getEnumUnderlyingWioTypeName = [&](const std::vector<NodePtr<AttributeStatement>>& attributes,
+                                                std::string_view fallbackTypeName) -> std::string
+        {
+            auto typeArgs = getAttributeArgs(attributes, Attribute::Type);
+            if (typeArgs.empty())
+                return std::string(fallbackTypeName);
+
+            switch (typeArgs[0].type)
+            {
+            case TokenType::kwI8: return "i8";
+            case TokenType::kwU8: return "u8";
+            case TokenType::kwI16: return "i16";
+            case TokenType::kwU16: return "u16";
+            case TokenType::kwI32: return "i32";
+            case TokenType::kwU32: return "u32";
+            case TokenType::kwI64: return "i64";
+            case TokenType::kwU64: return "u64";
+            default: return std::string(fallbackTypeName);
+            }
+        };
+
         auto emitEnumReflectionSpecialization = [&](const EnumDeclaration& declaration)
         {
             auto sym = declaration.name->referencedSymbol.Lock();
             std::string enumName = Mangler::mangleStruct(declaration.name->token.value, sym ? sym->scopePath : "");
+            const std::string underlyingTypeName = getEnumUnderlyingWioTypeName(declaration.attributes, "i32");
 
             emitLine("template <>");
             emitLine("struct wio::runtime::EnumReflection<" + enumName + ">");
             emitLine("{");
             indent();
             emitLine("static constexpr std::size_t Count = " + std::to_string(declaration.members.size()) + "u;");
+            emitLine("static constexpr std::size_t Size = sizeof(" + enumName + ");");
+            emitLine("static constexpr std::string_view UnderlyingTypeName = \"" + underlyingTypeName + "\";");
             emitLine("static std::string Name(const " + enumName + " value)");
             emitLine("{");
             indent();
@@ -3908,6 +4119,36 @@ namespace wio::codegen
             emitLine("}");
             dedent();
             emitLine("}");
+            emitLine("static " + enumName + " Value(const std::size_t index)");
+            emitLine("{");
+            indent();
+            emitLine("switch (index)");
+            emitLine("{");
+            indent();
+            for (size_t i = 0; i < declaration.members.size(); ++i)
+            {
+                emitLine("case " + std::to_string(i) + "u: return " + enumName + "::" + declaration.members[i].name->token.value + ";");
+            }
+            emitLine("default: return " + enumName + "::" + declaration.members.front().name->token.value + ";");
+            dedent();
+            emitLine("}");
+            dedent();
+            emitLine("}");
+            emitLine("static std::ptrdiff_t Index(const " + enumName + " value) noexcept");
+            emitLine("{");
+            indent();
+            emitLine("switch (value)");
+            emitLine("{");
+            indent();
+            for (size_t i = 0; i < declaration.members.size(); ++i)
+            {
+                emitLine("case " + enumName + "::" + declaration.members[i].name->token.value + ": return " + std::to_string(i) + ";");
+            }
+            emitLine("default: return -1;");
+            dedent();
+            emitLine("}");
+            dedent();
+            emitLine("}");
             dedent();
             emitLine("};");
         };
@@ -3916,13 +4157,15 @@ namespace wio::codegen
         {
             auto sym = declaration.name->referencedSymbol.Lock();
             std::string flagsetName = Mangler::mangleStruct(declaration.name->token.value, sym ? sym->scopePath : "");
-            const std::string fallbackUnderType = getEnumUnderlyingCppType(declaration.attributes, "uint32_t");
+            const std::string underlyingTypeName = getEnumUnderlyingWioTypeName(declaration.attributes, "u32");
 
             emitLine("template <>");
             emitLine("struct wio::runtime::EnumReflection<" + flagsetName + ">");
             emitLine("{");
             indent();
             emitLine("static constexpr std::size_t Count = " + std::to_string(declaration.members.size()) + "u;");
+            emitLine("static constexpr std::size_t Size = sizeof(" + flagsetName + ");");
+            emitLine("static constexpr std::string_view UnderlyingTypeName = \"" + underlyingTypeName + "\";");
             emitLine("static std::string Name(const " + flagsetName + " value)");
             emitLine("{");
             indent();
@@ -3969,6 +4212,36 @@ namespace wio::codegen
             emitLine("}");
             emitLine("if (result.empty()) return raw == 0 ? \"0\" : \"<unknown>\";");
             emitLine("return result;");
+            dedent();
+            emitLine("}");
+            emitLine("static " + flagsetName + " Value(const std::size_t index)");
+            emitLine("{");
+            indent();
+            emitLine("switch (index)");
+            emitLine("{");
+            indent();
+            for (size_t i = 0; i < declaration.members.size(); ++i)
+            {
+                emitLine("case " + std::to_string(i) + "u: return " + flagsetName + "::" + declaration.members[i].name->token.value + ";");
+            }
+            emitLine("default: return " + flagsetName + "::" + declaration.members.front().name->token.value + ";");
+            dedent();
+            emitLine("}");
+            dedent();
+            emitLine("}");
+            emitLine("static std::ptrdiff_t Index(const " + flagsetName + " value) noexcept");
+            emitLine("{");
+            indent();
+            emitLine("switch (value)");
+            emitLine("{");
+            indent();
+            for (size_t i = 0; i < declaration.members.size(); ++i)
+            {
+                emitLine("case " + flagsetName + "::" + declaration.members[i].name->token.value + ": return " + std::to_string(i) + ";");
+            }
+            emitLine("default: return -1;");
+            dedent();
+            emitLine("}");
             dedent();
             emitLine("}");
             dedent();
@@ -6875,11 +7148,26 @@ namespace wio::codegen
             const bool returnsNativePodComponent = static_cast<bool>(nativeReturnStruct);
             const bool returnsNativePodAliasComponent =
                 nativeReturnStruct && usesNativePodAliasModelForCodegen(nativeReturnStruct);
+            const bool emitExplicitNativeTemplateArguments =
+                !node.genericParameters.empty() &&
+                [&]() -> bool
+                {
+                    auto cppNameArg = getSingleAttributeArg(node.attributes, Attribute::CppName);
+                    if (!cppNameArg.has_value())
+                        return false;
+
+                    return cppNameArg->value == "wio::runtime::EnumCount" ||
+                           cppNameArg->value == "wio::runtime::EnumName" ||
+                           cppNameArg->value == "wio::runtime::EnumValue" ||
+                           cppNameArg->value == "wio::runtime::EnumIndex" ||
+                           cppNameArg->value == "wio::runtime::EnumUnderlyingTypeName" ||
+                           cppNameArg->value == "wio::runtime::EnumSize";
+                }();
 
             auto emitNativeSymbolInvocationTarget = [&]()
             {
                 emit(nativeSymbol);
-                if (!node.genericParameters.empty() && node.parameters.empty())
+                if (emitExplicitNativeTemplateArguments)
                 {
                     emit("<");
                     for (size_t genericIndex = 0; genericIndex < node.genericParameters.size(); ++genericIndex)

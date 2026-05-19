@@ -5,7 +5,7 @@
 #include <cstring>
 #include <utility>
 
-inline constexpr std::uint32_t WIO_MODULE_API_DESCRIPTOR_VERSION = 5u;
+inline constexpr std::uint32_t WIO_MODULE_API_DESCRIPTOR_VERSION = 6u;
 
 enum WioModuleCapability : std::uint32_t
 {
@@ -66,6 +66,51 @@ struct WioValue
     WioAbiType type = WIO_ABI_UNKNOWN;
     WioValuePayload value{};
 };
+
+inline WioValue WioMakeAbiIntegerValue(const WioAbiType abiType, const std::uint64_t value)
+{
+    WioValue result{};
+    result.type = abiType;
+
+    switch (abiType)
+    {
+    case WIO_ABI_I8:
+        result.value.v_i8 = static_cast<std::int8_t>(value);
+        break;
+    case WIO_ABI_I16:
+        result.value.v_i16 = static_cast<std::int16_t>(value);
+        break;
+    case WIO_ABI_I32:
+        result.value.v_i32 = static_cast<std::int32_t>(value);
+        break;
+    case WIO_ABI_I64:
+        result.value.v_i64 = static_cast<std::int64_t>(value);
+        break;
+    case WIO_ABI_U8:
+        result.value.v_u8 = static_cast<std::uint8_t>(value);
+        break;
+    case WIO_ABI_U16:
+        result.value.v_u16 = static_cast<std::uint16_t>(value);
+        break;
+    case WIO_ABI_U32:
+        result.value.v_u32 = static_cast<std::uint32_t>(value);
+        break;
+    case WIO_ABI_U64:
+        result.value.v_u64 = static_cast<std::uint64_t>(value);
+        break;
+    case WIO_ABI_ISIZE:
+        result.value.v_isize = static_cast<std::intptr_t>(value);
+        break;
+    case WIO_ABI_USIZE:
+        result.value.v_usize = static_cast<std::uintptr_t>(value);
+        break;
+    default:
+        result.type = WIO_ABI_UNKNOWN;
+        break;
+    }
+
+    return result;
+}
 
 enum WioInvokeStatus : std::int32_t
 {
@@ -130,7 +175,15 @@ enum WioModuleTypeDescriptorKind : std::uint32_t
     WIO_MODULE_TYPE_DESC_DICT = 7u,
     WIO_MODULE_TYPE_DESC_TREE = 8u,
     WIO_MODULE_TYPE_DESC_FUNCTION = 9u,
-    WIO_MODULE_TYPE_DESC_OPAQUE = 10u
+    WIO_MODULE_TYPE_DESC_OPAQUE = 10u,
+    WIO_MODULE_TYPE_DESC_ENUM = 11u,
+    WIO_MODULE_TYPE_DESC_FLAGSET = 12u
+};
+
+struct WioModuleEnumMemberDescriptor
+{
+    const char* name;
+    WioValue value;
 };
 
 struct WioModuleTypeDescriptor
@@ -146,6 +199,8 @@ struct WioModuleTypeDescriptor
     const WioModuleTypeDescriptor* returnType;
     std::uint32_t parameterCount;
     const WioModuleTypeDescriptor* const* parameterTypes;
+    std::uint32_t enumMemberCount;
+    const WioModuleEnumMemberDescriptor* enumMembers;
 };
 
 struct WioErasedValue

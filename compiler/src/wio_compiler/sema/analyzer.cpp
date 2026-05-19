@@ -3469,7 +3469,11 @@ namespace wio::sema
                 return false;
 
             return cppNameArg->value == "wio::runtime::EnumCount" ||
-                   cppNameArg->value == "wio::runtime::EnumName";
+                   cppNameArg->value == "wio::runtime::EnumName" ||
+                   cppNameArg->value == "wio::runtime::EnumValue" ||
+                   cppNameArg->value == "wio::runtime::EnumIndex" ||
+                   cppNameArg->value == "wio::runtime::EnumUnderlyingTypeName" ||
+                   cppNameArg->value == "wio::runtime::EnumSize";
         }
 
         bool matchesOpenNativeTemplateIntrinsicConstraints(const std::vector<NodePtr<AttributeStatement>>& attributes,
@@ -3480,7 +3484,11 @@ namespace wio::sema
                 return true;
 
             if (cppNameArg->value == "wio::runtime::EnumCount" ||
-                cppNameArg->value == "wio::runtime::EnumName")
+                cppNameArg->value == "wio::runtime::EnumName" ||
+                cppNameArg->value == "wio::runtime::EnumValue" ||
+                cppNameArg->value == "wio::runtime::EnumIndex" ||
+                cppNameArg->value == "wio::runtime::EnumUnderlyingTypeName" ||
+                cppNameArg->value == "wio::runtime::EnumSize")
             {
                 return bindingTypes.size() == 1 &&
                        (isEnumConstraintType(bindingTypes.front()) || isFlagsetConstraintType(bindingTypes.front()));
@@ -13258,6 +13266,9 @@ namespace wio::sema
                 default: WIO_LOG_ADD_ERROR(node.location(), "Invalid underlying type for enum.");
                 }
             }
+
+            if (sym && sym->type && sym->type->kind() == TypeKind::Struct)
+                sym->type.AsFast<StructType>()->enumUnderlyingType = targetType;
             
             for (auto& member : node.members)
             {
@@ -13368,6 +13379,9 @@ namespace wio::sema
                 default: WIO_LOG_ADD_ERROR(node.location(), "Invalid underlying type for flagset.");
                 }
             }
+
+            if (sym && sym->type && sym->type->kind() == TypeKind::Struct)
+                sym->type.AsFast<StructType>()->enumUnderlyingType = targetType;
             
             for (auto& member : node.members)
             {
