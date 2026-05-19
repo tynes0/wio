@@ -34,6 +34,14 @@ with:
 - code-generation oriented attributes,
 - expression-oriented constructs such as `match`.
 
+For the current `v1` push, this draft should also be read as the canonical
+language contract for the already chosen surface. In practice that means:
+
+- syntax and diagnostics may still tighten,
+- edge-case behavior may still be hardened,
+- but the broad user-facing meaning of the documented stable surface should not
+  be casually redesigned before `v1.0.0`.
+
 ### 1.1 Status Labels Used in This Document
 
 This reference uses the following practical labels:
@@ -1048,9 +1056,16 @@ is intended to behave as assignment to the referred value.
 
 #### Current Compiler Note
 
-This area already exists in semantic analysis and code generation, but it is
-still complex enough that it deserves strong test coverage before being called
-fully stable.
+This area is part of the intended `v1` reference/mutation contract:
+
+- `ref values[i]` is the canonical mutable indexed-reference form,
+- nested chains such as `ref bag.values[i]`, `ref values[i].field`, and
+  `ref grid[i][j]` are expected to preserve writable reference behavior when
+  the underlying storage is mutable,
+- dictionary iteration forms such as `view key | ref value` are part of the
+  same mutable-data ergonomics model,
+- readable reference results may auto-read in value contexts, but assignment and
+  mutation still require a writable reference source.
 
 ## 8. Numeric and Object Conversion with `fit`
 
@@ -2954,6 +2969,14 @@ fn Entry() -> i32 {
 The same sugar also works on explicit generic calls such as `Wrap<string>!(...)`
 and `Load<T>?(...)`.
 
+For `v1`, this is the official fallible-flow model:
+
+- canonical std APIs return `std::Result<T>`,
+- `Foo!()` is the explicit unwrap / panic path,
+- `Foo?()` is the explicit propagation path,
+- and the language does not promise a second competing source-level error model
+  such as `try/catch/throw` in `v1`.
+
 `use std::name as alias;` creates `alias` as a namespace alias in the current
 scope. If a local symbol already uses the requested alias name, the compiler
 reports a Wio diagnostic.
@@ -2979,6 +3002,28 @@ without depending on private source layout details.
 
 For the current v1-oriented module contract and the runtime-backed vs pure-Wio
 split, see [`WIO_STD.md`](./WIO_STD.md).
+
+### 22.2.1 Native Bridge Contract In v1
+
+The intended `v1` native bridge contract is:
+
+- declaration-only `@Native` functions are the canonical source-level native
+  import form,
+- `@CppHeader("...")` names the public header that must be visible to the
+  backend compile step,
+- `@CppName(...)` selects the native symbol or qualified backend name,
+- POD-like `component` values are the structural native bridge category and may
+  cross by value, `view`, or `ref`,
+- `object` values cross native boundaries as handles / bridge wrappers rather
+  than as field-for-field POD layout,
+- `opaque` crosses as a foreign pass-through payload,
+- `any` and `std::Box<T>` cross as runtime wrapper concepts rather than as POD
+  layout promises,
+- `@Export` remains the canonical narrow C-facing export bridge for Wio-visible
+  functions.
+
+In other words, the remaining `v1` work here is polish, validation, and ABI
+documentation tightening, not a search for a different native interop model.
 
 ### 22.3 User Modules
 

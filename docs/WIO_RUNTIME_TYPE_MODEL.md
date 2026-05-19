@@ -412,6 +412,14 @@ This keeps three distinct concepts separate:
 
 That separation is healthy for both language clarity and ABI design.
 
+For the current `v1` boundary, this split should be treated as official:
+
+- `object` is not a substitute for `any`,
+- `any` is not a substitute for `opaque`,
+- `opaque` is not a substitute for `std::Box<T>`,
+- and crossing from one bucket to another should stay explicit through
+  dedicated bridge rules rather than through implicit reinterpretation.
+
 ### 8.4 Current Foundation
 
 The first source-level `any` slice is now exposed. The runtime foundation lives
@@ -434,6 +442,9 @@ That header and compiler slice currently establish this model:
 - object payloads can be recovered through interface `is` / `fit` using the same runtime cast path as ordinary object/interface conversions,
 - std-backed event/context helpers now exist through `std::event`, using `any`
   as payload and userdata-style runtime transport.
+
+For `v1`, the remaining work here is helper polish and additional utilities, not
+a redesign of the `std::Box<T>` / `any` / `opaque` category boundary itself.
 
 ## 9. Native Interop Policy
 

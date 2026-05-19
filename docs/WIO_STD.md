@@ -68,8 +68,8 @@ Current v1 expectation:
   C++
 - when an operation can fail, the canonical API direction is `Result`-returning
   names such as `io::Open(...)` and `console::PrintLine(...)`
-- transitional `...Result` aliases may exist during migration, but the long-term
-  user-facing surface should prefer canonical names plus `Foo!()` / later `Foo?()`
+- compatibility `...Result` aliases may remain temporarily, but they are no
+  longer the canonical user-facing names for `v1`
 
 ### 2.1.1 Shared Result Convention
 
@@ -88,6 +88,9 @@ Current v1 expectation:
   follow this `Result` model
 - `Try*` and `*Raw` names remain available as low-level escape hatches, but
   they are no longer the recommended surface for normal Wio code
+
+For `v1`, this should be treated as the sealed std error-flow model rather than
+as a transition toward a second competing API family.
 
 ### 2.1.2 Runtime-Backed Stable Module With Explicit Caveat
 
@@ -196,7 +199,7 @@ flagset types enough metadata for stable `v1` reflection code.
 
 `std::meta` is the current bootstrap surface for generic-pack ergonomics.
 
-Current expectation:
+Current `v1` expectation:
 
 - it is intentionally smaller and more experimental than the main stable module
   families
@@ -234,8 +237,13 @@ Current expectation:
   event/context/payload surface
 - `std::Event` is the canonical public alias for the std event object used for
   userdata-style flows, handler dispatch, and small message pipelines
-- both modules should currently be treated as implemented but still
-  experimental/hardening-oriented, not frozen v1 core
+- the public boundary between `std::Box<T>`, `any`, and `opaque` should be
+  treated as frozen:
+  - `std::Box<T>` is the owned boxed Wio value path,
+  - `any` is the erased Wio-owned payload path,
+  - `opaque` is the foreign/native payload path,
+- remaining work here is helper growth and documentation polish, not a search
+  for a different boundary.
 
 ---
 

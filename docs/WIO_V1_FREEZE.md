@@ -156,8 +156,13 @@ This is a deliberate `v1` boundary, not an accident.
 ### 3.2 `Result`
 
 `std::Result<T>` plus `!` / `?` is the intended official fallible-flow model.
-The remaining work is surface polish and documentation alignment, not a search
-for a second error model.
+That should now be treated as the sealed `v1` direction:
+
+- canonical fallible std APIs return `std::Result<T>`,
+- `!` is the explicit unwrap / panic path,
+- `?` is the explicit propagation path,
+- and a second competing `v1` source-level error model is not part of the
+  current contract.
 
 ### 3.3 `any / Box / opaque`
 
@@ -169,6 +174,18 @@ family:
 - `opaque` = foreign/native handle
 
 The boundary is stable; remaining work is mainly docs, tests, and SDK polish.
+
+### 3.3.1 Mutable Data Ergonomics
+
+The current mutable-data model should also now be treated as part of the
+intended `v1` contract:
+
+- `ref values[i]` is the canonical mutable indexed-reference form,
+- nested chains such as `ref bag.values[i]`, `ref values[i].field`, and
+  `ref grid[i][j]` are expected to preserve writable-reference behavior when
+  the underlying storage is mutable,
+- readable reference results may auto-read in value contexts,
+- and write-through behavior still requires a writable reference source.
 
 ### 3.4 Enum / Flagset
 
@@ -196,6 +213,23 @@ The intended `v1` tooling behavior is:
 
 The remaining work here is mainly cross-platform validation and packaging
 polish, not a search for a different model.
+
+### 3.5.1 Native Interop Contract
+
+The intended `v1` native bridge contract is:
+
+- declaration-only `@Native` functions are the canonical import form,
+- `@CppHeader(...)` and `@CppName(...)` define the public bridge boundary,
+- POD-like `component` values are the structural native bridge category,
+- `object` values cross as handles / bridge wrappers rather than shared POD
+  layout,
+- `opaque` is the foreign pass-through payload category,
+- `any` and `std::Box<T>` are runtime wrapper concepts rather than POD layout
+  promises,
+- `@Export` remains the canonical narrow C-facing export bridge.
+
+The remaining work here is documentation tightening and cross-platform ABI
+validation, not a search for a different interop direction.
 
 ### 3.6 Package / Install UX
 

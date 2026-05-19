@@ -16,8 +16,8 @@ Status markers:
 
 1. [x] Finish operator overloading.
    Member/free unary-binary-assignment operators, `fit`, `[]`, `()`, generic overloads, and the `deref` ergonomics pass are now in place.
-2. [~] Freeze the language surface.
-   A stable contract must be written for `component / object / interface / native / Result / any / Box / opaque / enum / flagset / reflection / pack`, and the generic surface should now move into freeze / polish mode.
+2. [x] Freeze the language surface.
+   The stable contract is now written across the freeze snapshot, language draft, std docs, runtime type model, and SDK docs; remaining work is reference-quality tightening rather than unsettled surface direction.
 3. [x] Declare `makewio` as the official primary project format.
    `wio.makewio` is now documented as the primary manifest and `wio.project.json` is explicitly legacy / compatibility only.
 4. [x] Make the CLI first-class and freeze its behavior.
@@ -38,14 +38,14 @@ Status markers:
     At minimum, Windows and Linux should both be covered across `project`, `bind`, `package`, `env`, and `std::process`.
 12. [x] Stabilize the std surface.
     The stable vs experimental boundary is now documented for `std::Result<T>`, `std::console`, `std::io`, `std::process`, `std::fs`, `std::path`, `std::reflect`, `std::traits`, and `std::meta`.
-13. [~] Fully seal the `Result` model.
-    `std::Result<T>`, `Foo!()`, and `Foo?()` should be frozen as the official error model together with docs and tests.
-14. [~] Freeze the native interop contract.
-    `@Native`, `@CppHeader`, `@CppName`, POD/native enum/flagset handling, export rules, and ABI-safe surface rules should be documented clearly.
-15. [~] Make `any / Box / opaque` boundaries official.
-    Boxing rules, foreign-handle rules, the `is/fit` matrix, and native representation should be stabilized.
-16. [~] Finalize mutable data ergonomics.
-    `ref values[i]`, nested `ref`, dict mutation, and container mutability rules should stop surprising users.
+13. [x] Fully seal the `Result` model.
+    `std::Result<T>`, `Foo!()`, and `Foo?()` are now documented as the official `v1` error-flow model together with the existing test matrix.
+14. [x] Freeze the native interop contract.
+    `@Native`, `@CppHeader`, `@CppName`, POD/native enum/flagset handling, export rules, and ABI-safe surface rules are now documented as the intended `v1` bridge contract.
+15. [x] Make `any / Box / opaque` boundaries official.
+    Boxing rules, foreign-handle rules, the `is/fit` matrix, and native/runtime representation are now documented as one stable boundary.
+16. [x] Finalize mutable data ergonomics.
+    `ref values[i]`, nested `ref`, dict mutation, container mutability, and value-context auto-read are now documented as the intended `v1` behavior.
 17. [x] Make enum/flagset fully first-class.
     Native support, const compatibility, helper APIs, and everyday state/kind/mode usage should be fully closed.
 18. [ ] Expand the tooling test suite.

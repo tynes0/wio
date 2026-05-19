@@ -50,6 +50,8 @@ Notes:
 - [x] A serious runtime/test line was established for `any / Box / opaque`.
 - [x] `std::event` was added as the first real usage surface for
       `any/context/payload`.
+- [x] The public `Result`, `std::Box<T>`, `any`, and `opaque` boundaries were
+      frozen across the language/runtime/std documentation set.
 
 ## Mutable Data and Semantics
 
@@ -57,6 +59,8 @@ Notes:
 - [x] Nested mutable access and `ref` ergonomics improved significantly.
 - [x] The first real in-place mutation coverage landed for arrays, dicts, and
       components.
+- [x] The mutable reference/value-context behavior is now documented as part of
+      the intended `v1` language contract.
 
 ## Enum / Flagset
 
@@ -82,6 +86,8 @@ Notes:
       `object` / `component`.
 - [x] The module lifecycle/state ABI landed in its first strong form.
 - [x] Shared/static/executable target separation and host interop were tested.
+- [x] The intended `v1` native interop contract is now documented explicitly
+      across the language freeze docs.
 
 ## Standard Library Surface
 
@@ -142,6 +148,9 @@ Notes:
 - [x] Native/shared/static/SDK/package/project-model smoke tests landed.
 - [x] Packaged toolchains were validated through real project
       create/build/run flows.
+- [x] The language/reference freeze snapshot now treats the chosen generic,
+      Result, native interop, mutable reference, and runtime reference surface
+      as the intended `v1` contract.
 
 ## Recent Partial Foundation
 
