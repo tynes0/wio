@@ -3,20 +3,22 @@ if(NOT DEFINED WIO_EXE)
 endif()
 
 set(commands
-    "build;--help"
-    "test;--help"
-    "file;--help"
-    "project;--help"
-    "bind;--help"
-    "env;--help"
-    "package;--help"
+    "build|--help"
+    "test|--help"
+    "file|--help"
+    "project|--help"
+    "bind|--help"
+    "env|--help"
+    "package|--help"
+    "perf|--help"
 )
 
 foreach(command_spec IN LISTS commands)
-    string(REPLACE ";" " " command_label "${command_spec}")
+    string(REPLACE "|" ";" command_parts "${command_spec}")
+    string(REPLACE "|" " " command_label "${command_spec}")
 
     execute_process(
-        COMMAND "${WIO_EXE}" ${command_spec}
+        COMMAND "${WIO_EXE}" ${command_parts}
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         RESULT_VARIABLE wio_result
         OUTPUT_VARIABLE wio_stdout
@@ -33,7 +35,8 @@ foreach(command_spec IN LISTS commands)
     endif()
 
     string(FIND "${wio_output}" "--help" help_index)
-    if(help_index EQUAL -1)
+    string(FIND "${wio_output}" "Usage:" usage_index)
+    if(help_index EQUAL -1 AND usage_index EQUAL -1)
         message(FATAL_ERROR
             "CLI help smoke for '${command_label}' did not print help text.\n"
             "Tool output:\n${wio_output}"

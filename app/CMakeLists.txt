@@ -14,6 +14,8 @@ add_executable(wio_app
     file_cli.h
     package_cli.cpp
     package_cli.h
+    perf_cli.cpp
+    perf_cli.h
     tooling_cli.cpp
     tooling_cli.h
     ${WIO_STD_FILES}
@@ -593,6 +595,52 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
     set_tests_properties(
         wio_test_package_cli_smoke
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
+        NAME wio_test_perf_cli_smoke
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DWIO_SCRATCH_DIR=${CMAKE_BINARY_DIR}/perf-smoke-test
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioPerfSmoke.cmake"
+    )
+
+    set_tests_properties(
+        wio_test_perf_cli_smoke
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
+        NAME wio_test_project_cli_smoke
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DWIO_SCRATCH_DIR=${CMAKE_BINARY_DIR}/project-smoke
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioProjectSmoke.cmake"
+    )
+    set_tests_properties(
+        wio_test_project_cli_smoke
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
+        NAME wio_test_packaged_file_run_uses_user_cache
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DWIO_BUILD_DIR=${CMAKE_BINARY_DIR}
+            -DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/package-file-run-smoke
+            -DWIO_CONFIG=$<CONFIG>
+            -DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/file_run_args_forwarding_run.wio
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioPackagedFileRunSmoke.cmake"
+    )
+    set_tests_properties(
+        wio_test_packaged_file_run_uses_user_cache
         PROPERTIES
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )

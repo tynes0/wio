@@ -42,6 +42,8 @@ become “how do I use the shipped surface?”
 ## Release / Quality Tracking
 
 - [v1 freeze snapshot](C:/Users/cihan/RiderProjects/wio/docs/WIO_V1_FREEZE.md)
+- [Versioning and compatibility](C:/Users/cihan/RiderProjects/wio/docs/WIO_COMPATIBILITY.md)
+- [Performance and memory notes](C:/Users/cihan/RiderProjects/wio/docs/WIO_PERFORMANCE.md)
 - [Traceability](C:/Users/cihan/RiderProjects/wio/docs/WIO_TRACEABILITY.md)
 
 These documents should stay smaller and more directional than the main

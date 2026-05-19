@@ -3,6 +3,7 @@
 #include "env_cli.h"
 #include "file_cli.h"
 #include "package_cli.h"
+#include "perf_cli.h"
 
 #include <argonaut.h>
 
@@ -31,6 +32,11 @@ namespace wio::tooling
 {
     namespace
     {
+        bool isHelpToken(const std::string_view value)
+        {
+            return value == "--help" || value == "-h" || value == "help";
+        }
+
         std::string quoteCommandPart(const std::string& value)
         {
             if (value.empty())
@@ -213,6 +219,8 @@ namespace wio::tooling
             std::cout
                 << "Wio developer commands\n"
                 << "\n"
+                << "Usage:\n"
+                << "\n"
                 << "  wio build     [--build-dir DIR] [--config CFG] [--configure] [--test]\n"
                 << "  wio test      [--build-dir DIR] [--config CFG] [--filter REGEX] [--list] [--configure]\n"
                 << "  wio file run    [FILE] [compiler args...] [-- program args...]\n"
@@ -228,6 +236,7 @@ namespace wio::tooling
                 << "  wio env print        [--wio-root DIR] [--shell powershell|cmd|sh] [--add-path]\n"
                 << "  wio env setup        [--wio-root DIR] [--set-user] [--no-prompt] [--add-path]\n"
                 << "  wio package          [--build-dir DIR] [--config CFG] [--output-dir DIR] [--version-suffix TAG] [--generator NAME] [--no-zip] [--clean]\n"
+                << "  wio perf smoke       [--iterations N] [--scratch-dir DIR] [--keep-scratch]\n"
                 << "\n"
                 << "Alias forms:\n"
                 << "\n"
@@ -2212,6 +2221,18 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
             return std::nullopt;
 
         const std::string_view command = argv[1];
+        if (isHelpToken(command))
+        {
+            printToolingUsage();
+            return EXIT_SUCCESS;
+        }
+
+        if (argc >= 3 && argv[2] != nullptr && isHelpToken(argv[2]) && command != "file")
+        {
+            printToolingUsage();
+            return EXIT_SUCCESS;
+        }
+
         if (command == "build")
             return handleBuildCommand(collectCommandArgs("wio build", argc, argv, 2));
 
@@ -2251,6 +2272,9 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
 
         if (command == "package")
             return package::tryHandlePackageCommand(argc, argv);
+
+        if (command == "perf")
+            return perf::tryHandlePerfCommand(argc, argv);
 
         if (command != "dev")
             return std::nullopt;

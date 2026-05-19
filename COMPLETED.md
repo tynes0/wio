@@ -133,6 +133,12 @@ Notes:
 - [x] The first `.wio` tooling folder and source tool examples landed.
 - [x] The `wio` CLI was split into separate modules and `main.cpp` became a
       thin entrypoint.
+- [x] `wio file run` and source-based tool workflows now keep backend outputs
+      out of source directories, use project/repo hidden caches when available,
+      and fall back to user-cache locations for packaged/non-project use.
+- [x] Ordinary generated `.wio.cpp` files are now treated as backend
+      intermediates near the output root, while `--emit-cpp` remains the
+      explicit opt-in path for keeping source-adjacent generated C++.
 
 ## Binding Automation
 
@@ -146,11 +152,16 @@ Notes:
 - [x] The first serious invalid-program corpus landed.
 - [x] The first clear backend compile/link failure tests landed.
 - [x] Native/shared/static/SDK/package/project-model smoke tests landed.
+- [x] The release-facing tooling smoke matrix now covers CLI help, file flows,
+      project create/describe/build/run, binding import/new, package staging,
+      packaged file-run cache behavior, and source-based Wio tool dry-runs.
 - [x] Packaged toolchains were validated through real project
       create/build/run flows.
 - [x] The language/reference freeze snapshot now treats the chosen generic,
       Result, native interop, mutable reference, and runtime reference surface
       as the intended `v1` contract.
+- [x] The `v1` release contract now has explicit companion notes for
+      compatibility policy and performance/memory expectations.
 
 ## Recent Partial Foundation
 

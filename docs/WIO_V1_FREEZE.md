@@ -17,6 +17,8 @@ For full details, see:
 - [`WIO_STD.md`](./WIO_STD.md)
 - [`WIO_RUNTIME_TYPE_MODEL.md`](./WIO_RUNTIME_TYPE_MODEL.md)
 - [`WIO_SDK.md`](./WIO_SDK.md)
+- [`WIO_COMPATIBILITY.md`](./WIO_COMPATIBILITY.md)
+- [`WIO_PERFORMANCE.md`](./WIO_PERFORMANCE.md)
 
 ---
 
@@ -207,12 +209,15 @@ The intended `v1` tooling behavior is:
 
 - ordinary compiles treat generated `.wio.cpp` files as intermediate artifacts,
 - `--emit-cpp` is the explicit opt-in path that keeps generated C++ on disk,
+- ordinary non-`--emit-cpp` compiles keep those intermediates near the backend
+  output root rather than beside source files,
 - `wio file run ...` and source-based Wio workflow tools use hidden
-  `.wio-build/file-run/` outputs instead of dropping executables beside source
-  files.
+  `.wio-build/file-run/` outputs when a repo/project root is known,
+- packaged or non-project single-file flows may fall back to a user-cache
+  output root instead of writing under the source or package directory.
 
-The remaining work here is mainly cross-platform validation and packaging
-polish, not a search for a different model.
+The remaining work here is mainly broader cross-platform validation, not a
+search for a different model.
 
 ### 3.5.1 Native Interop Contract
 

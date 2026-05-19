@@ -3,6 +3,7 @@
 #include "compiler.h"
 
 #include <cctype>
+#include <cstdlib>
 #include <filesystem>
 #include <functional>
 #include <iostream>
@@ -18,8 +19,53 @@
 
 namespace wio::tooling::file
 {
-    namespace
+namespace
+{
+    void printFileCommandUsage(std::ostream& stream)
     {
+        stream
+            << "Expected a file subcommand. Currently supported: run, check, tokens, ast\n"
+            << "Usage:\n"
+            << "  wio file run    [FILE] [compiler args...] [-- program args...]\n"
+            << "  wio file check  [FILE] [extra compiler args...]\n"
+            << "  wio file tokens [FILE] [extra compiler args...]\n"
+            << "  wio file ast    [FILE] [extra compiler args...]\n";
+    }
+
+        bool hasProjectManifest(const std::filesystem::path& candidate)
+        {
+            std::error_code ec;
+            return std::filesystem::exists(candidate / "wio.makewio", ec) ||
+                   std::filesystem::exists(candidate / "makewio", ec) ||
+                   std::filesystem::exists(candidate / "wio.project.json", ec);
+        }
+
+        std::optional<std::filesystem::path> searchAncestorDirectories(
+            std::filesystem::path seed,
+            const std::function<bool(const std::filesystem::path&)>& predicate)
+        {
+            if (seed.empty())
+                return std::nullopt;
+
+            std::error_code ec;
+            seed = std::filesystem::absolute(seed, ec).make_preferred();
+            if (ec)
+                return std::nullopt;
+
+            while (!seed.empty())
+            {
+                if (predicate(seed))
+                    return seed;
+
+                const auto parent = seed.parent_path();
+                if (parent == seed)
+                    break;
+                seed = parent;
+            }
+
+            return std::nullopt;
+        }
+
         std::optional<std::filesystem::path> tryFindRepoRoot()
         {
             std::error_code ec;
@@ -66,6 +112,46 @@ namespace wio::tooling::file
             return std::nullopt;
         }
 
+        std::optional<std::filesystem::path> tryFindProjectRoot(const std::filesystem::path& sourcePath)
+        {
+            if (auto fromSource = searchAncestorDirectories(sourcePath.parent_path(), hasProjectManifest); fromSource.has_value())
+                return fromSource;
+
+            std::error_code ec;
+            std::filesystem::path current = std::filesystem::current_path(ec);
+            if (!ec && !current.empty())
+            {
+                if (auto fromCurrent = searchAncestorDirectories(current, hasProjectManifest); fromCurrent.has_value())
+                    return fromCurrent;
+            }
+
+            return std::nullopt;
+        }
+
+        std::filesystem::path getUserCacheRoot()
+        {
+#if defined(_WIN32)
+            if (const char* localAppData = std::getenv("LOCALAPPDATA"); localAppData != nullptr && *localAppData != '\0')
+                return std::filesystem::path(localAppData).make_preferred();
+
+            if (const char* userProfile = std::getenv("USERPROFILE"); userProfile != nullptr && *userProfile != '\0')
+                return (std::filesystem::path(userProfile) / "AppData" / "Local").make_preferred();
+#else
+            if (const char* xdgCacheHome = std::getenv("XDG_CACHE_HOME"); xdgCacheHome != nullptr && *xdgCacheHome != '\0')
+                return std::filesystem::path(xdgCacheHome).make_preferred();
+
+            if (const char* home = std::getenv("HOME"); home != nullptr && *home != '\0')
+                return (std::filesystem::path(home) / ".cache").make_preferred();
+#endif
+
+            std::error_code ec;
+            std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec);
+            if (!ec && !tempRoot.empty())
+                return tempRoot.make_preferred();
+
+            return std::filesystem::absolute(std::filesystem::path(".")).make_preferred();
+        }
+
         std::filesystem::path resolveDefaultSourcePath()
         {
             if (const auto repoRoot = tryFindRepoRoot(); repoRoot.has_value())
@@ -89,22 +175,20 @@ namespace wio::tooling::file
             return stem;
         }
 
-        std::filesystem::path resolveFileRunOutputRoot()
+        std::filesystem::path resolveFileRunOutputRoot(const std::filesystem::path& sourcePath)
         {
             if (const auto repoRoot = tryFindRepoRoot(); repoRoot.has_value())
                 return std::filesystem::absolute(*repoRoot / ".wio-build" / "file-run").make_preferred();
 
-            std::error_code ec;
-            std::filesystem::path current = std::filesystem::current_path(ec);
-            if (ec || current.empty())
-                current = std::filesystem::path(".");
+            if (const auto projectRoot = tryFindProjectRoot(sourcePath); projectRoot.has_value())
+                return std::filesystem::absolute(*projectRoot / ".wio-build" / "file-run").make_preferred();
 
-            return std::filesystem::absolute(current / ".wio-build" / "file-run").make_preferred();
+            return std::filesystem::absolute(getUserCacheRoot() / "Wio" / "cache" / "file-run").make_preferred();
         }
 
         std::filesystem::path buildDefaultFileRunOutputPath(const std::filesystem::path& sourcePath)
         {
-            const std::filesystem::path root = resolveFileRunOutputRoot();
+            const std::filesystem::path root = resolveFileRunOutputRoot(sourcePath);
             const std::string stem = sanitizePathStem(sourcePath.stem().string());
             const size_t sourceHash = std::hash<std::string>{}(sourcePath.string());
 
@@ -166,8 +250,11 @@ namespace wio::tooling::file
 
             if (mode == "run" && !hasExplicitOutputOverride(compilerArgs))
             {
+                const std::filesystem::path outputRoot = resolveFileRunOutputRoot(sourcePath);
                 args.push_back("--output");
                 args.push_back(buildDefaultFileRunOutputPath(sourcePath).string());
+                args.push_back("--intermediate-dir");
+                args.push_back(outputRoot.string());
             }
 
             args.insert(args.end(), compilerArgs.begin(), compilerArgs.end());
@@ -268,17 +355,17 @@ namespace wio::tooling::file
 
         if (argc < 3 || argv[2] == nullptr)
         {
-            std::cerr
-                << "Expected a file subcommand. Currently supported: run, check, tokens, ast\n"
-                << "Usage:\n"
-                << "  wio file run    [FILE] [compiler args...] [-- program args...]\n"
-                << "  wio file check  [FILE] [extra compiler args...]\n"
-                << "  wio file tokens [FILE] [extra compiler args...]\n"
-                << "  wio file ast    [FILE] [extra compiler args...]\n";
+            printFileCommandUsage(std::cerr);
             return EXIT_FAILURE;
         }
 
         const std::string_view mode = argv[2];
+        if (mode == "--help" || mode == "-h" || mode == "help")
+        {
+            printFileCommandUsage(std::cout);
+            return EXIT_SUCCESS;
+        }
+
         if (mode == "run" || mode == "check" || mode == "tokens" || mode == "ast")
             return handleFileMode(std::string(mode), argc, argv);
 

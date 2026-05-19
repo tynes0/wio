@@ -405,6 +405,28 @@ namespace wio
             return outputPath;
         }
 
+        std::filesystem::path makeDefaultGeneratedCppPath(const std::filesystem::path& sourcePath,
+                                                          const std::filesystem::path& outputPath,
+                                                          const std::optional<std::filesystem::path>& intermediateDir,
+                                                          bool keepSourceAdjacent)
+        {
+            if (keepSourceAdjacent)
+            {
+                auto cppPath = sourcePath;
+                cppPath += ".cpp";
+                return cppPath.make_preferred();
+            }
+
+            std::filesystem::path root =
+                intermediateDir.has_value()
+                    ? std::filesystem::absolute(*intermediateDir).make_preferred()
+                    : outputPath.parent_path().make_preferred();
+
+            std::filesystem::path cppPath = root / outputPath.stem();
+            cppPath += ".wio.cpp";
+            return cppPath.make_preferred();
+        }
+
         std::string quotePath(const std::filesystem::path& path)
         {
             return "\"" + path.string() + "\"";
@@ -2127,6 +2149,11 @@ namespace wio
                     .SetDescription("Overrides the backend output path.")
             )
             .Add(
+                Argonaut::Argument("INTERMEDIATE-DIR")
+                    .AddAlias("--intermediate-dir")
+                    .SetDescription("Overrides the directory used for non-emitted generated backend intermediates.")
+            )
+            .Add(
                 Argonaut::Argument("INCLUDE-DIR")
                     .AddAlias("--include-dir")
                     .MultiValue()
@@ -2372,35 +2399,59 @@ namespace wio
             sema::SemanticAnalyzer analyzer;
             analyzer.analyze(program);
 
-            std::filesystem::path runtimeIncludeDir = getRuntimeIncludeDir();
-            std::filesystem::path sdkIncludeDir = getSdkIncludeDir();
-            const std::vector<std::filesystem::path> systemIncludeDirs =
-                getBackendSystemIncludeDirs(runtimeIncludeDir, sdkIncludeDir);
+            std::filesystem::path runtimeIncludeDir;
+            std::filesystem::path sdkIncludeDir;
+            std::vector<std::filesystem::path> systemIncludeDirs;
+            std::vector<std::string> rawLinkDirs;
+            std::vector<std::string> rawLinkLibraries;
+            std::vector<std::string> rawBackendArgs;
+            std::vector<std::string> outputPaths;
+            std::vector<std::string> intermediateDirs;
+            std::vector<std::string> rawIncludeDirs;
+            std::vector<std::string> includeDirs;
+            std::vector<std::string> linkDirs;
+            std::vector<std::string> linkLibraries;
+            std::vector<std::string> backendArgs;
+            std::filesystem::path outputPath;
+            std::optional<std::filesystem::path> intermediateDir;
+            std::filesystem::path cppPath;
+            std::filesystem::path runtimeLibraryPath;
+            std::filesystem::path stdSourceDir;
+
+            runtimeIncludeDir = getRuntimeIncludeDir();
+            sdkIncludeDir = getSdkIncludeDir();
+            systemIncludeDirs = getBackendSystemIncludeDirs(runtimeIncludeDir, sdkIncludeDir);
             validateBackendConfiguration(gAppData.requiredCppHeaders, sourcePath.parent_path(), systemIncludeDirs);
 
-            std::vector<std::string> rawLinkDirs = gAppData.argParser.GetValuesOf<std::string>("LINK-DIR");
-            std::vector<std::string> rawLinkLibraries = gAppData.argParser.GetValuesOf<std::string>("LINK-LIB");
-            std::vector<std::string> rawBackendArgs = gAppData.argParser.GetValuesOf<std::string>("BACKEND-ARG");
-            std::vector<std::string> outputPaths = gAppData.argParser.GetValuesOf<std::string>("OUTPUT");
-            std::vector<std::string> rawIncludeDirs = gAppData.argParser.GetValuesOf<std::string>("INCLUDE-DIR");
+            rawLinkDirs = gAppData.argParser.GetValuesOf<std::string>("LINK-DIR");
+            rawLinkLibraries = gAppData.argParser.GetValuesOf<std::string>("LINK-LIB");
+            rawBackendArgs = gAppData.argParser.GetValuesOf<std::string>("BACKEND-ARG");
+            outputPaths = gAppData.argParser.GetValuesOf<std::string>("OUTPUT");
+            intermediateDirs = gAppData.argParser.GetValuesOf<std::string>("INTERMEDIATE-DIR");
+            rawIncludeDirs = gAppData.argParser.GetValuesOf<std::string>("INCLUDE-DIR");
 
-            std::vector<std::string> includeDirs = normalizeDirectoryArguments(rawIncludeDirs);
-            std::vector<std::string> linkDirs = normalizeDirectoryArguments(rawLinkDirs);
-            std::vector<std::string> linkLibraries = normalizeLinkLibraries(rawLinkLibraries);
-            std::vector<std::string> backendArgs = normalizeBackendArguments(rawBackendArgs);
+            includeDirs = normalizeDirectoryArguments(rawIncludeDirs);
+            linkDirs = normalizeDirectoryArguments(rawLinkDirs);
+            linkLibraries = normalizeLinkLibraries(rawLinkLibraries);
+            backendArgs = normalizeBackendArguments(rawBackendArgs);
 
-            std::filesystem::path outputPath =
+            outputPath =
                 outputPaths.empty()
                     ? makeDefaultOutputPath(sourcePath, gAppData.buildTarget)
                     : std::filesystem::absolute(std::filesystem::path(outputPaths.front())).make_preferred();
 
             outputPath = std::filesystem::absolute(outputPath).make_preferred();
 
-            auto cppPath = sourcePath;
-            cppPath += ".cpp";
+            intermediateDir =
+                intermediateDirs.empty()
+                    ? std::nullopt
+                    : std::optional<std::filesystem::path>(
+                          std::filesystem::absolute(std::filesystem::path(intermediateDirs.front())).make_preferred());
 
-            const std::filesystem::path runtimeLibraryPath = getRuntimeLibraryFile();
-            const std::filesystem::path stdSourceDir = getStdSourceDir();
+            cppPath = makeDefaultGeneratedCppPath(sourcePath, outputPath, intermediateDir, gAppData.flags.get_EmitCpp());
+
+            runtimeLibraryPath = getRuntimeLibraryFile();
+            stdSourceDir = getStdSourceDir();
 
             if (gAppData.flags.get_DryRun() && gAppData.flags.get_EmitCpp())
             {
@@ -2442,8 +2493,18 @@ namespace wio
             }
 
             // 4. Code Generation
+            std::string cppCode;
             codegen::CppGenerator generator;
-            std::string cppCode = generator.generate(program);
+            cppCode = generator.generate(program);
+
+            std::error_code intermediateDirEc;
+            if (cppPath.has_parent_path())
+                std::filesystem::create_directories(cppPath.parent_path(), intermediateDirEc);
+            if (intermediateDirEc)
+            {
+                WIO_LOG_FATAL("Generated C++ output directory could not be created: {}", cppPath.parent_path().string());
+                return EXIT_FAILURE;
+            }
 
             if (!filesystem::writeFilepath(cppCode, cppPath))
             {

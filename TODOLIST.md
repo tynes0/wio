@@ -26,12 +26,12 @@ Status markers:
    `scripts/*.ps1` are now documented and maintained as compatibility wrappers rather than the main user path.
 6. [x] Formalize the Wio-written tooling model.
    The split between core CLI commands and `scripts/wio/*.wio` source tools is now explicit in the docs.
-7. [ ] Finalize the `file run` and tool-script output/cache policy.
-   Single-file and tool workflows should not clutter source directories.
-8. [ ] Finish the generated C++ cleanup policy.
-   Generated backend files should be deleted by default and preserved only behind explicit flags.
-9. [ ] Finalize cache/output policy for packaged builds.
-   Packaged `wio` should use safe cache/output locations even in non-writable installs.
+7. [x] Finalize the `file run` and tool-script output/cache policy.
+   Single-file and tool workflows now avoid source-adjacent outputs and use hidden project/repo caches or user-cache fallbacks.
+8. [x] Finish the generated C++ cleanup policy.
+   Ordinary compiles now treat generated `.wio.cpp` files as backend intermediates near the output root, while `--emit-cpp` remains the explicit opt-in escape hatch.
+9. [x] Finalize cache/output policy for packaged builds.
+   Packaged `wio` now prefers safe user-cache output roots for single-file workflows instead of writing under non-writable install directories.
 10. [x] Seal packaging and installation UX.
     `wio package`, installer wrappers, `env print/setup`, `QUICKSTART.md`, and the `WIO_ROOT`, `WIO_HOME`, and `PATH` story now share one documented model with smoke coverage.
 11. [ ] Validate the cross-platform flow for real.
@@ -48,18 +48,19 @@ Status markers:
     `ref values[i]`, nested `ref`, dict mutation, container mutability, and value-context auto-read are now documented as the intended `v1` behavior.
 17. [x] Make enum/flagset fully first-class.
     Native support, const compatibility, helper APIs, and everyday state/kind/mode usage should be fully closed.
-18. [ ] Expand the tooling test suite.
-    CLI smoke, package smoke, binding smoke, project smoke, Wio tool smoke, and packaged smoke should all have release-level coverage.
+18. [x] Expand the tooling test suite.
+    CLI smoke, package smoke, binding smoke, project smoke, Wio tool smoke, and packaged smoke now all have release-level coverage.
 19. [ ] Raise the docs to release quality.
     README, project system, language draft/spec, runtime type model, std, sdk, and traceability docs should tell one coherent story.
+    `WIO_SDK.md` especially needs a full refresh so the current host/runtime/export surface, `WioEnum` / `WioFlagset`, field-kind coverage, and stale-wrapper / reload expectations are described completely instead of partially.
 20. [ ] Raise the example project set to release level.
     Plain app, native app, hybrid module, host interop, binding import, and packaged quickstart examples should all be polished.
-21. [ ] Write versioning and compatibility policy.
-    Stable / experimental / deprecated boundaries and the post-`1.0.0` contract should be explicit.
+21. [x] Write versioning and compatibility policy.
+    Stable / experimental / deprecated boundaries and the post-`1.0.0` contract are now written down explicitly.
 22. [ ] Make the `v1` decision for `const generics` / `std::meta` wave 3.
     If they are not part of `v1`, that should be stated clearly; if they are, their scope must be frozen.
-23. [ ] Add a performance and memory story note.
-    Users should understand the cost model for `view/ref/value`, `Box`, `any`, containers, and native passing.
+23. [x] Add a performance and memory story note.
+    The intended `v1` cost model for `view/ref/value`, `Box`, `any`, containers, and native passing is now documented.
 24. [x] Add first-class enum/flagset support on the SDK side.
     `WioObject` / `WioComponent` should preserve reflection identity through `WioEnum` and `WioFlagset`.
 25. [x] Finish the normal Wio reflection API for enum/flagset.

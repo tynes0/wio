@@ -38,6 +38,7 @@ The `v1` command surface that should now be treated as stable is:
 - `wio bind`
 - `wio env`
 - `wio package`
+- `wio perf`
 
 The compatibility wrappers may remain for transition purposes, but they are no
 longer the primary public contract.
@@ -60,16 +61,21 @@ build\app\Debug\wio.exe bind new --manifest .\tests\native\binding_manifest_smok
 build\app\Debug\wio.exe env print --wio-root . --shell powershell --add-path
 build\app\Debug\wio.exe env setup --wio-root . --no-prompt
 build\app\Debug\wio.exe package --build-dir build --config Debug --output-dir .\artifacts\packages --no-zip
+build\app\Debug\wio.exe perf smoke --iterations 3
 ```
 
 For single-file execution and source-based Wio workflow tools:
 
 - `wio file run ...` uses cached backend outputs under `.wio-build/file-run/`
-  instead of dropping executables beside the source file,
+  when a repo or project root is known,
+- otherwise it falls back to a user-cache location such as
+  `%LOCALAPPDATA%\Wio\cache\file-run\` on Windows or `~/.cache/wio/file-run/`
+  on POSIX systems,
 - ordinary compile-and-run flows treat generated `.wio.cpp` files as
-  intermediates and clean them up after the backend step,
+  intermediates colocated with the backend output root instead of source files,
+  and clean them up after the backend step,
 - `--emit-cpp` is the explicit escape hatch when you intentionally want to keep
-  the generated C++ file on disk.
+  the generated source-adjacent `<file>.wio.cpp` file on disk.
 
 Equivalent alias forms also exist:
 
@@ -773,6 +779,16 @@ bin\wio.exe env print --wio-root <package-root> --shell powershell --add-path
 
 Every staged package now also includes a root-level `QUICKSTART.md` that points
 to the exact install and first-project commands for that packaged toolchain.
+
+For packaged single-file and source-tool workflows, the intended `v1` behavior
+is:
+
+- user-cache output roots are preferred over writing under the package install
+  directory,
+- ordinary generated `.wio.cpp` intermediates stay near the backend output root
+  rather than beside packaged source files,
+- packaged `wio file run ...` should work even when the package root itself is
+  not user-writable.
 
 Then all of these work:
 
