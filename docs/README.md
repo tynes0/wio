@@ -36,6 +36,10 @@ runtime-facing type rules belong.
 - [Standard library](C:/Users/cihan/RiderProjects/wio/docs/WIO_STD.md)
 - [Host SDK](C:/Users/cihan/RiderProjects/wio/docs/WIO_SDK.md)
 
+The SDK reference now covers raw ABI layering, module vs hot-reload usage,
+exported object/component reflection, enum/flagset wrappers, dynamic values,
+and stale-wrapper generation rules.
+
 Use these when the topic is no longer “what does the language mean?” and has
 become “how do I use the shipped surface?”
 

@@ -68,7 +68,7 @@ This suite is not the whole repository test corpus. It is the current
 | --- | --- | --- | --- |
 | Raw module API descriptor validation | [`WIO_SDK.md`](./WIO_SDK.md) sections 4, 11 | [`sdk_static_api_host.cpp`](../tests/native/sdk_static_api_host.cpp) | [`sdk_invalid_api_host.cpp`](../tests/native/sdk_invalid_api_host.cpp) |
 | Top-level command/event/export loading from shared modules | [`WIO_SDK.md`](./WIO_SDK.md) sections 4, 5 | [`sdk_module_easy_host.cpp`](../tests/native/sdk_module_easy_host.cpp) | [`sdk_module_stale_bindings_host.cpp`](../tests/native/sdk_module_stale_bindings_host.cpp) |
-| Exported object/component reflection and field access | [`WIO_SDK.md`](./WIO_SDK.md) sections 6, 7, 8, 9 | [`sdk_exported_types_host.cpp`](../tests/native/sdk_exported_types_host.cpp), [`sdk_exported_complex_fields_host.cpp`](../tests/native/sdk_exported_complex_fields_host.cpp) | [`sdk_invalid_api_host.cpp`](../tests/native/sdk_invalid_api_host.cpp) |
+| Exported object/component reflection, enum/flagset field identity, and field access | [`WIO_SDK.md`](./WIO_SDK.md) sections 6, 7, 8, 9 | [`sdk_exported_types_host.cpp`](../tests/native/sdk_exported_types_host.cpp), [`sdk_exported_complex_fields_host.cpp`](../tests/native/sdk_exported_complex_fields_host.cpp) | [`sdk_invalid_api_host.cpp`](../tests/native/sdk_invalid_api_host.cpp) |
 | Hot reload boundary and stale wrapper behavior | [`WIO_SDK.md`](./WIO_SDK.md) section 10 | [`sdk_module_hot_reload_host.cpp`](../tests/native/sdk_module_hot_reload_host.cpp) | [`sdk_hot_reload_stale_wrappers_host.cpp`](../tests/native/sdk_hot_reload_stale_wrappers_host.cpp), [`sdk_module_stale_bindings_host.cpp`](../tests/native/sdk_module_stale_bindings_host.cpp) |
 
 ---

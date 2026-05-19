@@ -190,6 +190,27 @@ The free helper overloads also accept `wio::sdk::Module` and
 - `wio_load_object(...)`
 - `wio_load_component(...)`
 
+### 4.3 Choosing `Module` vs `HotReloadModule`
+
+The rule of thumb is:
+
+- use `Module` when you want one loaded generation and explicit lifecycle calls,
+- use `HotReloadModule` when the host wants to keep a stable C++ handle while
+  the underlying DLL generation may change.
+
+In practice:
+
+- editor tools, gameplay scripting hosts, and live-reload workflows usually
+  want `HotReloadModule`
+- packaging tests, static host integration, CI, and deterministic automation
+  usually want plain `Module`
+
+The important distinction is not just "reload support":
+
+- `Module` gives you direct generation-bound wrappers
+- `HotReloadModule` keeps top-level callable reloadable wrappers stable while
+  object/component/field wrappers remain generation-bound on purpose
+
 ---
 
 ## 5. Top-Level Entry Points
@@ -249,10 +270,34 @@ Instance wrappers:
 These wrappers support:
 
 - constructor binding through `create(...)`
-- method binding through `method<Signature>(...)`
+- bound-method loading through `method<Signature>(...)`
 - field metadata through `list_fields()` and `field_info(...)`
 - typed field access through `get<T>(...)`, `set(...)`, and the collection helpers
 - field accessor objects through `field(...)`
+- explicit enum/flagset helpers through `get_enum(...)`, `set_enum(...)`,
+  `get_flagset(...)`, and `set_flagset(...)`
+
+Method binding example:
+
+```cpp
+auto enemyType = module.load_object("Enemy");
+auto enemy = enemyType.create();
+
+enemy.set("hp", 40);
+
+auto addDamage = enemy.method<void(std::int32_t)>("ApplyDamage");
+auto currentHp = enemy.method<std::int32_t()>("GetHp");
+
+addDamage(7);
+const std::int32_t hp = currentHp();
+```
+
+This is intentionally different from loading top-level exports:
+
+- top-level `load_export(...)`, `load_command(...)`, and `load_event(...)`
+  bind module-level entrypoints
+- `object.method<...>(...)` and `component.method<...>(...)` bind instance
+  methods and keep the instance handle captured in the callable
 
 ### 6.1 Exported Type ABI Validation
 
@@ -289,6 +334,8 @@ The current documented field-export contract is:
 The supported exported field families in the current SDK are:
 
 - primitive scalars
+- enum
+- flagset
 - `string`
 - `object`
 - `component`
@@ -301,6 +348,19 @@ The supported exported field families in the current SDK are:
 The current v1 SDK treats `ref` and `view` field export semantics as outside the
 stable documented host field ABI. They should not be relied on as part of the
 public SDK contract yet.
+
+Practical access matrix:
+
+- primitive scalar field -> `get<T>()`, `set(...)`, `get_scalar_value()`,
+  `set_scalar_value(...)`
+- enum field -> `get_enum()`, `set_enum(...)`, `get_dynamic()`
+- flagset field -> `get_flagset()`, `set_flagset(...)`, `get_dynamic()`
+- `string` field -> `get<string>()`, `set(...)`, `get_dynamic()`
+- `object` / `component` field -> typed object/component wrappers or dynamic
+  wrappers
+- container field -> typed container helpers or dynamic wrappers
+- function field -> `get_function<Signature>()`, `set_function(...)`, or
+  `get_dynamic()`
 
 ### 7.1 Field Metadata
 
@@ -337,6 +397,16 @@ for (const auto& field : stateType.list_fields())
 - key/value types for dictionaries and trees
 - return type and parameter types for function fields
 - static extent for fixed-size arrays
+- enum/flagset member descriptors through the embedded enum-member helpers
+
+For enum and flagset fields, `TypeDescriptorView` also exposes enough metadata
+for host tooling to stay symbolic instead of flattening everything into raw
+integers:
+
+- `enum_member_count()`
+- `enum_member_name(index)`
+- `enum_member_scalar_value(index)`
+- `enum_index_of(value)`
 
 ### 7.2 Ownership Rules
 
@@ -381,6 +451,22 @@ auto fixed = state.get_static_array<std::int32_t, 3>("fixed");
 auto callback = state.get_function<std::int32_t(std::int32_t)>("callback");
 ```
 
+Enum/flagset example:
+
+```cpp
+auto enemy = module.load_object("Enemy").create();
+
+auto state = enemy.get_enum("state");
+auto flags = enemy.get_flagset("features");
+
+const std::string_view stateName = state.name();
+const std::ptrdiff_t stateIndex = state.index();
+const std::uint32_t stateMemberCount = state.member_count();
+
+enemy.set_enum("state", state);
+enemy.set_flagset("features", flags);
+```
+
 Use typed access when:
 
 - the field schema is known ahead of time
@@ -397,6 +483,8 @@ runtime reflection rather than compile-time knowledge.
 `WioDynamicValue` can currently hold:
 
 - primitive scalar values
+- `WioEnum`
+- `WioFlagset`
 - `string`
 - `WioObject`
 - `WioComponent`
@@ -427,6 +515,33 @@ state.field("callback").set_dynamic(
         })));
 ```
 
+Enum/flagset dynamic example:
+
+```cpp
+auto stateAccessor = enemy.field("state");
+auto stateValue = stateAccessor.get_dynamic();
+
+if (stateValue.is_enum())
+{
+    auto stateEnum = stateValue.as_enum();
+    auto stateName = stateEnum.name();
+    auto stateOrdinal = stateEnum.index();
+    (void)stateName;
+    (void)stateOrdinal;
+}
+
+auto featureAccessor = enemy.field("features");
+auto featureValue = featureAccessor.get_dynamic();
+
+if (featureValue.is_flagset())
+{
+    auto flags = featureValue.as_flagset();
+    auto type = flags.type();
+    const auto bitCount = type.enum_member_count();
+    (void)bitCount;
+}
+```
+
 Use dynamic access when:
 
 - a tool is inspecting arbitrary exported fields
@@ -437,6 +552,14 @@ Use dynamic access when:
 If the host asks for the wrong type, the SDK throws `wio::sdk::Error` with
 `ErrorCode::SignatureMismatch` instead of leaving the mismatch to raw backend C++
 behavior.
+
+The key design boundary here is:
+
+- `WioDynamicValue` preserves enum/flagset identity
+- it does not flatten them into anonymous integers unless the host explicitly
+  converts them
+- the host can still fall back to the underlying scalar representation through
+  `scalar_value()` / `as<T>()` on `WioEnum` and `WioFlagset`
 
 ---
 
@@ -471,6 +594,16 @@ Current lifetime and handoff rule:
 - when code changes across reload, the host must decide how to reacquire and reinterpret state from the new generation
 - the SDK guarantees fail-fast stale-binding diagnostics and optional module save/restore handoff, but it does not try to make old object wrappers semantically valid against new code automatically
 
+Practical reload rule:
+
+- reload-safe: top-level exports/commands/events loaded from `HotReloadModule`
+- reload-unsafe by design: `WioObjectType`, `WioComponentType`, `WioObject`,
+  `WioComponent`, `WioFieldAccessor`, and bound instance methods
+
+If you need long-lived host objects across reload, keep host-side keys or
+identifiers and reacquire fresh wrappers after reload instead of caching old
+instance wrappers indefinitely.
+
 ---
 
 ## 11. Error Model
@@ -479,18 +612,25 @@ The SDK throws `wio::sdk::Error` on failures.
 
 Important error categories include:
 
+- `InvalidArgument`
 - `ApiUnavailable`
 - `InvalidApiDescriptor`
 - `LibraryOpenFailed`
 - `SymbolLookupFailed`
 - `ExportNotFound`
+- `CommandNotFound`
+- `EventNotFound`
+- `EventHookNotFound`
 - `TypeNotFound`
 - `FieldNotFound`
+- `MethodNotFound`
 - `FieldNotWritable`
 - `SignatureMismatch`
 - `InvokeFailed`
 - `LifecycleFailed`
 - `StaleBinding`
+- `ReloadFailed`
+- `IoFailure`
 
 The goal of the SDK layer is that host mistakes are surfaced as Wio SDK errors
 rather than as obscure backend-only failures.
@@ -505,6 +645,12 @@ For the current SDK version, the public and documented boundary is:
 - `wio_sdk.h` for the ergonomic C++ layer
 - shared-module loading, static-module consumption, reload helpers, exports,
   commands, events, exported object/component reflection, and dynamic field access
+- `TypeDescriptorView` as the host-readable type-metadata view
+- `FieldInfo` as the stable per-field metadata carrier
+- `WioEnum` and `WioFlagset` as the first-class host wrappers for enum identity
+- `WioDynamicValue` and the current dynamic container wrappers as the runtime
+  reflection payload family
+- generation-aware stale-wrapper diagnostics for reload-sensitive wrappers
 
 The following should be treated as stable with explicit caveats:
 
@@ -513,6 +659,15 @@ The following should be treated as stable with explicit caveats:
 - enum/flagset wrappers are stable at the `WioEnum` / `WioFlagset` level, but
   deeper host-side reflection growth beyond that should still be treated as
   future-facing
+
+The following should not currently be read as part of the stable v1 SDK
+contract:
+
+- compiler-internal AST/parser/sema/codegen APIs
+- host-side registration DSLs for declaring Wio types from C++
+- automatic semantic reconciliation of stale object/component wrappers across
+  reload generations
+- `ref` / `view` field export behavior as a public host ABI promise
 
 Future SDK work can still grow from here, but this is the intended "complete
 enough to build against" baseline for the current Wio SDK generation.

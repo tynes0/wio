@@ -39,6 +39,11 @@ In short:
 - large model pivots should now be treated as post-`v1` work unless they fix a
   release blocker.
 
+For the current closure phase, the most important documentation expectation is
+that the SDK, std, runtime-type, and project-system documents all describe the
+same user-visible boundaries instead of each document inventing its own
+slightly different reading.
+
 ---
 
 ## 2. Intended Stable Core For v1
