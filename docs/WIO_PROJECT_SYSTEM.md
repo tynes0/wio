@@ -2,10 +2,10 @@
 
 This document describes the current Wio project model used by:
 
-- `scripts/New-WioProject.ps1`
-- `scripts/Invoke-WioProject.ps1`
+- the `wio` CLI
 - `cmake/WioProject.cmake`
-- and the `wio` CLI itself
+- source-based workflow tools under `scripts/wio/`
+- and the remaining compatibility wrappers under `scripts/*.ps1`
 
 The design goal is straightforward:
 
@@ -16,21 +16,31 @@ The design goal is straightforward:
 
 ---
 
-The repository is also in the middle of a tooling transition:
+For `v1`, the intended tooling contract is:
 
-- `wio build ...` and `wio test ...` are now the preferred repo-local entrypoints once `wio.exe` exists,
-- `wio file ...` now covers the old single-file runner workflow directly from the CLI,
-- `wio bind import ...` and `wio bind new ...` now cover the binding bootstrap path directly from the CLI,
-- `wio env print ...` and `wio env setup ...` now cover the package install / environment path directly from the CLI,
-- `wio package ...` now covers versioned distribution staging directly from the CLI,
-- `scripts/wio/*.wio` now hosts source-based workflow tools such as host-interop
-  and demo runners,
-- the PowerShell helpers remain as compatibility wrappers,
-- and the medium-term goal is to move project and binding flows behind direct Wio CLI subcommands instead of treating `scripts/` as the main user interface.
+- `wio` is the primary user interface,
+- `wio.makewio` is the primary project manifest,
+- `scripts/wio/*.wio` is the home for source-based workflow helpers,
+- `scripts/*.ps1` are compatibility launchers only,
+- and `wio.project.json` remains legacy / compatibility input rather than the
+  recommended format for new projects.
 
 ---
 
 ## 0. Repository CLI
+
+The `v1` command surface that should now be treated as stable is:
+
+- `wio build`
+- `wio test`
+- `wio file`
+- `wio project`
+- `wio bind`
+- `wio env`
+- `wio package`
+
+The compatibility wrappers may remain for transition purposes, but they are no
+longer the primary public contract.
 
 Once the compiler has been built at least once, the preferred source-checkout workflow is:
 
@@ -68,7 +78,9 @@ build\app\Debug\wio.exe dev build --build-dir build --config Debug --configure
 build\app\Debug\wio.exe dev test --build-dir build --config Debug --configure
 ```
 
-`Build-Wio.ps1` and `Test-Wio.ps1` are still shipped so existing setups do not break, but they now prefer routing through the Wio CLI when the compiler executable is already available.
+`Build-Wio.ps1` and `Test-Wio.ps1` are still shipped so existing setups do not
+break, but they are now compatibility wrappers that prefer routing through the
+Wio CLI when the compiler executable is already available.
 
 `Run-WioFile.ps1`, `Run-WioHostInterop.ps1`, `Run-HybridArenaDemo.ps1`,
 `Invoke-WioProject.ps1`, `New-WioProject.ps1`, `Import-CHeaderToWioBinding.ps1`,
@@ -122,7 +134,13 @@ Create your own folder structure and write a `wio.makewio` file by hand.
 Then build it directly:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\Wio\scripts\Invoke-WioProject.ps1 -Project C:\Projects\MyGame
+build\app\Debug\wio.exe project build --project C:\Projects\MyGame
+```
+
+Or, from a packaged toolchain:
+
+```powershell
+C:\Wio\bin\wio.exe project build --project C:\Projects\MyGame
 ```
 
 `-Project` may be:
@@ -142,7 +160,8 @@ So the recommended user-facing format is now:
 
 - `wio.makewio`
 
-Legacy JSON manifests are still supported for compatibility and tooling.
+Legacy JSON manifests are still supported for compatibility and tooling, but new
+user-facing examples should prefer `wio.makewio`.
 
 ---
 
@@ -863,22 +882,29 @@ Both binding scripts are smoke-tested by the repository:
 ### 10.1 Build From A Project Root
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\Wio\scripts\Invoke-WioProject.ps1 -Project C:\Projects\MyGame -NoRun
+C:\Wio\bin\wio.exe project build --project C:\Projects\MyGame
 ```
 
 ### 10.2 Build And Run From A Project Root
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\Wio\scripts\Invoke-WioProject.ps1 -Project C:\Projects\MyGame
+C:\Wio\bin\wio.exe project run --project C:\Projects\MyGame
 ```
 
 ### 10.3 Ask Wio What It Thinks The Project Is
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\Wio\scripts\Invoke-WioProject.ps1 -Project C:\Projects\MyGame -Describe
+C:\Wio\bin\wio.exe project describe --project C:\Projects\MyGame
 ```
 
 This prints normalized JSON metadata that other tooling, especially CMake, can consume.
+
+If you still need the older PowerShell entrypoint for compatibility, it remains
+available as a thin wrapper:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\Wio\scripts\Invoke-WioProject.ps1 -Project C:\Projects\MyGame -NoRun
+```
 
 ---
 

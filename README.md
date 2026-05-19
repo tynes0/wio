@@ -12,6 +12,13 @@ Useful reference docs:
 - [Standard library](C:/Users/cihan/RiderProjects/wio/docs/WIO_STD.md)
 - [Host SDK](C:/Users/cihan/RiderProjects/wio/docs/WIO_SDK.md)
 
+Current `v1` direction in one sentence:
+
+- `wio` is the primary CLI,
+- `wio.makewio` is the primary manifest,
+- `scripts/wio/*.wio` hosts source-based workflow tools,
+- and `scripts/*.ps1` are compatibility wrappers.
+
 ### Build
 
 ```powershell

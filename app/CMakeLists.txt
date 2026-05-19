@@ -569,6 +569,19 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_test(
+        NAME wio_test_cli_help_smoke
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioCliHelpSmoke.cmake"
+    )
+    set_tests_properties(
+        wio_test_cli_help_smoke
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
         NAME wio_test_package_cli_smoke
         COMMAND
             ${CMAKE_COMMAND}

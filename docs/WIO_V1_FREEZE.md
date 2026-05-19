@@ -67,6 +67,17 @@ contract.
 - explicit generic calls such as `Foo<T>(...)`
 - result sugars `Foo!()` and `Foo?()`
 
+### 2.2.1 Tooling And Project Entry Surface
+
+The following project/tooling decisions are part of the intended `v1`
+contract:
+
+- `wio` is the primary command-line entrypoint,
+- `wio.makewio` is the primary human-written project manifest,
+- `wio.project.json` is a legacy / compatibility manifest,
+- `scripts/wio/*.wio` hosts source-based workflow helpers,
+- `scripts/*.ps1` are compatibility wrappers rather than the primary user path.
+
 ### 2.3 Reference and Runtime Reference Surface
 
 - `ref`
@@ -185,6 +196,20 @@ The intended `v1` tooling behavior is:
 
 The remaining work here is mainly cross-platform validation and packaging
 polish, not a search for a different model.
+
+### 3.6 Package / Install UX
+
+The intended `v1` package/install model is:
+
+- `wio package` stages the canonical user-facing distribution,
+- packaged toolchains include `Install-Wio.ps1`, `install-wio.sh`, and
+  `QUICKSTART.md`,
+- `wio env print` and `wio env setup` are the canonical environment commands,
+- installer scripts delegate to the CLI instead of carrying separate install
+  logic.
+
+The remaining work here is polish and validation, not a search for a different
+install model.
 
 ---
 

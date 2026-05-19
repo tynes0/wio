@@ -82,4 +82,20 @@ if(quickstart_install_index EQUAL -1)
     )
 endif()
 
+string(FIND "${quickstart_text}" "project new" quickstart_project_index)
+if(quickstart_project_index EQUAL -1)
+    message(FATAL_ERROR
+        "Packaged QUICKSTART.md did not contain the expected project creation guidance.\n"
+        "Contents:\n${quickstart_text}"
+    )
+endif()
+
+string(FIND "${quickstart_text}" "env setup" quickstart_env_index)
+if(quickstart_env_index EQUAL -1)
+    message(FATAL_ERROR
+        "Packaged QUICKSTART.md did not contain the expected environment setup guidance.\n"
+        "Contents:\n${quickstart_text}"
+    )
+endif()
+
 message(STATUS "Package smoke succeeded for ${package_root}")

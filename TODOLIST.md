@@ -18,22 +18,22 @@ Status markers:
    Member/free unary-binary-assignment operators, `fit`, `[]`, `()`, generic overloads, and the `deref` ergonomics pass are now in place.
 2. [~] Freeze the language surface.
    A stable contract must be written for `component / object / interface / native / Result / any / Box / opaque / enum / flagset / reflection / pack`, and the generic surface should now move into freeze / polish mode.
-3. [~] Declare `makewio` as the official primary project format.
-   `wio.project.json` should remain clearly marked as legacy / compatibility only.
-4. [~] Make the CLI first-class and freeze its behavior.
-   `build`, `test`, `file`, `project`, `bind`, `env`, and `package` should be stabilized together with help, exit-code, and path behavior.
-5. [~] Remove PowerShell from the primary path completely.
-   `scripts/*.ps1` should exist only as compatibility wrappers.
-6. [~] Formalize the Wio-written tooling model.
-   The role split between core CLI commands and `scripts/wio/*.wio` source tools should be explicit.
+3. [x] Declare `makewio` as the official primary project format.
+   `wio.makewio` is now documented as the primary manifest and `wio.project.json` is explicitly legacy / compatibility only.
+4. [x] Make the CLI first-class and freeze its behavior.
+   `build`, `test`, `file`, `project`, `bind`, `env`, and `package` are now the documented stable command surface, and CLI help smoke coverage is in place.
+5. [x] Remove PowerShell from the primary path completely.
+   `scripts/*.ps1` are now documented and maintained as compatibility wrappers rather than the main user path.
+6. [x] Formalize the Wio-written tooling model.
+   The split between core CLI commands and `scripts/wio/*.wio` source tools is now explicit in the docs.
 7. [ ] Finalize the `file run` and tool-script output/cache policy.
    Single-file and tool workflows should not clutter source directories.
 8. [ ] Finish the generated C++ cleanup policy.
    Generated backend files should be deleted by default and preserved only behind explicit flags.
 9. [ ] Finalize cache/output policy for packaged builds.
    Packaged `wio` should use safe cache/output locations even in non-writable installs.
-10. [~] Seal packaging and installation UX.
-    `wio package`, installer wrappers, `env print/setup`, and the `WIO_ROOT`, `WIO_HOME`, and `PATH` story should reach release quality.
+10. [x] Seal packaging and installation UX.
+    `wio package`, installer wrappers, `env print/setup`, `QUICKSTART.md`, and the `WIO_ROOT`, `WIO_HOME`, and `PATH` story now share one documented model with smoke coverage.
 11. [ ] Validate the cross-platform flow for real.
     At minimum, Windows and Linux should both be covered across `project`, `bind`, `package`, `env`, and `std::process`.
 12. [x] Stabilize the std surface.

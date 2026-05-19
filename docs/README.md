@@ -8,6 +8,13 @@ The goal is simple:
 - avoid turning one file into an unmaintainable wall of text,
 - and make it obvious where new material should live as the language grows.
 
+Current `v1` tooling reading:
+
+- start with the CLI,
+- treat `wio.makewio` as the canonical project manifest,
+- use `scripts/wio/*.wio` for source-based helpers,
+- and treat PowerShell scripts as compatibility wrappers.
+
 ## Start Here
 
 - [Project system](C:/Users/cihan/RiderProjects/wio/docs/WIO_PROJECT_SYSTEM.md)

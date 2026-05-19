@@ -114,8 +114,14 @@ Notes:
 - [x] `wio bind import/new` landed.
 - [x] `wio env print/setup` landed.
 - [x] `wio package` landed.
+- [x] The CLI command surface was frozen as the primary tooling contract.
+- [x] The source-based tooling split was formalized:
+      core orchestration stays in the CLI while `scripts/wio/*.wio` hosts
+      source-based workflow helpers.
 - [x] Packages now include installer wrappers (`Install-Wio.ps1`,
       `install-wio.sh`) and source-based tool scripts.
+- [x] Packaging and install UX now share one documented model through
+      `wio package`, `wio env print/setup`, and packaged `QUICKSTART.md`.
 - [x] PowerShell stopped being the primary path; larger scripts became
       compatibility wrappers.
 - [x] The first `.wio` tooling folder and source tool examples landed.
