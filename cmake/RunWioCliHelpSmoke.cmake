@@ -2,6 +2,32 @@ if(NOT DEFINED WIO_EXE)
     message(FATAL_ERROR "WIO_EXE was not provided.")
 endif()
 
+execute_process(
+    COMMAND "${WIO_EXE}"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    RESULT_VARIABLE wio_result
+    OUTPUT_VARIABLE wio_stdout
+    ERROR_VARIABLE wio_stderr
+)
+
+set(wio_output "${wio_stdout}${wio_stderr}")
+
+if(NOT wio_result EQUAL 0)
+    message(FATAL_ERROR
+        "CLI help smoke failed for bare 'wio' invocation with code ${wio_result}.\n"
+        "Tool output:\n${wio_output}"
+    )
+endif()
+
+string(FIND "${wio_output}" "--help" help_index)
+string(FIND "${wio_output}" "Usage:" usage_index)
+if(help_index EQUAL -1 AND usage_index EQUAL -1)
+    message(FATAL_ERROR
+        "CLI help smoke for bare 'wio' invocation did not print help text.\n"
+        "Tool output:\n${wio_output}"
+    )
+endif()
+
 set(commands
     "build|--help"
     "test|--help"

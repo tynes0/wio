@@ -2217,8 +2217,14 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
 
     std::optional<int> tryHandleToolingCommand(int argc, char* argv[])
     {
-        if (argc < 2 || argv == nullptr || argv[1] == nullptr)
+        if (argv == nullptr)
             return std::nullopt;
+
+        if (argc < 2 || argv[1] == nullptr)
+        {
+            printToolingUsage();
+            return EXIT_SUCCESS;
+        }
 
         const std::string_view command = argv[1];
         if (isHelpToken(command))
