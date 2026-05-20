@@ -457,35 +457,84 @@ namespace wio::tooling::package
         std::string buildPowerShellInstallScript()
         {
             return R"(param(
-    [switch]$SetUserEnvironment,
+    [string]$InstallRoot,
+    [switch]$AllUsers,
     [switch]$NoPrompt,
+    [switch]$Force,
+    [switch]$SkipEnvironmentSetup,
+    [switch]$SkipPath,
+    [switch]$SetUserEnvironment,
     [switch]$AddPath
 )
 
 $ErrorActionPreference = "Stop"
 
 $packageRoot = Split-Path $MyInvocation.MyCommand.Path -Parent
-$wioExe = Join-Path $packageRoot "bin\wio.exe"
+$packageWioExe = Join-Path $packageRoot "bin\wio.exe"
 
-if (-not (Test-Path -LiteralPath $wioExe)) {
+if (-not (Test-Path -LiteralPath $packageWioExe)) {
     throw "The packaged wio executable was not found under '$packageRoot\bin'."
 }
 
-$cliArgs = @("env", "setup", "--wio-root", $packageRoot)
-
-if ($SetUserEnvironment) {
-    $cliArgs += "--set-user"
+if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
+    if ($AllUsers) {
+        $InstallRoot = Join-Path $env:ProgramFiles "Wio"
+    } elseif (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+        $InstallRoot = Join-Path $env:LOCALAPPDATA "Programs\Wio"
+    } else {
+        $InstallRoot = Join-Path $HOME "Wio"
+    }
 }
 
-if ($NoPrompt) {
-    $cliArgs += "--no-prompt"
+$packageRoot = [System.IO.Path]::GetFullPath($packageRoot)
+$InstallRoot = [System.IO.Path]::GetFullPath($InstallRoot)
+
+if ((-not $Force) -and (-not $NoPrompt) -and (Test-Path -LiteralPath $InstallRoot) -and ($packageRoot -ne $InstallRoot)) {
+    $response = Read-Host "Wio is already installed at '$InstallRoot'. Overwrite it? [y/N]"
+    if ($response -notmatch '^(?i:y|yes)$') {
+        Write-Host "Installation cancelled."
+        exit 1
+    }
 }
 
-if ($AddPath) {
-    $cliArgs += "--add-path"
+if ($packageRoot -ne $InstallRoot) {
+    $installParent = Split-Path -Parent $InstallRoot
+    if (-not [string]::IsNullOrWhiteSpace($installParent)) {
+        New-Item -ItemType Directory -Force -Path $installParent | Out-Null
+    }
+
+    if (Test-Path -LiteralPath $InstallRoot) {
+        Remove-Item -LiteralPath $InstallRoot -Recurse -Force
+    }
+
+    New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null
+    Get-ChildItem -LiteralPath $packageRoot -Force | ForEach-Object {
+        Copy-Item -LiteralPath $_.FullName -Destination $InstallRoot -Recurse -Force
+    }
 }
 
-& $wioExe @cliArgs
+$installedWioExe = Join-Path $InstallRoot "bin\wio.exe"
+if (-not (Test-Path -LiteralPath $installedWioExe)) {
+    throw "The installed wio executable was not found under '$InstallRoot\bin'."
+}
+
+if (-not $SkipEnvironmentSetup) {
+    $cliArgs = @("env", "setup", "--wio-root", $InstallRoot, "--set-user", "--no-prompt")
+
+    if (-not $SkipPath) {
+        $cliArgs += "--add-path"
+    }
+
+    & $installedWioExe @cliArgs
+    if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
+    }
+}
+
+Write-Host "Wio installed to '$InstallRoot'."
+if (-not $SkipEnvironmentSetup) {
+    Write-Host "Open a new terminal and run 'wio'."
+}
 exit $LASTEXITCODE
 )";
         }
@@ -496,15 +545,204 @@ exit $LASTEXITCODE
 set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-WIO_EXE="$SCRIPT_DIR/bin/wio"
+PACKAGE_WIO_EXE="$SCRIPT_DIR/bin/wio"
+INSTALL_ROOT="${WIO_INSTALL_ROOT:-$HOME/.local/share/wio}"
+SKIP_PATH=0
 
-if [ ! -x "$WIO_EXE" ]; then
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --install-root)
+            INSTALL_ROOT="$2"
+            shift 2
+            ;;
+        --skip-path)
+            SKIP_PATH=1
+            shift
+            ;;
+        *)
+            echo "Unknown install-wio.sh argument: $1" >&2
+            exit 1
+            ;;
+    esac
+done
+
+if [ ! -x "$PACKAGE_WIO_EXE" ]; then
     echo "The packaged wio executable was not found under '$SCRIPT_DIR/bin'." >&2
     exit 1
 fi
 
-exec "$WIO_EXE" env setup --wio-root "$SCRIPT_DIR" "$@"
+if [ "$SCRIPT_DIR" != "$INSTALL_ROOT" ]; then
+    mkdir -p "$(dirname "$INSTALL_ROOT")"
+    rm -rf "$INSTALL_ROOT"
+    mkdir -p "$INSTALL_ROOT"
+
+    for entry in "$SCRIPT_DIR"/* "$SCRIPT_DIR"/.[!.]* "$SCRIPT_DIR"/..?*; do
+        [ -e "$entry" ] || continue
+        cp -R "$entry" "$INSTALL_ROOT"/
+    done
+fi
+
+INSTALLED_WIO_EXE="$INSTALL_ROOT/bin/wio"
+
+if [ ! -x "$INSTALLED_WIO_EXE" ]; then
+    echo "The installed wio executable was not found under '$INSTALL_ROOT/bin'." >&2
+    exit 1
+fi
+
+if [ "$SKIP_PATH" -eq 1 ]; then
+    exec "$INSTALLED_WIO_EXE" env setup --wio-root "$INSTALL_ROOT" --set-user
+fi
+
+exec "$INSTALLED_WIO_EXE" env setup --wio-root "$INSTALL_ROOT" --set-user --add-path
 )WIOINSTALL";
+        }
+
+        std::string buildPowerShellUninstallScript()
+        {
+            return R"(param(
+    [string]$InstallRoot,
+    [switch]$NoPrompt,
+    [switch]$KeepFiles
+)
+
+$ErrorActionPreference = "Stop"
+
+$scriptRoot = Split-Path $MyInvocation.MyCommand.Path -Parent
+
+if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
+    $InstallRoot = $scriptRoot
+}
+
+$InstallRoot = [System.IO.Path]::GetFullPath($InstallRoot)
+$wioExe = Join-Path $InstallRoot "bin\wio.exe"
+
+if ((-not $NoPrompt) -and (-not $KeepFiles)) {
+    $response = Read-Host "Remove Wio from '$InstallRoot'? [y/N]"
+    if ($response -notmatch '^(?i:y|yes)$') {
+        Write-Host "Uninstall cancelled."
+        exit 1
+    }
+}
+
+if (Test-Path -LiteralPath $wioExe) {
+    & $wioExe env remove --wio-root $InstallRoot --set-user --remove-path --no-prompt
+}
+
+if ($KeepFiles) {
+    Write-Host "Wio environment entries were removed. Files were kept at '$InstallRoot'."
+    exit 0
+}
+
+$cleanupCommand = "Start-Sleep -Milliseconds 700; Remove-Item -LiteralPath '" + ($InstallRoot.Replace("'", "''")) + "' -Recurse -Force"
+Start-Process -FilePath "powershell" -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $cleanupCommand) -WindowStyle Hidden | Out-Null
+
+Write-Host "Wio uninstall started for '$InstallRoot'."
+Write-Host "This window can now be closed."
+exit 0
+)";
+        }
+
+        std::string buildShellUninstallScript()
+        {
+            return R"WIOUNINSTALL(#!/usr/bin/env sh
+set -eu
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+INSTALL_ROOT="${WIO_INSTALL_ROOT:-$SCRIPT_DIR}"
+KEEP_FILES=0
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --install-root)
+            INSTALL_ROOT="$2"
+            shift 2
+            ;;
+        --keep-files)
+            KEEP_FILES=1
+            shift
+            ;;
+        *)
+            echo "Unknown uninstall-wio.sh argument: $1" >&2
+            exit 1
+            ;;
+    esac
+done
+
+WIO_EXE="$INSTALL_ROOT/bin/wio"
+
+if [ -x "$WIO_EXE" ]; then
+    "$WIO_EXE" env remove --wio-root "$INSTALL_ROOT" --set-user --remove-path --no-prompt || true
+fi
+
+if [ "$KEEP_FILES" -eq 1 ]; then
+    echo "Wio environment entries were removed. Files were kept at '$INSTALL_ROOT'."
+    exit 0
+fi
+
+rm -rf "$INSTALL_ROOT"
+echo "Wio uninstalled from '$INSTALL_ROOT'."
+)WIOUNINSTALL";
+        }
+
+        std::string buildWindowsBootstrapInstallerScript(const std::string& packageName)
+        {
+            std::string script = R"(param(
+    [string]$PackageZipPath,
+    [string]$InstallRoot,
+    [switch]$AllUsers,
+    [switch]$NoPrompt,
+    [switch]$Force,
+    [switch]$SkipPath
+)
+
+$ErrorActionPreference = "Stop"
+
+$scriptRoot = Split-Path $MyInvocation.MyCommand.Path -Parent
+if ([string]::IsNullOrWhiteSpace($PackageZipPath)) {
+    $PackageZipPath = Join-Path $scriptRoot "__PACKAGE_NAME__.zip"
+}
+
+if (-not (Test-Path -LiteralPath $PackageZipPath)) {
+    throw "The package zip was not found at '$PackageZipPath'."
+}
+
+$stagingRoot = Join-Path $env:TEMP ("wio-installer-" + [guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Force -Path $stagingRoot | Out-Null
+
+try {
+    Expand-Archive -LiteralPath $PackageZipPath -DestinationPath $stagingRoot -Force
+    $packageRoot = Join-Path $stagingRoot "__PACKAGE_NAME__"
+    $installScript = Join-Path $packageRoot "Install-Wio.ps1"
+    if (-not (Test-Path -LiteralPath $installScript)) {
+        throw "The extracted package does not contain Install-Wio.ps1."
+    }
+
+    $args = @()
+    if (-not [string]::IsNullOrWhiteSpace($InstallRoot)) { $args += @('-InstallRoot', $InstallRoot) }
+    if ($AllUsers) { $args += '-AllUsers' }
+    if ($NoPrompt) { $args += '-NoPrompt' }
+    if ($Force) { $args += '-Force' }
+    if ($SkipPath) { $args += '-SkipPath' }
+
+    & $installScript @args
+    exit $LASTEXITCODE
+}
+finally {
+    if (Test-Path -LiteralPath $stagingRoot) {
+        Remove-Item -LiteralPath $stagingRoot -Recurse -Force
+    }
+}
+)";
+
+            const std::string placeholder = "__PACKAGE_NAME__";
+            size_t position = 0;
+            while ((position = script.find(placeholder, position)) != std::string::npos)
+            {
+                script.replace(position, placeholder.size(), packageName);
+                position += packageName.size();
+            }
+
+            return script;
         }
 
         std::string buildPackageQuickstart(const std::string& packageName)
@@ -524,26 +762,37 @@ exec "$WIO_EXE" env setup --wio-root "$SCRIPT_DIR" "$@"
                 << "./bin/wio --help\n"
                 << "./bin/wio env print --wio-root . --shell sh --add-path\n"
                 << "```\n\n"
-                << "## 2. Optional persistent install\n\n"
+                << "## 2. Install into a stable location\n\n"
+                << "The package zip is portable, but a normal install should copy Wio into a stable root so later moves of the extracted zip do not break `PATH`.\n\n"
+                << "PowerShell (default user install under `%LOCALAPPDATA%\\Programs\\Wio`):\n\n"
+                << "```powershell\n"
+                << ".\\Install-Wio.ps1\n"
+                << "```\n\n"
+                << "PowerShell (explicit machine-style target):\n\n"
+                << "```powershell\n"
+                << ".\\Install-Wio.ps1 -InstallRoot \"C:\\Program Files\\Wio\"\n"
+                << "```\n\n"
+                << "POSIX shell (default user install under `$HOME/.local/share/wio`):\n\n"
+                << "```sh\n"
+                << "sh ./install-wio.sh\n"
+                << "```\n\n"
+                << "Portable use without copying into a stable location is still supported, but it should be treated as a portable workflow rather than a normal installed toolchain.\n\n"
+                << "## 3. Uninstall\n\n"
                 << "PowerShell:\n\n"
                 << "```powershell\n"
-                << ".\\Install-Wio.ps1 -SetUserEnvironment -AddPath\n"
+                << "C:\\Users\\<you>\\AppData\\Local\\Programs\\Wio\\Uninstall-Wio.ps1\n"
                 << "```\n\n"
                 << "POSIX shell:\n\n"
                 << "```sh\n"
-                << "sh ./install-wio.sh --set-user --add-path\n"
+                << "~/.local/share/wio/uninstall-wio.sh\n"
                 << "```\n\n"
-                << "You can also call the CLI directly instead of the wrapper scripts:\n\n"
+                << "## 4. Create and run a project\n\n"
                 << "```powershell\n"
-                << "bin\\wio.exe env setup --wio-root . --set-user --add-path\n"
+                << "wio project new MyGame --output-dir C:\\Projects --template wio-app\n"
+                << "wio project build --project C:\\Projects\\MyGame\n"
+                << "wio project run --project C:\\Projects\\MyGame\n"
                 << "```\n\n"
-                << "## 3. Create and run a project\n\n"
-                << "```powershell\n"
-                << "bin\\wio.exe project new MyGame --output-dir C:\\Projects --template wio-app\n"
-                << "bin\\wio.exe project build --project C:\\Projects\\MyGame\n"
-                << "bin\\wio.exe project run --project C:\\Projects\\MyGame\n"
-                << "```\n\n"
-                << "## 4. Useful references\n\n"
+                << "## 5. Useful references\n\n"
                 << "- `README.md`\n"
                 << "- `docs/README.md`\n"
                 << "- `docs/WIO_PROJECT_SYSTEM.md`\n"
@@ -717,8 +966,17 @@ exec "$WIO_EXE" env setup --wio-root "$SCRIPT_DIR" "$@"
 
                 writeUtf8File(packageRoot / "WIO_PACKAGE_INFO.json", packageInfo.str());
                 writeUtf8File(packageRoot / "Install-Wio.ps1", buildPowerShellInstallScript());
+                writeUtf8File(packageRoot / "Uninstall-Wio.ps1", buildPowerShellUninstallScript());
                 writeUtf8File(packageRoot / "install-wio.sh", buildShellInstallScript());
+                writeUtf8File(packageRoot / "uninstall-wio.sh", buildShellUninstallScript());
                 writeUtf8File(packageRoot / "QUICKSTART.md", buildPackageQuickstart(packageName));
+
+                std::filesystem::path bootstrapInstallerPath;
+                if (platformTag == "windows")
+                {
+                    bootstrapInstallerPath = outputDir / (packageName + "-installer.ps1");
+                    writeUtf8File(bootstrapInstallerPath, buildWindowsBootstrapInstallerScript(packageName));
+                }
 
                 if (!noZip)
                 {
@@ -747,10 +1005,15 @@ exec "$WIO_EXE" env setup --wio-root "$SCRIPT_DIR" "$@"
                 std::cout << "Wio package root : " << packageRoot.string() << '\n';
                 if (!noZip)
                     std::cout << "Wio package zip  : " << archivePath.string() << '\n';
+                if (!bootstrapInstallerPath.empty())
+                    std::cout << "Wio installer    : " << bootstrapInstallerPath.string() << '\n';
                 std::cout << "Next steps:\n";
                 std::cout << "  1. Open " << (packageRoot / "QUICKSTART.md").string() << '\n';
-                std::cout << "  2. Run " << (packageRoot / "Install-Wio.ps1").string() << " -SetUserEnvironment -AddPath\n";
-                std::cout << "  3. Or run " << (packageRoot / "bin" / "wio.exe").string() << " env setup --wio-root " << packageRoot.string() << " --set-user --add-path\n";
+                if (!bootstrapInstallerPath.empty())
+                    std::cout << "  2. Run " << bootstrapInstallerPath.string() << '\n';
+                else
+                    std::cout << "  2. Run " << (packageRoot / "Install-Wio.ps1").string() << '\n';
+                std::cout << "  3. Portable use stays available via " << (packageRoot / "bin" / "wio.exe").string() << '\n';
 
                 return EXIT_SUCCESS;
             }
