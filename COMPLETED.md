@@ -167,6 +167,11 @@ Notes:
       as the intended `v1` contract.
 - [x] The `v1` release contract now has explicit companion notes for
       compatibility policy and performance/memory expectations.
+- [x] The docs set was expanded into a release-quality, website-ready
+      structure: getting started, CLI reference, interop guide, examples
+      guide, troubleshooting, FAQ, refreshed SDK/std/project-system
+      navigation, and a clearer root/docs index story now all point at one
+      coherent `v1` product narrative.
 
 ## Recent Partial Foundation
 

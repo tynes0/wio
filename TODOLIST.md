@@ -50,7 +50,7 @@ Status markers:
     Native support, const compatibility, helper APIs, and everyday state/kind/mode usage should be fully closed.
 18. [x] Expand the tooling test suite.
     CLI smoke, package smoke, binding smoke, project smoke, Wio tool smoke, and packaged smoke now all have release-level coverage.
-19. [ ] Raise the docs to release quality.
+19. [x] Raise the docs to release quality.
     README, project system, language draft/spec, runtime type model, std, sdk, and traceability docs should tell one coherent story.
     `WIO_SDK.md` especially needs a full refresh so the current host/runtime/export surface, `WioEnum` / `WioFlagset`, field-kind coverage, and stale-wrapper / reload expectations are described completely instead of partially.
 20. [ ] Raise the example project set to release level.

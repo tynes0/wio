@@ -6,11 +6,17 @@ analyzes, and lowers `.wio` files into generated C++.
 Useful reference docs:
 
 - [Documentation index](C:/Users/cihan/RiderProjects/wio/docs/README.md)
+- [Getting started](C:/Users/cihan/RiderProjects/wio/docs/WIO_GETTING_STARTED.md)
+- [CLI reference](C:/Users/cihan/RiderProjects/wio/docs/WIO_CLI_REFERENCE.md)
 - [Language reference](C:/Users/cihan/RiderProjects/wio/docs/WIO_LANGUAGE_DRAFT.md)
 - [v1 freeze snapshot](C:/Users/cihan/RiderProjects/wio/docs/WIO_V1_FREEZE.md)
 - [Project system](C:/Users/cihan/RiderProjects/wio/docs/WIO_PROJECT_SYSTEM.md)
 - [Standard library](C:/Users/cihan/RiderProjects/wio/docs/WIO_STD.md)
+- [Interop guide](C:/Users/cihan/RiderProjects/wio/docs/WIO_INTEROP_GUIDE.md)
 - [Host SDK](C:/Users/cihan/RiderProjects/wio/docs/WIO_SDK.md)
+- [Examples guide](C:/Users/cihan/RiderProjects/wio/docs/WIO_EXAMPLES.md)
+- [Troubleshooting](C:/Users/cihan/RiderProjects/wio/docs/WIO_TROUBLESHOOTING.md)
+- [FAQ](C:/Users/cihan/RiderProjects/wio/docs/WIO_FAQ.md)
 
 Current `v1` direction in one sentence:
 

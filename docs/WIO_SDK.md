@@ -6,6 +6,11 @@ It is the SDK contract for the current Wio v1 host integration layer.
 For representative host-interop and stale-binding conformance tests, see
 [`WIO_TRACEABILITY.md`](./WIO_TRACEABILITY.md).
 
+For a practical interop-first walkthrough, also see:
+
+- [`WIO_INTEROP_GUIDE.md`](./WIO_INTEROP_GUIDE.md)
+- [`WIO_EXAMPLES.md`](./WIO_EXAMPLES.md)
+
 Official public headers:
 
 - `sdk/include/module_api.h`

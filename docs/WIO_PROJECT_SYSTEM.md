@@ -7,6 +7,11 @@ This document describes the current Wio project model used by:
 - source-based workflow tools under `scripts/wio/`
 - and the remaining compatibility wrappers under `scripts/*.ps1`
 
+For onboarding and command-by-command usage, also see:
+
+- [`WIO_GETTING_STARTED.md`](./WIO_GETTING_STARTED.md)
+- [`WIO_CLI_REFERENCE.md`](./WIO_CLI_REFERENCE.md)
+
 The design goal is straightforward:
 
 - the easiest path should require very little configuration,

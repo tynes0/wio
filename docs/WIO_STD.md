@@ -8,6 +8,12 @@ runtime C++ bridges, and which modules are pure Wio source modules.
 For representative conformance tests tied to that stable surface, see
 [`WIO_TRACEABILITY.md`](./WIO_TRACEABILITY.md).
 
+For practical onboarding and design Q&A around the shipped std surface, also
+see:
+
+- [`WIO_GETTING_STARTED.md`](./WIO_GETTING_STARTED.md)
+- [`WIO_FAQ.md`](./WIO_FAQ.md)
+
 ---
 
 ## 0. Stability Reading

@@ -1,74 +1,139 @@
 # Wio Documentation Index
 
-This directory is the scalable documentation entrypoint for Wio.
+This directory is the main documentation map for Wio.
 
-The goal is simple:
+The current docs strategy is:
 
-- keep the main docs easy to discover,
-- avoid turning one file into an unmaintainable wall of text,
-- and make it obvious where new material should live as the language grows.
+- keep the root `README.md` fast and practical
+- keep this file as the documentation hub
+- keep major areas in dedicated, website-ready companion documents
+- keep formal contracts separate from tutorials and troubleshooting
 
-Current `v1` tooling reading:
+That lets the docs work well both:
 
-- start with the CLI,
-- treat `wio.makewio` as the canonical project manifest,
-- use `scripts/wio/*.wio` for source-based helpers,
-- and treat PowerShell scripts as compatibility wrappers.
+- directly inside the repository
+- and later as the content base for a docs website if we want to ship one
 
-## Start Here
+---
 
-- [Project system](C:/Users/cihan/RiderProjects/wio/docs/WIO_PROJECT_SYSTEM.md)
-- [v1 freeze snapshot](C:/Users/cihan/RiderProjects/wio/docs/WIO_V1_FREEZE.md)
+## 1. Start Here
 
-If you are trying to build, package, install, or run Wio projects, start with
-the project-system document first.
+If you are brand new to Wio, read in this order:
 
-## Core Language
+1. [Getting started](./WIO_GETTING_STARTED.md)
+2. [CLI reference](./WIO_CLI_REFERENCE.md)
+3. [Project system](./WIO_PROJECT_SYSTEM.md)
+4. [v1 freeze snapshot](./WIO_V1_FREEZE.md)
 
-- [Language reference](C:/Users/cihan/RiderProjects/wio/docs/WIO_LANGUAGE_DRAFT.md)
-- [Runtime type model](C:/Users/cihan/RiderProjects/wio/docs/WIO_RUNTIME_TYPE_MODEL.md)
+That path gives you:
 
-This is where syntax, semantics, references, generics, operator behavior, and
-runtime-facing type rules belong.
+- first install/build steps
+- first commands
+- first project flow
+- the current `v1` stability reading
 
-## Standard Library And SDK
+---
 
-- [Standard library](C:/Users/cihan/RiderProjects/wio/docs/WIO_STD.md)
-- [Host SDK](C:/Users/cihan/RiderProjects/wio/docs/WIO_SDK.md)
+## 2. Tutorials And Practical Guides
 
-The SDK reference now covers raw ABI layering, module vs hot-reload usage,
-exported object/component reflection, enum/flagset wrappers, dynamic values,
-and stale-wrapper generation rules.
+- [Getting started](./WIO_GETTING_STARTED.md)
+- [Interop guide](./WIO_INTEROP_GUIDE.md)
+- [Examples guide](./WIO_EXAMPLES.md)
+- [Troubleshooting](./WIO_TROUBLESHOOTING.md)
+- [FAQ](./WIO_FAQ.md)
 
-Use these when the topic is no longer “what does the language mean?” and has
-become “how do I use the shipped surface?”
+These documents answer practical workflow questions such as:
 
-## Release / Quality Tracking
+- how do I get Wio running?
+- how do I call native C++?
+- how does a host call Wio?
+- which example should I open first?
+- where do generated files go?
+- why does Wio make certain product/design choices?
 
-- [v1 freeze snapshot](C:/Users/cihan/RiderProjects/wio/docs/WIO_V1_FREEZE.md)
-- [Versioning and compatibility](C:/Users/cihan/RiderProjects/wio/docs/WIO_COMPATIBILITY.md)
-- [Performance and memory notes](C:/Users/cihan/RiderProjects/wio/docs/WIO_PERFORMANCE.md)
-- [Traceability](C:/Users/cihan/RiderProjects/wio/docs/WIO_TRACEABILITY.md)
+---
 
-These documents should stay smaller and more directional than the main
-reference.
+## 3. Reference Documents
 
-## Documentation Growth Policy
+### 3.1 Language And Runtime
 
-As Wio grows, we should keep this split:
+- [Language reference](./WIO_LANGUAGE_DRAFT.md)
+- [Runtime type model](./WIO_RUNTIME_TYPE_MODEL.md)
 
-- `README.md` at repo root: fast orientation and common commands.
-- `docs/README.md`: documentation map and navigation.
-- `WIO_LANGUAGE_DRAFT.md`: canonical language surface.
-- `WIO_PROJECT_SYSTEM.md`: CLI, manifests, package, install, and build flow.
-- `WIO_STD.md`: shipped standard-library surface.
-- `WIO_SDK.md`: host-facing integration surface.
-- focused companion docs when one topic gets too large.
+Use these when the question is about:
 
-When a topic starts bloating one document, the preferred move is:
+- syntax
+- semantics
+- `ref` / `view` / `deref`
+- generics and packs
+- object/component/interface meaning
+- runtime type boundaries such as `any`, `Box`, and `opaque`
 
-1. create a focused companion document,
-2. keep the parent doc as the overview and contract,
-3. link the detailed material from this index.
+### 3.2 Tooling And Project System
 
-That gives us room to grow without making the docs harder to navigate.
+- [CLI reference](./WIO_CLI_REFERENCE.md)
+- [Project system](./WIO_PROJECT_SYSTEM.md)
+
+Use these when the question is about:
+
+- commands
+- manifests
+- build/run/package/install behavior
+- cache/output policy
+- packaged toolchain usage
+
+### 3.3 Standard Library And SDK
+
+- [Standard library](./WIO_STD.md)
+- [Host SDK](./WIO_SDK.md)
+
+Use these when the question is about:
+
+- what std ships
+- what is stable vs experimental
+- exported object/component behavior
+- enum/flagset wrappers
+- dynamic host reflection
+- hot reload behavior
+
+---
+
+## 4. Release, Quality, And Compatibility
+
+- [v1 freeze snapshot](./WIO_V1_FREEZE.md)
+- [Versioning and compatibility](./WIO_COMPATIBILITY.md)
+- [Performance and memory notes](./WIO_PERFORMANCE.md)
+- [Traceability](./WIO_TRACEABILITY.md)
+
+These are the "how should I read the product right now?" documents.
+
+Use them when you want to answer:
+
+- is this part of `v1`?
+- is this stable or experimental?
+- how do I think about performance?
+- which tests prove a feature is real?
+
+---
+
+## 5. Documentation Growth Policy
+
+As Wio grows, keep this split:
+
+- `README.md` at repo root:
+  fast orientation, common commands, and entry links
+- `docs/README.md`:
+  navigation and document map
+- major contracts:
+  language, project system, std, SDK, runtime model, freeze, compatibility
+- companion docs:
+  getting started, CLI reference, guides, troubleshooting, FAQ, examples
+
+When a document starts trying to do too many jobs at once, prefer this move:
+
+1. create a focused companion document
+2. keep the parent document as the overview/contract
+3. link the companion document from here
+
+That is the same structure we would want if these docs later move into a
+website or Vercel-hosted docs surface.
