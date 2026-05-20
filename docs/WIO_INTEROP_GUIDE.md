@@ -110,7 +110,7 @@ Examples:
 Repo-local single-file example:
 
 ```powershell
-build\app\Debug\wio.exe file run .\tests\native\native_bridge.wio --include-dir .\tests\native --backend-arg .\tests\native\native_math.cpp
+wio file run .\tests\native\native_bridge.wio --include-dir .\tests\native --backend-arg .\tests\native\native_math.cpp
 ```
 
 Project-based workflows should prefer:

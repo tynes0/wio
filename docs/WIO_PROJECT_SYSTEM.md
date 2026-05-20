@@ -51,25 +51,25 @@ longer the primary public contract.
 Once the compiler has been built at least once, the preferred source-checkout workflow is:
 
 ```powershell
-build\app\Debug\wio.exe build --build-dir build --config Debug --configure
-build\app\Debug\wio.exe test --build-dir build --config Debug --configure
-build\app\Debug\wio.exe file run .\playground\main.wio
-build\app\Debug\wio.exe file check .\playground\main.wio
-build\app\Debug\wio.exe file run .\scripts\wio\run_host_interop.wio -- --help
-build\app\Debug\wio.exe file run .\scripts\wio\run_hybrid_arena_demo.wio -- --help
-build\app\Debug\wio.exe project new MyGame --output-dir C:\Projects --template wio-app
-build\app\Debug\wio.exe project describe --project C:\Projects\MyGame
-build\app\Debug\wio.exe project build --project C:\Projects\MyGame
-build\app\Debug\wio.exe project run --project C:\Projects\MyGame
-build\app\Debug\wio.exe bind import --header .\tests\native\binding_import_smoke.h --realm binding_import_smoke --output .\build\generated\binding_import_smoke.wio
-build\app\Debug\wio.exe bind new --manifest .\tests\native\binding_manifest_smoke.json --output .\build\generated\binding_manifest_smoke.wio
-build\app\Debug\wio.exe env print --wio-root . --shell powershell --add-path
-build\app\Debug\wio.exe env setup --wio-root . --set-user --add-path
-build\app\Debug\wio.exe env status --wio-root .
-build\app\Debug\wio.exe env doctor --wio-root .
-build\app\Debug\wio.exe env remove --wio-root . --set-user --remove-path
-build\app\Debug\wio.exe package --build-dir build --config Debug --output-dir .\artifacts\packages --no-zip
-build\app\Debug\wio.exe perf smoke --iterations 3
+wio build --build-dir build --config Debug --configure
+wio test --build-dir build --config Debug --configure
+wio file run .\playground\main.wio
+wio file check .\playground\main.wio
+wio file run .\scripts\wio\run_host_interop.wio -- --help
+wio file run .\scripts\wio\run_hybrid_arena_demo.wio -- --help
+wio project new MyGame --output-dir C:\Projects --template wio-app
+wio project describe --project C:\Projects\MyGame
+wio project build --project C:\Projects\MyGame
+wio project run --project C:\Projects\MyGame
+wio bind import --header .\tests\native\binding_import_smoke.h --realm binding_import_smoke --output .\build\generated\binding_import_smoke.wio
+wio bind new --manifest .\tests\native\binding_manifest_smoke.json --output .\build\generated\binding_manifest_smoke.wio
+wio env print --wio-root . --shell powershell --add-path
+wio env setup --wio-root . --set-user --add-path
+wio env status --wio-root .
+wio env doctor --wio-root .
+wio env remove --wio-root . --set-user --remove-path
+wio package --build-dir build --config Debug --output-dir .\artifacts\packages --no-zip
+wio perf smoke --iterations 3
 ```
 
 For single-file execution and source-based Wio workflow tools:
@@ -88,8 +88,8 @@ For single-file execution and source-based Wio workflow tools:
 Equivalent alias forms also exist:
 
 ```powershell
-build\app\Debug\wio.exe dev build --build-dir build --config Debug --configure
-build\app\Debug\wio.exe dev test --build-dir build --config Debug --configure
+wio dev build --build-dir build --config Debug --configure
+wio dev test --build-dir build --config Debug --configure
 ```
 
 `Build-Wio.ps1` and `Test-Wio.ps1` are still shipped so existing setups do not
@@ -112,15 +112,15 @@ Wio now supports two practical workflows.
 Create a project from a template directly through the Wio CLI:
 
 ```powershell
-build\app\Debug\wio.exe project new MyGame --output-dir C:\Projects --template hybrid-module
+wio project new MyGame --output-dir C:\Projects --template hybrid-module
 ```
 
 Then inspect, build, or run it directly:
 
 ```powershell
-build\app\Debug\wio.exe project describe --project C:\Projects\MyGame
-build\app\Debug\wio.exe project build --project C:\Projects\MyGame
-build\app\Debug\wio.exe project run --project C:\Projects\MyGame
+wio project describe --project C:\Projects\MyGame
+wio project build --project C:\Projects\MyGame
+wio project run --project C:\Projects\MyGame
 ```
 
 The older compatibility helper still exists:
@@ -148,7 +148,7 @@ Create your own folder structure and write a `wio.makewio` file by hand.
 Then build it directly:
 
 ```powershell
-build\app\Debug\wio.exe project build --project C:\Projects\MyGame
+wio project build --project C:\Projects\MyGame
 ```
 
 Or, from a packaged toolchain:

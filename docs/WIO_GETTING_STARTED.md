@@ -37,10 +37,12 @@ cmake -S . -B build
 cmake --build build --config Debug
 ```
 
-After that, the repo-local executable is typically:
+After that, the repo-local executable lives under `build/app/<config>/`, but
+the user-facing docs assume you will either add it to `PATH` or use a packaged
+toolchain. So the examples below intentionally use plain `wio`.
 
 ```powershell
-build\app\Debug\wio.exe
+wio
 ```
 
 ### 1.2 Use A Packaged Wio Distribution
@@ -104,20 +106,20 @@ This validates the file through parsing, semantic analysis, and normal
 compiler checks without running it:
 
 ```powershell
-build\app\Debug\wio.exe file check .\playground\main.wio
+wio file check .\playground\main.wio
 ```
 
 ### 2.2 Run It
 
 ```powershell
-build\app\Debug\wio.exe file run .\playground\main.wio
+wio file run .\playground\main.wio
 ```
 
 ### 2.3 Inspect Tokens Or AST
 
 ```powershell
-build\app\Debug\wio.exe file tokens .\playground\main.wio
-build\app\Debug\wio.exe file ast .\playground\main.wio
+wio file tokens .\playground\main.wio
+wio file ast .\playground\main.wio
 ```
 
 ### 2.4 Hidden Output Behavior
@@ -142,7 +144,7 @@ The primary manifest is `wio.makewio`.
 The easiest way to create a project is:
 
 ```powershell
-build\app\Debug\wio.exe project new MyGame --output-dir C:\Projects --template wio-app
+wio project new MyGame --output-dir C:\Projects --template wio-app
 ```
 
 Useful templates currently include:
@@ -155,19 +157,19 @@ Useful templates currently include:
 ### 3.1 Inspect The Project
 
 ```powershell
-build\app\Debug\wio.exe project describe --project C:\Projects\MyGame
+wio project describe --project C:\Projects\MyGame
 ```
 
 ### 3.2 Build The Project
 
 ```powershell
-build\app\Debug\wio.exe project build --project C:\Projects\MyGame
+wio project build --project C:\Projects\MyGame
 ```
 
 ### 3.3 Run The Project
 
 ```powershell
-build\app\Debug\wio.exe project run --project C:\Projects\MyGame
+wio project run --project C:\Projects\MyGame
 ```
 
 The stable user-facing project flow is:
@@ -195,7 +197,7 @@ fn Multiply(lhs: i32, rhs: i32) -> i32;
 Then build or run with the required include/source inputs:
 
 ```powershell
-build\app\Debug\wio.exe file run .\tests\native\native_bridge.wio --include-dir .\tests\native --backend-arg .\tests\native\native_math.cpp
+wio file run .\tests\native\native_bridge.wio --include-dir .\tests\native --backend-arg .\tests\native\native_math.cpp
 ```
 
 If you want the full interop/export/SDK story, go straight to
@@ -208,7 +210,7 @@ If you want the full interop/export/SDK story, go straight to
 To stage a packaged toolchain from the source tree:
 
 ```powershell
-build\app\Debug\wio.exe package --build-dir build --config Debug --output-dir .\artifacts\packages
+wio package --build-dir build --config Debug --output-dir .\artifacts\packages
 ```
 
 That gives you a package root containing:

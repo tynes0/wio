@@ -20,7 +20,7 @@ What to do:
 1. If you are in the source tree, use the repo-local executable first:
 
 ```powershell
-build\app\Debug\wio.exe --help
+wio --help
 ```
 
 2. If you are using a package, print the environment setup commands:

@@ -59,7 +59,7 @@ more structured single-file UX.
 Typical source-tree usage:
 
 ```powershell
-build\app\Debug\wio.exe build --build-dir build --config Debug --configure
+wio build --build-dir build --config Debug --configure
 ```
 
 Use it when you want to:
@@ -79,9 +79,9 @@ This is different from `wio project build`, which builds a user Wio project.
 Examples:
 
 ```powershell
-build\app\Debug\wio.exe test --build-dir build --config Debug --configure
-build\app\Debug\wio.exe test --build-dir build --config Debug --list
-build\app\Debug\wio.exe test --build-dir build --config Debug --filter std_result_
+wio test --build-dir build --config Debug --configure
+wio test --build-dir build --config Debug --list
+wio test --build-dir build --config Debug --filter std_result_
 ```
 
 Use it when you want to:
@@ -368,40 +368,40 @@ That means:
 ```powershell
 cmake -S . -B build
 cmake --build build --config Debug
-build\app\Debug\wio.exe build --build-dir build --config Debug --configure
+wio build --build-dir build --config Debug --configure
 ```
 
 ### 11.2 Check Or Run A Single File
 
 ```powershell
-build\app\Debug\wio.exe file check .\playground\main.wio
-build\app\Debug\wio.exe file run .\playground\main.wio
+wio file check .\playground\main.wio
+wio file run .\playground\main.wio
 ```
 
 ### 11.3 Create And Run A Project
 
 ```powershell
-build\app\Debug\wio.exe project new MyGame --output-dir C:\Projects --template wio-app
-build\app\Debug\wio.exe project build --project C:\Projects\MyGame
-build\app\Debug\wio.exe project run --project C:\Projects\MyGame
+wio project new MyGame --output-dir C:\Projects --template wio-app
+wio project build --project C:\Projects\MyGame
+wio project run --project C:\Projects\MyGame
 ```
 
 ### 11.4 Generate A Binding
 
 ```powershell
-build\app\Debug\wio.exe bind import --header .\tests\native\binding_import_smoke.h --realm binding_import_smoke --output .\build\generated\binding_import_smoke.wio
+wio bind import --header .\tests\native\binding_import_smoke.h --realm binding_import_smoke --output .\build\generated\binding_import_smoke.wio
 ```
 
 ### 11.5 Stage A Package
 
 ```powershell
-build\app\Debug\wio.exe package --build-dir build --config Debug --output-dir .\artifacts\packages
+wio package --build-dir build --config Debug --output-dir .\artifacts\packages
 ```
 
 ### 11.6 Inspect Performance Smoke
 
 ```powershell
-build\app\Debug\wio.exe perf smoke --iterations 1
+wio perf smoke --iterations 1
 ```
 
 ---
