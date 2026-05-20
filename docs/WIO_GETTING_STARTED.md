@@ -68,6 +68,13 @@ To set up the user environment:
 C:\Wio\bin\wio.exe env setup --wio-root C:\Wio --set-user --add-path
 ```
 
+To inspect or troubleshoot the current environment:
+
+```powershell
+C:\Wio\bin\wio.exe env status --wio-root C:\Wio
+C:\Wio\bin\wio.exe env doctor --wio-root C:\Wio
+```
+
 After that, new terminals should be able to use:
 
 ```powershell

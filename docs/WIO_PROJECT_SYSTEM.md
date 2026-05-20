@@ -64,7 +64,10 @@ build\app\Debug\wio.exe project run --project C:\Projects\MyGame
 build\app\Debug\wio.exe bind import --header .\tests\native\binding_import_smoke.h --realm binding_import_smoke --output .\build\generated\binding_import_smoke.wio
 build\app\Debug\wio.exe bind new --manifest .\tests\native\binding_manifest_smoke.json --output .\build\generated\binding_manifest_smoke.wio
 build\app\Debug\wio.exe env print --wio-root . --shell powershell --add-path
-build\app\Debug\wio.exe env setup --wio-root . --no-prompt
+build\app\Debug\wio.exe env setup --wio-root . --set-user --add-path
+build\app\Debug\wio.exe env status --wio-root .
+build\app\Debug\wio.exe env doctor --wio-root .
+build\app\Debug\wio.exe env remove --wio-root . --set-user --remove-path
 build\app\Debug\wio.exe package --build-dir build --config Debug --output-dir .\artifacts\packages --no-zip
 build\app\Debug\wio.exe perf smoke --iterations 3
 ```
@@ -778,7 +781,7 @@ That helper may set:
 The packaged compiler does not require those variables for direct CLI use; they mainly help external tooling such as CMake or compatibility scripts find the toolchain consistently. The canonical implementation now lives behind the CLI:
 
 ```powershell
-bin\wio.exe env setup --wio-root <package-root>
+bin\wio.exe env setup --wio-root <package-root> --set-user --add-path
 bin\wio.exe env print --wio-root <package-root> --shell powershell --add-path
 ```
 

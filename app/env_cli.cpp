@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cwctype>
+#include <cwchar>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -15,6 +16,8 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #if defined(_WIN32)
@@ -29,6 +32,61 @@ namespace wio::tooling::env
     {
         constexpr std::string_view kProfileMarkerBegin = "# >>> wio env >>>";
         constexpr std::string_view kProfileMarkerEnd = "# <<< wio env <<<";
+
+        struct EnvStatusSnapshot
+        {
+            std::optional<std::filesystem::path> toolchainRoot;
+            std::optional<std::filesystem::path> binDirectory;
+            std::string processWioRoot;
+            std::string processWioHome;
+            std::string processPath;
+            bool processPathContainsBin = false;
+            bool processHasWioRoot = false;
+            bool processHasWioHome = false;
+            bool processHasPath = false;
+            bool persistentHasWioRoot = false;
+            bool persistentHasWioHome = false;
+            bool persistentPathContainsBin = false;
+            std::string persistentWioRoot;
+            std::string persistentWioHome;
+            std::string persistentPath;
+            bool profileMarkerPresent = false;
+            std::vector<std::string> caseInsensitiveDuplicateEnvKeys;
+        };
+
+        std::string trim(const std::string& value);
+        std::string lowercase(std::string value);
+
+        const char* tryGetEnv(const char* name)
+        {
+            const char* value = std::getenv(name);
+            return (value != nullptr && *value != '\0') ? value : nullptr;
+        }
+
+        bool containsPathEntry(const std::string& pathList, const std::string& candidate, const char separator, const bool caseInsensitive)
+        {
+            std::stringstream stream(pathList);
+            std::string entry;
+
+            auto normalize = [caseInsensitive](std::string value)
+            {
+                while (!value.empty() && (value.back() == '\\' || value.back() == '/'))
+                    value.pop_back();
+                value = trim(value);
+                if (caseInsensitive)
+                    value = lowercase(value);
+                return value;
+            };
+
+            const std::string normalizedCandidate = normalize(candidate);
+            while (std::getline(stream, entry, separator))
+            {
+                if (normalize(entry) == normalizedCandidate)
+                    return true;
+            }
+
+            return false;
+        }
 
         std::vector<std::string> collectCommandArgs(const std::string& programName, int argc, char* argv[], int firstArgumentIndex)
         {
@@ -307,6 +365,41 @@ namespace wio::tooling::env
             return stream.str();
         }
 
+        std::string renderShellEnvironmentRemoval(const std::filesystem::path& binDirectory, const std::string& shell, bool removePath)
+        {
+            const std::string bin = binDirectory.string();
+            std::ostringstream stream;
+            const std::string shellId = lowercase(shell);
+
+            if (shellId == "powershell" || shellId == "pwsh" || shellId == "ps")
+            {
+                stream << "Remove-Item Env:WIO_ROOT -ErrorAction SilentlyContinue" << '\n';
+                stream << "Remove-Item Env:WIO_HOME -ErrorAction SilentlyContinue";
+                if (removePath)
+                {
+                    stream << '\n'
+                           << "$wioBin = '" << powershellEscapeSingleQuoted(bin) << "'\n"
+                           << "$env:Path = [string]::Join(';', (($env:Path -split ';') | Where-Object { $_ -and ([string]::Compare($_.TrimEnd('\\', '/'), $wioBin.TrimEnd('\\', '/'), $true) -ne 0) }))";
+                }
+                return stream.str();
+            }
+
+            if (shellId == "cmd")
+            {
+                stream << "set \"WIO_ROOT=\"" << '\n';
+                stream << "set \"WIO_HOME=\"";
+                if (removePath)
+                    stream << '\n' << "REM Remove '" << bin << "' from PATH manually in this cmd.exe session.";
+                return stream.str();
+            }
+
+            stream << "unset WIO_ROOT" << '\n';
+            stream << "unset WIO_HOME";
+            if (removePath)
+                stream << '\n' << "export PATH=$(printf '%s' \"$PATH\" | awk -v RS=: -v ORS=: '$0 != \"" << shellEscapeSingleQuoted(bin) << "\"' | sed 's/:$//')";
+            return stream.str();
+        }
+
 #if defined(_WIN32)
         std::wstring normalizeWindowsPath(const std::wstring& value)
         {
@@ -335,6 +428,15 @@ namespace wio::tooling::env
             return value.substr(start, end - start);
         }
 
+        std::string narrowFromWide(const std::wstring& value)
+        {
+            std::string result;
+            result.reserve(value.size());
+            for (const wchar_t ch : value)
+                result.push_back(static_cast<char>(ch));
+            return result;
+        }
+
         std::wstring readRegistryString(HKEY key, const wchar_t* valueName)
         {
             DWORD type = 0;
@@ -350,6 +452,13 @@ namespace wio::tooling::env
             while (!buffer.empty() && buffer.back() == L'\0')
                 buffer.pop_back();
             return buffer;
+        }
+
+        void deleteRegistryValueIfPresent(HKEY key, const wchar_t* valueName)
+        {
+            const LONG status = RegDeleteValueW(key, valueName);
+            if (status != ERROR_SUCCESS && status != ERROR_FILE_NOT_FOUND)
+                throw std::runtime_error("Could not update the Windows user environment registry.");
         }
 
         void writeRegistryExpandString(HKEY key, const wchar_t* valueName, const std::wstring& value)
@@ -373,6 +482,75 @@ namespace wio::tooling::env
             }
 
             return false;
+        }
+
+        std::wstring removePathEntry(const std::wstring& pathList, const std::wstring& candidate)
+        {
+            std::wstringstream stream(pathList);
+            std::wstring entry;
+            std::vector<std::wstring> keptEntries;
+            const std::wstring normalizedCandidate = normalizeWindowsPath(candidate);
+
+            while (std::getline(stream, entry, L';'))
+            {
+                const std::wstring trimmedEntry = trimWindowsString(entry);
+                if (trimmedEntry.empty())
+                    continue;
+
+                if (normalizeWindowsPath(trimmedEntry) == normalizedCandidate)
+                    continue;
+
+                keptEntries.push_back(trimmedEntry);
+            }
+
+            std::wostringstream result;
+            for (size_t i = 0; i < keptEntries.size(); ++i)
+            {
+                if (i > 0)
+                    result << L';';
+                result << keptEntries[i];
+            }
+
+            return result.str();
+        }
+
+        std::vector<std::string> collectDuplicateEnvironmentKeysWindows()
+        {
+            std::vector<std::string> duplicates;
+            LPWCH environmentStrings = GetEnvironmentStringsW();
+            if (environmentStrings == nullptr)
+                return duplicates;
+
+            std::unordered_set<std::string> seenKeys;
+            std::unordered_set<std::string> duplicateKeys;
+
+            for (LPCWSTR cursor = environmentStrings; *cursor != L'\0'; cursor += std::wcslen(cursor) + 1)
+            {
+                std::wstring_view entry(cursor);
+                const size_t equalsIndex = entry.find(L'=');
+                if (equalsIndex == std::wstring_view::npos || equalsIndex == 0)
+                    continue;
+
+                std::wstring key(entry.substr(0, equalsIndex));
+                std::transform(key.begin(), key.end(), key.begin(), [](wchar_t ch)
+                {
+                    return static_cast<wchar_t>(std::towlower(ch));
+                });
+
+                std::string narrowKey;
+                narrowKey.reserve(key.size());
+                for (const wchar_t ch : key)
+                    narrowKey.push_back(static_cast<char>(ch));
+
+                if (!seenKeys.insert(narrowKey).second)
+                    duplicateKeys.insert(narrowKey);
+            }
+
+            FreeEnvironmentStringsW(environmentStrings);
+
+            duplicates.assign(duplicateKeys.begin(), duplicateKeys.end());
+            std::sort(duplicates.begin(), duplicates.end());
+            return duplicates;
         }
 
         void persistUserEnvironmentWindows(const std::filesystem::path& toolchainRoot, const std::filesystem::path& binDirectory, bool addPath)
@@ -424,6 +602,53 @@ namespace wio::tooling::env
                         processPath = bin;
                     SetEnvironmentVariableW(L"Path", processPath.c_str());
                 }
+            }
+
+            SendMessageTimeoutW(HWND_BROADCAST,
+                                WM_SETTINGCHANGE,
+                                0,
+                                reinterpret_cast<LPARAM>(L"Environment"),
+                                SMTO_ABORTIFHUNG,
+                                5000,
+                                nullptr);
+        }
+
+        void removeUserEnvironmentWindows(const std::filesystem::path& binDirectory, bool removePath)
+        {
+            HKEY key = nullptr;
+            const LONG openStatus = RegOpenKeyExW(HKEY_CURRENT_USER, L"Environment", 0, KEY_QUERY_VALUE | KEY_SET_VALUE, &key);
+            if (openStatus != ERROR_SUCCESS)
+                throw std::runtime_error("Could not open the current user Environment registry key.");
+
+            deleteRegistryValueIfPresent(key, L"WIO_ROOT");
+            deleteRegistryValueIfPresent(key, L"WIO_HOME");
+
+            if (removePath)
+            {
+                const std::wstring existingPath = readRegistryString(key, L"Path");
+                const std::wstring updatedPath = removePathEntry(existingPath, binDirectory.wstring());
+                if (updatedPath.empty())
+                    deleteRegistryValueIfPresent(key, L"Path");
+                else if (updatedPath != existingPath)
+                    writeRegistryExpandString(key, L"Path", updatedPath);
+            }
+
+            RegCloseKey(key);
+
+            SetEnvironmentVariableW(L"WIO_ROOT", nullptr);
+            SetEnvironmentVariableW(L"WIO_HOME", nullptr);
+            if (removePath)
+            {
+                std::wstring processPath;
+                processPath.resize(32767, L'\0');
+                const DWORD copied = GetEnvironmentVariableW(L"Path", processPath.data(), static_cast<DWORD>(processPath.size()));
+                if (copied > 0 && copied < processPath.size())
+                    processPath.resize(copied);
+                else
+                    processPath.clear();
+
+                const std::wstring updatedProcessPath = removePathEntry(processPath, binDirectory.wstring());
+                SetEnvironmentVariableW(L"Path", updatedProcessPath.empty() ? nullptr : updatedProcessPath.c_str());
             }
 
             SendMessageTimeoutW(HWND_BROADCAST,
@@ -499,6 +724,47 @@ namespace wio::tooling::env
             if (!output.good())
                 throw std::runtime_error("Could not update the shell profile at '" + profilePath.string() + "'.");
         }
+
+        void removeUserEnvironmentPosix(const std::filesystem::path& binDirectory, bool removePath)
+        {
+            const char* homeValue = std::getenv("HOME");
+            if (homeValue == nullptr || *homeValue == '\0')
+                throw std::runtime_error("Could not resolve the HOME directory for persistent environment cleanup.");
+
+            const std::filesystem::path profilePath = std::filesystem::path(homeValue) / ".profile";
+            std::string profileContent;
+
+            {
+                std::ifstream input(profilePath, std::ios::binary);
+                if (input.is_open())
+                {
+                    std::ostringstream buffer;
+                    buffer << input.rdbuf();
+                    profileContent = buffer.str();
+                }
+            }
+
+            std::ostringstream block;
+            if (!removePath)
+            {
+                block << kProfileMarkerBegin << '\n'
+                      << "export PATH='" << shellEscapeSingleQuoted(binDirectory.string()) << ":$PATH'" << '\n'
+                      << kProfileMarkerEnd << '\n';
+                replaceProfileBlock(profileContent, block.str());
+            }
+            else
+            {
+                replaceProfileBlock(profileContent, "");
+            }
+
+            std::ofstream output(profilePath, std::ios::binary | std::ios::trunc);
+            if (!output.is_open())
+                throw std::runtime_error("Could not write the shell profile at '" + profilePath.string() + "'.");
+
+            output.write(profileContent.data(), static_cast<std::streamsize>(profileContent.size()));
+            if (!output.good())
+                throw std::runtime_error("Could not update the shell profile at '" + profilePath.string() + "'.");
+        }
 #endif
 
         std::string determineDefaultShell()
@@ -508,6 +774,166 @@ namespace wio::tooling::env
 #else
             return "sh";
 #endif
+        }
+
+        EnvStatusSnapshot inspectEnvironment(const std::optional<std::filesystem::path>& explicitRoot)
+        {
+            EnvStatusSnapshot snapshot;
+            snapshot.toolchainRoot = tryFindToolchainRoot(explicitRoot);
+            if (snapshot.toolchainRoot.has_value())
+                snapshot.binDirectory = resolveBinDirectory(*snapshot.toolchainRoot);
+
+            if (const char* value = tryGetEnv("WIO_ROOT"))
+            {
+                snapshot.processWioRoot = value;
+                snapshot.processHasWioRoot = true;
+            }
+
+            if (const char* value = tryGetEnv("WIO_HOME"))
+            {
+                snapshot.processWioHome = value;
+                snapshot.processHasWioHome = true;
+            }
+
+#if defined(_WIN32)
+            {
+                std::wstring processPath;
+                processPath.resize(32767, L'\0');
+                const DWORD copied = GetEnvironmentVariableW(L"Path", processPath.data(), static_cast<DWORD>(processPath.size()));
+                if (copied > 0 && copied < processPath.size())
+                {
+                    processPath.resize(copied);
+                    snapshot.processPath = narrowFromWide(processPath);
+                    snapshot.processHasPath = true;
+                }
+            }
+
+            snapshot.caseInsensitiveDuplicateEnvKeys = collectDuplicateEnvironmentKeysWindows();
+
+            HKEY key = nullptr;
+            if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Environment", 0, KEY_QUERY_VALUE, &key) == ERROR_SUCCESS)
+            {
+                const std::wstring userRoot = readRegistryString(key, L"WIO_ROOT");
+                const std::wstring userHome = readRegistryString(key, L"WIO_HOME");
+                const std::wstring userPath = readRegistryString(key, L"Path");
+                RegCloseKey(key);
+
+                snapshot.persistentHasWioRoot = !userRoot.empty();
+                snapshot.persistentHasWioHome = !userHome.empty();
+                snapshot.persistentWioRoot = narrowFromWide(userRoot);
+                snapshot.persistentWioHome = narrowFromWide(userHome);
+                snapshot.persistentPath = narrowFromWide(userPath);
+            }
+#else
+            if (const char* value = tryGetEnv("PATH"))
+            {
+                snapshot.processPath = value;
+                snapshot.processHasPath = true;
+            }
+
+            const char* homeValue = std::getenv("HOME");
+            if (homeValue != nullptr && *homeValue != '\0')
+            {
+                const std::filesystem::path profilePath = std::filesystem::path(homeValue) / ".profile";
+                std::ifstream input(profilePath, std::ios::binary);
+                if (input.is_open())
+                {
+                    std::ostringstream buffer;
+                    buffer << input.rdbuf();
+                    snapshot.persistentPath = buffer.str();
+                    snapshot.profileMarkerPresent = snapshot.persistentPath.find(kProfileMarkerBegin) != std::string::npos;
+                    snapshot.persistentHasWioRoot = snapshot.persistentPath.find("WIO_ROOT") != std::string::npos;
+                    snapshot.persistentHasWioHome = snapshot.persistentPath.find("WIO_HOME") != std::string::npos;
+                }
+            }
+#endif
+
+            if (snapshot.binDirectory.has_value())
+            {
+                if (snapshot.processHasPath)
+                    snapshot.processPathContainsBin = containsPathEntry(snapshot.processPath, snapshot.binDirectory->string(),
+#if defined(_WIN32)
+                                                                      ';', true
+#else
+                                                                      ':', false
+#endif
+                    );
+
+#if defined(_WIN32)
+                snapshot.persistentPathContainsBin = containsPathEntry(snapshot.persistentPath, snapshot.binDirectory->string(), ';', true);
+#else
+                snapshot.persistentPathContainsBin = snapshot.persistentPath.find(snapshot.binDirectory->string()) != std::string::npos;
+#endif
+            }
+
+            return snapshot;
+        }
+
+        void printEnvironmentStatus(const EnvStatusSnapshot& snapshot)
+        {
+            std::cout << "Wio environment status\n\n";
+
+            std::cout << "Resolved toolchain root : "
+                      << (snapshot.toolchainRoot.has_value() ? snapshot.toolchainRoot->string() : "<not resolved>") << '\n';
+            std::cout << "Resolved bin directory  : "
+                      << (snapshot.binDirectory.has_value() ? snapshot.binDirectory->string() : "<not resolved>") << '\n';
+            std::cout << '\n';
+
+            std::cout << "Current process\n";
+            std::cout << "  WIO_ROOT              : " << (snapshot.processHasWioRoot ? snapshot.processWioRoot : "<unset>") << '\n';
+            std::cout << "  WIO_HOME              : " << (snapshot.processHasWioHome ? snapshot.processWioHome : "<unset>") << '\n';
+            std::cout << "  PATH contains Wio bin : " << (snapshot.processPathContainsBin ? "yes" : "no") << '\n';
+
+#if defined(_WIN32)
+            std::cout << "\nPersistent user environment (registry)\n";
+            std::cout << "  WIO_ROOT              : " << (snapshot.persistentHasWioRoot ? snapshot.persistentWioRoot : "<unset>") << '\n';
+            std::cout << "  WIO_HOME              : " << (snapshot.persistentHasWioHome ? snapshot.persistentWioHome : "<unset>") << '\n';
+            std::cout << "  PATH contains Wio bin : " << (snapshot.persistentPathContainsBin ? "yes" : "no") << '\n';
+            std::cout << '\n';
+
+            if (snapshot.caseInsensitiveDuplicateEnvKeys.empty())
+            {
+                std::cout << "Current shell duplicate env keys : none\n";
+            }
+            else
+            {
+                std::cout << "Current shell duplicate env keys : ";
+                for (size_t i = 0; i < snapshot.caseInsensitiveDuplicateEnvKeys.size(); ++i)
+                {
+                    if (i > 0)
+                        std::cout << ", ";
+                    std::cout << snapshot.caseInsensitiveDuplicateEnvKeys[i];
+                }
+                std::cout << '\n';
+            }
+#else
+            std::cout << "\nPersistent user environment (.profile)\n";
+            std::cout << "  Wio profile block     : " << (snapshot.profileMarkerPresent ? "present" : "missing") << '\n';
+            std::cout << "  WIO_ROOT configured   : " << (snapshot.persistentHasWioRoot ? "yes" : "no") << '\n';
+            std::cout << "  WIO_HOME configured   : " << (snapshot.persistentHasWioHome ? "yes" : "no") << '\n';
+            std::cout << "  PATH contains Wio bin : " << (snapshot.persistentPathContainsBin ? "yes" : "no") << '\n';
+#endif
+        }
+
+        std::vector<std::string> diagnoseEnvironment(const EnvStatusSnapshot& snapshot)
+        {
+            std::vector<std::string> issues;
+            if (!snapshot.toolchainRoot.has_value())
+                issues.emplace_back("Could not resolve a Wio toolchain root from the current command, environment, or working directory.");
+
+            if (!snapshot.processHasPath || !snapshot.processPathContainsBin)
+                issues.emplace_back("The current shell PATH does not contain the active Wio bin directory.");
+
+            if (!snapshot.persistentHasWioRoot || !snapshot.persistentHasWioHome)
+                issues.emplace_back("The persistent user environment is missing WIO_ROOT and/or WIO_HOME.");
+
+            if (snapshot.binDirectory.has_value() && !snapshot.persistentPathContainsBin)
+                issues.emplace_back("The persistent user PATH does not contain the Wio bin directory.");
+
+            if (!snapshot.caseInsensitiveDuplicateEnvKeys.empty())
+                issues.emplace_back("The current shell exposes duplicate environment keys (for example Path/PATH), which can break MSBuild and other .NET tools on Windows.");
+
+            return issues;
         }
 
         Argonaut::Parser makeEnvPrintParser()
@@ -565,6 +991,78 @@ namespace wio::tooling::env
                         .AddAlias("--add-path")
                         .Flag()
                         .SetDescription("Include the packaged bin directory in PATH when persisting settings.")
+                )
+                .AutoHelp()
+                .SetVersion("0.1.0");
+
+            return parser;
+        }
+
+        Argonaut::Parser makeEnvStatusParser()
+        {
+            Argonaut::Parser parser;
+            parser
+                .Add(
+                    Argonaut::Argument("WIO-ROOT")
+                        .AddAlias("--wio-root")
+                        .SetDefaultValue("")
+                        .SetDescription("Optional explicit Wio toolchain root.")
+                )
+                .AutoHelp()
+                .SetVersion("0.1.0");
+
+            return parser;
+        }
+
+        Argonaut::Parser makeEnvRemoveParser()
+        {
+            Argonaut::Parser parser;
+            parser
+                .Add(
+                    Argonaut::Argument("WIO-ROOT")
+                        .AddAlias("--wio-root")
+                        .SetDefaultValue("")
+                        .SetDescription("Optional explicit Wio toolchain root.")
+                )
+                .Add(
+                    Argonaut::Argument("SHELL")
+                        .AddAlias("--shell")
+                        .SetDefaultValue(determineDefaultShell())
+                        .SetDescription("Shell syntax to emit for preview mode: powershell, cmd, or sh.")
+                )
+                .Add(
+                    Argonaut::Argument("SET-USER")
+                        .AddAlias("--set-user")
+                        .Flag()
+                        .SetDescription("Persist removal for the current user.")
+                )
+                .Add(
+                    Argonaut::Argument("NO-PROMPT")
+                        .AddAlias("--no-prompt")
+                        .Flag()
+                        .SetDescription("Do not ask interactive questions; print commands unless --set-user is provided.")
+                )
+                .Add(
+                    Argonaut::Argument("REMOVE-PATH")
+                        .AddAlias("--remove-path")
+                        .Flag()
+                        .SetDescription("Also remove the Wio bin directory from PATH.")
+                )
+                .AutoHelp()
+                .SetVersion("0.1.0");
+
+            return parser;
+        }
+
+        Argonaut::Parser makeEnvDoctorParser()
+        {
+            Argonaut::Parser parser;
+            parser
+                .Add(
+                    Argonaut::Argument("WIO-ROOT")
+                        .AddAlias("--wio-root")
+                        .SetDefaultValue("")
+                        .SetDescription("Optional explicit Wio toolchain root.")
                 )
                 .AutoHelp()
                 .SetVersion("0.1.0");
@@ -642,10 +1140,16 @@ namespace wio::tooling::env
                     std::cout << "WIO_HOME=" << toolchainRoot->string() << '\n';
                     if (addPath)
                         std::cout << "PATH includes " << binDirectory.string() << '\n';
+                    std::cout << "Open a new terminal to pick up the persistent PATH changes cleanly.\n";
                     return EXIT_SUCCESS;
                 }
 
                 std::cout << "No persistent environment changes were applied.\n";
+                std::cout << "This was a preview-only setup. If you want a persistent install, rerun with:\n";
+                std::cout << "  wio env setup --wio-root " << toolchainRoot->string() << " --set-user";
+                if (addPath)
+                    std::cout << " --add-path";
+                std::cout << "\n\n";
                 std::cout << "Use one of the following commands for the current shell:\n\n";
                 std::cout << renderShellEnvironment(*toolchainRoot, binDirectory, determineDefaultShell(), addPath) << '\n';
                 return EXIT_SUCCESS;
@@ -653,6 +1157,142 @@ namespace wio::tooling::env
             catch (const std::exception& e)
             {
                 std::cerr << "Env setup failed: " << e.what() << '\n';
+                return EXIT_FAILURE;
+            }
+        }
+
+        int handleEnvStatusCommand(std::vector<std::string> args)
+        {
+            Argonaut::Parser parser = makeEnvStatusParser();
+            if (const auto parseResult = parseWithHandling(parser, args, "Env status"); parseResult.has_value())
+                return *parseResult;
+
+            try
+            {
+                const std::string rootArgument = parser.GetValuesOf<std::string>("WIO-ROOT").front();
+                const std::optional<std::filesystem::path> explicitRoot =
+                    rootArgument.empty() ? std::nullopt : std::optional<std::filesystem::path>(std::filesystem::path(rootArgument));
+
+                const EnvStatusSnapshot snapshot = inspectEnvironment(explicitRoot);
+                printEnvironmentStatus(snapshot);
+                return EXIT_SUCCESS;
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "Env status failed: " << e.what() << '\n';
+                return EXIT_FAILURE;
+            }
+        }
+
+        int handleEnvRemoveCommand(std::vector<std::string> args)
+        {
+            Argonaut::Parser parser = makeEnvRemoveParser();
+            if (const auto parseResult = parseWithHandling(parser, args, "Env remove"); parseResult.has_value())
+                return *parseResult;
+
+            try
+            {
+                const std::string rootArgument = parser.GetValuesOf<std::string>("WIO-ROOT").front();
+                const std::string shell = parser.GetValuesOf<std::string>("SHELL").front();
+                bool setUser = getFlagValue(parser, "SET-USER");
+                const bool noPrompt = getFlagValue(parser, "NO-PROMPT");
+                bool removePath = getFlagValue(parser, "REMOVE-PATH");
+
+                const std::optional<std::filesystem::path> explicitRoot =
+                    rootArgument.empty() ? std::nullopt : std::optional<std::filesystem::path>(std::filesystem::path(rootArgument));
+
+                const auto toolchainRoot = tryFindToolchainRoot(explicitRoot);
+                if (!toolchainRoot.has_value())
+                    throw std::runtime_error("Could not resolve a Wio toolchain root for environment removal.");
+
+                const std::filesystem::path binDirectory = resolveBinDirectory(*toolchainRoot);
+
+                if (!setUser && !noPrompt)
+                    setUser = promptYesNo("Remove persistent Wio environment values for the current user?");
+
+                if (setUser && !removePath && !noPrompt)
+                    removePath = promptYesNo("Also remove the Wio bin directory from PATH?");
+
+                if (setUser)
+                {
+#if defined(_WIN32)
+                    removeUserEnvironmentWindows(binDirectory, removePath);
+#else
+                    removeUserEnvironmentPosix(binDirectory, removePath);
+#endif
+                    std::cout << "Removed persistent Wio environment values for the current user.\n";
+                    if (removePath)
+                        std::cout << "PATH no longer includes " << binDirectory.string() << '\n';
+                    std::cout << "Open a new terminal to observe the cleaned environment.\n";
+                    return EXIT_SUCCESS;
+                }
+
+                std::cout << "No persistent environment changes were applied.\n";
+                std::cout << "This was a preview-only removal. If you want a persistent cleanup, rerun with:\n";
+                std::cout << "  wio env remove --wio-root " << toolchainRoot->string() << " --set-user";
+                if (removePath)
+                    std::cout << " --remove-path";
+                std::cout << "\n\n";
+                std::cout << "Use one of the following commands for the current shell:\n\n";
+                std::cout << renderShellEnvironmentRemoval(binDirectory, shell, removePath) << '\n';
+                return EXIT_SUCCESS;
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "Env remove failed: " << e.what() << '\n';
+                return EXIT_FAILURE;
+            }
+        }
+
+        int handleEnvDoctorCommand(std::vector<std::string> args)
+        {
+            Argonaut::Parser parser = makeEnvDoctorParser();
+            if (const auto parseResult = parseWithHandling(parser, args, "Env doctor"); parseResult.has_value())
+                return *parseResult;
+
+            try
+            {
+                const std::string rootArgument = parser.GetValuesOf<std::string>("WIO-ROOT").front();
+                const std::optional<std::filesystem::path> explicitRoot =
+                    rootArgument.empty() ? std::nullopt : std::optional<std::filesystem::path>(std::filesystem::path(rootArgument));
+
+                const EnvStatusSnapshot snapshot = inspectEnvironment(explicitRoot);
+                const std::vector<std::string> issues = diagnoseEnvironment(snapshot);
+
+                std::cout << "Wio environment doctor\n\n";
+                if (issues.empty())
+                {
+                    std::cout << "No obvious environment problems were detected.\n";
+                    return EXIT_SUCCESS;
+                }
+
+                std::cout << "Detected issues:\n";
+                for (const std::string& issue : issues)
+                    std::cout << "- " << issue << '\n';
+
+#if defined(_WIN32)
+                if (!snapshot.caseInsensitiveDuplicateEnvKeys.empty())
+                {
+                    std::cout << "\nQuick current-shell fix for Path/PATH style collisions:\n";
+                    std::cout << "$effectivePath = $env:Path\n";
+                    std::cout << "Remove-Item Env:PATH -ErrorAction SilentlyContinue\n";
+                    std::cout << "$env:Path = $effectivePath\n";
+                }
+#endif
+
+                if (snapshot.toolchainRoot.has_value())
+                {
+                    std::cout << "\nRecommended persistent install command:\n";
+                    std::cout << "wio env setup --wio-root " << snapshot.toolchainRoot->string() << " --set-user --add-path\n";
+                    std::cout << "\nRecommended persistent cleanup command:\n";
+                    std::cout << "wio env remove --wio-root " << snapshot.toolchainRoot->string() << " --set-user --remove-path\n";
+                }
+
+                return EXIT_SUCCESS;
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "Env doctor failed: " << e.what() << '\n';
                 return EXIT_FAILURE;
             }
         }
@@ -669,7 +1309,7 @@ namespace wio::tooling::env
 
         if (argc < 3 || argv[2] == nullptr)
         {
-            std::cerr << "Expected an env subcommand. Currently supported: print, setup\n";
+            std::cerr << "Expected an env subcommand. Currently supported: print, setup, status, remove, doctor\n";
             return EXIT_FAILURE;
         }
 
@@ -678,6 +1318,12 @@ namespace wio::tooling::env
             return handleEnvPrintCommand(collectCommandArgs("wio env print", argc, argv, 3));
         if (subcommand == "setup")
             return handleEnvSetupCommand(collectCommandArgs("wio env setup", argc, argv, 3));
+        if (subcommand == "status")
+            return handleEnvStatusCommand(collectCommandArgs("wio env status", argc, argv, 3));
+        if (subcommand == "remove")
+            return handleEnvRemoveCommand(collectCommandArgs("wio env remove", argc, argv, 3));
+        if (subcommand == "doctor")
+            return handleEnvDoctorCommand(collectCommandArgs("wio env doctor", argc, argv, 3));
 
         std::cerr << "Unknown env subcommand: " << subcommand << '\n';
         return EXIT_FAILURE;

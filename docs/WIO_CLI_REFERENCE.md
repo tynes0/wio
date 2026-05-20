@@ -232,6 +232,9 @@ Subcommands:
 
 - `print`
 - `setup`
+- `status`
+- `remove`
+- `doctor`
 
 ### 7.1 `env print`
 
@@ -245,7 +248,7 @@ machine.
 ### 7.2 `env setup`
 
 ```powershell
-wio env setup --wio-root . --no-prompt
+wio env setup --wio-root . --set-user --add-path
 wio env setup --wio-root C:\Wio --set-user --add-path
 ```
 
@@ -256,6 +259,41 @@ Use it when you want to:
 - add the packaged `bin` directory to `PATH`
 
 Packaged installer wrappers delegate to this command.
+
+### 7.3 `env status`
+
+```powershell
+wio env status --wio-root .
+```
+
+Use it when you want a readable snapshot of:
+
+- the resolved Wio toolchain root
+- the active `bin` directory
+- current-shell `WIO_ROOT` / `WIO_HOME`
+- whether the current shell `PATH` contains Wio
+- whether the persistent user environment contains Wio
+
+### 7.4 `env remove`
+
+```powershell
+wio env remove --wio-root C:\Wio --set-user --remove-path
+```
+
+Use it when you want Wio to remove its own user-level environment values.
+
+### 7.5 `env doctor`
+
+```powershell
+wio env doctor --wio-root .
+```
+
+Use it when you want Wio to diagnose:
+
+- missing `PATH` entries
+- missing `WIO_ROOT` / `WIO_HOME`
+- Windows `Path` / `PATH` current-shell collisions
+- mismatches between the current shell and the persistent user environment
 
 ---
 

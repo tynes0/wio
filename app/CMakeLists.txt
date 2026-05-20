@@ -571,6 +571,36 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_test(
+        NAME wio_test_env_cli_status
+        COMMAND $<TARGET_FILE:wio_app> env status --wio-root "${CMAKE_SOURCE_DIR}"
+    )
+    set_tests_properties(
+        wio_test_env_cli_status
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
+        NAME wio_test_env_cli_remove_preview
+        COMMAND $<TARGET_FILE:wio_app> env remove --wio-root "${CMAKE_SOURCE_DIR}" --no-prompt --remove-path
+    )
+    set_tests_properties(
+        wio_test_env_cli_remove_preview
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
+        NAME wio_test_env_cli_doctor
+        COMMAND $<TARGET_FILE:wio_app> env doctor --wio-root "${CMAKE_SOURCE_DIR}"
+    )
+    set_tests_properties(
+        wio_test_env_cli_doctor
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
         NAME wio_test_cli_help_smoke
         COMMAND
             ${CMAKE_COMMAND}
