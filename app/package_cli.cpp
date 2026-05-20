@@ -371,6 +371,24 @@ namespace wio::tooling::package
                         .SetDescription("Optional CMake generator override.")
                 )
                 .Add(
+                    Argonaut::Argument("VISUAL-INSTALLER")
+                        .AddAlias("--visual-installer")
+                        .Flag()
+                        .SetDescription("Build the Windows visual installer .exe when supported.")
+                )
+                .Add(
+                    Argonaut::Argument("NO-VISUAL-INSTALLER")
+                        .AddAlias("--no-visual-installer")
+                        .Flag()
+                        .SetDescription("Skip building the Windows visual installer .exe.")
+                )
+                .Add(
+                    Argonaut::Argument("INNO-COMPILER")
+                        .AddAlias("--inno-compiler")
+                        .SetDefaultValue("")
+                        .SetDescription("Optional path to ISCC.exe used for the Windows visual installer.")
+                )
+                .Add(
                     Argonaut::Argument("NO-ZIP")
                         .AddAlias("--no-zip")
                         .Flag()
@@ -818,6 +836,9 @@ finally {
                 const std::string outputDirValue = parser.GetValuesOf<std::string>("OUTPUT-DIR").front();
                 const std::string versionSuffix = parser.GetValuesOf<std::string>("VERSION-SUFFIX").front();
                 const std::string generator = parser.GetValuesOf<std::string>("GENERATOR").front();
+                const std::string innoCompiler = parser.GetValuesOf<std::string>("INNO-COMPILER").front();
+                const bool explicitVisualInstaller = getFlagValue(parser, "VISUAL-INSTALLER");
+                const bool noVisualInstaller = getFlagValue(parser, "NO-VISUAL-INSTALLER");
                 const bool noZip = getFlagValue(parser, "NO-ZIP");
                 const bool clean = getFlagValue(parser, "CLEAN");
 
@@ -972,6 +993,7 @@ finally {
                 writeUtf8File(packageRoot / "QUICKSTART.md", buildPackageQuickstart(packageName));
 
                 std::filesystem::path bootstrapInstallerPath;
+                std::filesystem::path visualInstallerPath;
                 if (platformTag == "windows")
                 {
                     bootstrapInstallerPath = outputDir / (packageName + "-installer.ps1");
@@ -1002,14 +1024,68 @@ finally {
                     }
                 }
 
+#if defined(_WIN32)
+                const bool tryVisualInstaller = platformTag == "windows" && !noVisualInstaller;
+                if (tryVisualInstaller)
+                {
+                    const std::filesystem::path visualInstallerScript = *repoRoot / "tools" / "Build-WioVisualInstaller.ps1";
+                    const bool scriptExists = std::filesystem::exists(visualInstallerScript, ec);
+                    ec.clear();
+
+                    if (scriptExists)
+                    {
+                        std::vector<std::string> visualInstallerCommand{
+                            "powershell",
+                            "-ExecutionPolicy",
+                            "Bypass",
+                            "-File",
+                            visualInstallerScript.string(),
+                            "-Version",
+                            version,
+                            "-PackageRoot",
+                            packageRoot.string(),
+                            "-OutputDir",
+                            outputDir.string()
+                        };
+
+                        if (!innoCompiler.empty())
+                        {
+                            visualInstallerCommand.push_back("-InnoCompiler");
+                            visualInstallerCommand.push_back(innoCompiler);
+                        }
+
+                        const int visualInstallerResult = runShellCommand(visualInstallerCommand, *repoRoot);
+                        if (visualInstallerResult != 0)
+                        {
+                            if (explicitVisualInstaller)
+                                return visualInstallerResult;
+
+                            std::cerr << "Warning: visual installer build was skipped because the installer toolchain failed.\n";
+                        }
+                        else
+                        {
+                            visualInstallerPath = outputDir / ("WioSetup-" + version + "-windows-x64.exe");
+                        }
+                    }
+                    else if (explicitVisualInstaller)
+                    {
+                        throw std::runtime_error("Could not find tools/Build-WioVisualInstaller.ps1 for '--visual-installer'.");
+                    }
+                }
+#endif
+
                 std::cout << "Wio package root : " << packageRoot.string() << '\n';
                 if (!noZip)
                     std::cout << "Wio package zip  : " << archivePath.string() << '\n';
                 if (!bootstrapInstallerPath.empty())
                     std::cout << "Wio installer    : " << bootstrapInstallerPath.string() << '\n';
+                if (!visualInstallerPath.empty())
+                    std::cout << "Wio setup exe    : " << visualInstallerPath.string() << '\n';
                 std::cout << "Next steps:\n";
                 std::cout << "  1. Open " << (packageRoot / "QUICKSTART.md").string() << '\n';
-                if (!bootstrapInstallerPath.empty())
+                if (!visualInstallerPath.empty())
+                    std::cout << "  2. Upload " << visualInstallerPath.string() << " as the primary Windows installer\n";
+                else if (!bootstrapInstallerPath.empty())
                     std::cout << "  2. Run " << bootstrapInstallerPath.string() << '\n';
                 else
                     std::cout << "  2. Run " << (packageRoot / "Install-Wio.ps1").string() << '\n';

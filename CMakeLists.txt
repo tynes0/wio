@@ -16,6 +16,14 @@ set(WIO_BACKEND_CXX_COMPILER "g++" CACHE STRING "C++ compiler used for generated
 set(WIO_BACKEND_AR "ar" CACHE STRING "Archiver used for generated Wio static libraries.")
 
 if (MSVC)
+    option(WIO_MSVC_STATIC_RUNTIME "Link the MSVC runtime statically for Wio binaries." ON)
+
+    if (WIO_MSVC_STATIC_RUNTIME)
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    else()
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    endif()
+
     add_compile_options(/Zc:__cplusplus)
 endif()
 
