@@ -103,14 +103,21 @@ begin
     Result := Result + ' --add-path';
 end;
 
+function GetDoctorParams(): String;
+begin
+  Result := 'env doctor --wio-root ' + QuoteArg(ExpandConstant('{app}')) + ' --backend-smoke';
+end;
+
 procedure ConfigureWioEnvironment();
 var
   ResultCode: Integer;
   WioExe: String;
   Params: String;
+  DoctorParams: String;
 begin
   WioExe := GetWioExePath();
   Params := GetEnvSetupParams();
+  DoctorParams := GetDoctorParams();
 
   if not FileExists(WioExe) then begin
     MsgBox('Wio was copied, but bin\wio.exe could not be found. Environment setup was skipped.', mbError, MB_OK);
@@ -134,6 +141,23 @@ begin
            mbError, MB_OK);
   end else begin
     Log('Wio environment setup completed successfully.');
+
+    if not Exec(WioExe, DoctorParams, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then begin
+      MsgBox('Wio installed, but backend smoke verification could not be started.'#13#10#13#10 +
+             'You can run this manually:'#13#10 +
+             QuoteArg(WioExe) + ' ' + DoctorParams,
+             mbError, MB_OK);
+      exit;
+    end;
+
+    if ResultCode <> 0 then begin
+      MsgBox('Wio installed, but backend smoke verification failed with exit code ' + IntToStr(ResultCode) + '.'#13#10#13#10 +
+             'Please run this manually from a terminal for details:'#13#10 +
+             QuoteArg(WioExe) + ' ' + DoctorParams,
+             mbError, MB_OK);
+    end else begin
+      Log('Wio backend smoke verification completed successfully.');
+    end;
   end;
 end;
 

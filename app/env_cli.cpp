@@ -3,7 +3,10 @@
 #include <argonaut.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <chrono>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <cwctype>
@@ -23,6 +26,7 @@
 #if defined(_WIN32)
     #include <windows.h>
 #else
+    #include <sys/wait.h>
     #include <unistd.h>
 #endif
 
@@ -52,6 +56,16 @@ namespace wio::tooling::env
             std::string persistentPath;
             bool profileMarkerPresent = false;
             std::vector<std::string> caseInsensitiveDuplicateEnvKeys;
+        };
+
+        struct BackendSmokeResult
+        {
+            bool attempted = false;
+            bool success = false;
+            int exitCode = EXIT_FAILURE;
+            std::filesystem::path sourcePath;
+            std::filesystem::path logPath;
+            std::string output;
         };
 
         std::string trim(const std::string& value);
@@ -247,6 +261,30 @@ namespace wio::tooling::env
 #endif
         }
 
+        std::filesystem::path getUserCacheRoot()
+        {
+#if defined(_WIN32)
+            if (const char* localAppData = std::getenv("LOCALAPPDATA"); localAppData != nullptr && *localAppData != '\0')
+                return std::filesystem::path(localAppData).make_preferred();
+
+            if (const char* userProfile = std::getenv("USERPROFILE"); userProfile != nullptr && *userProfile != '\0')
+                return (std::filesystem::path(userProfile) / "AppData" / "Local").make_preferred();
+#else
+            if (const char* xdgCacheHome = std::getenv("XDG_CACHE_HOME"); xdgCacheHome != nullptr && *xdgCacheHome != '\0')
+                return std::filesystem::path(xdgCacheHome).make_preferred();
+
+            if (const char* home = std::getenv("HOME"); home != nullptr && *home != '\0')
+                return (std::filesystem::path(home) / ".cache").make_preferred();
+#endif
+
+            std::error_code ec;
+            std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec);
+            if (!ec && !tempRoot.empty())
+                return tempRoot.make_preferred();
+
+            return std::filesystem::absolute(std::filesystem::path(".")).make_preferred();
+        }
+
         bool isToolchainRoot(const std::filesystem::path& candidate)
         {
             std::error_code ec;
@@ -331,6 +369,208 @@ namespace wio::tooling::env
                 return executablePath.parent_path().make_preferred();
 
             return packagedBin.make_preferred();
+        }
+
+        std::string quoteShellArgument(const std::string& value)
+        {
+            std::string escaped;
+            escaped.reserve(value.size() + 2);
+            escaped.push_back('"');
+            for (const char ch : value)
+            {
+                if (ch == '"')
+                    escaped += "\\\"";
+                else
+                    escaped.push_back(ch);
+            }
+            escaped.push_back('"');
+            return escaped;
+        }
+
+        std::string readUtf8FileIfPresent(const std::filesystem::path& path)
+        {
+            std::ifstream stream(path, std::ios::binary);
+            if (!stream.is_open())
+                return {};
+
+            std::ostringstream buffer;
+            buffer << stream.rdbuf();
+            return buffer.str();
+        }
+
+        struct CapturedCommandResult
+        {
+            int exitCode = EXIT_FAILURE;
+            std::string output;
+        };
+
+        CapturedCommandResult captureCommandOutput(const std::string& command)
+        {
+            CapturedCommandResult result;
+
+#if defined(_WIN32)
+            SECURITY_ATTRIBUTES securityAttributes{};
+            securityAttributes.nLength = sizeof(securityAttributes);
+            securityAttributes.bInheritHandle = TRUE;
+
+            HANDLE readPipe = nullptr;
+            HANDLE writePipe = nullptr;
+            if (CreatePipe(&readPipe, &writePipe, &securityAttributes, 0) == FALSE)
+            {
+                result.output = "Failed to create doctor output pipe.";
+                return result;
+            }
+
+            SetHandleInformation(readPipe, HANDLE_FLAG_INHERIT, 0);
+
+            STARTUPINFOA startupInfo{};
+            startupInfo.cb = sizeof(startupInfo);
+            startupInfo.dwFlags = STARTF_USESTDHANDLES;
+            startupInfo.hStdOutput = writePipe;
+            startupInfo.hStdError = writePipe;
+            startupInfo.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+
+            PROCESS_INFORMATION processInfo{};
+            std::vector<char> commandLine(command.begin(), command.end());
+            commandLine.push_back('\0');
+
+            const BOOL created = CreateProcessA(
+                nullptr,
+                commandLine.data(),
+                nullptr,
+                nullptr,
+                TRUE,
+                CREATE_NO_WINDOW,
+                nullptr,
+                nullptr,
+                &startupInfo,
+                &processInfo
+            );
+
+            CloseHandle(writePipe);
+
+            if (created == FALSE)
+            {
+                CloseHandle(readPipe);
+                result.output = "Failed to start backend smoke command.";
+                return result;
+            }
+
+            std::array<char, 4096> buffer{};
+            DWORD bytesRead = 0;
+            while (ReadFile(readPipe, buffer.data(), static_cast<DWORD>(buffer.size()), &bytesRead, nullptr) == TRUE && bytesRead > 0)
+                result.output.append(buffer.data(), bytesRead);
+
+            WaitForSingleObject(processInfo.hProcess, INFINITE);
+            DWORD exitCode = EXIT_FAILURE;
+            GetExitCodeProcess(processInfo.hProcess, &exitCode);
+            result.exitCode = static_cast<int>(exitCode);
+
+            CloseHandle(readPipe);
+            CloseHandle(processInfo.hThread);
+            CloseHandle(processInfo.hProcess);
+#else
+            const std::string redirectedCommand = command + " 2>&1";
+            FILE* pipe = popen(redirectedCommand.c_str(), "r");
+            if (pipe == nullptr)
+            {
+                result.output = "Failed to start backend smoke command.";
+                return result;
+            }
+
+            std::array<char, 4096> buffer{};
+            while (std::fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr)
+                result.output += buffer.data();
+
+            const int closeResult = pclose(pipe);
+            result.exitCode = closeResult;
+            if (closeResult != -1 && WIFEXITED(closeResult))
+                result.exitCode = WEXITSTATUS(closeResult);
+#endif
+
+            return result;
+        }
+
+        BackendSmokeResult runBackendSmoke()
+        {
+            BackendSmokeResult result;
+            result.attempted = true;
+
+            const std::filesystem::path executablePath = tryGetExecutablePath();
+            if (executablePath.empty())
+            {
+                result.output = "Could not resolve the current wio executable path.";
+                return result;
+            }
+
+            const auto timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
+            std::error_code ec;
+            std::filesystem::path doctorRoot;
+            for (const std::filesystem::path candidate : {
+                     (getUserCacheRoot() / "Wio" / "doctor").make_preferred(),
+                     (std::filesystem::temp_directory_path(ec) / "Wio" / "doctor").make_preferred(),
+                     std::filesystem::absolute(std::filesystem::path(".wio-doctor")).make_preferred()
+                 })
+            {
+                ec.clear();
+                std::filesystem::create_directories(candidate, ec);
+                if (!ec)
+                {
+                    doctorRoot = candidate;
+                    break;
+                }
+            }
+
+            if (doctorRoot.empty())
+            {
+                result.output = "Could not create a writable Wio doctor working directory.";
+                return result;
+            }
+
+            result.sourcePath = (doctorRoot / ("backend-smoke-" + std::to_string(timestamp) + ".wio")).make_preferred();
+            result.logPath = (doctorRoot / ("backend-smoke-" + std::to_string(timestamp) + ".log")).make_preferred();
+
+            {
+                std::ofstream sourceStream(result.sourcePath, std::ios::binary | std::ios::trunc);
+                if (!sourceStream.is_open())
+                {
+                    result.output = "Could not create the Wio backend smoke source file.";
+                    return result;
+                }
+
+                sourceStream
+                    << "use std::console;\n\n"
+                    << "fn Entry() -> void\n"
+                    << "{\n"
+                    << "    std::console::PrintLine(\"Wio backend smoke ok\");\n"
+                    << "}\n";
+            }
+
+            const std::string command =
+                quoteShellArgument(executablePath.string()) +
+                " file run " +
+                quoteShellArgument(result.sourcePath.string()) +
+                " --show-backend-info";
+
+            const CapturedCommandResult commandResult = captureCommandOutput(command);
+            result.exitCode = commandResult.exitCode;
+            result.output = commandResult.output;
+            {
+                std::ofstream logStream(result.logPath, std::ios::binary | std::ios::trunc);
+                if (logStream.is_open())
+                    logStream.write(result.output.data(), static_cast<std::streamsize>(result.output.size()));
+            }
+
+            if (commandResult.exitCode == 0 && result.output.find("Wio backend smoke ok") != std::string::npos)
+            {
+                result.success = true;
+                return result;
+            }
+
+            if (result.output.empty())
+                result.output = "The backend smoke command did not produce output.";
+
+            return result;
         }
 
         std::string renderShellEnvironment(const std::filesystem::path& toolchainRoot, const std::filesystem::path& binDirectory, const std::string& shell, bool addPath)
@@ -1064,6 +1304,12 @@ namespace wio::tooling::env
                         .SetDefaultValue("")
                         .SetDescription("Optional explicit Wio toolchain root.")
                 )
+                .Add(
+                    Argonaut::Argument("BACKEND-SMOKE")
+                        .AddAlias("--backend-smoke")
+                        .Flag()
+                        .SetDescription("Compile and run a tiny Wio program to verify the bundled/native backend toolchain.")
+                )
                 .AutoHelp()
                 .SetVersion("0.1.0");
 
@@ -1253,22 +1499,29 @@ namespace wio::tooling::env
             try
             {
                 const std::string rootArgument = parser.GetValuesOf<std::string>("WIO-ROOT").front();
+                const bool backendSmokeRequested = getFlagValue(parser, "BACKEND-SMOKE");
                 const std::optional<std::filesystem::path> explicitRoot =
                     rootArgument.empty() ? std::nullopt : std::optional<std::filesystem::path>(std::filesystem::path(rootArgument));
 
                 const EnvStatusSnapshot snapshot = inspectEnvironment(explicitRoot);
                 const std::vector<std::string> issues = diagnoseEnvironment(snapshot);
+                std::optional<BackendSmokeResult> backendSmoke;
+                if (backendSmokeRequested && snapshot.toolchainRoot.has_value())
+                    backendSmoke = runBackendSmoke();
 
                 std::cout << "Wio environment doctor\n\n";
                 if (issues.empty())
                 {
                     std::cout << "No obvious environment problems were detected.\n";
-                    return EXIT_SUCCESS;
+                    if (!backendSmoke.has_value())
+                        return EXIT_SUCCESS;
                 }
-
-                std::cout << "Detected issues:\n";
-                for (const std::string& issue : issues)
-                    std::cout << "- " << issue << '\n';
+                else
+                {
+                    std::cout << "Detected issues:\n";
+                    for (const std::string& issue : issues)
+                        std::cout << "- " << issue << '\n';
+                }
 
 #if defined(_WIN32)
                 if (!snapshot.caseInsensitiveDuplicateEnvKeys.empty())
@@ -1286,6 +1539,27 @@ namespace wio::tooling::env
                     std::cout << "wio env setup --wio-root " << snapshot.toolchainRoot->string() << " --set-user --add-path\n";
                     std::cout << "\nRecommended persistent cleanup command:\n";
                     std::cout << "wio env remove --wio-root " << snapshot.toolchainRoot->string() << " --set-user --remove-path\n";
+                }
+
+                if (backendSmoke.has_value())
+                {
+                    std::cout << "\nBackend smoke:\n";
+                    if (backendSmoke->success)
+                    {
+                        std::cout << "- Success: compile + run passed.\n";
+                        std::cout << "- Log: " << backendSmoke->logPath.string() << '\n';
+                    }
+                    else
+                    {
+                        std::cout << "- Failed with exit code " << backendSmoke->exitCode << '\n';
+                        if (!backendSmoke->sourcePath.empty())
+                            std::cout << "- Smoke file: " << backendSmoke->sourcePath.string() << '\n';
+                        if (!backendSmoke->logPath.empty())
+                            std::cout << "- Log: " << backendSmoke->logPath.string() << '\n';
+                        if (!backendSmoke->output.empty())
+                            std::cout << "\nSmoke output:\n" << backendSmoke->output << '\n';
+                        return EXIT_FAILURE;
+                    }
                 }
 
                 return EXIT_SUCCESS;
