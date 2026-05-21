@@ -4430,7 +4430,7 @@ namespace wio::codegen
                         ? enumType->name
                         : enumType->nativeCppName;
 
-                    emitLine(std::format(
+                    emitLine(common::formatString(
                         "using {} = {};",
                         Mangler::mangleStruct(declaration->name->token.value, sym ? sym->scopePath : ""),
                         nativeTypeName
@@ -4454,7 +4454,7 @@ namespace wio::codegen
                         ? enumType->name
                         : enumType->nativeCppName;
 
-                    emitLine(std::format(
+                    emitLine(common::formatString(
                         "using {} = {};",
                         Mangler::mangleStruct(declaration->name->token.value, sym ? sym->scopePath : ""),
                         nativeTypeName
@@ -4508,7 +4508,7 @@ namespace wio::codegen
                         nativeTypeName += ">";
                     }
 
-                    emitLine(std::format(
+                    emitLine(common::formatString(
                         "using {} = {};",
                         Mangler::mangleStruct(declaration->name->token.value, sym ? sym->scopePath : ""),
                         nativeTypeName
@@ -4517,7 +4517,7 @@ namespace wio::codegen
                 else
                 {
                     emitTemplateForwardDeclarationPrefix(declaration->genericParameters);
-                    emitLine(std::format("struct {};", Mangler::mangleStruct(declaration->name->token.value, sym ? sym->scopePath : "")));
+                    emitLine(common::formatString("struct {};", Mangler::mangleStruct(declaration->name->token.value, sym ? sym->scopePath : "")));
                 }
             }
             else if (stmt->template is<ObjectDeclaration>())
@@ -4525,14 +4525,14 @@ namespace wio::codegen
                 auto declaration = stmt->template as<ObjectDeclaration>();
                 auto sym = declaration->name->referencedSymbol.Lock();
                 emitTemplateForwardDeclarationPrefix(declaration->genericParameters);
-                emitLine(std::format("struct {};", Mangler::mangleStruct(declaration->name->token.value, sym ? sym->scopePath : "")));
+                emitLine(common::formatString("struct {};", Mangler::mangleStruct(declaration->name->token.value, sym ? sym->scopePath : "")));
             }
             else if (stmt->template is<InterfaceDeclaration>())
             {
                 auto declaration = stmt->template as<InterfaceDeclaration>();
                 auto sym = declaration->name->referencedSymbol.Lock();
                 emitTemplateForwardDeclarationPrefix(declaration->genericParameters);
-                emitLine(std::format("struct {};", Mangler::mangleInterface(declaration->name->token.value, sym ? sym->scopePath : "")));
+                emitLine(common::formatString("struct {};", Mangler::mangleInterface(declaration->name->token.value, sym ? sym->scopePath : "")));
             }
         });
 
@@ -5155,7 +5155,7 @@ namespace wio::codegen
             }
         }
 
-        emit("std::format(\"" + formatString + "\"");
+        emit("wio::common::formatString(\"" + formatString + "\"");
 
         for (auto& arg : arguments)
         {
