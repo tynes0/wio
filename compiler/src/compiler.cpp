@@ -1,6 +1,7 @@
 #include "compiler.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstdlib>
 #include <cstdio>
@@ -158,9 +159,6 @@ namespace wio
                     candidates.push_back(std::move(absoluteCandidate));
             };
 
-            if (auto envRoot = tryGetEnvironmentToolchainRoot(); envRoot.has_value())
-                appendCandidate(*envRoot);
-
             if (const std::filesystem::path executablePath = getExecutablePath(); !executablePath.empty())
             {
                 const std::filesystem::path executableDir = executablePath.parent_path();
@@ -168,6 +166,9 @@ namespace wio
                 appendCandidate(executableDir.parent_path());
                 appendCandidate(executableDir.parent_path().parent_path());
             }
+
+            if (auto envRoot = tryGetEnvironmentToolchainRoot(); envRoot.has_value())
+                appendCandidate(*envRoot);
 
             appendCandidate(getCompileTimeDefaultRootDir());
             return candidates;
@@ -281,22 +282,93 @@ namespace wio
             );
         }
 
-        std::string getBackendCompiler()
+        std::optional<std::filesystem::path> tryResolveExecutableFromPath(const std::string& executableName)
+        {
+            if (executableName.empty())
+                return std::nullopt;
+
+            std::error_code ec;
+            const std::filesystem::path configuredPath = std::filesystem::path(executableName);
+            if (configuredPath.is_absolute() &&
+                std::filesystem::exists(configuredPath, ec) &&
+                std::filesystem::is_regular_file(configuredPath, ec) &&
+                !ec)
+            {
+                return std::filesystem::absolute(configuredPath).make_preferred();
+            }
+
+#if defined(_WIN32)
+            std::vector<char> buffer(MAX_PATH, '\0');
+            const DWORD copied = SearchPathA(nullptr, executableName.c_str(), nullptr, static_cast<DWORD>(buffer.size()), buffer.data(), nullptr);
+            if (copied > 0 && copied < buffer.size())
+                return std::filesystem::path(buffer.data()).make_preferred();
+#endif
+
+            return std::nullopt;
+        }
+
+        std::filesystem::path resolveBundledBackendExecutable(std::string_view configuredExecutable,
+                                                              std::initializer_list<std::filesystem::path> relativeCandidates)
+        {
+            const std::string configuredValue(configuredExecutable);
+
+            if (auto bundled = resolveToolchainFile({}, relativeCandidates); !bundled.empty())
+                return bundled;
+
+            if (auto fromPath = tryResolveExecutableFromPath(configuredValue); fromPath.has_value())
+                return fromPath->make_preferred();
+
+            return std::filesystem::path(configuredValue).make_preferred();
+        }
+
+        std::filesystem::path getBackendCompilerPath()
         {
 #ifdef WIO_BACKEND_CXX_COMPILER
-            return WIO_BACKEND_CXX_COMPILER;
+            constexpr std::string_view configuredCompiler = WIO_BACKEND_CXX_COMPILER;
 #else
-            return "g++";
+            constexpr std::string_view configuredCompiler = "g++";
 #endif
+
+#if defined(_WIN32)
+            return resolveBundledBackendExecutable(
+                configuredCompiler,
+                {
+                    std::filesystem::path("toolchains") / "windows-x64-mingw" / "bin" / "g++.exe"
+                }
+            );
+#else
+            return resolveBundledBackendExecutable(configuredCompiler, {});
+#endif
+        }
+
+        std::filesystem::path getBackendArchiverPath()
+        {
+#ifdef WIO_BACKEND_AR
+            constexpr std::string_view configuredArchiver = WIO_BACKEND_AR;
+#else
+            constexpr std::string_view configuredArchiver = "ar";
+#endif
+
+#if defined(_WIN32)
+            return resolveBundledBackendExecutable(
+                configuredArchiver,
+                {
+                    std::filesystem::path("toolchains") / "windows-x64-mingw" / "bin" / "ar.exe"
+                }
+            );
+#else
+            return resolveBundledBackendExecutable(configuredArchiver, {});
+#endif
+        }
+
+        std::string getBackendCompiler()
+        {
+            return getBackendCompilerPath().string();
         }
 
         std::string getBackendArchiver()
         {
-#ifdef WIO_BACKEND_AR
-            return WIO_BACKEND_AR;
-#else
-            return "ar";
-#endif
+            return getBackendArchiverPath().string();
         }
 
         std::filesystem::path getRuntimeLibraryFile()
@@ -375,6 +447,14 @@ namespace wio
             }
 
             return "unknown";
+        }
+
+        bool backendCompilerLooksGnuLike(std::string_view compilerText)
+        {
+            const std::string lower = normalizeLowercase(std::string(compilerText));
+            return lower.find("g++") != std::string::npos ||
+                   lower.find("gcc") != std::string::npos ||
+                   lower.find("mingw") != std::string::npos;
         }
 
         std::filesystem::path makeDefaultOutputPath(const std::filesystem::path& sourcePath, BuildTarget target)
@@ -727,17 +807,151 @@ namespace wio
             std::string message;
         };
 
-        CommandResult runCommandCaptureOutput(const std::string& command)
+#if defined(_WIN32)
+        class ScopedWindowsPathOverride
+        {
+        public:
+            explicit ScopedWindowsPathOverride(const std::vector<std::filesystem::path>& extraPathEntries)
+            {
+                if (extraPathEntries.empty())
+                    return;
+
+                std::string existingPath;
+                DWORD requiredLength = GetEnvironmentVariableA("Path", nullptr, 0);
+                if (requiredLength > 0)
+                {
+                    existingPath.assign(requiredLength, '\0');
+                    const DWORD copiedLength = GetEnvironmentVariableA("Path", existingPath.data(), requiredLength);
+                    if (copiedLength > 0 && copiedLength < requiredLength)
+                        existingPath.resize(copiedLength);
+                    else if (copiedLength == 0)
+                        existingPath.clear();
+                }
+
+                originalPath_ = existingPath;
+                hadOriginalPath_ = requiredLength > 0;
+
+                std::string overriddenPath;
+                for (const auto& pathEntry : extraPathEntries)
+                {
+                    if (pathEntry.empty())
+                        continue;
+
+                    if (!overriddenPath.empty())
+                        overriddenPath += ';';
+                    overriddenPath += pathEntry.string();
+                }
+
+                if (!existingPath.empty())
+                {
+                    if (!overriddenPath.empty())
+                        overriddenPath += ';';
+                    overriddenPath += existingPath;
+                }
+
+                if (!overriddenPath.empty())
+                {
+                    SetEnvironmentVariableA("Path", overriddenPath.c_str());
+                    active_ = true;
+                }
+            }
+
+            ScopedWindowsPathOverride(const ScopedWindowsPathOverride&) = delete;
+            ScopedWindowsPathOverride& operator=(const ScopedWindowsPathOverride&) = delete;
+
+            ~ScopedWindowsPathOverride()
+            {
+                if (!active_)
+                    return;
+
+                if (hadOriginalPath_)
+                    SetEnvironmentVariableA("Path", originalPath_.c_str());
+                else
+                    SetEnvironmentVariableA("Path", nullptr);
+            }
+
+        private:
+            bool active_ = false;
+            bool hadOriginalPath_ = false;
+            std::string originalPath_;
+        };
+#endif
+
+        CommandResult runCommandCaptureOutput(const std::string& command,
+                                             const std::vector<std::filesystem::path>& extraPathEntries = {})
         {
             CommandResult result;
             result.command = command;
-            const std::string redirectedCommand = command + " 2>&1";
 
 #if defined(_WIN32)
-            FILE* pipe = _popen(redirectedCommand.c_str(), "r");
+            SECURITY_ATTRIBUTES securityAttributes{};
+            securityAttributes.nLength = sizeof(securityAttributes);
+            securityAttributes.bInheritHandle = TRUE;
+
+            HANDLE readPipe = nullptr;
+            HANDLE writePipe = nullptr;
+            if (CreatePipe(&readPipe, &writePipe, &securityAttributes, 0) == FALSE)
+            {
+                result.output =
+                    "Failed to create backend output pipe.\n"
+                    "Command: " + command;
+                return result;
+            }
+
+            SetHandleInformation(readPipe, HANDLE_FLAG_INHERIT, 0);
+
+            STARTUPINFOA startupInfo{};
+            startupInfo.cb = sizeof(startupInfo);
+            startupInfo.dwFlags = STARTF_USESTDHANDLES;
+            startupInfo.hStdOutput = writePipe;
+            startupInfo.hStdError = writePipe;
+            startupInfo.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+
+            PROCESS_INFORMATION processInfo{};
+            std::vector<char> commandLine(command.begin(), command.end());
+            commandLine.push_back('\0');
+            ScopedWindowsPathOverride scopedPathOverride(extraPathEntries);
+
+            const BOOL created = CreateProcessA(
+                nullptr,
+                commandLine.data(),
+                nullptr,
+                nullptr,
+                TRUE,
+                CREATE_NO_WINDOW,
+                nullptr,
+                nullptr,
+                &startupInfo,
+                &processInfo
+            );
+
+            CloseHandle(writePipe);
+
+            if (created == FALSE)
+            {
+                CloseHandle(readPipe);
+                result.output =
+                    "Failed to start backend command. Verify that the backend tool exists on PATH or is configured correctly.\n"
+                    "Command: " + command;
+                return result;
+            }
+
+            std::array<char, 4096> buffer{};
+            DWORD bytesRead = 0;
+            while (ReadFile(readPipe, buffer.data(), static_cast<DWORD>(buffer.size()), &bytesRead, nullptr) == TRUE && bytesRead > 0)
+                result.output.append(buffer.data(), bytesRead);
+
+            WaitForSingleObject(processInfo.hProcess, INFINITE);
+            DWORD exitCode = EXIT_FAILURE;
+            GetExitCodeProcess(processInfo.hProcess, &exitCode);
+            result.exitCode = static_cast<int>(exitCode);
+
+            CloseHandle(readPipe);
+            CloseHandle(processInfo.hThread);
+            CloseHandle(processInfo.hProcess);
 #else
+            const std::string redirectedCommand = command + " 2>&1";
             FILE* pipe = popen(redirectedCommand.c_str(), "r");
-#endif
             if (pipe == nullptr)
             {
                 result.output =
@@ -750,9 +964,6 @@ namespace wio
             while (std::fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr)
                 result.output += buffer.data();
 
-#if defined(_WIN32)
-            result.exitCode = _pclose(pipe);
-#else
             const int closeResult = pclose(pipe);
             result.exitCode = closeResult;
             if (closeResult != -1 && WIFEXITED(closeResult))
@@ -1446,6 +1657,9 @@ namespace wio
             const std::string trimmedOutput = trimWhitespace(output);
             if (!emittedStructuredDiagnostics)
             {
+                if (!trimWhitespace(command).empty())
+                    WIO_LOG_INFO("Backend command:\n{}", command);
+
                 if (trimmedOutput.empty())
                     WIO_LOG_FATAL("{} with code: {}", summary, exitCode);
                 else
@@ -2546,7 +2760,8 @@ namespace wio
 
                 std::filesystem::create_directories(outputPath.parent_path());
 
-                std::string backendCompiler = getBackendCompiler();
+                const std::filesystem::path backendCompilerPath = getBackendCompilerPath();
+                const std::string backendCompiler = backendCompilerPath.string();
                 int exitCode = EXIT_SUCCESS;
 
                 if (gAppData.buildTarget == BuildTarget::StaticLibrary)
@@ -2586,7 +2801,7 @@ namespace wio
                         appendBackendArguments(compileCmd, backendCompilerArgs);
                         compileCmd << " -o " << quotePath(objectPath);
 
-                        return runCommandCaptureOutput(compileCmd.str());
+                        return runCommandCaptureOutput(compileCmd.str(), { backendCompilerPath.parent_path() });
                     };
 
                     CommandResult compileResult = compileObject(cppPath, 0);
@@ -2614,7 +2829,8 @@ namespace wio
                     for (const auto& objectFile : objectFiles)
                         archiveCmd << " " << quotePath(objectFile);
 
-                    const CommandResult archiveResult = runCommandCaptureOutput(archiveCmd.str());
+                    const std::filesystem::path backendArchiverPath = getBackendArchiverPath();
+                    const CommandResult archiveResult = runCommandCaptureOutput(archiveCmd.str(), { backendArchiverPath.parent_path() });
                     exitCode = archiveResult.exitCode;
                     if (exitCode != 0)
                     {
@@ -2636,6 +2852,11 @@ namespace wio
                         cmd << "-shared ";
                     }
 
+#if defined(_WIN32)
+                    if (gAppData.buildTarget == BuildTarget::Executable && backendCompilerLooksGnuLike(backendCompiler))
+                        cmd << "-static ";
+#endif
+
                     cmd << quotePath(cppPath);
                     appendIncludeDirectories(cmd, systemIncludeDirs);
                     appendIncludeDirectories(cmd, includeDirs);
@@ -2645,7 +2866,7 @@ namespace wio
                     cmd << " " << quotePath(runtimeLibraryPath);
                     cmd << " -o " << quotePath(outputPath);
 
-                    const CommandResult backendResult = runCommandCaptureOutput(cmd.str());
+                    const CommandResult backendResult = runCommandCaptureOutput(cmd.str(), { backendCompilerPath.parent_path() });
                     exitCode = backendResult.exitCode;
 
                     if (exitCode != 0)

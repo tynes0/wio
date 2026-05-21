@@ -763,6 +763,162 @@ finally {
             return script;
         }
 
+        std::optional<std::filesystem::path> tryFindExecutableOnPath(const std::string& executableName)
+        {
+            if (executableName.empty())
+                return std::nullopt;
+
+#if defined(_WIN32)
+            std::vector<char> buffer(MAX_PATH, '\0');
+            const DWORD copied = SearchPathA(nullptr, executableName.c_str(), nullptr, static_cast<DWORD>(buffer.size()), buffer.data(), nullptr);
+            if (copied > 0 && copied < buffer.size())
+                return std::filesystem::path(buffer.data()).make_preferred();
+#else
+            if (const char* pathValue = std::getenv("PATH"))
+            {
+                std::stringstream stream(pathValue);
+                std::string segment;
+                while (std::getline(stream, segment, ':'))
+                {
+                    if (segment.empty())
+                        continue;
+
+                    std::filesystem::path candidate = std::filesystem::path(segment) / executableName;
+                    std::error_code ec;
+                    if (std::filesystem::exists(candidate, ec) && !ec &&
+                        std::filesystem::is_regular_file(candidate, ec) && !ec)
+                    {
+                        return std::filesystem::absolute(candidate).make_preferred();
+                    }
+                }
+            }
+#endif
+
+            return std::nullopt;
+        }
+
+        std::optional<std::filesystem::path> tryResolvePortableBackendRoot()
+        {
+            if (const char* explicitRoot = std::getenv("WIO_PORTABLE_BACKEND_ROOT"))
+            {
+                if (*explicitRoot != '\0')
+                {
+                    const std::filesystem::path root = std::filesystem::absolute(std::filesystem::path(explicitRoot)).make_preferred();
+                    std::error_code ec;
+                    if (std::filesystem::exists(root / "bin", ec) && !ec)
+                        return root;
+                }
+            }
+
+#if defined(_WIN32)
+            const auto compilerPath = tryFindExecutableOnPath("g++.exe");
+            const auto archiverPath = tryFindExecutableOnPath("ar.exe");
+#else
+            const auto compilerPath = tryFindExecutableOnPath("g++");
+            const auto archiverPath = tryFindExecutableOnPath("ar");
+#endif
+
+            if (!compilerPath.has_value() || !archiverPath.has_value())
+                return std::nullopt;
+
+            const std::filesystem::path compilerRoot = compilerPath->parent_path().parent_path();
+            const std::filesystem::path archiverRoot = archiverPath->parent_path().parent_path();
+            if (compilerRoot != archiverRoot)
+                return std::nullopt;
+
+            std::error_code ec;
+            if (!std::filesystem::exists(compilerRoot / "bin", ec) || ec)
+                return std::nullopt;
+            ec.clear();
+            if (!std::filesystem::exists(compilerRoot / "lib", ec) || ec)
+                return std::nullopt;
+
+            auto normalizedCompilerRoot = compilerRoot;
+            return normalizedCompilerRoot.make_preferred();
+        }
+
+        std::filesystem::path copyPortableBackendToolchain(const std::filesystem::path& packageRoot)
+        {
+            const auto backendRoot = tryResolvePortableBackendRoot();
+            if (!backendRoot.has_value())
+            {
+                throw std::runtime_error(
+                    "Could not resolve a portable backend compiler root for packaging. "
+                    "Ensure g++.exe and ar.exe are available on PATH, or set WIO_PORTABLE_BACKEND_ROOT."
+                );
+            }
+
+            const std::filesystem::path targetRoot =
+#if defined(_WIN32)
+                packageRoot / "toolchains" / "windows-x64-mingw";
+#else
+                packageRoot / "toolchains" / "host-backend";
+#endif
+
+            std::error_code ec;
+            if (std::filesystem::exists(targetRoot, ec))
+            {
+                std::filesystem::remove_all(targetRoot, ec);
+                if (ec)
+                    throw std::runtime_error("Could not replace previous bundled backend toolchain at: " + targetRoot.string());
+            }
+
+            std::filesystem::create_directories(targetRoot.parent_path(), ec);
+            if (ec)
+                throw std::runtime_error("Could not create bundled backend parent directory: " + targetRoot.parent_path().string());
+
+            std::filesystem::create_directories(targetRoot, ec);
+            if (ec)
+                throw std::runtime_error("Could not create bundled backend directory: " + targetRoot.string());
+
+            const auto copyRecursive = [&](const std::filesystem::path& relativePath)
+            {
+                ec.clear();
+                const std::filesystem::path sourcePath = (*backendRoot / relativePath).make_preferred();
+                if (!std::filesystem::exists(sourcePath, ec) || ec)
+                    return;
+
+                ec.clear();
+                std::filesystem::copy(sourcePath,
+                                      (targetRoot / relativePath).make_preferred(),
+                                      std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing,
+                                      ec);
+                if (ec)
+                    throw std::runtime_error("Could not copy bundled backend subtree into package root: " + sourcePath.string());
+            };
+
+            copyRecursive("bin");
+            copyRecursive("include");
+            copyRecursive("lib");
+            copyRecursive("libexec");
+            copyRecursive("x86_64-w64-mingw32");
+
+            for (const std::filesystem::path topLevelFile : {
+                     std::filesystem::path("build-info.txt"),
+                     std::filesystem::path("COPYING"),
+                     std::filesystem::path("COPYING.txt"),
+                     std::filesystem::path("LICENSE"),
+                     std::filesystem::path("LICENSE.txt")
+                 })
+            {
+                ec.clear();
+                const std::filesystem::path sourceFile = (*backendRoot / topLevelFile).make_preferred();
+                if (!std::filesystem::exists(sourceFile, ec) || ec)
+                    continue;
+
+                ec.clear();
+                std::filesystem::copy_file(sourceFile,
+                                           (targetRoot / topLevelFile.filename()).make_preferred(),
+                                           std::filesystem::copy_options::overwrite_existing,
+                                           ec);
+                if (ec)
+                    throw std::runtime_error("Could not copy bundled backend file into package root: " + sourceFile.string());
+            }
+
+            auto normalizedTargetRoot = targetRoot;
+            return normalizedTargetRoot.make_preferred();
+        }
+
         std::string buildPackageQuickstart(const std::string& packageName)
         {
             std::ostringstream stream;
@@ -795,6 +951,12 @@ finally {
                 << "sh ./install-wio.sh\n"
                 << "```\n\n"
                 << "Portable use without copying into a stable location is still supported, but it should be treated as a portable workflow rather than a normal installed toolchain.\n\n"
+                << "## 2.5. Bundled backend compiler\n\n"
+                << "Windows release packages also carry a portable GNU backend toolchain under:\n\n"
+                << "```text\n"
+                << "toolchains/windows-x64-mingw/\n"
+                << "```\n\n"
+                << "This is what lets `wio file run test.wio` work on a clean machine without requiring a separate MinGW install.\n\n"
                 << "## 3. Uninstall\n\n"
                 << "PowerShell:\n\n"
                 << "```powershell\n"
@@ -934,6 +1096,12 @@ finally {
                 if (ec)
                     throw std::runtime_error("Could not copy staged distribution into package root: " + packageRoot.string());
 
+#if defined(_WIN32)
+                const std::filesystem::path bundledBackendRoot = copyPortableBackendToolchain(packageRoot);
+#else
+                const std::filesystem::path bundledBackendRoot;
+#endif
+
                 if (std::filesystem::exists(licensePath, ec))
                     std::filesystem::copy_file(licensePath, packageRoot / "LICENSE", std::filesystem::copy_options::overwrite_existing, ec);
                 ec.clear();
@@ -982,6 +1150,7 @@ finally {
                     << "  \"config\": " << quoteJson(config) << ",\n"
                     << "  \"buildDir\": " << quoteJson(buildDir.string()) << ",\n"
                     << "  \"packageRoot\": " << quoteJson(packageRoot.string()) << ",\n"
+                    << "  \"bundledBackendRoot\": " << quoteJson(bundledBackendRoot.empty() ? "" : bundledBackendRoot.string()) << ",\n"
                     << "  \"generatedAtUtc\": " << quoteJson(currentUtcIso8601()) << "\n"
                     << "}\n";
 
