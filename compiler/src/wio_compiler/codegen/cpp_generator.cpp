@@ -4070,7 +4070,18 @@ namespace wio::codegen
 
     void CppGenerator::emitMain(FunctionDeclaration& node)
     {
-        auto lockedRefType = node.returnType->refType.Lock();
+        Ref<sema::Type> lockedRefType = nullptr;
+        if (auto funcSym = node.name ? node.name->referencedSymbol.Lock() : nullptr)
+        {
+            if (auto funcType = funcSym->type.AsFast<sema::FunctionType>())
+                lockedRefType = funcType->returnType;
+        }
+
+        if (!lockedRefType && node.returnType)
+            lockedRefType = node.returnType->refType.Lock();
+
+        if (!lockedRefType)
+            lockedRefType = Compiler::get().getTypeContext().getVoid();
         
         if (lockedRefType->toString() != "i32" && lockedRefType->toString() != "void")
         {

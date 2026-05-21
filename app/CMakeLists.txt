@@ -1359,6 +1359,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_entry_default_void_run
+        "${CMAKE_SOURCE_DIR}/tests/entry_default_void_run.wio"
+        "Entry default void works"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_cpp_header_use_statement_run
         "${CMAKE_SOURCE_DIR}/tests/cpp_header_use_statement.wio"
         "CppHeader use: 42"

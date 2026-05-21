@@ -1,0 +1,5 @@
+use std::console;
+
+fn Entry() {
+    std::console::PrintLine("Entry default void works");
+}
