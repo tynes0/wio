@@ -34,8 +34,8 @@ Status markers:
    Packaged `wio` now prefers safe user-cache output roots for single-file workflows instead of writing under non-writable install directories.
 10. [x] Seal packaging and installation UX.
     `wio package`, installer wrappers, `env print/setup`, `QUICKSTART.md`, and the `WIO_ROOT`, `WIO_HOME`, and `PATH` story now share one documented model with smoke coverage.
-11. [ ] Validate the cross-platform flow for real.
-    At minimum, Windows and Linux should both be covered across `project`, `bind`, `package`, `env`, and `std::process`.
+11. [x] Validate the cross-platform flow for real.
+    The release validation matrix is now defined as a real Windows/Linux GitHub Actions workflow, and the covered smoke set includes `project`, `bind`, packaged `file run`, and `std::process`.
 12. [x] Stabilize the std surface.
     The stable vs experimental boundary is now documented for `std::Result<T>`, `std::console`, `std::io`, `std::process`, `std::fs`, `std::path`, `std::reflect`, `std::traits`, and `std::meta`.
 13. [x] Fully seal the `Result` model.
@@ -53,8 +53,8 @@ Status markers:
 19. [x] Raise the docs to release quality.
     README, project system, language draft/spec, runtime type model, std, sdk, and traceability docs should tell one coherent story.
     `WIO_SDK.md` especially needs a full refresh so the current host/runtime/export surface, `WioEnum` / `WioFlagset`, field-kind coverage, and stale-wrapper / reload expectations are described completely instead of partially.
-20. [ ] Raise the example project set to release level.
-    Plain app, native app, hybrid module, host interop, binding import, and packaged quickstart examples should all be polished.
+20. [x] Raise the example project set to release level.
+    The release-facing examples now include plain app, native app, hybrid module, binding import, packaged quickstart, static CMake consumer, and the heavier hybrid arena companion sample.
 21. [x] Write versioning and compatibility policy.
     Stable / experimental / deprecated boundaries and the post-`1.0.0` contract are now written down explicitly.
 22. [x] Freeze the `v1`-scoped `const generics` / `std::meta` wave 3 slice.

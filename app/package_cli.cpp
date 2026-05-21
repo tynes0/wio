@@ -401,7 +401,7 @@ namespace wio::tooling::package
                         .SetDescription("Delete any previous package directory and archive before staging a fresh one.")
                 )
                 .AutoHelp()
-                .SetVersion("0.1.0");
+                .SetVersion("1.0.0");
 
             return parser;
         }

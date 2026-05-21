@@ -367,7 +367,7 @@ namespace wio::tooling::perf
                         .SetDescription("Keep the perf scratch directory on disk after a successful run.")
                 )
                 .AutoHelp()
-                .SetVersion("0.1.0");
+                .SetVersion("1.0.0");
 
             return parser;
         }

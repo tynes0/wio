@@ -137,7 +137,7 @@ function Get-VersionInfo([string]$SemanticVersion) {
     if ($parts.Count -eq 4) {
         return $SemanticVersion
     }
-    throw "Version must be in 0.1.0 or 0.1.0.0 form. Got '$SemanticVersion'."
+    throw "Version must be in 1.0.0 or 1.0.0.0 form. Got '$SemanticVersion'."
 }
 
 if (-not (Test-Path -LiteralPath $issPath)) {

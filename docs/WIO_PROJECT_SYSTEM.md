@@ -19,6 +19,17 @@ The design goal is straightforward:
 - mixed Wio + C++ projects should stay readable,
 - and CMake integration should feel natural instead of “shell command glued into a build”.
 
+For `hybrid-module` projects, the direct CLI path is now intentionally
+hybrid-aware:
+
+- `wio project build` compiles the Wio target first,
+- then compiles host-side C/C++ sources described by the manifest,
+- and `wio project run` launches the host executable with the Wio output path
+  when the host expects a shared module argument.
+
+On packaged Windows toolchains, this host build path prefers the bundled
+portable GNU backend instead of requiring a separately installed compiler.
+
 ---
 
 For `v1`, the intended tooling contract is:

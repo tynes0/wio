@@ -1,0 +1,61 @@
+{
+  "header": "binding_import_example.h",
+  "realms": [
+    {
+      "name": "binding_import_example",
+      "cppNamespace": "binding_import_example",
+      "consts": [
+        { "name": "DefaultPort", "type": "i32", "value": "8080" },
+        { "name": "DefaultScale", "type": "f32", "value": "0.5f" }
+      ],
+      "enums": [
+        {
+          "name": "state",
+          "backingType": "u8",
+          "members": [
+            { "name": "idle", "value": "0" },
+            { "name": "running", "value": "1" }
+          ]
+        }
+      ],
+      "flagsets": [
+        {
+          "name": "feature_mask",
+          "backingType": "u32",
+          "members": [
+            { "name": "none", "value": "0" },
+            { "name": "alpha", "value": "1 << 0" },
+            { "name": "beta", "value": "1 << 1" }
+          ]
+        }
+      ],
+      "components": [
+        {
+          "name": "color3",
+          "cppName": "binding_import_example::color3",
+          "fields": [
+            { "name": "rgb", "type": "[u8; 3]" },
+            { "name": "scale", "type": "f32" }
+          ]
+        }
+      ],
+      "functions": [
+        {
+          "name": "Describe",
+          "returnType": "string",
+          "parameters": [
+            { "name": "value", "type": "state" }
+          ]
+        },
+        {
+          "name": "Scale",
+          "parameters": [
+            { "name": "value", "type": "ref color3" },
+            { "name": "factor", "type": "f32" }
+          ]
+        }
+      ]
+    }
+  ]
+}
+

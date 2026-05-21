@@ -1,0 +1,35 @@
+schemaVersion = 1
+name = "NativeApp"
+template = "wio-native-app"
+
+[toolchain]
+buildDir = "build"
+config = "Debug"
+
+[wio]
+entry = "wio/main.wio"
+target = "exe"
+sourceRoots = ["wio"]
+includeDirs = ["native/include"]
+linkDirs = []
+linkLibraries = []
+nativeSources = ["native/src/native_math.cpp"]
+backendArgs = []
+
+[host]
+enabled = false
+
+[build]
+buildDir = ".wio-build"
+config = "Debug"
+
+[outputs]
+directory = ".wio-build/interop"
+baseName = "native_app"
+wioName = "native_app"
+hostName = "native_app.host"
+
+[run]
+passLibraryPath = false
+args = []
+workingDirectory = "."

@@ -162,6 +162,11 @@ Notes:
       packaged file-run cache behavior, and source-based Wio tool dry-runs.
 - [x] Packaged toolchains were validated through real project
       create/build/run flows.
+- [x] The release-facing example set now includes plain app, native app,
+      hybrid module, binding import, packaged quickstart, static consumer,
+      and the heavier hybrid arena companion example.
+- [x] A Windows/Linux release validation workflow now covers the critical
+      packaged/project/binding/process smoke matrix in CI.
 - [x] The language/reference freeze snapshot now treats the chosen generic,
       Result, native interop, mutable reference, and runtime reference surface
       as the intended `v1` contract.

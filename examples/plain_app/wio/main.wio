@@ -1,0 +1,6 @@
+use std::console as console;
+
+fn Entry() {
+    console::PrintLine!("Hello from the plain Wio app example.");
+}
+

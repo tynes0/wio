@@ -1199,7 +1199,7 @@ namespace wio::tooling::env
                         .SetDescription("Include the Wio bin directory in the emitted PATH command.")
                 )
                 .AutoHelp()
-                .SetVersion("0.1.0");
+                .SetVersion("1.0.0");
 
             return parser;
         }
@@ -1233,7 +1233,7 @@ namespace wio::tooling::env
                         .SetDescription("Include the packaged bin directory in PATH when persisting settings.")
                 )
                 .AutoHelp()
-                .SetVersion("0.1.0");
+                .SetVersion("1.0.0");
 
             return parser;
         }
@@ -1249,7 +1249,7 @@ namespace wio::tooling::env
                         .SetDescription("Optional explicit Wio toolchain root.")
                 )
                 .AutoHelp()
-                .SetVersion("0.1.0");
+                .SetVersion("1.0.0");
 
             return parser;
         }
@@ -1289,7 +1289,7 @@ namespace wio::tooling::env
                         .SetDescription("Also remove the Wio bin directory from PATH.")
                 )
                 .AutoHelp()
-                .SetVersion("0.1.0");
+                .SetVersion("1.0.0");
 
             return parser;
         }
@@ -1311,7 +1311,7 @@ namespace wio::tooling::env
                         .SetDescription("Compile and run a tiny Wio program to verify the bundled/native backend toolchain.")
                 )
                 .AutoHelp()
-                .SetVersion("0.1.0");
+                .SetVersion("1.0.0");
 
             return parser;
         }

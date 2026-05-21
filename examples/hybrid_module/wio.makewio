@@ -1,0 +1,42 @@
+schemaVersion = 1
+name = "HybridModule"
+template = "hybrid-module"
+
+[toolchain]
+buildDir = "build"
+config = "Debug"
+
+[wio]
+entry = "wio/module.wio"
+target = "shared"
+sourceRoots = ["wio"]
+includeDirs = ["native/include"]
+linkDirs = ["native/lib"]
+linkLibraries = []
+nativeSources = []
+backendArgs = []
+
+[host]
+enabled = true
+compiler = "g++"
+sourceRoots = ["host"]
+includeDirs = ["host/include", "native/include"]
+linkDirs = ["native/lib"]
+linkLibraries = []
+compilerArgs = []
+
+[build]
+buildDir = ".wio-build"
+config = "Debug"
+
+[outputs]
+directory = ".wio-build/interop"
+baseName = "hybrid_module"
+wioName = "hybrid_module"
+hostName = "hybrid_module.host"
+
+[run]
+passLibraryPath = true
+args = []
+workingDirectory = "."
+

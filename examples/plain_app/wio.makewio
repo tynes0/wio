@@ -1,0 +1,36 @@
+schemaVersion = 1
+name = "PlainApp"
+template = "wio-app"
+
+[toolchain]
+buildDir = "build"
+config = "Debug"
+
+[wio]
+entry = "wio/main.wio"
+target = "exe"
+sourceRoots = ["wio"]
+includeDirs = []
+linkDirs = []
+linkLibraries = []
+nativeSources = []
+backendArgs = []
+
+[host]
+enabled = false
+
+[build]
+buildDir = ".wio-build"
+config = "Debug"
+
+[outputs]
+directory = ".wio-build/interop"
+baseName = "plain_app"
+wioName = "plain_app"
+hostName = "plain_app.host"
+
+[run]
+passLibraryPath = false
+args = []
+workingDirectory = "."
+

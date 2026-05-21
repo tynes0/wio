@@ -32,6 +32,78 @@ namespace wio::tooling
 {
     namespace
     {
+        constexpr std::string_view kWioCliVersion = "1.0.0";
+
+#if defined(_WIN32)
+        class ScopedWindowsPathOverride
+        {
+        public:
+            explicit ScopedWindowsPathOverride(const std::vector<std::filesystem::path>& extraPathEntries)
+            {
+                if (extraPathEntries.empty())
+                    return;
+
+                std::string existingPath;
+                DWORD requiredLength = GetEnvironmentVariableA("Path", nullptr, 0);
+                if (requiredLength > 0)
+                {
+                    existingPath.assign(requiredLength, '\0');
+                    const DWORD copiedLength = GetEnvironmentVariableA("Path", existingPath.data(), requiredLength);
+                    if (copiedLength > 0 && copiedLength < requiredLength)
+                        existingPath.resize(copiedLength);
+                    else if (copiedLength == 0)
+                        existingPath.clear();
+                }
+
+                originalPath_ = existingPath;
+                hadOriginalPath_ = requiredLength > 0;
+
+                std::string overriddenPath;
+                for (const auto& pathEntry : extraPathEntries)
+                {
+                    if (pathEntry.empty())
+                        continue;
+
+                    if (!overriddenPath.empty())
+                        overriddenPath += ';';
+                    overriddenPath += pathEntry.string();
+                }
+
+                if (!existingPath.empty())
+                {
+                    if (!overriddenPath.empty())
+                        overriddenPath += ';';
+                    overriddenPath += existingPath;
+                }
+
+                if (!overriddenPath.empty())
+                {
+                    SetEnvironmentVariableA("Path", overriddenPath.c_str());
+                    active_ = true;
+                }
+            }
+
+            ScopedWindowsPathOverride(const ScopedWindowsPathOverride&) = delete;
+            ScopedWindowsPathOverride& operator=(const ScopedWindowsPathOverride&) = delete;
+
+            ~ScopedWindowsPathOverride()
+            {
+                if (!active_)
+                    return;
+
+                if (hadOriginalPath_)
+                    SetEnvironmentVariableA("Path", originalPath_.c_str());
+                else
+                    SetEnvironmentVariableA("Path", nullptr);
+            }
+
+        private:
+            bool active_ = false;
+            bool hadOriginalPath_ = false;
+            std::string originalPath_;
+        };
+#endif
+
         bool isHelpToken(const std::string_view value)
         {
             return value == "--help" || value == "-h" || value == "help";
@@ -82,11 +154,13 @@ namespace wio::tooling
         }
 
         int runShellCommand(const std::vector<std::string>& parts,
-                            const std::optional<std::filesystem::path>& workingDirectory = std::nullopt)
+                            const std::optional<std::filesystem::path>& workingDirectory = std::nullopt,
+                            const std::vector<std::filesystem::path>& extraPathEntries = {})
         {
             const std::string command = joinCommand(parts);
 
 #if defined(_WIN32)
+            ScopedWindowsPathOverride scopedPathOverride(extraPathEntries);
             LPCH environmentStrings = GetEnvironmentStringsA();
             if (environmentStrings == nullptr)
                 return EXIT_FAILURE;
@@ -166,6 +240,78 @@ namespace wio::tooling
             }
             return std::system(command.c_str());
 #endif
+        }
+
+        std::optional<std::filesystem::path> tryResolveExecutableOnPath(const std::string& executableName)
+        {
+            if (executableName.empty())
+                return std::nullopt;
+
+#if defined(_WIN32)
+            std::vector<char> buffer(MAX_PATH, '\0');
+            const DWORD copied = SearchPathA(nullptr, executableName.c_str(), nullptr, static_cast<DWORD>(buffer.size()), buffer.data(), nullptr);
+            if (copied > 0 && copied < buffer.size())
+                return std::filesystem::path(buffer.data()).make_preferred();
+
+            if (!std::filesystem::path(executableName).has_extension())
+            {
+                const std::string withExe = executableName + ".exe";
+                const DWORD copiedWithExe = SearchPathA(nullptr, withExe.c_str(), nullptr, static_cast<DWORD>(buffer.size()), buffer.data(), nullptr);
+                if (copiedWithExe > 0 && copiedWithExe < buffer.size())
+                    return std::filesystem::path(buffer.data()).make_preferred();
+            }
+
+            if (const char* pathValue = std::getenv("Path"))
+            {
+                std::stringstream stream(pathValue);
+                std::string segment;
+                while (std::getline(stream, segment, ';'))
+                {
+                    if (segment.empty())
+                        continue;
+
+                    std::error_code ec;
+                    std::filesystem::path candidate = std::filesystem::path(segment) / executableName;
+                    if (std::filesystem::exists(candidate, ec) && !ec &&
+                        std::filesystem::is_regular_file(candidate, ec) && !ec)
+                    {
+                        return std::filesystem::absolute(candidate).make_preferred();
+                    }
+
+                    if (!std::filesystem::path(executableName).has_extension())
+                    {
+                        candidate = std::filesystem::path(segment) / (executableName + ".exe");
+                        ec.clear();
+                        if (std::filesystem::exists(candidate, ec) && !ec &&
+                            std::filesystem::is_regular_file(candidate, ec) && !ec)
+                        {
+                            return std::filesystem::absolute(candidate).make_preferred();
+                        }
+                    }
+                }
+            }
+#else
+            if (const char* pathValue = std::getenv("PATH"))
+            {
+                std::stringstream stream(pathValue);
+                std::string segment;
+                while (std::getline(stream, segment, ':'))
+                {
+                    if (segment.empty())
+                        continue;
+
+                    std::filesystem::path candidate = std::filesystem::path(segment) / executableName;
+                    std::error_code ec;
+                    if (std::filesystem::exists(candidate, ec) && !ec &&
+                        std::filesystem::is_regular_file(candidate, ec) && !ec)
+                    {
+                        return std::filesystem::absolute(candidate).make_preferred();
+                    }
+                }
+            }
+#endif
+
+            return std::nullopt;
         }
 
         std::optional<std::filesystem::path> tryFindRepoRoot()
@@ -1126,6 +1272,132 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
             return std::nullopt;
         }
 
+        bool looksLikeExplicitCommandPath(std::string_view value)
+        {
+            return value.find('\\') != std::string_view::npos ||
+                   value.find('/') != std::string_view::npos;
+        }
+
+        bool compilerUsesGnuStyleDriver(const std::filesystem::path& compilerPath)
+        {
+            std::string lower = compilerPath.filename().string();
+            for (char& ch : lower)
+                ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+
+            return lower.find("g++") != std::string::npos ||
+                   lower.find("gcc") != std::string::npos ||
+                   lower.find("clang++") != std::string::npos ||
+                   lower.find("clang") != std::string::npos;
+        }
+
+        std::filesystem::path getCompileTimeDefaultToolchainRoot()
+        {
+#ifdef WIO_DEFAULT_ROOT_DIR
+            return std::filesystem::path(WIO_DEFAULT_ROOT_DIR).make_preferred();
+#else
+            return {};
+#endif
+        }
+
+        std::vector<std::filesystem::path> getBundledToolchainRootCandidates(const std::filesystem::path& preferredRoot)
+        {
+            std::vector<std::filesystem::path> candidates;
+
+            auto appendCandidate = [&](const std::filesystem::path& candidate)
+            {
+                if (candidate.empty())
+                    return;
+
+                const std::filesystem::path absoluteCandidate = std::filesystem::absolute(candidate).make_preferred();
+                for (const auto& existing : candidates)
+                {
+                    if (existing == absoluteCandidate)
+                        return;
+                }
+
+                candidates.push_back(absoluteCandidate);
+            };
+
+            appendCandidate(preferredRoot);
+
+            if (const auto envRoot = environmentToolchainRoot(); envRoot.has_value())
+                appendCandidate(*envRoot);
+
+            const std::filesystem::path executablePath = currentExecutablePath();
+            if (!executablePath.empty())
+            {
+                const std::filesystem::path executableDir = executablePath.parent_path();
+                appendCandidate(executableDir);
+                appendCandidate(executableDir.parent_path());
+                appendCandidate(executableDir.parent_path().parent_path());
+            }
+
+            appendCandidate(getCompileTimeDefaultToolchainRoot());
+
+#if defined(_WIN32)
+            if (const char* localAppData = std::getenv("LOCALAPPDATA"); localAppData != nullptr && *localAppData != '\0')
+                appendCandidate(std::filesystem::path(localAppData) / "Programs" / "Wio");
+
+            if (const char* userProfile = std::getenv("USERPROFILE"); userProfile != nullptr && *userProfile != '\0')
+                appendCandidate(std::filesystem::path(userProfile) / "AppData" / "Local" / "Programs" / "Wio");
+#endif
+
+            return candidates;
+        }
+
+        std::optional<std::filesystem::path> tryResolveBundledBackendCompiler(const std::filesystem::path& toolchainRoot,
+                                                                              std::string_view configuredCompiler)
+        {
+            const size_t start = configuredCompiler.find_first_not_of(" \t\r\n");
+            if (start == std::string_view::npos)
+                return std::nullopt;
+
+            const size_t end = configuredCompiler.find_last_not_of(" \t\r\n");
+            const std::string compilerName(configuredCompiler.substr(start, end - start + 1));
+            if (compilerName.empty())
+                return std::nullopt;
+
+            auto tryRelative = [&](const std::filesystem::path& relativePath) -> std::optional<std::filesystem::path>
+            {
+                for (const auto& rootCandidate : getBundledToolchainRootCandidates(toolchainRoot))
+                {
+                    const std::filesystem::path candidate = std::filesystem::absolute(rootCandidate / relativePath).make_preferred();
+                    std::error_code ec;
+                    if (std::filesystem::exists(candidate, ec) && std::filesystem::is_regular_file(candidate, ec))
+                        return candidate;
+                }
+                return std::nullopt;
+            };
+
+            const bool prefersBundledGnu =
+                compilerName == "bundled" ||
+                compilerName == "g++" ||
+                compilerName == "gcc" ||
+                compilerName == "c++";
+
+#if defined(_WIN32)
+            if (prefersBundledGnu)
+            {
+                if (auto bundled = tryRelative(std::filesystem::path("toolchains") / "windows-x64-mingw" / "bin" / "g++.exe"); bundled.has_value())
+                    return bundled;
+            }
+#else
+            if (prefersBundledGnu)
+            {
+                if (auto bundled = tryRelative(std::filesystem::path("toolchains") / "host-backend" / "bin" / "g++"); bundled.has_value())
+                    return bundled;
+            }
+#endif
+
+            if (compilerName == "bundled")
+                return std::nullopt;
+
+            if (looksLikeExplicitCommandPath(compilerName))
+                return std::nullopt;
+
+            return tryResolveExecutableOnPath(compilerName);
+        }
+
         std::filesystem::path findRuntimeStaticLibrary(const std::filesystem::path& toolchainRoot,
                                                        const std::string& toolchainBuildDir)
         {
@@ -1305,6 +1577,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
             std::filesystem::path wioEntry;
             std::filesystem::path wioOutput;
             std::filesystem::path hostOutput;
+            std::filesystem::path hostCompilerExecutable;
             std::string name;
             std::string templateName;
             std::string config;
@@ -1507,6 +1780,41 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
             info.sdkIncludeDirectory = info.toolchainRoot / "sdk" / "include";
             info.runtimeStaticLibrary = findRuntimeStaticLibrary(info.toolchainRoot, info.toolchainBuildDir);
 
+            if (looksLikeExplicitCommandPath(info.hostCompiler))
+            {
+                info.hostCompilerExecutable = resolveProjectPath(info.projectRoot, info.hostCompiler);
+            }
+            else if (auto resolvedHostCompiler = tryResolveBundledBackendCompiler(info.toolchainRoot, info.hostCompiler); resolvedHostCompiler.has_value())
+            {
+                info.hostCompilerExecutable = *resolvedHostCompiler;
+            }
+
+            if (info.hostEnabled)
+            {
+                if (info.hostCompilerExecutable.empty())
+                {
+                    throw std::runtime_error(
+                        "Could not resolve the host compiler '" + info.hostCompiler +
+                        "'. Ensure it is available on PATH or bundled with the Wio toolchain."
+                    );
+                }
+
+                std::error_code compilerEc;
+                if (!std::filesystem::exists(info.hostCompilerExecutable, compilerEc) ||
+                    !std::filesystem::is_regular_file(info.hostCompilerExecutable, compilerEc))
+                {
+                    throw std::runtime_error("Resolved host compiler does not exist: " + info.hostCompilerExecutable.string());
+                }
+
+                if (!compilerUsesGnuStyleDriver(info.hostCompilerExecutable))
+                {
+                    throw std::runtime_error(
+                        "The current direct project host build path expects a GNU-style C++ driver (g++, gcc, or clang++). "
+                        "Resolved host compiler: " + info.hostCompilerExecutable.string()
+                    );
+                }
+            }
+
             return info;
         }
 
@@ -1535,6 +1843,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                 << "  \"host\": {\n"
                 << "    \"enabled\": " << (info.hostEnabled ? "true" : "false") << ",\n"
                 << "    \"compiler\": " << jsonString(info.hostCompiler) << ",\n"
+                << "    \"resolvedCompiler\": " << jsonString(info.hostCompilerExecutable.string()) << ",\n"
                 << "    \"output\": " << jsonString(info.hostOutput.string()) << ",\n"
                 << "    \"sourceFiles\": " << jsonPathArray(info.hostSourceFiles) << ",\n"
                 << "    \"includeDirs\": " << jsonPathArray(info.hostIncludeDirs) << ",\n"
@@ -1629,7 +1938,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                         .SetDescription("Run ctest after a successful build.")
                 )
                 .AutoHelp()
-                .SetVersion("0.1.0");
+                .SetVersion("1.0.0");
 
             return parser;
         }
@@ -1668,7 +1977,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                         .SetDescription("Run CMake configure before invoking ctest.")
                 )
                 .AutoHelp()
-                .SetVersion("0.1.0");
+                .SetVersion("1.0.0");
 
             return parser;
         }
@@ -1701,7 +2010,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                         .SetDescription("Allow generating into an existing non-empty directory.")
                 )
                 .AutoHelp()
-                .SetVersion("0.1.0");
+                .SetVersion("1.0.0");
 
             return parser;
         }
@@ -1735,7 +2044,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                         .SetDescription("Reserved compatibility flag. Project manifests are configured declaratively, so this currently forces a rebuild check only.")
                 )
                 .AutoHelp()
-                .SetVersion("0.1.0");
+                .SetVersion("1.0.0");
 
             return parser;
         }
@@ -2038,7 +2347,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                 return EXIT_FAILURE;
 
             std::vector<std::string> hostCommand{
-                info.hostCompiler,
+                info.hostCompilerExecutable.string(),
                 "-std=c++20",
                 "-I", info.sdkIncludeDirectory.string()
             };
@@ -2059,7 +2368,14 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
             }
 
             for (const auto& linkLibrary : info.hostLinkLibraries)
-                hostCommand.push_back(linkLibrary);
+            {
+                if (!linkLibrary.empty() && linkLibrary.front() == '-')
+                    hostCommand.push_back(linkLibrary);
+                else if (looksLikeLibraryFile(linkLibrary))
+                    hostCommand.push_back(linkLibrary);
+                else
+                    hostCommand.push_back("-l" + linkLibrary);
+            }
 
             if (info.wioTarget == "static")
             {
@@ -2072,6 +2388,10 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                 hostCommand.push_back(info.wioOutput.string());
                 hostCommand.push_back(info.runtimeStaticLibrary.string());
             }
+
+#if defined(_WIN32)
+            hostCommand.push_back("-static");
+#endif
 
             for (const auto& arg : info.hostCompilerArgs)
                 hostCommand.push_back(arg);
@@ -2099,7 +2419,10 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
 
             if (forceRebuild || !outputUpToDate(info.hostOutput, hostInputs))
             {
-                if (const int result = runShellCommand(hostCommand, info.projectRoot); result != 0)
+                const std::vector<std::filesystem::path> extraPathEntries{
+                    info.hostCompilerExecutable.parent_path()
+                };
+                if (const int result = runShellCommand(hostCommand, info.projectRoot, extraPathEntries); result != 0)
                     return result;
             }
             else
@@ -2233,6 +2556,12 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
         if (isHelpToken(command))
         {
             printToolingUsage();
+            return EXIT_SUCCESS;
+        }
+
+        if (command == "--version" || command == "-v")
+        {
+            std::cout << kWioCliVersion << '\n';
             return EXIT_SUCCESS;
         }
 

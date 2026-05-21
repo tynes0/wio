@@ -37,6 +37,12 @@ target_include_directories(wio_app
         ${CMAKE_SOURCE_DIR}/compiler/include
 )
 
+file(TO_CMAKE_PATH "${CMAKE_SOURCE_DIR}" WIO_APP_DEFAULT_ROOT_DIR)
+target_compile_definitions(wio_app
+    PRIVATE
+        WIO_DEFAULT_ROOT_DIR="${WIO_APP_DEFAULT_ROOT_DIR}"
+)
+
 install(TARGETS wio_app
     RUNTIME DESTINATION bin
 )
@@ -654,6 +660,79 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
     set_tests_properties(
         wio_test_project_cli_smoke
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
+        NAME wio_test_hybrid_project_cli_smoke
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DWIO_SCRATCH_DIR=${CMAKE_BINARY_DIR}/hybrid-project-smoke
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioHybridProjectSmoke.cmake"
+    )
+    set_tests_properties(
+        wio_test_hybrid_project_cli_smoke
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
+        NAME wio_test_example_plain_app_run
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DEXAMPLE_ROOT=${CMAKE_SOURCE_DIR}/examples/plain_app
+            -DWIO_EXPECT=Hello\ from\ the\ plain\ Wio\ app\ example.
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExampleProject.cmake"
+    )
+    set_tests_properties(
+        wio_test_example_plain_app_run
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
+        NAME wio_test_example_native_app_run
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DEXAMPLE_ROOT=${CMAKE_SOURCE_DIR}/examples/native_app
+            -DWIO_EXPECT=Native\ multiply:
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExampleProject.cmake"
+    )
+    set_tests_properties(
+        wio_test_example_native_app_run
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
+        NAME wio_test_example_hybrid_module_run
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DEXAMPLE_ROOT=${CMAKE_SOURCE_DIR}/examples/hybrid_module
+            -DWIO_EXPECT=Hybrid\ project:\ before=11\ afterAdd=16\ afterTick=18
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExampleProject.cmake"
+    )
+    set_tests_properties(
+        wio_test_example_hybrid_module_run
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
+        NAME wio_test_example_binding_import
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DEXAMPLE_ROOT=${CMAKE_SOURCE_DIR}/examples/binding_import
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioBindingExample.cmake"
+    )
+    set_tests_properties(
+        wio_test_example_binding_import
         PROPERTIES
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )

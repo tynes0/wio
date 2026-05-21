@@ -22,7 +22,15 @@ file(MAKE_DIRECTORY "${WIO_OUTPUT_DIR}")
 
 file(GLOB existing_entries LIST_DIRECTORIES true "${WIO_OUTPUT_DIR}/wio-*")
 foreach(existing_entry IN LISTS existing_entries)
-    file(REMOVE_RECURSE "${existing_entry}")
+    if(IS_DIRECTORY "${existing_entry}")
+        file(REMOVE_RECURSE "${existing_entry}")
+    else()
+        file(REMOVE "${existing_entry}")
+    endif()
+endforeach()
+file(GLOB existing_setup_exes LIST_DIRECTORIES false "${WIO_OUTPUT_DIR}/WioSetup-*.exe")
+foreach(existing_setup_exe IN LISTS existing_setup_exes)
+    file(REMOVE "${existing_setup_exe}")
 endforeach()
 
 execute_process(
@@ -42,7 +50,14 @@ if(NOT package_result EQUAL 0)
     )
 endif()
 
-file(GLOB package_roots LIST_DIRECTORIES true "${WIO_OUTPUT_DIR}/wio-*")
+file(GLOB candidate_package_entries LIST_DIRECTORIES true "${WIO_OUTPUT_DIR}/wio-*")
+set(package_roots)
+foreach(candidate_entry IN LISTS candidate_package_entries)
+    if(IS_DIRECTORY "${candidate_entry}")
+        list(APPEND package_roots "${candidate_entry}")
+    endif()
+endforeach()
+
 list(LENGTH package_roots package_root_count)
 if(NOT package_root_count EQUAL 1)
     message(FATAL_ERROR

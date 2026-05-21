@@ -1,210 +1,195 @@
 # Wio Examples Guide
 
-This document maps the current example and reference scenarios in the
-repository.
+This document is the release-facing map for the example set that ships with
+Wio `v1.0.0`.
 
-The goal is to answer:
+The goal is simple:
 
-- which example should I open first?
-- which example covers my workflow?
-- which files are "real product" examples vs test-oriented scenario coverage?
-
----
-
-## 1. Example Families
-
-Wio examples currently come from three places:
-
-1. `examples/`
-2. `scripts/wio/`
-3. `tests/native/` and selected conformance tests
-
-They are not all the same thing.
-
-### 1.1 `examples/`
-
-These are the closest thing to user-facing showcase projects.
-
-### 1.2 `scripts/wio/`
-
-These are source-based workflow helpers written in Wio itself.
-
-### 1.3 `tests/native/`
-
-These are mostly scenario coverage and host-interop references rather than
-polished end-user tutorials.
-
-They are still valuable because they show real surfaces working end to end.
+- if you are new, you should know which example to open first
+- if you have a specific workflow, you should know which example matches it
+- if you are debugging interop, you should know when to leave `examples/` and
+  go to the deeper test/scenario library
 
 ---
 
-## 2. Best Starting Examples
+## 1. Release Example Set
 
-If you only open a few examples, open these first:
+The primary release example set now lives under `examples/`.
 
-1. [`examples/static_cmake_consumer`](../examples/static_cmake_consumer/README.md)
-2. [`examples/hybrid_arena`](../examples/hybrid_arena/README.md)
-3. `tests/native/` host-interop cases for focused bridge questions
+These examples are the intended first-stop references:
+
+1. [`examples/plain_app`](../examples/plain_app/README.md)
+2. [`examples/native_app`](../examples/native_app/README.md)
+3. [`examples/hybrid_module`](../examples/hybrid_module/README.md)
+4. [`examples/binding_import`](../examples/binding_import/README.md)
+5. [`examples/packaged_quickstart`](../examples/packaged_quickstart/README.md)
+6. [`examples/static_cmake_consumer`](../examples/static_cmake_consumer/README.md)
+
+They are complemented by:
+
+- [`examples/hybrid_arena`](../examples/hybrid_arena/README.md) for a heavier
+  integration sample
+- `scripts/wio/` for source-based tooling examples
+- `tests/native/` for focused interop scenario coverage
 
 ---
 
-## 3. `examples/static_cmake_consumer`
+## 2. Start Here By Goal
 
-This is the clearest "real host consumes Wio" reference right now.
+### 2.1 I Want The Smallest Real Wio Program
 
-What it demonstrates:
+Open:
 
-- `wio.makewio`
-- CMake integration through `cmake/WioProject.cmake`
+- [`examples/plain_app`](../examples/plain_app/README.md)
+
+Use it for:
+
+- first `wio.makewio`
+- first `Entry`
+- first `wio project build`
+- first `wio project run`
+
+### 2.2 I Want Wio To Call Existing C++
+
+Open:
+
+- [`examples/native_app`](../examples/native_app/README.md)
+
+Use it for:
+
+- `@Native`
+- `@CppHeader`
+- `@CppName`
+- native include/source layout
+
+### 2.3 I Want A Mixed Wio + C++ Host Project
+
+Open:
+
+- [`examples/hybrid_module`](../examples/hybrid_module/README.md)
+
+Use it for:
+
+- `hybrid-module`
+- shared module output
+- host executable build from the same manifest
+- `@Command`, `@Event`, and module lifecycle behavior
+
+### 2.4 I Want To Generate Bridge Files
+
+Open:
+
+- [`examples/binding_import`](../examples/binding_import/README.md)
+
+Use it for:
+
+- `wio bind import`
+- `wio bind new`
+- validating generated bridge files
+
+### 2.5 I Want To Understand Installed / Packaged Wio
+
+Open:
+
+- [`examples/packaged_quickstart`](../examples/packaged_quickstart/README.md)
+
+Use it for:
+
+- installer-first usage
+- `wio env status`
+- `wio env doctor --backend-smoke`
+- first project and single-file run from an installed toolchain
+
+### 2.6 I Want A Host SDK / CMake Embedding Example
+
+Open:
+
+- [`examples/static_cmake_consumer`](../examples/static_cmake_consumer/README.md)
+
+Use it for:
+
 - static library output
-- host use of `WioModuleGetApi()`
-- SDK-based loading and invocation
+- direct SDK consumption
+- `cmake/WioProject.cmake`
+- host-side calls through the public SDK
 
-Use it when you want:
+### 2.7 I Want A Heavier Stress Example
 
-- a practical embedding example
-- a CMake-centered host integration reference
-- a small and readable example before the bigger hybrid demo
+Open:
 
-Good fit for:
+- [`examples/hybrid_arena`](../examples/hybrid_arena/README.md)
 
-- engine embedding
-- tools that statically link Wio-generated code
-- learning the public SDK flow
+Use it for:
 
----
-
-## 4. `examples/hybrid_arena`
-
-This is the bigger integration stress example.
-
-What it demonstrates:
-
-- mixed Wio + C++ layout
 - multi-file Wio modules
 - nested realms
-- `component`, `object`, `interface`
-- `@Native`
-- `@Command`
-- `@Event`
-- shared-library lifecycle
-- save/restore and reload behavior
-
-Use it when you want:
-
-- a "realer" module/host shape
-- hot-reload-oriented reference behavior
-- a broader language + interop sample together
-
-It is intentionally heavier than the static consumer example.
-
-Open it after you already understand the simpler project story.
+- richer module/host choreography
+- reload-oriented integration reading
 
 ---
 
-## 5. `scripts/wio/`
+## 3. Source-Based Tooling Examples
 
-This folder shows that parts of the tooling/workflow story can live in Wio
-source rather than only in PowerShell or C++.
+The `scripts/wio/` folder demonstrates the "Wio can help build Wio workflows"
+direction.
 
-Representative files include:
+Representative files:
 
 - `scripts/wio/print_file.wio`
 - `scripts/wio/line_count.wio`
 - `scripts/wio/run_host_interop.wio`
 - `scripts/wio/run_hybrid_arena_demo.wio`
 
-Use them when you want to understand:
+These are not the primary user examples for shipping apps, but they are the
+best examples for:
 
-- how source-based Wio tooling is expected to feel
-- how `wio file run ...` supports internal workflow tools
-- where the project is heading as it reduces script-wrapper dependence
-
----
-
-## 6. `tests/native/` As A Scenario Library
-
-The `tests/native/` area is not only tests; it is also a strong interop
-catalog.
-
-It includes scenarios for:
-
-- `@Native` imports
-- `@Export`
-- commands and events
-- host-side module loading
-- SDK object/component reflection
-- enum/flagset metadata
-- stale-wrapper and hot-reload behavior
-
-If you are asking a narrow question such as:
-
-- "how do I export an object field?"
-- "how does a host bind a command?"
-- "what does stale reload behavior look like?"
-
-then a targeted `tests/native/*` scenario is often the best answer.
+- source-based tooling
+- `wio file run ...`
+- internal automation patterns
 
 ---
 
-## 7. Example Picks By Goal
+## 4. `tests/native/` As The Interop Scenario Library
 
-### 7.1 I Want The Fastest First Project
+`tests/native/` is still extremely valuable, but it plays a different role.
 
-Use:
+Think of it as the detailed scenario catalog for questions like:
 
-- `wio project new ...`
-- then read [`WIO_GETTING_STARTED.md`](./WIO_GETTING_STARTED.md)
+- how do I export a field?
+- how does a host bind a command or event?
+- how do enum/flagset wrappers look from the SDK?
+- what happens during stale wrapper / reload behavior?
 
-### 7.2 I Want A Host Application To Call Wio
-
-Start with:
-
-- [`examples/static_cmake_consumer`](../examples/static_cmake_consumer/README.md)
-
-Then read:
-
-- [`WIO_SDK.md`](./WIO_SDK.md)
-- [`WIO_INTEROP_GUIDE.md`](./WIO_INTEROP_GUIDE.md)
-
-### 7.3 I Want Wio To Call Existing C++
-
-Start with:
-
-- `tests/native/` import-oriented scenarios
-- [`WIO_INTEROP_GUIDE.md`](./WIO_INTEROP_GUIDE.md)
-
-### 7.4 I Want Hot Reload
-
-Start with:
-
-- `examples/hybrid_arena`
-- `tests/native/` reload scenarios
-- [`WIO_SDK.md`](./WIO_SDK.md) hot reload section
-
-### 7.5 I Want To See Wio-Written Tooling
-
-Start with:
-
-- `scripts/wio/`
-- [`WIO_CLI_REFERENCE.md`](./WIO_CLI_REFERENCE.md)
+If `examples/` gives the product story, `tests/native/` gives the edge-case and
+host-interop microscope.
 
 ---
 
-## 8. Example Release Reading
+## 5. Release Reading
 
-For `v1`, examples should be read like this:
+For `v1.0.0`, the intended reading order is:
 
-- `examples/` are the primary showcase layer
-- `scripts/wio/` demonstrates the source-based tooling direction
-- `tests/native/` is the detailed interop scenario library
+1. `examples/plain_app`
+2. `examples/native_app`
+3. `examples/hybrid_module`
+4. `examples/binding_import`
+5. `examples/packaged_quickstart`
+6. `examples/static_cmake_consumer`
+7. `examples/hybrid_arena`
 
-That means a polished release story should eventually make all three easy to
-discover, but they serve different audiences.
+That sequence moves from:
+
+- smallest normal app
+- to native bridge
+- to hybrid host/module
+- to bridge generation
+- to packaged toolchain usage
+- to CMake embedding
+- to a heavier integration sample
 
 ---
 
-## 9. Next Places To Read
+## 6. Related Docs
 
 - getting started:
   [`WIO_GETTING_STARTED.md`](./WIO_GETTING_STARTED.md)
@@ -214,5 +199,7 @@ discover, but they serve different audiences.
   [`WIO_INTEROP_GUIDE.md`](./WIO_INTEROP_GUIDE.md)
 - SDK:
   [`WIO_SDK.md`](./WIO_SDK.md)
+- project model:
+  [`WIO_PROJECT_SYSTEM.md`](./WIO_PROJECT_SYSTEM.md)
 - troubleshooting:
   [`WIO_TROUBLESHOOTING.md`](./WIO_TROUBLESHOOTING.md)
