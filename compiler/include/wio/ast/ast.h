@@ -12,6 +12,7 @@
 #include "ast_visitor.h"
 
 #include <concepts>
+#include <vector>
 #include <frenum.h>
 
 #define WIO_NODE_BODY_1(K)                                      \
