@@ -1,5 +1,7 @@
 ## Wio Programming Language
 
+[![v1 validation](https://github.com/tynes0/wio/actions/workflows/v1-validation.yml/badge.svg?branch=main)](https://github.com/tynes0/wio/actions/workflows/v1-validation.yml)
+
 Wio is a C++20-based language experiment with a pipeline that lexes, parses,
 analyzes, and lowers `.wio` files into generated C++.
 
