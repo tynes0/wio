@@ -3035,7 +3035,7 @@ namespace wio::codegen
         emitHeaderLine("#include <utility>");
         emitHeaderLine("#include <vector>");
         emitHeaderLine("#include <array>");
-        emitHeaderLine("#include <format>");
+        emitHeaderLine("#include \"format.h\"");
         emitHeaderLine("#include <iostream>");
         emitHeaderLine("#include <functional>");
         emitHeaderLine("#include <map>");
@@ -5155,7 +5155,7 @@ namespace wio::codegen
             }
         }
 
-        emit("wio::common::formatString(\"" + formatString + "\"");
+        emit("wio::runtime::Format(\"" + formatString + "\"");
 
         for (auto& arg : arguments)
         {
