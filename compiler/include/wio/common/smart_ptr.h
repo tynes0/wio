@@ -596,7 +596,7 @@ namespace wio::common
          * @param strong The strong reference to observe.
          */
         WeakRef(const Ref<T>& strong) noexcept
-            : m_Ptr(strong.Get())
+            : m_Ptr(strong.Get()), m_BasePtr(static_cast<RefCountedObject*>(strong.Get()))
         {
             IncWeakRef();
         }
@@ -606,7 +606,7 @@ namespace wio::common
          * @param other The WeakRef to copy from.
          */
         WeakRef(const WeakRef& other) noexcept
-            : m_Ptr(other.m_Ptr)
+            : m_Ptr(other.m_Ptr), m_BasePtr(other.m_BasePtr)
         {
             IncWeakRef();
         }
@@ -616,9 +616,10 @@ namespace wio::common
          * @param other The WeakRef to move from.
          */
         WeakRef(WeakRef&& other) noexcept
-            : m_Ptr(other.m_Ptr)
+            : m_Ptr(other.m_Ptr), m_BasePtr(other.m_BasePtr)
         {
             other.m_Ptr = nullptr;
+            other.m_BasePtr = nullptr;
         }
     
         /**
@@ -633,7 +634,8 @@ namespace wio::common
     
             Release();
             m_Ptr = other.m_Ptr;
-    
+            m_BasePtr = other.m_BasePtr;
+
             IncWeakRef();
     
             return *this;
@@ -651,7 +653,9 @@ namespace wio::common
     
             Release();
             m_Ptr = other.m_Ptr;
+            m_BasePtr = other.m_BasePtr;
             other.m_Ptr = nullptr;
+            other.m_BasePtr = nullptr;
             return *this;
         }
     
@@ -669,7 +673,7 @@ namespace wio::common
          */
         [[nodiscard]] bool Expired() const noexcept
         {
-            return !m_Ptr || static_cast<const RefCountedObject*>(m_Ptr)->StrongCount() == 0;
+            return !m_BasePtr || m_BasePtr->StrongCount() == 0;
         }
     
         /**
@@ -679,6 +683,7 @@ namespace wio::common
         {
             Release();
             m_Ptr = nullptr;
+            m_BasePtr = nullptr;
         }
     
         /**
@@ -689,10 +694,10 @@ namespace wio::common
         {
             if (!m_Ptr)
                 return nullptr;
-    
-            if (!static_cast<RefCountedObject*>(m_Ptr)->TryIncStrong())
+
+            if (!m_BasePtr->TryIncStrong())
                 return nullptr;
-    
+
             return Ref<T>(m_Ptr, DetailRef::AdoptTag{});
         }
     
@@ -700,19 +705,29 @@ namespace wio::common
         /** @brief Internal helper to safely increment the weak count. */
         void IncWeakRef() noexcept
         {
-            if (m_Ptr)
-                static_cast<const RefCountedObject*>(m_Ptr)->IncWeak();
+            if (m_BasePtr)
+                m_BasePtr->IncWeak();
         }
         
         /** @brief Internal helper to decrement the weak count and trigger memory deallocation if it hits zero. */
         void Release() noexcept
         {
-            RefDeleter<T>::ExecuteWeak(m_Ptr);
+            if (!m_BasePtr)
+                return;
+
+            if (m_BasePtr->DecWeak() == 0)
+            {
+                m_BasePtr->DestroyInternal();
+            }
+
             m_Ptr = nullptr;
+            m_BasePtr = nullptr;
         }
-    
+
         /** @brief The underlying raw pointer. */
         T* m_Ptr = nullptr;
+        /** @brief Untyped intrusive base pointer used for lifetime management even when T is incomplete. */
+        RefCountedObject* m_BasePtr = nullptr;
     };
     
     /**
