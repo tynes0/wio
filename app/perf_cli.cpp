@@ -1,8 +1,9 @@
 #include "perf_cli.h"
 
 #include <argonaut.h>
-#include <coco.h>
 
+#include <algorithm>
+#include <chrono>
 #include <cctype>
 #include <cstdlib>
 #include <cstring>
@@ -29,10 +30,63 @@ namespace wio::tooling::perf
 {
     namespace
     {
+        struct PerfStats
+        {
+            std::vector<double> measurements;
+
+            void add_measurement(const double value)
+            {
+                measurements.push_back(value);
+            }
+
+            [[nodiscard]] double calculate_average() const
+            {
+                if (measurements.empty())
+                    return 0.0;
+
+                double sum = 0.0;
+                for (const double value : measurements)
+                    sum += value;
+
+                return sum / static_cast<double>(measurements.size());
+            }
+
+            [[nodiscard]] double calculate_median() const
+            {
+                if (measurements.empty())
+                    return 0.0;
+
+                std::vector<double> sorted = measurements;
+                std::sort(sorted.begin(), sorted.end());
+
+                const size_t middle = sorted.size() / 2;
+                if ((sorted.size() % 2) == 0)
+                    return (sorted[middle - 1] + sorted[middle]) / 2.0;
+
+                return sorted[middle];
+            }
+
+            [[nodiscard]] double get_min_value() const
+            {
+                if (measurements.empty())
+                    return 0.0;
+
+                return *std::min_element(measurements.begin(), measurements.end());
+            }
+
+            [[nodiscard]] double get_max_value() const
+            {
+                if (measurements.empty())
+                    return 0.0;
+
+                return *std::max_element(measurements.begin(), measurements.end());
+            }
+        };
+
         struct ScenarioStats
         {
             std::string name;
-            coco::timer_statistics stats;
+            PerfStats stats;
         };
 
         bool isHelpToken(const std::string_view value)
@@ -378,15 +432,15 @@ namespace wio::tooling::perf
         {
             for (int iteration = 0; iteration < iterations; ++iteration)
             {
-                coco::timer<coco::time_units::milliseconds> timer(coco::dont_start{});
-                timer.start();
+                const auto startTime = std::chrono::steady_clock::now();
                 const int result = action(iteration);
-                timer.stop();
+                const auto endTime = std::chrono::steady_clock::now();
 
                 if (result != EXIT_SUCCESS)
                     return result;
 
-                scenario.stats.add_measurement(timer.get_time());
+                const auto elapsed = std::chrono::duration<double, std::milli>(endTime - startTime).count();
+                scenario.stats.add_measurement(elapsed);
             }
 
             return EXIT_SUCCESS;
@@ -518,41 +572,41 @@ namespace wio::tooling::perf
                     return newResult;
                 }
 
-                coco::timer<coco::time_units::milliseconds> coldBuildTimer(coco::dont_start{});
-                coldBuildTimer.start();
+                const auto coldBuildStart = std::chrono::steady_clock::now();
                 const int coldBuildResult = runWio({ "project", "build", "--project", projectRoot.string() }, scratchDir);
-                coldBuildTimer.stop();
+                const auto coldBuildEnd = std::chrono::steady_clock::now();
                 if (coldBuildResult != EXIT_SUCCESS)
                 {
                     std::cerr << "Perf smoke failed during cold project build.\n";
                     std::cerr << "Scratch directory: " << scratchDir << '\n';
                     return coldBuildResult;
                 }
-                projectBuildColdStats.stats.add_measurement(coldBuildTimer.get_time());
+                projectBuildColdStats.stats.add_measurement(
+                    std::chrono::duration<double, std::milli>(coldBuildEnd - coldBuildStart).count());
 
-                coco::timer<coco::time_units::milliseconds> warmBuildTimer(coco::dont_start{});
-                warmBuildTimer.start();
+                const auto warmBuildStart = std::chrono::steady_clock::now();
                 const int warmBuildResult = runWio({ "project", "build", "--project", projectRoot.string() }, scratchDir);
-                warmBuildTimer.stop();
+                const auto warmBuildEnd = std::chrono::steady_clock::now();
                 if (warmBuildResult != EXIT_SUCCESS)
                 {
                     std::cerr << "Perf smoke failed during warm project build.\n";
                     std::cerr << "Scratch directory: " << scratchDir << '\n';
                     return warmBuildResult;
                 }
-                projectBuildWarmStats.stats.add_measurement(warmBuildTimer.get_time());
+                projectBuildWarmStats.stats.add_measurement(
+                    std::chrono::duration<double, std::milli>(warmBuildEnd - warmBuildStart).count());
 
-                coco::timer<coco::time_units::milliseconds> runTimer(coco::dont_start{});
-                runTimer.start();
+                const auto runStart = std::chrono::steady_clock::now();
                 const int runResult = runWio({ "project", "run", "--project", projectRoot.string() }, scratchDir);
-                runTimer.stop();
+                const auto runEnd = std::chrono::steady_clock::now();
                 if (runResult != EXIT_SUCCESS)
                 {
                     std::cerr << "Perf smoke failed during project run.\n";
                     std::cerr << "Scratch directory: " << scratchDir << '\n';
                     return runResult;
                 }
-                projectRunWarmStats.stats.add_measurement(runTimer.get_time());
+                projectRunWarmStats.stats.add_measurement(
+                    std::chrono::duration<double, std::milli>(runEnd - runStart).count());
             }
 
             std::cout << "Wio performance smoke\n";
