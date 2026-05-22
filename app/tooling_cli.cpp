@@ -26,6 +26,8 @@
 
 #if defined(_WIN32)
     #include <windows.h>
+#else
+    #include <unistd.h>
 #endif
 
 namespace wio::tooling
@@ -1216,7 +1218,13 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
             buffer.resize(copiedLength);
             return std::filesystem::path(buffer).make_preferred();
 #else
-            return {};
+            std::vector<char> buffer(4096, '\0');
+            const ssize_t copiedLength = readlink("/proc/self/exe", buffer.data(), buffer.size() - 1);
+            if (copiedLength <= 0)
+                return {};
+
+            buffer[static_cast<size_t>(copiedLength)] = '\0';
+            return std::filesystem::path(buffer.data()).make_preferred();
 #endif
         }
 
