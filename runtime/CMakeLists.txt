@@ -35,6 +35,11 @@ set(WIO_BACKEND_RUNTIME_OBJ_STD_PROCESS "${WIO_BACKEND_RUNTIME_DIR}/std_process.
 
 file(MAKE_DIRECTORY "${WIO_BACKEND_RUNTIME_DIR}")
 
+set(WIO_BACKEND_RUNTIME_COMPILE_ARGS -std=c++20)
+if(NOT WIN32)
+    list(APPEND WIO_BACKEND_RUNTIME_COMPILE_ARGS -fPIC)
+endif()
+
 add_library(wio_runtime_headers INTERFACE)
 target_include_directories(wio_runtime_headers INTERFACE "${WIO_RUNTIME_INCLUDE_DIR}")
 target_sources(wio_runtime_headers INTERFACE ${WIO_RUNTIME_HEADERS})
@@ -44,7 +49,7 @@ add_custom_command(
         "${WIO_BACKEND_RUNTIME_OBJ_STD_ASSERT}"
     COMMAND
         ${WIO_BACKEND_CXX_COMPILER}
-        -std=c++20
+        ${WIO_BACKEND_RUNTIME_COMPILE_ARGS}
         -I "${WIO_RUNTIME_INCLUDE_DIR}"
         -I "${CMAKE_CURRENT_SOURCE_DIR}/src"
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_assert.cpp"
@@ -61,7 +66,7 @@ add_custom_command(
         "${WIO_BACKEND_RUNTIME_OBJ_STD_CONSOLE}"
     COMMAND
         ${WIO_BACKEND_CXX_COMPILER}
-        -std=c++20
+        ${WIO_BACKEND_RUNTIME_COMPILE_ARGS}
         -I "${WIO_RUNTIME_INCLUDE_DIR}"
         -I "${CMAKE_CURRENT_SOURCE_DIR}/src"
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_console.cpp"
@@ -78,7 +83,7 @@ add_custom_command(
         "${WIO_BACKEND_RUNTIME_OBJ_STD_FS}"
     COMMAND
         ${WIO_BACKEND_CXX_COMPILER}
-        -std=c++20
+        ${WIO_BACKEND_RUNTIME_COMPILE_ARGS}
         -I "${WIO_RUNTIME_INCLUDE_DIR}"
         -I "${CMAKE_CURRENT_SOURCE_DIR}/src"
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_fs.cpp"
@@ -95,7 +100,7 @@ add_custom_command(
         "${WIO_BACKEND_RUNTIME_OBJ_STD_MATH}"
     COMMAND
         ${WIO_BACKEND_CXX_COMPILER}
-        -std=c++20
+        ${WIO_BACKEND_RUNTIME_COMPILE_ARGS}
         -I "${WIO_RUNTIME_INCLUDE_DIR}"
         -I "${CMAKE_CURRENT_SOURCE_DIR}/src"
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_math.cpp"
@@ -112,7 +117,7 @@ add_custom_command(
         "${WIO_BACKEND_RUNTIME_OBJ_STD_IO}"
     COMMAND
         ${WIO_BACKEND_CXX_COMPILER}
-        -std=c++20
+        ${WIO_BACKEND_RUNTIME_COMPILE_ARGS}
         -I "${WIO_RUNTIME_INCLUDE_DIR}"
         -I "${CMAKE_CURRENT_SOURCE_DIR}/src"
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_io.cpp"
@@ -130,7 +135,7 @@ add_custom_command(
         "${WIO_BACKEND_RUNTIME_OBJ_STD_PROCESS}"
     COMMAND
         ${WIO_BACKEND_CXX_COMPILER}
-        -std=c++20
+        ${WIO_BACKEND_RUNTIME_COMPILE_ARGS}
         -I "${WIO_RUNTIME_INCLUDE_DIR}"
         -I "${CMAKE_CURRENT_SOURCE_DIR}/src"
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_process.cpp"
