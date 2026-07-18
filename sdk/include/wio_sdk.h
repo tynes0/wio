@@ -3007,7 +3007,7 @@ namespace wio::sdk
                     throwInvalidApiDescriptor(context, problem.str());
                 }
 
-                std::unordered_set<std::string> methodNames;
+                std::unordered_set<std::string> methodSignatures;
                 for (std::uint32_t methodIndex = 0; methodIndex < typeEntry.methodCount; ++methodIndex)
                 {
                     const WioModuleMethod& methodEntry = typeEntry.methods[methodIndex];
@@ -3018,11 +3018,38 @@ namespace wio::sdk
                         throwInvalidApiDescriptor(context, problem.str());
                     }
 
-                    if (!methodNames.insert(methodEntry.methodName).second)
+                    std::ostringstream methodSignature;
+                    methodSignature << methodEntry.methodName << '#';
+                    if (methodEntry.exportEntry != nullptr)
+                    {
+                        methodSignature << static_cast<std::uint32_t>(methodEntry.exportEntry->returnType) << '(';
+                        if (methodEntry.exportEntry->parameterTypes != nullptr)
+                        {
+                            for (std::uint32_t parameterIndex = 0;
+                                 parameterIndex < methodEntry.exportEntry->parameterCount;
+                                 ++parameterIndex)
+                            {
+                                if (parameterIndex > 0u)
+                                    methodSignature << ',';
+                                methodSignature << static_cast<std::uint32_t>(methodEntry.exportEntry->parameterTypes[parameterIndex]);
+                            }
+                        }
+                        else if (methodEntry.exportEntry->parameterCount > 0u)
+                        {
+                            methodSignature << "missing-parameters:" << methodEntry.exportEntry->parameterCount;
+                        }
+                        methodSignature << ')';
+                    }
+                    else
+                    {
+                        methodSignature << "missing-export";
+                    }
+
+                    if (!methodSignatures.insert(methodSignature.str()).second)
                     {
                         std::ostringstream problem;
                         problem << "Exported type '" << typeEntry.logicalName
-                                << "' declares method '" << methodEntry.methodName << "' more than once.";
+                                << "' declares method signature '" << methodEntry.methodName << "' more than once.";
                         throwInvalidApiDescriptor(context, problem.str());
                     }
 

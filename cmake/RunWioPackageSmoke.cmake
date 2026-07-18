@@ -39,6 +39,13 @@ if(NOT wio_result EQUAL 0)
 endif()
 
 file(GLOB package_roots LIST_DIRECTORIES true "${WIO_OUTPUT_DIR}/wio-*")
+set(package_directories)
+foreach(package_entry IN LISTS package_roots)
+    if(IS_DIRECTORY "${package_entry}")
+        list(APPEND package_directories "${package_entry}")
+    endif()
+endforeach()
+set(package_roots ${package_directories})
 list(LENGTH package_roots package_root_count)
 if(NOT package_root_count EQUAL 1)
     message(FATAL_ERROR

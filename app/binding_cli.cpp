@@ -603,7 +603,7 @@ namespace wio::tooling::binding
                         .SetDescription("Optional output .wio file override.")
                 )
                 .AutoHelp()
-                .SetVersion("1.0.0");
+                .SetVersion(WIO_VERSION);
 
             return parser;
         }
@@ -643,7 +643,7 @@ namespace wio::tooling::binding
                         .SetDescription("Treat imported enums as flagsets when possible.")
                 )
                 .AutoHelp()
-                .SetVersion("1.0.0");
+                .SetVersion(WIO_VERSION);
 
             return parser;
         }

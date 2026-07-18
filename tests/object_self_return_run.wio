@@ -1,0 +1,50 @@
+use std::assert as assert;
+use std::console as console;
+
+object BlaBla {
+    public value: i32;
+
+    OnConstruct(value: i32) {
+        self.value = value;
+    }
+
+    public fn AsValue() -> BlaBla {
+        return deref self;
+    }
+
+    public fn AsRef() -> ref BlaBla {
+        return self;
+    }
+
+    public fn AsView() -> view BlaBla {
+        return self;
+    }
+
+    public fn Set(value: i32) {
+        self.value = value;
+    }
+}
+
+fn CreateViaSelf(value: i32) -> BlaBla {
+    let temporary = BlaBla(value);
+    return temporary.AsValue();
+}
+
+fn Entry() -> i32 {
+    mut original = BlaBla(7);
+
+    let valueCopy: BlaBla = original.AsValue();
+    let borrowed: ref BlaBla = original.AsRef();
+    let observed: view BlaBla = original.AsView();
+
+    borrowed.Set(11);
+
+    assert::ExpectEqual(valueCopy.value, 11, "deref self should return the same object handle");
+    assert::ExpectEqual(observed.value, 11, "view self should observe the same object");
+
+    let survivor = CreateViaSelf(23);
+    assert::ExpectEqual(survivor.value, 23, "deref self should preserve object ownership");
+
+    console::Print("Object self return: ok");
+    return 0;
+}

@@ -38,7 +38,7 @@ in pure Wio source or behind runtime-backed native helpers.
 
 The current Wio standard library is source-based:
 
-- `std` modules are written as `.wio` files under [`std/`](C:/Users/cihan/RiderProjects/wio/std)
+- `std` modules are written as `.wio` files under [`std/`](../std)
 - some modules are pure Wio wrappers over language intrinsics
 - some modules call public runtime helpers through `@Native` and `@CppHeader(...)`
 
@@ -180,7 +180,7 @@ The intended stable direction is:
 
 `enum` and `flagset` now have a stable first-class convenience layer, even
 though the implementation currently lives in
-[`std/reflect.wio`](C:/Users/cihan/RiderProjects/wio/std/reflect.wio).
+[`std/reflect.wio`](../std/reflect.wio).
 
 The stable ergonomic surface is:
 
@@ -335,7 +335,7 @@ The following is intentionally not part of the current stable surface:
 
 The combined smoke test for the current v1 std surface is:
 
-- [`std_contract_v1_run.wio`](C:/Users/cihan/RiderProjects/wio/tests/std_contract_v1_run.wio)
+- [`std_contract_v1_run.wio`](../tests/std_contract_v1_run.wio)
 
 That test intentionally exercises both families together:
 

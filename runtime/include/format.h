@@ -17,6 +17,10 @@ namespace wio::runtime
 
             if constexpr (std::is_same_v<RawValue, bool>)
                 stream << (value ? "true" : "false");
+            else if constexpr (std::is_same_v<RawValue, signed char>)
+                stream << static_cast<int>(value);
+            else if constexpr (std::is_same_v<RawValue, unsigned char>)
+                stream << static_cast<unsigned int>(value);
             else
                 stream << std::forward<TValue>(value);
         }

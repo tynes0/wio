@@ -24,7 +24,7 @@ For the broader host-SDK contract, see
 ## Build From The Source Tree
 
 ```powershell
-cmake -S .\examples\static_cmake_consumer -B .\build-codex\examples\static_cmake_consumer -DWIO_ROOT=C:\Users\cihan\RiderProjects\wio
+cmake -S .\examples\static_cmake_consumer -B .\build-codex\examples\static_cmake_consumer -DWIO_ROOT=C:\path\to\wio
 cmake --build .\build-codex\examples\static_cmake_consumer --config Debug
 .\build-codex\examples\static_cmake_consumer\Debug\wio_static_consumer.exe
 ```
@@ -44,7 +44,7 @@ That creates a packaged layout under:
 Then point the example to that package:
 
 ```powershell
-cmake -S .\examples\static_cmake_consumer -B .\build-codex\examples\static_cmake_consumer_pkg -DWIO_ROOT=C:\Users\cihan\RiderProjects\wio\build\dist
+cmake -S .\examples\static_cmake_consumer -B .\build-codex\examples\static_cmake_consumer_pkg -DWIO_ROOT=C:\path\to\wio\build\dist
 cmake --build .\build-codex\examples\static_cmake_consumer_pkg --config Debug
 .\build-codex\examples\static_cmake_consumer_pkg\Debug\wio_static_consumer.exe
 ```

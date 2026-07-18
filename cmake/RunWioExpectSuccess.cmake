@@ -23,6 +23,8 @@ execute_process(
 )
 
 set(wio_output "${wio_stdout}${wio_stderr}")
+string(REPLACE "\r\n" "\n" wio_output "${wio_output}")
+string(REPLACE "\r" "\n" wio_output "${wio_output}")
 
 if(NOT wio_result EQUAL 0)
     message(FATAL_ERROR

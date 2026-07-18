@@ -216,6 +216,8 @@ namespace wio::tooling::perf
 
             std::unordered_set<std::string> seenKeys;
             std::vector<std::string> sanitizedEntries;
+            std::string mergedPath;
+            std::optional<size_t> pathEntryIndex;
 
             for (LPCSTR cursor = environmentStrings; *cursor != '\0'; cursor += std::strlen(cursor) + 1)
             {
@@ -231,11 +233,25 @@ namespace wio::tooling::perf
                 for (char& ch : normalizedKey)
                     ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
 
+                if (normalizedKey == "path")
+                {
+                    if (!pathEntryIndex.has_value())
+                        pathEntryIndex = sanitizedEntries.size();
+                    if (!mergedPath.empty() && mergedPath.back() != ';' &&
+                        equalsIndex + 1 < entry.size() && entry[equalsIndex + 1] != ';')
+                        mergedPath.push_back(';');
+                    mergedPath.append(entry.substr(equalsIndex + 1));
+                    continue;
+                }
+
                 if (!seenKeys.insert(normalizedKey).second)
                     continue;
 
                 sanitizedEntries.emplace_back(entry);
             }
+
+            if (!mergedPath.empty() && pathEntryIndex.has_value())
+                sanitizedEntries.insert(sanitizedEntries.begin() + static_cast<std::ptrdiff_t>(*pathEntryIndex), "Path=" + mergedPath);
 
             FreeEnvironmentStringsA(environmentStrings);
 
@@ -421,7 +437,7 @@ namespace wio::tooling::perf
                         .SetDescription("Keep the perf scratch directory on disk after a successful run.")
                 )
                 .AutoHelp()
-                .SetVersion("1.0.0");
+                .SetVersion(WIO_VERSION);
 
             return parser;
         }

@@ -1,0 +1,9 @@
+use std::math as math;
+
+realm std {
+    realm nested_import_regression {
+        fn Value() -> i32 {
+            return math::Abs(-7);
+        }
+    }
+}

@@ -1,0 +1,17 @@
+object Box<T> {
+    public value: T;
+}
+
+@Specialize(i32)
+object Box {
+    public value: i32;
+}
+
+@Specialize(i32)
+object Box {
+    public other: i32;
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

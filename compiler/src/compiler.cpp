@@ -2399,7 +2399,7 @@ namespace wio
             )
             .AutoHelp()
             .AutoVersion()
-            .SetVersion("1.0.0");
+            .SetVersion(WIO_VERSION);
     }
 
     // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
