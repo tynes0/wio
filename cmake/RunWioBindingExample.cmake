@@ -6,10 +6,20 @@ if(NOT DEFINED EXAMPLE_ROOT OR EXAMPLE_ROOT STREQUAL "")
     message(FATAL_ERROR "EXAMPLE_ROOT was not provided.")
 endif()
 
-set(header_input "${EXAMPLE_ROOT}/binding_import_example.h")
-set(manifest_input "${EXAMPLE_ROOT}/binding_manifest.json")
-set(header_output "${EXAMPLE_ROOT}/binding_import_example.wio")
-set(manifest_output "${EXAMPLE_ROOT}/binding_manifest_example.wio")
+if(NOT DEFINED WIO_SCRATCH_DIR OR WIO_SCRATCH_DIR STREQUAL "")
+    message(FATAL_ERROR "WIO_SCRATCH_DIR was not provided.")
+endif()
+
+file(REMOVE_RECURSE "${WIO_SCRATCH_DIR}")
+file(MAKE_DIRECTORY "${WIO_SCRATCH_DIR}")
+
+set(header_input "${WIO_SCRATCH_DIR}/binding_import_example.h")
+set(manifest_input "${WIO_SCRATCH_DIR}/binding_manifest.json")
+set(header_output "${WIO_SCRATCH_DIR}/binding_import_example.wio")
+set(manifest_output "${WIO_SCRATCH_DIR}/binding_manifest_example.wio")
+
+configure_file("${EXAMPLE_ROOT}/binding_import_example.h" "${header_input}" COPYONLY)
+configure_file("${EXAMPLE_ROOT}/binding_manifest.json" "${manifest_input}" COPYONLY)
 
 file(REMOVE "${header_output}" "${manifest_output}")
 
@@ -52,7 +62,7 @@ if(NOT EXISTS "${manifest_output}")
 endif()
 
 execute_process(
-    COMMAND "${WIO_EXE}" file check "${header_output}" --include-dir "${EXAMPLE_ROOT}" --target static
+    COMMAND "${WIO_EXE}" file check "${header_output}" --include-dir "${WIO_SCRATCH_DIR}" --target static
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     RESULT_VARIABLE check_result
     OUTPUT_VARIABLE check_stdout
@@ -66,4 +76,4 @@ if(NOT check_result EQUAL 0)
     )
 endif()
 
-message(STATUS "Binding example smoke succeeded for ${EXAMPLE_ROOT}")
+message(STATUS "Binding example smoke succeeded in ${WIO_SCRATCH_DIR}")

@@ -2761,6 +2761,14 @@ namespace wio::sema
             if (structType->genericParameterNames.empty())
                 return structType;
 
+            if (auto specializationIt = structType->explicitSpecializations.find(
+                    getGenericSpecializationKey(explicitTypeArguments));
+                specializationIt != structType->explicitSpecializations.end())
+            {
+                if (auto specialization = specializationIt->second.Lock(); specialization)
+                    return specialization;
+            }
+
             const auto bindings = buildExtendedGenericBindings(
                 structType->genericParameterNames,
                 structType->hasGenericParameterPack,
@@ -3473,6 +3481,65 @@ namespace wio::sema
                 }
             }
             return allArgs;
+        }
+
+        std::vector<Ref<Type>> resolveExplicitSpecializationArguments(
+            SemanticAnalyzer& analyzer,
+            const std::vector<NodePtr<AttributeStatement>>& attributes,
+            const common::Location& declarationLocation)
+        {
+            const auto specializationAttributes = getAttributeStatements(attributes, Attribute::Specialize);
+            if (specializationAttributes.empty())
+                return {};
+
+            if (specializationAttributes.size() > 1)
+            {
+                WIO_LOG_ADD_ERROR(
+                    specializationAttributes[1]->location(),
+                    "Only one @Specialize(...) attribute is allowed per declaration."
+                );
+            }
+
+            const auto* specializationAttribute = specializationAttributes.front();
+            if (!specializationAttribute || specializationAttribute->args.empty())
+            {
+                WIO_LOG_ADD_ERROR(declarationLocation, "@Specialize expects at least one concrete type argument.");
+                return {};
+            }
+
+            std::vector<Ref<Type>> arguments;
+            arguments.reserve(specializationAttribute->args.size());
+            for (size_t argumentIndex = 0; argumentIndex < specializationAttribute->args.size(); ++argumentIndex)
+            {
+                NodePtr<TypeSpecifier> typeSpecifier =
+                    argumentIndex < specializationAttribute->typeArgs.size()
+                        ? specializationAttribute->typeArgs[argumentIndex]
+                        : nullptr;
+
+                if (!typeSpecifier)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        specializationAttribute->location(),
+                        "@Specialize arguments must be concrete types."
+                    );
+                    arguments.push_back(Compiler::get().getTypeContext().getUnknown());
+                    continue;
+                }
+
+                typeSpecifier->accept(analyzer);
+                Ref<Type> argumentType = typeSpecifier->refType.Lock();
+                if (!argumentType || argumentType->isUnknown() || containsGenericParameterType(argumentType))
+                {
+                    WIO_LOG_ADD_ERROR(
+                        typeSpecifier->location(),
+                        "@Specialize arguments must be fully concrete types."
+                    );
+                    argumentType = Compiler::get().getTypeContext().getUnknown();
+                }
+                arguments.push_back(argumentType);
+            }
+
+            return arguments;
         }
 
         AttributeTypeArgument getAttributeTypeArgument(const AttributeStatement& attribute, size_t index)
@@ -6360,9 +6427,9 @@ namespace wio::sema
         if (node.op.type == TokenType::kwDeref)
         {
             Ref<Type> resolvedType = unwrapAliasType(opType);
-            if (!resolvedType || resolvedType->kind() != TypeKind::Reference || !shouldAutoReadReferenceType(opType))
+            if (!resolvedType || resolvedType->kind() != TypeKind::Reference)
             {
-                WIO_LOG_ADD_ERROR(node.location(), "The 'deref' operator requires a readable reference to a value-like type.");
+                WIO_LOG_ADD_ERROR(node.location(), "The 'deref' operator requires a readable reference.");
                 node.refType = Compiler::get().getTypeContext().getUnknown();
                 return;
             }
@@ -8479,7 +8546,15 @@ namespace wio::sema
                 return;
             }
 
-            if (auto lockedScope = structType->structScope.Lock())
+            Ref<StructType> resolvedConstructorStructType = structType;
+            if (auto resolvedReturnType = unwrapAliasType(structReturnType);
+                resolvedReturnType && resolvedReturnType->kind() == TypeKind::Struct)
+            {
+                resolvedConstructorStructType = resolvedReturnType.AsFast<StructType>();
+                constructorStructType = resolvedConstructorStructType;
+            }
+
+            if (auto lockedScope = resolvedConstructorStructType->structScope.Lock())
             {
                 calleeSym = lockedScope->resolveLocally("OnConstruct");
             }
@@ -9743,6 +9818,34 @@ namespace wio::sema
                 return;
             }
 
+            if (isConstructorCall &&
+                constructorStructType &&
+                !constructorGenericParameterNames.empty() &&
+                constructorGenericBindings.empty() &&
+                constructorGenericBindingSet.packBindings.empty())
+            {
+                auto deducedGenericArguments = tryMaterializeConcreteInstantiation(
+                    constructorGenericParameterNames,
+                    constructorStructType->hasGenericParameterPack,
+                    bestMatch->bindingSet
+                );
+                if (!deducedGenericArguments.has_value())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "Cannot infer generic arguments for constructor '{}'. Use explicit type arguments.",
+                        constructorStructType->name
+                    );
+                    node.refType = Compiler::get().getTypeContext().getUnknown();
+                    return;
+                }
+
+                constructorGenericBindings = bestMatch->bindingSet.directBindings;
+                constructorGenericBindingSet = bestMatch->bindingSet;
+                structReturnType = instantiateGenericStructType(constructorStructType, *deducedGenericArguments);
+                node.callee->refType = structReturnType;
+            }
+
             auto getConcreteCallableOwnerType = [&]() -> Ref<StructType>
             {
                 auto resolveStructReceiverType = [&](const Ref<Type>& candidateType) -> Ref<StructType>
@@ -9798,29 +9901,6 @@ namespace wio::sema
             }
             else if (constructorStructType && !constructorGenericParameterNames.empty() && (!constructorGenericBindings.empty() || !constructorGenericBindingSet.packBindings.empty()))
             {
-                node.callee->refType = structReturnType;
-            }
-            else if (constructorStructType && !constructorGenericParameterNames.empty())
-            {
-                auto deducedGenericArguments = tryMaterializeConcreteInstantiation(
-                    constructorGenericParameterNames,
-                    constructorStructType->hasGenericParameterPack,
-                    bestMatch->bindingSet
-                );
-                if (!deducedGenericArguments.has_value())
-                {
-                    WIO_LOG_ADD_ERROR(
-                        node.location(),
-                        "Cannot infer generic arguments for constructor '{}'. Use explicit type arguments.",
-                        constructorStructType->name
-                    );
-                    node.refType = Compiler::get().getTypeContext().getUnknown();
-                    return;
-                }
-
-                constructorGenericBindings = bestMatch->bindingSet.directBindings;
-                constructorGenericBindingSet = bestMatch->bindingSet;
-                structReturnType = instantiateGenericStructType(constructorStructType, *deducedGenericArguments);
                 node.callee->refType = structReturnType;
             }
 
@@ -10908,6 +10988,12 @@ namespace wio::sema
     
     void SemanticAnalyzer::visit(VariableDeclaration& node)
     {
+        if (hasAttribute(node.attributes, Attribute::Specialize) &&
+            (isDeclarationPass_ || currentScope_->getKind() == ScopeKind::Function || currentScope_->getKind() == ScopeKind::Block))
+        {
+            WIO_LOG_ADD_ERROR(node.location(), "@Specialize is supported only on generic object and component declarations.");
+        }
+
         if (isDeclarationPass_)
         {
             if (currentScope_->getKind() == ScopeKind::Function || currentScope_->getKind() == ScopeKind::Block)
@@ -11092,6 +11178,12 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(TypeAliasDeclaration& node)
     {
+        if (hasAttribute(node.attributes, Attribute::Specialize) &&
+            (isDeclarationPass_ || currentScope_->getKind() == ScopeKind::Function || currentScope_->getKind() == ScopeKind::Block))
+        {
+            WIO_LOG_ADD_ERROR(node.location(), "@Specialize is supported only on generic object and component declarations.");
+        }
+
         auto buildGenericTypeParameterScope = [&]() -> std::unordered_map<std::string, Ref<Type>>
         {
             std::unordered_map<std::string, Ref<Type>> scope;
@@ -11197,6 +11289,14 @@ namespace wio::sema
 
         if (isDeclarationPass_)
         {
+            if (hasAttribute(node.attributes, Attribute::Specialize))
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "@Specialize is supported only on generic object and component declarations."
+                );
+            }
+
             auto genericScope = buildGenericTypeParameterScope();
             genericTypeParameterScopes_.push_back(genericScope);
 
@@ -12379,6 +12479,14 @@ namespace wio::sema
 
         if (isDeclarationPass_)
         {
+            if (hasAttribute(node.attributes, Attribute::Specialize))
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "@Specialize is supported only on generic object and component declarations."
+                );
+            }
+
             auto interfaceScope = Ref<Scope>::Create(currentScope_, ScopeKind::Struct);
             scopes_.push_back(interfaceScope);
             
@@ -12429,6 +12537,8 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(ComponentDeclaration& node)
     {
+        const bool isExplicitSpecialization = hasAttribute(node.attributes, Attribute::Specialize);
+
         auto buildGenericTypeParameterScope = [&]() -> std::unordered_map<std::string, Ref<Type>>
         {
             std::unordered_map<std::string, Ref<Type>> scope;
@@ -12462,18 +12572,118 @@ namespace wio::sema
 
         if (isDeclarationPass_)
         {
+            Ref<Symbol> genericPrimarySymbol = nullptr;
+            Ref<StructType> genericPrimaryType = nullptr;
+            std::vector<Ref<Type>> specializationArguments;
+            bool specializationCanRegister = false;
+
+            if (isExplicitSpecialization)
+            {
+                const bool hasDeclarationLevelNativeInterop = hasAttribute(node.attributes, Attribute::Native);
+                if (hasDeclarationLevelNativeInterop)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "@Specialize cannot be combined with declaration-level @Native component interop."
+                    );
+                }
+
+                specializationArguments = resolveExplicitSpecializationArguments(*this, node.attributes, node.location());
+                if (!node.genericParameters.empty())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "An explicit component specialization must not declare generic parameters. Put concrete types in @Specialize(...)."
+                    );
+                }
+
+                genericPrimarySymbol = currentScope_->resolveLocally(node.name->token.value);
+                if (!genericPrimarySymbol || genericPrimarySymbol->kind != SymbolKind::Struct ||
+                    !genericPrimarySymbol->type || genericPrimarySymbol->type->kind() != TypeKind::Struct)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "@Specialize component '{}' requires an earlier generic component declaration with the same name.",
+                        node.name->token.value
+                    );
+                }
+                else
+                {
+                    genericPrimaryType = genericPrimarySymbol->type.AsFast<StructType>();
+                    if (genericPrimaryType->isObject || genericPrimaryType->isInterface)
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            node.location(),
+                            "@Specialize component '{}' must target a generic component, not an object or interface.",
+                            node.name->token.value
+                        );
+                    }
+                    else if (genericPrimaryType->genericParameterNames.empty())
+                    {
+                        WIO_LOG_ADD_ERROR(node.location(), "@Specialize target '{}' is not generic.", node.name->token.value);
+                    }
+                    else if (genericPrimaryType->isNativePodComponent)
+                    {
+                        WIO_LOG_ADD_ERROR(node.location(), "@Specialize is not yet supported for declaration-level @Native components.");
+                    }
+                    else
+                    {
+                        const size_t minimumArgumentCount = getMinimumGenericArgumentCount(
+                            genericPrimaryType->genericParameterNames,
+                            genericPrimaryType->hasGenericParameterPack
+                        );
+                        const bool invalidArity = genericPrimaryType->hasGenericParameterPack
+                            ? specializationArguments.size() < minimumArgumentCount
+                            : specializationArguments.size() != genericPrimaryType->genericParameterNames.size();
+                        if (invalidArity)
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                node.location(),
+                                genericPrimaryType->hasGenericParameterPack
+                                    ? "@Specialize for '{}' expects at least {} type arguments, but got {}."
+                                    : "@Specialize for '{}' expects {} type arguments, but got {}.",
+                                node.name->token.value,
+                                genericPrimaryType->hasGenericParameterPack
+                                    ? minimumArgumentCount
+                                    : genericPrimaryType->genericParameterNames.size(),
+                                specializationArguments.size()
+                            );
+                        }
+                        else
+                        {
+                            specializationCanRegister = !hasDeclarationLevelNativeInterop && std::ranges::all_of(
+                                specializationArguments,
+                                [](const Ref<Type>& type)
+                                {
+                                    return type && !type->isUnknown() && !containsGenericParameterType(type);
+                                }
+                            );
+                        }
+                    }
+                }
+            }
+
             auto structScope = Ref<Scope>::Create(currentScope_, ScopeKind::Struct);
             scopes_.push_back(structScope);
             
             Ref<Type> structType = Ref<StructType>::Create(node.name->token.value, structScope);
             structType.AsFast<StructType>()->scopePath = getCurrentNamespacePath();
-            structType.AsFast<StructType>()->genericParameterNames.reserve(node.genericParameters.size());
-            for (const auto& genericParameter : node.genericParameters)
+            if (isExplicitSpecialization)
             {
-                if (genericParameter)
-                    structType.AsFast<StructType>()->genericParameterNames.push_back(genericParameter->token.value);
+                structType.AsFast<StructType>()->genericArguments = specializationArguments;
+                structType.AsFast<StructType>()->genericPrimaryType = genericPrimaryType;
+                structType.AsFast<StructType>()->isExplicitSpecialization = true;
             }
-            structType.AsFast<StructType>()->hasGenericParameterPack = node.hasGenericParameterPack;
+            else
+            {
+                structType.AsFast<StructType>()->genericParameterNames.reserve(node.genericParameters.size());
+                for (const auto& genericParameter : node.genericParameters)
+                {
+                    if (genericParameter)
+                        structType.AsFast<StructType>()->genericParameterNames.push_back(genericParameter->token.value);
+                }
+                structType.AsFast<StructType>()->hasGenericParameterPack = node.hasGenericParameterPack;
+            }
             structType.AsFast<StructType>()->isFinal = hasAttribute(node.attributes, Attribute::Final);
             const bool isNativePodComponent = hasAttribute(node.attributes, Attribute::Native);
             structType.AsFast<StructType>()->isNativePodComponent = isNativePodComponent;
@@ -12529,13 +12739,39 @@ namespace wio::sema
 
             auto genericScope = buildGenericTypeParameterScope();
             genericTypeParameterScopes_.push_back(genericScope);
-            validateApplyAttributes(*this, node.attributes, structType.AsFast<StructType>()->genericParameterNames, "component", node.location());
+            if (!isExplicitSpecialization)
+                validateApplyAttributes(*this, node.attributes, structType.AsFast<StructType>()->genericParameterNames, "component", node.location());
+            else if (hasAttribute(node.attributes, Attribute::Apply))
+                WIO_LOG_ADD_ERROR(node.location(), "@Apply cannot be declared on an explicit specialization; constrain the generic primary declaration.");
             genericTypeParameterScopes_.pop_back();
             Ref<Symbol> compSym = createSymbol(node.name->token.value, structType, SymbolKind::Struct, node.location());
             compSym->innerScope = structScope;
             compSym->genericParameterNames = structType.AsFast<StructType>()->genericParameterNames;
-            compSym->hasGenericParameterPack = node.hasGenericParameterPack;
-            currentScope_->define(node.name->token.value, compSym);
+            compSym->hasGenericParameterPack = structType.AsFast<StructType>()->hasGenericParameterPack;
+            if (isExplicitSpecialization)
+            {
+                if (specializationCanRegister && genericPrimaryType)
+                {
+                    const std::string specializationKey = getGenericSpecializationKey(specializationArguments);
+                    if (genericPrimaryType->explicitSpecializations.contains(specializationKey))
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            node.location(),
+                            "Duplicate explicit specialization for '{}{}'.",
+                            node.name->token.value,
+                            formatConcreteInstantiationSignature(specializationArguments)
+                        );
+                    }
+                    else
+                    {
+                        genericPrimaryType->explicitSpecializations.emplace(specializationKey, structType.AsFast<StructType>());
+                    }
+                }
+            }
+            else
+            {
+                currentScope_->define(node.name->token.value, compSym);
+            }
             attributeListsBySymbol_[compSym.Get()] = &node.attributes;
             
             node.name->refType = structType;
@@ -12883,6 +13119,8 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(ObjectDeclaration& node)
     {
+        const bool isExplicitSpecialization = hasAttribute(node.attributes, Attribute::Specialize);
+
         auto buildGenericTypeParameterScope = [&]() -> std::unordered_map<std::string, Ref<Type>>
         {
             std::unordered_map<std::string, Ref<Type>> scope;
@@ -12916,18 +13154,105 @@ namespace wio::sema
 
         if (isDeclarationPass_)
         {
+            Ref<Symbol> genericPrimarySymbol = nullptr;
+            Ref<StructType> genericPrimaryType = nullptr;
+            std::vector<Ref<Type>> specializationArguments;
+            bool specializationCanRegister = false;
+
+            if (isExplicitSpecialization)
+            {
+                specializationArguments = resolveExplicitSpecializationArguments(*this, node.attributes, node.location());
+                if (!node.genericParameters.empty())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "An explicit object specialization must not declare generic parameters. Put concrete types in @Specialize(...)."
+                    );
+                }
+
+                genericPrimarySymbol = currentScope_->resolveLocally(node.name->token.value);
+                if (!genericPrimarySymbol || genericPrimarySymbol->kind != SymbolKind::Struct ||
+                    !genericPrimarySymbol->type || genericPrimarySymbol->type->kind() != TypeKind::Struct)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "@Specialize object '{}' requires an earlier generic object declaration with the same name.",
+                        node.name->token.value
+                    );
+                }
+                else
+                {
+                    genericPrimaryType = genericPrimarySymbol->type.AsFast<StructType>();
+                    if (!genericPrimaryType->isObject || genericPrimaryType->isInterface)
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            node.location(),
+                            "@Specialize object '{}' must target a generic object, not a component or interface.",
+                            node.name->token.value
+                        );
+                    }
+                    else if (genericPrimaryType->genericParameterNames.empty())
+                    {
+                        WIO_LOG_ADD_ERROR(node.location(), "@Specialize target '{}' is not generic.", node.name->token.value);
+                    }
+                    else
+                    {
+                        const size_t minimumArgumentCount = getMinimumGenericArgumentCount(
+                            genericPrimaryType->genericParameterNames,
+                            genericPrimaryType->hasGenericParameterPack
+                        );
+                        const bool invalidArity = genericPrimaryType->hasGenericParameterPack
+                            ? specializationArguments.size() < minimumArgumentCount
+                            : specializationArguments.size() != genericPrimaryType->genericParameterNames.size();
+                        if (invalidArity)
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                node.location(),
+                                genericPrimaryType->hasGenericParameterPack
+                                    ? "@Specialize for '{}' expects at least {} type arguments, but got {}."
+                                    : "@Specialize for '{}' expects {} type arguments, but got {}.",
+                                node.name->token.value,
+                                genericPrimaryType->hasGenericParameterPack
+                                    ? minimumArgumentCount
+                                    : genericPrimaryType->genericParameterNames.size(),
+                                specializationArguments.size()
+                            );
+                        }
+                        else
+                        {
+                            specializationCanRegister = std::ranges::all_of(
+                                specializationArguments,
+                                [](const Ref<Type>& type)
+                                {
+                                    return type && !type->isUnknown() && !containsGenericParameterType(type);
+                                }
+                            );
+                        }
+                    }
+                }
+            }
+
             auto structScope = Ref<Scope>::Create(currentScope_, ScopeKind::Struct);
             scopes_.push_back(structScope);
             
             Ref<Type> structType = Ref<StructType>::Create(node.name->token.value, structScope, true);
             structType.AsFast<StructType>()->scopePath = getCurrentNamespacePath();
-            structType.AsFast<StructType>()->genericParameterNames.reserve(node.genericParameters.size());
-            for (const auto& genericParameter : node.genericParameters)
+            if (isExplicitSpecialization)
             {
-                if (genericParameter)
-                    structType.AsFast<StructType>()->genericParameterNames.push_back(genericParameter->token.value);
+                structType.AsFast<StructType>()->genericArguments = specializationArguments;
+                structType.AsFast<StructType>()->genericPrimaryType = genericPrimaryType;
+                structType.AsFast<StructType>()->isExplicitSpecialization = true;
             }
-            structType.AsFast<StructType>()->hasGenericParameterPack = node.hasGenericParameterPack;
+            else
+            {
+                structType.AsFast<StructType>()->genericParameterNames.reserve(node.genericParameters.size());
+                for (const auto& genericParameter : node.genericParameters)
+                {
+                    if (genericParameter)
+                        structType.AsFast<StructType>()->genericParameterNames.push_back(genericParameter->token.value);
+                }
+                structType.AsFast<StructType>()->hasGenericParameterPack = node.hasGenericParameterPack;
+            }
             structType.AsFast<StructType>()->isFinal = hasAttribute(node.attributes, Attribute::Final);
 
             if (hasAttribute(node.attributes, Attribute::Native))
@@ -12945,13 +13270,39 @@ namespace wio::sema
 
             auto genericScope = buildGenericTypeParameterScope();
             genericTypeParameterScopes_.push_back(genericScope);
-            validateApplyAttributes(*this, node.attributes, structType.AsFast<StructType>()->genericParameterNames, "object", node.location());
+            if (!isExplicitSpecialization)
+                validateApplyAttributes(*this, node.attributes, structType.AsFast<StructType>()->genericParameterNames, "object", node.location());
+            else if (hasAttribute(node.attributes, Attribute::Apply))
+                WIO_LOG_ADD_ERROR(node.location(), "@Apply cannot be declared on an explicit specialization; constrain the generic primary declaration.");
             genericTypeParameterScopes_.pop_back();
             Ref<Symbol> objSym = createSymbol(node.name->token.value, structType, SymbolKind::Struct, node.location());
             objSym->innerScope = structScope;
             objSym->genericParameterNames = structType.AsFast<StructType>()->genericParameterNames;
-            objSym->hasGenericParameterPack = node.hasGenericParameterPack;
-            currentScope_->define(node.name->token.value, objSym);
+            objSym->hasGenericParameterPack = structType.AsFast<StructType>()->hasGenericParameterPack;
+            if (isExplicitSpecialization)
+            {
+                if (specializationCanRegister && genericPrimaryType)
+                {
+                    const std::string specializationKey = getGenericSpecializationKey(specializationArguments);
+                    if (genericPrimaryType->explicitSpecializations.contains(specializationKey))
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            node.location(),
+                            "Duplicate explicit specialization for '{}{}'.",
+                            node.name->token.value,
+                            formatConcreteInstantiationSignature(specializationArguments)
+                        );
+                    }
+                    else
+                    {
+                        genericPrimaryType->explicitSpecializations.emplace(specializationKey, structType.AsFast<StructType>());
+                    }
+                }
+            }
+            else
+            {
+                currentScope_->define(node.name->token.value, objSym);
+            }
             attributeListsBySymbol_[objSym.Get()] = &node.attributes;
             
             node.name->refType = structType;
@@ -13461,6 +13812,9 @@ namespace wio::sema
     {
         if (isDeclarationPass_)
         {
+            if (hasAttribute(node.attributes, Attribute::Specialize))
+                WIO_LOG_ADD_ERROR(node.location(), "@Specialize is supported only on generic object and component declarations.");
+
             auto structScope = Ref<Scope>::Create(currentScope_, ScopeKind::Struct);
             scopes_.push_back(structScope);
             
@@ -13494,6 +13848,9 @@ namespace wio::sema
     {
         if (isDeclarationPass_)
         {
+            if (hasAttribute(node.attributes, Attribute::Specialize))
+                WIO_LOG_ADD_ERROR(node.location(), "@Specialize is supported only on generic object and component declarations.");
+
             auto enumScope = Ref<Scope>::Create(currentScope_, ScopeKind::Struct);
             scopes_.push_back(enumScope);
             
@@ -13608,6 +13965,9 @@ namespace wio::sema
     void SemanticAnalyzer::visit(FlagsetDeclaration& node)
     {
         if (isDeclarationPass_) {
+            if (hasAttribute(node.attributes, Attribute::Specialize))
+                WIO_LOG_ADD_ERROR(node.location(), "@Specialize is supported only on generic object and component declarations.");
+
             auto flagsetScope = Ref<Scope>::Create(currentScope_, ScopeKind::Struct);
             scopes_.push_back(flagsetScope);
             

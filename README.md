@@ -1,24 +1,24 @@
 ## Wio Programming Language
 
-[![v1 validation](https://github.com/tynes0/wio/actions/workflows/v1-validation.yml/badge.svg?branch=main)](https://github.com/tynes0/wio/actions/workflows/v1-validation.yml)
+[![release validation](https://github.com/tynes0/wio/actions/workflows/v1-validation.yml/badge.svg?branch=main)](https://github.com/tynes0/wio/actions/workflows/v1-validation.yml)
 
 Wio is a C++20-based language experiment with a pipeline that lexes, parses,
 analyzes, and lowers `.wio` files into generated C++.
 
 Useful reference docs:
 
-- [Documentation index](C:/Users/cihan/RiderProjects/wio/docs/README.md)
-- [Getting started](C:/Users/cihan/RiderProjects/wio/docs/WIO_GETTING_STARTED.md)
-- [CLI reference](C:/Users/cihan/RiderProjects/wio/docs/WIO_CLI_REFERENCE.md)
-- [Language reference](C:/Users/cihan/RiderProjects/wio/docs/WIO_LANGUAGE_DRAFT.md)
-- [v1 freeze snapshot](C:/Users/cihan/RiderProjects/wio/docs/WIO_V1_FREEZE.md)
-- [Project system](C:/Users/cihan/RiderProjects/wio/docs/WIO_PROJECT_SYSTEM.md)
-- [Standard library](C:/Users/cihan/RiderProjects/wio/docs/WIO_STD.md)
-- [Interop guide](C:/Users/cihan/RiderProjects/wio/docs/WIO_INTEROP_GUIDE.md)
-- [Host SDK](C:/Users/cihan/RiderProjects/wio/docs/WIO_SDK.md)
-- [Examples guide](C:/Users/cihan/RiderProjects/wio/docs/WIO_EXAMPLES.md)
-- [Troubleshooting](C:/Users/cihan/RiderProjects/wio/docs/WIO_TROUBLESHOOTING.md)
-- [FAQ](C:/Users/cihan/RiderProjects/wio/docs/WIO_FAQ.md)
+- [Documentation index](docs/README.md)
+- [Getting started](docs/WIO_GETTING_STARTED.md)
+- [CLI reference](docs/WIO_CLI_REFERENCE.md)
+- [Language reference](docs/WIO_LANGUAGE_DRAFT.md)
+- [v1 freeze snapshot](docs/WIO_V1_FREEZE.md)
+- [Project system](docs/WIO_PROJECT_SYSTEM.md)
+- [Standard library](docs/WIO_STD.md)
+- [Interop guide](docs/WIO_INTEROP_GUIDE.md)
+- [Host SDK](docs/WIO_SDK.md)
+- [Examples guide](docs/WIO_EXAMPLES.md)
+- [Troubleshooting](docs/WIO_TROUBLESHOOTING.md)
+- [FAQ](docs/WIO_FAQ.md)
 
 Current `v1` direction in one sentence:
 
@@ -287,7 +287,7 @@ existing C++ code with a real end-to-end workflow.
 ### Source-Based `std`
 
 Wio's public standard-library surface is now moving toward source-based `.wio`
-modules under [`std/`](/C:/Users/cihan/RiderProjects/wio/std).
+modules under [`std/`](std).
 
 Current modules include:
 
@@ -404,10 +404,10 @@ fn RestoreState(snapshot: i32) -> i32 {
 ### Host SDK
 
 The public SDK now lives in
-[`sdk/include/wio_sdk.h`](/C:/Users/cihan/RiderProjects/wio/sdk/include/wio_sdk.h).
+[`sdk/include/wio_sdk.h`](sdk/include/wio_sdk.h).
 
 The full host-SDK walkthrough now lives in
-[`docs/WIO_SDK.md`](/C:/Users/cihan/RiderProjects/wio/docs/WIO_SDK.md).
+[`docs/WIO_SDK.md`](docs/WIO_SDK.md).
 
 It sits on top of `module_api.h` and is designed to make host-side usage much
 shorter:

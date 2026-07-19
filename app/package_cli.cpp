@@ -82,6 +82,8 @@ namespace wio::tooling::package
 
             std::unordered_set<std::string> seenKeys;
             std::vector<std::string> sanitizedEntries;
+            std::string mergedPath;
+            std::optional<size_t> pathEntryIndex;
 
             for (LPCSTR cursor = environmentStrings; *cursor != '\0'; cursor += std::strlen(cursor) + 1)
             {
@@ -97,11 +99,25 @@ namespace wio::tooling::package
                 for (char& ch : normalizedKey)
                     ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
 
+                if (normalizedKey == "path")
+                {
+                    if (!pathEntryIndex.has_value())
+                        pathEntryIndex = sanitizedEntries.size();
+                    if (!mergedPath.empty() && mergedPath.back() != ';' &&
+                        equalsIndex + 1 < entry.size() && entry[equalsIndex + 1] != ';')
+                        mergedPath.push_back(';');
+                    mergedPath.append(entry.substr(equalsIndex + 1));
+                    continue;
+                }
+
                 if (!seenKeys.insert(normalizedKey).second)
                     continue;
 
                 sanitizedEntries.emplace_back(entry);
             }
+
+            if (!mergedPath.empty() && pathEntryIndex.has_value())
+                sanitizedEntries.insert(sanitizedEntries.begin() + static_cast<std::ptrdiff_t>(*pathEntryIndex), "Path=" + mergedPath);
 
             FreeEnvironmentStringsA(environmentStrings);
 
@@ -292,6 +308,68 @@ namespace wio::tooling::package
             return match[1].str();
         }
 
+        std::optional<std::string> readCMakeCacheValue(const std::filesystem::path& cachePath,
+                                                       const std::string& key)
+        {
+            std::error_code ec;
+            if (!std::filesystem::is_regular_file(cachePath, ec) || ec)
+                return std::nullopt;
+
+            const std::string content = readUtf8File(cachePath);
+            std::smatch match;
+            if (!std::regex_search(content, match, std::regex(key + R"(:[^=]*=([^\r\n]+))")))
+                return std::nullopt;
+
+            return match[1].str();
+        }
+
+        std::optional<std::filesystem::path> resolveConfiguredMakeProgram(
+            const std::filesystem::path& cachePath)
+        {
+            const auto configuredValue = readCMakeCacheValue(cachePath, "CMAKE_MAKE_PROGRAM");
+            if (!configuredValue.has_value() || configuredValue->empty())
+                return std::nullopt;
+
+            std::error_code ec;
+            std::filesystem::path configuredPath(*configuredValue);
+            if (configuredPath.is_absolute() && std::filesystem::is_regular_file(configuredPath, ec) && !ec)
+                return configuredPath.make_preferred();
+
+#if defined(_WIN32)
+            std::vector<char> resolvedBuffer(MAX_PATH, '\0');
+            const DWORD resolvedLength = SearchPathA(
+                nullptr,
+                configuredValue->c_str(),
+                configuredPath.has_extension() ? nullptr : ".exe",
+                static_cast<DWORD>(resolvedBuffer.size()),
+                resolvedBuffer.data(),
+                nullptr
+            );
+            if (resolvedLength > 0 && static_cast<size_t>(resolvedLength) < resolvedBuffer.size())
+            {
+                return std::filesystem::path(
+                    std::string(resolvedBuffer.data(), static_cast<size_t>(resolvedLength))
+                ).make_preferred();
+            }
+
+            const auto configuredCompiler = readCMakeCacheValue(cachePath, "CMAKE_CXX_COMPILER");
+            if (configuredCompiler.has_value() && !configuredCompiler->empty())
+            {
+                std::filesystem::path makeProgramName = configuredPath.filename();
+                if (!makeProgramName.has_extension())
+                    makeProgramName += ".exe";
+
+                std::filesystem::path siblingCandidate =
+                    std::filesystem::path(*configuredCompiler).parent_path() / makeProgramName;
+                ec.clear();
+                if (std::filesystem::is_regular_file(siblingCandidate, ec) && !ec)
+                    return siblingCandidate.make_preferred();
+            }
+#endif
+
+            return std::nullopt;
+        }
+
         std::string getPlatformTag()
         {
 #if defined(_WIN32)
@@ -401,7 +479,7 @@ namespace wio::tooling::package
                         .SetDescription("Delete any previous package directory and archive before staging a fresh one.")
                 )
                 .AutoHelp()
-                .SetVersion("1.0.0");
+                .SetVersion(WIO_VERSION);
 
             return parser;
         }
@@ -951,6 +1029,10 @@ finally {
                 << "sh ./install-wio.sh\n"
                 << "```\n\n"
                 << "Portable use without copying into a stable location is still supported, but it should be treated as a portable workflow rather than a normal installed toolchain.\n\n"
+                << "To persist the environment manually from a portable package root:\n\n"
+                << "```powershell\n"
+                << "bin\\wio.exe env setup --wio-root . --set-user --add-path\n"
+                << "```\n\n"
                 << "## 2.5. Bundled backend compiler\n\n"
                 << "Windows release packages also carry a portable GNU backend toolchain under:\n\n"
                 << "```text\n"
@@ -1062,6 +1144,8 @@ finally {
                     "-B", buildDir.string(),
                     "-DWIO_DIST_DIR=" + distPrefix.string()
                 };
+                if (const auto makeProgram = resolveConfiguredMakeProgram(buildDir / "CMakeCache.txt"); makeProgram.has_value())
+                    configureCommand.push_back("-DCMAKE_MAKE_PROGRAM=" + makeProgram->string());
                 if (!generator.empty())
                 {
                     configureCommand.push_back("-G");

@@ -576,6 +576,191 @@ namespace wio::runtime
         /** @brief The underlying raw pointer. */
         T* m_Ptr = nullptr;
     };
+
+    // ============================================================
+    // Borrowed object references
+    // ============================================================
+
+    /**
+     * A mutable, non-owning borrow of a Wio object handle.
+     *
+     * When created from an lvalue Ref<T>, assignments are forwarded to that
+     * handle so `ref object` keeps its write-through/rebind behavior. Borrows
+     * created from a raw object pointer (notably `self`) still provide normal
+     * instance access without creating a self-owning reference cycle.
+     */
+    template <typename T>
+    class BorrowedObjectRef
+    {
+    public:
+        constexpr BorrowedObjectRef() noexcept = default;
+        constexpr BorrowedObjectRef(std::nullptr_t) noexcept {}
+
+        BorrowedObjectRef(T* ptr) noexcept
+            : m_Ptr(ptr)
+        {
+        }
+
+        BorrowedObjectRef(Ref<T>& handle) noexcept
+            : m_Handle(&handle), m_Ptr(handle.Get())
+        {
+        }
+
+        template <typename U>
+        requires std::is_convertible_v<U*, T*>
+        BorrowedObjectRef(Ref<U>& handle) noexcept
+            : m_Ptr(handle.Get())
+        {
+            if constexpr (std::is_same_v<U, T>)
+                m_Handle = &handle;
+        }
+
+        template <typename U>
+        requires std::is_convertible_v<U*, T*>
+        BorrowedObjectRef(const BorrowedObjectRef<U>& other) noexcept
+            : m_Ptr(other.Get())
+        {
+        }
+
+        BorrowedObjectRef(const BorrowedObjectRef&) noexcept = default;
+
+        BorrowedObjectRef& operator=(const BorrowedObjectRef& other) noexcept
+        {
+            return assign(other.Get());
+        }
+
+        BorrowedObjectRef& operator=(const Ref<T>& value) noexcept
+        {
+            if (m_Handle)
+            {
+                *m_Handle = value;
+                m_Ptr = m_Handle->Get();
+            }
+            else
+            {
+                m_Ptr = value.Get();
+            }
+            return *this;
+        }
+
+        BorrowedObjectRef& operator=(std::nullptr_t) noexcept
+        {
+            if (m_Handle)
+            {
+                *m_Handle = nullptr;
+                m_Ptr = nullptr;
+            }
+            else
+            {
+                m_Ptr = nullptr;
+            }
+            return *this;
+        }
+
+        template <typename... Args>
+        [[nodiscard]] static Ref<T> Create(Args&&... args)
+        {
+            return Ref<T>::Create(std::forward<Args>(args)...);
+        }
+
+        [[nodiscard]] T* operator->() const noexcept { return Get(); }
+        [[nodiscard]] T& operator*() const noexcept { return *Get(); }
+        [[nodiscard]] T* Get() const noexcept { return m_Handle ? m_Handle->Get() : m_Ptr; }
+        [[nodiscard]] explicit operator bool() const noexcept { return Get() != nullptr; }
+        [[nodiscard]] bool operator==(std::nullptr_t) const noexcept { return Get() == nullptr; }
+        [[nodiscard]] bool operator!=(std::nullptr_t) const noexcept { return Get() != nullptr; }
+
+    private:
+        BorrowedObjectRef& assign(T* ptr) noexcept
+        {
+            if (m_Handle)
+            {
+                *m_Handle = Ref<T>(ptr);
+                m_Ptr = m_Handle->Get();
+            }
+            else
+            {
+                m_Ptr = ptr;
+            }
+            return *this;
+        }
+
+        Ref<T>* m_Handle = nullptr;
+        T* m_Ptr = nullptr;
+    };
+
+    /** A read-only, non-owning view of a Wio object instance. */
+    template <typename T>
+    class BorrowedObjectView
+    {
+    public:
+        constexpr BorrowedObjectView() noexcept = default;
+        constexpr BorrowedObjectView(std::nullptr_t) noexcept {}
+
+        BorrowedObjectView(T* ptr) noexcept
+            : m_Ptr(ptr)
+        {
+        }
+
+        template <typename U>
+        requires std::is_convertible_v<U*, T*>
+        BorrowedObjectView(const Ref<U>& handle) noexcept
+            : m_Ptr(handle.Get())
+        {
+        }
+
+        template <typename U>
+        requires std::is_convertible_v<U*, T*>
+        BorrowedObjectView(const BorrowedObjectRef<U>& other) noexcept
+            : m_Ptr(other.Get())
+        {
+        }
+
+        template <typename U>
+        requires std::is_convertible_v<U*, T*>
+        BorrowedObjectView(const BorrowedObjectView<U>& other) noexcept
+            : m_Ptr(other.Get())
+        {
+        }
+
+        [[nodiscard]] T* operator->() const noexcept { return m_Ptr; }
+        [[nodiscard]] T& operator*() const noexcept { return *m_Ptr; }
+        [[nodiscard]] T* Get() const noexcept { return m_Ptr; }
+        [[nodiscard]] explicit operator bool() const noexcept { return m_Ptr != nullptr; }
+        [[nodiscard]] bool operator==(std::nullptr_t) const noexcept { return m_Ptr == nullptr; }
+        [[nodiscard]] bool operator!=(std::nullptr_t) const noexcept { return m_Ptr != nullptr; }
+
+    private:
+        T* m_Ptr = nullptr;
+    };
+
+    template <typename T, typename U>
+    requires std::is_convertible_v<U*, T*>
+    [[nodiscard]] Ref<T> OwnObjectReference(U* value) noexcept
+    {
+        return Ref<T>(static_cast<T*>(value));
+    }
+
+    template <typename T, typename U>
+    requires std::is_convertible_v<U*, T*>
+    [[nodiscard]] Ref<T> OwnObjectReference(const Ref<U>& value) noexcept
+    {
+        return Ref<T>(value);
+    }
+
+    template <typename T, typename U>
+    requires std::is_convertible_v<U*, T*>
+    [[nodiscard]] Ref<T> OwnObjectReference(const BorrowedObjectRef<U>& value) noexcept
+    {
+        return Ref<T>(static_cast<T*>(value.Get()));
+    }
+
+    template <typename T, typename U>
+    requires std::is_convertible_v<U*, T*>
+    [[nodiscard]] Ref<T> OwnObjectReference(const BorrowedObjectView<U>& value) noexcept
+    {
+        return Ref<T>(static_cast<T*>(value.Get()));
+    }
     
     // ============================================================
     // WeakRef

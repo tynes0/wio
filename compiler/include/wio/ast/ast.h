@@ -92,6 +92,7 @@ namespace wio
         CppHeader,
         CppName,
         Instantiate,
+        Specialize,
         Apply,
         Export,
         Command,

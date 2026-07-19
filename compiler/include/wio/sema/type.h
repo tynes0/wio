@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include <cstdint>
+#include <unordered_map>
 #include <vector>
 #include <frenum.h>
 
@@ -188,6 +189,9 @@ namespace wio
             WeakRef<Scope> structScope;
             std::vector<std::string> genericParameterNames;
             std::vector<Ref<Type>> genericArguments;
+            std::unordered_map<std::string, WeakRef<StructType>> explicitSpecializations;
+            WeakRef<StructType> genericPrimaryType;
+            bool isExplicitSpecialization = false;
             bool hasGenericParameterPack = false;
             std::vector<Ref<Type>> baseTypes;
             std::vector<std::string> fieldNames;
@@ -209,6 +213,8 @@ namespace wio
             std::string toString() const override;
             std::string toCppString() const override;
         };
+
+        std::string getGenericSpecializationKey(const std::vector<Ref<Type>>& types);
 
         struct AliasType : Type
         {

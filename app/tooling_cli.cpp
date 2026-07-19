@@ -34,7 +34,7 @@ namespace wio::tooling
 {
     namespace
     {
-        constexpr std::string_view kWioCliVersion = "1.0.0";
+        constexpr std::string_view kWioCliVersion = WIO_VERSION;
 
 #if defined(_WIN32)
         class ScopedWindowsPathOverride
@@ -169,6 +169,8 @@ namespace wio::tooling
 
             std::unordered_set<std::string> seenKeys;
             std::vector<std::string> sanitizedEntries;
+            std::string mergedPath;
+            std::optional<size_t> pathEntryIndex;
 
             for (LPCSTR cursor = environmentStrings; *cursor != '\0'; cursor += std::strlen(cursor) + 1)
             {
@@ -184,11 +186,25 @@ namespace wio::tooling
                 for (char& ch : normalizedKey)
                     ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
 
+                if (normalizedKey == "path")
+                {
+                    if (!pathEntryIndex.has_value())
+                        pathEntryIndex = sanitizedEntries.size();
+                    if (!mergedPath.empty() && mergedPath.back() != ';' &&
+                        equalsIndex + 1 < entry.size() && entry[equalsIndex + 1] != ';')
+                        mergedPath.push_back(';');
+                    mergedPath.append(entry.substr(equalsIndex + 1));
+                    continue;
+                }
+
                 if (!seenKeys.insert(normalizedKey).second)
                     continue;
 
                 sanitizedEntries.emplace_back(entry);
             }
+
+            if (!mergedPath.empty() && pathEntryIndex.has_value())
+                sanitizedEntries.insert(sanitizedEntries.begin() + static_cast<std::ptrdiff_t>(*pathEntryIndex), "Path=" + mergedPath);
 
             FreeEnvironmentStringsA(environmentStrings);
 
@@ -1946,7 +1962,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                         .SetDescription("Run ctest after a successful build.")
                 )
                 .AutoHelp()
-                .SetVersion("1.0.0");
+                .SetVersion(WIO_VERSION);
 
             return parser;
         }
@@ -1985,7 +2001,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                         .SetDescription("Run CMake configure before invoking ctest.")
                 )
                 .AutoHelp()
-                .SetVersion("1.0.0");
+                .SetVersion(WIO_VERSION);
 
             return parser;
         }
@@ -2018,7 +2034,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                         .SetDescription("Allow generating into an existing non-empty directory.")
                 )
                 .AutoHelp()
-                .SetVersion("1.0.0");
+                .SetVersion(WIO_VERSION);
 
             return parser;
         }
@@ -2052,7 +2068,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                         .SetDescription("Reserved compatibility flag. Project manifests are configured declaratively, so this currently forces a rebuild check only.")
                 )
                 .AutoHelp()
-                .SetVersion("1.0.0");
+                .SetVersion(WIO_VERSION);
 
             return parser;
         }

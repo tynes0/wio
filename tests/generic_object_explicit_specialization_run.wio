@@ -1,0 +1,62 @@
+use std::assert as assert;
+use std::console as console;
+
+object ArgumentConverter<T> {
+    public value: T;
+
+    OnConstruct(value: T) {
+        self.value = value;
+    }
+
+    public fn Kind() -> string {
+        return "generic";
+    }
+
+    public fn Get() -> T {
+        return self.value;
+    }
+}
+
+@Specialize(i32)
+object ArgumentConverter {
+    public value: i32;
+
+    OnConstruct(value: i32) {
+        self.value = value + 1;
+    }
+
+    public fn Kind() -> string {
+        return "i32";
+    }
+
+    public fn Get() -> i32 {
+        return self.value;
+    }
+}
+
+component TypedStorage<T> {
+    public value: T;
+}
+
+@Specialize(i32)
+component TypedStorage {
+    public value: i32;
+    public doubled: i32;
+}
+
+fn Entry() -> i32 {
+    let generic = ArgumentConverter<string>("hello");
+    let typed = ArgumentConverter<i32>(41);
+    let genericStorage = TypedStorage<string>("stored");
+    let typedStorage = TypedStorage<i32>(21, 42);
+
+    assert::ExpectEqual(generic.Kind(), "generic", "generic primary should remain active for other types");
+    assert::ExpectEqual(generic.Get(), "hello", "generic primary should preserve its T value");
+    assert::ExpectEqual(typed.Kind(), "i32", "i32 should select the explicit specialization");
+    assert::ExpectEqual(typed.Get(), 42, "explicit specialization should use its own implementation");
+    assert::ExpectEqual(genericStorage.value, "stored", "generic component primary should remain available");
+    assert::ExpectEqual(typedStorage.doubled, 42, "component specialization should expose its own field layout and constructor");
+
+    console::Print("Generic object specialization: ok");
+    return 0;
+}

@@ -337,7 +337,24 @@ namespace wio::codegen
                         return referredCppType;
 
                     if (structType->isObject)
-                        return refType->isMutable ? (referredCppType + "&") : ("const " + referredCppType + "&");
+                    {
+                        std::string objectType = Mangler::mangleStruct(structType->name, structType->scopePath);
+                        if (!structType->genericArguments.empty())
+                        {
+                            objectType += "<";
+                            for (size_t i = 0; i < structType->genericArguments.size(); ++i)
+                            {
+                                objectType += toCppType(structType->genericArguments[i]);
+                                if (i + 1 < structType->genericArguments.size())
+                                    objectType += ", ";
+                            }
+                            objectType += ">";
+                        }
+
+                        return std::string("wio::runtime::") +
+                               (refType->isMutable ? "BorrowedObjectRef<" : "BorrowedObjectView<") +
+                               objectType + ">";
+                    }
                 }
 
                 if (refType->isMutable)
@@ -984,6 +1001,14 @@ namespace wio::codegen
 
             if (structType->genericParameterNames.empty())
                 return structType;
+
+            if (auto specializationIt = structType->explicitSpecializations.find(
+                    sema::getGenericSpecializationKey(explicitTypeArguments));
+                specializationIt != structType->explicitSpecializations.end())
+            {
+                if (auto specialization = specializationIt->second.Lock(); specialization)
+                    return specialization;
+            }
 
             const auto bindings = buildExtendedGenericBindings(
                 structType->genericParameterNames,
@@ -2912,6 +2937,40 @@ namespace wio::codegen
             auto expectedRef = resolvedExpected.AsFast<sema::ReferenceType>();
             auto expectedTarget = unwrapAliasTypeForCodegen(expectedRef->referredType);
 
+            // Keep the borrow wrapper visible at the call site. In particular,
+            // C++ template argument deduction does not consider the converting
+            // constructors from Ref<T> to BorrowedObject{Ref,View}<T>.
+            if (expectedTarget && expectedTarget->kind() == sema::TypeKind::Struct)
+            {
+                auto expectedStruct = expectedTarget.AsFast<sema::StructType>();
+                Ref<sema::Type> actualTarget = resolvedActual;
+                if (actualTarget && actualTarget->kind() == sema::TypeKind::Reference)
+                {
+                    actualTarget = unwrapAliasTypeForCodegen(
+                        actualTarget.AsFast<sema::ReferenceType>()->referredType
+                    );
+                }
+
+                const bool actualIsObject =
+                    actualTarget &&
+                    actualTarget->kind() == sema::TypeKind::Struct &&
+                    actualTarget.AsFast<sema::StructType>()->isObject;
+
+                const bool actualCarriesReferenceLayer =
+                    resolvedActual->kind() == sema::TypeKind::Reference;
+
+                if (expectedStruct->isObject &&
+                    actualIsObject &&
+                    (!expectedRef->isMutable || actualCarriesReferenceLayer))
+                {
+                    emit(toCppType(expectedType));
+                    emit("(");
+                    expression->accept(*this);
+                    emit(")");
+                    return;
+                }
+            }
+
             if (allowAutoRef &&
                 expectedTarget &&
                 (expectedTarget->isCompatibleWith(resolvedActual) ||
@@ -4486,7 +4545,12 @@ namespace wio::codegen
                 auto declaration = stmt->template as<ComponentDeclaration>();
                 auto sym = declaration->name->referencedSymbol.Lock();
                 auto componentType = getStructTypeFromSymbol(sym);
-                if (componentType && usesNativePodAliasModelForCodegen(componentType))
+                if (componentType && componentType->isExplicitSpecialization)
+                {
+                    emitLine("template <>");
+                    emitLine(common::formatString("struct {};", mangleStructTypeName(componentType)));
+                }
+                else if (componentType && usesNativePodAliasModelForCodegen(componentType))
                 {
                     emitTemplateForwardDeclarationPrefix(declaration->genericParameters);
 
@@ -4524,8 +4588,17 @@ namespace wio::codegen
             {
                 auto declaration = stmt->template as<ObjectDeclaration>();
                 auto sym = declaration->name->referencedSymbol.Lock();
-                emitTemplateForwardDeclarationPrefix(declaration->genericParameters);
-                emitLine(common::formatString("struct {};", Mangler::mangleStruct(declaration->name->token.value, sym ? sym->scopePath : "")));
+                auto objectType = getStructTypeFromSymbol(sym);
+                if (objectType && objectType->isExplicitSpecialization)
+                {
+                    emitLine("template <>");
+                    emitLine(common::formatString("struct {};", mangleStructTypeName(objectType)));
+                }
+                else
+                {
+                    emitTemplateForwardDeclarationPrefix(declaration->genericParameters);
+                    emitLine(common::formatString("struct {};", Mangler::mangleStruct(declaration->name->token.value, sym ? sym->scopePath : "")));
+                }
             }
             else if (stmt->template is<InterfaceDeclaration>())
             {
@@ -4906,6 +4979,31 @@ namespace wio::codegen
 
         if (node.op.type == TokenType::kwDeref)
         {
+            Ref<sema::Type> operandType = unwrapAliasTypeForCodegen(node.operand ? node.operand->refType.Lock() : nullptr);
+            if (operandType && operandType->kind() == sema::TypeKind::Reference)
+            {
+                Ref<sema::Type> referredType = unwrapAliasTypeForCodegen(
+                    operandType.AsFast<sema::ReferenceType>()->referredType
+                );
+                if (referredType && referredType->kind() == sema::TypeKind::Struct)
+                {
+                    auto structType = referredType.AsFast<sema::StructType>();
+                    if (structType->isObject)
+                    {
+                        emit("wio::runtime::OwnObjectReference<" + mangleStructTypeName(structType) + ">(");
+                        node.operand->accept(*this);
+                        emit(")");
+                        return;
+                    }
+
+                    if (structType->isInterface)
+                    {
+                        node.operand->accept(*this);
+                        return;
+                    }
+                }
+            }
+
             emit("*(");
             node.operand->accept(*this);
             emit(")");
@@ -5386,18 +5484,6 @@ namespace wio::codegen
 
                 bool usePointerAccess =
                     resolvedReceiverType && resolvedReceiverType->kind() == sema::TypeKind::Reference;
-                if (usePointerAccess)
-                {
-                    auto receiverReferenceType = resolvedReceiverType.AsFast<sema::ReferenceType>();
-                    Ref<sema::Type> referredType = unwrapAliasTypeForCodegen(receiverReferenceType->referredType);
-                    if (referredType && referredType->kind() == sema::TypeKind::Struct)
-                    {
-                        auto referredStructType = referredType.AsFast<sema::StructType>();
-                        if (referredStructType && (referredStructType->isObject || referredStructType->isInterface))
-                            usePointerAccess = false;
-                    }
-                }
-
                 emit("(");
                 receiver->accept(*this);
                 emit(")");
@@ -6066,18 +6152,6 @@ namespace wio::codegen
 
                 bool usePointerAccess =
                     resolvedReceiverType && resolvedReceiverType->kind() == sema::TypeKind::Reference;
-                if (usePointerAccess)
-                {
-                    auto receiverReferenceType = resolvedReceiverType.AsFast<sema::ReferenceType>();
-                    Ref<sema::Type> referredType = unwrapAliasTypeForCodegen(receiverReferenceType->referredType);
-                    if (referredType && referredType->kind() == sema::TypeKind::Struct)
-                    {
-                        auto referredStructType = referredType.AsFast<sema::StructType>();
-                        if (referredStructType && (referredStructType->isObject || referredStructType->isInterface))
-                            usePointerAccess = false;
-                    }
-                }
-
                 emit("(");
                 receiver->accept(*this);
                 emit(")");
@@ -6364,18 +6438,6 @@ namespace wio::codegen
 
                 bool usePointerAccess =
                     resolvedReceiverType && resolvedReceiverType->kind() == sema::TypeKind::Reference;
-                if (usePointerAccess)
-                {
-                    auto receiverReferenceType = resolvedReceiverType.AsFast<sema::ReferenceType>();
-                    Ref<sema::Type> referredType = unwrapAliasTypeForCodegen(receiverReferenceType->referredType);
-                    if (referredType && referredType->kind() == sema::TypeKind::Struct)
-                    {
-                        auto referredStructType = referredType.AsFast<sema::StructType>();
-                        if (referredStructType && (referredStructType->isObject || referredStructType->isInterface))
-                            usePointerAccess = false;
-                    }
-                }
-
                 emit("(");
                 receiver->accept(*this);
                 emit(")");
@@ -7797,7 +7859,12 @@ namespace wio::codegen
         auto componentType = getStructTypeFromSymbol(componentSym);
         auto enclosingScope = componentSym && componentSym->innerScope ? componentSym->innerScope->getParent().Lock() : nullptr;
 
-        if (!node.genericParameters.empty())
+        if (componentType && componentType->isExplicitSpecialization)
+        {
+            EMIT_TABS();
+            emitLine("template <>");
+        }
+        else if (!node.genericParameters.empty())
         {
             EMIT_TABS();
             emit("template <");
@@ -7814,6 +7881,10 @@ namespace wio::codegen
         }
 
         std::string structName = mangleStructTypeName(componentType);
+        const std::string declaredClassName = Mangler::mangleStruct(
+            componentType ? componentType->name : node.name->token.value,
+            componentType ? componentType->scopePath : ""
+        );
         if (componentType && usesNativePodAliasModelForCodegen(componentType))
         {
             std::string nativeTypeName = componentType->nativeCppName.empty() ? componentType->name : componentType->nativeCppName;
@@ -7873,7 +7944,7 @@ namespace wio::codegen
             }
         }
     
-        currentClassName_ = structName;
+        currentClassName_ = declaredClassName;
         AccessModifier currentAccess = AccessModifier::Public;
     
         std::vector<std::pair<std::string, std::string>> memberVars;
@@ -8012,7 +8083,12 @@ namespace wio::codegen
         emitSourceDirective(node.location());
         auto symb = node.name->referencedSymbol.Lock();
         auto objectType = getStructTypeFromSymbol(symb);
-        if (!node.genericParameters.empty())
+        if (objectType && objectType->isExplicitSpecialization)
+        {
+            EMIT_TABS();
+            emitLine("template <>");
+        }
+        else if (!node.genericParameters.empty())
         {
             EMIT_TABS();
             emit("template <");
@@ -8028,6 +8104,10 @@ namespace wio::codegen
             emitLine(">");
         }
         std::string structName = mangleStructTypeName(objectType);
+        const std::string declaredClassName = Mangler::mangleStruct(
+            objectType ? objectType->name : node.name->token.value,
+            objectType ? objectType->scopePath : ""
+        );
         emit("struct " + structName); 
         
         if (hasAttribute(node.attributes, Attribute::Final)) emit(" final");
@@ -8149,7 +8229,7 @@ namespace wio::codegen
             }
         }
     
-        currentClassName_ = structName;
+        currentClassName_ = declaredClassName;
         AccessModifier currentAccess = AccessModifier::Public;
     
         std::vector<std::pair<std::string, std::string>> memberVars;

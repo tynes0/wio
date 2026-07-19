@@ -1880,7 +1880,63 @@ Current rules:
 - generic methods on `component` declarations stay out of the current v1 slice,
 - generic `interface` methods remain unsupported in v1.
 
-### 13.6 Generic Packs and Pack Storage
+### 13.6 Explicit Generic Specialization
+
+Generic `object` and `component` declarations may provide a different complete
+definition for an exact list of concrete type arguments with `@Specialize(...)`.
+
+```wio
+object ArgumentConverter<T> {
+    public value: T;
+
+    OnConstruct(value: T) {
+        self.value = value;
+    }
+
+    public fn Kind() -> string {
+        return "generic";
+    }
+}
+
+@Specialize(i32)
+object ArgumentConverter {
+    public value: i32;
+
+    OnConstruct(value: i32) {
+        self.value = value + 1;
+    }
+
+    public fn Kind() -> string {
+        return "i32";
+    }
+}
+```
+
+`ArgumentConverter<i32>` selects the specialized declaration automatically.
+Other concrete forms, such as `ArgumentConverter<string>`, continue to use the
+generic primary declaration.
+
+Current rules:
+
+- the generic primary declaration must appear earlier in the same scope,
+- the primary and specialization must have the same name and both be either
+  `object` or `component`,
+- a specialization omits the generic parameter list and supplies one fully
+  concrete type per primary generic parameter through `@Specialize(...)`,
+- the specialized declaration may define its own fields and constructors;
+  `object` specializations may also define their own method implementations,
+- duplicate specializations of the same concrete type list are rejected,
+- `@Apply(...)` constraints belong on the generic primary declaration,
+- declaration-level native components are not currently specialization targets,
+- only full specialization is supported; partial or pattern-based
+  specialization remains outside the current v1 surface.
+
+Wio does not currently have static object/component methods. A C++ pattern such
+as `ArgumentConverter<T>::Convert(...)` therefore uses an instance method or a
+free function in current Wio code; explicit type specialization itself is
+supported independently of that static-member surface.
+
+### 13.7 Generic Packs and Pack Storage
 
 Wio now supports the first broad variadic-generic slice across functions,
 generic aliases, `object`, `component`, and `interface` declarations.

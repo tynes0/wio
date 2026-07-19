@@ -782,8 +782,24 @@ namespace wio::sema
             
             if (sType->isObject) 
             {
-                if (isMutable) return baseTypeStr + "&";
-                else return "const " + baseTypeStr + "&";
+                std::string objectType = codegen::Mangler::mangleStruct(sType->name, sType->scopePath);
+                if (!sType->genericArguments.empty())
+                {
+                    objectType += "<";
+                    for (size_t i = 0; i < sType->genericArguments.size(); ++i)
+                    {
+                        objectType += sType->genericArguments[i]
+                            ? sType->genericArguments[i]->toCppString()
+                            : "void";
+                        if (i + 1 < sType->genericArguments.size())
+                            objectType += ", ";
+                    }
+                    objectType += ">";
+                }
+
+                return std::string("wio::runtime::") +
+                       (isMutable ? "BorrowedObjectRef<" : "BorrowedObjectView<") +
+                       objectType + ">";
             }
         }
         
@@ -886,6 +902,18 @@ namespace wio::sema
             return "wio::runtime::Ref<" + mangled + ">";
         }
         return mangled;
+    }
+
+    std::string getGenericSpecializationKey(const std::vector<Ref<Type>>& types)
+    {
+        std::string key;
+        for (size_t i = 0; i < types.size(); ++i)
+        {
+            if (i > 0)
+                key += "|";
+            key += types[i] ? types[i]->toCppString() : "<unknown>";
+        }
+        return key;
     }
 
     AliasType::AliasType(std::string name, Ref<Type> aliasedType)

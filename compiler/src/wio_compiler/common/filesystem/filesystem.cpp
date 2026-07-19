@@ -13,13 +13,17 @@ namespace wio::common::filesystem
 {
     FILE* openFile(const std::filesystem::path& path, const char* mode)
     {
-#ifdef _MSC_VER
+#ifdef _WIN32
         std::wstring wmode(mode, mode + strlen(mode));
+#ifdef _MSC_VER
         FILE* f = nullptr;
         errno_t eno = _wfopen_s(&f, path.c_str(), wmode.c_str());
         if (eno != 0)
             return nullptr;
         return f;
+#else
+        return _wfopen(path.c_str(), wmode.c_str());
+#endif
 #else
         return fopen(path.c_str(), mode);
 #endif

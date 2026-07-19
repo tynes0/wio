@@ -131,6 +131,8 @@ The following generic slice is intended to be in `v1`:
 - generic free functions
 - generic aliases
 - generic `object`, `component`, and `interface` declarations
+- full explicit `object` and `component` specialization through
+  `@Specialize(...)`
 - explicit generic argument passing
 - constructor deduction for generic `object` and `component` declarations
 - `@Apply(...)`-based constraint checking
@@ -270,7 +272,7 @@ decision changes that on purpose.
 - const generics beyond the current pack/meta indexing slice
 - `std::meta` beyond the current `v1` wave 3 helper surface
 - generic defaults
-- partial specialization
+- partial or pattern-based specialization
 - generalized implicit user-defined conversions
 - user-defined `operator->`
 - broader async/task/concurrency language features
