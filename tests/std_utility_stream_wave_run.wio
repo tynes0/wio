@@ -1,0 +1,55 @@
+use std::assert as assert;
+use std::log as log;
+use std::numeric as numeric;
+use std::semver as semver;
+use std::stream as stream;
+use std::uuid as uuid;
+use std::console as console;
+
+fn Entry() -> i32 {
+    let sum = numeric::CheckedAdd(40i64, 2i64);
+    assert::Expect(sum.IsSome(), "checked add success");
+    assert::ExpectEqual(sum.Value(), 42i64, "checked add value");
+    assert::Expect(numeric::CheckedAdd(9223372036854775807i64, 1i64).IsNone(), "checked overflow");
+    assert::ExpectEqual(
+        numeric::SaturatingAdd(9223372036854775807i64, 1i64),
+        9223372036854775807i64,
+        "saturating add");
+    assert::Expect(numeric::CheckedMul(9223372036854775807i64, 2i64).IsNone(), "checked multiply overflow");
+    assert::ExpectEqual(
+        numeric::SaturatingMul(9223372036854775807i64, 2i64),
+        9223372036854775807i64,
+        "saturating multiply");
+
+    let writer = stream::StringWriter();
+    writer.Write("first");
+    writer.WriteLine();
+    writer.WriteLine("second");
+    assert::ExpectEqual(writer.ToString(), "first\nsecond\n", "string writer");
+
+    let reader = stream::StringReader(writer.ToString());
+    assert::ExpectEqual(reader.ReadLine().Value(), "first", "reader first line");
+    assert::ExpectEqual(reader.ReadLine().Value(), "second", "reader second line");
+    assert::Expect(reader.End(), "reader end");
+
+    let identifier = uuid::NewV4();
+    assert::Expect(uuid::IsValid(identifier), "uuid v4 format");
+
+    let parsed = semver::Parse("1.4.2");
+    assert::Expect(parsed.IsSome(), "semver parse");
+    assert::ExpectEqual(parsed.Value().ToString(), "1.4.2", "semver format");
+    assert::Expect(
+        parsed.Value().Compare(semver::Parse("1.4.3").Value()) < 0,
+        "semantic version ordering");
+
+    let logger = log::Logger("test", log::Level::debug, false);
+    assert::ExpectEqual(logger.Format(log::Level::info, "ready"), "[INFO] [test] ready", "logger text format");
+
+    let structured = log::Logger("test", log::Level::info, true);
+    let event = structured.Format(log::Level::warning, "careful");
+    assert::Expect(event.Contains("\"level\":\"WARN\""), "structured log level");
+    assert::Expect(event.Contains("\"message\":\"careful\""), "structured log message");
+
+    console::Print("STD utility stream wave: ok");
+    return 0;
+}

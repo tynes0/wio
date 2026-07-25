@@ -1,0 +1,40 @@
+use std::assert as assert;
+use std::console as console;
+
+fn Wrap(value: string) -> string {
+    return $"[${value}]";
+}
+
+fn Add(left: i32, right: i32) -> i32 {
+    return left + right;
+}
+
+fn Entry() -> i32 {
+    assert::ExpectEqual(
+        $"call=${Wrap("inner")}",
+        "call=[inner]",
+        "string literal in interpolation call"
+    );
+
+    assert::ExpectEqual(
+        $"nested=${$"value=${Wrap("deep")}"}",
+        "nested=value=[deep]",
+        "nested interpolated string"
+    );
+
+    assert::ExpectEqual(
+        $"math=${Add((1 + 2), Add(3, 4))}",
+        "math=10",
+        "nested calls and parentheses"
+    );
+
+    let values: Dict<string, i32> = { "answer": 42 };
+    assert::ExpectEqual(
+        $"dict=${values.GetOr("answer", 0)}",
+        "dict=42",
+        "dictionary call with string argument"
+    );
+
+    console::Print("Interpolated string nested: ok");
+    return 0;
+}

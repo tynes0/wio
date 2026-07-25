@@ -312,6 +312,19 @@ namespace wio
 
     ComponentDeclaration::~ComponentDeclaration() = default;
 
+    ExtensionDeclaration::ExtensionDeclaration(NodePtr<Identifier> _name,
+                                               NodePtr<TypeSpecifier> _targetType,
+                                               std::vector<ExtensionMember> _members,
+                                               common::Location _loc)
+        : Statement(_loc),
+          name(std::move(_name)),
+          targetType(std::move(_targetType)),
+          members(std::move(_members))
+    {
+    }
+
+    ExtensionDeclaration::~ExtensionDeclaration() = default;
+
     ObjectDeclaration::ObjectDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
         NodePtr<Identifier> _name,
         std::vector<NodePtr<Identifier>> _genericParameters,

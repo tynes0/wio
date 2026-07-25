@@ -498,6 +498,15 @@ namespace wio::sema
                     }
                     break;
                 }
+                case NodeKind::ExtensionDeclaration:
+                {
+                    auto* current = node->as<ExtensionDeclaration>();
+                    traverse(current->name);
+                    traverse(current->targetType);
+                    for (const auto& member : current->members)
+                        traverse(member.method);
+                    break;
+                }
                 case NodeKind::ObjectDeclaration:
                 {
                     auto* current = node->as<ObjectDeclaration>();
@@ -5538,7 +5547,8 @@ namespace wio::sema
         isStructResolutionPass_ = true;
         for (auto& stmt : node.statements)
         {
-            if (stmt->is<ComponentDeclaration>() || 
+            if (stmt->is<ComponentDeclaration>() ||
+                stmt->is<ExtensionDeclaration>() ||
                 stmt->is<ObjectDeclaration>() ||
                 stmt->is<EnumDeclaration>() ||
                 stmt->is<FlagsetDeclaration>() ||
@@ -8366,6 +8376,54 @@ namespace wio::sema
             }
         }
     
+        if (!foundMember && actualStructType)
+        {
+            auto typeMethods = extensionMethods_.find(actualStructType.Get());
+            if (typeMethods != extensionMethods_.end())
+            {
+                auto method = typeMethods->second.find(node.member->token.value);
+                if (method != typeMethods->second.end())
+                {
+                    Ref<Symbol> extensionSymbol = method->second;
+                    auto fullType = extensionSymbol->type.AsFast<FunctionType>();
+                    if (fullType && !fullType->paramTypes.empty())
+                    {
+                        std::vector<Ref<Type>> visibleParameters(
+                            fullType->paramTypes.begin() + 1, fullType->paramTypes.end());
+                        Ref<Type> visibleType = Compiler::get().getTypeContext().getOrCreateFunctionType(
+                            fullType->returnType, visibleParameters, fullType->hasParameterPack);
+
+                        auto receiverType = fullType->paramTypes.front();
+                        auto receiverReference = receiverType && receiverType->kind() == TypeKind::Reference
+                            ? receiverType.AsFast<ReferenceType>()
+                            : nullptr;
+                        if (receiverReference && receiverReference->isMutable &&
+                            !canMutateIntrinsicReceiver(node.object))
+                        {
+                            WIO_LOG_ADD_ERROR(node.location(),
+                                "Extension method '{}' requires a mutable receiver.",
+                                node.member->token.value);
+                        }
+
+                        Ref<Symbol> callableSymbol = createSymbol(
+                            extensionSymbol->name, visibleType, SymbolKind::Function,
+                            extensionSymbol->definitionLoc);
+                        callableSymbol->scopePath = extensionSymbol->scopePath;
+                        callableSymbol->flags.set_isExtension(true);
+                        callableSymbol->extensionTargetType = extensionSymbol->extensionTargetType;
+                        callableSymbol->extensionMemberName = extensionSymbol->extensionMemberName;
+                        callableSymbol->extensionImplementation = extensionSymbol;
+
+                        node.referencedSymbol = callableSymbol;
+                        node.refType = visibleType;
+                        node.member->referencedSymbol = callableSymbol;
+                        node.member->refType = visibleType;
+                        return;
+                    }
+                }
+            }
+        }
+
         if (!foundMember)
         {
             std::string ownerName = leftType ? leftType->toString() : (leftSymbol ? leftSymbol->name : "<unknown>");
@@ -11090,13 +11148,15 @@ namespace wio::sema
     {
         if (isDeclarationPass_ || isStructResolutionPass_) return;
         
-        if (!currentStructType_) {
+        if (!currentStructType_ && !currentExtensionTargetType_) {
             WIO_LOG_ADD_ERROR(node.location(), "'self' can only be used inside a component or object method.");
             node.refType = Compiler::get().getTypeContext().getUnknown();
             return;
         }
         
-        node.refType = Compiler::get().getTypeContext().getOrCreateReferenceType(currentStructType_, true);
+        Ref<Type> selfType = currentExtensionTargetType_ ? currentExtensionTargetType_ : currentStructType_;
+        node.refType = Compiler::get().getTypeContext().getOrCreateReferenceType(
+            selfType, currentExtensionTargetType_ ? currentExtensionMutableReceiver_ : true);
     }
 
     void SemanticAnalyzer::visit(SuperExpression& node)
@@ -11614,6 +11674,13 @@ namespace wio::sema
             auto funcType = Compiler::get().getTypeContext().getOrCreateFunctionType(returnType, paramTypes, hasParameterPack);
             
             Ref<Symbol> funcSym = createSymbol(node.name->token.value, funcType, SymbolKind::Function, node.location());
+            if (node.isExtensionMethod)
+            {
+                funcSym->flags.set_isExtension(true);
+                funcSym->extensionTargetType = currentExtensionTargetType_;
+                funcSym->extensionMemberName = node.extensionMemberName;
+                node.extensionTargetType = currentExtensionTargetType_;
+            }
             funcSym->innerScope = currentScope_;
             funcSym->genericParameterNames.reserve(node.genericParameters.size());
             for (const auto& genericParameter : node.genericParameters)
@@ -12715,6 +12782,7 @@ namespace wio::sema
             if (isStructResolutionPass_)
             {
                 if (statement->is<ComponentDeclaration>() ||
+                    statement->is<ExtensionDeclaration>() ||
                     statement->is<ObjectDeclaration>() ||
                     statement->is<EnumDeclaration>() ||
                     statement->is<FlagsetDeclaration>() ||
@@ -12823,6 +12891,122 @@ namespace wio::sema
 
         genericTypeParameterScopes_.pop_back();
         currentScope_ = prevScope;
+    }
+
+    void SemanticAnalyzer::visit(ExtensionDeclaration& node)
+    {
+        if (isDeclarationPass_)
+            return;
+
+        if (isStructResolutionPass_)
+        {
+            node.targetType->accept(*this);
+            Ref<Type> targetType = unwrapAliasType(node.targetType->refType.Lock());
+            if (!targetType || targetType->kind() != TypeKind::Struct)
+            {
+                WIO_LOG_ADD_ERROR(node.targetType->location(), "Extension target must be a component type.");
+                return;
+            }
+
+            auto targetStruct = targetType.AsFast<StructType>();
+            if (targetStruct->isObject || targetStruct->isInterface)
+            {
+                WIO_LOG_ADD_ERROR(node.targetType->location(), "Extensions currently support component types only.");
+                return;
+            }
+
+            Ref<Type> previousExtensionTarget = currentExtensionTargetType_;
+            currentExtensionTargetType_ = targetType;
+            const bool previousDeclarationPass = isDeclarationPass_;
+            isDeclarationPass_ = true;
+
+            for (auto& member : node.members)
+            {
+                auto& method = member.method;
+                if (!method)
+                    continue;
+                if (member.access == AccessModifier::Private ||
+                    member.access == AccessModifier::Protected)
+                {
+                    WIO_LOG_ADD_ERROR(method->location(),
+                        "Extension methods are external APIs and must be public.");
+                    continue;
+                }
+                if (!method->genericParameters.empty())
+                {
+                    WIO_LOG_ADD_ERROR(method->location(),
+                        "Generic extension methods are not supported yet.");
+                    continue;
+                }
+                if (common::isOperatorOverloadName(method->extensionMemberName))
+                {
+                    WIO_LOG_ADD_ERROR(method->location(),
+                        "Extension operator overloads are not supported.");
+                    continue;
+                }
+                if (std::ranges::any_of(method->parameters, [](const Parameter& parameter)
+                    {
+                        return parameter.defaultValue != nullptr;
+                    }))
+                {
+                    WIO_LOG_ADD_ERROR(method->location(),
+                        "Extension methods do not support default parameters yet.");
+                    continue;
+                }
+
+                const std::string publicName = method->extensionMemberName;
+                if (auto scope = targetStruct->structScope.Lock();
+                    scope && scope->resolveLocally(publicName))
+                {
+                    WIO_LOG_ADD_ERROR(method->location(),
+                        "Extension method '{}' conflicts with a component member.", publicName);
+                    continue;
+                }
+
+                method->name->token.value =
+                    "__extension_" + node.name->token.value + "_" + publicName;
+                currentExtensionMutableReceiver_ = member.mutableReceiver;
+                method->accept(*this);
+
+                auto symbol = method->name->referencedSymbol.Lock();
+                if (!symbol)
+                    continue;
+                symbol->flags.set_isExtension(true);
+                symbol->extensionTargetType = targetType;
+                symbol->extensionMemberName = publicName;
+                method->extensionTargetType = targetType;
+
+                auto& methods = extensionMethods_[targetType.Get()];
+                if (methods.contains(publicName))
+                {
+                    WIO_LOG_ADD_ERROR(method->location(),
+                        "Extension method '{}' is ambiguous for '{}'.",
+                        publicName, targetType->toString());
+                }
+                else
+                {
+                    methods.emplace(publicName, symbol);
+                }
+            }
+
+            isDeclarationPass_ = previousDeclarationPass;
+            currentExtensionTargetType_ = previousExtensionTarget;
+            currentExtensionMutableReceiver_ = false;
+            return;
+        }
+
+        Ref<Type> previousExtensionTarget = currentExtensionTargetType_;
+        const bool previousMutableReceiver = currentExtensionMutableReceiver_;
+        currentExtensionTargetType_ = unwrapAliasType(node.targetType->refType.Lock());
+        for (auto& member : node.members)
+        {
+            if (!member.method || !member.method->name->referencedSymbol.Lock())
+                continue;
+            currentExtensionMutableReceiver_ = member.mutableReceiver;
+            member.method->accept(*this);
+        }
+        currentExtensionTargetType_ = previousExtensionTarget;
+        currentExtensionMutableReceiver_ = previousMutableReceiver;
     }
 
     void SemanticAnalyzer::visit(ComponentDeclaration& node)

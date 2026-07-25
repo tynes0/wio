@@ -1,6 +1,7 @@
 use std::queue as queue;
 use std::sets as sets;
 use std::tuple as tuple;
+use std::option as option;
 
 realm std {
     realm collections {
@@ -70,6 +71,21 @@ realm std {
 
         fn GetOr<T>(values: T[], index: usize, fallback: T) -> T {
             return values.GetOr(index, fallback);
+        }
+
+        fn Get<T>(values: T[], index: usize) -> std::Option<T> {
+            if (index >= values.Count()) { return std::None<T>(); }
+            return std::Some<T>(values[index]);
+        }
+
+        fn First<T>(values: T[]) -> std::Option<T> {
+            if (values.Empty()) { return std::None<T>(); }
+            return std::Some<T>(values[0usize]);
+        }
+
+        fn Last<T>(values: T[]) -> std::Option<T> {
+            if (values.Empty()) { return std::None<T>(); }
+            return std::Some<T>(values.Last());
         }
 
         fn Clone<T>(values: T[]) -> T[] {

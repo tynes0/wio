@@ -1,0 +1,15 @@
+component Counter {
+    public value: i32;
+}
+
+extension CounterOps for Counter {
+    public ref fn AddOne() {
+        self.value += 1;
+    }
+}
+
+fn Entry() -> i32 {
+    let counter = Counter(1);
+    counter.AddOne();
+    return 0;
+}

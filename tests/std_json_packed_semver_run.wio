@@ -1,0 +1,48 @@
+use std::assert as assert;
+use std::console as console;
+use std::json as json;
+use std::semver as semver;
+
+fn Entry() -> i32 {
+    mut version = semver::Make(1u64, 4u64, 2u64);
+    assert::ExpectEqual(version.Packed(), 4398054899714u64, "packed semver layout");
+    assert::ExpectEqual(version.Major(), 1u64, "semver major");
+    assert::ExpectEqual(version.Minor(), 4u64, "semver minor");
+    assert::ExpectEqual(version.Patch(), 2u64, "semver patch");
+    version.SetPatch(9u64);
+    assert::ExpectEqual(version.ToString(), "1.4.9", "semver extension mutation");
+    assert::Expect(semver::Parse("2097152.0.0").IsNone(), "semver component overflow");
+    assert::Expect(semver::Parse("1.0.0-beta").IsNone(), "packed semver rejects metadata");
+
+    mut document = "{";
+    document += "\"name\":\"Wio\",";
+    document += "\"active\":true,";
+    document += "\"score\":42.5,";
+    document += "\"tags\":[\"lang\",\"native\"],";
+    document += "\"meta\":{\"stable\":false},";
+    document += "\"empty\":null";
+    document += "}";
+
+    let parsed = json::Parse(document);
+    assert::Expect(parsed.IsOk(), "json parse");
+    let root = parsed.Value();
+    assert::Expect(root.IsObject(), "json root object");
+    assert::ExpectEqual(root.Get("name").Value().StringOr(""), "Wio", "json string access");
+    assert::Expect(root.Get("active").Value().BoolOr(false), "json bool access");
+    assert::ExpectEqual(root.Get("score").Value().NumberOr(0.0f64), 42.5f64, "json number access");
+    assert::ExpectEqual(root.Get("tags").Value().At(1usize).Value().StringOr(""), "native", "json array access");
+    assert::Expect(not root.Get("meta").Value().Get("stable").Value().BoolOr(true), "json nested object");
+    assert::Expect(root.Get("empty").Value().IsNull(), "json null");
+
+    let compact = json::Write(root);
+    assert::Expect(json::Parse(compact).IsOk(), "json compact roundtrip");
+    let pretty = json::WritePretty(root, 4usize);
+    assert::Expect(pretty.Contains("\n"), "json pretty lines");
+    assert::Expect(pretty.Contains("    \"name\": \"Wio\""), "json pretty indentation");
+
+    assert::Expect(json::Parse("{\"x\": [1,}").IsError(), "json invalid syntax");
+    assert::Expect(not json::IsValid("true trailing"), "json trailing data");
+
+    console::Print("JSON + packed semver: ok");
+    return 0;
+}

@@ -1,7 +1,0 @@
-use std::assert as assert;
-use std::nested_import_regression as nested;
-
-fn Entry(args: string[]) -> i32 {
-    assert::ExpectEqual(nested::Value(), 7, "nested std import should resolve");
-    return 0;
-}

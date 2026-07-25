@@ -1,0 +1,350 @@
+use std::convert as convert;
+use std::option as option;
+use std::result as result;
+use std::serialization as serialization;
+
+realm std {
+    realm json {
+        @Type(u8)
+        enum Kind {
+            null_value = 0u8,
+            boolean = 1u8,
+            number = 2u8,
+            string_value = 3u8,
+            array_value = 4u8,
+            object_value = 5u8
+        };
+
+        object Value {
+            public kind: Kind;
+            public booleanValue: bool;
+            public numberValue: f64;
+            public stringValue: string;
+            public arrayValue: Value[];
+            public objectValue: Dict<string, Value>;
+
+            public fn IsNull() -> bool { return self.kind == Kind::null_value; }
+            public fn IsBool() -> bool { return self.kind == Kind::boolean; }
+            public fn IsNumber() -> bool { return self.kind == Kind::number; }
+            public fn IsString() -> bool { return self.kind == Kind::string_value; }
+            public fn IsArray() -> bool { return self.kind == Kind::array_value; }
+            public fn IsObject() -> bool { return self.kind == Kind::object_value; }
+            public fn Count() -> usize {
+                if (self.IsArray()) { return self.arrayValue.Count(); }
+                if (self.IsObject()) { return self.objectValue.Count(); }
+                return 0usize;
+            }
+            public fn BoolOr(fallback: bool) -> bool {
+                if (self.IsBool()) { return self.booleanValue; }
+                return fallback;
+            }
+            public fn NumberOr(fallback: f64) -> f64 {
+                if (self.IsNumber()) { return self.numberValue; }
+                return fallback;
+            }
+            public fn StringOr(fallback: string) -> string {
+                if (self.IsString()) { return self.stringValue; }
+                return fallback;
+            }
+            public fn At(index: usize) -> std::Option<Value> {
+                if (not self.IsArray() or index >= self.arrayValue.Count()) { return std::None<Value>(); }
+                return std::Some<Value>(self.arrayValue[index]);
+            }
+            public fn Get(key: string) -> std::Option<Value> {
+                if (not self.IsObject() or not self.objectValue.ContainsKey(key)) { return std::None<Value>(); }
+                return std::Some<Value>(self.objectValue.GetOr(key, NullValue()));
+            }
+            public fn Contains(key: string) -> bool {
+                return self.IsObject() and self.objectValue.ContainsKey(key);
+            }
+        }
+
+        fn NullValue() -> Value {
+            mut value = Value();
+            value.kind = Kind::null_value;
+            return value;
+        }
+
+        fn BoolValue(value: bool) -> Value {
+            mut result = Value();
+            result.kind = Kind::boolean;
+            result.booleanValue = value;
+            return result;
+        }
+
+        fn NumberValue(value: f64) -> Value {
+            mut result = Value();
+            result.kind = Kind::number;
+            result.numberValue = value;
+            return result;
+        }
+
+        fn StringValue(value: string) -> Value {
+            mut result = Value();
+            result.kind = Kind::string_value;
+            result.stringValue = value;
+            return result;
+        }
+
+        fn ArrayValue(values: Value[]) -> Value {
+            mut result = Value();
+            result.kind = Kind::array_value;
+            result.arrayValue = values;
+            return result;
+        }
+
+        fn ObjectValue(values: Dict<string, Value>) -> Value {
+            mut result = Value();
+            result.kind = Kind::object_value;
+            result.objectValue = values;
+            return result;
+        }
+
+        object Parser {
+            private source: string;
+            private position: usize;
+            private failure: string;
+
+            OnConstruct(source: string) {
+                self.source = source;
+                self.position = 0usize;
+                self.failure = "";
+            }
+
+            private fn Fail(message: string) {
+                if (self.failure == "") {
+                    self.failure = $"JSON parse error at byte ${self.position}: ${message}";
+                }
+            }
+
+            private fn SkipWhitespace() {
+                while (self.position < self.source.Count()) {
+                    let current = self.source[self.position];
+                    if (current != ' ' and current != '\t' and current != '\r' and current != '\n') { return; }
+                    self.position += 1usize;
+                }
+            }
+
+            private fn Consume(text: string) -> bool {
+                if (self.source.Slice(self.position, text.Count()) != text) { return false; }
+                self.position += text.Count();
+                return true;
+            }
+
+            private fn ParseStringToken() -> string {
+                if (self.position >= self.source.Count() or self.source[self.position] != '"') {
+                    self.Fail("Expected a string.");
+                    return "";
+                }
+                let start = self.position;
+                self.position += 1usize;
+                mut escaped = false;
+                while (self.position < self.source.Count()) {
+                    let current = self.source[self.position];
+                    self.position += 1usize;
+                    if (escaped) {
+                        escaped = false;
+                    } else if (current == '\\') {
+                        escaped = true;
+                    } else if (current == '"') {
+                        return serialization::UnquoteJson(
+                            self.source.Slice(start, self.position - start));
+                    } else if (current == '\n' or current == '\r') {
+                        self.Fail("Unescaped newline in string.");
+                        return "";
+                    }
+                }
+                self.Fail("Unterminated string.");
+                return "";
+            }
+
+            private fn ParseNumberValue() -> Value {
+                let start = self.position;
+                while (self.position < self.source.Count()) {
+                    let current = self.source[self.position];
+                    let valid = (current >= '0' and current <= '9') or current == '-' or current == '+' or
+                                current == '.' or current == 'e' or current == 'E';
+                    if (not valid) { break; }
+                    self.position += 1usize;
+                }
+                let token = self.source.Slice(start, self.position - start);
+                let parsed = convert::ParseF64(token);
+                if (parsed.IsError()) {
+                    self.Fail("Invalid number.");
+                    return NullValue();
+                }
+                return NumberValue(parsed.Value());
+            }
+
+            private fn ParseArrayValue() -> Value {
+                self.position += 1usize;
+                mut values: Value[] = [];
+                self.SkipWhitespace();
+                if (self.position < self.source.Count() and self.source[self.position] == ']') {
+                    self.position += 1usize;
+                    return ArrayValue(values);
+                }
+                while (self.position < self.source.Count() and self.failure == "") {
+                    values.Push(self.ParseAny());
+                    self.SkipWhitespace();
+                    if (self.position < self.source.Count() and self.source[self.position] == ']') {
+                        self.position += 1usize;
+                        return ArrayValue(values);
+                    }
+                    if (self.position >= self.source.Count() or self.source[self.position] != ',') {
+                        self.Fail("Expected ',' or ']' in array.");
+                        return NullValue();
+                    }
+                    self.position += 1usize;
+                    self.SkipWhitespace();
+                }
+                self.Fail("Unterminated array.");
+                return NullValue();
+            }
+
+            private fn ParseObjectValue() -> Value {
+                self.position += 1usize;
+                mut values: Dict<string, Value> = {};
+                self.SkipWhitespace();
+                if (self.position < self.source.Count() and self.source[self.position] == '}') {
+                    self.position += 1usize;
+                    return ObjectValue(values);
+                }
+                while (self.position < self.source.Count() and self.failure == "") {
+                    let key = self.ParseStringToken();
+                    self.SkipWhitespace();
+                    if (self.position >= self.source.Count() or self.source[self.position] != ':') {
+                        self.Fail("Expected ':' after object key.");
+                        return NullValue();
+                    }
+                    self.position += 1usize;
+                    self.SkipWhitespace();
+                    values.Set(key, self.ParseAny());
+                    self.SkipWhitespace();
+                    if (self.position < self.source.Count() and self.source[self.position] == '}') {
+                        self.position += 1usize;
+                        return ObjectValue(values);
+                    }
+                    if (self.position >= self.source.Count() or self.source[self.position] != ',') {
+                        self.Fail("Expected ',' or '}' in object.");
+                        return NullValue();
+                    }
+                    self.position += 1usize;
+                    self.SkipWhitespace();
+                }
+                self.Fail("Unterminated object.");
+                return NullValue();
+            }
+
+            private fn ParseAny() -> Value {
+                self.SkipWhitespace();
+                if (self.position >= self.source.Count()) {
+                    self.Fail("Expected a value.");
+                    return NullValue();
+                }
+                let current = self.source[self.position];
+                if (current == '"') { return StringValue(self.ParseStringToken()); }
+                if (current == '[') { return self.ParseArrayValue(); }
+                if (current == '{') { return self.ParseObjectValue(); }
+                if (self.Consume("true")) { return BoolValue(true); }
+                if (self.Consume("false")) { return BoolValue(false); }
+                if (self.Consume("null")) { return NullValue(); }
+                if ((current >= '0' and current <= '9') or current == '-') { return self.ParseNumberValue(); }
+                self.Fail("Unexpected token.");
+                return NullValue();
+            }
+
+            public fn Run() -> std::Result<Value> {
+                let value = self.ParseAny();
+                self.SkipWhitespace();
+                if (self.failure == "" and self.position != self.source.Count()) {
+                    self.Fail("Trailing characters.");
+                }
+                if (self.failure != "") {
+                    return std::Err<Value>(std::MakeResultError(
+                        std::ResultDomain::custom, 1, self.failure));
+                }
+                return std::Ok<Value>(value);
+            }
+        }
+
+        fn Parse(value: string) -> std::Result<Value> {
+            return Parser(value).Run();
+        }
+
+        fn IsValid(value: string) -> bool { return Parse(value).IsOk(); }
+
+        fn Indent(depth: usize, width: usize) -> string {
+            mut result = "";
+            mut count = 0usize;
+            while (count < depth * width) {
+                result += " ";
+                count += 1usize;
+            }
+            return result;
+        }
+
+        fn WriteValue(value: Value, pretty: bool, depth: usize, width: usize) -> string {
+            if (value.IsNull()) { return "null"; }
+            if (value.IsBool()) { return match (value.booleanValue) { true: "true"; assumed: "false"; }; }
+            if (value.IsNumber()) { return std::ToString<f64>(value.numberValue); }
+            if (value.IsString()) { return serialization::QuoteJson(value.stringValue); }
+            if (value.IsArray()) {
+                if (value.arrayValue.Empty()) { return "[]"; }
+                mut parts: string[] = [];
+                mut index = 0usize;
+                while (index < value.arrayValue.Count()) {
+                    let encoded = WriteValue(value.arrayValue[index], pretty, depth + 1usize, width);
+                    parts.Push(match (pretty) {
+                        true: Indent(depth + 1usize, width) + encoded;
+                        assumed: encoded;
+                    });
+                    index += 1usize;
+                }
+                if (pretty) {
+                    return "[\n" + parts.Join(",\n") + "\n" + Indent(depth, width) + "]";
+                }
+                return "[" + parts.Join(",") + "]";
+            }
+            let keys = value.objectValue.Keys();
+            if (keys.Empty()) { return "{}"; }
+            mut fields: string[] = [];
+            mut index = 0usize;
+            while (index < keys.Count()) {
+                let key = keys[index];
+                let separator = match (pretty) { true: ": "; assumed: ":"; };
+                let encoded = serialization::QuoteJson(key) + separator +
+                    WriteValue(value.objectValue.GetOr(key, NullValue()), pretty, depth + 1usize, width);
+                fields.Push(match (pretty) {
+                    true: Indent(depth + 1usize, width) + encoded;
+                    assumed: encoded;
+                });
+                index += 1usize;
+            }
+            if (pretty) {
+                return "{\n" + fields.Join(",\n") + "\n" + Indent(depth, width) + "}";
+            }
+            return "{" + fields.Join(",") + "}";
+        }
+
+        fn Write(value: Value) -> string { return WriteValue(value, false, 0usize, 2usize); }
+        fn WritePretty(value: Value) -> string { return WriteValue(value, true, 0usize, 2usize); }
+        fn WritePretty(value: Value, indentWidth: usize) -> string {
+            return WriteValue(value, true, 0usize, indentWidth);
+        }
+
+        // Scalar/composition compatibility facade.
+        fn Escape(value: string) -> string { return serialization::EscapeJson(value); }
+        fn Quote(value: string) -> string { return serialization::QuoteJson(value); }
+        fn Unquote(value: string) -> string { return serialization::UnquoteJson(value); }
+        fn String(value: string) -> string { return serialization::ToJson(value); }
+        fn Bool(value: bool) -> string { return serialization::ToJson(value); }
+        fn Number(value: i32) -> string { return serialization::ToJson(value); }
+        fn Number(value: i64) -> string { return serialization::ToJson(value); }
+        fn Number(value: f64) -> string { return serialization::ToJson(value); }
+        fn Array(values: string[]) -> string { return serialization::ArrayJson(values); }
+        fn Field(name: string, value: string) -> string { return serialization::FieldJson(name, value); }
+        fn Object(fields: string[]) -> string { return serialization::ObjectJson(fields); }
+        fn Null() -> string { return serialization::NullJson(); }
+    }
+}

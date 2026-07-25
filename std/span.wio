@@ -1,4 +1,5 @@
 use std::result as result;
+use std::option as option;
 
 realm std {
     realm span {
@@ -71,6 +72,13 @@ realm std {
             return true;
         }
 
+        fn Get<T>(values: view T[], source: Span, index: usize) -> std::Option<T> {
+            if (index >= source.count or source.start + index >= values.Count()) {
+                return std::None<T>();
+            }
+            return std::Some<T>(values[source.start + index]);
+        }
+
         fn ToArray<T>(values: view T[], source: Span) -> T[] {
             return values.Slice(source.start, source.count);
         }
@@ -91,6 +99,20 @@ realm std {
             while (index < source.count and source.start + index < values.Count()) {
                 values[source.start + index] = value;
                 index += 1usize;
+            }
+        }
+
+        extension SpanMethods for Span {
+            public view fn End() -> usize {
+                return self.start + self.count;
+            }
+
+            public view fn Empty() -> bool {
+                return self.count == 0usize;
+            }
+
+            public view fn Slice(start: usize, count: usize) -> Span {
+                return span::Slice(deref self, start, count);
             }
         }
     }

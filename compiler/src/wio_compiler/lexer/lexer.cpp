@@ -17,13 +17,15 @@ namespace wio
     {
         position_ = 0;
         tokens_.clear();
+        interpolationStack_.clear();
+        flags_ = LexerFlags::createAllFalse();
         location_.line = 1;
         location_.column = 1;
         
         
         while (!isAtEnd())
         {
-            if (flags_.get_inInterpolatedString() && !flags_.get_inInterpolatedExpr())
+            if (!interpolationStack_.empty() && !interpolationStack_.back().inExpression)
             {
                 readString();
                 continue;
@@ -458,9 +460,20 @@ namespace wio
             return Token::invalid();
         }
 
-        if (match('}') && flags_.get_inInterpolatedExpr())
+        if (!interpolationStack_.empty() && interpolationStack_.back().inExpression)
         {
-            flags_.set_inInterpolatedExpr(false);
+            auto& frame = interpolationStack_.back();
+            if (match('{'))
+            {
+                ++frame.braceDepth;
+            }
+            else if (match('}'))
+            {
+                if (frame.braceDepth > 0)
+                    --frame.braceDepth;
+                if (frame.braceDepth == 0)
+                    frame.inExpression = false;
+            }
         }
         
         advance();
@@ -472,14 +485,17 @@ namespace wio
         Location start = location_;
         std::string buffer;
 
-        bool isMultiline = false;
+        const bool isContinuation =
+            !interpolationStack_.empty() && !interpolationStack_.back().inExpression;
+        bool isMultiline = isContinuation
+            ? interpolationStack_.back().multiline
+            : false;
 
-        if (!flags_.get_inInterpolatedString() && !flags_.get_inInterpolatedExpr())
+        if (!isContinuation)
         {
             if (flags_.get_nextStringMultiLine())
             {
                 flags_.set_nextStringMultiLine(false);
-                flags_.set_interpolatedStringIsMultiline(true);
                 isMultiline = true;
             }
             if (match('\"'))
@@ -491,12 +507,6 @@ namespace wio
                 throw UnexpectedCharError("Invalid string start", location_);
             }
 
-            flags_.set_inInterpolatedString(true);
-        }
-        else
-        {
-            if (flags_.get_interpolatedStringIsMultiline())
-                isMultiline = true;
         }
 
         while (true)
@@ -513,8 +523,8 @@ namespace wio
                     start
                 );
 
-                flags_.set_inInterpolatedString(false);
-                flags_.set_interpolatedStringIsMultiline(false);
+                if (isContinuation)
+                    interpolationStack_.pop_back();
                 return;
             }
 
@@ -544,7 +554,20 @@ namespace wio
                 );
                 advance();
 
-                flags_.set_inInterpolatedExpr(true);
+                if (isContinuation)
+                {
+                    auto& frame = interpolationStack_.back();
+                    frame.inExpression = true;
+                    frame.braceDepth = 1;
+                }
+                else
+                {
+                    interpolationStack_.push_back(InterpolationFrame{
+                        .multiline = isMultiline,
+                        .inExpression = true,
+                        .braceDepth = 1
+                    });
+                }
 
                 return;
             }

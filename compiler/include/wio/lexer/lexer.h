@@ -8,7 +8,7 @@
 
 namespace wio
 {
-#define LEXER_FLAGS(X) X(inInterpolatedString) X(inInterpolatedExpr) X(nextStringMultiLine) X(interpolatedStringIsMultiline)
+#define LEXER_FLAGS(X) X(nextStringMultiLine)
     DEFINE_FLAGS(LexerFlags, LEXER_FLAGS);
 #undef LEXER_FLAGS
     
@@ -19,6 +19,12 @@ namespace wio
         std::vector<Token> lex();
         [[nodiscard]] std::string toString() const;
     private:
+        struct InterpolationFrame
+        {
+            bool multiline = false;
+            bool inExpression = false;
+            uint32_t braceDepth = 0;
+        };
         [[nodiscard]] char peek(int offset = 0) const;
         [[nodiscard]] unsigned char upeek(int offset = 0) const;
         [[nodiscard]] bool match(char c, int offset = 0) const;
@@ -48,6 +54,7 @@ namespace wio
         uint64_t position_;
         common::Location location_;
         LexerFlags flags_;
+        std::vector<InterpolationFrame> interpolationStack_;
     };
     
 }

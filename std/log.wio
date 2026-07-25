@@ -1,0 +1,94 @@
+use std::console as console;
+use std::json as json;
+use std::time as time;
+
+realm std {
+    realm log {
+        @Type(i32)
+        enum Level {
+            trace = 0,
+            debug = 1,
+            info = 2,
+            warning = 3,
+            error = 4,
+            critical = 5,
+            off = 6
+        };
+
+        fn LevelName(level: Level) -> string {
+            return match (level) {
+                Level::trace: "TRACE";
+                Level::debug: "DEBUG";
+                Level::info: "INFO";
+                Level::warning: "WARN";
+                Level::error: "ERROR";
+                Level::critical: "CRITICAL";
+                assumed: "OFF";
+            };
+        }
+
+        fn LevelRank(level: Level) -> i32 {
+            return match (level) {
+                Level::trace: 0;
+                Level::debug: 1;
+                Level::info: 2;
+                Level::warning: 3;
+                Level::error: 4;
+                Level::critical: 5;
+                assumed: 6;
+            };
+        }
+
+        object Logger {
+            private name: string;
+            private minimum: Level;
+            private structured: bool;
+
+            OnConstruct(name: string, minimum: Level, structured: bool) {
+                self.name = name;
+                self.minimum = minimum;
+                self.structured = structured;
+            }
+
+            OnConstruct(name: string) {
+                self.name = name;
+                self.minimum = Level::info;
+                self.structured = false;
+            }
+
+            public fn Enabled(level: Level) -> bool {
+                return LevelRank(level) >= LevelRank(self.minimum) and self.minimum != Level::off;
+            }
+
+            public fn Format(level: Level, message: string) -> string {
+                if (self.structured) {
+                    let fields: string[] = [
+                        json::Field("timestamp", std::ToString<i64>(time::UnixMilliseconds())),
+                        json::Field("level", json::String(LevelName(level))),
+                        json::Field("logger", json::String(self.name)),
+                        json::Field("message", json::String(message))
+                    ];
+                    return json::Object(fields);
+                }
+                return $"[${LevelName(level)}] [${self.name}] ${message}";
+            }
+
+            public fn Write(level: Level, message: string) {
+                if (not self.Enabled(level)) { return; }
+                let formatted = self.Format(level, message);
+                if (LevelRank(level) >= LevelRank(Level::error)) {
+                    console::WriteErrorLine(formatted);
+                } else {
+                    console::Print(formatted);
+                }
+            }
+
+            public fn Trace(message: string) { self.Write(Level::trace, message); }
+            public fn Debug(message: string) { self.Write(Level::debug, message); }
+            public fn Info(message: string) { self.Write(Level::info, message); }
+            public fn Warn(message: string) { self.Write(Level::warning, message); }
+            public fn Error(message: string) { self.Write(Level::error, message); }
+            public fn Critical(message: string) { self.Write(Level::critical, message); }
+        }
+    }
+}

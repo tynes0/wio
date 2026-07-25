@@ -10,6 +10,7 @@ set(WIO_RUNTIME_HEADERS
     "${WIO_RUNTIME_INCLUDE_DIR}/std_assert.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_console.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_convert.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/std_encoding.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_fs.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_hash.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_math.h"
@@ -17,8 +18,10 @@ set(WIO_RUNTIME_HEADERS
     "${WIO_RUNTIME_INCLUDE_DIR}/std_process.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_random.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_regex.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/std_serialization.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_text.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_time.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/std_utility.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_type_traits.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/type_reflection.h"
 )

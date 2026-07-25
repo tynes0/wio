@@ -1,0 +1,11 @@
+realm std {
+    realm uuid {
+        use @CppHeader("std_utility.h");
+
+        @Native @CppName(wio::runtime::std_uuid::NewV4)
+        fn NewV4() -> string;
+
+        @Native @CppName(wio::runtime::std_uuid::IsValid)
+        fn IsValid(value: string) -> bool;
+    }
+}

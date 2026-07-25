@@ -1,0 +1,67 @@
+use std::option as option;
+
+realm std {
+    realm semver {
+        use @CppHeader("std_utility.h");
+
+        const PartMask: u64 = 2097151u64;
+
+        component Version {
+            packed: u64;
+
+            fn operator==(right: Version) -> bool { return self.packed == right.packed; }
+            fn operator!=(right: Version) -> bool { return self.packed != right.packed; }
+        }
+
+        fn Make(major: u64, minor: u64, patch: u64) -> Version {
+            mut result = Version();
+            result.packed =
+                ((major & PartMask) << 42u64) |
+                ((minor & PartMask) << 21u64) |
+                (patch & PartMask);
+            return result;
+        }
+
+        fn TryMake(major: u64, minor: u64, patch: u64) -> std::Option<Version> {
+            if (major > PartMask or minor > PartMask or patch > PartMask) {
+                return std::None<Version>();
+            }
+            return std::Some<Version>(Make(major, minor, patch));
+        }
+
+        @Native @CppName(wio::runtime::std_semver::ParsePacked)
+        fn ParsePacked(value: string, packed: ref u64) -> bool;
+
+        fn Parse(value: string) -> std::Option<Version> {
+            mut packed = 0u64;
+            if (not ParsePacked(value, ref packed)) { return std::None<Version>(); }
+            mut result = Version();
+            result.packed = packed;
+            return std::Some<Version>(result);
+        }
+
+        extension VersionMethods for Version {
+            public view fn Major() -> u64 { return (self.packed >> 42u64) & PartMask; }
+            public view fn Minor() -> u64 { return (self.packed >> 21u64) & PartMask; }
+            public view fn Patch() -> u64 { return self.packed & PartMask; }
+            public view fn Packed() -> u64 { return self.packed; }
+            public view fn Compare(other: Version) -> i32 {
+                if (self.packed < other.packed) { return -1; }
+                if (self.packed > other.packed) { return 1; }
+                return 0;
+            }
+            public view fn ToString() -> string {
+                return $"${self.Major()}.${self.Minor()}.${self.Patch()}";
+            }
+            public ref fn SetMajor(value: u64) {
+                self.packed = ((value & PartMask) << 42u64) | (self.packed & 4398046511103u64);
+            }
+            public ref fn SetMinor(value: u64) {
+                self.packed = (self.packed & ~(PartMask << 21u64)) | ((value & PartMask) << 21u64);
+            }
+            public ref fn SetPatch(value: u64) {
+                self.packed = (self.packed & ~PartMask) | (value & PartMask);
+            }
+        }
+    }
+}

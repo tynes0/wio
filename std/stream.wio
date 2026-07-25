@@ -1,0 +1,69 @@
+use std::option as option;
+
+realm std {
+    realm stream {
+        object StringWriter {
+            private buffer: string;
+
+            OnConstruct() { self.buffer = ""; }
+
+            public fn Write(value: string) { self.buffer += value; }
+            public fn WriteLine(value: string) { self.buffer += value + "\n"; }
+            public fn WriteLine() { self.buffer += "\n"; }
+            public fn Clear() { self.buffer = ""; }
+            public fn Count() -> usize { return self.buffer.Count(); }
+            public fn Empty() -> bool { return self.buffer.Empty(); }
+            public fn ToString() -> string { return self.buffer; }
+        }
+
+        object StringReader {
+            private source: string;
+            private position: usize;
+
+            OnConstruct(source: string) {
+                self.source = source;
+                self.position = 0usize;
+            }
+
+            public fn Position() -> usize { return self.position; }
+            public fn End() -> bool { return self.position >= self.source.Count(); }
+            public fn Remaining() -> usize {
+                if (self.End()) { return 0usize; }
+                return self.source.Count() - self.position;
+            }
+
+            public fn ReadChar() -> std::Option<char> {
+                if (self.End()) { return std::None<char>(); }
+                let value = self.source[self.position];
+                self.position += 1usize;
+                return std::Some<char>(value);
+            }
+
+            public fn Read(count: usize) -> string {
+                if (self.End()) { return ""; }
+                let available = self.source.Count() - self.position;
+                let actual = match (count < available) {
+                    true: count;
+                    assumed: available;
+                };
+                let value = self.source.Slice(self.position, actual);
+                self.position += actual;
+                return value;
+            }
+
+            public fn ReadLine() -> std::Option<string> {
+                if (self.End()) { return std::None<string>(); }
+                let start = self.position;
+                while (self.position < self.source.Count() and self.source[self.position] != '\n') {
+                    self.position += 1usize;
+                }
+                let value = self.source.Slice(start, self.position - start);
+                if (self.position < self.source.Count()) { self.position += 1usize; }
+                if (value.EndsWith("\r")) { return std::Some<string>(value.Take(value.Count() - 1usize)); }
+                return std::Some<string>(value);
+            }
+
+            public fn Reset() { self.position = 0usize; }
+        }
+    }
+}

@@ -770,6 +770,10 @@ namespace wio
         NodePtr<Expression> whenCondition; 
         NodePtr<Expression> whenFallback;
         NodePtr<Statement> body;
+        bool isExtensionMethod = false;
+        bool extensionMutableReceiver = false;
+        std::string extensionMemberName;
+        WeakRef<sema::Type> extensionTargetType;
 
         FunctionDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
             std::vector<NodePtr<Identifier>> _genericParameters, bool _hasGenericParameterPack, std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType, NodePtr<Expression> _whenCondition,
@@ -818,6 +822,28 @@ namespace wio
             std::vector<ComponentMember> _members,
             common::Location _loc);
         ~ComponentDeclaration() override;
+    };
+
+    struct ExtensionMember
+    {
+        AccessModifier access = AccessModifier::None;
+        bool mutableReceiver = false;
+        NodePtr<FunctionDeclaration> method;
+    };
+
+    struct ExtensionDeclaration : Statement
+    {
+        WIO_STMT_NODE_BODY(ExtensionDeclaration)
+
+        NodePtr<Identifier> name;
+        NodePtr<TypeSpecifier> targetType;
+        std::vector<ExtensionMember> members;
+
+        ExtensionDeclaration(NodePtr<Identifier> _name,
+            NodePtr<TypeSpecifier> _targetType,
+            std::vector<ExtensionMember> _members,
+            common::Location _loc);
+        ~ExtensionDeclaration() override;
     };
 
     struct ObjectMember

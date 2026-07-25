@@ -1,0 +1,14 @@
+component Secret {
+    private value: i32;
+}
+
+extension SecretOps for Secret {
+    public view fn Read() -> i32 {
+        return self.value;
+    }
+}
+
+fn Entry() -> i32 {
+    let secret = Secret(1);
+    return secret.Read();
+}

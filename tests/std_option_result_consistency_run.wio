@@ -1,0 +1,59 @@
+use std::algorithms as algorithms;
+use std::assert as assert;
+use std::collections as collections;
+use std::console as console;
+use std::option as option;
+use std::result as result;
+use std::span as span;
+use std::strings as strings;
+
+fn Double(value: i32) -> i32 {
+    return value * 2;
+}
+
+fn Positive(value: i32) -> bool {
+    return value > 0;
+}
+
+fn FindEven(value: i32) -> bool {
+    return value % 2 == 0;
+}
+
+fn Fallback() -> std::Option<i32> {
+    return std::Some<i32>(99);
+}
+
+fn Entry() -> i32 {
+    mut values: i32[] = [1, 2, 3];
+    let empty: i32[] = [];
+
+    assert::ExpectEqual(algorithms::First<i32>(values).Value(), 1, "algorithm first");
+    assert::Expect(algorithms::First<i32>(empty).IsNone(), "algorithm first empty");
+    assert::ExpectEqual(algorithms::Last<i32>(values).Value(), 3, "algorithm last");
+    assert::ExpectEqual(algorithms::Find<i32>(values, FindEven).Value(), 2, "algorithm find");
+    assert::ExpectEqual(algorithms::FindIndex<i32>(values, FindEven).Value() fit i32, 1, "algorithm find index");
+
+    assert::ExpectEqual(collections::Get<i32>(values, 1usize).Value(), 2, "collection get");
+    assert::Expect(collections::Get<i32>(values, 9usize).IsNone(), "collection missing");
+    assert::ExpectEqual(collections::First<i32>(values).Value(), 1, "collection first");
+    assert::Expect(collections::Last<i32>(empty).IsNone(), "collection last empty");
+    assert::ExpectEqual(strings::First("wio").Value(), 'w', "string first");
+    assert::Expect(strings::Get("wio", 9usize).IsNone(), "string missing");
+
+    let window = span::Make<i32>(ref values, 1usize, 2usize);
+    assert::ExpectEqual(span::Get<i32>(ref values, window, 1usize).Value(), 3, "span get");
+    assert::Expect(span::Get<i32>(ref values, window, 2usize).IsNone(), "span missing");
+
+    let mapped = option::Some<i32>(4).Map<i32>(Double);
+    assert::ExpectEqual(mapped.Value(), 8, "option map");
+    assert::Expect(option::Some<i32>(-1).Filter(Positive).IsNone(), "option filter");
+    assert::ExpectEqual(option::None<i32>().OrElse(Fallback).Value(), 99, "option or else");
+
+    let error = result::MakeError(std::ResultDomain::custom, 7, "missing");
+    let converted = option::None<i32>().ToResult(error);
+    assert::Expect(converted.IsError(), "option to result error");
+    assert::ExpectEqual(converted.ErrorValue().code, 7, "option to result payload");
+
+    console::Print("STD option/result consistency: ok");
+    return 0;
+}

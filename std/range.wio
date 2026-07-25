@@ -1,0 +1,61 @@
+realm std {
+    realm range {
+        component IndexRange {
+            start: isize;
+            end: isize;
+            stride: isize;
+        }
+
+        fn Make(start: isize, end: isize, stride: isize) -> IndexRange {
+            mut result = IndexRange();
+            result.start = start;
+            result.end = end;
+            result.stride = stride;
+            if (result.stride == 0isize) { result.stride = 1isize; }
+            return result;
+        }
+
+        fn Make(start: isize, end: isize) -> IndexRange {
+            return Make(start, end, 1isize);
+        }
+
+        fn Count(source: IndexRange) -> usize {
+            if (source.stride > 0isize and source.start >= source.end) { return 0usize; }
+            if (source.stride < 0isize and source.start <= source.end) { return 0usize; }
+            let distance = match (source.stride > 0isize) {
+                true: source.end - source.start;
+                assumed: source.start - source.end;
+            };
+            let stride = match (source.stride > 0isize) {
+                true: source.stride;
+                assumed: -source.stride;
+            };
+            return ((distance + stride - 1isize) / stride) fit usize;
+        }
+
+        fn Contains(source: IndexRange, value: isize) -> bool {
+            if (source.stride > 0isize and (value < source.start or value >= source.end)) { return false; }
+            if (source.stride < 0isize and (value > source.start or value <= source.end)) { return false; }
+            return (value - source.start) % source.stride == 0isize;
+        }
+
+        fn ToArray(source: IndexRange) -> isize[] {
+            mut output: isize[] = [];
+            mut value = source.start;
+            while ((source.stride > 0isize and value < source.end) or
+                   (source.stride < 0isize and value > source.end)) {
+                output.Push(value);
+                value += source.stride;
+            }
+            return output;
+        }
+
+        extension IndexRangeMethods for IndexRange {
+            public view fn Count() -> usize { return range::Count(deref self); }
+            public view fn Contains(value: isize) -> bool { return range::Contains(deref self, value); }
+            public view fn ToArray() -> isize[] { return range::ToArray(deref self); }
+        }
+    }
+
+    type IndexRange = range::IndexRange;
+}

@@ -3010,7 +3010,29 @@ namespace wio::codegen
                 }
 
                 if (!isSmartPtrOrInterface)
+                {
+                    const bool materializeImmutableComponentView =
+                        !expectedRef->isMutable &&
+                        expectedTarget->kind() == sema::TypeKind::Struct &&
+                        !expectedTarget.AsFast<sema::StructType>()->isObject &&
+                        !expectedTarget.AsFast<sema::StructType>()->isInterface;
+
+                    if (materializeImmutableComponentView)
+                    {
+                        // Binding the component expression to a const reference
+                        // extends a temporary through the complete call expression.
+                        // Emitting a raw &expression is invalid for extension calls
+                        // such as Parse(...).Value().ToString().
+                        emit("&static_cast<const ");
+                        emit(toCppType(expectedTarget));
+                        emit("&>(");
+                        expression->accept(*this);
+                        emit(")");
+                        return;
+                    }
+
                     emit("&");
+                }
                 expression->accept(*this);
                 return;
             }
@@ -4853,6 +4875,8 @@ namespace wio::codegen
         {
             if (stmt->template is<FunctionDeclaration>())
                 stmt->accept(*this);
+            else if (stmt->template is<ExtensionDeclaration>())
+                stmt->accept(*this);
         });
         isEmittingPrototypes_ = false;
 
@@ -4909,6 +4933,8 @@ namespace wio::codegen
         emitPhase(emitPhase, statements, [&](const auto& stmt)
         {
             if (stmt->template is<FunctionDeclaration>())
+                stmt->accept(*this);
+            else if (stmt->template is<ExtensionDeclaration>())
                 stmt->accept(*this);
         });
     }
@@ -6529,6 +6555,10 @@ namespace wio::codegen
                 {
                     shouldEmitDirectFunctionCallee = true;
                 }
+                else if (calleeSym->flags.get_isExtension())
+                {
+                    shouldEmitDirectFunctionCallee = true;
+                }
             }
         }
 
@@ -6541,7 +6571,13 @@ namespace wio::codegen
             if (isStructMemberFunctionSymbol(calleeSym))
                 scopePath.clear();
 
-            Ref<sema::FunctionType> mangledFunctionType = functionType;
+            Ref<sema::Symbol> extensionImplementation =
+                calleeSym->extensionImplementation ? calleeSym->extensionImplementation : calleeSym;
+            Ref<sema::FunctionType> mangledFunctionType =
+                calleeSym->flags.get_isExtension() && extensionImplementation->type &&
+                extensionImplementation->type->kind() == sema::TypeKind::Function
+                    ? extensionImplementation->type.AsFast<sema::FunctionType>()
+                    : functionType;
             if (!calleeSym->genericParameterNames.empty())
             {
                 Ref<sema::Type> declarationType = calleeSym->type;
@@ -6586,8 +6622,25 @@ namespace wio::codegen
             emit(">");
         }
         emit("(");
+        bool emittedExtensionReceiver = false;
+        if (calleeSym && calleeSym->flags.get_isExtension())
+        {
+            if (const auto* memberAccess = node.callee->as<MemberAccessExpression>())
+            {
+                auto implementation = calleeSym->extensionImplementation
+                    ? calleeSym->extensionImplementation
+                    : calleeSym;
+                auto fullType = implementation->type.AsFast<sema::FunctionType>();
+                Ref<sema::Type> receiverType =
+                    fullType && !fullType->paramTypes.empty() ? fullType->paramTypes.front() : nullptr;
+                emitExpressionWithExpectedType(memberAccess->object, receiverType, true);
+                emittedExtensionReceiver = true;
+            }
+        }
         for (size_t i = 0; i < node.arguments.size(); ++i)
         {
+            if (emittedExtensionReceiver || i > 0)
+                emit(", ");
             Ref<sema::Type> expectedType = nullptr;
             if (functionType && i < functionType->paramTypes.size())
                 expectedType = functionType->paramTypes[i];
@@ -6596,8 +6649,6 @@ namespace wio::codegen
                 node.arguments[i]->accept(*this);
             else
                 emitExpressionWithExpectedType(node.arguments[i], expectedType, false);
-            if (i < node.arguments.size() - 1)
-                emit(", ");
         }
         emit(")");
         endResultUnwrap();
@@ -6829,7 +6880,7 @@ namespace wio::codegen
     void CppGenerator::visit(SelfExpression& node)
     {
         WIO_UNUSED(node);
-        emit("this");
+        emit(currentExtensionMethod_ ? "_wio_self" : "this");
     }
 
     void CppGenerator::visit(SuperExpression& node)
@@ -8123,6 +8174,20 @@ namespace wio::codegen
     
         dedent();
         emitLine("};\n");
+    }
+
+    void CppGenerator::visit(ExtensionDeclaration& node)
+    {
+        WIO_UNUSED(node.name);
+        WIO_UNUSED(node.targetType);
+        const bool previousExtensionMethod = currentExtensionMethod_;
+        currentExtensionMethod_ = true;
+        for (auto& member : node.members)
+        {
+            if (member.method && member.method->name->referencedSymbol.Lock())
+                member.method->accept(*this);
+        }
+        currentExtensionMethod_ = previousExtensionMethod;
     }
 
     void CppGenerator::visit(ComponentDeclaration& node)

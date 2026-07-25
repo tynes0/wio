@@ -1486,4 +1486,49 @@ realm std {
             );
         }
     }
+
+    extension Vector2Methods for Vector2 {
+        public view fn LengthSquared() -> f64 { return vector2::LengthSquared(deref self); }
+        public view fn Length() -> f64 { return vector2::Length(deref self); }
+        public view fn Dot(right: Vector2) -> f64 { return vector2::Dot(deref self, right); }
+        public view fn Distance(right: Vector2) -> f64 { return vector2::Distance(deref self, right); }
+        public view fn Normalized() -> Vector2 { return vector2::Normalize(deref self); }
+        public view fn ApproxEq(right: Vector2) -> bool { return vector2::ApproxEq(deref self, right); }
+        public ref fn NormalizeInPlace() {
+            let value = vector2::Normalize(deref self);
+            self.x = value.x;
+            self.y = value.y;
+        }
+    }
+
+    extension Vector3Methods for Vector3 {
+        public view fn LengthSquared() -> f64 { return vector3::LengthSquared(deref self); }
+        public view fn Length() -> f64 { return vector3::Length(deref self); }
+        public view fn Dot(right: Vector3) -> f64 { return vector3::Dot(deref self, right); }
+        public view fn Distance(right: Vector3) -> f64 { return vector3::Distance(deref self, right); }
+        public view fn Normalized() -> Vector3 { return vector3::Normalize(deref self); }
+        public view fn ApproxEq(right: Vector3) -> bool { return vector3::ApproxEq(deref self, right); }
+        public ref fn NormalizeInPlace() {
+            let value = vector3::Normalize(deref self);
+            self.x = value.x;
+            self.y = value.y;
+            self.z = value.z;
+        }
+    }
+
+    extension Vector4Methods for Vector4 {
+        public view fn LengthSquared() -> f64 { return vector4::LengthSquared(deref self); }
+        public view fn Length() -> f64 { return vector4::Length(deref self); }
+        public view fn Dot(right: Vector4) -> f64 { return vector4::Dot(deref self, right); }
+        public view fn Distance(right: Vector4) -> f64 { return vector4::Distance(deref self, right); }
+        public view fn Normalized() -> Vector4 { return vector4::Normalize(deref self); }
+        public view fn ApproxEq(right: Vector4) -> bool { return vector4::ApproxEq(deref self, right); }
+        public ref fn NormalizeInPlace() {
+            let value = vector4::Normalize(deref self);
+            self.x = value.x;
+            self.y = value.y;
+            self.z = value.z;
+            self.w = value.w;
+        }
+    }
 }

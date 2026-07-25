@@ -1,3 +1,5 @@
+use std::option as option;
+
 realm std {
     realm strings {
         use @CppHeader("std_text.h");
@@ -103,6 +105,21 @@ realm std {
 
         fn GetOr(value: string, index: usize, fallback: char) -> char {
             return value.GetOr(index, fallback);
+        }
+
+        fn First(value: string) -> std::Option<char> {
+            if (value.Empty()) { return std::None<char>(); }
+            return std::Some<char>(value[0usize]);
+        }
+
+        fn Last(value: string) -> std::Option<char> {
+            if (value.Empty()) { return std::None<char>(); }
+            return std::Some<char>(value.Last());
+        }
+
+        fn Get(value: string, index: usize) -> std::Option<char> {
+            if (index >= value.Count()) { return std::None<char>(); }
+            return std::Some<char>(value[index]);
         }
 
         fn Slice(value: string, start: usize) -> string {

@@ -1,0 +1,25 @@
+realm std {
+    realm encoding {
+        use @CppHeader("std_encoding.h");
+
+        @Native @CppName(wio::runtime::std_encoding::HexEncode)
+        fn HexEncode(value: string, upper: bool) -> string;
+
+        fn HexEncode(value: string) -> string { return HexEncode(value, false); }
+
+        @Native @CppName(wio::runtime::std_encoding::HexDecode)
+        fn HexDecode(value: string) -> string;
+
+        @Native @CppName(wio::runtime::std_encoding::Base64Encode)
+        fn Base64Encode(value: string) -> string;
+
+        @Native @CppName(wio::runtime::std_encoding::Base64Decode)
+        fn Base64Decode(value: string) -> string;
+
+        @Native @CppName(wio::runtime::std_encoding::UrlEncode)
+        fn UrlEncode(value: string) -> string;
+
+        @Native @CppName(wio::runtime::std_encoding::UrlDecode)
+        fn UrlDecode(value: string) -> string;
+    }
+}

@@ -1,0 +1,68 @@
+use std::result as result;
+
+realm std {
+    object Option<T> {
+        private present: bool;
+        private value: T;
+
+        OnConstruct(value: T) {
+            self.present = true;
+            self.value = value;
+        }
+
+        OnConstruct() {
+            self.present = false;
+        }
+
+        public fn IsSome() -> bool { return self.present; }
+        public fn IsNone() -> bool { return not self.present; }
+
+        public fn Value() -> T {
+            if (self.present) { return self.value; }
+            std::Panic("Option<T> does not contain a value.");
+            return self.value;
+        }
+
+        public fn Unwrap() -> T { return self.Value(); }
+
+        public fn ValueOr(fallback: T) -> T {
+            if (self.present) { return self.value; }
+            return fallback;
+        }
+
+        public fn Map<U>(transform: fn(T) -> U) -> Option<U> {
+            if (self.present) { return std::Some<U>(transform(self.value)); }
+            return std::None<U>();
+        }
+
+        public fn AndThen<U>(transform: fn(T) -> Option<U>) -> Option<U> {
+            if (self.present) { return transform(self.value); }
+            return std::None<U>();
+        }
+
+        public fn Filter(predicate: fn(T) -> bool) -> Option<T> {
+            if (self.present and predicate(self.value)) { return std::Some<T>(self.value); }
+            return std::None<T>();
+        }
+
+        public fn OrElse(fallback: fn() -> Option<T>) -> Option<T> {
+            if (self.present) { return std::Some<T>(self.value); }
+            return fallback();
+        }
+
+        public fn ToResult(error: ResultError) -> Result<T> {
+            if (self.present) { return std::Ok<T>(self.value); }
+            return std::Err<T>(error);
+        }
+
+    }
+
+    fn Some<T>(value: T) -> Option<T> { return Option<T>(value); }
+    fn None<T>() -> Option<T> { return Option<T>(); }
+
+    realm option {
+        type Option<T> = std::Option<T>;
+        fn Some<T>(value: T) -> Option<T> { return std::Some<T>(value); }
+        fn None<T>() -> Option<T> { return std::None<T>(); }
+    }
+}

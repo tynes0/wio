@@ -168,6 +168,9 @@ Current v1 expectation:
 - `std::vector`
 - `std::result`
 - `std::traits`
+- `std::option`
+- `std::iterator`
+- `std::range`
 
 These modules are currently pure Wio source and do not require native bridge
 headers.
@@ -207,6 +210,58 @@ The collection wave also includes:
 - `std::span::Span`, a checked range token used together with an explicit
   `view T[]`/`ref T[]`; the source reference is deliberately not stored because
   Wio does not yet have escaping borrow lifetimes
+
+Component extensions provide the ergonomic member surface without changing
+component layout. `Span` exposes `End`, `Empty`, and `Slice`; `Vector2`,
+`Vector3`, and `Vector4` expose length, dot, distance, normalization, approximate
+equality, and in-place normalization methods. The original realm functions
+remain available for source compatibility.
+
+The foundation module wave also adds:
+
+- `std::Option<T>` with `Some`, `None`, `Value`, `ValueOr`, presence queries,
+  `Map`, `AndThen`, `Filter`, `OrElse`, and `ToResult`
+- absence-oriented collection APIs return `Option`: `algorithms::First`,
+  `Last`, `Find`, and `FindIndex`; `collections::First`, `Last`, and `Get`;
+  `strings::First`, `Last`, and `Get`; and `span::Get`
+- `std::iterator` array algorithms: `Map`, `Filter`, `Fold`, `Any`, `All`, and
+  `Find`
+- `std::range::IndexRange`, including member-style `Count`, `Contains`, and
+  `ToArray`
+- `std::encoding` for hex, Base64, and URL encode/decode operations
+- `std::serialization` for JSON escaping, quoting, scalar encoding, and
+  object/array composition
+- `std::json` as the concise JSON-facing facade
+
+`Option<T>` represents an expected absence such as an empty collection or a
+missing match. `Result<T>` represents an operation that can fail and carries a
+structured error. Existing `...Or` and `Try...` functions remain available for
+source compatibility, while new code can use the Option-returning counterparts.
+
+The utility and stream wave adds:
+
+- `std::numeric` checked `i64`/`u64` addition, subtraction, multiplication, and
+  saturating arithmetic; checked value APIs integrate with `Option<T>`
+- `std::stream::StringReader` and `StringWriter` for in-memory sequential text
+  processing
+- `std::uuid` UUID v4 generation and format validation
+- `std::semver::Version` as a one-field stack component whose `major`, `minor`,
+  and `patch` values are packed into one `u64`; parsing, access, mutation,
+  formatting, and ordering are supplied through extensions
+- `std::log::Logger` with severity filtering, readable text output, JSON
+  structured output, and console/error routing
+
+Packed semantic versions allocate 21 bits to each numeric part. Each part is in
+the inclusive range `0..2097151`. Prerelease and build metadata are rejected by
+the packed parser because they cannot be represented reversibly in the `u64`.
+
+`std::json` provides a recursive `Value` model for null, boolean, number,
+string, array, and object values. `Parse` returns `Result<Value>` with source
+positions in parse errors. Values provide typed fallback access, array indexing,
+and object lookup through `Option<Value>`. `Write` emits compact JSON and
+`WritePretty` emits configurable indentation. Parser and writer support nested
+objects/arrays, escapes, numbers, literals, whitespace, syntax validation, and
+round trips.
 
 `std::traits` now provides both compiler constraints and query functions.
 Built-in constraints cover integer/numeric/floating/signed/unsigned,

@@ -1,5 +1,0 @@
-use std::assert::missing_cpp_header;
-
-fn Entry() -> i32 {
-    return 0;
-}

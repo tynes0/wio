@@ -1,0 +1,49 @@
+use std::assert as assert;
+use std::console as console;
+use std::encoding as encoding;
+use std::iterator as iterator;
+use std::json as json;
+use std::option as option;
+use std::range as range;
+use std::span as span;
+use std::vector;
+
+fn Entry() -> i32 {
+    mut vector = std::Vector2(3.0f64, 4.0f64);
+    assert::ExpectEqual(vector.Length(), 5.0f64, "vector extension length");
+    vector.NormalizeInPlace();
+    assert::Expect(std::vector2::ApproxEq(vector, std::Vector2(0.6f64, 0.8f64)), "vector extension mutation");
+
+    mut values: i32[] = [1, 2, 3, 4];
+    let window = span::Make<i32>(ref values, 1usize, 2usize);
+    assert::ExpectEqual(window.End() fit i32, 3, "span extension end");
+    assert::ExpectEqual(window.Slice(1usize, 1usize).count fit i32, 1, "span extension slice");
+
+    let doubled = iterator::Map<i32, i32>(values, (value: i32) => value * 2);
+    let evens = iterator::Filter<i32>(values, (value: i32) => value % 2 == 0);
+    assert::ExpectEqual(doubled[3], 8, "iterator map");
+    assert::ExpectEqual(evens.Count() fit i32, 2, "iterator filter");
+
+    let found = iterator::Find<i32>(values, (value: i32) => value == 3);
+    assert::Expect(found.IsSome(), "option some");
+    assert::ExpectEqual(found.Value(), 3, "option value");
+    assert::ExpectEqual(option::None<i32>().ValueOr(9), 9, "option fallback");
+
+    let indices = range::Make(1isize, 6isize, 2isize);
+    assert::ExpectEqual(indices.Count() fit i32, 3, "range count");
+    assert::Expect(indices.Contains(5isize), "range contains");
+
+    assert::ExpectEqual(encoding::HexDecode(encoding::HexEncode("Wio")), "Wio", "hex roundtrip");
+    assert::ExpectEqual(encoding::Base64Decode(encoding::Base64Encode("Wio")), "Wio", "base64 roundtrip");
+    assert::ExpectEqual(encoding::UrlDecode(encoding::UrlEncode("a b+c")), "a b+c", "url roundtrip");
+
+    let fields: string[] = [
+        json::Field("name", json::String("Wio")),
+        json::Field("ok", json::Bool(true))
+    ];
+    assert::ExpectEqual(json::Object(fields), "{\"name\":\"Wio\",\"ok\":true}", "json object");
+    assert::ExpectEqual(json::Unquote("\"line\\nnext\""), "line\nnext", "json unquote");
+
+    console::Print("STD foundation extensions: ok");
+    return 0;
+}

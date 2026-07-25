@@ -45,6 +45,9 @@ namespace wio::sema
         Ref<Type> currentFunctionReturnType_ = nullptr;
         Ref<Type> currentStructType_ = nullptr;
         Ref<Type> currentBaseStructType_ = nullptr;
+        Ref<Type> currentExtensionTargetType_ = nullptr;
+        bool currentExtensionMutableReceiver_ = false;
+        std::unordered_map<const Type*, std::unordered_map<std::string, Ref<Symbol>>> extensionMethods_;
         Ref<Symbol> currentFunctionParameterPackSymbol_ = nullptr;
         Ref<Type> currentFunctionParameterPackType_ = nullptr;
         std::vector<Ref<Symbol>> activeGenericConstraintSymbols_;

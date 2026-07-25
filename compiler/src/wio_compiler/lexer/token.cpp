@@ -69,6 +69,7 @@ namespace wio
        case TokenType::kwComponent: return "kwComponent";
        case TokenType::kwObject: return "kwObject";
        case TokenType::kwInterface: return "kwInterface";
+       case TokenType::kwExtension: return "kwExtension";
        case TokenType::kwVoid: return "kwVoid";
    
        /* ===============================

@@ -1,0 +1,42 @@
+use std::convert as convert;
+
+realm std {
+    realm serialization {
+        use @CppHeader("std_serialization.h");
+
+        @Native @CppName(wio::runtime::std_serialization::JsonEscape)
+        fn EscapeJson(value: string) -> string;
+
+        @Native @CppName(wio::runtime::std_serialization::JsonQuote)
+        fn QuoteJson(value: string) -> string;
+
+        @Native @CppName(wio::runtime::std_serialization::JsonUnquote)
+        fn UnquoteJson(value: string) -> string;
+
+        fn ToJson(value: string) -> string { return QuoteJson(value); }
+        fn ToJson(value: bool) -> string {
+            if (value) { return "true"; }
+            return "false";
+        }
+        fn ToJson(value: i32) -> string { return std::ToString<i32>(value); }
+        fn ToJson(value: i64) -> string { return std::ToString<i64>(value); }
+        fn ToJson(value: u32) -> string { return std::ToString<u32>(value); }
+        fn ToJson(value: u64) -> string { return std::ToString<u64>(value); }
+        fn ToJson(value: f32) -> string { return std::ToString<f32>(value); }
+        fn ToJson(value: f64) -> string { return std::ToString<f64>(value); }
+        fn NullJson() -> string { return "null"; }
+
+        fn ArrayJson(values: string[]) -> string {
+            return "[" + values.Join(",") + "]";
+        }
+
+        fn FieldJson(name: string, encodedValue: string) -> string {
+            return QuoteJson(name) + ":" + encodedValue;
+        }
+
+        fn ObjectJson(fields: string[]) -> string {
+            return "{" + fields.Join(",") + "}";
+        }
+    }
+
+}

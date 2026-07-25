@@ -1,3 +1,5 @@
+use std::option as option;
+
 realm std {
     realm algorithms {
         fn FirstOr<T>(values: T[], fallback: T) -> T {
@@ -89,6 +91,32 @@ realm std {
                 }
             }
             return fallback;
+        }
+
+        fn First<T>(values: T[]) -> std::Option<T> {
+            if (values.Empty()) { return std::None<T>(); }
+            return std::Some<T>(values[0usize]);
+        }
+
+        fn Last<T>(values: T[]) -> std::Option<T> {
+            if (values.Empty()) { return std::None<T>(); }
+            return std::Some<T>(values.Last());
+        }
+
+        fn Find<T>(values: T[], predicate: fn(T) -> bool) -> std::Option<T> {
+            for value in values {
+                if (predicate(value)) { return std::Some<T>(value); }
+            }
+            return std::None<T>();
+        }
+
+        fn FindIndex<T>(values: T[], predicate: fn(T) -> bool) -> std::Option<usize> {
+            mut index = 0usize;
+            for value in values {
+                if (predicate(value)) { return std::Some<usize>(index); }
+                index += 1usize;
+            }
+            return std::None<usize>();
         }
 
         fn FindIndexBy<T>(values: T[], predicate: fn(T) -> bool) -> isize {

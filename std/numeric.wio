@@ -1,0 +1,57 @@
+use std::option as option;
+
+realm std {
+    realm numeric {
+        use @CppHeader("std_utility.h");
+
+        @Native @CppName(wio::runtime::std_numeric::CheckedAddI64)
+        fn TryAdd(left: i64, right: i64, value: ref i64) -> bool;
+        @Native @CppName(wio::runtime::std_numeric::CheckedSubI64)
+        fn TrySub(left: i64, right: i64, value: ref i64) -> bool;
+        @Native @CppName(wio::runtime::std_numeric::CheckedMulI64)
+        fn TryMul(left: i64, right: i64, value: ref i64) -> bool;
+        @Native @CppName(wio::runtime::std_numeric::CheckedAddU64)
+        fn TryAdd(left: u64, right: u64, value: ref u64) -> bool;
+        @Native @CppName(wio::runtime::std_numeric::CheckedSubU64)
+        fn TrySub(left: u64, right: u64, value: ref u64) -> bool;
+        @Native @CppName(wio::runtime::std_numeric::CheckedMulU64)
+        fn TryMul(left: u64, right: u64, value: ref u64) -> bool;
+
+        @Native @CppName(wio::runtime::std_numeric::SaturatingAddI64)
+        fn SaturatingAdd(left: i64, right: i64) -> i64;
+        @Native @CppName(wio::runtime::std_numeric::SaturatingSubI64)
+        fn SaturatingSub(left: i64, right: i64) -> i64;
+        @Native @CppName(wio::runtime::std_numeric::SaturatingMulI64)
+        fn SaturatingMul(left: i64, right: i64) -> i64;
+        @Native @CppName(wio::runtime::std_numeric::SaturatingAddU64)
+        fn SaturatingAdd(left: u64, right: u64) -> u64;
+        @Native @CppName(wio::runtime::std_numeric::SaturatingSubU64)
+        fn SaturatingSub(left: u64, right: u64) -> u64;
+        @Native @CppName(wio::runtime::std_numeric::SaturatingMulU64)
+        fn SaturatingMul(left: u64, right: u64) -> u64;
+
+        fn CheckedAdd(left: i64, right: i64) -> std::Option<i64> {
+            mut value = 0i64;
+            if (TryAdd(left, right, ref value)) { return std::Some<i64>(value); }
+            return std::None<i64>();
+        }
+
+        fn CheckedSub(left: i64, right: i64) -> std::Option<i64> {
+            mut value = 0i64;
+            if (TrySub(left, right, ref value)) { return std::Some<i64>(value); }
+            return std::None<i64>();
+        }
+
+        fn CheckedMul(left: i64, right: i64) -> std::Option<i64> {
+            mut value = 0i64;
+            if (TryMul(left, right, ref value)) { return std::Some<i64>(value); }
+            return std::None<i64>();
+        }
+
+        fn CheckedAdd(left: u64, right: u64) -> std::Option<u64> {
+            mut value = 0u64;
+            if (TryAdd(left, right, ref value)) { return std::Some<u64>(value); }
+            return std::None<u64>();
+        }
+    }
+}

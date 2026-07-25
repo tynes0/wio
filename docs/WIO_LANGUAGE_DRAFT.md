@@ -486,6 +486,18 @@ std::io::Print($"2 + 3 = ${2 + 3}");
 std::io::Print($"Position: ${self.x}, ${self.y}, ${self.z}");
 ```
 
+Embedded expressions use balanced lexical state. They may contain ordinary
+string literals, nested function calls and parentheses, dictionary/object
+literals with braces, and nested interpolated strings:
+
+```wio
+let text = $"value = ${Format("hex", Convert(value))}";
+let nested = $"outer = ${$"inner = ${Build("item")}"}";
+```
+
+Only the `}` that balances the interpolation's opening `${` resumes the outer
+string. Quotes and braces belonging to nested expressions do not terminate it.
+
 #### Current Compiler Note
 
 Interpolated strings are internally tokenized as alternating string fragments
@@ -2383,6 +2395,41 @@ component SecretData {
     token: string;
 }
 ```
+
+### 17.6 Component Extensions
+
+An extension adds method-call syntax to a component without changing the
+component layout or placing functions inside the component. Extension methods
+are emitted as free functions, and the receiver is passed explicitly by the
+compiler.
+
+```wio
+extension Vector3Math for Vector3 {
+    public view fn LengthSquared() -> f32 {
+        return self.x * self.x + self.y * self.y + self.z * self.z;
+    }
+
+    public ref fn Scale(amount: f32) {
+        self.x *= amount;
+        self.y *= amount;
+        self.z *= amount;
+    }
+}
+
+mut position = Vector3(1.0f, 2.0f, 3.0f);
+let lengthSquared = position.LengthSquared();
+position.Scale(2.0f);
+```
+
+- `view fn` receives a read-only `self`.
+- `ref fn` receives a mutable `self` and requires a mutable receiver.
+- Extension methods are external APIs and therefore cannot access private or
+  protected component fields.
+- A real component member takes precedence. Defining an extension with the same
+  name is diagnosed as a conflict.
+- Multiple visible extensions defining the same method name for the same
+  component are diagnosed as ambiguous.
+- Generic extension targets are not supported yet.
 
 ## 18. `object`
 

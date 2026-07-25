@@ -70,6 +70,7 @@ namespace wio
       kwComponent,
       kwObject,
       kwInterface,
+      kwExtension,
       kwVoid,
       
       /* ===============================
@@ -290,6 +291,7 @@ namespace wio
       { "component", TokenType::kwComponent },
       { "object",    TokenType::kwObject },
       { "interface", TokenType::kwInterface },
+      { "extension", TokenType::kwExtension },
       { "void",      TokenType::kwVoid },
 
       { "true",      TokenType::kwTrue },

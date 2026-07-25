@@ -28,6 +28,7 @@ namespace wio::codegen
 
         bool isEmittingPrototypes_ = false;
         std::string currentClassName_;
+        bool currentExtensionMethod_ = false;
         Ref<sema::Type> currentFunctionReturnType_;
         std::unordered_map<const sema::Symbol*, const VariableDeclaration*> variableDeclarationsBySymbol_;
 

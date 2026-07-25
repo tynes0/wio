@@ -1,0 +1,62 @@
+use std::option as option;
+
+realm std {
+    realm iterator {
+        fn Map<T, U>(values: T[], transform: fn(T) -> U) -> U[] {
+            mut output: U[] = [];
+            mut index = 0usize;
+            while (index < values.Count()) {
+                output.Push(transform(values[index]));
+                index += 1usize;
+            }
+            return output;
+        }
+
+        fn Filter<T>(values: T[], predicate: fn(T) -> bool) -> T[] {
+            mut output: T[] = [];
+            mut index = 0usize;
+            while (index < values.Count()) {
+                if (predicate(values[index])) { output.Push(values[index]); }
+                index += 1usize;
+            }
+            return output;
+        }
+
+        fn Fold<T, U>(values: T[], initial: U, combine: fn(U, T) -> U) -> U {
+            mut state = initial;
+            mut index = 0usize;
+            while (index < values.Count()) {
+                state = combine(state, values[index]);
+                index += 1usize;
+            }
+            return state;
+        }
+
+        fn Any<T>(values: T[], predicate: fn(T) -> bool) -> bool {
+            mut index = 0usize;
+            while (index < values.Count()) {
+                if (predicate(values[index])) { return true; }
+                index += 1usize;
+            }
+            return false;
+        }
+
+        fn All<T>(values: T[], predicate: fn(T) -> bool) -> bool {
+            mut index = 0usize;
+            while (index < values.Count()) {
+                if (not predicate(values[index])) { return false; }
+                index += 1usize;
+            }
+            return true;
+        }
+
+        fn Find<T>(values: T[], predicate: fn(T) -> bool) -> std::Option<T> {
+            mut index = 0usize;
+            while (index < values.Count()) {
+                if (predicate(values[index])) { return std::Some<T>(values[index]); }
+                index += 1usize;
+            }
+            return std::None<T>();
+        }
+    }
+}

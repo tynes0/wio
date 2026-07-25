@@ -921,6 +921,8 @@ namespace wio
                 return parseInterfaceDeclaration(std::move(attributes));
             if (match(TokenType::kwComponent))
                 return parseComponentDeclaration(std::move(attributes));
+            if (match(TokenType::kwExtension))
+                return parseExtensionDeclaration(std::move(attributes));
             if (match(TokenType::kwObject))
                 return parseObjectDeclaration(std::move(attributes));
             if (match(TokenType::kwEnum))
@@ -1470,6 +1472,75 @@ namespace wio
         }
         consume(TokenType::rightBrace);
         return makeNodePtr<ComponentDeclaration>(std::move(attributes), std::move(name), std::move(genericParameters), hasGenericParameterPack, std::move(members), startTok.loc);
+    }
+
+    NodePtr<Statement> Parser::parseExtensionDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
+    {
+        Token startTok = consume(TokenType::kwExtension);
+        if (!attributes.empty())
+            utError("Extension declarations do not support attributes yet.", attributes.front()->location());
+
+        NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+        consume(TokenType::kwFor);
+        NodePtr<TypeSpecifier> targetType = parseType();
+        consume(TokenType::leftBrace);
+
+        std::vector<ExtensionMember> members;
+        while (peek().isValid() && !match(TokenType::rightBrace))
+        {
+            std::vector<NodePtr<AttributeStatement>> methodAttrs;
+            while (peek().type == TokenType::atSign)
+                methodAttrs.push_back(parseAttributeStatement());
+
+            AccessModifier access = AccessModifier::None;
+            if (match(TokenType::kwPublic, true)) access = AccessModifier::Public;
+            else if (match(TokenType::kwPrivate, true)) access = AccessModifier::Private;
+            else if (match(TokenType::kwProtected, true)) access = AccessModifier::Protected;
+
+            bool mutableReceiver = false;
+            if (match(TokenType::kwRef, true))
+                mutableReceiver = true;
+            else
+                consume(TokenType::kwView);
+
+            auto method = parseFunctionDeclaration(std::move(methodAttrs), false, false);
+            if (!targetType->generics.empty())
+                utError("Generic extension targets are not supported yet.", targetType->location());
+
+            Token receiverInnerToken = targetType->name;
+            auto receiverInner = makeNodePtr<TypeSpecifier>(
+                std::move(receiverInnerToken), std::vector<NodePtr<TypeSpecifier>>{}, nullptr,
+                0, false, false, false, targetType->location());
+            Token receiverToken{
+                .type = mutableReceiver ? TokenType::kwRef : TokenType::kwView,
+                .value = mutableReceiver ? "ref" : "view",
+                .loc = method->location()
+            };
+            std::vector<NodePtr<TypeSpecifier>> receiverGenerics;
+            receiverGenerics.push_back(std::move(receiverInner));
+            auto receiverType = makeNodePtr<TypeSpecifier>(
+                std::move(receiverToken), std::move(receiverGenerics), nullptr,
+                0, true, mutableReceiver, false, method->location());
+            Token receiverNameToken{
+                .type = TokenType::identifier,
+                .value = "_wio_self",
+                .loc = method->location()
+            };
+            method->parameters.insert(
+                method->parameters.begin(),
+                Parameter(makeNodePtr<Identifier>(std::move(receiverNameToken)), std::move(receiverType), nullptr, false));
+            method->isExtensionMethod = true;
+            method->extensionMutableReceiver = mutableReceiver;
+            method->extensionMemberName = method->name->token.value;
+            members.push_back(ExtensionMember{
+                .access = access,
+                .mutableReceiver = mutableReceiver,
+                .method = std::move(method)
+            });
+        }
+        consume(TokenType::rightBrace);
+        return makeNodePtr<ExtensionDeclaration>(
+            std::move(name), std::move(targetType), std::move(members), startTok.loc);
     }
 
     NodePtr<Statement> Parser::parseObjectDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
