@@ -1,4 +1,5 @@
 #include "env_cli.h"
+#include "cli_common.h"
 
 #include <argonaut.h>
 
@@ -1199,6 +1200,8 @@ namespace wio::tooling::env
                         .SetDescription("Include the Wio bin directory in the emitted PATH command.")
                 )
                 .AutoHelp()
+                .HelpOnEmpty(false)
+                .AutoVersion()
                 .SetVersion(WIO_VERSION);
 
             return parser;
@@ -1233,6 +1236,8 @@ namespace wio::tooling::env
                         .SetDescription("Include the packaged bin directory in PATH when persisting settings.")
                 )
                 .AutoHelp()
+                .HelpOnEmpty(false)
+                .AutoVersion()
                 .SetVersion(WIO_VERSION);
 
             return parser;
@@ -1249,6 +1254,8 @@ namespace wio::tooling::env
                         .SetDescription("Optional explicit Wio toolchain root.")
                 )
                 .AutoHelp()
+                .HelpOnEmpty(false)
+                .AutoVersion()
                 .SetVersion(WIO_VERSION);
 
             return parser;
@@ -1289,6 +1296,7 @@ namespace wio::tooling::env
                         .SetDescription("Also remove the Wio bin directory from PATH.")
                 )
                 .AutoHelp()
+                .AutoVersion()
                 .SetVersion(WIO_VERSION);
 
             return parser;
@@ -1311,6 +1319,8 @@ namespace wio::tooling::env
                         .SetDescription("Compile and run a tiny Wio program to verify the bundled/native backend toolchain.")
                 )
                 .AutoHelp()
+                .HelpOnEmpty(false)
+                .AutoVersion()
                 .SetVersion(WIO_VERSION);
 
             return parser;
@@ -1583,11 +1593,30 @@ namespace wio::tooling::env
 
         if (argc < 3 || argv[2] == nullptr)
         {
-            std::cerr << "Expected an env subcommand. Currently supported: print, setup, status, remove, doctor\n";
-            return EXIT_FAILURE;
+            std::cout
+                << "Wio environment commands\n\n"
+                << "Usage:\n"
+                << "  wio env print  [--wio-root DIR] [--shell powershell|cmd|sh] [--add-path]\n"
+                << "  wio env setup  [--wio-root DIR] [--set-user] [--no-prompt] [--add-path]\n"
+                << "  wio env status [--wio-root DIR]\n"
+                << "  wio env remove [--wio-root DIR] [--shell powershell|cmd|sh] [--set-user] [--no-prompt] [--remove-path]\n"
+                << "  wio env doctor [--wio-root DIR] [--backend-smoke]\n";
+            return EXIT_SUCCESS;
         }
 
         const std::string_view subcommand = argv[2];
+        if (cli::IsHelpToken(subcommand))
+        {
+            std::cout
+                << "Wio environment commands\n\n"
+                << "Usage:\n"
+                << "  wio env print  [--wio-root DIR] [--shell powershell|cmd|sh] [--add-path]\n"
+                << "  wio env setup  [--wio-root DIR] [--set-user] [--no-prompt] [--add-path]\n"
+                << "  wio env status [--wio-root DIR]\n"
+                << "  wio env remove [--wio-root DIR] [--shell powershell|cmd|sh] [--set-user] [--no-prompt] [--remove-path]\n"
+                << "  wio env doctor [--wio-root DIR] [--backend-smoke]\n";
+            return EXIT_SUCCESS;
+        }
         if (subcommand == "print")
             return handleEnvPrintCommand(collectCommandArgs("wio env print", argc, argv, 3));
         if (subcommand == "setup")
@@ -1600,6 +1629,14 @@ namespace wio::tooling::env
             return handleEnvDoctorCommand(collectCommandArgs("wio env doctor", argc, argv, 3));
 
         std::cerr << "Unknown env subcommand: " << subcommand << '\n';
+        if (const auto suggestion = cli::SuggestCommand(
+                subcommand,
+                { "print", "setup", "status", "remove", "doctor" });
+            suggestion.has_value())
+        {
+            std::cerr << "Did you mean 'wio env " << *suggestion << "'?\n";
+        }
+        std::cerr << "Run 'wio env --help' to list available environment commands.\n";
         return EXIT_FAILURE;
     }
 }

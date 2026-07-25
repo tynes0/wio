@@ -1,0 +1,360 @@
+use std::result as result;
+
+realm std {
+    realm heap {
+        component PoolHandle {
+            index: usize;
+            generation: u32;
+        }
+
+        fn IsValid(handle: PoolHandle) -> bool {
+            return handle.generation != 0u32;
+        }
+
+        object ByteBuffer {
+            private data: byte[];
+            private position: usize;
+
+            public fn OnConstruct() {
+                self.data = [];
+                self.position = 0usize;
+            }
+
+            public fn OnConstruct(capacity: usize) {
+                self.data = [];
+                self.data.Reserve(capacity);
+                self.position = 0usize;
+            }
+
+            public fn OnConstruct(values: byte[]) {
+                self.data = values.Clone();
+                self.position = 0usize;
+            }
+
+            public fn Count() -> usize {
+                return self.data.Count();
+            }
+
+            public fn Capacity() -> usize {
+                return self.data.Capacity();
+            }
+
+            public fn Position() -> usize {
+                return self.position;
+            }
+
+            public fn Remaining() -> usize {
+                if (self.position >= self.data.Count()) {
+                    return 0usize;
+                }
+                return self.data.Count() - self.position;
+            }
+
+            public fn Empty() -> bool {
+                return self.data.Empty();
+            }
+
+            public fn Reserve(capacity: usize) {
+                self.data.Reserve(capacity);
+            }
+
+            public fn Rewind() {
+                self.position = 0usize;
+            }
+
+            public fn Seek(position: usize) -> bool {
+                if (position > self.data.Count()) {
+                    return false;
+                }
+                self.position = position;
+                return true;
+            }
+
+            public fn Clear() {
+                self.data.Clear();
+                self.position = 0usize;
+            }
+
+            public fn Write(value: byte) {
+                if (self.position < self.data.Count()) {
+                    self.data[self.position] = value;
+                } else {
+                    self.data.Push(value);
+                }
+                self.position += 1usize;
+            }
+
+            public fn Write(values: byte[]) {
+                for (value in values) {
+                    self.Write(value);
+                }
+            }
+
+            public fn WriteU16LE(value: u16) {
+                self.Write((value & 0xFFu16) fit byte);
+                self.Write(((value >> 8u16) & 0xFFu16) fit byte);
+            }
+
+            public fn WriteU32LE(value: u32) {
+                self.Write((value & 0xFFu32) fit byte);
+                self.Write(((value >> 8u32) & 0xFFu32) fit byte);
+                self.Write(((value >> 16u32) & 0xFFu32) fit byte);
+                self.Write(((value >> 24u32) & 0xFFu32) fit byte);
+            }
+
+            public fn WriteU64LE(value: u64) {
+                self.Write((value & 0xFFu64) fit byte);
+                self.Write(((value >> 8u64) & 0xFFu64) fit byte);
+                self.Write(((value >> 16u64) & 0xFFu64) fit byte);
+                self.Write(((value >> 24u64) & 0xFFu64) fit byte);
+                self.Write(((value >> 32u64) & 0xFFu64) fit byte);
+                self.Write(((value >> 40u64) & 0xFFu64) fit byte);
+                self.Write(((value >> 48u64) & 0xFFu64) fit byte);
+                self.Write(((value >> 56u64) & 0xFFu64) fit byte);
+            }
+
+            public fn TryRead(value: ref byte) -> bool {
+                if (self.position >= self.data.Count()) {
+                    return false;
+                }
+                value = self.data[self.position];
+                self.position += 1usize;
+                return true;
+            }
+
+            public fn Read() -> byte {
+                mut value = 0u8;
+                if (not self.TryRead(ref value)) {
+                    std::Panic("ByteBuffer.Read reached the end of the buffer.");
+                }
+                return value;
+            }
+
+            public fn TryReadU16LE(value: ref u16) -> bool {
+                if (self.Remaining() < 2usize) {
+                    return false;
+                }
+                value = (self.Read() fit u16) |
+                    ((self.Read() fit u16) << 8u16);
+                return true;
+            }
+
+            public fn TryReadU32LE(value: ref u32) -> bool {
+                if (self.Remaining() < 4usize) {
+                    return false;
+                }
+                value = (self.Read() fit u32) |
+                    ((self.Read() fit u32) << 8u32) |
+                    ((self.Read() fit u32) << 16u32) |
+                    ((self.Read() fit u32) << 24u32);
+                return true;
+            }
+
+            public fn TryReadU64LE(value: ref u64) -> bool {
+                if (self.Remaining() < 8usize) {
+                    return false;
+                }
+                value = (self.Read() fit u64) |
+                    ((self.Read() fit u64) << 8u64) |
+                    ((self.Read() fit u64) << 16u64) |
+                    ((self.Read() fit u64) << 24u64) |
+                    ((self.Read() fit u64) << 32u64) |
+                    ((self.Read() fit u64) << 40u64) |
+                    ((self.Read() fit u64) << 48u64) |
+                    ((self.Read() fit u64) << 56u64);
+                return true;
+            }
+
+            public fn At(index: usize) -> byte {
+                return self.data[index];
+            }
+
+            public fn Set(index: usize, value: byte) -> bool {
+                if (index >= self.data.Count()) {
+                    return false;
+                }
+                self.data[index] = value;
+                return true;
+            }
+
+            public fn Slice(start: usize, count: usize) -> byte[] {
+                return self.data.Slice(start, count);
+            }
+
+            public fn ToArray() -> byte[] {
+                return self.data.Clone();
+            }
+        }
+
+        object BytePool {
+            private buffers: ByteBuffer[];
+            private used: bit[];
+            private generations: u32[];
+            private free: usize[];
+            private blockCapacity: usize;
+            private active: usize;
+
+            public fn OnConstruct(blockCapacity: usize) {
+                self.buffers = [];
+                self.used = [];
+                self.generations = [];
+                self.free = [];
+                self.blockCapacity = blockCapacity;
+                self.active = 0usize;
+            }
+
+            public fn Count() -> usize { return self.active; }
+            public fn Capacity() -> usize { return self.buffers.Count(); }
+            public fn BlockCapacity() -> usize { return self.blockCapacity; }
+
+            public fn Rent() -> PoolHandle {
+                mut index = 0usize;
+                if (not self.free.Empty()) {
+                    index = self.free.Pop();
+                    self.used[index] = true;
+                    self.buffers[index].Clear();
+                } else {
+                    index = self.buffers.Count();
+                    self.buffers.Push(ByteBuffer(self.blockCapacity));
+                    self.used.Push(true);
+                    self.generations.Push(1u32);
+                }
+                self.active += 1usize;
+                mut handle = PoolHandle();
+                handle.index = index;
+                handle.generation = self.generations[index];
+                return handle;
+            }
+
+            public fn Owns(handle: PoolHandle) -> bool {
+                return handle.index < self.buffers.Count() and
+                    self.used[handle.index] and
+                    self.generations[handle.index] == handle.generation;
+            }
+
+            public fn Get(handle: PoolHandle) -> ByteBuffer {
+                if (not self.Owns(handle)) {
+                    std::Panic("BytePool.Get received a stale or foreign handle.");
+                }
+                return self.buffers[handle.index];
+            }
+
+            public fn Return(handle: PoolHandle) -> bool {
+                if (not self.Owns(handle)) {
+                    return false;
+                }
+                self.buffers[handle.index].Clear();
+                self.used[handle.index] = false;
+                self.generations[handle.index] += 1u32;
+                if (self.generations[handle.index] == 0u32) {
+                    self.generations[handle.index] = 1u32;
+                }
+                self.free.Push(handle.index);
+                self.active -= 1usize;
+                return true;
+            }
+        }
+
+        object Pool<T> {
+            private values: T[];
+            private used: bit[];
+            private generations: u32[];
+            private free: usize[];
+            private active: usize;
+            private emptyValue: T;
+            private clearReturned: bit;
+
+            public fn OnConstruct() {
+                self.values = [];
+                self.used = [];
+                self.generations = [];
+                self.free = [];
+                self.active = 0usize;
+                self.clearReturned = false;
+            }
+
+            public fn OnConstruct(emptyValue: T) {
+                self.values = [];
+                self.used = [];
+                self.generations = [];
+                self.free = [];
+                self.active = 0usize;
+                self.emptyValue = emptyValue;
+                self.clearReturned = true;
+            }
+
+            public fn Count() -> usize { return self.active; }
+            public fn Capacity() -> usize { return self.values.Count(); }
+
+            public fn Rent(value: T) -> PoolHandle {
+                mut index = 0usize;
+                if (not self.free.Empty()) {
+                    index = self.free.Pop();
+                    self.values[index] = value;
+                    self.used[index] = true;
+                } else {
+                    index = self.values.Count();
+                    self.values.Push(value);
+                    self.used.Push(true);
+                    self.generations.Push(1u32);
+                }
+                self.active += 1usize;
+                mut handle = PoolHandle();
+                handle.index = index;
+                handle.generation = self.generations[index];
+                return handle;
+            }
+
+            public fn Owns(handle: PoolHandle) -> bool {
+                return handle.index < self.values.Count() and
+                    self.used[handle.index] and
+                    self.generations[handle.index] == handle.generation;
+            }
+
+            public fn TryGet(handle: PoolHandle, value: ref T) -> bool {
+                if (not self.Owns(handle)) {
+                    return false;
+                }
+                value = self.values[handle.index];
+                return true;
+            }
+
+            public fn Set(handle: PoolHandle, value: T) -> bool {
+                if (not self.Owns(handle)) {
+                    return false;
+                }
+                self.values[handle.index] = value;
+                return true;
+            }
+
+            public fn Return(handle: PoolHandle) -> bool {
+                if (not self.Owns(handle)) {
+                    return false;
+                }
+                if (self.clearReturned) {
+                    self.values[handle.index] = self.emptyValue;
+                }
+                self.used[handle.index] = false;
+                self.generations[handle.index] += 1u32;
+                if (self.generations[handle.index] == 0u32) {
+                    self.generations[handle.index] = 1u32;
+                }
+                self.free.Push(handle.index);
+                self.active -= 1usize;
+                return true;
+            }
+        }
+    }
+
+    realm buffer {
+        type ByteBuffer = heap::ByteBuffer;
+        type BytePool = heap::BytePool;
+        type Pool<T> = heap::Pool<T>;
+        type PoolHandle = heap::PoolHandle;
+    }
+
+    type ByteBuffer = heap::ByteBuffer;
+    type BytePool = heap::BytePool;
+    type Pool<T> = heap::Pool<T>;
+    type PoolHandle = heap::PoolHandle;
+}

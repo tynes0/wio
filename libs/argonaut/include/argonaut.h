@@ -4,6 +4,7 @@
 #define ARGONAUT_H_DEFINED
 
 #include <functional>
+#include <cctype>
 #include <string>
 #include <vector>
 #include <optional>
@@ -14,6 +15,7 @@
 #include <sstream>  // std::stringstream
 #include <iomanip>  // std::setw, std::left
 #include <ranges> // views
+#include <type_traits>
 
 /**
  * @brief Main namespace for the Argonaut parser library.
@@ -85,7 +87,7 @@ namespace Argonaut
         {
             // Normalize ID to uppercase for case-insensitive lookup
             for (auto& ch : Id_)
-                ch = static_cast<char>(::toupper(ch));
+                ch = static_cast<char>(::toupper(static_cast<unsigned char>(ch)));
         }
 
         /**
@@ -112,7 +114,7 @@ namespace Argonaut
         {
             Id_ = id;
             for (auto& ch : Id_)
-                ch = static_cast<char>(::toupper(ch));
+                ch = static_cast<char>(::toupper(static_cast<unsigned char>(ch)));
             return *this;
         }
 
@@ -147,8 +149,8 @@ namespace Argonaut
          */
         Argument& Required(bool value = true)
         {
-            if (IsFlag_)
-                throw ParsePrepException("Argonaut Exception: Flag argument cannot be required."); // I am not sure about this actually
+            if (IsFlag_ && value)
+                throw ParsePrepException("Argonaut Exception: Flag argument cannot be required.");
             Required_ = value;
             return *this;
         }
@@ -162,8 +164,10 @@ namespace Argonaut
          */
         Argument& Flag(bool value = true)
         {
-            if (IsMultiValue_)
+            if (IsMultiValue_ && value)
                 throw ParsePrepException("Argonaut Exception: Multi-value argument cannot be flag.");
+            if (Required_ && value)
+                throw ParsePrepException("Argonaut Exception: Required argument cannot be flag.");
             IsFlag_ = value;
             return *this;
         }
@@ -177,7 +181,7 @@ namespace Argonaut
          */
         Argument& MultiValue(bool value = true)
         {
-            if (IsFlag_)
+            if (IsFlag_ && value)
                 throw ParsePrepException("Argonaut Exception: Flag argument cannot be multi-value.");
             IsMultiValue_ = value;
             return *this;
@@ -315,8 +319,14 @@ namespace Argonaut
         {
             std::string tmp = v;
             for (auto& ch : tmp)
-                ch = static_cast<char>(::tolower(ch));
-            return (tmp == "true" || tmp == "1" || tmp == "yes" || tmp == "on");
+                ch = static_cast<char>(::tolower(static_cast<unsigned char>(ch)));
+
+            if (tmp == "true" || tmp == "1" || tmp == "yes" || tmp == "on")
+                return true;
+            if (tmp == "false" || tmp == "0" || tmp == "no" || tmp == "off")
+                return false;
+
+            throw std::invalid_argument("Expected a boolean value.");
         }
     };
 
@@ -339,9 +349,15 @@ namespace Argonaut
             std::vector<std::string> args;
             if (argc > 0)
             {
+                if (argv == nullptr)
+                    throw ParseException("Argonaut Exception: Argument vector is null.");
+
                 args.reserve(argc);
                 for(int i = 0; i < argc; ++i)
                 {
+                    if (argv[i] == nullptr)
+                        throw ParseException("Argonaut Exception: Argument vector contains a null value.");
+
                     // Use emplace_back for potentially more efficient string construction
                     args.emplace_back(argv[i]);
                 }
@@ -359,16 +375,28 @@ namespace Argonaut
         {
             std::string id = arg.Id_; // Id_ is already uppercase from Argument constructor
 
+            if (id.empty()) {
+                throw ParsePrepException("Argonaut Exception: Argument ID cannot be empty.");
+            }
+
             if (ArgumentDefinitions_.contains(id)) {
                 throw ParsePrepException("Argonaut Exception: Argument already exists: " + id);
             }
-            
-            // Register all aliases in the lookup map
+
+            std::set<std::string> localAliases;
             for (const auto& alias : arg.Aliases_)
             {
-                if (AliasToIdMap_.contains(alias)) {
+                if (alias.empty())
+                    throw ParsePrepException("Argonaut Exception: Argument alias cannot be empty.");
+                if (!localAliases.insert(alias).second || AliasToIdMap_.contains(alias)) {
                     throw ParsePrepException("Argonaut Exception: Alias already exists: " + alias);
                 }
+            }
+
+            // Register all aliases only after the complete definition is known
+            // to be valid, so a failed Add never leaves partial parser state.
+            for (const auto& alias : arg.Aliases_)
+            {
                 AliasToIdMap_[alias] = id;
             }
             
@@ -391,6 +419,9 @@ namespace Argonaut
          */
         Parser& AutoHelp(bool value = true)
         {
+            if (AutoHelp_ == value)
+                return *this;
+
             AutoHelp_ = value;
 
             if (AutoHelp_)
@@ -401,7 +432,6 @@ namespace Argonaut
                     .AddAlias("--help")
                     .AddAlias("-h")
                     .Flag()
-                    .SetCallback([&](const std::string&){ throw HelpRequestedException(Help()); }) // Print help and exit
                     .SetDescription("Show this help menu.");
 
                 Add(HelpArgument);
@@ -429,6 +459,9 @@ namespace Argonaut
          */
         Parser& AutoVersion(bool value = true)
         {
+            if (AutoVersion_ == value)
+                return *this;
+
             AutoVersion_ = value;
 
             if (AutoVersion_)
@@ -439,7 +472,6 @@ namespace Argonaut
                     .AddAlias("--version")
                     .AddAlias("-v")
                     .Flag()
-                    .SetCallback([&](const std::string&){ throw VersionRequestedException(Help()); }) // Print version and exit
                     .SetDescription("Show version.");
 
                 Add(VersionArgument);
@@ -470,6 +502,28 @@ namespace Argonaut
             Version_ = version;
             return *this;
         }
+
+        /**
+         * @brief Controls whether an otherwise valid empty invocation prints help.
+         *
+         * Commands with useful defaults (for example `project run` in the
+         * current directory) should disable this while keeping explicit
+         * `--help` handling enabled through AutoHelp().
+         */
+        Parser& HelpOnEmpty(bool value = true)
+        {
+            HelpOnEmpty_ = value;
+            return *this;
+        }
+
+        /**
+         * @brief Appends command-specific syntax to the generated usage line.
+         */
+        Parser& SetUsageSuffix(const std::string& suffix)
+        {
+            UsageSuffix_ = suffix;
+            return *this;
+        }
         
         /**
          * @brief Gets the name of the program (from argv[0]).
@@ -478,6 +532,19 @@ namespace Argonaut
         std::string GetProgramName() const
         {
             return ProgramName_;
+        }
+
+        /**
+         * @brief Returns true when the argument was explicitly provided.
+         *
+         * Default values are intentionally not considered provided.
+         */
+        bool WasProvided(const std::string& argumentId) const
+        {
+            std::string id = argumentId;
+            for (auto& ch : id)
+                ch = static_cast<char>(::toupper(static_cast<unsigned char>(ch)));
+            return ParsedValues_.contains(id);
         }
 
         /**
@@ -492,7 +559,7 @@ namespace Argonaut
             // 1. ID Normalization and Search 
             std::string ID = ArgumentID;
             for (auto& ch : ID)
-                ch = static_cast<char>(::toupper(ch));
+                ch = static_cast<char>(::toupper(static_cast<unsigned char>(ch)));
             
             auto ArgIt = ArgumentDefinitions_.find(ID);
             if (ArgIt == ArgumentDefinitions_.end())
@@ -532,7 +599,10 @@ namespace Argonaut
                     }
                     catch (const std::exception& e)
                     {
-                        throw ParseException("Argonaut Exception: Conversion failed for argument '" + ID + "'. Value: '" += strVal + "'. Error: " + e.what());
+                        throw ParseException(
+                            "Argonaut Exception: Conversion failed for argument '" + ID +
+                            "'. Value: '" + strVal + "'. Error: " + e.what()
+                        );
                     }
                 }
                 return Result;
@@ -604,6 +674,7 @@ namespace Argonaut
                     ss << "..."; // Indicate multiple values
                 }
             }
+            ss << UsageSuffix_;
             ss << "\n\n";
 
             // --- 2. Positional Arguments Section ---
@@ -704,6 +775,7 @@ namespace Argonaut
             }
 
             ProgramName_ = args[0]; // Store program name
+            ParsedValues_.clear();
             
             // --- Parser State Machine ---
             bool NextIsPositional = false; // True after "--" is encountered
@@ -723,7 +795,8 @@ namespace Argonaut
                 // --- State 1: Handling tokens after "--" ---
                 if (NextIsPositional)
                 {
-                    //NextIsPositional = false; // Keep this true
+                    if (PositionalArgumentIndex >= RequiredPositionalArgOrder_.size())
+                        throw ParseException("Argonaut Exception: Too many positional arguments.");
                     
                     Argument& RealArg = ArgumentDefinitions_[RequiredPositionalArgOrder_[PositionalArgumentIndex]];
                     auto& ParsedList = ParsedValues_[RealArg.Id_];
@@ -785,6 +858,8 @@ namespace Argonaut
                         if (pos != std::string::npos)
                             throw ParseException("Argonaut Exception: Flag argument cannot have a value: " + key);
 
+                        HandleBuiltinArgument(RealArg);
+
                         std::string Value = "true"; // Represent flag presence
                         
                         ParsedList.emplace_back(Value);
@@ -793,7 +868,7 @@ namespace Argonaut
                     }
                     
                     // --- Handle long option with =value ---
-                    if (pos != std::string::npos && pos != Arg.size() - 1)
+                    if (pos != std::string::npos)
                     {
                         // Check for duplicate if not multi-value
                         if (!ParsedList.empty() && !RealArg.IsMultiValue_)
@@ -830,6 +905,8 @@ namespace Argonaut
 
                     if (RealArg.IsFlag_)
                     {
+                        HandleBuiltinArgument(RealArg);
+
                         std::string Value = "true";
                         ParsedList.emplace_back(Value);
                         CallbackIfValid(RealArg, Value);
@@ -877,9 +954,19 @@ namespace Argonaut
                         throw ParseException("Argonaut Exception: Required value " + RealArg.Id_ + " not found.");
                 }
             }
-            // If no arguments were parsed AND auto-help is on, show help.
-            if (ParsedValues_.empty() && AutoHelp_ && args.size() == 1)
+            // Some commands intentionally do useful work with their defaults.
+            // They can disable this behavior while retaining explicit --help.
+            if (ParsedValues_.empty() && AutoHelp_ && HelpOnEmpty_ && args.size() == 1)
                 throw HelpRequestedException(Help());
+        }
+
+        void HandleBuiltinArgument(const Argument& argument) const
+        {
+            if (AutoHelp_ && argument.Id_ == "HELP")
+                throw HelpRequestedException(Help());
+
+            if (AutoVersion_ && argument.Id_ == "VERSION")
+                throw VersionRequestedException(Version_ + "\n");
         }
 
         /**
@@ -916,6 +1003,12 @@ namespace Argonaut
         
         /// @brief Flag to control automatic --version handling.
         bool AutoVersion_ = false;
+
+        /// @brief Flag to control implicit help for an otherwise empty invocation.
+        bool HelpOnEmpty_ = true;
+
+        /// @brief Optional command-specific syntax appended to the usage line.
+        std::string UsageSuffix_;
     };
     
 } // namespace Argonaut

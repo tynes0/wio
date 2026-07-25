@@ -1,0 +1,73 @@
+realm std {
+    realm chars {
+        use @CppHeader("std_text.h");
+
+        @Native
+        @CppName(wio::runtime::std_text::IsAscii)
+        fn IsAscii(value: char) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_text::IsControl)
+        fn IsControl(value: char) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_text::IsWhitespace)
+        fn IsWhitespace(value: char) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_text::IsDigit)
+        fn IsDigit(value: char) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_text::IsBinaryDigit)
+        fn IsBinaryDigit(value: char) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_text::IsOctalDigit)
+        fn IsOctalDigit(value: char) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_text::IsHexDigit)
+        fn IsHexDigit(value: char) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_text::IsLower)
+        fn IsLower(value: char) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_text::IsUpper)
+        fn IsUpper(value: char) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_text::IsAlpha)
+        fn IsAlpha(value: char) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_text::IsAlphaNumeric)
+        fn IsAlphaNumeric(value: char) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_text::ToLower)
+        fn ToLower(value: char) -> char;
+
+        @Native
+        @CppName(wio::runtime::std_text::ToUpper)
+        fn ToUpper(value: char) -> char;
+
+        @Native
+        @CppName(wio::runtime::std_text::DigitValue)
+        fn DigitValue(value: char) -> i32;
+
+        @Native
+        @CppName(wio::runtime::std_text::HexValue)
+        fn HexValue(value: char) -> i32;
+
+        @Native
+        @CppName(wio::runtime::std_text::FromDigit)
+        fn FromDigit(value: i32, upper: bool) -> char;
+
+        fn FromDigit(value: i32) -> char {
+            return FromDigit(value, false);
+        }
+    }
+}

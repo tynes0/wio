@@ -1,0 +1,55 @@
+use std::assert as assert;
+use std::console as console;
+use std::hash as hash;
+use std::random as random;
+use std::time as time;
+
+fn Entry() -> i32 {
+    let fnv = hash::Hash("hello");
+    let sha = hash::Sha256("abc");
+    let digest = hash::Sha256Digest("abc");
+    let bytes: byte[] = [97u8, 98u8, 99u8];
+
+    let mtA = random::Mt19937(42u64);
+    let mtB = random::Mt19937(42u64);
+    let mtFirst = mtA.NextU32();
+    let mtSame = mtFirst == mtB.NextU32();
+    let mtRange = mtA.NextI32(-10, 10);
+
+    let xorA = random::Xoroshiro128Plus(7u64);
+    let xorB = random::Xoroshiro128Plus(7u64);
+    let xorSame = xorA.NextU64() == xorB.NextU64();
+
+    let lxmA = random::Lxm(9u64);
+    let lxmB = random::Lxm(9u64);
+    let lxmSame = lxmA.NextU64() == lxmB.NextU64();
+
+    let whA = random::WichmannHill(11u64);
+    let whB = random::WichmannHill(11u64);
+    let whValue = whA.NextF64();
+    let whSame = whValue == whB.NextF64();
+
+    let epoch = time::FromUnixMilliseconds(0i64, false);
+    mut leapDate = time::DateTime();
+    let madeLeapDate = time::TryCreate(2024, 2, 29, 12, 30, 15, 250, false, ref leapDate);
+    let started = time::Now();
+    let elapsed = started.Elapsed();
+
+    assert::ExpectEqual(fnv, 11831194018420276491u64, "FNV-1a 64 vector failed");
+    assert::ExpectEqual(sha, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "SHA-256 vector failed");
+    assert::ExpectEqual(hash::Sha256(bytes), sha, "SHA-256 byte overload failed");
+    assert::ExpectEqual(hash::HashValue<i32>(42), hash::Hash("42"), "generic canonical hash failed");
+    assert::ExpectEqual(digest.Count(), 32usize, "SHA-256 digest length failed");
+    assert::ExpectTrue(mtSame and xorSame and lxmSame and whSame, "random generators must be deterministic for a seed");
+    assert::ExpectTrue(mtRange >= -10 and mtRange < 10, "MT19937 range failed");
+    assert::ExpectTrue(whValue >= 0.0f64 and whValue < 1.0f64, "Wichmann-Hill unit range failed");
+    assert::ExpectTrue(time::IsLeapYear(2024), "leap-year check failed");
+    assert::ExpectEqual(time::DaysInMonth(2024, 2), 29, "days-in-month failed");
+    assert::ExpectEqual(epoch.year, 1970, "UTC epoch breakdown failed");
+    assert::ExpectTrue(madeLeapDate, "valid DateTime creation failed");
+    assert::ExpectEqual(leapDate.ToIso8601(), "2024-02-29T12:30:15.250Z", "ISO-8601 formatting failed");
+    assert::ExpectTrue(elapsed.Nanoseconds() >= 0i64, "monotonic clock moved backwards");
+
+    console::Print("std-hash-random-time-wave-ok");
+    return 0;
+}

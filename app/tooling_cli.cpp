@@ -1,15 +1,17 @@
 #include "tooling_cli.h"
 #include "binding_cli.h"
+#include "cli_common.h"
 #include "env_cli.h"
 #include "file_cli.h"
 #include "package_cli.h"
 #include "perf_cli.h"
+#include "process_cli.h"
 
 #include <argonaut.h>
 
+#include <algorithm>
 #include <cctype>
 #include <cstdlib>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -21,7 +23,6 @@
 #include <string>
 #include <string_view>
 #include <system_error>
-#include <unordered_set>
 #include <vector>
 
 #if defined(_WIN32)
@@ -36,228 +37,14 @@ namespace wio::tooling
     {
         constexpr std::string_view kWioCliVersion = WIO_VERSION;
 
-#if defined(_WIN32)
-        class ScopedWindowsPathOverride
-        {
-        public:
-            explicit ScopedWindowsPathOverride(const std::vector<std::filesystem::path>& extraPathEntries)
-            {
-                if (extraPathEntries.empty())
-                    return;
-
-                std::string existingPath;
-                DWORD requiredLength = GetEnvironmentVariableA("Path", nullptr, 0);
-                if (requiredLength > 0)
-                {
-                    existingPath.assign(requiredLength, '\0');
-                    const DWORD copiedLength = GetEnvironmentVariableA("Path", existingPath.data(), requiredLength);
-                    if (copiedLength > 0 && copiedLength < requiredLength)
-                        existingPath.resize(copiedLength);
-                    else if (copiedLength == 0)
-                        existingPath.clear();
-                }
-
-                originalPath_ = existingPath;
-                hadOriginalPath_ = requiredLength > 0;
-
-                std::string overriddenPath;
-                for (const auto& pathEntry : extraPathEntries)
-                {
-                    if (pathEntry.empty())
-                        continue;
-
-                    if (!overriddenPath.empty())
-                        overriddenPath += ';';
-                    overriddenPath += pathEntry.string();
-                }
-
-                if (!existingPath.empty())
-                {
-                    if (!overriddenPath.empty())
-                        overriddenPath += ';';
-                    overriddenPath += existingPath;
-                }
-
-                if (!overriddenPath.empty())
-                {
-                    SetEnvironmentVariableA("Path", overriddenPath.c_str());
-                    active_ = true;
-                }
-            }
-
-            ScopedWindowsPathOverride(const ScopedWindowsPathOverride&) = delete;
-            ScopedWindowsPathOverride& operator=(const ScopedWindowsPathOverride&) = delete;
-
-            ~ScopedWindowsPathOverride()
-            {
-                if (!active_)
-                    return;
-
-                if (hadOriginalPath_)
-                    SetEnvironmentVariableA("Path", originalPath_.c_str());
-                else
-                    SetEnvironmentVariableA("Path", nullptr);
-            }
-
-        private:
-            bool active_ = false;
-            bool hadOriginalPath_ = false;
-            std::string originalPath_;
-        };
-#endif
-
         bool isHelpToken(const std::string_view value)
         {
-            return value == "--help" || value == "-h" || value == "help";
+            return cli::IsHelpToken(value);
         }
 
-        std::string quoteCommandPart(const std::string& value)
+        bool isVersionToken(const std::string_view value)
         {
-            if (value.empty())
-                return "\"\"";
-
-            bool needsQuotes = false;
-            for (const char ch : value)
-            {
-                if (std::isspace(static_cast<unsigned char>(ch)) != 0 || ch == '"' || ch == '&' || ch == '(' || ch == ')' || ch == ';')
-                {
-                    needsQuotes = true;
-                    break;
-                }
-            }
-
-            if (!needsQuotes)
-                return value;
-
-            std::string result;
-            result.reserve(value.size() + 2);
-            result.push_back('"');
-            for (const char ch : value)
-            {
-                if (ch == '"')
-                    result += "\\\"";
-                else
-                    result.push_back(ch);
-            }
-            result.push_back('"');
-            return result;
-        }
-
-        std::string joinCommand(const std::vector<std::string>& parts)
-        {
-            std::ostringstream stream;
-            for (size_t i = 0; i < parts.size(); ++i)
-            {
-                if (i > 0)
-                    stream << ' ';
-                stream << quoteCommandPart(parts[i]);
-            }
-            return stream.str();
-        }
-
-        int runShellCommand(const std::vector<std::string>& parts,
-                            const std::optional<std::filesystem::path>& workingDirectory = std::nullopt,
-                            const std::vector<std::filesystem::path>& extraPathEntries = {})
-        {
-            const std::string command = joinCommand(parts);
-
-#if defined(_WIN32)
-            ScopedWindowsPathOverride scopedPathOverride(extraPathEntries);
-            LPCH environmentStrings = GetEnvironmentStringsA();
-            if (environmentStrings == nullptr)
-                return EXIT_FAILURE;
-
-            std::unordered_set<std::string> seenKeys;
-            std::vector<std::string> sanitizedEntries;
-            std::string mergedPath;
-            std::optional<size_t> pathEntryIndex;
-
-            for (LPCSTR cursor = environmentStrings; *cursor != '\0'; cursor += std::strlen(cursor) + 1)
-            {
-                const std::string_view entry(cursor);
-                const size_t equalsIndex = entry.find('=');
-                if (equalsIndex == std::string_view::npos || equalsIndex == 0)
-                {
-                    sanitizedEntries.emplace_back(entry);
-                    continue;
-                }
-
-                std::string normalizedKey(entry.substr(0, equalsIndex));
-                for (char& ch : normalizedKey)
-                    ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-
-                if (normalizedKey == "path")
-                {
-                    if (!pathEntryIndex.has_value())
-                        pathEntryIndex = sanitizedEntries.size();
-                    if (!mergedPath.empty() && mergedPath.back() != ';' &&
-                        equalsIndex + 1 < entry.size() && entry[equalsIndex + 1] != ';')
-                        mergedPath.push_back(';');
-                    mergedPath.append(entry.substr(equalsIndex + 1));
-                    continue;
-                }
-
-                if (!seenKeys.insert(normalizedKey).second)
-                    continue;
-
-                sanitizedEntries.emplace_back(entry);
-            }
-
-            if (!mergedPath.empty() && pathEntryIndex.has_value())
-                sanitizedEntries.insert(sanitizedEntries.begin() + static_cast<std::ptrdiff_t>(*pathEntryIndex), "Path=" + mergedPath);
-
-            FreeEnvironmentStringsA(environmentStrings);
-
-            std::vector<char> environmentBlock;
-            for (const std::string& entry : sanitizedEntries)
-            {
-                environmentBlock.insert(environmentBlock.end(), entry.begin(), entry.end());
-                environmentBlock.push_back('\0');
-            }
-            environmentBlock.push_back('\0');
-
-            std::vector<char> commandLine(command.begin(), command.end());
-            commandLine.push_back('\0');
-
-            STARTUPINFOA startupInfo{};
-            startupInfo.cb = sizeof(startupInfo);
-
-            PROCESS_INFORMATION processInfo{};
-            const BOOL created = CreateProcessA(
-                nullptr,
-                commandLine.data(),
-                nullptr,
-                nullptr,
-                FALSE,
-                0,
-                environmentBlock.data(),
-                workingDirectory.has_value() ? workingDirectory->string().c_str() : nullptr,
-                &startupInfo,
-                &processInfo
-            );
-
-            if (created == FALSE)
-                return EXIT_FAILURE;
-
-            WaitForSingleObject(processInfo.hProcess, INFINITE);
-
-            DWORD exitCode = EXIT_FAILURE;
-            GetExitCodeProcess(processInfo.hProcess, &exitCode);
-
-            CloseHandle(processInfo.hThread);
-            CloseHandle(processInfo.hProcess);
-            return static_cast<int>(exitCode);
-#else
-            if (workingDirectory.has_value())
-            {
-                const auto previous = std::filesystem::current_path();
-                std::filesystem::current_path(*workingDirectory);
-                const int result = std::system(command.c_str());
-                std::filesystem::current_path(previous);
-                return result;
-            }
-            return std::system(command.c_str());
-#endif
+            return cli::IsVersionToken(value);
         }
 
         std::optional<std::filesystem::path> tryResolveExecutableOnPath(const std::string& executableName)
@@ -381,10 +168,12 @@ namespace wio::tooling
         void printToolingUsage()
         {
             std::cout
-                << "Wio developer commands\n"
+                << "Wio command line interface\n"
                 << "\n"
                 << "Usage:\n"
                 << "\n"
+                << "  wio help      [COMMAND [SUBCOMMAND]]\n"
+                << "  wio run       [PROJECT] [project options...] [-- application args...]\n"
                 << "  wio build     [--build-dir DIR] [--config CFG] [--configure] [--test]\n"
                 << "  wio test      [--build-dir DIR] [--config CFG] [--filter REGEX] [--list] [--configure]\n"
                 << "  wio file run    [FILE] [compiler args...] [-- program args...]\n"
@@ -392,9 +181,9 @@ namespace wio::tooling
                 << "  wio file tokens [FILE] [extra compiler args...]\n"
                 << "  wio file ast    [FILE] [extra compiler args...]\n"
                 << "  wio project new <NAME> [--output-dir DIR] [--template NAME] [--force]\n"
-                << "  wio project describe [--project PATH] [--config CFG] [--build-dir DIR]\n"
-                << "  wio project build    [--project PATH] [--config CFG] [--build-dir DIR] [--configure]\n"
-                << "  wio project run      [--project PATH] [--config CFG] [--build-dir DIR] [--configure]\n"
+                << "  wio project describe [PROJECT] [--project PATH] [--config CFG] [--build-dir DIR]\n"
+                << "  wio project build    [PROJECT] [--project PATH] [--config CFG] [--build-dir DIR] [--rebuild]\n"
+                << "  wio project run      [PROJECT] [--project PATH] [--config CFG] [--build-dir DIR] [--no-build] [-- application args...]\n"
                 << "  wio bind new         --manifest FILE [--output FILE]\n"
                 << "  wio bind import      --header FILE --realm NAME [--output FILE] [--header-include FILE] [--prefer-flagset]\n"
                 << "  wio env print        [--wio-root DIR] [--shell powershell|cmd|sh] [--add-path]\n"
@@ -410,8 +199,23 @@ namespace wio::tooling
                 << "  wio dev build [--build-dir DIR] [--config CFG] [--configure] [--test]\n"
                 << "  wio dev test  [--build-dir DIR] [--config CFG] [--filter REGEX] [--list] [--configure]\n"
                 << "\n"
-                << "These commands are the direct CLI replacement for the thin repo PowerShell helpers\n"
-                << "such as Build-Wio.ps1 and Test-Wio.ps1.\n";
+                << "Project commands discover wio.makewio in the current directory or its ancestors.\n"
+                << "Use '<command> --help' for command-specific options.\n";
+        }
+
+        void printProjectUsage(std::ostream& stream)
+        {
+            stream
+                << "Wio project commands\n"
+                << "\n"
+                << "Usage:\n"
+                << "  wio project new <NAME> [--output-dir DIR] [--template NAME] [--force]\n"
+                << "  wio project describe [PROJECT] [--config CFG] [--build-dir DIR]\n"
+                << "  wio project build    [PROJECT] [--config CFG] [--build-dir DIR] [--rebuild]\n"
+                << "  wio project run      [PROJECT] [--config CFG] [--build-dir DIR] [--no-build] [-- application args...]\n"
+                << "\n"
+                << "PROJECT may be a directory or a makewio manifest. When omitted, Wio searches\n"
+                << "the current directory and its ancestors for wio.makewio or makewio.\n";
         }
 
         std::filesystem::path resolveBuildDir(const std::filesystem::path& repoRoot, const std::string& buildDir)
@@ -642,8 +446,12 @@ int main(int argc, char** argv)
                 spec.description = "Plain Wio executable.";
                 spec.wioSource = R"(use std::console as console;
 
-fn Entry() -> i32 {
+fn Entry(args: string[]) -> i32 {
     console::Print!("Hello from a plain Wio application.");
+    if (args.Count() > 1usize) {
+        let applicationArguments = args.Skip(1usize).Join("|");
+        console::Print!($"Application arguments: ${applicationArguments}");
+    }
     return 0;
 }
 )";
@@ -665,9 +473,13 @@ realm ffi {
     fn Multiply(lhs: i32, rhs: i32) -> i32;
 }
 
-fn Entry() -> i32 {
+fn Entry(args: string[]) -> i32 {
     console::Print!("Native multiply:");
     console::Print!(ffi::Multiply(6, 7));
+    if (args.Count() > 1usize) {
+        let applicationArguments = args.Skip(1usize).Join("|");
+        console::Print!($"Application arguments: ${applicationArguments}");
+    }
     return 0;
 }
 )";
@@ -796,12 +608,15 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                 << "- `CMakeLists.txt`: optional CMake integration through `WioProject.cmake`\n\n"
                 << "## Current Workflow\n\n"
                 << "This project was generated by `wio project new`.\n\n"
-                << "Today, the most stable project-level flows are:\n\n"
-                << "1. Set `WIO_ROOT` to your Wio toolchain root.\n"
-                << "2. Use the generated `CMakeLists.txt`.\n"
-                << "3. Or, as a compatibility path, run `scripts/Invoke-WioProject.ps1` from that toolchain.\n\n"
-                << "## Longer-Term Direction\n\n"
-                << "Wio is moving toward direct CLI subcommands for project build/run/describe so PowerShell is no longer the primary user-facing tool.\n";
+                << "From this directory, the direct project workflow is:\n\n"
+                << "```powershell\n"
+                << "wio project describe\n"
+                << "wio project build\n"
+                << "wio project run\n"
+                << "wio project run -- first-argument \"two words\"\n"
+                << "```\n\n"
+                << "`wio project run` discovers this manifest from the current directory or a child directory.\n"
+                << "Arguments after `--` are passed to the generated executable without reinterpretation.\n";
             return stream.str();
         }
 
@@ -1081,13 +896,14 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
         {
             std::filesystem::path path = value;
             if (path.is_absolute())
-                return path.make_preferred();
-            return std::filesystem::absolute(projectRoot / path).make_preferred();
+                return path.lexically_normal().make_preferred();
+            return std::filesystem::absolute(projectRoot / path).lexically_normal().make_preferred();
         }
 
         void addUniquePath(std::vector<std::filesystem::path>& paths, const std::filesystem::path& path)
         {
-            const std::filesystem::path normalized = std::filesystem::absolute(path).make_preferred();
+            const std::filesystem::path normalized =
+                std::filesystem::absolute(path).lexically_normal().make_preferred();
             for (const auto& existing : paths)
             {
                 if (existing == normalized)
@@ -1164,7 +980,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
 
         std::filesystem::path resolveProjectManifestFile(const std::string& projectValue)
         {
-            const std::filesystem::path base =
+            std::filesystem::path base =
                 projectValue.empty()
                     ? std::filesystem::current_path()
                     : std::filesystem::absolute(std::filesystem::path(projectValue)).make_preferred();
@@ -1178,23 +994,37 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                 const std::string fileName = base.filename().string();
                 if (fileName == "wio.project.json")
                     throw std::runtime_error("The direct Wio CLI currently supports makewio manifests. Use wio.makewio or the compatibility script for legacy JSON manifests.");
-                return base;
+                return std::filesystem::absolute(base).make_preferred();
             }
 
             const std::vector<std::string> candidates{ "wio.makewio", "makewio", "wio.project.json" };
-            for (const auto& candidate : candidates)
+            const std::filesystem::path searchStart = std::filesystem::absolute(base).make_preferred();
+            base = searchStart;
+
+            while (!base.empty())
             {
-                const std::filesystem::path manifestPath = base / candidate;
-                if (std::filesystem::exists(manifestPath, ec) && std::filesystem::is_regular_file(manifestPath, ec))
+                for (const auto& candidate : candidates)
                 {
-                    if (candidate == "wio.project.json")
-                        throw std::runtime_error("The direct Wio CLI currently supports makewio manifests. Use wio.makewio or the compatibility script for legacy JSON manifests.");
-                    auto resolved = manifestPath;
-                    return resolved.make_preferred();
+                    const std::filesystem::path manifestPath = base / candidate;
+                    ec.clear();
+                    if (std::filesystem::exists(manifestPath, ec) && std::filesystem::is_regular_file(manifestPath, ec))
+                    {
+                        if (candidate == "wio.project.json")
+                            throw std::runtime_error("The direct Wio CLI currently supports makewio manifests. Use wio.makewio or the compatibility script for legacy JSON manifests.");
+                        return std::filesystem::absolute(manifestPath).make_preferred();
+                    }
                 }
+
+                const std::filesystem::path parent = base.parent_path();
+                if (parent == base)
+                    break;
+                base = parent;
             }
 
-            throw std::runtime_error("No project manifest was found under '" + base.string() + "'. Expected wio.makewio or makewio.");
+            throw std::runtime_error(
+                "No project manifest was found from '" + searchStart.string() +
+                "' upward. Expected wio.makewio or makewio."
+            );
         }
 
         std::filesystem::path getDefaultWioEntry(const std::filesystem::path& projectRoot)
@@ -1888,6 +1718,20 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
             return !values.empty() && values.front();
         }
 
+        std::string getProjectValue(Argonaut::Parser& parser)
+        {
+            const auto positionalValues = parser.GetValuesOf<std::string>("PROJECT-PATH");
+            if (!positionalValues.empty())
+            {
+                if (parser.WasProvided("PROJECT"))
+                    throw std::runtime_error("Specify the project either positionally or with --project, not both.");
+                return positionalValues.front();
+            }
+
+            const auto projectValues = parser.GetValuesOf<std::string>("PROJECT");
+            return projectValues.empty() ? "." : projectValues.front();
+        }
+
         std::vector<char*> buildArgvView(std::vector<std::string>& args)
         {
             std::vector<char*> argvView;
@@ -1962,6 +1806,8 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                         .SetDescription("Run ctest after a successful build.")
                 )
                 .AutoHelp()
+                .HelpOnEmpty(false)
+                .AutoVersion()
                 .SetVersion(WIO_VERSION);
 
             return parser;
@@ -2001,6 +1847,8 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                         .SetDescription("Run CMake configure before invoking ctest.")
                 )
                 .AutoHelp()
+                .HelpOnEmpty(false)
+                .AutoVersion()
                 .SetVersion(WIO_VERSION);
 
             return parser;
@@ -2034,6 +1882,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                         .SetDescription("Allow generating into an existing non-empty directory.")
                 )
                 .AutoHelp()
+                .AutoVersion()
                 .SetVersion(WIO_VERSION);
 
             return parser;
@@ -2043,6 +1892,10 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
         {
             Argonaut::Parser parser;
             parser
+                .Add(
+                    Argonaut::Argument("PROJECT-PATH")
+                        .SetDescription("Optional project directory or makewio manifest path.")
+                )
                 .Add(
                     Argonaut::Argument("PROJECT")
                         .AddAlias("--project")
@@ -2060,14 +1913,60 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                         .AddAlias("--build-dir")
                         .SetDefaultValue("")
                         .SetDescription("Optional override for the project build directory.")
-                )
-                .Add(
+                );
+
+            if (actionDescription != "describe")
+            {
+                parser.Add(
                     Argonaut::Argument("CONFIGURE")
+                        .AddAlias("--rebuild")
                         .AddAlias("--configure")
                         .Flag()
-                        .SetDescription("Reserved compatibility flag. Project manifests are configured declaratively, so this currently forces a rebuild check only.")
-                )
+                        .SetDescription("Force recompilation even when project outputs are up to date. --configure is retained as a compatibility alias.")
+                );
+            }
+
+            if (actionDescription == "run")
+            {
+                parser
+                    .Add(
+                        Argonaut::Argument("NO-BUILD")
+                            .AddAlias("--no-build")
+                            .Flag()
+                            .SetDescription("Run the existing executable without checking or rebuilding project outputs.")
+                    )
+                    .Add(
+                        Argonaut::Argument("WORKING-DIRECTORY")
+                            .AddAlias("--cwd")
+                            .AddAlias("--working-directory")
+                            .SetDefaultValue("")
+                            .SetDescription("Override the run working directory; relative paths resolve from the project root.")
+                    )
+                    .Add(
+                        Argonaut::Argument("NO-MANIFEST-ARGS")
+                            .AddAlias("--no-manifest-args")
+                            .Flag()
+                            .SetDescription("Do not prepend arguments declared in run.args.")
+                    )
+                    .Add(
+                        Argonaut::Argument("RUN-ARG")
+                            .AddAlias("--arg")
+                            .MultiValue()
+                            .SetDescription("Append one application argument. May be repeated; '--' is preferred for arbitrary argument lists.")
+                    )
+                    .Add(
+                        Argonaut::Argument("PRINT-COMMAND")
+                            .AddAlias("--print-command")
+                            .Flag()
+                            .SetDescription("Print the resolved executable, working directory, and arguments before launching.")
+                    )
+                    .SetUsageSuffix(" [-- <application-args...>]");
+            }
+
+            parser
                 .AutoHelp()
+                .HelpOnEmpty(false)
+                .AutoVersion()
                 .SetVersion(WIO_VERSION);
 
             return parser;
@@ -2095,7 +1994,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
 
             if (configure)
             {
-                if (const int configureResult = runShellCommand({
+                if (const int configureResult = process::Run({
                         "cmake",
                         "-S", repoRoot->string(),
                         "-B", resolvedBuildDir.string()
@@ -2106,7 +2005,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                 }
             }
 
-            if (const int buildResult = runShellCommand({
+            if (const int buildResult = process::Run({
                     "cmake",
                     "--build", resolvedBuildDir.string(),
                     "--config", config
@@ -2118,7 +2017,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
 
             if (test)
             {
-                return runShellCommand({
+                return process::Run({
                     "ctest",
                     "--test-dir", resolvedBuildDir.string(),
                     "-C", config,
@@ -2153,7 +2052,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
 
             if (configure)
             {
-                if (const int configureResult = runShellCommand({
+                if (const int configureResult = process::Run({
                         "cmake",
                         "-S", repoRoot->string(),
                         "-B", resolvedBuildDir.string()
@@ -2181,7 +2080,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                 ctestCommand.push_back(filter);
             }
 
-            return runShellCommand(ctestCommand);
+            return process::Run(ctestCommand);
         }
 
         int handleProjectNewCommand(std::vector<std::string> args)
@@ -2356,7 +2255,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
 
             if (forceRebuild || !outputUpToDate(info.wioOutput, wioInputs))
             {
-                if (const int result = runShellCommand(wioCommand, info.projectRoot); result != 0)
+                if (const int result = process::Run(wioCommand, info.projectRoot); result != 0)
                     return result;
             }
             else
@@ -2446,7 +2345,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                 const std::vector<std::filesystem::path> extraPathEntries{
                     info.hostCompilerExecutable.parent_path()
                 };
-                if (const int result = runShellCommand(hostCommand, info.projectRoot, extraPathEntries); result != 0)
+                if (const int result = process::Run(hostCommand, info.projectRoot, extraPathEntries); result != 0)
                     return result;
             }
             else
@@ -2466,7 +2365,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
             try
             {
                 const ProjectInfo info = resolveProjectInfo(
-                    parser.GetValuesOf<std::string>("PROJECT").front(),
+                    getProjectValue(parser),
                     parser.GetValuesOf<std::string>("CONFIG").front(),
                     parser.GetValuesOf<std::string>("BUILD-DIR").front()
                 );
@@ -2489,7 +2388,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
             try
             {
                 const ProjectInfo info = resolveProjectInfo(
-                    parser.GetValuesOf<std::string>("PROJECT").front(),
+                    getProjectValue(parser),
                     parser.GetValuesOf<std::string>("CONFIG").front(),
                     parser.GetValuesOf<std::string>("BUILD-DIR").front()
                 );
@@ -2502,37 +2401,81 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
             }
         }
 
+        struct ProjectRunInvocation
+        {
+            std::vector<std::string> commandArgs;
+            std::vector<std::string> applicationArgs;
+        };
+
+        ProjectRunInvocation splitProjectRunArguments(const std::vector<std::string>& args)
+        {
+            ProjectRunInvocation invocation;
+            invocation.commandArgs.reserve(args.size());
+            invocation.applicationArgs.reserve(args.size());
+
+            if (args.empty())
+                return invocation;
+
+            invocation.commandArgs.push_back(args.front());
+            bool applicationArgumentsStarted = false;
+
+            for (size_t index = 1; index < args.size(); ++index)
+            {
+                if (!applicationArgumentsStarted && args[index] == "--")
+                {
+                    applicationArgumentsStarted = true;
+                    continue;
+                }
+
+                if (applicationArgumentsStarted)
+                    invocation.applicationArgs.push_back(args[index]);
+                else
+                    invocation.commandArgs.push_back(args[index]);
+            }
+
+            return invocation;
+        }
+
         int handleProjectRunCommand(std::vector<std::string> args)
         {
+            ProjectRunInvocation invocation = splitProjectRunArguments(args);
             Argonaut::Parser parser = makeProjectActionParser("run");
-            if (const auto parseResult = parseWithHandling(parser, args); parseResult.has_value())
+            if (const auto parseResult = parseWithHandling(parser, invocation.commandArgs); parseResult.has_value())
                 return *parseResult;
 
             try
             {
                 const ProjectInfo info = resolveProjectInfo(
-                    parser.GetValuesOf<std::string>("PROJECT").front(),
+                    getProjectValue(parser),
                     parser.GetValuesOf<std::string>("CONFIG").front(),
                     parser.GetValuesOf<std::string>("BUILD-DIR").front()
                 );
 
-                if (const int buildResult = buildProject(info, getFlagValue(parser, "CONFIGURE")); buildResult != 0)
-                    return buildResult;
+                const bool noBuild = getFlagValue(parser, "NO-BUILD");
+                const bool forceRebuild = getFlagValue(parser, "CONFIGURE");
+                if (noBuild && forceRebuild)
+                    throw std::runtime_error("--no-build cannot be combined with --rebuild or --configure.");
+
+                if (!noBuild)
+                {
+                    if (const int buildResult = buildProject(info, forceRebuild); buildResult != 0)
+                        return buildResult;
+                }
 
                 std::vector<std::string> runCommand;
+                std::filesystem::path executablePath;
                 if (info.hostEnabled)
                 {
-                    runCommand.push_back(info.hostOutput.string());
+                    executablePath = info.hostOutput;
+                    runCommand.push_back(executablePath.string());
                     if (info.passLibraryPath && info.wioTarget == "shared")
                         runCommand.push_back(info.wioOutput.string());
                 }
                 else if (info.wioTarget == "exe")
                 {
-                    runCommand.push_back(info.wioOutput.string());
+                    executablePath = info.wioOutput;
+                    runCommand.push_back(executablePath.string());
                 }
-
-                for (const auto& arg : info.runArgs)
-                    runCommand.push_back(arg);
 
                 if (runCommand.empty())
                 {
@@ -2540,7 +2483,55 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                     return EXIT_FAILURE;
                 }
 
-                return runShellCommand(runCommand, info.runWorkingDirectory);
+                if (noBuild)
+                {
+                    std::error_code ec;
+                    if (!std::filesystem::exists(executablePath, ec) ||
+                        !std::filesystem::is_regular_file(executablePath, ec))
+                    {
+                        throw std::runtime_error(
+                            "--no-build was requested, but the expected executable does not exist: " +
+                            executablePath.string()
+                        );
+                    }
+                }
+
+                if (!getFlagValue(parser, "NO-MANIFEST-ARGS"))
+                {
+                    for (const auto& arg : info.runArgs)
+                        runCommand.push_back(arg);
+                }
+
+                for (const auto& arg : parser.GetValuesOf<std::string>("RUN-ARG"))
+                    runCommand.push_back(arg);
+
+                for (const auto& arg : invocation.applicationArgs)
+                    runCommand.push_back(arg);
+
+                std::filesystem::path runWorkingDirectory = info.runWorkingDirectory;
+                const std::string workingDirectoryOverride =
+                    parser.GetValuesOf<std::string>("WORKING-DIRECTORY").front();
+                if (!workingDirectoryOverride.empty())
+                    runWorkingDirectory = resolveProjectPath(info.projectRoot, workingDirectoryOverride);
+
+                std::error_code ec;
+                if (!std::filesystem::exists(runWorkingDirectory, ec) ||
+                    !std::filesystem::is_directory(runWorkingDirectory, ec))
+                {
+                    throw std::runtime_error(
+                        "Run working directory does not exist or is not a directory: " +
+                        runWorkingDirectory.string()
+                    );
+                }
+
+                if (getFlagValue(parser, "PRINT-COMMAND"))
+                {
+                    std::cout << "Working directory: " << runWorkingDirectory.string() << '\n';
+                    std::cout << "Command: " << process::FormatCommand(runCommand) << '\n';
+                    std::cout.flush();
+                }
+
+                return process::Run(runCommand, runWorkingDirectory);
             }
             catch (const std::exception& e)
             {
@@ -2563,6 +2554,66 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
 
             return args;
         }
+
+        bool looksLikeDirectCompilerInvocation(const std::string_view command)
+        {
+            if (command.empty())
+                return false;
+            if (command.front() == '-')
+                return true;
+
+            const std::filesystem::path path{ std::string(command) };
+            if (path.extension() == ".wio")
+                return true;
+
+            std::error_code ec;
+            return std::filesystem::exists(path, ec) && std::filesystem::is_regular_file(path, ec);
+        }
+
+        size_t editDistance(const std::string_view left, const std::string_view right)
+        {
+            std::vector<size_t> previous(right.size() + 1);
+            std::vector<size_t> current(right.size() + 1);
+            for (size_t index = 0; index <= right.size(); ++index)
+                previous[index] = index;
+
+            for (size_t leftIndex = 0; leftIndex < left.size(); ++leftIndex)
+            {
+                current[0] = leftIndex + 1;
+                for (size_t rightIndex = 0; rightIndex < right.size(); ++rightIndex)
+                {
+                    const size_t substitutionCost = left[leftIndex] == right[rightIndex] ? 0 : 1;
+                    current[rightIndex + 1] = (std::min)({
+                        current[rightIndex] + 1,
+                        previous[rightIndex + 1] + 1,
+                        previous[rightIndex] + substitutionCost
+                    });
+                }
+                previous.swap(current);
+            }
+
+            return previous.back();
+        }
+
+        std::optional<std::string_view> suggestTopLevelCommand(const std::string_view command)
+        {
+            static constexpr std::string_view commands[]{
+                "help", "run", "build", "test", "file", "project", "bind", "env", "package", "perf", "dev"
+            };
+
+            std::optional<std::string_view> best;
+            size_t bestDistance = 3;
+            for (const std::string_view candidate : commands)
+            {
+                const size_t distance = editDistance(command, candidate);
+                if (distance < bestDistance)
+                {
+                    best = candidate;
+                    bestDistance = distance;
+                }
+            }
+            return best;
+        }
     }
 
     std::optional<int> tryHandleToolingCommand(int argc, char* argv[])
@@ -2577,23 +2628,48 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
         }
 
         const std::string_view command = argv[1];
+        if (command == "help" && argc > 2)
+        {
+            std::vector<std::string> rewrittenArgs;
+            rewrittenArgs.reserve(static_cast<size_t>(argc));
+            rewrittenArgs.emplace_back(argv[0] != nullptr ? argv[0] : "wio");
+            for (int index = 2; index < argc; ++index)
+            {
+                if (argv[index] != nullptr)
+                    rewrittenArgs.emplace_back(argv[index]);
+            }
+            rewrittenArgs.emplace_back("--help");
+
+            std::vector<char*> rewrittenArgv = buildArgvView(rewrittenArgs);
+            return tryHandleToolingCommand(
+                static_cast<int>(rewrittenArgv.size()),
+                rewrittenArgv.data()
+            );
+        }
+
         if (isHelpToken(command))
         {
             printToolingUsage();
             return EXIT_SUCCESS;
         }
 
-        if (command == "--version" || command == "-v")
+        if (isVersionToken(command))
         {
             std::cout << kWioCliVersion << '\n';
             return EXIT_SUCCESS;
         }
 
-        if (argc >= 3 && argv[2] != nullptr && isHelpToken(argv[2]) && command != "file")
+        if (argc == 3 && argv[2] != nullptr && isVersionToken(argv[2]) &&
+            (command == "file" || command == "project" || command == "bind" ||
+             command == "env" || command == "package" || command == "perf" ||
+             command == "dev"))
         {
-            printToolingUsage();
+            std::cout << kWioCliVersion << '\n';
             return EXIT_SUCCESS;
         }
+
+        if (command == "run")
+            return handleProjectRunCommand(collectCommandArgs("wio run", argc, argv, 2));
 
         if (command == "build")
             return handleBuildCommand(collectCommandArgs("wio build", argc, argv, 2));
@@ -2608,11 +2684,16 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
         {
             if (argc < 3 || argv[2] == nullptr)
             {
-                std::cerr << "Expected a project subcommand. Currently supported: new, describe, build, run\n";
-                return EXIT_FAILURE;
+                printProjectUsage(std::cout);
+                return EXIT_SUCCESS;
             }
 
             const std::string_view subcommand = argv[2];
+            if (isHelpToken(subcommand))
+            {
+                printProjectUsage(std::cout);
+                return EXIT_SUCCESS;
+            }
             if (subcommand == "new")
                 return handleProjectNewCommand(collectCommandArgs("wio project new", argc, argv, 3));
             if (subcommand == "describe")
@@ -2623,6 +2704,14 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                 return handleProjectRunCommand(collectCommandArgs("wio project run", argc, argv, 3));
 
             std::cerr << "Unknown project subcommand: " << subcommand << '\n';
+            if (const auto suggestion = cli::SuggestCommand(
+                    subcommand,
+                    { "new", "describe", "build", "run" });
+                suggestion.has_value())
+            {
+                std::cerr << "Did you mean 'wio project " << *suggestion << "'?\n";
+            }
+            std::cerr << "Run 'wio project --help' to list available project commands.\n";
             return EXIT_FAILURE;
         }
 
@@ -2639,15 +2728,29 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
             return perf::tryHandlePerfCommand(argc, argv);
 
         if (command != "dev")
-            return std::nullopt;
+        {
+            if (looksLikeDirectCompilerInvocation(command))
+                return std::nullopt;
+
+            std::cerr << "Unknown Wio command: " << command << '\n';
+            if (const auto suggestion = suggestTopLevelCommand(command); suggestion.has_value())
+                std::cerr << "Did you mean 'wio " << *suggestion << "'?\n";
+            std::cerr << "Run 'wio --help' to list available commands.\n";
+            return EXIT_FAILURE;
+        }
 
         if (argc < 3 || argv[2] == nullptr)
         {
             printToolingUsage();
-            return EXIT_FAILURE;
+            return EXIT_SUCCESS;
         }
 
         const std::string_view subcommand = argv[2];
+        if (isHelpToken(subcommand))
+        {
+            printToolingUsage();
+            return EXIT_SUCCESS;
+        }
         if (subcommand == "build")
             return handleBuildCommand(collectCommandArgs("wio dev build", argc, argv, 3));
 
@@ -2655,6 +2758,11 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
             return handleTestCommand(collectCommandArgs("wio dev test", argc, argv, 3));
 
         std::cerr << "Unknown developer subcommand: " << subcommand << '\n';
+        if (const auto suggestion = cli::SuggestCommand(subcommand, { "build", "test" });
+            suggestion.has_value())
+        {
+            std::cerr << "Did you mean 'wio dev " << *suggestion << "'?\n";
+        }
         printToolingUsage();
         return EXIT_FAILURE;
     }

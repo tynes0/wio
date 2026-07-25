@@ -1,0 +1,79 @@
+use std::result as result;
+
+realm std {
+    realm collections {
+        object Queue<T> {
+            private values: T[];
+            private head: usize;
+
+            public fn OnConstruct() {
+                self.values = [];
+                self.head = 0usize;
+            }
+
+            public fn Count() -> usize {
+                return self.values.Count() - self.head;
+            }
+
+            public fn Empty() -> bool {
+                return self.head >= self.values.Count();
+            }
+
+            public fn Enqueue(value: T) {
+                self.values.Push(value);
+            }
+
+            public fn Push(value: T) {
+                self.Enqueue(value);
+            }
+
+            public fn Peek() -> T {
+                if (self.Empty()) {
+                    std::Panic("Queue<T>.Peek cannot read an empty queue.");
+                }
+                return self.values[self.head];
+            }
+
+            public fn Dequeue() -> T {
+                if (self.Empty()) {
+                    std::Panic("Queue<T>.Dequeue cannot read an empty queue.");
+                }
+
+                let value = self.values[self.head];
+                self.head += 1usize;
+                if (self.head >= 32usize and self.head * 2usize >= self.values.Count()) {
+                    self.values = self.values.Slice(self.head);
+                    self.head = 0usize;
+                }
+                return value;
+            }
+
+            public fn Pop() -> T {
+                return self.Dequeue();
+            }
+
+            public fn TryDequeue(value: ref T) -> bool {
+                if (self.Empty()) {
+                    return false;
+                }
+                value = self.Dequeue();
+                return true;
+            }
+
+            public fn Clear() {
+                self.values.Clear();
+                self.head = 0usize;
+            }
+
+            public fn ToArray() -> T[] {
+                return self.values.Slice(self.head);
+            }
+        }
+    }
+
+    realm queue {
+        type Queue<T> = collections::Queue<T>;
+    }
+
+    type Queue<T> = collections::Queue<T>;
+}

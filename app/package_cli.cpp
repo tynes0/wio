@@ -1,11 +1,11 @@
 #include "package_cli.h"
+#include "process_cli.h"
 
 #include <argonaut.h>
 
 #include <cctype>
 #include <chrono>
 #include <cstdlib>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -15,7 +15,6 @@
 #include <sstream>
 #include <string>
 #include <string_view>
-#include <unordered_set>
 #include <vector>
 
 #if defined(_WIN32)
@@ -26,153 +25,6 @@ namespace wio::tooling::package
 {
     namespace
     {
-        std::string quoteCommandPart(const std::string& value)
-        {
-            if (value.empty())
-                return "\"\"";
-
-            bool needsQuotes = false;
-            for (const char ch : value)
-            {
-                if (std::isspace(static_cast<unsigned char>(ch)) != 0 || ch == '"' || ch == '&' || ch == '(' || ch == ')' || ch == ';')
-                {
-                    needsQuotes = true;
-                    break;
-                }
-            }
-
-            if (!needsQuotes)
-                return value;
-
-            std::string result;
-            result.reserve(value.size() + 2);
-            result.push_back('"');
-            for (const char ch : value)
-            {
-                if (ch == '"')
-                    result += "\\\"";
-                else
-                    result.push_back(ch);
-            }
-            result.push_back('"');
-            return result;
-        }
-
-        std::string joinCommand(const std::vector<std::string>& parts)
-        {
-            std::ostringstream stream;
-            for (size_t i = 0; i < parts.size(); ++i)
-            {
-                if (i > 0)
-                    stream << ' ';
-                stream << quoteCommandPart(parts[i]);
-            }
-            return stream.str();
-        }
-
-        int runShellCommand(const std::vector<std::string>& parts,
-                            const std::optional<std::filesystem::path>& workingDirectory = std::nullopt)
-        {
-            const std::string command = joinCommand(parts);
-
-#if defined(_WIN32)
-            LPCH environmentStrings = GetEnvironmentStringsA();
-            if (environmentStrings == nullptr)
-                return EXIT_FAILURE;
-
-            std::unordered_set<std::string> seenKeys;
-            std::vector<std::string> sanitizedEntries;
-            std::string mergedPath;
-            std::optional<size_t> pathEntryIndex;
-
-            for (LPCSTR cursor = environmentStrings; *cursor != '\0'; cursor += std::strlen(cursor) + 1)
-            {
-                const std::string_view entry(cursor);
-                const size_t equalsIndex = entry.find('=');
-                if (equalsIndex == std::string_view::npos || equalsIndex == 0)
-                {
-                    sanitizedEntries.emplace_back(entry);
-                    continue;
-                }
-
-                std::string normalizedKey(entry.substr(0, equalsIndex));
-                for (char& ch : normalizedKey)
-                    ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-
-                if (normalizedKey == "path")
-                {
-                    if (!pathEntryIndex.has_value())
-                        pathEntryIndex = sanitizedEntries.size();
-                    if (!mergedPath.empty() && mergedPath.back() != ';' &&
-                        equalsIndex + 1 < entry.size() && entry[equalsIndex + 1] != ';')
-                        mergedPath.push_back(';');
-                    mergedPath.append(entry.substr(equalsIndex + 1));
-                    continue;
-                }
-
-                if (!seenKeys.insert(normalizedKey).second)
-                    continue;
-
-                sanitizedEntries.emplace_back(entry);
-            }
-
-            if (!mergedPath.empty() && pathEntryIndex.has_value())
-                sanitizedEntries.insert(sanitizedEntries.begin() + static_cast<std::ptrdiff_t>(*pathEntryIndex), "Path=" + mergedPath);
-
-            FreeEnvironmentStringsA(environmentStrings);
-
-            std::vector<char> environmentBlock;
-            for (const std::string& entry : sanitizedEntries)
-            {
-                environmentBlock.insert(environmentBlock.end(), entry.begin(), entry.end());
-                environmentBlock.push_back('\0');
-            }
-            environmentBlock.push_back('\0');
-
-            std::vector<char> commandLine(command.begin(), command.end());
-            commandLine.push_back('\0');
-
-            STARTUPINFOA startupInfo{};
-            startupInfo.cb = sizeof(startupInfo);
-
-            PROCESS_INFORMATION processInfo{};
-            const BOOL created = CreateProcessA(
-                nullptr,
-                commandLine.data(),
-                nullptr,
-                nullptr,
-                FALSE,
-                0,
-                environmentBlock.data(),
-                workingDirectory.has_value() ? workingDirectory->string().c_str() : nullptr,
-                &startupInfo,
-                &processInfo
-            );
-
-            if (created == FALSE)
-                return EXIT_FAILURE;
-
-            WaitForSingleObject(processInfo.hProcess, INFINITE);
-
-            DWORD exitCode = EXIT_FAILURE;
-            GetExitCodeProcess(processInfo.hProcess, &exitCode);
-
-            CloseHandle(processInfo.hThread);
-            CloseHandle(processInfo.hProcess);
-            return static_cast<int>(exitCode);
-#else
-            if (workingDirectory.has_value())
-            {
-                const auto previous = std::filesystem::current_path();
-                std::filesystem::current_path(*workingDirectory);
-                const int result = std::system(command.c_str());
-                std::filesystem::current_path(previous);
-                return result;
-            }
-            return std::system(command.c_str());
-#endif
-        }
-
         std::optional<std::filesystem::path> tryFindRepoRoot()
         {
             std::error_code ec;
@@ -479,6 +331,7 @@ namespace wio::tooling::package
                         .SetDescription("Delete any previous package directory and archive before staging a fresh one.")
                 )
                 .AutoHelp()
+                .AutoVersion()
                 .SetVersion(WIO_VERSION);
 
             return parser;
@@ -1051,8 +904,9 @@ finally {
                 << "## 4. Create and run a project\n\n"
                 << "```powershell\n"
                 << "wio project new MyGame --output-dir C:\\Projects --template wio-app\n"
-                << "wio project build --project C:\\Projects\\MyGame\n"
-                << "wio project run --project C:\\Projects\\MyGame\n"
+                << "cd C:\\Projects\\MyGame\n"
+                << "wio project build\n"
+                << "wio project run -- \"two words\" --verbose\n"
                 << "```\n\n"
                 << "## 5. Useful references\n\n"
                 << "- `README.md`\n"
@@ -1152,10 +1006,10 @@ finally {
                     configureCommand.push_back(generator);
                 }
 
-                if (const int configureResult = runShellCommand(configureCommand, *repoRoot); configureResult != 0)
+                if (const int configureResult = process::Run(configureCommand, *repoRoot); configureResult != 0)
                     return configureResult;
 
-                if (const int buildResult = runShellCommand({
+                if (const int buildResult = process::Run({
                         "cmake",
                         "--build", buildDir.string(),
                         "--target", "wio_dist",
@@ -1262,7 +1116,7 @@ finally {
                             throw std::runtime_error("Could not remove previous archive: " + archivePath.string());
                     }
 
-                    if (const int zipResult = runShellCommand({
+                    if (const int zipResult = process::Run({
                             "cmake",
                             "-E",
                             "tar",
@@ -1307,7 +1161,7 @@ finally {
                             visualInstallerCommand.push_back(innoCompiler);
                         }
 
-                        const int visualInstallerResult = runShellCommand(visualInstallerCommand, *repoRoot);
+                        const int visualInstallerResult = process::Run(visualInstallerCommand, *repoRoot);
                         if (visualInstallerResult != 0)
                         {
                             if (explicitVisualInstaller)

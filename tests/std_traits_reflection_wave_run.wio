@@ -1,0 +1,74 @@
+use std::assert as assert;
+use std::console as console;
+use std::reflect as reflect;
+use std::traits as traits;
+
+interface Serializable<T> {
+}
+
+@From(Serializable<Profile>)
+object Profile {
+    private id: i32;
+    public name: string;
+
+    public fn OnConstruct(id: i32, name: string) {
+        self.id = id;
+        self.name = name;
+    }
+
+    public fn Id() -> i32 {
+        return self.id;
+    }
+}
+
+component Point {
+    public x: i32;
+    public y: i32;
+}
+
+object GenericBox<T> {
+    public value: T;
+
+    public fn OnConstruct(value: T) {
+        self.value = value;
+    }
+}
+
+@Apply(Serializable<T>)
+fn KeepSerializable<T>(value: T) -> T {
+    return value;
+}
+
+@Apply(traits::IsFloating<T>)
+fn TwiceFloat<T>(value: T) -> T {
+    return value + value;
+}
+
+fn Entry() -> i32 {
+    let profile = KeepSerializable<Profile>(Profile(7, "Ada"));
+    let profileInfo = reflect::Describe<Profile>();
+    let pointInfo = reflect::Describe<Point>();
+    let genericInfo = reflect::Describe<GenericBox<i32> >();
+
+    assert::ExpectEqual(profile.Id(), 7, "user-defined trait constraint failed");
+    assert::ExpectEqual(TwiceFloat(1.25f64), 2.5f64, "built-in floating trait failed");
+    assert::ExpectTrue(traits::IsFloatingType<f64>(), "floating trait query failed");
+    assert::ExpectTrue(traits::IsUnsignedType<byte>(), "byte unsigned trait query failed");
+    assert::ExpectTrue(traits::IsArrayType<i32[]>(), "array trait query failed");
+    assert::ExpectTrue(traits::IsObjectType<Profile>(), "object trait query failed");
+    assert::ExpectTrue(traits::IsComponentType<Point>(), "component trait query failed");
+    assert::ExpectTrue(traits::IsSameType<byte, u8>(), "byte must be a semantic u8 alias");
+    assert::ExpectEqual(profileInfo.name, "Profile", "object reflection name failed");
+    assert::ExpectTrue(profileInfo.kind == reflect::Kind::object_type, "object reflection kind failed");
+    assert::ExpectEqual(profileInfo.fields.Count(), 2usize, "object field reflection failed");
+    assert::ExpectEqual(profileInfo.fields[0usize].name, "id", "object field name failed");
+    assert::ExpectEqual(profileInfo.fields[0usize].access, "private", "object access reflection failed");
+    assert::ExpectTrue(profileInfo.methods.Count() >= 2usize, "object method reflection failed");
+    assert::ExpectTrue(pointInfo.kind == reflect::Kind::component_type, "component reflection kind failed");
+    assert::ExpectEqual(pointInfo.fields.Count(), 2usize, "component field reflection failed");
+    assert::ExpectTrue(genericInfo.kind == reflect::Kind::object_type, "generic object reflection kind failed");
+    assert::ExpectEqual(genericInfo.fields.Count(), 1usize, "generic object field reflection failed");
+
+    console::Print("std-traits-reflection-wave-ok");
+    return 0;
+}

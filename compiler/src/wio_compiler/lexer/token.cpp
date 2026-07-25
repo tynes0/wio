@@ -59,6 +59,7 @@ namespace wio
        case TokenType::kwIsize: return "kwIsize";
        case TokenType::kwUsize: return "kwUsize";
        case TokenType::kwByte: return "kwByte";
+       case TokenType::kwBit: return "kwBit";
        case TokenType::kwBool: return "kwBool";
        case TokenType::kwChar: return "kwChar";
        case TokenType::kwUchar: return "kwUchar";
@@ -329,6 +330,7 @@ namespace wio
        case TokenType::kwIsize: 
        case TokenType::kwUsize: 
        case TokenType::kwByte:  
+       case TokenType::kwBit:
        case TokenType::kwBool:  
        case TokenType::kwChar:  
        case TokenType::kwUchar: 

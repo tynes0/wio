@@ -1,0 +1,55 @@
+realm std {
+    realm tuple {
+        const SecondIndex: usize = 1usize;
+
+        object Tuple<Args...> {
+            public pack data: Args...;
+
+            public fn OnConstruct(args: Args...) {
+                self.data = args.array;
+            }
+
+            public fn Count() -> usize {
+                return self.data.size;
+            }
+
+            public fn Empty() -> bool {
+                return self.data.size == 0usize;
+            }
+
+            public fn First() -> Args[0usize] {
+                return self.data[0usize];
+            }
+
+            public fn Second() -> Args[SecondIndex] {
+                return self.data[SecondIndex];
+            }
+
+            public fn Last() -> Args[Args.size - 1usize] {
+                return self.data[self.data.size - 1usize];
+            }
+
+            public fn Set(args: Args...) {
+                self.data = args.array;
+            }
+
+            public fn ReplaceFirst(value: Args[0usize]) {
+                self.data[0usize] = value;
+            }
+
+            public fn ReplaceSecond(value: Args[SecondIndex]) {
+                self.data[SecondIndex] = value;
+            }
+
+            public fn ReplaceLast(value: Args[Args.size - 1usize]) {
+                self.data[self.data.size - 1usize] = value;
+            }
+        }
+
+        fn Make<Args...>(args: Args...) -> Tuple<Args...> {
+            return Tuple<Args...>(args...);
+        }
+    }
+
+    type Tuple<Args...> = tuple::Tuple<Args...>;
+}

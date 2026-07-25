@@ -113,7 +113,11 @@ wio file check .\playground\main.wio
 
 ```powershell
 wio file run .\playground\main.wio
+wio file run .\playground\main.wio -- "two words" --verbose
 ```
+
+The first `--` ends Wio/compiler options. Everything after it is delivered to
+`Entry(args: string[])` as an application argument.
 
 ### 2.3 Inspect Tokens Or AST
 
@@ -158,19 +162,31 @@ Useful templates currently include:
 
 ```powershell
 wio project describe --project C:\Projects\MyGame
+cd C:\Projects\MyGame
+wio project describe
 ```
 
 ### 3.2 Build The Project
 
 ```powershell
 wio project build --project C:\Projects\MyGame
+cd C:\Projects\MyGame
+wio project build
 ```
 
 ### 3.3 Run The Project
 
 ```powershell
 wio project run --project C:\Projects\MyGame
+cd C:\Projects\MyGame
+wio project run
+wio run -- "two words" --verbose
 ```
+
+Inside a project, `describe`, `build`, and `run` need no `--project` argument.
+Wio searches the current folder and then its ancestors for the manifest, so
+these commands also work from nested source folders. `wio run` is a shorthand
+for `wio project run`; both preserve the application's exit code.
 
 The stable user-facing project flow is:
 

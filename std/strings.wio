@@ -1,5 +1,47 @@
 realm std {
     realm strings {
+        use @CppHeader("std_text.h");
+
+        @Native
+        @CppName(wio::runtime::std_text::StringIsAscii)
+        fn IsAscii(value: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_text::StringEqualsIgnoreCase)
+        fn EqualsIgnoreCase(left: string, right: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_text::StringCompare)
+        fn Compare(left: string, right: string) -> i32;
+
+        @Native
+        @CppName(wio::runtime::std_text::StringCompareIgnoreCase)
+        fn CompareIgnoreCase(left: string, right: string) -> i32;
+
+        @Native
+        @CppName(wio::runtime::std_text::StringContainsIgnoreCase)
+        fn ContainsIgnoreCase(value: string, target: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_text::StringStartsWithIgnoreCase)
+        fn StartsWithIgnoreCase(value: string, prefix: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_text::StringEndsWithIgnoreCase)
+        fn EndsWithIgnoreCase(value: string, suffix: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_text::StringCountOccurrences)
+        fn CountOccurrences(value: string, needle: string) -> usize;
+
+        @Native
+        @CppName(wio::runtime::std_text::StringSplitWhitespace)
+        fn SplitWhitespace(value: string) -> string[];
+
+        @Native
+        @CppName(wio::runtime::std_text::StringCollapseWhitespace)
+        fn CollapseWhitespace(value: string) -> string;
+
         fn Count(value: string) -> usize {
             return value.Count();
         }
@@ -91,6 +133,66 @@ realm std {
             return value.Right(count);
         }
 
+        fn RemovePrefix(value: string, prefix: string) -> string {
+            if (value.StartsWith(prefix)) {
+                return value.Skip(prefix.Count());
+            }
+            return value;
+        }
+
+        fn RemoveSuffix(value: string, suffix: string) -> string {
+            if (value.EndsWith(suffix)) {
+                return value.Take(value.Count() - suffix.Count());
+            }
+            return value;
+        }
+
+        fn EnsurePrefix(value: string, prefix: string) -> string {
+            if (value.StartsWith(prefix)) {
+                return value;
+            }
+            return prefix + value;
+        }
+
+        fn EnsureSuffix(value: string, suffix: string) -> string {
+            if (value.EndsWith(suffix)) {
+                return value;
+            }
+            return value + suffix;
+        }
+
+        fn BeforeFirst(value: string, separator: string) -> string {
+            let index = value.IndexOf(separator);
+            if (index < 0isize) {
+                return value;
+            }
+            return value.Take(index fit usize);
+        }
+
+        fn AfterFirst(value: string, separator: string) -> string {
+            let index = value.IndexOf(separator);
+            if (index < 0isize) {
+                return "";
+            }
+            return value.Skip((index fit usize) + separator.Count());
+        }
+
+        fn BeforeLast(value: string, separator: string) -> string {
+            let index = value.LastIndexOf(separator);
+            if (index < 0isize) {
+                return value;
+            }
+            return value.Take(index fit usize);
+        }
+
+        fn AfterLast(value: string, separator: string) -> string {
+            let index = value.LastIndexOf(separator);
+            if (index < 0isize) {
+                return "";
+            }
+            return value.Skip((index fit usize) + separator.Count());
+        }
+
         fn Trim(value: string) -> string {
             return value.Trim();
         }
@@ -109,6 +211,37 @@ realm std {
 
         fn ToUpper(value: string) -> string {
             return value.ToUpper();
+        }
+
+        fn Capitalize(value: string) -> string {
+            if (value.Empty()) {
+                return value;
+            }
+            return value.Take(1usize).ToUpper() + value.Skip(1usize);
+        }
+
+        fn Uncapitalize(value: string) -> string {
+            if (value.Empty()) {
+                return value;
+            }
+            return value.Take(1usize).ToLower() + value.Skip(1usize);
+        }
+
+        fn Truncate(value: string, maxLength: usize) -> string {
+            if (value.Count() <= maxLength) {
+                return value;
+            }
+            return value.Take(maxLength);
+        }
+
+        fn Truncate(value: string, maxLength: usize, suffix: string) -> string {
+            if (value.Count() <= maxLength) {
+                return value;
+            }
+            if (suffix.Count() >= maxLength) {
+                return suffix.Take(maxLength);
+            }
+            return value.Take(maxLength - suffix.Count()) + suffix;
         }
 
         fn Replace(value: string, needle: string, replacement: string) -> string {

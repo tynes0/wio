@@ -72,6 +72,7 @@ wio project new MyGame --output-dir C:\Projects --template wio-app
 wio project describe --project C:\Projects\MyGame
 wio project build --project C:\Projects\MyGame
 wio project run --project C:\Projects\MyGame
+wio run C:\Projects\MyGame -- "two words" --verbose
 wio bind import --header .\tests\native\binding_import_smoke.h --realm binding_import_smoke --output .\build\generated\binding_import_smoke.wio
 wio bind new --manifest .\tests\native\binding_manifest_smoke.json --output .\build\generated\binding_manifest_smoke.wio
 wio env print --wio-root . --shell powershell --add-path
@@ -129,10 +130,24 @@ wio project new MyGame --output-dir C:\Projects --template hybrid-module
 Then inspect, build, or run it directly:
 
 ```powershell
-wio project describe --project C:\Projects\MyGame
-wio project build --project C:\Projects\MyGame
-wio project run --project C:\Projects\MyGame
+cd C:\Projects\MyGame
+wio project describe
+wio project build
+wio project run
+wio run -- "two words" --verbose
 ```
+
+When a project path is omitted, Wio searches the current directory and its
+ancestors for a manifest. A project directory or manifest file may also be
+given as the positional `PROJECT` argument; `--project` remains available for
+explicit scripts.
+
+For `project run`, arguments are appended in deterministic order: manifest
+`[run].args`, repeated `--arg` values, then values after `--`. Use
+`--no-manifest-args` to suppress manifest defaults, `--no-build` to launch an
+existing output, `--cwd` to override the run directory, and `--print-command`
+to inspect the resolved invocation. Wio returns the child executable's exit
+code unchanged.
 
 The older compatibility helper still exists:
 

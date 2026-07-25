@@ -2,11 +2,13 @@
 
 #include "exception.h"
 #include "enum_reflection.h"
+#include "std_convert.h"
 
 #include <algorithm>
 #include <array>
 #include <cctype>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <iterator>
 #include <map>
@@ -695,13 +697,77 @@ namespace wio::intrinsics
     template <typename TContainer>
     inline void ArraySort(TContainer& container)
     {
+        if (container.size() < 2u || std::is_sorted(container.begin(), container.end()))
+            return;
+
+        if (std::is_sorted(container.begin(), container.end(), [](const auto& left, const auto& right)
+            {
+                return right < left;
+            }))
+        {
+            std::reverse(container.begin(), container.end());
+            return;
+        }
+
+        if (container.size() <= 32u)
+        {
+            for (auto current = std::next(container.begin()); current != container.end(); ++current)
+            {
+                auto value = std::move(*current);
+                auto position = current;
+                while (position != container.begin() && value < *std::prev(position))
+                {
+                    *position = std::move(*std::prev(position));
+                    --position;
+                }
+                *position = std::move(value);
+            }
+            return;
+        }
+
+        using Value = typename TContainer::value_type;
+        if constexpr (std::is_integral_v<Value> && !std::is_same_v<std::remove_cv_t<Value>, bool>)
+        {
+            const auto [minimumIt, maximumIt] = std::minmax_element(container.begin(), container.end());
+            using UnsignedValue = std::make_unsigned_t<Value>;
+            const UnsignedValue minimum = static_cast<UnsignedValue>(*minimumIt);
+            const UnsignedValue span =
+                static_cast<UnsignedValue>(*maximumIt) - minimum;
+            const std::size_t densityLimit = container.size() * 4u;
+            const std::size_t maximumRange = std::min<std::size_t>(densityLimit, 1048576u);
+            if (static_cast<std::uintmax_t>(span) < static_cast<std::uintmax_t>(maximumRange))
+            {
+                const std::size_t range = static_cast<std::size_t>(span) + 1u;
+                std::vector<std::size_t> counts(range, 0u);
+                for (const auto value : container)
+                {
+                    const auto index = static_cast<std::size_t>(
+                        static_cast<UnsignedValue>(value) - minimum);
+                    ++counts[index];
+                }
+
+                auto output = container.begin();
+                for (std::size_t index = 0; index < counts.size(); ++index)
+                {
+                    const Value value = static_cast<Value>(
+                        *minimumIt + static_cast<Value>(index));
+                    for (std::size_t count = 0; count < counts[index]; ++count)
+                    {
+                        *output = value;
+                        ++output;
+                    }
+                }
+                return;
+            }
+        }
+
         std::sort(container.begin(), container.end());
     }
 
     template <typename TContainer>
     inline TContainer ArraySorted(TContainer container)
     {
-        std::sort(container.begin(), container.end());
+        ArraySort(container);
         return container;
     }
 
@@ -1148,6 +1214,71 @@ namespace wio::intrinsics
     {
         std::reverse(value.begin(), value.end());
         return value;
+    }
+
+    inline std::int8_t StringToI8(const std::string& value, const int base = 10)
+    {
+        return runtime::std_convert::ParseI8OrThrow(value, base);
+    }
+
+    inline std::int16_t StringToI16(const std::string& value, const int base = 10)
+    {
+        return runtime::std_convert::ParseI16OrThrow(value, base);
+    }
+
+    inline std::int32_t StringToI32(const std::string& value, const int base = 10)
+    {
+        return runtime::std_convert::ParseI32OrThrow(value, base);
+    }
+
+    inline std::int64_t StringToI64(const std::string& value, const int base = 10)
+    {
+        return runtime::std_convert::ParseI64OrThrow(value, base);
+    }
+
+    inline std::uint8_t StringToU8(const std::string& value, const int base = 10)
+    {
+        return runtime::std_convert::ParseU8OrThrow(value, base);
+    }
+
+    inline std::uint16_t StringToU16(const std::string& value, const int base = 10)
+    {
+        return runtime::std_convert::ParseU16OrThrow(value, base);
+    }
+
+    inline std::uint32_t StringToU32(const std::string& value, const int base = 10)
+    {
+        return runtime::std_convert::ParseU32OrThrow(value, base);
+    }
+
+    inline std::uint64_t StringToU64(const std::string& value, const int base = 10)
+    {
+        return runtime::std_convert::ParseU64OrThrow(value, base);
+    }
+
+    inline std::ptrdiff_t StringToISize(const std::string& value, const int base = 10)
+    {
+        return runtime::std_convert::ParseISizeOrThrow(value, base);
+    }
+
+    inline std::size_t StringToUSize(const std::string& value, const int base = 10)
+    {
+        return runtime::std_convert::ParseUSizeOrThrow(value, base);
+    }
+
+    inline float StringToF32(const std::string& value)
+    {
+        return runtime::std_convert::ParseF32OrThrow(value);
+    }
+
+    inline double StringToF64(const std::string& value)
+    {
+        return runtime::std_convert::ParseF64OrThrow(value);
+    }
+
+    inline bool StringToBool(const std::string& value)
+    {
+        return runtime::std_convert::ParseBoolOrThrow(value);
     }
 
     inline void StringAppend(std::string& value, const std::string& suffix)

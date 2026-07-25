@@ -1,0 +1,99 @@
+use std::result as result;
+
+realm std {
+    realm span {
+        // A Span is a checked range token. The borrowed array is passed separately
+        // because Wio view references intentionally cannot escape into stored fields.
+        component Span {
+            start: usize;
+            count: usize;
+        }
+
+        fn End(source: Span) -> usize {
+            return source.start + source.count;
+        }
+
+        fn Empty(source: Span) -> bool {
+            return source.count == 0usize;
+        }
+
+        fn Full<T>(values: view T[]) -> Span {
+            mut result = Span();
+            result.start = 0usize;
+            result.count = values.Count();
+            return result;
+        }
+
+        fn Make<T>(values: view T[], start: usize, count: usize) -> Span {
+            mut result = Span();
+            if (start >= values.Count()) {
+                result.start = values.Count();
+                result.count = 0usize;
+                return result;
+            }
+            result.start = start;
+            let available = values.Count() - start;
+            result.count = count;
+            if (result.count > available) {
+                result.count = available;
+            }
+            return result;
+        }
+
+        fn Slice(source: Span, start: usize, count: usize) -> Span {
+            mut result = Span();
+            if (start >= source.count) {
+                result.start = End(source);
+                result.count = 0usize;
+                return result;
+            }
+            result.start = source.start + start;
+            let available = source.count - start;
+            result.count = count;
+            if (result.count > available) {
+                result.count = available;
+            }
+            return result;
+        }
+
+        fn At<T>(values: view T[], source: Span, index: usize) -> T {
+            if (index >= source.count or source.start + index >= values.Count()) {
+                std::Panic("span::At index is out of range.");
+            }
+            return values[source.start + index];
+        }
+
+        fn TryAt<T>(values: view T[], source: Span, index: usize, value: ref T) -> bool {
+            if (index >= source.count or source.start + index >= values.Count()) {
+                return false;
+            }
+            value = values[source.start + index];
+            return true;
+        }
+
+        fn ToArray<T>(values: view T[], source: Span) -> T[] {
+            return values.Slice(source.start, source.count);
+        }
+
+        fn Contains<T>(values: view T[], source: Span, target: T) -> bool {
+            mut index = 0usize;
+            while (index < source.count and source.start + index < values.Count()) {
+                if (values[source.start + index] == target) {
+                    return true;
+                }
+                index += 1usize;
+            }
+            return false;
+        }
+
+        fn Fill<T>(values: ref T[], source: Span, value: T) {
+            mut index = 0usize;
+            while (index < source.count and source.start + index < values.Count()) {
+                values[source.start + index] = value;
+                index += 1usize;
+            }
+        }
+    }
+
+    type Span = span::Span;
+}

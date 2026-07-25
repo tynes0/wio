@@ -1,0 +1,214 @@
+use std::result as result;
+
+realm std {
+    realm regex {
+        use @CppHeader("std_regex.h");
+
+        @Native
+        @Type(u8)
+        @CppName(wio::runtime::std_regex::RegexError)
+        enum Error {
+            none = 0u8,
+            invalid_pattern = 1u8,
+            runtime_error = 2u8
+        };
+
+        component Match {
+            found: bool;
+            index: usize;
+            length: usize;
+            value: string;
+            groups: string[];
+        }
+
+        @Native
+        @CppName(wio::runtime::std_regex::ToString)
+        fn ErrorName(error: Error) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_regex::ErrorValue)
+        fn ErrorCode(error: Error) -> i32;
+
+        @Native
+        @CppName(wio::runtime::std_regex::TryIsMatch)
+        fn TryIsMatchNative(
+            input: string,
+            pattern: string,
+            ignoreCase: bool,
+            matched: ref bool,
+            error: ref Error,
+            message: ref string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_regex::TryFind)
+        fn TryFindNative(
+            input: string,
+            pattern: string,
+            ignoreCase: bool,
+            found: ref bool,
+            index: ref usize,
+            length: ref usize,
+            value: ref string,
+            groups: ref string[],
+            error: ref Error,
+            message: ref string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_regex::TryFindAll)
+        fn TryFindAllNative(
+            input: string,
+            pattern: string,
+            ignoreCase: bool,
+            matches: ref string[],
+            error: ref Error,
+            message: ref string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_regex::TryReplace)
+        fn TryReplaceNative(
+            input: string,
+            pattern: string,
+            replacement: string,
+            ignoreCase: bool,
+            output: ref string,
+            error: ref Error,
+            message: ref string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_regex::TrySplit)
+        fn TrySplitNative(
+            input: string,
+            pattern: string,
+            ignoreCase: bool,
+            output: ref string[],
+            error: ref Error,
+            message: ref string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_regex::Escape)
+        fn Escape(value: string) -> string;
+
+        fn MakeError(error: Error, message: string) -> std::ResultError {
+            mut finalMessage = message;
+            if (finalMessage == "") {
+                finalMessage = "regex error " + ErrorName(error);
+            }
+            return std::MakeResultError(std::ResultDomain::runtime, ErrorCode(error), finalMessage);
+        }
+
+        fn IsMatch(input: string, pattern: string, ignoreCase: bool) -> std::Result<bool> {
+            mut matched = false;
+            mut error = Error::none;
+            mut message = "";
+            if (TryIsMatchNative(input, pattern, ignoreCase, ref matched, ref error, ref message)) {
+                return std::Ok<bool>(matched);
+            }
+            return std::Err<bool>(MakeError(error, message));
+        }
+
+        fn IsMatch(input: string, pattern: string) -> std::Result<bool> {
+            return IsMatch(input, pattern, false);
+        }
+
+        fn Find(input: string, pattern: string, ignoreCase: bool) -> std::Result<Match> {
+            mut result = Match();
+            mut error = Error::none;
+            mut message = "";
+            if (TryFindNative(
+                    input,
+                    pattern,
+                    ignoreCase,
+                    ref result.found,
+                    ref result.index,
+                    ref result.length,
+                    ref result.value,
+                    ref result.groups,
+                    ref error,
+                    ref message)) {
+                return std::Ok<Match>(result);
+            }
+            return std::Err<Match>(MakeError(error, message));
+        }
+
+        fn Find(input: string, pattern: string) -> std::Result<Match> {
+            return Find(input, pattern, false);
+        }
+
+        fn FindAll(input: string, pattern: string, ignoreCase: bool) -> std::Result<string[]> {
+            mut matches: string[] = [];
+            mut error = Error::none;
+            mut message = "";
+            if (TryFindAllNative(input, pattern, ignoreCase, ref matches, ref error, ref message)) {
+                return std::Ok<string[]>(matches);
+            }
+            return std::Err<string[]>(MakeError(error, message));
+        }
+
+        fn FindAll(input: string, pattern: string) -> std::Result<string[]> {
+            return FindAll(input, pattern, false);
+        }
+
+        fn Replace(input: string, pattern: string, replacement: string, ignoreCase: bool) -> std::Result<string> {
+            mut output = "";
+            mut error = Error::none;
+            mut message = "";
+            if (TryReplaceNative(input, pattern, replacement, ignoreCase, ref output, ref error, ref message)) {
+                return std::Ok<string>(output);
+            }
+            return std::Err<string>(MakeError(error, message));
+        }
+
+        fn Replace(input: string, pattern: string, replacement: string) -> std::Result<string> {
+            return Replace(input, pattern, replacement, false);
+        }
+
+        fn Split(input: string, pattern: string, ignoreCase: bool) -> std::Result<string[]> {
+            mut output: string[] = [];
+            mut error = Error::none;
+            mut message = "";
+            if (TrySplitNative(input, pattern, ignoreCase, ref output, ref error, ref message)) {
+                return std::Ok<string[]>(output);
+            }
+            return std::Err<string[]>(MakeError(error, message));
+        }
+
+        fn Split(input: string, pattern: string) -> std::Result<string[]> {
+            return Split(input, pattern, false);
+        }
+
+        object Regex {
+            private pattern: string;
+            private ignoreCase: bool;
+
+            public fn OnConstruct(pattern: string) {
+                self.pattern = pattern;
+                self.ignoreCase = false;
+            }
+
+            public fn OnConstruct(pattern: string, ignoreCase: bool) {
+                self.pattern = pattern;
+                self.ignoreCase = ignoreCase;
+            }
+
+            public fn IsMatch(input: string) -> std::Result<bool> {
+                return regex::IsMatch(input, self.pattern, self.ignoreCase);
+            }
+
+            public fn Find(input: string) -> std::Result<Match> {
+                return regex::Find(input, self.pattern, self.ignoreCase);
+            }
+
+            public fn FindAll(input: string) -> std::Result<string[]> {
+                return regex::FindAll(input, self.pattern, self.ignoreCase);
+            }
+
+            public fn Replace(input: string, replacement: string) -> std::Result<string> {
+                return regex::Replace(input, self.pattern, replacement, self.ignoreCase);
+            }
+
+            public fn Split(input: string) -> std::Result<string[]> {
+                return regex::Split(input, self.pattern, self.ignoreCase);
+            }
+        }
+    }
+}

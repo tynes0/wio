@@ -1,0 +1,93 @@
+use std::console as console;
+use std::convert as convert;
+
+@Type(i32)
+enum ConvertMode {
+    fast = 7
+};
+
+@Type(u8)
+enum TinyMode {
+    ready = 7u8
+};
+
+object Printable {
+    public fn ToString() -> string {
+        return "printable";
+    }
+}
+
+fn Stringify<T>(value: T) -> string {
+    return convert::ToString<T>(value);
+}
+
+fn Entry() -> i32 {
+    let minValue = " -2147483648 ".ToI32();
+    let hexValue = "0x2A".ToI32(0);
+    let binaryValue = "0b101010".ToU64(0);
+    let floatValue = " 3.5 ".ToF64();
+    let boolValue = "YES".ToBool();
+
+    mut parsed = 0u16;
+    let tried = convert::TryToU16("65535", ref parsed);
+    let rejected = convert::ParseI8("128");
+    let trailing = convert::ParseI32("42x");
+    let invalidBase = convert::ParseI32("42", 1);
+
+    let genericInt = Stringify<i32>(42);
+    let genericBool = Stringify<bool>(false);
+    let genericText = Stringify<string>("wio");
+    let upperHex = convert::ToHexUpper(48879u64);
+    let binary = convert::ToBinary(10i64);
+    let enumText = Stringify<ConvertMode>(ConvertMode::fast);
+    let tinyEnumText = Stringify<TinyMode>(TinyMode::ready);
+    let numbers: i32[] = [1, 2, 3];
+    let arrayText = Stringify<i32[]>(numbers);
+    let answer: Dict<string, i32> = { "answer": 42 };
+    let mapText = convert::ToString(answer);
+    let printableText = Stringify<Printable>(Printable());
+    let rootText = std::ToString<bool>(true);
+    let genericSurface =
+        enumText == "7" and
+        tinyEnumText == "7" and
+        arrayText == "[1, 2, 3]" and
+        mapText == "{answer: 42}" and
+        printableText == "printable" and
+        rootText == "true";
+    let memberSurface =
+        "1".ToI8() == 1i8 and
+        "2".ToI16() == 2i16 and
+        "3".ToI32() == 3 and
+        "4".ToI64() == 4i64 and
+        "5".ToU8() == 5u8 and
+        "6".ToU16() == 6u16 and
+        "7".ToU32() == 7u32 and
+        "8".ToU64() == 8u64 and
+        "9".ToISize() == 9isize and
+        "10".ToUSize() == 10usize and
+        "1.5".ToF32() == 1.5f and
+        "2.5".ToF64() == 2.5f64 and
+        "off".ToBool() == false;
+    let boundarySurface =
+        convert::ParseI8("-128").ValueOr(0i8) == -128i8 and
+        convert::ParseI16("-32768").ValueOr(0i16) == -32768i16 and
+        convert::ParseI64("-9223372036854775808").ValueOr(0i64) == -9223372036854775808i64 and
+        convert::ParseU8("255").ValueOr(0u8) == 255u8 and
+        convert::ParseU32("4294967295").ValueOr(0u32) == 4294967295u32 and
+        convert::ParseU64("18446744073709551615").ValueOr(0u64) == 18446744073709551615u64 and
+        convert::ParseISize("11").ValueOr(0isize) == 11isize and
+        convert::ParseUSize("12").ValueOr(0usize) == 12usize and
+        convert::ParseF32("1.25").IsOk() and
+        convert::ParseF64("1e999").IsError() and
+        convert::ParseBool("perhaps").IsError() and
+        convert::ParseU8("-1").IsError() and
+        convert::ParseI32("z", 36).ValueOr(0) == 35;
+
+    console::Print(
+        $"Std convert: ${minValue}/${hexValue}/${binaryValue}/${floatValue}/${boolValue}/" +
+        $"${tried}/${parsed}/${rejected.IsError()}/${trailing.IsError()}/${invalidBase.IsError()}/" +
+        genericInt + "/" + genericBool + "/" + genericText + "/" + upperHex + "/" + binary +
+        $"/${genericSurface}/${memberSurface}/${boundarySurface}"
+    );
+    return 0;
+}

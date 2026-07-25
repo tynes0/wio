@@ -4,6 +4,13 @@ realm std {
             return values.GetOr(0, fallback);
         }
 
+        fn LastOr<T>(values: T[], fallback: T) -> T {
+            if (values.Empty()) {
+                return fallback;
+            }
+            return values.Last();
+        }
+
         fn IsEmpty<T>(values: T[]) -> bool {
             return values.Empty();
         }
@@ -38,6 +45,21 @@ realm std {
             return values.IndexOf(target) fit i32;
         }
 
+        fn SequenceEqual<T>(left: T[], right: T[]) -> bool {
+            if (left.Count() != right.Count()) {
+                return false;
+            }
+
+            mut index = 0usize;
+            while (index < left.Count()) {
+                if (left[index] != right[index]) {
+                    return false;
+                }
+                index += 1usize;
+            }
+            return true;
+        }
+
         fn AnyBy<T>(values: T[], predicate: fn(T) -> bool) -> bool {
             for value in values {
                 if (predicate(value)) {
@@ -69,6 +91,17 @@ realm std {
             return fallback;
         }
 
+        fn FindIndexBy<T>(values: T[], predicate: fn(T) -> bool) -> isize {
+            mut index = 0usize;
+            for value in values {
+                if (predicate(value)) {
+                    return index fit isize;
+                }
+                index += 1usize;
+            }
+            return -1isize;
+        }
+
         fn ForEach<T>(values: T[], action: fn(T)) {
             for value in values {
                 action(value);
@@ -95,6 +128,111 @@ realm std {
                 }
             }
 
+            return result;
+        }
+
+        fn Reject<T>(values: T[], predicate: fn(T) -> bool) -> T[] {
+            mut result: T[] = [];
+            result.Reserve(values.Count());
+            for value in values {
+                if (not predicate(value)) {
+                    result.Push(value);
+                }
+            }
+            return result;
+        }
+
+        fn TakeWhile<T>(values: T[], predicate: fn(T) -> bool) -> T[] {
+            mut result: T[] = [];
+            for value in values {
+                if (not predicate(value)) {
+                    return result;
+                }
+                result.Push(value);
+            }
+            return result;
+        }
+
+        fn SkipWhile<T>(values: T[], predicate: fn(T) -> bool) -> T[] {
+            mut result: T[] = [];
+            mut taking = false;
+            for value in values {
+                if (not taking and not predicate(value)) {
+                    taking = true;
+                }
+                if (taking) {
+                    result.Push(value);
+                }
+            }
+            return result;
+        }
+
+        fn Distinct<T>(values: T[]) -> T[] {
+            mut result: T[] = [];
+            for value in values {
+                if (not result.Contains(value)) {
+                    result.Push(value);
+                }
+            }
+            return result;
+        }
+
+        fn Appended<T>(values: T[], value: T) -> T[] {
+            mut result = values.Clone();
+            result.Push(value);
+            return result;
+        }
+
+        fn Prepended<T>(values: T[], value: T) -> T[] {
+            mut result = values.Clone();
+            result.PushFront(value);
+            return result;
+        }
+
+        fn Repeat<T>(value: T, count: usize) -> T[] {
+            mut result: T[] = [];
+            result.Reserve(count);
+            mut index = 0usize;
+            while (index < count) {
+                result.Push(value);
+                index += 1usize;
+            }
+            return result;
+        }
+
+        fn Flatten<T>(values: T[][]) -> T[] {
+            mut result: T[] = [];
+            for current in values {
+                result.Extend(current);
+            }
+            return result;
+        }
+
+        fn Chunk<T>(values: T[], size: usize) -> T[][] {
+            mut result: T[][] = [];
+            if (size == 0usize) {
+                return result;
+            }
+
+            mut index = 0usize;
+            while (index < values.Count()) {
+                result.Push(values.Slice(index, size));
+                index += size;
+            }
+            return result;
+        }
+
+        fn Windowed<T>(values: T[], size: usize) -> T[][] {
+            mut result: T[][] = [];
+            if (size == 0usize or size > values.Count()) {
+                return result;
+            }
+
+            mut index = 0usize;
+            while (index + size <= values.Count()) {
+                result.Push(values.Slice(index, size));
+                index += 1usize;
+            }
             return result;
         }
 
@@ -125,6 +263,77 @@ realm std {
                 counts.Set(key, nextCount);
             }
             return counts;
+        }
+
+        fn Range(start: i32, endExclusive: i32, stepValue: i32) -> i32[] {
+            mut result: i32[] = [];
+            if (stepValue == 0) {
+                return result;
+            }
+
+            mut value = start fit i64;
+            let endValue = endExclusive fit i64;
+            let stepWide = stepValue fit i64;
+            if (stepWide > 0i64) {
+                while (value < endValue) {
+                    result.Push(value fit i32);
+                    value += stepWide;
+                }
+            } else {
+                while (value > endValue) {
+                    result.Push(value fit i32);
+                    value += stepWide;
+                }
+            }
+            return result;
+        }
+
+        fn Range(start: i32, endExclusive: i32) -> i32[] {
+            return Range(start, endExclusive, 1);
+        }
+
+        fn Range(endExclusive: i32) -> i32[] {
+            return Range(0, endExclusive, 1);
+        }
+
+        fn Sum(values: i32[]) -> i32 {
+            mut result = 0;
+            for value in values {
+                result += value;
+            }
+            return result;
+        }
+
+        fn SumI64(values: i64[]) -> i64 {
+            mut result = 0i64;
+            for value in values {
+                result += value;
+            }
+            return result;
+        }
+
+        fn SumU64(values: u64[]) -> u64 {
+            mut result = 0u64;
+            for value in values {
+                result += value;
+            }
+            return result;
+        }
+
+        fn SumF32(values: f32[]) -> f32 {
+            mut result = 0.0f;
+            for value in values {
+                result += value;
+            }
+            return result;
+        }
+
+        fn SumF64(values: f64[]) -> f64 {
+            mut result = 0.0f64;
+            for value in values {
+                result += value;
+            }
+            return result;
         }
     }
 }

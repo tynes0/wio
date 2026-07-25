@@ -1,0 +1,121 @@
+realm std {
+    realm collections {
+        object UnorderedSet<T> {
+            private values: Dict<T, bool>;
+
+            public fn OnConstruct() {
+                self.values = {};
+            }
+
+            public fn Count() -> usize {
+                return self.values.Count();
+            }
+
+            public fn Empty() -> bool {
+                return self.values.Empty();
+            }
+
+            public fn Add(value: T) -> bool {
+                if (self.values.ContainsKey(value)) {
+                    return false;
+                }
+                self.values.Set(value, true);
+                return true;
+            }
+
+            public fn Insert(value: T) -> bool {
+                return self.Add(value);
+            }
+
+            public fn Contains(value: T) -> bool {
+                return self.values.ContainsKey(value);
+            }
+
+            public fn Remove(value: T) -> bool {
+                if (not self.values.ContainsKey(value)) {
+                    return false;
+                }
+                self.values.Remove(value);
+                return true;
+            }
+
+            public fn Clear() {
+                self.values.Clear();
+            }
+
+            public fn Values() -> T[] {
+                return self.values.Keys();
+            }
+        }
+
+        object OrderedSet<T> {
+            private values: Tree<T, bool>;
+
+            public fn OnConstruct() {
+                self.values = {< >};
+            }
+
+            public fn Count() -> usize {
+                return self.values.Count();
+            }
+
+            public fn Empty() -> bool {
+                return self.values.Empty();
+            }
+
+            public fn Add(value: T) -> bool {
+                if (self.values.ContainsKey(value)) {
+                    return false;
+                }
+                self.values.Set(value, true);
+                return true;
+            }
+
+            public fn Insert(value: T) -> bool {
+                return self.Add(value);
+            }
+
+            public fn Contains(value: T) -> bool {
+                return self.values.ContainsKey(value);
+            }
+
+            public fn Remove(value: T) -> bool {
+                if (not self.values.ContainsKey(value)) {
+                    return false;
+                }
+                self.values.Remove(value);
+                return true;
+            }
+
+            public fn Clear() {
+                self.values.Clear();
+            }
+
+            public fn Values() -> T[] {
+                return self.values.Keys();
+            }
+
+            public fn First() -> T {
+                return self.values.FirstKey();
+            }
+
+            public fn Last() -> T {
+                return self.values.LastKey();
+            }
+        }
+
+        type Set<T> = UnorderedSet<T>;
+        type HashSet<T> = UnorderedSet<T>;
+        type TreeSet<T> = OrderedSet<T>;
+    }
+
+    realm sets {
+        type Set<T> = collections::UnorderedSet<T>;
+        type UnorderedSet<T> = collections::UnorderedSet<T>;
+        type OrderedSet<T> = collections::OrderedSet<T>;
+    }
+
+    type Set<T> = collections::UnorderedSet<T>;
+    type UnorderedSet<T> = collections::UnorderedSet<T>;
+    type OrderedSet<T> = collections::OrderedSet<T>;
+}

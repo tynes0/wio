@@ -1,0 +1,43 @@
+use std::algorithms as algorithms;
+use std::console as console;
+
+fn Entry() -> i32 {
+    let values: i32[] = [1, 1, 2, 3, 3, 4];
+    let distinct = algorithms::Distinct(values);
+    let taken = algorithms::TakeWhile(values, (value: i32) => value < 3);
+    let skipped = algorithms::SkipWhile(values, (value: i32) => value < 3);
+    let rejected = algorithms::Reject(values, (value: i32) => value % 2 == 0);
+    let chunks = algorithms::Chunk(values, 2usize);
+    let windowSource: i32[] = [1, 2, 3, 4];
+    let windows = algorithms::Windowed(windowSource, 3usize);
+    let nested: i32[][] = [[1, 2], [3], [4, 5]];
+    let flat = algorithms::Flatten(nested);
+    let range = algorithms::Range(5, -1, -2);
+    let safeRange = algorithms::Range(2147483646, 2147483647, 2147483647);
+    let word: string = "wio";
+    let repeated = algorithms::Repeat(word, 3usize);
+    let index = algorithms::FindIndexBy(values, (value: i32) => value == 4);
+    let expected: i32[] = [1, 2, 3, 4, 5];
+    let equal = algorithms::SequenceEqual(flat, expected);
+    let distinctCount = distinct.Count();
+    let distinctLast = distinct.Last();
+    let takenCount = taken.Count();
+    let skippedFirst = skipped.First();
+    let rejectedCount = rejected.Count();
+    let chunkCount = chunks.Count();
+    let chunkLastCount = chunks.Last().Count();
+    let windowCount = windows.Count();
+    let windowLast = windows.Last().Last();
+    let total = algorithms::Sum(flat);
+    let rangeCount = range.Count();
+    let rangeLast = range.Last();
+    let rangeSafe = safeRange.Count() == 1usize and safeRange.First() == 2147483646;
+    let repeatedCount = repeated.Count();
+
+    console::Print(
+        $"Std algorithms utility: ${distinctCount}/${distinctLast}/${takenCount}/${skippedFirst}/" +
+        $"${rejectedCount}/${chunkCount}/${chunkLastCount}/${windowCount}/" +
+        $"${windowLast}/${total}/${rangeCount}/${rangeLast}/${rangeSafe}/${repeatedCount}/${index}/${equal}"
+    );
+    return 0;
+}

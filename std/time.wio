@@ -1,0 +1,186 @@
+realm std {
+    realm time {
+        use @CppHeader("std_time.h");
+
+        object Duration {
+            public nanoseconds: i64;
+
+            public fn Nanoseconds() -> i64 { return self.nanoseconds; }
+            public fn Microseconds() -> i64 { return self.nanoseconds / 1000i64; }
+            public fn Milliseconds() -> i64 { return self.nanoseconds / 1000000i64; }
+            public fn Seconds() -> f64 { return (self.nanoseconds fit f64) / 1000000000.0f64; }
+        }
+
+        object Instant {
+            public nanoseconds: i64;
+
+            public fn Elapsed() -> Duration {
+                mut result = Duration();
+                result.nanoseconds = MonotonicNanoseconds() - self.nanoseconds;
+                return result;
+            }
+        }
+
+        object DateTime {
+            public year: i32;
+            public month: i32;
+            public day: i32;
+            public hour: i32;
+            public minute: i32;
+            public second: i32;
+            public millisecond: i32;
+            public weekDay: i32;
+            public yearDay: i32;
+            public unixMilliseconds: i64;
+            public local: bool;
+
+            public fn IsUtc() -> bool { return not self.local; }
+            public fn IsLocal() -> bool { return self.local; }
+            public fn ToIso8601() -> string {
+                return FormatIso8601(self.unixMilliseconds, self.local);
+            }
+        }
+
+        @Native
+        @CppName(wio::runtime::std_time::UnixSeconds)
+        fn UnixSeconds() -> i64;
+
+        @Native
+        @CppName(wio::runtime::std_time::UnixMilliseconds)
+        fn UnixMilliseconds() -> i64;
+
+        @Native
+        @CppName(wio::runtime::std_time::UnixNanoseconds)
+        fn UnixNanoseconds() -> i64;
+
+        @Native
+        @CppName(wio::runtime::std_time::MonotonicNanoseconds)
+        fn MonotonicNanoseconds() -> i64;
+
+        @Native
+        @CppName(wio::runtime::std_time::SleepMilliseconds)
+        fn SleepMilliseconds(milliseconds: u64);
+
+        @Native
+        @CppName(wio::runtime::std_time::SleepNanoseconds)
+        fn SleepNanoseconds(nanoseconds: u64);
+
+        @Native
+        @CppName(wio::runtime::std_time::IsLeapYear)
+        fn IsLeapYear(year: i32) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_time::DaysInMonth)
+        fn DaysInMonth(year: i32, month: i32) -> i32;
+
+        @Native
+        @CppName(wio::runtime::std_time::BreakDown)
+        fn BreakDownNative(
+            unixMilliseconds: i64,
+            local: bool,
+            year: ref i32,
+            month: ref i32,
+            day: ref i32,
+            hour: ref i32,
+            minute: ref i32,
+            second: ref i32,
+            millisecond: ref i32,
+            weekDay: ref i32,
+            yearDay: ref i32) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_time::ToUnixMilliseconds)
+        fn ToUnixMillisecondsNative(
+            year: i32,
+            month: i32,
+            day: i32,
+            hour: i32,
+            minute: i32,
+            second: i32,
+            millisecond: i32,
+            local: bool,
+            value: ref i64) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_time::FormatIso8601)
+        fn FormatIso8601(unixMilliseconds: i64, local: bool) -> string;
+
+        fn Nanoseconds(value: i64) -> Duration {
+            mut result = Duration();
+            result.nanoseconds = value;
+            return result;
+        }
+
+        fn Microseconds(value: i64) -> Duration {
+            return Nanoseconds(value * 1000i64);
+        }
+
+        fn Milliseconds(value: i64) -> Duration {
+            return Nanoseconds(value * 1000000i64);
+        }
+
+        fn Seconds(value: f64) -> Duration {
+            return Nanoseconds((value * 1000000000.0f64) fit i64);
+        }
+
+        fn Now() -> Instant {
+            mut result = Instant();
+            result.nanoseconds = MonotonicNanoseconds();
+            return result;
+        }
+
+        fn FromUnixMilliseconds(value: i64, local: bool) -> DateTime {
+            mut result = DateTime();
+            result.unixMilliseconds = value;
+            result.local = local;
+            BreakDownNative(
+                value,
+                local,
+                ref result.year,
+                ref result.month,
+                ref result.day,
+                ref result.hour,
+                ref result.minute,
+                ref result.second,
+                ref result.millisecond,
+                ref result.weekDay,
+                ref result.yearDay);
+            return result;
+        }
+
+        fn UtcNow() -> DateTime {
+            return FromUnixMilliseconds(UnixMilliseconds(), false);
+        }
+
+        fn LocalNow() -> DateTime {
+            return FromUnixMilliseconds(UnixMilliseconds(), true);
+        }
+
+        fn TryCreate(
+            year: i32,
+            month: i32,
+            day: i32,
+            hour: i32,
+            minute: i32,
+            second: i32,
+            millisecond: i32,
+            local: bool,
+            result: ref DateTime) -> bool {
+            mut value = 0i64;
+            if (not ToUnixMillisecondsNative(
+                    year,
+                    month,
+                    day,
+                    hour,
+                    minute,
+                    second,
+                    millisecond,
+                    local,
+                    ref value)) {
+                return false;
+            }
+            result = FromUnixMilliseconds(value, local);
+            return true;
+        }
+    }
+}
