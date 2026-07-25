@@ -2583,7 +2583,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                 for (size_t rightIndex = 0; rightIndex < right.size(); ++rightIndex)
                 {
                     const size_t substitutionCost = left[leftIndex] == right[rightIndex] ? 0 : 1;
-                    current[rightIndex + 1] = std::min({
+                    current[rightIndex + 1] = (std::min)({
                         current[rightIndex] + 1,
                         previous[rightIndex + 1] + 1,
                         previous[rightIndex] + substitutionCost
