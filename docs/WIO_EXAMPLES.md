@@ -1,7 +1,7 @@
 # Wio Examples Guide
 
 This document is the release-facing map for the example set that ships with
-Wio `v0.2.0`.
+Wio `v0.3.0`.
 
 The goal is simple:
 
@@ -167,7 +167,7 @@ host-interop microscope.
 
 ## 5. Release Reading
 
-For `v0.2.0`, the intended reading order is:
+For `v0.3.0`, the intended reading order is:
 
 1. `examples/plain_app`
 2. `examples/native_app`

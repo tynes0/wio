@@ -4,6 +4,8 @@ All notable user-facing changes to Wio are recorded here.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-25
+
 ### Added
 
 - Added `std::hash` with default FNV-1a hashing and SHA-256 hex/byte digests.
