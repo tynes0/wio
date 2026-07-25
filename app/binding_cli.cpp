@@ -1,4 +1,5 @@
 #include "binding_cli.h"
+#include "cli_common.h"
 
 #include <argonaut.h>
 
@@ -603,6 +604,7 @@ namespace wio::tooling::binding
                         .SetDescription("Optional output .wio file override.")
                 )
                 .AutoHelp()
+                .AutoVersion()
                 .SetVersion(WIO_VERSION);
 
             return parser;
@@ -643,6 +645,7 @@ namespace wio::tooling::binding
                         .SetDescription("Treat imported enums as flagsets when possible.")
                 )
                 .AutoHelp()
+                .AutoVersion()
                 .SetVersion(WIO_VERSION);
 
             return parser;
@@ -1479,17 +1482,36 @@ namespace wio::tooling::binding
 
         if (argc < 3 || argv[2] == nullptr)
         {
-            std::cerr << "Expected a bind subcommand. Currently supported: new, import\n";
-            return EXIT_FAILURE;
+            std::cout
+                << "Wio binding commands\n\n"
+                << "Usage:\n"
+                << "  wio bind new    --manifest FILE [--output FILE]\n"
+                << "  wio bind import --header FILE --realm NAME [--output FILE] [--header-include FILE] [--prefer-flagset]\n";
+            return EXIT_SUCCESS;
         }
 
         const std::string_view subcommand = argv[2];
+        if (cli::IsHelpToken(subcommand))
+        {
+            std::cout
+                << "Wio binding commands\n\n"
+                << "Usage:\n"
+                << "  wio bind new    --manifest FILE [--output FILE]\n"
+                << "  wio bind import --header FILE --realm NAME [--output FILE] [--header-include FILE] [--prefer-flagset]\n";
+            return EXIT_SUCCESS;
+        }
         if (subcommand == "new")
             return handleBindNewCommand(collectCommandArgs("wio bind new", argc, argv, 3));
         if (subcommand == "import")
             return handleBindImportCommand(collectCommandArgs("wio bind import", argc, argv, 3));
 
         std::cerr << "Unknown bind subcommand: " << subcommand << '\n';
+        if (const auto suggestion = cli::SuggestCommand(subcommand, { "new", "import" });
+            suggestion.has_value())
+        {
+            std::cerr << "Did you mean 'wio bind " << *suggestion << "'?\n";
+        }
+        std::cerr << "Run 'wio bind --help' to list available binding commands.\n";
         return EXIT_FAILURE;
     }
 }

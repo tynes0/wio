@@ -99,7 +99,7 @@ file(REMOVE "${adjacent_cpp}" "${adjacent_output}")
 file(REMOVE_RECURSE "${work_dir}/.wio-build" "${package_root}/.wio-build")
 
 execute_process(
-    COMMAND "${packaged_wio}" file run "${temp_source}" -- alpha beta
+    COMMAND "${packaged_wio}" file run "${temp_source}" -- alpha "two words" "--literal" "amp&ersand" "--"
     WORKING_DIRECTORY "${package_root}"
     RESULT_VARIABLE run_result
     OUTPUT_VARIABLE run_stdout

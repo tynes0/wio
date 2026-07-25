@@ -1,0 +1,37 @@
+use std::chars as chars;
+use std::console as console;
+use std::strings as strings;
+
+fn Entry() -> i32 {
+    let words = strings::SplitWhitespace("  alpha\tbeta\n gamma  ");
+    let joinedWords = words.Join("|");
+    let collapsed = strings::CollapseWhitespace("  alpha\tbeta\n gamma  ");
+    let insensitive = strings::EqualsIgnoreCase("Wio", "wIO");
+    let contains = strings::ContainsIgnoreCase("The Wio Language", "WIO");
+    let edgeMatches =
+        strings::StartsWithIgnoreCase("Wio Language", "wIO") and
+        strings::EndsWithIgnoreCase("Wio Language", "LANGUAGE");
+    let ordering = strings::CompareIgnoreCase("alpha", "BETA");
+    let count = strings::CountOccurrences("one::two::three", "::");
+    let removed = strings::RemovePrefix("std::convert", "std::");
+    let ensured = strings::EnsureSuffix("report", ".txt");
+    let before = strings::BeforeLast("a/b/c.txt", "/");
+    let afterText = strings::AfterLast("a/b/c.txt", "/");
+    let capitalized = strings::Capitalize("wio");
+    let truncated = strings::Truncate("abcdefgh", 6usize, "...");
+    let ascii = strings::IsAscii("wio");
+
+    let charSurface =
+        chars::IsAlpha('Q') and
+        chars::IsAlphaNumeric('7') and
+        chars::IsHexDigit('f') and
+        chars::HexValue('F') == 15 and
+        chars::FromDigit(15, true) == 'F';
+
+    console::Print(
+        $"Std text: ${joinedWords}/${collapsed}/${insensitive}/${contains}/${edgeMatches}/${ordering}/${count}/" +
+        removed + "/" + ensured + "/" + before + "/" + afterText + "/" + capitalized + "/" +
+        truncated + $"/${charSurface}/${ascii}"
+    );
+    return 0;
+}

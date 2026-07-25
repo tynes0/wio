@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <array>
+#include <cerrno>
 #include <cctype>
 #include <cstdlib>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <optional>
@@ -19,6 +21,7 @@
 #include <windows.h>
 #elif defined(__APPLE__)
 #include <mach-o/dyld.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #else
 #include <sys/wait.h>
@@ -528,16 +531,16 @@ namespace wio
             return "\"" + value + "\"";
         }
 
+#if defined(_WIN32)
         std::string quoteRunArgument(const std::string& value)
         {
-#if defined(_WIN32)
             if (value.empty())
                 return "\"\"";
 
             bool needsQuotes = false;
             for (const char ch : value)
             {
-                if (std::isspace(static_cast<unsigned char>(ch)) != 0 || ch == '"' || ch == '&' || ch == '(' || ch == ')' || ch == ';')
+                if (std::isspace(static_cast<unsigned char>(ch)) != 0 || ch == '"')
                 {
                     needsQuotes = true;
                     break;
@@ -550,31 +553,129 @@ namespace wio
             std::string result;
             result.reserve(value.size() + 2);
             result.push_back('"');
+
+            size_t backslashCount = 0;
             for (const char ch : value)
             {
+                if (ch == '\\')
+                {
+                    ++backslashCount;
+                    continue;
+                }
+
                 if (ch == '"')
-                    result += "\\\"";
-                else
-                    result.push_back(ch);
+                {
+                    result.append((backslashCount * 2) + 1, '\\');
+                    result.push_back('"');
+                    backslashCount = 0;
+                    continue;
+                }
+
+                result.append(backslashCount, '\\');
+                backslashCount = 0;
+                result.push_back(ch);
             }
+
+            result.append(backslashCount * 2, '\\');
             result.push_back('"');
             return result;
-#else
-            if (value.empty())
-                return "''";
+        }
+#endif
 
-            std::string result;
-            result.reserve(value.size() + 2);
-            result.push_back('\'');
-            for (const char ch : value)
+        int runExecutable(const std::filesystem::path& executablePath,
+                          const std::vector<std::string>& arguments)
+        {
+#if defined(_WIN32)
+            std::string commandLineText = quoteRunArgument(executablePath.string());
+            for (const auto& argument : arguments)
             {
-                if (ch == '\'')
-                    result += "'\\''";
-                else
-                    result.push_back(ch);
+                commandLineText.push_back(' ');
+                commandLineText += quoteRunArgument(argument);
             }
-            result.push_back('\'');
-            return result;
+
+            std::vector<char> commandLine(commandLineText.begin(), commandLineText.end());
+            commandLine.push_back('\0');
+
+            STARTUPINFOA startupInfo{};
+            startupInfo.cb = sizeof(startupInfo);
+            PROCESS_INFORMATION processInfo{};
+            const std::string executable = executablePath.string();
+
+            const BOOL created = CreateProcessA(
+                executable.c_str(),
+                commandLine.data(),
+                nullptr,
+                nullptr,
+                TRUE,
+                0,
+                nullptr,
+                nullptr,
+                &startupInfo,
+                &processInfo
+            );
+
+            if (created == FALSE)
+            {
+                WIO_LOG_ERROR("Could not launch generated executable '{}'. Windows error: {}",
+                              executablePath.string(),
+                              static_cast<unsigned long>(GetLastError()));
+                return EXIT_FAILURE;
+            }
+
+            WaitForSingleObject(processInfo.hProcess, INFINITE);
+            DWORD exitCode = EXIT_FAILURE;
+            GetExitCodeProcess(processInfo.hProcess, &exitCode);
+
+            CloseHandle(processInfo.hThread);
+            CloseHandle(processInfo.hProcess);
+            return static_cast<int>(exitCode);
+#else
+            const pid_t processId = fork();
+            if (processId < 0)
+            {
+                WIO_LOG_ERROR("Could not fork generated executable '{}': {}",
+                              executablePath.string(),
+                              std::strerror(errno));
+                return EXIT_FAILURE;
+            }
+
+            if (processId == 0)
+            {
+                const std::string executable = executablePath.string();
+                std::vector<std::string> ownedArguments;
+                ownedArguments.reserve(arguments.size() + 1);
+                ownedArguments.push_back(executable);
+                ownedArguments.insert(ownedArguments.end(), arguments.begin(), arguments.end());
+
+                std::vector<char*> argvView;
+                argvView.reserve(ownedArguments.size() + 1);
+                for (std::string& argument : ownedArguments)
+                    argvView.push_back(argument.data());
+                argvView.push_back(nullptr);
+
+                execv(executable.c_str(), argvView.data());
+                std::fprintf(stderr, "Could not launch generated executable '%s': %s\n",
+                             executable.c_str(), std::strerror(errno));
+                _exit(errno == ENOENT ? 127 : 126);
+            }
+
+            int status = 0;
+            while (waitpid(processId, &status, 0) < 0)
+            {
+                if (errno == EINTR)
+                    continue;
+
+                WIO_LOG_ERROR("Could not wait for generated executable '{}': {}",
+                              executablePath.string(),
+                              std::strerror(errno));
+                return EXIT_FAILURE;
+            }
+
+            if (WIFEXITED(status))
+                return WEXITSTATUS(status);
+            if (WIFSIGNALED(status))
+                return 128 + WTERMSIG(status);
+            return EXIT_FAILURE;
 #endif
         }
 
@@ -2882,17 +2983,10 @@ namespace wio
                 {
                     WIO_LOG_INFO("Running {} ...", outputPath.filename().string());
 
-                    std::stringstream runCmd;
-
-                    const std::filesystem::path& finalExePath = outputPath;
-
-                    runCmd << "\"" << finalExePath.string() << "\"";
-
-                    for (const auto& runArg : gAppData.argParser.GetValuesOf<std::string>("RUN-ARG"))
-                        runCmd << " " << quoteRunArgument(runArg);
-
-                    // NOLINTNEXTLINE(concurrency-mt-unsafe)
-                    int runExitCode = std::system(runCmd.str().c_str());
+                    const int runExitCode = runExecutable(
+                        outputPath,
+                        gAppData.argParser.GetValuesOf<std::string>("RUN-ARG")
+                    );
                     if (runExitCode != 0)
                     {
                         WIO_LOG_WARN("Program exited with code: {}", runExitCode);

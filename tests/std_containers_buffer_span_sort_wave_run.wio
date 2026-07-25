@@ -1,0 +1,76 @@
+use std::assert as assert;
+use std::buffer as buffer;
+use std::console as console;
+use std::queue as queue;
+use std::sets as sets;
+use std::sort as sort;
+use std::span as span;
+use std::tuple as tuple;
+
+fn Entry() -> i32 {
+    let pending = queue::Queue<i32>();
+    pending.Enqueue(10);
+    pending.Enqueue(20);
+    mut dequeued = 0;
+    let didDequeue = pending.TryDequeue(ref dequeued);
+
+    let unique = sets::UnorderedSet<string>();
+    let firstAdd = unique.Add("wio");
+    let duplicateAdd = unique.Add("wio");
+    unique.Add("std");
+
+    let ordered = sets::OrderedSet<i32>();
+    ordered.Add(9);
+    ordered.Add(2);
+    ordered.Add(5);
+
+    let pair = tuple::Tuple<i32, string>(7, "seven");
+
+    let bytes = buffer::ByteBuffer(16usize);
+    bytes.WriteU16LE(0x1234u16);
+    bytes.WriteU32LE(0x89ABCDEFu32);
+    bytes.Rewind();
+    mut small = 0u16;
+    mut large = 0u32;
+    let readSmall = bytes.TryReadU16LE(ref small);
+    let readLarge = bytes.TryReadU32LE(ref large);
+
+    let bytePool = buffer::BytePool(32usize);
+    let lease = bytePool.Rent();
+    bytePool.Get(lease).Write(42u8);
+    let pooledValue = bytePool.Get(lease).At(0usize);
+    let returned = bytePool.Return(lease);
+    let staleRejected = not bytePool.Return(lease);
+
+    let valuesPool = buffer::Pool<string>("");
+    let valueHandle = valuesPool.Rent("managed");
+    mut managed = "";
+    let gotManaged = valuesPool.TryGet(valueHandle, ref managed);
+    valuesPool.Return(valueHandle);
+
+    mut values: i32[] = [9, 1, 4, 1, 8, 2];
+    let middle = span::Make(ref values, 1usize, 3usize);
+    span::Fill(ref values, middle, 7);
+    let copied = span::ToArray(ref values, middle);
+    sort::Sort(ref values);
+
+    mut stable: i32[] = [4, 2, 3, 1];
+    sort::StableSort(ref stable);
+
+    let marker: bit = true;
+    let octet: byte = 255u8;
+
+    assert::ExpectTrue(didDequeue and dequeued == 10 and pending.Peek() == 20, "queue FIFO failed");
+    assert::ExpectTrue(firstAdd and not duplicateAdd and unique.Count() == 2usize, "unordered set uniqueness failed");
+    assert::ExpectTrue(ordered.First() == 2 and ordered.Last() == 9, "ordered set order failed");
+    assert::ExpectTrue(pair.First() == 7 and pair.Second() == "seven", "tuple access failed");
+    assert::ExpectTrue(readSmall and readLarge and small == 0x1234u16 and large == 0x89ABCDEFu32, "byte buffer encoding failed");
+    assert::ExpectTrue(pooledValue == 42u8 and returned and staleRejected, "byte pool generation checks failed");
+    assert::ExpectTrue(gotManaged and managed == "managed" and valuesPool.Count() == 0usize, "generic pool failed");
+    assert::ExpectTrue(copied.Count() == 3usize and copied[0usize] == 7, "span range failed");
+    assert::ExpectTrue(sort::IsSorted(values) and sort::IsSorted(stable), "sorting failed");
+    assert::ExpectTrue(marker and octet == 255u8, "bit/byte type aliases failed");
+
+    console::Print("std-containers-buffer-span-sort-wave-ok");
+    return 0;
+}

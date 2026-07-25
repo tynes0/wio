@@ -1,0 +1,51 @@
+use std::convert as convert;
+
+realm std {
+    realm hash {
+        use @CppHeader("std_hash.h");
+
+        @Native
+        @CppName(wio::runtime::std_hash::Fnv1a32)
+        fn Fnv1a32(value: string) -> u32;
+
+        @Native
+        @CppName(wio::runtime::std_hash::Fnv1a64)
+        fn Fnv1a64(value: string) -> u64;
+
+        @Native
+        @CppName(wio::runtime::std_hash::Fnv1a32Bytes)
+        fn Fnv1a32(value: byte[]) -> u32;
+
+        @Native
+        @CppName(wio::runtime::std_hash::Fnv1a64Bytes)
+        fn Fnv1a64(value: byte[]) -> u64;
+
+        fn Hash(value: string) -> u64 {
+            return Fnv1a64(value);
+        }
+
+        fn Hash(value: byte[]) -> u64 {
+            return Fnv1a64(value);
+        }
+
+        fn HashValue<T>(value: T) -> u64 {
+            return Hash(convert::ToString<T>(value));
+        }
+
+        @Native
+        @CppName(wio::runtime::std_hash::Sha256)
+        fn Sha256(value: string) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_hash::Sha256Bytes)
+        fn Sha256(value: byte[]) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_hash::Sha256Digest)
+        fn Sha256Digest(value: string) -> byte[];
+
+        @Native
+        @CppName(wio::runtime::std_hash::Sha256DigestBytes)
+        fn Sha256Digest(value: byte[]) -> byte[];
+    }
+}

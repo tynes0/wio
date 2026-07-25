@@ -344,6 +344,62 @@ namespace wio::sema
             }
             else if (memberName == "Reversed")
                 appendMethodResolution(overloads, IntrinsicMember::StringReversed, stringType, {}, typeContext, false);
+            else if (memberName == "ToI8")
+            {
+                appendMethodResolution(overloads, IntrinsicMember::StringToI8, typeContext.getI8(), {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringToI8, typeContext.getI8(), { typeContext.getI32() }, typeContext, false);
+            }
+            else if (memberName == "ToI16")
+            {
+                appendMethodResolution(overloads, IntrinsicMember::StringToI16, typeContext.getI16(), {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringToI16, typeContext.getI16(), { typeContext.getI32() }, typeContext, false);
+            }
+            else if (memberName == "ToI32")
+            {
+                appendMethodResolution(overloads, IntrinsicMember::StringToI32, typeContext.getI32(), {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringToI32, typeContext.getI32(), { typeContext.getI32() }, typeContext, false);
+            }
+            else if (memberName == "ToI64")
+            {
+                appendMethodResolution(overloads, IntrinsicMember::StringToI64, typeContext.getI64(), {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringToI64, typeContext.getI64(), { typeContext.getI32() }, typeContext, false);
+            }
+            else if (memberName == "ToU8")
+            {
+                appendMethodResolution(overloads, IntrinsicMember::StringToU8, typeContext.getU8(), {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringToU8, typeContext.getU8(), { typeContext.getI32() }, typeContext, false);
+            }
+            else if (memberName == "ToU16")
+            {
+                appendMethodResolution(overloads, IntrinsicMember::StringToU16, typeContext.getU16(), {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringToU16, typeContext.getU16(), { typeContext.getI32() }, typeContext, false);
+            }
+            else if (memberName == "ToU32")
+            {
+                appendMethodResolution(overloads, IntrinsicMember::StringToU32, typeContext.getU32(), {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringToU32, typeContext.getU32(), { typeContext.getI32() }, typeContext, false);
+            }
+            else if (memberName == "ToU64")
+            {
+                appendMethodResolution(overloads, IntrinsicMember::StringToU64, typeContext.getU64(), {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringToU64, typeContext.getU64(), { typeContext.getI32() }, typeContext, false);
+            }
+            else if (memberName == "ToISize")
+            {
+                appendMethodResolution(overloads, IntrinsicMember::StringToISize, typeContext.getISize(), {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringToISize, typeContext.getISize(), { typeContext.getI32() }, typeContext, false);
+            }
+            else if (memberName == "ToUSize")
+            {
+                appendMethodResolution(overloads, IntrinsicMember::StringToUSize, typeContext.getUSize(), {}, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringToUSize, typeContext.getUSize(), { typeContext.getI32() }, typeContext, false);
+            }
+            else if (memberName == "ToF32")
+                appendMethodResolution(overloads, IntrinsicMember::StringToF32, typeContext.getF32(), {}, typeContext, false);
+            else if (memberName == "ToF64")
+                appendMethodResolution(overloads, IntrinsicMember::StringToF64, typeContext.getF64(), {}, typeContext, false);
+            else if (memberName == "ToBool")
+                appendMethodResolution(overloads, IntrinsicMember::StringToBool, typeContext.getBool(), {}, typeContext, false);
             else if (memberName == "Append")
                 appendMethodResolution(overloads, IntrinsicMember::StringAppend, typeContext.getVoid(), { stringType }, typeContext, true);
             else if (memberName == "Push")

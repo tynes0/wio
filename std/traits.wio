@@ -1,9 +1,20 @@
 realm std {
     realm traits {
+        use @CppHeader("std_type_traits.h");
+
         interface IsInteger<T> {
         }
 
         interface IsNumeric<T> {
+        }
+
+        interface IsFloating<T> {
+        }
+
+        interface IsSigned<T> {
+        }
+
+        interface IsUnsigned<T> {
         }
 
         interface IsEnum<T> {
@@ -11,5 +22,83 @@ realm std {
 
         interface IsFlagset<T> {
         }
+
+        interface IsObject<T> {
+        }
+
+        interface IsComponent<T> {
+        }
+
+        interface IsInterface<T> {
+        }
+
+        interface IsArray<T> {
+        }
+
+        interface IsReference<T> {
+        }
+
+        // User traits use the same declaration model: declare an empty generic
+        // interface, implement Trait<ConcreteType>, then use @Apply(Trait<T>).
+
+        @Native
+        @CppName(wio::runtime::traits::IsIntegerValue)
+        fn IsIntegerType<T>() -> bool;
+
+        @Native
+        @CppName(wio::runtime::traits::IsNumericValue)
+        fn IsNumericType<T>() -> bool;
+
+        @Native
+        @CppName(wio::runtime::traits::IsFloatingValue)
+        fn IsFloatingType<T>() -> bool;
+
+        @Native
+        @CppName(wio::runtime::traits::IsSignedValue)
+        fn IsSignedType<T>() -> bool;
+
+        @Native
+        @CppName(wio::runtime::traits::IsUnsignedValue)
+        fn IsUnsignedType<T>() -> bool;
+
+        @Native
+        @CppName(wio::runtime::traits::IsArrayValue)
+        fn IsArrayType<T>() -> bool;
+
+        @Native
+        @CppName(wio::runtime::traits::IsDictionaryValue)
+        fn IsDictionaryType<T>() -> bool;
+
+        @Native
+        @CppName(wio::runtime::traits::IsEnumValue)
+        fn IsEnumType<T>() -> bool;
+
+        @Native
+        @CppName(wio::runtime::traits::IsFlagsetValue)
+        fn IsFlagsetType<T>() -> bool;
+
+        @Native
+        @CppName(wio::runtime::traits::IsObjectValue)
+        fn IsObjectType<T>() -> bool;
+
+        @Native
+        @CppName(wio::runtime::traits::IsComponentValue)
+        fn IsComponentType<T>() -> bool;
+
+        @Native
+        @CppName(wio::runtime::traits::IsInterfaceValue)
+        fn IsInterfaceType<T>() -> bool;
+
+        @Native
+        @CppName(wio::runtime::traits::IsSameValue)
+        fn IsSameType<Left, Right>() -> bool;
+
+        @Native
+        @CppName(wio::runtime::traits::IsDefaultConstructibleValue)
+        fn IsDefaultConstructible<T>() -> bool;
+
+        @Native
+        @CppName(wio::runtime::traits::IsCopyConstructibleValue)
+        fn IsCopyConstructible<T>() -> bool;
     }
 }

@@ -1,0 +1,173 @@
+realm std {
+    realm random {
+        use @CppHeader("std_random.h");
+
+        @Native
+        @CppName(wio::runtime::std_random::SystemSeed)
+        fn SystemSeed() -> u64;
+
+        @Native
+        @CppName(wio::runtime::std_random::Mt19937Seed)
+        fn MtSeed(seed: u64, state: ref u32[], index: ref usize);
+
+        @Native
+        @CppName(wio::runtime::std_random::Mt19937Next)
+        fn MtNext(state: ref u32[], index: ref usize) -> u32;
+
+        @Native
+        @CppName(wio::runtime::std_random::Mt19937NextF64)
+        fn MtNextF64(state: ref u32[], index: ref usize) -> f64;
+
+        @Native
+        @CppName(wio::runtime::std_random::Mt19937NextBounded)
+        fn MtNextBounded(state: ref u32[], index: ref usize, maxExclusive: u32) -> u32;
+
+        object Mt19937 {
+            private state: u32[];
+            private index: usize;
+
+            public fn OnConstruct(seed: u64) {
+                self.state = [];
+                MtSeed(seed, ref self.state, ref self.index);
+            }
+
+            public fn NextU32() -> u32 {
+                return MtNext(ref self.state, ref self.index);
+            }
+
+            public fn NextU64() -> u64 {
+                return ((self.NextU32() fit u64) << 32u64) | (self.NextU32() fit u64);
+            }
+
+            public fn NextF64() -> f64 {
+                return MtNextF64(ref self.state, ref self.index);
+            }
+
+            public fn NextBool() -> bool {
+                return (self.NextU32() & 1u32) == 1u32;
+            }
+
+            public fn NextU32(maxExclusive: u32) -> u32 {
+                if (maxExclusive == 0u32) {
+                    return 0u32;
+                }
+                return MtNextBounded(ref self.state, ref self.index, maxExclusive);
+            }
+
+            public fn NextI32(minInclusive: i32, maxExclusive: i32) -> i32 {
+                if (maxExclusive <= minInclusive) {
+                    return minInclusive;
+                }
+                return minInclusive + (self.NextU32((maxExclusive - minInclusive) fit u32) fit i32);
+            }
+        }
+
+        @Native
+        @CppName(wio::runtime::std_random::Xoroshiro128PlusSeed)
+        fn XoroshiroSeed(seed: u64, state0: ref u64, state1: ref u64);
+
+        @Native
+        @CppName(wio::runtime::std_random::Xoroshiro128PlusNext)
+        fn XoroshiroNext(state0: ref u64, state1: ref u64) -> u64;
+
+        @Native
+        @CppName(wio::runtime::std_random::Xoroshiro128PlusNextF64)
+        fn XoroshiroNextF64(state0: ref u64, state1: ref u64) -> f64;
+
+        object Xoroshiro128Plus {
+            private state0: u64;
+            private state1: u64;
+
+            public fn OnConstruct(seed: u64) {
+                XoroshiroSeed(seed, ref self.state0, ref self.state1);
+            }
+
+            public fn NextU64() -> u64 {
+                return XoroshiroNext(ref self.state0, ref self.state1);
+            }
+
+            public fn NextU32() -> u32 {
+                return (self.NextU64() & 0xFFFFFFFFu64) fit u32;
+            }
+
+            public fn NextF64() -> f64 {
+                return XoroshiroNextF64(ref self.state0, ref self.state1);
+            }
+        }
+
+        @Native
+        @CppName(wio::runtime::std_random::LxmSeed)
+        fn LxmSeedNative(seed: u64, lcg: ref u64, state0: ref u64, state1: ref u64);
+
+        @Native
+        @CppName(wio::runtime::std_random::LxmNext)
+        fn LxmNextNative(lcg: ref u64, state0: ref u64, state1: ref u64) -> u64;
+
+        @Native
+        @CppName(wio::runtime::std_random::LxmNextF64)
+        fn LxmNextF64Native(lcg: ref u64, state0: ref u64, state1: ref u64) -> f64;
+
+        object Lxm {
+            private lcg: u64;
+            private state0: u64;
+            private state1: u64;
+
+            public fn OnConstruct(seed: u64) {
+                LxmSeedNative(seed, ref self.lcg, ref self.state0, ref self.state1);
+            }
+
+            public fn NextU64() -> u64 {
+                return LxmNextNative(ref self.lcg, ref self.state0, ref self.state1);
+            }
+
+            public fn NextU32() -> u32 {
+                return (self.NextU64() & 0xFFFFFFFFu64) fit u32;
+            }
+
+            public fn NextF64() -> f64 {
+                return LxmNextF64Native(ref self.lcg, ref self.state0, ref self.state1);
+            }
+        }
+
+        @Native
+        @CppName(wio::runtime::std_random::WichmannHillSeed)
+        fn WichmannHillSeedNative(seed: u64, x: ref u32, y: ref u32, z: ref u32);
+
+        @Native
+        @CppName(wio::runtime::std_random::WichmannHillNext)
+        fn WichmannHillNextNative(x: ref u32, y: ref u32, z: ref u32) -> u32;
+
+        @Native
+        @CppName(wio::runtime::std_random::WichmannHillNextF64)
+        fn WichmannHillNextF64Native(x: ref u32, y: ref u32, z: ref u32) -> f64;
+
+        object WichmannHill {
+            private x: u32;
+            private y: u32;
+            private z: u32;
+
+            public fn OnConstruct(seed: u64) {
+                WichmannHillSeedNative(seed, ref self.x, ref self.y, ref self.z);
+            }
+
+            public fn NextU32() -> u32 {
+                return WichmannHillNextNative(ref self.x, ref self.y, ref self.z);
+            }
+
+            public fn NextF64() -> f64 {
+                return WichmannHillNextF64Native(ref self.x, ref self.y, ref self.z);
+            }
+        }
+
+        type Random = Mt19937;
+        type Default = Mt19937;
+
+        fn Create() -> Random {
+            return Random(SystemSeed());
+        }
+
+        fn Create(seed: u64) -> Random {
+            return Random(seed);
+        }
+    }
+}

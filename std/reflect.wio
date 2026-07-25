@@ -1,6 +1,133 @@
 realm std {
     realm reflect {
         use @CppHeader("enum_reflection.h");
+        use @CppHeader("type_reflection.h");
+
+        @Native
+        @Type(u8)
+        @CppName(wio::runtime::ReflectedTypeKind)
+        enum Kind {
+            unknown = 0u8,
+            primitive_type = 1u8,
+            enum_type = 2u8,
+            flagset_type = 3u8,
+            component_type = 4u8,
+            object_type = 5u8,
+            interface_type = 6u8,
+            array_type = 7u8,
+            dictionary_type = 8u8,
+            reference_type = 9u8
+        };
+
+        component FieldInfo {
+            name: string;
+            typeName: string;
+            access: string;
+        }
+
+        component MethodInfo {
+            name: string;
+            signature: string;
+            access: string;
+        }
+
+        component TypeInfo {
+            name: string;
+            kind: Kind;
+            size: usize;
+            alignment: usize;
+            fields: FieldInfo[];
+            methods: MethodInfo[];
+            baseTypes: string[];
+        }
+
+        @Native
+        @CppName(wio::runtime::ReflectedTypeName)
+        fn TypeName<T>() -> string;
+
+        @Native
+        @CppName(wio::runtime::ReflectedKind)
+        fn TypeKind<T>() -> Kind;
+
+        @Native
+        @CppName(wio::runtime::ReflectedSize)
+        fn TypeSize<T>() -> usize;
+
+        @Native
+        @CppName(wio::runtime::ReflectedAlignment)
+        fn TypeAlignment<T>() -> usize;
+
+        @Native
+        @CppName(wio::runtime::ReflectedFieldCount)
+        fn FieldCount<T>() -> usize;
+
+        @Native
+        @CppName(wio::runtime::ReflectedFieldNames)
+        fn FieldNames<T>() -> string[];
+
+        @Native
+        @CppName(wio::runtime::ReflectedFieldTypes)
+        fn FieldTypes<T>() -> string[];
+
+        @Native
+        @CppName(wio::runtime::ReflectedFieldAccess)
+        fn FieldAccess<T>() -> string[];
+
+        @Native
+        @CppName(wio::runtime::ReflectedMethodCount)
+        fn MethodCount<T>() -> usize;
+
+        @Native
+        @CppName(wio::runtime::ReflectedMethodNames)
+        fn MethodNames<T>() -> string[];
+
+        @Native
+        @CppName(wio::runtime::ReflectedMethodSignatures)
+        fn MethodSignatures<T>() -> string[];
+
+        @Native
+        @CppName(wio::runtime::ReflectedMethodAccess)
+        fn MethodAccess<T>() -> string[];
+
+        @Native
+        @CppName(wio::runtime::ReflectedBaseTypes)
+        fn BaseTypes<T>() -> string[];
+
+        fn Describe<T>() -> TypeInfo {
+            mut result = TypeInfo();
+            result.name = TypeName<T>();
+            result.kind = TypeKind<T>();
+            result.size = TypeSize<T>();
+            result.alignment = TypeAlignment<T>();
+            result.baseTypes = BaseTypes<T>();
+
+            let fieldNames = FieldNames<T>();
+            let fieldTypes = FieldTypes<T>();
+            let fieldAccess = FieldAccess<T>();
+            mut fieldIndex = 0usize;
+            while (fieldIndex < fieldNames.Count()) {
+                mut field = FieldInfo();
+                field.name = fieldNames[fieldIndex];
+                field.typeName = fieldTypes[fieldIndex];
+                field.access = fieldAccess[fieldIndex];
+                result.fields.Push(field);
+                fieldIndex += 1usize;
+            }
+
+            let methodNames = MethodNames<T>();
+            let methodSignatures = MethodSignatures<T>();
+            let methodAccess = MethodAccess<T>();
+            mut methodIndex = 0usize;
+            while (methodIndex < methodNames.Count()) {
+                mut method = MethodInfo();
+                method.name = methodNames[methodIndex];
+                method.signature = methodSignatures[methodIndex];
+                method.access = methodAccess[methodIndex];
+                result.methods.Push(method);
+                methodIndex += 1usize;
+            }
+            return result;
+        }
 
         @Native
         @CppName(wio::runtime::EnumCount)

@@ -1,0 +1,26 @@
+use std::assert as assert;
+use std::console as console;
+use std::regex as regex;
+
+fn Entry() -> i32 {
+    let pattern = regex::Regex("([a-z]+)-(\\d+)", true);
+    let matched = pattern.IsMatch("Wio-2026");
+    let found = pattern.Find("prefix Wio-2026 suffix");
+    let all = regex::FindAll("a1 b22 c333", "\\d+");
+    let replaced = regex::Replace("a1 b22", "\\d+", "#");
+    let split = regex::Split("alpha, beta;gamma", "[,;]\\s*");
+    let invalid = regex::IsMatch("x", "[");
+
+    assert::ExpectTrue(matched.ValueOr(false), "regex match failed");
+    assert::ExpectTrue(found.IsOk() and found.Value().found, "regex find failed");
+    assert::ExpectEqual(found.Value().value, "Wio-2026", "regex find value failed");
+    assert::ExpectEqual(found.Value().groups.Count(), 2usize, "regex capture groups failed");
+    assert::ExpectEqual(all.Value().Count(), 3usize, "regex find-all failed");
+    assert::ExpectEqual(replaced.Value(), "a# b#", "regex replace failed");
+    assert::ExpectEqual(split.Value().Count(), 3usize, "regex split failed");
+    assert::ExpectTrue(invalid.IsError(), "invalid regex must return Result error");
+    assert::ExpectEqual(regex::Escape("a+b?"), "a\\+b\\?", "regex escape failed");
+
+    console::Print("std-regex-wave-ok");
+    return 0;
+}

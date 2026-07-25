@@ -1,0 +1,507 @@
+use std::result as result;
+
+realm std {
+    fn ToString<T>(value: T) -> string {
+        return $"${value}";
+    }
+
+    realm convert {
+        use @CppHeader("std_convert.h");
+
+        @Native
+        @Type(u8)
+        @CppName(wio::runtime::std_convert::ParseError)
+        enum ParseError {
+            none = 0u8,
+            empty = 1u8,
+            invalid_format = 2u8,
+            trailing_characters = 3u8,
+            out_of_range = 4u8,
+            invalid_base = 5u8
+        };
+
+        @Native
+        @CppName(wio::runtime::std_convert::ToString)
+        fn ErrorMessage(error: ParseError) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_convert::ParseErrorValue)
+        fn ErrorCode(error: ParseError) -> i32;
+
+        @Native
+        @CppName(wio::runtime::std_convert::TryParseI8)
+        fn TryParseI8Native(value: string, outValue: ref i8, error: ref ParseError, base: i32) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_convert::TryParseI16)
+        fn TryParseI16Native(value: string, outValue: ref i16, error: ref ParseError, base: i32) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_convert::TryParseI32)
+        fn TryParseI32Native(value: string, outValue: ref i32, error: ref ParseError, base: i32) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_convert::TryParseI64)
+        fn TryParseI64Native(value: string, outValue: ref i64, error: ref ParseError, base: i32) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_convert::TryParseU8)
+        fn TryParseU8Native(value: string, outValue: ref u8, error: ref ParseError, base: i32) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_convert::TryParseU16)
+        fn TryParseU16Native(value: string, outValue: ref u16, error: ref ParseError, base: i32) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_convert::TryParseU32)
+        fn TryParseU32Native(value: string, outValue: ref u32, error: ref ParseError, base: i32) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_convert::TryParseU64)
+        fn TryParseU64Native(value: string, outValue: ref u64, error: ref ParseError, base: i32) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_convert::TryParseISize)
+        fn TryParseISizeNative(value: string, outValue: ref isize, error: ref ParseError, base: i32) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_convert::TryParseUSize)
+        fn TryParseUSizeNative(value: string, outValue: ref usize, error: ref ParseError, base: i32) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_convert::TryParseF32)
+        fn TryParseF32Native(value: string, outValue: ref f32, error: ref ParseError) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_convert::TryParseF64)
+        fn TryParseF64Native(value: string, outValue: ref f64, error: ref ParseError) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_convert::TryParseBool)
+        fn TryParseBoolNative(value: string, outValue: ref bool, error: ref ParseError) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_convert::ToBaseString)
+        fn IntegerToString(value: i64, base: i32, upper: bool) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_convert::ToBaseString)
+        fn IntegerToString(value: u64, base: i32, upper: bool) -> string;
+
+        fn ToString<T>(value: T) -> string {
+            return std::ToString<T>(value);
+        }
+
+        fn ToString(value: i64, base: i32) -> string {
+            return IntegerToString(value, base, false);
+        }
+
+        fn ToString(value: u64, base: i32) -> string {
+            return IntegerToString(value, base, false);
+        }
+
+        fn ToString(value: i64, base: i32, upper: bool) -> string {
+            return IntegerToString(value, base, upper);
+        }
+
+        fn ToString(value: u64, base: i32, upper: bool) -> string {
+            return IntegerToString(value, base, upper);
+        }
+
+        fn ToHex(value: i64) -> string {
+            return IntegerToString(value, 16, false);
+        }
+
+        fn ToHex(value: u64) -> string {
+            return IntegerToString(value, 16, false);
+        }
+
+        fn ToHexUpper(value: i64) -> string {
+            return IntegerToString(value, 16, true);
+        }
+
+        fn ToHexUpper(value: u64) -> string {
+            return IntegerToString(value, 16, true);
+        }
+
+        fn ToBinary(value: i64) -> string {
+            return IntegerToString(value, 2, false);
+        }
+
+        fn ToBinary(value: u64) -> string {
+            return IntegerToString(value, 2, false);
+        }
+
+        fn ToOctal(value: i64) -> string {
+            return IntegerToString(value, 8, false);
+        }
+
+        fn ToOctal(value: u64) -> string {
+            return IntegerToString(value, 8, false);
+        }
+
+        fn MakeParseResultError(value: string, target: string, error: ParseError) -> std::ResultError {
+            let message = "Cannot parse '" + value + "' as " + target + ": " + ErrorMessage(error);
+            return std::MakeResultError(
+                std::ResultDomain::custom,
+                ErrorCode(error),
+                ErrorCode(error) fit i64,
+                message
+            );
+        }
+
+        fn TryToI8(value: string, base: i32, outValue: ref i8) -> bool {
+            mut error = ParseError::none;
+            return TryParseI8Native(value, outValue, ref error, base);
+        }
+
+        fn TryToI8(value: string, outValue: ref i8) -> bool {
+            return TryToI8(value, 10, outValue);
+        }
+
+        fn TryToI16(value: string, base: i32, outValue: ref i16) -> bool {
+            mut error = ParseError::none;
+            return TryParseI16Native(value, outValue, ref error, base);
+        }
+
+        fn TryToI16(value: string, outValue: ref i16) -> bool {
+            return TryToI16(value, 10, outValue);
+        }
+
+        fn TryToI32(value: string, base: i32, outValue: ref i32) -> bool {
+            mut error = ParseError::none;
+            return TryParseI32Native(value, outValue, ref error, base);
+        }
+
+        fn TryToI32(value: string, outValue: ref i32) -> bool {
+            return TryToI32(value, 10, outValue);
+        }
+
+        fn TryToI64(value: string, base: i32, outValue: ref i64) -> bool {
+            mut error = ParseError::none;
+            return TryParseI64Native(value, outValue, ref error, base);
+        }
+
+        fn TryToI64(value: string, outValue: ref i64) -> bool {
+            return TryToI64(value, 10, outValue);
+        }
+
+        fn TryToU8(value: string, base: i32, outValue: ref u8) -> bool {
+            mut error = ParseError::none;
+            return TryParseU8Native(value, outValue, ref error, base);
+        }
+
+        fn TryToU8(value: string, outValue: ref u8) -> bool {
+            return TryToU8(value, 10, outValue);
+        }
+
+        fn TryToU16(value: string, base: i32, outValue: ref u16) -> bool {
+            mut error = ParseError::none;
+            return TryParseU16Native(value, outValue, ref error, base);
+        }
+
+        fn TryToU16(value: string, outValue: ref u16) -> bool {
+            return TryToU16(value, 10, outValue);
+        }
+
+        fn TryToU32(value: string, base: i32, outValue: ref u32) -> bool {
+            mut error = ParseError::none;
+            return TryParseU32Native(value, outValue, ref error, base);
+        }
+
+        fn TryToU32(value: string, outValue: ref u32) -> bool {
+            return TryToU32(value, 10, outValue);
+        }
+
+        fn TryToU64(value: string, base: i32, outValue: ref u64) -> bool {
+            mut error = ParseError::none;
+            return TryParseU64Native(value, outValue, ref error, base);
+        }
+
+        fn TryToU64(value: string, outValue: ref u64) -> bool {
+            return TryToU64(value, 10, outValue);
+        }
+
+        fn TryToISize(value: string, base: i32, outValue: ref isize) -> bool {
+            mut error = ParseError::none;
+            return TryParseISizeNative(value, outValue, ref error, base);
+        }
+
+        fn TryToISize(value: string, outValue: ref isize) -> bool {
+            return TryToISize(value, 10, outValue);
+        }
+
+        fn TryToUSize(value: string, base: i32, outValue: ref usize) -> bool {
+            mut error = ParseError::none;
+            return TryParseUSizeNative(value, outValue, ref error, base);
+        }
+
+        fn TryToUSize(value: string, outValue: ref usize) -> bool {
+            return TryToUSize(value, 10, outValue);
+        }
+
+        fn TryToF32(value: string, outValue: ref f32) -> bool {
+            mut error = ParseError::none;
+            return TryParseF32Native(value, outValue, ref error);
+        }
+
+        fn TryToF64(value: string, outValue: ref f64) -> bool {
+            mut error = ParseError::none;
+            return TryParseF64Native(value, outValue, ref error);
+        }
+
+        fn TryToBool(value: string, outValue: ref bool) -> bool {
+            mut error = ParseError::none;
+            return TryParseBoolNative(value, outValue, ref error);
+        }
+
+        fn ParseI8(value: string, base: i32) -> std::Result<i8> {
+            mut parsed = 0i8;
+            mut error = ParseError::none;
+            if (TryParseI8Native(value, ref parsed, ref error, base)) {
+                return std::Ok<i8>(parsed);
+            }
+            return std::Err<i8>(MakeParseResultError(value, "i8", error));
+        }
+
+        fn ParseI8(value: string) -> std::Result<i8> {
+            return ParseI8(value, 10);
+        }
+
+        fn ParseI16(value: string, base: i32) -> std::Result<i16> {
+            mut parsed = 0i16;
+            mut error = ParseError::none;
+            if (TryParseI16Native(value, ref parsed, ref error, base)) {
+                return std::Ok<i16>(parsed);
+            }
+            return std::Err<i16>(MakeParseResultError(value, "i16", error));
+        }
+
+        fn ParseI16(value: string) -> std::Result<i16> {
+            return ParseI16(value, 10);
+        }
+
+        fn ParseI32(value: string, base: i32) -> std::Result<i32> {
+            mut parsed = 0;
+            mut error = ParseError::none;
+            if (TryParseI32Native(value, ref parsed, ref error, base)) {
+                return std::Ok<i32>(parsed);
+            }
+            return std::Err<i32>(MakeParseResultError(value, "i32", error));
+        }
+
+        fn ParseI32(value: string) -> std::Result<i32> {
+            return ParseI32(value, 10);
+        }
+
+        fn ParseI64(value: string, base: i32) -> std::Result<i64> {
+            mut parsed = 0i64;
+            mut error = ParseError::none;
+            if (TryParseI64Native(value, ref parsed, ref error, base)) {
+                return std::Ok<i64>(parsed);
+            }
+            return std::Err<i64>(MakeParseResultError(value, "i64", error));
+        }
+
+        fn ParseI64(value: string) -> std::Result<i64> {
+            return ParseI64(value, 10);
+        }
+
+        fn ParseU8(value: string, base: i32) -> std::Result<u8> {
+            mut parsed = 0u8;
+            mut error = ParseError::none;
+            if (TryParseU8Native(value, ref parsed, ref error, base)) {
+                return std::Ok<u8>(parsed);
+            }
+            return std::Err<u8>(MakeParseResultError(value, "u8", error));
+        }
+
+        fn ParseU8(value: string) -> std::Result<u8> {
+            return ParseU8(value, 10);
+        }
+
+        fn ParseU16(value: string, base: i32) -> std::Result<u16> {
+            mut parsed = 0u16;
+            mut error = ParseError::none;
+            if (TryParseU16Native(value, ref parsed, ref error, base)) {
+                return std::Ok<u16>(parsed);
+            }
+            return std::Err<u16>(MakeParseResultError(value, "u16", error));
+        }
+
+        fn ParseU16(value: string) -> std::Result<u16> {
+            return ParseU16(value, 10);
+        }
+
+        fn ParseU32(value: string, base: i32) -> std::Result<u32> {
+            mut parsed = 0u32;
+            mut error = ParseError::none;
+            if (TryParseU32Native(value, ref parsed, ref error, base)) {
+                return std::Ok<u32>(parsed);
+            }
+            return std::Err<u32>(MakeParseResultError(value, "u32", error));
+        }
+
+        fn ParseU32(value: string) -> std::Result<u32> {
+            return ParseU32(value, 10);
+        }
+
+        fn ParseU64(value: string, base: i32) -> std::Result<u64> {
+            mut parsed = 0u64;
+            mut error = ParseError::none;
+            if (TryParseU64Native(value, ref parsed, ref error, base)) {
+                return std::Ok<u64>(parsed);
+            }
+            return std::Err<u64>(MakeParseResultError(value, "u64", error));
+        }
+
+        fn ParseU64(value: string) -> std::Result<u64> {
+            return ParseU64(value, 10);
+        }
+
+        fn ParseISize(value: string, base: i32) -> std::Result<isize> {
+            mut parsed = 0isize;
+            mut error = ParseError::none;
+            if (TryParseISizeNative(value, ref parsed, ref error, base)) {
+                return std::Ok<isize>(parsed);
+            }
+            return std::Err<isize>(MakeParseResultError(value, "isize", error));
+        }
+
+        fn ParseISize(value: string) -> std::Result<isize> {
+            return ParseISize(value, 10);
+        }
+
+        fn ParseUSize(value: string, base: i32) -> std::Result<usize> {
+            mut parsed = 0usize;
+            mut error = ParseError::none;
+            if (TryParseUSizeNative(value, ref parsed, ref error, base)) {
+                return std::Ok<usize>(parsed);
+            }
+            return std::Err<usize>(MakeParseResultError(value, "usize", error));
+        }
+
+        fn ParseUSize(value: string) -> std::Result<usize> {
+            return ParseUSize(value, 10);
+        }
+
+        fn ParseF32(value: string) -> std::Result<f32> {
+            mut parsed = 0.0f;
+            mut error = ParseError::none;
+            if (TryParseF32Native(value, ref parsed, ref error)) {
+                return std::Ok<f32>(parsed);
+            }
+            return std::Err<f32>(MakeParseResultError(value, "f32", error));
+        }
+
+        fn ParseF64(value: string) -> std::Result<f64> {
+            mut parsed = 0.0f64;
+            mut error = ParseError::none;
+            if (TryParseF64Native(value, ref parsed, ref error)) {
+                return std::Ok<f64>(parsed);
+            }
+            return std::Err<f64>(MakeParseResultError(value, "f64", error));
+        }
+
+        fn ParseBool(value: string) -> std::Result<bool> {
+            mut parsed = false;
+            mut error = ParseError::none;
+            if (TryParseBoolNative(value, ref parsed, ref error)) {
+                return std::Ok<bool>(parsed);
+            }
+            return std::Err<bool>(MakeParseResultError(value, "bool", error));
+        }
+
+        fn ToI8(value: string, base: i32) -> i8 {
+            return ParseI8(value, base).Unwrap();
+        }
+
+        fn ToI8(value: string) -> i8 {
+            return ParseI8(value).Unwrap();
+        }
+
+        fn ToI16(value: string, base: i32) -> i16 {
+            return ParseI16(value, base).Unwrap();
+        }
+
+        fn ToI16(value: string) -> i16 {
+            return ParseI16(value).Unwrap();
+        }
+
+        fn ToI32(value: string, base: i32) -> i32 {
+            return ParseI32(value, base).Unwrap();
+        }
+
+        fn ToI32(value: string) -> i32 {
+            return ParseI32(value).Unwrap();
+        }
+
+        fn ToI64(value: string, base: i32) -> i64 {
+            return ParseI64(value, base).Unwrap();
+        }
+
+        fn ToI64(value: string) -> i64 {
+            return ParseI64(value).Unwrap();
+        }
+
+        fn ToU8(value: string, base: i32) -> u8 {
+            return ParseU8(value, base).Unwrap();
+        }
+
+        fn ToU8(value: string) -> u8 {
+            return ParseU8(value).Unwrap();
+        }
+
+        fn ToU16(value: string, base: i32) -> u16 {
+            return ParseU16(value, base).Unwrap();
+        }
+
+        fn ToU16(value: string) -> u16 {
+            return ParseU16(value).Unwrap();
+        }
+
+        fn ToU32(value: string, base: i32) -> u32 {
+            return ParseU32(value, base).Unwrap();
+        }
+
+        fn ToU32(value: string) -> u32 {
+            return ParseU32(value).Unwrap();
+        }
+
+        fn ToU64(value: string, base: i32) -> u64 {
+            return ParseU64(value, base).Unwrap();
+        }
+
+        fn ToU64(value: string) -> u64 {
+            return ParseU64(value).Unwrap();
+        }
+
+        fn ToISize(value: string, base: i32) -> isize {
+            return ParseISize(value, base).Unwrap();
+        }
+
+        fn ToISize(value: string) -> isize {
+            return ParseISize(value).Unwrap();
+        }
+
+        fn ToUSize(value: string, base: i32) -> usize {
+            return ParseUSize(value, base).Unwrap();
+        }
+
+        fn ToUSize(value: string) -> usize {
+            return ParseUSize(value).Unwrap();
+        }
+
+        fn ToF32(value: string) -> f32 {
+            return ParseF32(value).Unwrap();
+        }
+
+        fn ToF64(value: string) -> f64 {
+            return ParseF64(value).Unwrap();
+        }
+
+        fn ToBool(value: string) -> bool {
+            return ParseBool(value).Unwrap();
+        }
+    }
+}

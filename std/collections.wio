@@ -1,3 +1,7 @@
+use std::queue as queue;
+use std::sets as sets;
+use std::tuple as tuple;
+
 realm std {
     realm collections {
         type Array<T> = T[];
@@ -7,6 +11,7 @@ realm std {
         type OrderedDictionary<K, V> = Tree<K, V>;
         type OrderedMap<K, V> = Tree<K, V>;
         type TreeMap<K, V> = Tree<K, V>;
+        type Tuple<Args...> = std::tuple::Tuple<Args...>;
 
         fn Count<T>(values: T[]) -> usize {
             return values.Count();

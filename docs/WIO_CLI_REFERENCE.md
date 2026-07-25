@@ -4,6 +4,7 @@ This document is the command reference for the current Wio CLI.
 
 The stable `v1` command families are:
 
+- `wio run`
 - `wio build`
 - `wio test`
 - `wio file`
@@ -29,6 +30,7 @@ This is the primary user-facing interface:
 ```powershell
 wio build ...
 wio test ...
+wio help project run
 wio file run ...
 wio project build ...
 wio bind import ...
@@ -49,6 +51,25 @@ wio .\tests\native\exported_library.wio --target shared --output build\interop\e
 
 Think of it as a lower-level compiler entry path, while `wio file ...` is the
 more structured single-file UX.
+
+### 1.3 Common CLI Behavior
+
+Every command family follows the same discovery conventions:
+
+```powershell
+wio --help
+wio help project run
+wio env
+wio bind --version
+```
+
+- `wio help <command> [subcommand]` routes to command-specific help
+- a bare command group such as `wio file`, `wio bind`, `wio env`,
+  `wio project`, or `wio perf` prints its group help successfully
+- `--help`, `-h`, and `help` are accepted help forms
+- `--version`, `-v`, and `version` are accepted version forms
+- close misspellings produce a concrete suggestion at both top-level and
+  subcommand level
 
 ---
 
@@ -128,13 +149,16 @@ inspection.
 
 ### 4.2 Argument Forwarding
 
-Additional arguments after the file path are forwarded to the compiler/backend
-workflow when appropriate.
+Arguments before `--` belong to the compiler/backend workflow. Arguments after
+`--` are passed to `Entry(args: string[])` exactly as application arguments,
+including values with spaces, values beginning with `-`, and a later literal
+`--`.
 
-Example:
+Examples:
 
 ```powershell
 wio file run .\tests\native\native_bridge.wio --include-dir .\tests\native --backend-arg .\tests\native\native_math.cpp
+wio file run .\app.wio -- "two words" --verbose --
 ```
 
 ---
@@ -167,15 +191,20 @@ Templates currently include:
 
 ```powershell
 wio project describe --project C:\Projects\MyGame
+cd C:\Projects\MyGame
+wio project describe
 ```
 
 Use this to see what Wio thinks the project root, manifest, sources, outputs,
-and native/host pieces are.
+and native/host pieces are. When no project path is supplied, Wio searches the
+current directory and its ancestors for `wio.makewio` or `makewio`.
 
 ### 5.3 `project build`
 
 ```powershell
 wio project build --project C:\Projects\MyGame
+cd C:\Projects\MyGame
+wio project build
 ```
 
 Wio uses up-to-date checks so repeated builds can become very cheap when the
@@ -185,10 +214,29 @@ project is unchanged.
 
 ```powershell
 wio project run --project C:\Projects\MyGame
+cd C:\Projects\MyGame
+wio project run
+wio project run -- "two words" --verbose
 ```
 
 Use this when you want the project-aware run path rather than single-file
-execution.
+execution. `wio run` is the short form of `wio project run`.
+
+Application arguments are assembled in this order:
+
+1. `[run].args` from `wio.makewio`
+2. each repeated `--arg VALUE`
+3. every value after `--`
+
+Useful run options:
+
+- `--no-build` launches the existing output without an up-to-date build check
+- `--rebuild` forces project recompilation
+- `--no-manifest-args` omits `[run].args`
+- `--cwd DIR` overrides the manifest working directory
+- `--print-command` prints the resolved working directory and launch command
+
+The child program's exit code is returned unchanged by Wio.
 
 ---
 
@@ -382,8 +430,9 @@ wio file run .\playground\main.wio
 
 ```powershell
 wio project new MyGame --output-dir C:\Projects --template wio-app
-wio project build --project C:\Projects\MyGame
-wio project run --project C:\Projects\MyGame
+cd C:\Projects\MyGame
+wio project build
+wio project run -- player-one "--safe mode"
 ```
 
 ### 11.4 Generate A Binding

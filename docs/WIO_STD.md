@@ -113,6 +113,9 @@ explicit caveat:
 
 - `std::assert`
 - `std::math`
+- `std::convert`
+- `std::chars`
+- `std::strings`
 
 `std::assert` is a mixed module:
 
@@ -124,6 +127,28 @@ explicit caveat:
 - the numerically sensitive core is runtime-backed through `std_math.h`
 - higher-level aliases and convenience wrappers such as `Square`,
   `Clamp01`, and range predicates are implemented in Wio
+
+The conversion/text family is mixed as well:
+
+- `std::convert` exposes checked native parsing through Wio `Result<T>`
+  wrappers
+- `std::chars` provides locale-independent ASCII classification and case
+  conversion
+- `std::strings` remains primarily a Wio convenience module, with a small
+  runtime-backed ASCII text core
+- `string.ToI8()` through `string.ToUSize()`, `string.ToF32()`,
+  `string.ToF64()`, and `string.ToBool()` are language-owned ergonomic
+  intrinsics
+- integer member conversions accept an optional base; base `0` recognizes
+  `0x`, `0b`, and `0o` prefixes, while explicit bases may range from 2 to 36
+- direct `To*` conversion panics with a Wio runtime diagnostic on invalid input;
+  `convert::Parse*` returns `Result<T>` and `convert::TryTo*` writes through an
+  output reference
+- parsing trims ASCII whitespace but requires the remaining input to be
+  consumed completely, so values such as `"42x"` are rejected
+- `std::ToString<T>` and `convert::ToString<T>` provide generic formatting for
+  primitive values, enums, arrays/maps, and Wio objects that expose a public
+  `ToString() -> string` method
 
 Current v1 expectation:
 
@@ -139,7 +164,6 @@ Current v1 expectation:
 ### 2.3 Pure-Wio Stable Modules
 
 - `std::collections`
-- `std::strings`
 - `std::algorithms`
 - `std::vector`
 - `std::result`
@@ -170,17 +194,38 @@ The intended stable direction is:
 - utility helpers grouped under dedicated sub-realms
 - predictable scalar safety behavior for divide/modulo-oriented helpers
 
+The collection wave also includes:
+
+- `std::Queue<T>` / `std::queue::Queue<T>` with amortized FIFO storage
+- `std::Set<T>` and `std::UnorderedSet<T>` backed by `Dict<T, bool>`
+- `std::OrderedSet<T>` backed by `Tree<T, bool>`
+- heterogeneous `std::Tuple<Args...>` / `std::tuple::Tuple<Args...>`
+- `std::sort`, whose default `Sort` path uses the adaptive array intrinsic
+  (already-sorted and reverse-sorted fast paths, insertion sort for small
+  inputs, dense integral counting, and standard comparison-sort fallback)
+- explicit `InsertionSort`, `SelectionSort`, and stable merge-sort helpers
+- `std::span::Span`, a checked range token used together with an explicit
+  `view T[]`/`ref T[]`; the source reference is deliberately not stored because
+  Wio does not yet have escaping borrow lifetimes
+
+`std::traits` now provides both compiler constraints and query functions.
+Built-in constraints cover integer/numeric/floating/signed/unsigned,
+enum/flagset, object/component/interface, array, and reference categories.
+Users may declare an empty generic interface, implement its concrete
+specialization with `@From`, and use that interface as a nominal
+`@Apply(UserTrait<T>)` predicate. Query functions include `IsSameType`,
+constructibility checks, and the corresponding type-category checks.
+
 ### 2.3.1 Pure-Wio Stable Module
 
 - `std::reflect`
 
 `std::reflect` is part of the intended `v1` std surface.
 
-### 2.3.2 Enum And Flagset Surface
+### 2.3.2 Reflection Surface
 
-`enum` and `flagset` now have a stable first-class convenience layer, even
-though the implementation currently lives in
-[`std/reflect.wio`](../std/reflect.wio).
+`enum`, `flagset`, `component`, `object`, and `interface` declarations now have
+a first-class metadata layer in [`std/reflect.wio`](../std/reflect.wio).
 
 The stable ergonomic surface is:
 
@@ -196,10 +241,21 @@ The stable ergonomic surface is:
 - `reflect::Without(flags, mask)`
 - `reflect::Toggle(flags, mask)`
 - `reflect::Clear(flags)`
+- `reflect::TypeName<T>()`, `TypeKind<T>()`, `TypeSize<T>()`, and
+  `TypeAlignment<T>()`
+- `reflect::FieldNames<T>()`, `FieldTypes<T>()`, `FieldAccess<T>()`
+- `reflect::MethodNames<T>()`, `MethodSignatures<T>()`,
+  `MethodAccess<T>()`
+- `reflect::BaseTypes<T>()`
+- `reflect::Describe<T>()`, which composes those arrays into `TypeInfo`
 
 This keeps common state/kind/mode style code readable without forcing all
 flag-oriented operations back to raw integer math, while also giving enum and
-flagset types enough metadata for stable `v1` reflection code.
+flagset types enough metadata for stable reflection code while exposing the
+same source-level metadata for generic and non-generic components, objects,
+and interfaces. Generic declarations report their declared parameter names in
+field/method signatures while kind, access, bases, and member shape remain
+fully available for each instantiation.
 
 ### 2.4 Stable-With-Caveats Pure-Wio Meta Module
 
@@ -265,6 +321,37 @@ Current expectation:
 - remaining work here is helper growth and documentation polish, not a search
   for a different boundary.
 
+### 2.6 Hash, Random, Regex, Time, And Buffer Modules
+
+- `std::hash`
+  - `Hash(string|byte[])` defaults to FNV-1a 64
+  - explicit FNV-1a 32/64 functions are available
+  - `Sha256` returns lowercase hexadecimal output and `Sha256Digest` returns
+    the 32 digest bytes
+  - `HashValue<T>` hashes the canonical `std::ToString<T>` representation
+- `std::random`
+  - `Random`/`Default` are aliases of MT19937
+  - xoroshiro128+, LXM, and Wichmann-Hill generators are available as explicit
+    stateful objects
+  - all generators accept deterministic seeds; `Create()` uses `SystemSeed()`
+- `std::regex`
+  - match, find, captures, find-all, replace, split, and escaping
+  - invalid patterns are returned as `Result` errors instead of leaking native
+    exceptions
+- `std::time`
+  - system Unix clocks, monotonic clocks, sleeping, durations, UTC/local
+    breakdown, leap-year/month helpers, checked `DateTime` creation, and
+    ISO-8601 formatting
+- `std::buffer` / `std::heap`
+  - checked `ByteBuffer` cursor operations and explicit little-endian codecs
+  - generation-checked `BytePool` leases reject stale/double returns
+  - `Pool<T>` provides the same lifecycle discipline for typed values
+  - unchecked reinterpret-style `As<T>` is intentionally not exposed; typed
+    pools and explicit codecs keep ownership and representation errors visible
+
+The language keywords `byte` and `bit` are active semantic aliases of `u8` and
+`bool` respectively. New byte-oriented APIs use `byte[]` directly.
+
 ---
 
 ## 3. Language vs Std Ownership
@@ -302,11 +389,50 @@ v1 direction:
 - `std::path`
 - `std::process`
 - `std::math`
+- `std::convert`
+- `std::chars`
 - `std::collections`
 - `std::strings`
 - `std::algorithms`
 - `std::result`
 - `std::traits`
+
+### 4.1 Conversion Quick Reference
+
+```wio
+use std::convert as convert;
+
+let decimal = "42".ToI32();
+let prefixed = "0x2A".ToI32(0);
+
+let safe = convert::ParseU16("65535");
+if (safe.IsOk()) {
+    let value = safe.Unwrap();
+}
+
+mut fallback = 0i32;
+if (convert::TryToI32("not a number", ref fallback)) {
+    // fallback was replaced
+}
+
+let hex = convert::ToHexUpper(48879u64); // "BEEF"
+let values: i32[] = [1, 2, 3];
+let text = convert::ToString<i32[]>(values); // "[1, 2, 3]"
+```
+
+`ParseError` distinguishes empty input, invalid format, trailing characters,
+range overflow, and invalid bases. Floating-point parsing rejects non-finite and
+out-of-range results. Boolean parsing accepts `true/false`, `1/0`, `yes/no`,
+and `on/off` case-insensitively.
+
+The ASCII-oriented helpers under `std::chars` deliberately avoid
+locale-dependent behavior. `std::strings` adds case-insensitive comparison,
+prefix/suffix composition, before/after extraction, whitespace splitting and
+collapsing, capitalization, occurrence counting, and truncation helpers.
+
+The generic algorithm utility layer includes `Distinct`, `TakeWhile`,
+`SkipWhile`, `Reject`, `Chunk`, `Windowed`, `Flatten`, `Repeat`, `Range`,
+`SequenceEqual`, and numeric sum helpers.
 
 The following is part of the intended stable surface, but still carries an
 explicit caveat:
@@ -340,7 +466,8 @@ The combined smoke test for the current v1 std surface is:
 That test intentionally exercises both families together:
 
 - runtime-backed: `console`, `assert`, `fs`, `path`
-- pure-Wio: `math`, `collections`, `strings`, `algorithms`
+- pure-Wio: `collections`, `algorithms`
+- mixed Wio/runtime: `math`, `strings`, `convert`, `chars`
 
 If that test breaks, it usually means either:
 

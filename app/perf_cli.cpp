@@ -1,12 +1,12 @@
 #include "perf_cli.h"
+#include "cli_common.h"
+#include "process_cli.h"
 
 #include <argonaut.h>
 
 #include <algorithm>
 #include <chrono>
-#include <cctype>
 #include <cstdlib>
-#include <cstring>
 #include <filesystem>
 #include <functional>
 #include <fstream>
@@ -17,7 +17,6 @@
 #include <string>
 #include <string_view>
 #include <system_error>
-#include <unordered_set>
 #include <vector>
 
 #if defined(_WIN32)
@@ -89,11 +88,6 @@ namespace wio::tooling::perf
             PerfStats stats;
         };
 
-        bool isHelpToken(const std::string_view value)
-        {
-            return value == "--help" || value == "-h" || value == "help";
-        }
-
         std::vector<std::string> collectCommandArgs(const std::string& programName, int argc, char* argv[], int firstArgumentIndex)
         {
             std::vector<std::string> args;
@@ -158,153 +152,6 @@ namespace wio::tooling::perf
         {
             auto values = parser.GetValuesOf<bool>(id);
             return !values.empty() && values.front();
-        }
-
-        std::string quoteCommandPart(const std::string& value)
-        {
-            if (value.empty())
-                return "\"\"";
-
-            bool needsQuotes = false;
-            for (const char ch : value)
-            {
-                if (std::isspace(static_cast<unsigned char>(ch)) != 0 || ch == '"' || ch == '&' || ch == '(' || ch == ')' || ch == ';')
-                {
-                    needsQuotes = true;
-                    break;
-                }
-            }
-
-            if (!needsQuotes)
-                return value;
-
-            std::string result;
-            result.reserve(value.size() + 2);
-            result.push_back('"');
-            for (const char ch : value)
-            {
-                if (ch == '"')
-                    result += "\\\"";
-                else
-                    result.push_back(ch);
-            }
-            result.push_back('"');
-            return result;
-        }
-
-        std::string joinCommand(const std::vector<std::string>& parts)
-        {
-            std::ostringstream stream;
-            for (size_t i = 0; i < parts.size(); ++i)
-            {
-                if (i > 0)
-                    stream << ' ';
-                stream << quoteCommandPart(parts[i]);
-            }
-            return stream.str();
-        }
-
-        int runShellCommand(const std::vector<std::string>& parts,
-                            const std::optional<std::filesystem::path>& workingDirectory = std::nullopt)
-        {
-            const std::string command = joinCommand(parts);
-
-#if defined(_WIN32)
-            LPCH environmentStrings = GetEnvironmentStringsA();
-            if (environmentStrings == nullptr)
-                return EXIT_FAILURE;
-
-            std::unordered_set<std::string> seenKeys;
-            std::vector<std::string> sanitizedEntries;
-            std::string mergedPath;
-            std::optional<size_t> pathEntryIndex;
-
-            for (LPCSTR cursor = environmentStrings; *cursor != '\0'; cursor += std::strlen(cursor) + 1)
-            {
-                const std::string_view entry(cursor);
-                const size_t equalsIndex = entry.find('=');
-                if (equalsIndex == std::string_view::npos || equalsIndex == 0)
-                {
-                    sanitizedEntries.emplace_back(entry);
-                    continue;
-                }
-
-                std::string normalizedKey(entry.substr(0, equalsIndex));
-                for (char& ch : normalizedKey)
-                    ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-
-                if (normalizedKey == "path")
-                {
-                    if (!pathEntryIndex.has_value())
-                        pathEntryIndex = sanitizedEntries.size();
-                    if (!mergedPath.empty() && mergedPath.back() != ';' &&
-                        equalsIndex + 1 < entry.size() && entry[equalsIndex + 1] != ';')
-                        mergedPath.push_back(';');
-                    mergedPath.append(entry.substr(equalsIndex + 1));
-                    continue;
-                }
-
-                if (!seenKeys.insert(normalizedKey).second)
-                    continue;
-
-                sanitizedEntries.emplace_back(entry);
-            }
-
-            if (!mergedPath.empty() && pathEntryIndex.has_value())
-                sanitizedEntries.insert(sanitizedEntries.begin() + static_cast<std::ptrdiff_t>(*pathEntryIndex), "Path=" + mergedPath);
-
-            FreeEnvironmentStringsA(environmentStrings);
-
-            std::vector<char> environmentBlock;
-            for (const std::string& entry : sanitizedEntries)
-            {
-                environmentBlock.insert(environmentBlock.end(), entry.begin(), entry.end());
-                environmentBlock.push_back('\0');
-            }
-            environmentBlock.push_back('\0');
-
-            std::vector<char> commandLine(command.begin(), command.end());
-            commandLine.push_back('\0');
-
-            STARTUPINFOA startupInfo{};
-            startupInfo.cb = sizeof(startupInfo);
-
-            PROCESS_INFORMATION processInfo{};
-            const BOOL created = CreateProcessA(
-                nullptr,
-                commandLine.data(),
-                nullptr,
-                nullptr,
-                FALSE,
-                0,
-                environmentBlock.data(),
-                workingDirectory.has_value() ? workingDirectory->string().c_str() : nullptr,
-                &startupInfo,
-                &processInfo
-            );
-
-            if (created == FALSE)
-                return EXIT_FAILURE;
-
-            WaitForSingleObject(processInfo.hProcess, INFINITE);
-
-            DWORD exitCode = EXIT_FAILURE;
-            GetExitCodeProcess(processInfo.hProcess, &exitCode);
-
-            CloseHandle(processInfo.hThread);
-            CloseHandle(processInfo.hProcess);
-            return static_cast<int>(exitCode);
-#else
-            if (workingDirectory.has_value())
-            {
-                const auto previous = std::filesystem::current_path();
-                std::filesystem::current_path(*workingDirectory);
-                const int result = std::system(command.c_str());
-                std::filesystem::current_path(previous);
-                return result;
-            }
-            return std::system(command.c_str());
-#endif
         }
 
         std::filesystem::path getExecutablePath()
@@ -437,6 +284,7 @@ namespace wio::tooling::perf
                         .SetDescription("Keep the perf scratch directory on disk after a successful run.")
                 )
                 .AutoHelp()
+                .AutoVersion()
                 .SetVersion(WIO_VERSION);
 
             return parser;
@@ -543,7 +391,7 @@ namespace wio::tooling::perf
                 parts.reserve(subcommand.size() + 1);
                 parts.push_back(executablePath.string());
                 parts.insert(parts.end(), subcommand.begin(), subcommand.end());
-                return runShellCommand(parts, workingDirectory);
+                return process::Run(parts, workingDirectory);
             };
 
             if (const int result = recordScenario(fileCheckStats, iterations, [&](int) -> int
@@ -653,12 +501,16 @@ namespace wio::tooling::perf
 
         if (argc < 3 || argv[2] == nullptr)
         {
-            std::cerr << "Expected a perf subcommand. Currently supported: smoke\n";
-            return EXIT_FAILURE;
+            std::cout
+                << "Wio perf commands\n"
+                << "\n"
+                << "Usage:\n"
+                << "  wio perf smoke [--iterations N] [--scratch-dir DIR] [--keep-scratch]\n";
+            return EXIT_SUCCESS;
         }
 
         const std::string_view subcommand = argv[2];
-        if (isHelpToken(subcommand))
+        if (cli::IsHelpToken(subcommand))
         {
             std::cout
                 << "Wio perf commands\n"
@@ -672,6 +524,12 @@ namespace wio::tooling::perf
             return handlePerfSmokeCommand(collectCommandArgs("wio perf smoke", argc, argv, 3));
 
         std::cerr << "Unknown perf subcommand: " << subcommand << '\n';
+        if (const auto suggestion = cli::SuggestCommand(subcommand, { "smoke" });
+            suggestion.has_value())
+        {
+            std::cerr << "Did you mean 'wio perf " << *suggestion << "'?\n";
+        }
+        std::cerr << "Run 'wio perf --help' to list available performance commands.\n";
         return EXIT_FAILURE;
     }
 }

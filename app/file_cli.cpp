@@ -1,5 +1,6 @@
 #include "file_cli.h"
 
+#include "cli_common.h"
 #include "compiler.h"
 
 #include <cctype>
@@ -24,12 +25,16 @@ namespace
     void printFileCommandUsage(std::ostream& stream)
     {
         stream
-            << "Expected a file subcommand. Currently supported: run, check, tokens, ast\n"
+            << "Wio file commands\n"
+            << "\n"
             << "Usage:\n"
             << "  wio file run    [FILE] [compiler args...] [-- program args...]\n"
             << "  wio file check  [FILE] [extra compiler args...]\n"
             << "  wio file tokens [FILE] [extra compiler args...]\n"
-            << "  wio file ast    [FILE] [extra compiler args...]\n";
+            << "  wio file ast    [FILE] [extra compiler args...]\n"
+            << "\n"
+            << "When FILE is omitted, Wio looks for a conventional project entry file and\n"
+            << "then falls back to the repository playground entry when available.\n";
     }
 
         bool hasProjectManifest(const std::filesystem::path& candidate)
@@ -154,10 +159,55 @@ namespace
 
         std::filesystem::path resolveDefaultSourcePath()
         {
-            if (const auto repoRoot = tryFindRepoRoot(); repoRoot.has_value())
-                return std::filesystem::absolute(*repoRoot / "playground" / "main.wio").make_preferred();
+            auto findConventionalEntry = [](const std::filesystem::path& root)
+                -> std::optional<std::filesystem::path>
+            {
+                const std::filesystem::path candidates[]{
+                    root / "wio" / "main.wio",
+                    root / "wio" / "module.wio",
+                    root / "src" / "main.wio",
+                    root / "src" / "module.wio",
+                    root / "main.wio"
+                };
 
-            return std::filesystem::absolute(std::filesystem::path("playground") / "main.wio").make_preferred();
+                for (const auto& candidate : candidates)
+                {
+                    std::error_code ec;
+                    if (std::filesystem::exists(candidate, ec) &&
+                        std::filesystem::is_regular_file(candidate, ec))
+                    {
+                        return std::filesystem::absolute(candidate).make_preferred();
+                    }
+                }
+
+                return std::nullopt;
+            };
+
+            std::error_code ec;
+            const std::filesystem::path current = std::filesystem::current_path(ec);
+            if (!ec && !current.empty())
+            {
+                if (const auto projectRoot = searchAncestorDirectories(current, hasProjectManifest); projectRoot.has_value())
+                {
+                    if (const auto projectEntry = findConventionalEntry(*projectRoot); projectEntry.has_value())
+                        return *projectEntry;
+                }
+
+                if (const auto currentEntry = findConventionalEntry(current); currentEntry.has_value())
+                    return *currentEntry;
+            }
+
+            if (const auto repoRoot = tryFindRepoRoot(); repoRoot.has_value())
+            {
+                const std::filesystem::path playgroundEntry = *repoRoot / "playground" / "main.wio";
+                if (std::filesystem::exists(playgroundEntry, ec) &&
+                    std::filesystem::is_regular_file(playgroundEntry, ec))
+                {
+                    return std::filesystem::absolute(playgroundEntry).make_preferred();
+                }
+            }
+
+            return std::filesystem::absolute(std::filesystem::path("main.wio")).make_preferred();
         }
 
         std::string sanitizePathStem(std::string stem)
@@ -313,7 +363,7 @@ namespace
                 if (argv[i] != nullptr)
                 {
                     const std::string currentArg = argv[i];
-                    if (mode == "run" && currentArg == "--")
+                    if (mode == "run" && !collectingRunArgs && currentArg == "--")
                     {
                         collectingRunArgs = true;
                         continue;
@@ -355,21 +405,38 @@ namespace
 
         if (argc < 3 || argv[2] == nullptr)
         {
-            printFileCommandUsage(std::cerr);
-            return EXIT_FAILURE;
+            printFileCommandUsage(std::cout);
+            return EXIT_SUCCESS;
         }
 
         const std::string_view mode = argv[2];
-        if (mode == "--help" || mode == "-h" || mode == "help")
+        if (cli::IsHelpToken(mode))
         {
             printFileCommandUsage(std::cout);
             return EXIT_SUCCESS;
         }
 
         if (mode == "run" || mode == "check" || mode == "tokens" || mode == "ast")
+        {
+            if (argc >= 4 && argv[3] != nullptr)
+            {
+                const std::string_view firstModeArgument = argv[3];
+                if (cli::IsHelpToken(firstModeArgument))
+                {
+                    printFileCommandUsage(std::cout);
+                    return EXIT_SUCCESS;
+                }
+            }
             return handleFileMode(std::string(mode), argc, argv);
+        }
 
         std::cerr << "Unknown file subcommand: " << mode << '\n';
+        if (const auto suggestion = cli::SuggestCommand(mode, { "run", "check", "tokens", "ast" });
+            suggestion.has_value())
+        {
+            std::cerr << "Did you mean 'wio file " << *suggestion << "'?\n";
+        }
+        std::cerr << "Run 'wio file --help' to list available file commands.\n";
         return EXIT_FAILURE;
     }
 }

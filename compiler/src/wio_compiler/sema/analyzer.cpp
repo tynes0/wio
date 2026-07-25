@@ -3245,6 +3245,8 @@ namespace wio::sema
             if (name == "u64") return ctx.getU64();
             if (name == "isize") return ctx.getISize();
             if (name == "usize") return ctx.getUSize();
+            if (name == "byte") return ctx.getU8();
+            if (name == "bit") return ctx.getBool();
             if (name == "f32") return ctx.getF32();
             if (name == "f64") return ctx.getF64();
             if (name == "bool") return ctx.getBool();
@@ -3605,6 +3607,69 @@ namespace wio::sema
             return resolved && resolved->isNumeric();
         }
 
+        bool isFloatingConstraintType(const Ref<Type>& type)
+        {
+            Ref<Type> resolved = unwrapAliasType(type);
+            if (!resolved || resolved->kind() != TypeKind::Primitive)
+                return false;
+            const std::string& name = resolved.AsFast<PrimitiveType>()->name;
+            return name == "f32" || name == "f64";
+        }
+
+        bool isSignedConstraintType(const Ref<Type>& type)
+        {
+            Ref<Type> resolved = unwrapAliasType(type);
+            if (!resolved || resolved->kind() != TypeKind::Primitive)
+                return false;
+            const std::string& name = resolved.AsFast<PrimitiveType>()->name;
+            return name == "i8" || name == "i16" || name == "i32" || name == "i64" ||
+                   name == "isize" || name == "f32" || name == "f64";
+        }
+
+        bool isUnsignedConstraintType(const Ref<Type>& type)
+        {
+            Ref<Type> resolved = unwrapAliasType(type);
+            if (!resolved || resolved->kind() != TypeKind::Primitive)
+                return false;
+            const std::string& name = resolved.AsFast<PrimitiveType>()->name;
+            return name == "u8" || name == "u16" || name == "u32" || name == "u64" ||
+                   name == "usize";
+        }
+
+        bool isObjectConstraintType(const Ref<Type>& type)
+        {
+            auto objectType = getObjectOrInterfaceStructType(type);
+            return objectType && objectType->isObject && !objectType->isInterface;
+        }
+
+        bool isInterfaceConstraintType(const Ref<Type>& type)
+        {
+            auto interfaceType = getObjectOrInterfaceStructType(type);
+            return interfaceType && interfaceType->isInterface;
+        }
+
+        bool isComponentConstraintType(const Ref<Type>& type)
+        {
+            Ref<Type> resolved = unwrapAliasType(type);
+            if (!resolved || resolved->kind() != TypeKind::Struct)
+                return false;
+            auto structType = resolved.AsFast<StructType>();
+            return structType && !structType->isObject && !structType->isInterface &&
+                   !structType->isEnum && !structType->isFlagset;
+        }
+
+        bool isArrayConstraintType(const Ref<Type>& type)
+        {
+            Ref<Type> resolved = unwrapAliasType(type);
+            return resolved && resolved->kind() == TypeKind::Array;
+        }
+
+        bool isReferenceConstraintType(const Ref<Type>& type)
+        {
+            Ref<Type> resolved = unwrapAliasType(type);
+            return resolved && resolved->kind() == TypeKind::Reference;
+        }
+
         bool isEnumConstraintType(const Ref<Type>& type)
         {
             Ref<Type> resolved = unwrapAliasType(type);
@@ -3662,6 +3727,29 @@ namespace wio::sema
             return candidates;
         }
 
+        std::vector<Ref<Type>> getFloatingConstraintCandidateTypes()
+        {
+            auto& ctx = Compiler::get().getTypeContext();
+            return { ctx.getF32(), ctx.getF64() };
+        }
+
+        std::vector<Ref<Type>> getSignedConstraintCandidateTypes()
+        {
+            auto& ctx = Compiler::get().getTypeContext();
+            return {
+                ctx.getI8(), ctx.getI16(), ctx.getI32(), ctx.getI64(),
+                ctx.getISize(), ctx.getF32(), ctx.getF64()
+            };
+        }
+
+        std::vector<Ref<Type>> getUnsignedConstraintCandidateTypes()
+        {
+            auto& ctx = Compiler::get().getTypeContext();
+            return {
+                ctx.getU8(), ctx.getU16(), ctx.getU32(), ctx.getU64(), ctx.getUSize()
+            };
+        }
+
         std::vector<Ref<Type>> getNoConcreteConstraintCandidateTypes()
         {
             return {};
@@ -3671,8 +3759,16 @@ namespace wio::sema
         {
             IsInteger,
             IsNumeric,
+            IsFloating,
+            IsSigned,
+            IsUnsigned,
             IsEnum,
-            IsFlagset
+            IsFlagset,
+            IsObject,
+            IsComponent,
+            IsInterface,
+            IsArray,
+            IsReference
         };
 
         using GenericConstraintPredicateFn = bool (*)(const Ref<Type>&);
@@ -3687,9 +3783,9 @@ namespace wio::sema
             GenericConstraintCandidatesFn candidateTypes;
         };
 
-        const std::array<GenericConstraintTraitDescriptor, 4>& getGenericConstraintTraitDescriptors()
+        const std::array<GenericConstraintTraitDescriptor, 12>& getGenericConstraintTraitDescriptors()
         {
-            static const std::array<GenericConstraintTraitDescriptor, 4> descriptors = {{
+            static const std::array<GenericConstraintTraitDescriptor, 12> descriptors = {{
                 {
                     .kind = GenericConstraintTraitKind::IsInteger,
                     .canonicalQualifiedName = "std::traits::IsInteger",
@@ -3705,6 +3801,27 @@ namespace wio::sema
                     .candidateTypes = getNumericConstraintCandidateTypes
                 },
                 {
+                    .kind = GenericConstraintTraitKind::IsFloating,
+                    .canonicalQualifiedName = "std::traits::IsFloating",
+                    .shortName = "IsFloating",
+                    .predicate = isFloatingConstraintType,
+                    .candidateTypes = getFloatingConstraintCandidateTypes
+                },
+                {
+                    .kind = GenericConstraintTraitKind::IsSigned,
+                    .canonicalQualifiedName = "std::traits::IsSigned",
+                    .shortName = "IsSigned",
+                    .predicate = isSignedConstraintType,
+                    .candidateTypes = getSignedConstraintCandidateTypes
+                },
+                {
+                    .kind = GenericConstraintTraitKind::IsUnsigned,
+                    .canonicalQualifiedName = "std::traits::IsUnsigned",
+                    .shortName = "IsUnsigned",
+                    .predicate = isUnsignedConstraintType,
+                    .candidateTypes = getUnsignedConstraintCandidateTypes
+                },
+                {
                     .kind = GenericConstraintTraitKind::IsEnum,
                     .canonicalQualifiedName = "std::traits::IsEnum",
                     .shortName = "IsEnum",
@@ -3716,6 +3833,41 @@ namespace wio::sema
                     .canonicalQualifiedName = "std::traits::IsFlagset",
                     .shortName = "IsFlagset",
                     .predicate = isFlagsetConstraintType,
+                    .candidateTypes = getNoConcreteConstraintCandidateTypes
+                },
+                {
+                    .kind = GenericConstraintTraitKind::IsObject,
+                    .canonicalQualifiedName = "std::traits::IsObject",
+                    .shortName = "IsObject",
+                    .predicate = isObjectConstraintType,
+                    .candidateTypes = getNoConcreteConstraintCandidateTypes
+                },
+                {
+                    .kind = GenericConstraintTraitKind::IsComponent,
+                    .canonicalQualifiedName = "std::traits::IsComponent",
+                    .shortName = "IsComponent",
+                    .predicate = isComponentConstraintType,
+                    .candidateTypes = getNoConcreteConstraintCandidateTypes
+                },
+                {
+                    .kind = GenericConstraintTraitKind::IsInterface,
+                    .canonicalQualifiedName = "std::traits::IsInterface",
+                    .shortName = "IsInterface",
+                    .predicate = isInterfaceConstraintType,
+                    .candidateTypes = getNoConcreteConstraintCandidateTypes
+                },
+                {
+                    .kind = GenericConstraintTraitKind::IsArray,
+                    .canonicalQualifiedName = "std::traits::IsArray",
+                    .shortName = "IsArray",
+                    .predicate = isArrayConstraintType,
+                    .candidateTypes = getNoConcreteConstraintCandidateTypes
+                },
+                {
+                    .kind = GenericConstraintTraitKind::IsReference,
+                    .canonicalQualifiedName = "std::traits::IsReference",
+                    .shortName = "IsReference",
+                    .predicate = isReferenceConstraintType,
                     .candidateTypes = getNoConcreteConstraintCandidateTypes
                 }
             }};
@@ -3759,6 +3911,84 @@ namespace wio::sema
             return descriptor.canonicalQualifiedName;
         }
 
+        bool isUserDefinedTraitConstraint(const Ref<Type>& constraintType, std::string_view parameterName)
+        {
+            Ref<Type> resolved = unwrapAliasType(constraintType);
+            if (!resolved || resolved->kind() != TypeKind::Struct)
+                return false;
+
+            auto traitType = resolved.AsFast<StructType>();
+            if (!traitType || !traitType->isInterface || traitType->genericArguments.empty())
+                return false;
+
+            return std::ranges::any_of(traitType->genericArguments, [&](const Ref<Type>& argument)
+            {
+                Ref<Type> unwrappedArgument = unwrapAliasType(argument);
+                if (!unwrappedArgument || unwrappedArgument->kind() != TypeKind::GenericParameter)
+                    return false;
+                return unwrappedArgument.AsFast<GenericParameterType>()->name == parameterName;
+            });
+        }
+
+        bool matchesUserDefinedTraitConstraint(
+            const Ref<Type>& bindingType,
+            const Ref<Type>& constraintType,
+            std::string_view parameterName)
+        {
+            Ref<Type> resolvedBinding = unwrapAliasType(bindingType);
+            Ref<Type> resolvedConstraint = unwrapAliasType(constraintType);
+            if (!resolvedBinding || !resolvedConstraint ||
+                resolvedBinding->kind() != TypeKind::Struct ||
+                resolvedConstraint->kind() != TypeKind::Struct)
+                return false;
+
+            auto constraintStruct = resolvedConstraint.AsFast<StructType>();
+            if (!constraintStruct || !constraintStruct->isInterface)
+                return false;
+
+            std::function<bool(const Ref<Type>&)> matchesCandidate = [&](const Ref<Type>& candidateType) -> bool
+            {
+                Ref<Type> resolvedCandidate = unwrapAliasType(candidateType);
+                if (!resolvedCandidate || resolvedCandidate->kind() != TypeKind::Struct)
+                    return false;
+
+                auto candidateStruct = resolvedCandidate.AsFast<StructType>();
+                if (!candidateStruct)
+                    return false;
+
+                if (candidateStruct->name == constraintStruct->name &&
+                    candidateStruct->scopePath == constraintStruct->scopePath &&
+                    candidateStruct->genericArguments.size() == constraintStruct->genericArguments.size())
+                {
+                    bool argumentsMatch = true;
+                    for (size_t i = 0; i < constraintStruct->genericArguments.size(); ++i)
+                    {
+                        Ref<Type> expected = unwrapAliasType(constraintStruct->genericArguments[i]);
+                        Ref<Type> actual = unwrapAliasType(candidateStruct->genericArguments[i]);
+                        if (expected && expected->kind() == TypeKind::GenericParameter &&
+                            expected.AsFast<GenericParameterType>()->name == parameterName)
+                        {
+                            if (!isExactConstraintTypeMatch(actual, resolvedBinding))
+                                argumentsMatch = false;
+                        }
+                        else if (!isExactConstraintTypeMatch(actual, expected))
+                        {
+                            argumentsMatch = false;
+                        }
+                    }
+                    if (argumentsMatch)
+                        return true;
+                }
+
+                return std::ranges::any_of(candidateStruct->baseTypes, [&](const Ref<Type>& baseType)
+                {
+                    return matchesCandidate(baseType);
+                });
+            };
+
+            return matchesCandidate(resolvedBinding);
+        }
+
         bool isOpenNativeTemplateIntrinsic(const std::vector<NodePtr<AttributeStatement>>& attributes)
         {
             const Token* cppNameArg = getFirstAttributeArg(attributes, Attribute::CppName);
@@ -3770,7 +4000,35 @@ namespace wio::sema
                    cppNameArg->value == "wio::runtime::EnumValue" ||
                    cppNameArg->value == "wio::runtime::EnumIndex" ||
                    cppNameArg->value == "wio::runtime::EnumUnderlyingTypeName" ||
-                   cppNameArg->value == "wio::runtime::EnumSize";
+                   cppNameArg->value == "wio::runtime::EnumSize" ||
+                   cppNameArg->value == "wio::runtime::ReflectedTypeName" ||
+                   cppNameArg->value == "wio::runtime::ReflectedKind" ||
+                   cppNameArg->value == "wio::runtime::ReflectedSize" ||
+                   cppNameArg->value == "wio::runtime::ReflectedAlignment" ||
+                   cppNameArg->value == "wio::runtime::ReflectedFieldNames" ||
+                   cppNameArg->value == "wio::runtime::ReflectedFieldTypes" ||
+                   cppNameArg->value == "wio::runtime::ReflectedFieldAccess" ||
+                   cppNameArg->value == "wio::runtime::ReflectedMethodNames" ||
+                   cppNameArg->value == "wio::runtime::ReflectedMethodSignatures" ||
+                   cppNameArg->value == "wio::runtime::ReflectedMethodAccess" ||
+                   cppNameArg->value == "wio::runtime::ReflectedBaseTypes" ||
+                   cppNameArg->value == "wio::runtime::ReflectedFieldCount" ||
+                   cppNameArg->value == "wio::runtime::ReflectedMethodCount" ||
+                   cppNameArg->value == "wio::runtime::traits::IsIntegerValue" ||
+                   cppNameArg->value == "wio::runtime::traits::IsNumericValue" ||
+                   cppNameArg->value == "wio::runtime::traits::IsFloatingValue" ||
+                   cppNameArg->value == "wio::runtime::traits::IsSignedValue" ||
+                   cppNameArg->value == "wio::runtime::traits::IsUnsignedValue" ||
+                   cppNameArg->value == "wio::runtime::traits::IsArrayValue" ||
+                   cppNameArg->value == "wio::runtime::traits::IsDictionaryValue" ||
+                   cppNameArg->value == "wio::runtime::traits::IsEnumValue" ||
+                   cppNameArg->value == "wio::runtime::traits::IsFlagsetValue" ||
+                   cppNameArg->value == "wio::runtime::traits::IsObjectValue" ||
+                   cppNameArg->value == "wio::runtime::traits::IsComponentValue" ||
+                   cppNameArg->value == "wio::runtime::traits::IsInterfaceValue" ||
+                   cppNameArg->value == "wio::runtime::traits::IsSameValue" ||
+                   cppNameArg->value == "wio::runtime::traits::IsDefaultConstructibleValue" ||
+                   cppNameArg->value == "wio::runtime::traits::IsCopyConstructibleValue";
         }
 
         bool matchesOpenNativeTemplateIntrinsicConstraints(const std::vector<NodePtr<AttributeStatement>>& attributes,
@@ -3861,6 +4119,9 @@ namespace wio::sema
 
                 if (containsGenericParameterType(exactType))
                 {
+                    if (isUserDefinedTraitConstraint(exactType, expectedParameterName))
+                        return true;
+
                     WIO_LOG_ADD_ERROR(
                         errorLocation,
                         "{} must use fully concrete type constraints or supported predicates like std::traits::IsInteger<{}>.",
@@ -4009,6 +4270,13 @@ namespace wio::sema
                             }
 
                             Ref<Type> exactType = argument.typeSpecifier->refType.Lock();
+                            if (isUserDefinedTraitConstraint(exactType, genericParameterName))
+                            {
+                                return matchesUserDefinedTraitConstraint(
+                                    bindingType,
+                                    exactType,
+                                    genericParameterName);
+                            }
                             return exactType && isExactConstraintTypeMatch(bindingType, exactType);
                         }
 
@@ -5104,6 +5372,9 @@ namespace wio::sema
                                 attributeAllowsNumeric = true;
                                 continue;
                             case GenericConstraintTraitKind::IsNumeric:
+                            case GenericConstraintTraitKind::IsFloating:
+                            case GenericConstraintTraitKind::IsSigned:
+                            case GenericConstraintTraitKind::IsUnsigned:
                                 attributeAllowsNumeric = true;
                                 continue;
                             case GenericConstraintTraitKind::IsEnum:
@@ -5112,6 +5383,15 @@ namespace wio::sema
                             case GenericConstraintTraitKind::IsFlagset:
                                 attributeAllowsFlagset = true;
                                 continue;
+                            case GenericConstraintTraitKind::IsObject:
+                            case GenericConstraintTraitKind::IsInterface:
+                                attributeAllowsObjectLike = true;
+                                continue;
+                            case GenericConstraintTraitKind::IsComponent:
+                            case GenericConstraintTraitKind::IsArray:
+                            case GenericConstraintTraitKind::IsReference:
+                                attributeIsCompatible = false;
+                                break;
                             }
                         }
 
@@ -10648,9 +10928,19 @@ namespace wio::sema
                                                                          argument.typeSpecifier->refType.Lock()))
                             {
                                 if (predicateTrait->kind == GenericConstraintTraitKind::IsInteger ||
-                                    predicateTrait->kind == GenericConstraintTraitKind::IsNumeric)
+                                    predicateTrait->kind == GenericConstraintTraitKind::IsNumeric ||
+                                    predicateTrait->kind == GenericConstraintTraitKind::IsFloating ||
+                                    predicateTrait->kind == GenericConstraintTraitKind::IsSigned ||
+                                    predicateTrait->kind == GenericConstraintTraitKind::IsUnsigned)
                                 {
                                     attributeAllowsNumeric = true;
+                                    continue;
+                                }
+
+                                if (predicateTrait->kind == GenericConstraintTraitKind::IsObject ||
+                                    predicateTrait->kind == GenericConstraintTraitKind::IsInterface)
+                                {
+                                    attributeAllowsObjectLike = true;
                                     continue;
                                 }
 

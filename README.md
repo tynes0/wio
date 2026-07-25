@@ -39,6 +39,7 @@ is now the Wio CLI itself:
 
 ```powershell
 wio build --build-dir build --config Debug --configure
+wio help project run
 wio file check .\playground\main.wio
 wio file run .\playground\main.wio
 ```
@@ -47,9 +48,10 @@ The next direct tooling slice is also live:
 
 ```powershell
 wio project new MyGame --output-dir C:\Projects --template wio-native-app
-wio project describe --project C:\Projects\MyGame
-wio project build --project C:\Projects\MyGame
-wio project run --project C:\Projects\MyGame
+cd C:\Projects\MyGame
+wio project describe
+wio project build
+wio project run -- "two words" --verbose
 wio bind import --header .\tests\native\binding_import_smoke.h --realm binding_import_smoke --output .\build\generated\binding_import_smoke.wio
 wio bind new --manifest .\tests\native\binding_manifest_smoke.json --output .\build\generated\binding_manifest_smoke.wio
 wio env print --wio-root . --shell powershell --add-path
@@ -295,6 +297,9 @@ Current modules include:
 - `std::math`
 - `std::collections`
 - `std::algorithms`
+- `std::strings`
+- `std::convert`
+- `std::chars`
 
 Example:
 
@@ -317,6 +322,22 @@ fn Entry(args: string[]) -> i32 {
 This keeps the user-facing library in Wio itself while still allowing
 low-level runtime-backed pieces such as `std::io` to bridge into C++ through
 `@Native`.
+
+Numeric and boolean text conversion is available both ergonomically and
+safely:
+
+```wio
+use std::convert as convert;
+
+let port = "8080".ToI32();
+let mask = "0xff".ToU32(0);
+let checked = convert::ParseF64("3.14159");
+let label = convert::ToString<i32>(port);
+```
+
+`convert::Parse*` returns `std::Result<T>`, `convert::TryTo*` writes through an
+output reference, and direct string `To*` members panic with a precise runtime
+message when parsing fails.
 
 ### Experimental Library Mode
 

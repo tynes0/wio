@@ -190,6 +190,7 @@ Current built-in type keywords include:
 - `isize`
 - `usize`
 - `byte`
+- `bit`
 - `bool`
 - `char`
 - `uchar`
@@ -524,7 +525,7 @@ surface syntax for byte literals is not finalized in the current lexer.
 
 Practical guidance today:
 
-- treat `byte` as a built-in type,
+- `byte` is a built-in semantic alias of `u8`,
 - do not rely on a dedicated byte literal syntax yet.
 
 ## 5. Type System
@@ -546,6 +547,7 @@ Wio currently exposes the following built-in types:
 - `isize`
 - `usize`
 - `byte`
+- `bit`
 - `bool`
 - `char`
 - `uchar`
@@ -560,6 +562,8 @@ Examples:
 let hp: i32 = 100;
 let speed: f32 = 5.0f;
 let ok: bool = true;
+let enabled: bit = true;
+let octet: byte = 255u8;
 let name: string = "Entity";
 let payload: opaque = null;
 ```
@@ -2840,6 +2844,16 @@ Current supported trait predicates live under `std::traits`:
 
 - `std::traits::IsInteger<T>`
 - `std::traits::IsNumeric<T>`
+- `std::traits::IsFloating<T>`
+- `std::traits::IsSigned<T>`
+- `std::traits::IsUnsigned<T>`
+- `std::traits::IsEnum<T>`
+- `std::traits::IsFlagset<T>`
+- `std::traits::IsObject<T>`
+- `std::traits::IsComponent<T>`
+- `std::traits::IsInterface<T>`
+- `std::traits::IsArray<T>`
+- `std::traits::IsReference<T>`
 
 For multi-parameter generic functions, positional combinations are allowed:
 
@@ -2892,7 +2906,8 @@ Current rules:
 - Each attribute must provide exactly one argument per generic parameter.
 - Each argument may be:
   - a fully concrete type such as `string`,
-  - a supported predicate such as `traits::IsInteger<T>` or `traits::IsNumeric<T>`,
+  - a built-in predicate such as `traits::IsInteger<T>` or `traits::IsNumeric<T>`,
+  - a user-defined nominal trait interface such as `Serializable<T>`,
   - or a boolean constant (`true` / `false`).
 - Arguments are positional. The predicate operand must target the matching
   generic parameter for that slot.
@@ -2922,6 +2937,26 @@ This accepts either:
 
 - integer + string,
 - or numeric + bool.
+
+User traits use ordinary generic interfaces and object inheritance:
+
+```wio
+interface Serializable<T> {
+}
+
+@From(Serializable<Profile>)
+object Profile {
+}
+
+@Apply(Serializable<T>)
+fn Persist<T>(value: T) {
+}
+```
+
+The constraint matches only a type that implements the corresponding
+specialized interface. User traits therefore participate in the same
+`@Apply` call/type/constructor checks without requiring compiler-owned trait
+names.
 
 ## 21. Access Control and Member Semantics
 
@@ -2986,6 +3021,8 @@ Common current modules include:
 - `std::math`
 - `std::collections`
 - `std::strings`
+- `std::convert`
+- `std::chars`
 - `std::fs`
 - `std::path`
 - `std::algorithms`

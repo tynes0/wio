@@ -1,0 +1,111 @@
+realm std {
+    realm sort {
+        fn Sort<T>(values: ref T[]) {
+            values.Sort();
+        }
+
+        fn Sorted<T>(values: T[]) -> T[] {
+            return values.Sorted();
+        }
+
+        fn IsSorted<T>(values: T[]) -> bool {
+            if (values.Count() < 2usize) {
+                return true;
+            }
+            mut index = 1usize;
+            while (index < values.Count()) {
+                if (values[index] < values[index - 1usize]) {
+                    return false;
+                }
+                index += 1usize;
+            }
+            return true;
+        }
+
+        fn InsertionSort<T>(values: ref T[]) {
+            mut index = 1usize;
+            while (index < values.Count()) {
+                let value = values[index];
+                mut position = index;
+                while (position > 0usize and value < values[position - 1usize]) {
+                    values[position] = values[position - 1usize];
+                    position -= 1usize;
+                }
+                values[position] = value;
+                index += 1usize;
+            }
+        }
+
+        fn SelectionSort<T>(values: ref T[]) {
+            mut index = 0usize;
+            while (index < values.Count()) {
+                mut minimum = index;
+                mut candidate = index + 1usize;
+                while (candidate < values.Count()) {
+                    if (values[candidate] < values[minimum]) {
+                        minimum = candidate;
+                    }
+                    candidate += 1usize;
+                }
+                if (minimum != index) {
+                    let previous = values[index];
+                    values[index] = values[minimum];
+                    values[minimum] = previous;
+                }
+                index += 1usize;
+            }
+        }
+
+        fn StableSort<T>(values: ref T[]) {
+            if (values.Count() < 2usize) {
+                return;
+            }
+
+            mut width = 1usize;
+            while (width < values.Count()) {
+                mut start = 0usize;
+                while (start < values.Count()) {
+                    let middle = start + width;
+                    mut end = middle + width;
+                    if (middle >= values.Count()) {
+                        start = values.Count();
+                    } else {
+                        if (end > values.Count()) {
+                            end = values.Count();
+                        }
+
+                        mut merged: T[] = [];
+                        merged.Reserve(end - start);
+                        mut left = start;
+                        mut right = middle;
+                        while (left < middle and right < end) {
+                            if (values[right] < values[left]) {
+                                merged.Push(values[right]);
+                                right += 1usize;
+                            } else {
+                                merged.Push(values[left]);
+                                left += 1usize;
+                            }
+                        }
+                        while (left < middle) {
+                            merged.Push(values[left]);
+                            left += 1usize;
+                        }
+                        while (right < end) {
+                            merged.Push(values[right]);
+                            right += 1usize;
+                        }
+
+                        mut offset = 0usize;
+                        while (offset < merged.Count()) {
+                            values[start + offset] = merged[offset];
+                            offset += 1usize;
+                        }
+                        start = end;
+                    }
+                }
+                width *= 2usize;
+            }
+        }
+    }
+}

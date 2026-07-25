@@ -1565,6 +1565,32 @@ namespace wio::codegen
                 return "StringPadRight";
             case IntrinsicMember::StringReversed:
                 return "StringReversed";
+            case IntrinsicMember::StringToI8:
+                return "StringToI8";
+            case IntrinsicMember::StringToI16:
+                return "StringToI16";
+            case IntrinsicMember::StringToI32:
+                return "StringToI32";
+            case IntrinsicMember::StringToI64:
+                return "StringToI64";
+            case IntrinsicMember::StringToU8:
+                return "StringToU8";
+            case IntrinsicMember::StringToU16:
+                return "StringToU16";
+            case IntrinsicMember::StringToU32:
+                return "StringToU32";
+            case IntrinsicMember::StringToU64:
+                return "StringToU64";
+            case IntrinsicMember::StringToISize:
+                return "StringToISize";
+            case IntrinsicMember::StringToUSize:
+                return "StringToUSize";
+            case IntrinsicMember::StringToF32:
+                return "StringToF32";
+            case IntrinsicMember::StringToF64:
+                return "StringToF64";
+            case IntrinsicMember::StringToBool:
+                return "StringToBool";
             case IntrinsicMember::StringAppend:
                 return "StringAppend";
             case IntrinsicMember::StringPush:
@@ -3104,6 +3130,7 @@ namespace wio::codegen
         emitHeaderLine("#include <exception.h>");
         emitHeaderLine("#include <any.h>");
         emitHeaderLine("#include <enum_reflection.h>");
+        emitHeaderLine("#include <type_reflection.h>");
         emitHeaderLine("#include <fit.h>");
         emitHeaderLine("#include <intrinsics.h>");
         emitHeaderLine("#include <meta.h>");
@@ -4309,6 +4336,42 @@ namespace wio::codegen
             }
         };
 
+        auto emitStringViewArray = [&](std::string_view name, const std::vector<std::string>& values)
+        {
+            emit("static constexpr std::array<std::string_view, " + std::to_string(values.size()) + "> " +
+                 std::string(name) + " = {");
+            for (size_t i = 0; i < values.size(); ++i)
+            {
+                if (i > 0)
+                    emit(", ");
+                emit("\"" + common::wioStringToEscapedCppString(values[i]) + "\"");
+            }
+            emitLine("};");
+        };
+
+        auto emitSimpleTypeReflectionSpecialization = [&](const std::string& cppTypeName,
+                                                           const std::string& wioTypeName,
+                                                           std::string_view kind)
+        {
+            emitLine("template <>");
+            emitLine("struct wio::runtime::TypeReflection<" + cppTypeName + ">");
+            emitLine("{");
+            indent();
+            emitLine("static constexpr std::string_view Name = \"" +
+                     common::wioStringToEscapedCppString(wioTypeName) + "\";");
+            emitLine("static constexpr wio::runtime::ReflectedTypeKind Kind = wio::runtime::ReflectedTypeKind::" +
+                     std::string(kind) + ";");
+            emitStringViewArray("FieldNames", {});
+            emitStringViewArray("FieldTypes", {});
+            emitStringViewArray("FieldAccess", {});
+            emitStringViewArray("MethodNames", {});
+            emitStringViewArray("MethodSignatures", {});
+            emitStringViewArray("MethodAccess", {});
+            emitStringViewArray("BaseTypes", {});
+            dedent();
+            emitLine("};");
+        };
+
         auto emitEnumReflectionSpecialization = [&](const EnumDeclaration& declaration)
         {
             auto sym = declaration.name->referencedSymbol.Lock();
@@ -4370,6 +4433,12 @@ namespace wio::codegen
             emitLine("}");
             dedent();
             emitLine("};");
+            emitSimpleTypeReflectionSpecialization(
+                enumName,
+                sym && !sym->scopePath.empty()
+                    ? sym->scopePath + "::" + declaration.name->token.value
+                    : declaration.name->token.value,
+                "enum_type");
         };
 
         auto emitFlagsetReflectionSpecialization = [&](const FlagsetDeclaration& declaration)
@@ -4463,6 +4532,176 @@ namespace wio::codegen
             emitLine("}");
             dedent();
             emitLine("}");
+            dedent();
+            emitLine("};");
+            emitSimpleTypeReflectionSpecialization(
+                flagsetName,
+                sym && !sym->scopePath.empty()
+                    ? sym->scopePath + "::" + declaration.name->token.value
+                    : declaration.name->token.value,
+                "flagset_type");
+        };
+
+        auto accessName = [](const AccessModifier access, const bool objectDefault) -> std::string
+        {
+            if (access == AccessModifier::Public)
+                return "public";
+            if (access == AccessModifier::Protected)
+                return "protected";
+            if (access == AccessModifier::Private)
+                return "private";
+            return objectDefault ? "private" : "public";
+        };
+
+        auto emitStructuredTypeReflectionSpecialization = [&](const auto& declaration,
+                                                               const std::vector<ComponentMember>* componentMembers,
+                                                               const std::vector<ObjectMember>* objectMembers,
+                                                               const std::vector<NodePtr<FunctionDeclaration>>* interfaceMethods,
+                                                               std::string_view reflectedKind)
+        {
+            auto symbol = declaration.name->referencedSymbol.Lock();
+            auto structType = getStructTypeFromSymbol(symbol);
+            if (!structType || usesNativePodAliasModelForCodegen(structType))
+                return;
+
+            std::vector<std::string> fieldNames;
+            std::vector<std::string> fieldTypes;
+            std::vector<std::string> fieldAccess;
+            std::vector<std::string> methodNames;
+            std::vector<std::string> methodSignatures;
+            std::vector<std::string> methodAccess;
+            std::vector<std::string> baseTypes;
+
+            auto addMember = [&](const auto& member, const bool objectDefault)
+            {
+                if (member.declaration->template is<VariableDeclaration>())
+                {
+                    auto variable = member.declaration->template as<VariableDeclaration>();
+                    if (variable->mutability == Mutability::Const)
+                        return;
+                    fieldNames.push_back(variable->name->token.value);
+                    Ref<sema::Type> type = variable->type ? variable->type->refType.Lock() : variable->name->refType.Lock();
+                    fieldTypes.push_back(type ? type->toString() : "<unknown>");
+                    fieldAccess.push_back(accessName(member.access, objectDefault));
+                    return;
+                }
+
+                if (member.declaration->template is<FunctionDeclaration>())
+                {
+                    auto function = member.declaration->template as<FunctionDeclaration>();
+                    methodNames.push_back(function->name->token.value);
+                    std::string signature = function->name->token.value + "(";
+                    for (size_t i = 0; i < function->parameters.size(); ++i)
+                    {
+                        Ref<sema::Type> parameterType = function->parameters[i].name->refType.Lock();
+                        signature += parameterType ? parameterType->toString() : "<unknown>";
+                        if (i + 1 < function->parameters.size())
+                            signature += ", ";
+                    }
+                    Ref<sema::Type> returnType = function->returnType ? function->returnType->refType.Lock() : nullptr;
+                    signature += ") -> " + std::string(returnType ? returnType->toString() : "void");
+                    methodSignatures.push_back(std::move(signature));
+                    methodAccess.push_back(accessName(member.access, objectDefault));
+                }
+            };
+
+            if (componentMembers)
+            {
+                for (const auto& member : *componentMembers)
+                    addMember(member, false);
+            }
+            if (objectMembers)
+            {
+                for (const auto& member : *objectMembers)
+                    addMember(member, true);
+            }
+            if (interfaceMethods)
+            {
+                for (const auto& function : *interfaceMethods)
+                {
+                    methodNames.push_back(function->name->token.value);
+                    std::string signature = function->name->token.value + "(";
+                    for (size_t i = 0; i < function->parameters.size(); ++i)
+                    {
+                        Ref<sema::Type> parameterType = function->parameters[i].name->refType.Lock();
+                        signature += parameterType ? parameterType->toString() : "<unknown>";
+                        if (i + 1 < function->parameters.size())
+                            signature += ", ";
+                    }
+                    Ref<sema::Type> returnType = function->returnType ? function->returnType->refType.Lock() : nullptr;
+                    signature += ") -> " + std::string(returnType ? returnType->toString() : "void");
+                    methodSignatures.push_back(std::move(signature));
+                    methodAccess.push_back("public");
+                }
+            }
+
+            for (const auto& baseType : structType->baseTypes)
+            {
+                Ref<sema::Type> resolvedBase = unwrapAliasType(baseType);
+                if (!resolvedBase)
+                    continue;
+                if (resolvedBase->kind() == sema::TypeKind::Struct)
+                {
+                    auto baseStruct = resolvedBase.AsFast<sema::StructType>();
+                    if (baseStruct && baseStruct->name == "object" && baseStruct->scopePath.empty())
+                        continue;
+                }
+                baseTypes.push_back(resolvedBase->toString());
+            }
+
+            std::string cppTypeName = mangleStructTypeName(structType);
+            if (!declaration.genericParameters.empty())
+            {
+                cppTypeName =
+                    (reflectedKind == "interface_type"
+                        ? Mangler::mangleInterface(structType->name, structType->scopePath)
+                        : Mangler::mangleStruct(structType->name, structType->scopePath)) +
+                    "<";
+                for (size_t i = 0; i < declaration.genericParameters.size(); ++i)
+                {
+                    if (i > 0)
+                        cppTypeName += ", ";
+                    cppTypeName += declaration.genericParameters[i]->token.value;
+                    if (declaration.hasGenericParameterPack && i + 1 == declaration.genericParameters.size())
+                        cppTypeName += "...";
+                }
+                cppTypeName += ">";
+            }
+            const std::string wioTypeName = structType->scopePath.empty()
+                ? structType->name
+                : structType->scopePath + "::" + structType->name;
+            if (declaration.genericParameters.empty())
+            {
+                emitLine("template <>");
+            }
+            else
+            {
+                emit("template <");
+                for (size_t i = 0; i < declaration.genericParameters.size(); ++i)
+                {
+                    if (i > 0)
+                        emit(", ");
+                    const bool isPack = declaration.hasGenericParameterPack &&
+                                        i + 1 == declaration.genericParameters.size();
+                    emit(isPack ? "typename... " : "typename ");
+                    emit(declaration.genericParameters[i]->token.value);
+                }
+                emitLine(">");
+            }
+            emitLine("struct wio::runtime::TypeReflection<" + cppTypeName + ">");
+            emitLine("{");
+            indent();
+            emitLine("static constexpr std::string_view Name = \"" +
+                     common::wioStringToEscapedCppString(wioTypeName) + "\";");
+            emitLine("static constexpr wio::runtime::ReflectedTypeKind Kind = wio::runtime::ReflectedTypeKind::" +
+                     std::string(reflectedKind) + ";");
+            emitStringViewArray("FieldNames", fieldNames);
+            emitStringViewArray("FieldTypes", fieldTypes);
+            emitStringViewArray("FieldAccess", fieldAccess);
+            emitStringViewArray("MethodNames", methodNames);
+            emitStringViewArray("MethodSignatures", methodSignatures);
+            emitStringViewArray("MethodAccess", methodAccess);
+            emitStringViewArray("BaseTypes", baseTypes);
             dedent();
             emitLine("};");
         };
@@ -4621,6 +4860,40 @@ namespace wio::codegen
         {
             if (stmt->template is<InterfaceDeclaration>() || stmt->template is<ComponentDeclaration>() || stmt->template is<ObjectDeclaration>())
                 stmt->accept(*this);
+        });
+
+        emitPhase(emitPhase, statements, [&](const auto& stmt)
+        {
+            if (stmt->template is<ComponentDeclaration>())
+            {
+                auto declaration = stmt->template as<ComponentDeclaration>();
+                emitStructuredTypeReflectionSpecialization(
+                    *declaration,
+                    &declaration->members,
+                    nullptr,
+                    nullptr,
+                    "component_type");
+            }
+            else if (stmt->template is<ObjectDeclaration>())
+            {
+                auto declaration = stmt->template as<ObjectDeclaration>();
+                emitStructuredTypeReflectionSpecialization(
+                    *declaration,
+                    nullptr,
+                    &declaration->members,
+                    nullptr,
+                    "object_type");
+            }
+            else if (stmt->template is<InterfaceDeclaration>())
+            {
+                auto declaration = stmt->template as<InterfaceDeclaration>();
+                emitStructuredTypeReflectionSpecialization(
+                    *declaration,
+                    nullptr,
+                    nullptr,
+                    &declaration->methods,
+                    "interface_type");
+            }
         });
 
         emitPhase(emitPhase, statements, [&](const auto& stmt)

@@ -1,3 +1,5 @@
+use std::buffer as buffer;
+
 realm std {
     realm heap {
         object box<T> {
