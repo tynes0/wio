@@ -1,13 +1,13 @@
 #ifndef AppVersion
-  #define AppVersion "0.2.0"
+  #define AppVersion "0.3.0"
 #endif
 
 #ifndef AppVersionInfo
-  #define AppVersionInfo "0.2.0.0"
+  #define AppVersionInfo "0.3.0.0"
 #endif
 
 #ifndef PackageRoot
-  #define PackageRoot "..\artifacts\packages-release\wio-0.2.0-windows-x64-release"
+  #define PackageRoot "..\artifacts\packages-release\wio-0.3.0-windows-x64-release"
 #endif
 
 #ifndef OutputDir
