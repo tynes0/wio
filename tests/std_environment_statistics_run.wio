@@ -1,0 +1,25 @@
+use std::console as console;
+use std::environment as environment;
+use std::statistics as statistics;
+
+fn Entry() -> i32 {
+    let variableName = "WIO_STD_ENVIRONMENT_TEST_VALUE";
+    environment::Remove(variableName);
+    let absent = not environment::Has(variableName);
+    let set = environment::Set(variableName, "wio-environment-ok");
+    let read = environment::Get(variableName) == "wio-environment-ok";
+    let removed = environment::Remove(variableName) and not environment::Has(variableName);
+    let directories = environment::TemporaryDirectory() != "" and
+        environment::CacheDirectory() != "";
+
+    let summary = statistics::Calculate([1.0f64, 2.0f64, 3.0f64, 4.0f64]);
+    let statisticsOkay = summary.count == 4usize and
+        summary.sum == 10.0f64 and summary.mean == 2.5f64 and
+        summary.median == 2.5f64 and summary.minimum == 1.0f64 and
+        summary.maximum == 4.0f64 and summary.populationVariance == 1.25f64;
+
+    console::Print(
+        $"Std environment/statistics: ${absent}/${set}/${read}/${removed}/${directories}/${statisticsOkay}"
+    );
+    return 0;
+}

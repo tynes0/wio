@@ -1,0 +1,78 @@
+use std::math as math;
+use std::sort as sort;
+
+realm std {
+    realm statistics {
+        component Summary {
+            count: usize;
+            sum: f64;
+            mean: f64;
+            median: f64;
+            minimum: f64;
+            maximum: f64;
+            populationVariance: f64;
+            populationStandardDeviation: f64;
+        }
+
+        fn Sum(values: f64[]) -> f64 {
+            mut total = 0.0f64;
+            for value in values {
+                total += value;
+            }
+            return total;
+        }
+
+        fn Mean(values: f64[]) -> f64 {
+            if (values.Empty()) {
+                return 0.0f64;
+            }
+            return Sum(values) / (values.Count() fit f64);
+        }
+
+        fn Median(values: f64[]) -> f64 {
+            if (values.Empty()) {
+                return 0.0f64;
+            }
+            let sorted = sort::Sorted(values);
+            let middle = sorted.Count() / 2usize;
+            if (sorted.Count() % 2usize == 0usize) {
+                return (sorted[middle - 1usize] + sorted[middle]) / 2.0f64;
+            }
+            return sorted[middle];
+        }
+
+        fn PopulationVariance(values: f64[]) -> f64 {
+            if (values.Empty()) {
+                return 0.0f64;
+            }
+            let average = Mean(values);
+            mut squaredDifferenceTotal = 0.0f64;
+            for value in values {
+                let difference = value - average;
+                squaredDifferenceTotal += difference * difference;
+            }
+            return squaredDifferenceTotal / (values.Count() fit f64);
+        }
+
+        fn Calculate(values: f64[]) -> Summary {
+            mut result = Summary();
+            result.count = values.Count();
+            if (values.Empty()) {
+                return result;
+            }
+
+            result.sum = Sum(values);
+            result.mean = result.sum / (values.Count() fit f64);
+            result.median = Median(values);
+            result.minimum = values.First();
+            result.maximum = values.First();
+            for value in values {
+                result.minimum = math::Min(result.minimum, value);
+                result.maximum = math::Max(result.maximum, value);
+            }
+            result.populationVariance = PopulationVariance(values);
+            result.populationStandardDeviation = math::Sqrt(result.populationVariance);
+            return result;
+        }
+    }
+}

@@ -1,0 +1,149 @@
+use argonaut;
+use common;
+use std::console as console;
+use std::fs as fs;
+use std::path as path;
+use std::result as result;
+
+realm SelfHostedDev {
+    fn Help() -> string {
+        let lines: string[] = [
+            "Wio repository development commands\n\n",
+            "Usage:\n",
+            "  wio build [--build-dir DIR] [--config CFG] [--configure] [--test]\n",
+            "  wio test  [--build-dir DIR] [--config CFG] [--filter REGEX] [--list] [--configure]\n",
+            "  wio dev build [build options...]\n",
+            "  wio dev test  [test options...]\n"
+        ];
+        return lines.Join("");
+    }
+
+    fn AddOption(parser: ref Argonaut::Parser, id: string, alias: string, fallback: string, description: string)
+        -> std::Result<std::ResultUnit> {
+        mut argument = Argonaut::Argument(id);
+        argument.AddAlias(alias).SetDefaultValue(fallback).SetDescription(description);
+        parser.Add?(argument);
+        return std::OkUnit();
+    }
+
+    fn AddFlag(parser: ref Argonaut::Parser, id: string, alias: string, description: string)
+        -> std::Result<std::ResultUnit> {
+        mut argument = Argonaut::Argument(id);
+        argument.AddAlias(alias).SetDescription(description);
+        parser.Add?(argument.Flag?());
+        return std::OkUnit();
+    }
+
+    fn Parser(action: string) -> std::Result<Argonaut::Parser> {
+        mut parser = Argonaut::Parser();
+        AddOption?(ref parser, "BUILD-DIR", "--build-dir", "build", "CMake build directory for the Wio repository.");
+        AddOption?(ref parser, "CONFIG", "--config", "Debug", "Build or test configuration.");
+        AddFlag?(ref parser, "CONFIGURE", "--configure", "Run CMake configure first.");
+        if (action == "build") {
+            AddFlag?(ref parser, "TEST", "--test", "Run ctest after a successful build.");
+        }
+        else {
+            AddOption?(ref parser, "FILTER", "--filter", "", "Regex filter passed to ctest -R.");
+            AddFlag?(ref parser, "LIST", "--list", "List matching tests without executing them.");
+        }
+        AddFlag?(ref parser, "HELP", "--help", "Show this help menu.");
+        AddFlag?(ref parser, "HELP-SHORT", "-h", "Show this help menu.");
+        AddFlag?(ref parser, "VERSION", "--version", "Show the Wio version.");
+        AddFlag?(ref parser, "VERSION-SHORT", "-v", "Show the Wio version.");
+        return std::Ok<Argonaut::Parser>(parser);
+    }
+
+    fn CommandArgs(action: string, args: string[], start: usize) -> string[] {
+        mut values: string[] = [$"wio ${action}"];
+        mut index = start;
+        while (index < args.Count()) {
+            values.Push(args[index]);
+            index += 1usize;
+        }
+        return values;
+    }
+
+    fn Configure(repositoryRoot: string, buildDirectory: string) -> std::Result<i32> {
+        return SelfHostedCli::Run(
+            "cmake",
+            ["-S", repositoryRoot, "-B", buildDirectory],
+            repositoryRoot
+        );
+    }
+
+    fn Execute(action: string, args: string[], start: usize) -> std::Result<i32> {
+        mut parser = Parser?(action);
+        parser.Parse?(CommandArgs(action, args, start));
+        if (parser.GetFlag("HELP") or parser.GetFlag("HELP-SHORT")) {
+            console::Print(parser.Help());
+            return std::Ok<i32>(0);
+        }
+        if (parser.GetFlag("VERSION") or parser.GetFlag("VERSION-SHORT")) {
+            return SelfHostedCli::RunNativeVersion(args[0usize]);
+        }
+
+        let repositoryRoot = SelfHostedCli::FindRepositoryRoot(args[0usize]);
+        if (repositoryRoot == "") {
+            return SelfHostedCli::Failure<i32>(
+                $"Could not resolve the Wio repository root for 'wio ${action}'."
+            );
+        }
+        let buildDirectory = path::AbsoluteFrom(
+            repositoryRoot,
+            parser.GetStringOr("BUILD-DIR", "build")
+        );
+        let config = parser.GetStringOr("CONFIG", "Debug");
+        if (parser.GetFlag("CONFIGURE")) {
+            let configured = Configure?(repositoryRoot, buildDirectory);
+            if (configured != 0) { return std::Ok<i32>(configured); }
+        }
+
+        if (action == "build") {
+            let built = SelfHostedCli::Run?(
+                "cmake",
+                ["--build", buildDirectory, "--config", config],
+                repositoryRoot
+            );
+            if (built != 0 or not parser.GetFlag("TEST")) {
+                return std::Ok<i32>(built);
+            }
+        }
+
+        mut testArgs: string[] = ["--test-dir", buildDirectory, "-C", config];
+        if (action == "test" and parser.GetFlag("LIST")) {
+            testArgs.Push("-N");
+        }
+        else {
+            testArgs.Push("--output-on-failure");
+        }
+        if (action == "test") {
+            let filter = parser.GetStringOr("FILTER", "");
+            if (filter != "") {
+                testArgs.Push("-R");
+                testArgs.Push(filter);
+            }
+        }
+        return SelfHostedCli::Run("ctest", testArgs, repositoryRoot);
+    }
+
+    fn ExecuteGroup(args: string[]) -> std::Result<i32> {
+        if (args.Count() < 3usize or args[2usize] == "--help" or args[2usize] == "-h") {
+            console::Print(Help());
+            return std::Ok<i32>(0);
+        }
+        if (args[2usize] == "--version" or args[2usize] == "-v") {
+            return SelfHostedCli::RunNativeVersion(args[0usize]);
+        }
+        let action = args[2usize];
+        if (action == "build" or action == "test") {
+            return Execute(action, args, 3usize);
+        }
+        let suggestion = SelfHostedCli::Suggest(action, ["build", "test"]);
+        mut message = $"Unknown dev subcommand: ${action}";
+        if (suggestion != "") {
+            message.Append($"\nDid you mean 'wio dev ${suggestion}'?");
+        }
+        message.Append("\nRun 'wio dev --help' to list available development commands.");
+        return SelfHostedCli::Failure<i32>(message);
+    }
+}

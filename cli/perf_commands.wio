@@ -1,0 +1,239 @@
+use argonaut;
+use common;
+use std::console as console;
+use std::convert as convert;
+use std::environment as environment;
+use std::fs as fs;
+use std::path as path;
+use std::result as result;
+use std::statistics as statistics;
+use std::time as time;
+
+realm SelfHostedPerf {
+    component Scenario {
+        name: string;
+        measurements: f64[];
+    }
+
+    fn Help() -> string {
+        let lines: string[] = [
+            "Wio perf commands\n\n",
+            "Usage:\n",
+            "  wio perf smoke [--iterations N] [--scratch-dir DIR] [--keep-scratch]\n"
+        ];
+        return lines.Join("");
+    }
+
+    fn Parser() -> std::Result<Argonaut::Parser> {
+        mut parser = Argonaut::Parser();
+        mut iterations = Argonaut::Argument("ITERATIONS");
+        iterations.AddAlias("--iterations").SetDefaultValue("1")
+            .SetDescription("How many times each scenario should be measured.");
+        parser.Add?(iterations);
+
+        mut scratch = Argonaut::Argument("SCRATCH-DIR");
+        scratch.AddAlias("--scratch-dir").SetDefaultValue("")
+            .SetDescription("Scratch directory for generated performance inputs.");
+        parser.Add?(scratch);
+
+        mut keep = Argonaut::Argument("KEEP-SCRATCH");
+        keep.AddAlias("--keep-scratch").SetDescription("Keep the scratch directory after success.");
+        parser.Add?(keep.Flag?());
+
+        mut help = Argonaut::Argument("HELP");
+        help.AddAlias("--help").AddAlias("-h").SetDescription("Show this help menu.");
+        parser.Add?(help.Flag?());
+
+        mut version = Argonaut::Argument("VERSION");
+        version.AddAlias("--version").AddAlias("-v").SetDescription("Show the Wio version.");
+        parser.Add?(version.Flag?());
+        return std::Ok<Argonaut::Parser>(parser);
+    }
+
+    fn SmokeArgs(args: string[]) -> string[] {
+        mut values: string[] = ["wio perf smoke"];
+        mut index = 3usize;
+        while (index < args.Count()) {
+            values.Push(args[index]);
+            index += 1usize;
+        }
+        return values;
+    }
+
+    fn DefaultScratch(selfPath: string) -> string {
+        let repositoryRoot = SelfHostedCli::FindRepositoryRoot(selfPath);
+        if (repositoryRoot != "") {
+            return path::Join3(repositoryRoot, ".wio-build", "perf-smoke");
+        }
+        return path::JoinAll([
+            environment::CacheDirectory(), "Wio", "cache", "perf-smoke"
+        ]);
+    }
+
+    fn IsUnsafeScratch(scratch: string, selfPath: string) -> bool {
+        let absolute = path::Absolute(scratch);
+        if (absolute == path::RootPath(absolute) or path::Equivalent(absolute, fs::CurrentPath())) {
+            return true;
+        }
+        let repositoryRoot = SelfHostedCli::FindRepositoryRoot(selfPath);
+        return repositoryRoot != "" and path::Equivalent(absolute, repositoryRoot);
+    }
+
+    fn Measure(
+        executable: string,
+        command: string[],
+        workingDirectory: string,
+        iterations: i32,
+        measurements: ref f64[]
+    ) -> std::Result<i32> {
+        mut iteration = 0;
+        while (iteration < iterations) {
+            let started = time::MonotonicNanoseconds();
+            let result = SelfHostedCli::Run?(executable, command, workingDirectory);
+            let elapsed = time::MonotonicNanoseconds() - started;
+            if (result != 0) { return std::Ok<i32>(result); }
+            measurements.Push((elapsed fit f64) / 1000000.0f64);
+            iteration += 1;
+        }
+        return std::Ok<i32>(0);
+    }
+
+    fn PrintScenario(scenario: Scenario) {
+        let summary = statistics::Calculate(scenario.measurements);
+        console::PrintLine!($"Scenario: ${scenario.name}");
+        console::PrintLine!($"  average_ms: ${summary.mean}");
+        console::PrintLine!($"  median_ms: ${summary.median}");
+        console::PrintLine!($"  min_ms: ${summary.minimum}");
+        console::PrintLine!($"  max_ms: ${summary.maximum}");
+    }
+
+    fn Smoke(args: string[]) -> std::Result<i32> {
+        mut parser = Parser?();
+        parser.Parse?(SmokeArgs(args));
+        if (parser.GetFlag("HELP")) {
+            console::Print(parser.Help());
+            return std::Ok<i32>(0);
+        }
+        if (parser.GetFlag("VERSION")) {
+            return SelfHostedCli::RunNativeVersion(args[0usize]);
+        }
+
+        let iterations = convert::ParseI32?(parser.GetStringOr("ITERATIONS", "1"));
+        if (iterations <= 0) {
+            return SelfHostedCli::Failure<i32>("Perf iterations must be at least 1.");
+        }
+        let configuredScratch = parser.GetStringOr("SCRATCH-DIR", "");
+        let scratch = configuredScratch == ""
+            ? DefaultScratch(args[0usize])
+            : path::Absolute(configuredScratch);
+        if (IsUnsafeScratch(scratch, args[0usize])) {
+            return SelfHostedCli::Failure<i32>($"Refusing to use unsafe perf scratch directory: ${scratch}");
+        }
+        if (fs::Exists(scratch) and not fs::RemoveAll(scratch)) {
+            return SelfHostedCli::Failure<i32>($"Could not clean perf scratch directory: ${scratch}");
+        }
+        if (not fs::EnsureDirectory(scratch)) {
+            return SelfHostedCli::Failure<i32>($"Could not create perf scratch directory: ${scratch}");
+        }
+
+        let sources = path::Join(scratch, "sources");
+        let projects = path::Join(scratch, "projects");
+        let checkSource = path::Join(sources, "perf_check.wio");
+        let runSource = path::Join(sources, "perf_run.wio");
+        let tinyProgram = "fn Entry() -> i32 {\n    return 0;\n}\n";
+        if (not fs::WriteTextEnsured(checkSource, tinyProgram) or
+            not fs::WriteTextEnsured(runSource, tinyProgram) or
+            not fs::EnsureDirectory(projects)) {
+            return SelfHostedCli::Failure<i32>($"Could not prepare perf inputs under: ${scratch}");
+        }
+
+        let executable = SelfHostedCli::NativeCore(args[0usize]);
+        mut fileCheck = Scenario();
+        fileCheck.name = "file-check";
+        mut fileRun = Scenario();
+        fileRun.name = "file-run";
+        mut projectCold = Scenario();
+        projectCold.name = "project-build-cold";
+        mut projectWarm = Scenario();
+        projectWarm.name = "project-build-warm";
+        mut projectRun = Scenario();
+        projectRun.name = "project-run-warm";
+
+        let checkResult = Measure?(
+            executable, ["file", "check", checkSource], scratch, iterations, ref fileCheck.measurements
+        );
+        if (checkResult != 0) { return std::Ok<i32>(checkResult); }
+        let runResult = Measure?(
+            executable, ["file", "run", runSource], scratch, iterations, ref fileRun.measurements
+        );
+        if (runResult != 0) { return std::Ok<i32>(runResult); }
+
+        mut iteration = 0;
+        while (iteration < iterations) {
+            let ordinal = iteration + 1;
+            let name = $"PerfSmokeApp${ordinal}";
+            let iterationRoot = path::Join(projects, name);
+            let projectRoot = path::Join(iterationRoot, name);
+            fs::RemoveAll(iterationRoot);
+            fs::EnsureDirectory(iterationRoot);
+
+            let created = SelfHostedCli::Run?(
+                executable,
+                ["project", "new", name, "--output-dir", iterationRoot, "--template", "wio-app"],
+                scratch
+            );
+            if (created != 0) { return std::Ok<i32>(created); }
+
+            let cold = Measure?(
+                executable, ["project", "build", "--project", projectRoot],
+                scratch, 1, ref projectCold.measurements
+            );
+            if (cold != 0) { return std::Ok<i32>(cold); }
+            let warm = Measure?(
+                executable, ["project", "build", "--project", projectRoot],
+                scratch, 1, ref projectWarm.measurements
+            );
+            if (warm != 0) { return std::Ok<i32>(warm); }
+            let ran = Measure?(
+                executable, ["project", "run", "--project", projectRoot],
+                scratch, 1, ref projectRun.measurements
+            );
+            if (ran != 0) { return std::Ok<i32>(ran); }
+            iteration += 1;
+        }
+
+        console::PrintLine!("Wio performance smoke");
+        console::PrintLine!($"Iterations: ${iterations}");
+        console::PrintLine!($"Scratch directory: ${scratch}");
+        PrintScenario(fileCheck);
+        PrintScenario(fileRun);
+        PrintScenario(projectCold);
+        PrintScenario(projectWarm);
+        PrintScenario(projectRun);
+
+        if (not parser.GetFlag("KEEP-SCRATCH")) {
+            fs::RemoveAll(scratch);
+        }
+        return std::Ok<i32>(0);
+    }
+
+    fn Execute(args: string[]) -> std::Result<i32> {
+        if (args.Count() < 3usize or args[2usize] == "--help" or args[2usize] == "-h") {
+            console::Print(Help());
+            return std::Ok<i32>(0);
+        }
+        if (args[2usize] == "--version" or args[2usize] == "-v") {
+            return SelfHostedCli::RunNativeVersion(args[0usize]);
+        }
+        if (args[2usize] == "smoke") {
+            return Smoke(args);
+        }
+        let suggestion = SelfHostedCli::Suggest(args[2usize], ["smoke"]);
+        mut message = $"Unknown perf subcommand: ${args[2usize]}";
+        if (suggestion != "") {
+            message.Append($"\nDid you mean 'wio perf ${suggestion}'?");
+        }
+        message.Append("\nRun 'wio perf --help' to list available performance commands.");
+        return SelfHostedCli::Failure<i32>(message);
+    }
+}

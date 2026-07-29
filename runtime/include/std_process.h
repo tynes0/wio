@@ -34,3 +34,13 @@ namespace wio::runtime::std_process
         int& nativeError,
         std::string& message) noexcept;
 }
+
+namespace wio::runtime::std_environment
+{
+    [[nodiscard]] bool TryGet(std::string_view name, std::string& value) noexcept;
+    [[nodiscard]] bool Set(std::string_view name, std::string_view value) noexcept;
+    [[nodiscard]] bool Remove(std::string_view name) noexcept;
+    [[nodiscard]] std::string TemporaryDirectory();
+    [[nodiscard]] std::string HomeDirectory();
+    [[nodiscard]] std::string CacheDirectory();
+}

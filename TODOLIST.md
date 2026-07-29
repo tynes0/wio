@@ -242,8 +242,10 @@ application.
    The self-hosted migration has started: every recognized tooling command
    family now enters a Wio + Argonaut-Wio companion and uses an explicit
    native fallback bridge. The complete
-   `project new/describe/build/run/test/package` lifecycle and `wio run`
-   shorthand are Wio-owned. Transfer argument ownership and behavior for every remaining command,
+   `project new/describe/build/run/test/package` lifecycle, `wio run`,
+   `file run/check/tokens/ast`, repository `build/test`, `dev build/test`, and
+   `perf smoke` are Wio-owned. Transfer argument ownership and behavior for
+   `env`, `bind`, release `package`, and the remaining global command layer,
    establish pinned stage-0/generated-C++ bootstrap reproducibility, and
    remove the bridge and C++ argument parsers after parity is complete.
 

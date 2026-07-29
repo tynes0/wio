@@ -55,8 +55,18 @@ directory packaging all run in Wio. The project implementation invokes the
 native executable only as a raw source compiler; it no longer crosses the
 native `project ...` command bridge.
 
-The remaining migration work covers file, environment, binding, release
-package, performance, and repository-build command families.
+The second migration wave is also Wio-owned:
+
+- `wio file run/check/tokens/ast`,
+- repository `wio build` and `wio test`,
+- `wio dev build/test`,
+- and `wio perf smoke`.
+
+This wave added public `std::environment` and `std::statistics` modules instead
+of embedding platform/cache and measurement logic inside the CLI.
+
+The remaining migration work covers environment management, binding
+generation, release packaging, and global help/dispatch cleanup.
 
 Every migrated command needs:
 

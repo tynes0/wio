@@ -1,0 +1,150 @@
+use argonaut;
+use std::console as console;
+use std::fs as fs;
+use std::path as path;
+use std::process as process;
+use std::result as result;
+
+realm SelfHostedCli {
+    fn Failure<T>(message: string) -> std::Result<T> {
+        return Argonaut::Fail<T>(Argonaut::ErrorKind::Parse, message);
+    }
+
+    fn NativeCore(selfPath: string) -> string {
+        return path::Join(
+            path::ParentPath(path::Absolute(selfPath)),
+            "wio" + process::ExecutableSuffix()
+        );
+    }
+
+    fn Run(command: string, args: string[], workingDirectory: string) -> std::Result<i32> {
+        let launched = process::Run(command, args, workingDirectory);
+        if (launched.IsError()) {
+            return std::Err<i32>(launched.ErrorValue());
+        }
+        return std::Ok<i32>(launched.Value());
+    }
+
+    fn RunNativeVersion(selfPath: string) -> std::Result<i32> {
+        let core = NativeCore(selfPath);
+        if (not fs::IsFile(core)) {
+            return Failure<i32>($"Self-hosted CLI could not find its native core: ${core}");
+        }
+        return Run(core, ["--version"], fs::CurrentPath());
+    }
+
+    fn IsRepositoryRoot(candidate: string) -> bool {
+        return fs::IsFile(path::Join(candidate, "CMakeLists.txt")) and
+            fs::IsDirectory(path::Join(candidate, "compiler")) and
+            fs::IsDirectory(path::Join(candidate, "app"));
+    }
+
+    fn FindAncestor(seed: string, marker: string) -> string {
+        mut current = path::Absolute(seed);
+        while (current != "") {
+            if (fs::Exists(path::Join(current, marker))) {
+                return current;
+            }
+            let parent = path::ParentPath(current);
+            if (parent == current) {
+                break;
+            }
+            current = parent;
+        }
+        return "";
+    }
+
+    fn FindRepositoryRoot(selfPath: string) -> string {
+        mut current = path::Absolute(fs::CurrentPath());
+        while (current != "") {
+            if (IsRepositoryRoot(current)) {
+                return current;
+            }
+            let parent = path::ParentPath(current);
+            if (parent == current) {
+                break;
+            }
+            current = parent;
+        }
+
+        current = path::ParentPath(path::Absolute(selfPath));
+        while (current != "") {
+            if (IsRepositoryRoot(current)) {
+                return current;
+            }
+            let parent = path::ParentPath(current);
+            if (parent == current) {
+                break;
+            }
+            current = parent;
+        }
+        return "";
+    }
+
+    fn OptionValue(args: string[], start: usize, name: string, fallback: string) -> string {
+        mut index = start;
+        while (index + 1usize < args.Count()) {
+            if (args[index] == name) {
+                return args[index + 1usize];
+            }
+            index += 1usize;
+        }
+        return fallback;
+    }
+
+    fn Has(args: string[], name: string) -> bool {
+        for value in args {
+            if (value == name) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    fn EditDistance(left: string, right: string) -> usize {
+        mut previous: usize[] = [];
+        mut current: usize[] = [];
+        mut index = 0usize;
+        while (index <= right.Count()) {
+            previous.Push(index);
+            current.Push(0usize);
+            index += 1usize;
+        }
+
+        mut leftIndex = 0usize;
+        while (leftIndex < left.Count()) {
+            current[0usize] = leftIndex + 1usize;
+            mut rightIndex = 0usize;
+            while (rightIndex < right.Count()) {
+                let insertion = current[rightIndex] + 1usize;
+                let deletion = previous[rightIndex + 1usize] + 1usize;
+                let substitution = previous[rightIndex] +
+                    (left[leftIndex] == right[rightIndex] ? 0usize : 1usize);
+                mut best = insertion < deletion ? insertion : deletion;
+                if (substitution < best) {
+                    best = substitution;
+                }
+                current[rightIndex + 1usize] = best;
+                rightIndex += 1usize;
+            }
+            let swap = previous;
+            previous = current;
+            current = swap;
+            leftIndex += 1usize;
+        }
+        return previous[right.Count()];
+    }
+
+    fn Suggest(value: string, candidates: string[]) -> string {
+        mut suggestion = "";
+        mut bestDistance = 3usize;
+        for candidate in candidates {
+            let distance = EditDistance(value, candidate);
+            if (distance < bestDistance) {
+                suggestion = candidate;
+                bestDistance = distance;
+            }
+        }
+        return suggestion;
+    }
+}

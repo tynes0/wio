@@ -2,6 +2,10 @@ use argonaut;
 use project_new;
 use project_manifest;
 use project_commands;
+use common;
+use file_commands;
+use dev_commands;
+use perf_commands;
 use std::console as console;
 use std::fs as fs;
 use std::path as path;
@@ -141,6 +145,14 @@ fn ProxyNative(args: string[]) -> std::Result<i32> {
     return process::Run(core, nativeArgs, fs::CurrentPath());
 }
 
+fn ExitResult(value: std::Result<i32>) -> i32 {
+    if (value.IsError()) {
+        console::PrintLine!(value.ErrorValue().message);
+        return 1;
+    }
+    return value.Value();
+}
+
 fn Entry(args: string[]) -> i32 {
     if (args.Count() == 2usize and args[1usize] == "--self-hosted-info") {
         console::PrintLine!("Wio self-hosted CLI: Argonaut-Wio bootstrap");
@@ -165,6 +177,26 @@ fn Entry(args: string[]) -> i32 {
             return 1;
         }
         return generated.Value();
+    }
+
+    if (cliArgs.Count() >= 2usize and cliArgs[1usize] == "file") {
+        return ExitResult(SelfHostedFile::Execute(cliArgs));
+    }
+
+    if (cliArgs.Count() >= 2usize and cliArgs[1usize] == "build") {
+        return ExitResult(SelfHostedDev::Execute("build", cliArgs, 2usize));
+    }
+
+    if (cliArgs.Count() >= 2usize and cliArgs[1usize] == "test") {
+        return ExitResult(SelfHostedDev::Execute("test", cliArgs, 2usize));
+    }
+
+    if (cliArgs.Count() >= 2usize and cliArgs[1usize] == "dev") {
+        return ExitResult(SelfHostedDev::ExecuteGroup(cliArgs));
+    }
+
+    if (cliArgs.Count() >= 2usize and cliArgs[1usize] == "perf") {
+        return ExitResult(SelfHostedPerf::Execute(cliArgs));
     }
 
     if (cliArgs.Count() < 3usize or cliArgs[1usize] != "project") {

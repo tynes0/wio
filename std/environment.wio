@@ -1,0 +1,46 @@
+realm std {
+    realm environment {
+        use @CppHeader("std_process.h");
+
+        @Native
+        @CppName(wio::runtime::std_environment::TryGet)
+        fn TryGet(name: string, value: ref string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_environment::Set)
+        fn Set(name: string, value: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_environment::Remove)
+        fn Remove(name: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_environment::TemporaryDirectory)
+        fn TemporaryDirectory() -> string;
+
+        @Native
+        @CppName(wio::runtime::std_environment::HomeDirectory)
+        fn HomeDirectory() -> string;
+
+        @Native
+        @CppName(wio::runtime::std_environment::CacheDirectory)
+        fn CacheDirectory() -> string;
+
+        fn Get(name: string, fallback: string) -> string {
+            mut value = "";
+            if (TryGet(name, ref value)) {
+                return value;
+            }
+            return fallback;
+        }
+
+        fn Get(name: string) -> string {
+            return Get(name, "");
+        }
+
+        fn Has(name: string) -> bool {
+            mut value = "";
+            return TryGet(name, ref value);
+        }
+    }
+}

@@ -52,6 +52,36 @@ if(invalid_result EQUAL 0 OR
     )
 endif()
 
+execute_process(
+    COMMAND "${WIO_EXE}" build --selfhost-invalid-option
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    RESULT_VARIABLE build_invalid_result
+    OUTPUT_VARIABLE build_invalid_stdout
+    ERROR_VARIABLE build_invalid_stderr
+)
+set(build_invalid_output "${build_invalid_stdout}${build_invalid_stderr}")
+if(build_invalid_result EQUAL 0 OR
+   NOT build_invalid_output MATCHES "Argonaut: Undefined argument: --selfhost-invalid-option")
+    message(FATAL_ERROR
+        "Repository build was not validated by Argonaut-Wio.\n${build_invalid_output}"
+    )
+endif()
+
+execute_process(
+    COMMAND "${WIO_EXE}" perf smoke --selfhost-invalid-option
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    RESULT_VARIABLE perf_invalid_result
+    OUTPUT_VARIABLE perf_invalid_stdout
+    ERROR_VARIABLE perf_invalid_stderr
+)
+set(perf_invalid_output "${perf_invalid_stdout}${perf_invalid_stderr}")
+if(perf_invalid_result EQUAL 0 OR
+   NOT perf_invalid_output MATCHES "Argonaut: Undefined argument: --selfhost-invalid-option")
+    message(FATAL_ERROR
+        "Performance smoke was not validated by Argonaut-Wio.\n${perf_invalid_output}"
+    )
+endif()
+
 run_success("Native CLI recursion bridge" --native-cli --version)
 run_success("Raw stage-0 compiler path" "${WIO_SOURCE}" --dry-run)
 

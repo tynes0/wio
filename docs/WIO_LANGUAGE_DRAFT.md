@@ -3082,6 +3082,8 @@ Common current modules include:
 - `std::chars`
 - `std::fs`
 - `std::path`
+- `std::environment`
+- `std::statistics`
 - `std::algorithms`
 - `std::assert`
 - `std::heap`

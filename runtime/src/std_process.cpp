@@ -214,3 +214,98 @@ namespace wio::runtime::std_process
         return true;
     }
 }
+
+namespace wio::runtime::std_environment
+{
+    bool TryGet(const std::string_view name, std::string& value) noexcept
+    {
+        value.clear();
+        if (name.empty())
+            return false;
+
+        const std::string key(name);
+#if defined(_WIN32)
+        char* buffer = nullptr;
+        std::size_t length = 0;
+        if (_dupenv_s(&buffer, &length, key.c_str()) != 0 || buffer == nullptr)
+            return false;
+        value.assign(buffer);
+        std::free(buffer);
+        return true;
+#else
+        const char* result = std::getenv(key.c_str());
+        if (result == nullptr)
+            return false;
+        value.assign(result);
+        return true;
+#endif
+    }
+
+    bool Set(const std::string_view name, const std::string_view value) noexcept
+    {
+        if (name.empty())
+            return false;
+        const std::string key(name);
+        const std::string text(value);
+#if defined(_WIN32)
+        return _putenv_s(key.c_str(), text.c_str()) == 0;
+#else
+        return setenv(key.c_str(), text.c_str(), 1) == 0;
+#endif
+    }
+
+    bool Remove(const std::string_view name) noexcept
+    {
+        if (name.empty())
+            return false;
+        const std::string key(name);
+#if defined(_WIN32)
+        return _putenv_s(key.c_str(), "") == 0;
+#else
+        return unsetenv(key.c_str()) == 0;
+#endif
+    }
+
+    std::string TemporaryDirectory()
+    {
+        std::error_code ec;
+        const auto path = std::filesystem::temp_directory_path(ec);
+        return ec ? std::string{} : path.lexically_normal().generic_string();
+    }
+
+    std::string HomeDirectory()
+    {
+        std::string value;
+#if defined(_WIN32)
+        if (TryGet("USERPROFILE", value))
+            return std::filesystem::path(value).lexically_normal().generic_string();
+        std::string drive;
+        std::string homePath;
+        if (TryGet("HOMEDRIVE", drive) && TryGet("HOMEPATH", homePath))
+            return std::filesystem::path(drive + homePath).lexically_normal().generic_string();
+#else
+        if (TryGet("HOME", value))
+            return std::filesystem::path(value).lexically_normal().generic_string();
+#endif
+        return {};
+    }
+
+    std::string CacheDirectory()
+    {
+        std::string value;
+#if defined(_WIN32)
+        if (TryGet("LOCALAPPDATA", value))
+            return std::filesystem::path(value).lexically_normal().generic_string();
+        const std::string home = HomeDirectory();
+        if (!home.empty())
+            return (std::filesystem::path(home) / "AppData" / "Local").lexically_normal().generic_string();
+#else
+        if (TryGet("XDG_CACHE_HOME", value))
+            return std::filesystem::path(value).lexically_normal().generic_string();
+        const std::string home = HomeDirectory();
+        if (!home.empty())
+            return (std::filesystem::path(home) / ".cache").lexically_normal().generic_string();
+#endif
+        return TemporaryDirectory();
+    }
+}

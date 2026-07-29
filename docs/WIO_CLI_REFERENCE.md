@@ -76,6 +76,8 @@ wio bind --version
 ## 2. `wio build`
 
 `wio build` is the repo/toolchain-oriented build command.
+Its parser and CMake/CTest orchestration are implemented by the self-hosted
+Wio CLI.
 
 Typical source-tree usage:
 
@@ -96,6 +98,8 @@ This is different from `wio project build`, which builds a user Wio project.
 ## 3. `wio test`
 
 `wio test` is the repo/toolchain-oriented test entrypoint.
+It shares the Wio-owned repository resolver and process layer with `wio build`
+and the `wio dev` aliases.
 
 Examples:
 
@@ -116,6 +120,8 @@ Use it when you want to:
 ## 4. `wio file`
 
 `wio file` is the structured single-file workflow.
+The command family is Wio-owned and invokes the native executable only as its
+raw compiler backend.
 
 Supported modes:
 
@@ -417,6 +423,8 @@ The package story is CLI-first rather than script-first.
 ## 9. `wio perf`
 
 `wio perf` is the current built-in performance smoke entrypoint.
+Scenario timing and statistics are implemented in Wio with `std::time` and
+`std::statistics`.
 
 Example:
 

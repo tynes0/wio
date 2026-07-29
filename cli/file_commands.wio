@@ -1,0 +1,208 @@
+use common;
+use std::console as console;
+use std::environment as environment;
+use std::fs as fs;
+use std::hash as hash;
+use std::path as path;
+use std::process as process;
+use std::result as result;
+
+realm SelfHostedFile {
+    fn Help() -> string {
+        let lines: string[] = [
+            "Wio file commands\n\n",
+            "Usage:\n",
+            "  wio file run    [FILE] [compiler args...] [-- program args...]\n",
+            "  wio file check  [FILE] [extra compiler args...]\n",
+            "  wio file tokens [FILE] [extra compiler args...]\n",
+            "  wio file ast    [FILE] [extra compiler args...]\n\n",
+            "When FILE is omitted, Wio looks for a conventional project entry file and\n",
+            "then falls back to the repository playground entry when available.\n"
+        ];
+        return lines.Join("");
+    }
+
+    fn HasManifest(directory: string) -> bool {
+        return fs::IsFile(path::Join(directory, "wio.makewio")) or
+            fs::IsFile(path::Join(directory, "makewio")) or
+            fs::IsFile(path::Join(directory, "wio.project.json"));
+    }
+
+    fn FindProjectRoot(seed: string) -> string {
+        mut current = path::Absolute(seed);
+        while (current != "") {
+            if (HasManifest(current)) {
+                return current;
+            }
+            let parent = path::ParentPath(current);
+            if (parent == current) { break; }
+            current = parent;
+        }
+        return "";
+    }
+
+    fn ConventionalEntry(root: string) -> string {
+        let candidates = [
+            path::Join3(root, "wio", "main.wio"),
+            path::Join3(root, "wio", "module.wio"),
+            path::Join3(root, "src", "main.wio"),
+            path::Join3(root, "src", "module.wio"),
+            path::Join(root, "main.wio")
+        ];
+        for candidate in candidates {
+            if (fs::IsFile(candidate)) {
+                return path::Absolute(candidate);
+            }
+        }
+        return "";
+    }
+
+    fn DefaultSource(selfPath: string) -> string {
+        let projectRoot = FindProjectRoot(fs::CurrentPath());
+        if (projectRoot != "") {
+            let entry = ConventionalEntry(projectRoot);
+            if (entry != "") { return entry; }
+        }
+        let currentEntry = ConventionalEntry(fs::CurrentPath());
+        if (currentEntry != "") { return currentEntry; }
+
+        let repositoryRoot = SelfHostedCli::FindRepositoryRoot(selfPath);
+        if (repositoryRoot != "") {
+            let playground = path::Join3(repositoryRoot, "playground", "main.wio");
+            if (fs::IsFile(playground)) { return playground; }
+        }
+        return path::Absolute("main.wio");
+    }
+
+    fn RunOutputRoot(selfPath: string, source: string) -> string {
+        let repositoryRoot = SelfHostedCli::FindRepositoryRoot(selfPath);
+        if (repositoryRoot != "") {
+            return path::Join3(repositoryRoot, ".wio-build", "file-run");
+        }
+        let projectRoot = FindProjectRoot(path::ParentPath(source));
+        if (projectRoot != "") {
+            return path::Join3(projectRoot, ".wio-build", "file-run");
+        }
+        return path::JoinAll([
+            environment::CacheDirectory(), "Wio", "cache", "file-run"
+        ]);
+    }
+
+    fn SafeStem(source: string) -> string {
+        mut result = path::Stem(source)
+            .Replace(" ", "_")
+            .Replace(".", "_")
+            .Replace("/", "_")
+            .Replace("\\", "_");
+        if (result == "") { result = "file"; }
+        return result;
+    }
+
+    fn HasOutputOverride(args: string[]) -> bool {
+        for argument in args {
+            if (argument == "-o" or argument == "--output" or argument.StartsWith("--output=")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    fn ExecuteMode(mode: string, args: string[]) -> std::Result<i32> {
+        mut source = DefaultSource(args[0usize]);
+        mut nextIndex = 3usize;
+        if (args.Count() > 3usize and not args[3usize].StartsWith("-")) {
+            source = path::Absolute(args[3usize]);
+            nextIndex = 4usize;
+        }
+        if (not fs::IsFile(source)) {
+            return SelfHostedCli::Failure<i32>($"Wio source file not found: ${source}");
+        }
+
+        mut compilerArgs: string[] = [];
+        mut runArgs: string[] = [];
+        mut collectingRunArgs = false;
+        mut index = nextIndex;
+        while (index < args.Count()) {
+            let argument = args[index];
+            if (mode == "run" and not collectingRunArgs and argument == "--") {
+                collectingRunArgs = true;
+            }
+            else if (collectingRunArgs) {
+                runArgs.Push(argument);
+            }
+            else {
+                compilerArgs.Push(argument);
+            }
+            index += 1usize;
+        }
+
+        mut finalArgs: string[] = [source];
+        if (mode == "run") {
+            finalArgs.Push("--run");
+        }
+        else if (mode == "check") {
+            finalArgs.Push("--dry-run");
+        }
+        else if (mode == "tokens") {
+            finalArgs.Push("--show-tokens");
+            finalArgs.Push("--dry-run");
+        }
+        else if (mode == "ast") {
+            finalArgs.Push("--show-ast");
+            finalArgs.Push("--dry-run");
+        }
+
+        if (mode == "run" and not HasOutputOverride(compilerArgs)) {
+            let outputRoot = RunOutputRoot(args[0usize], source);
+            if (not fs::EnsureDirectory(outputRoot)) {
+                return SelfHostedCli::Failure<i32>($"Could not create file-run cache: ${outputRoot}");
+            }
+            let fingerprint = hash::Sha256(source).Take(12usize);
+            let output = path::Join(
+                outputRoot,
+                SafeStem(source) + "-" + fingerprint + process::ExecutableSuffix()
+            );
+            finalArgs.Push("--output");
+            finalArgs.Push(output);
+            finalArgs.Push("--intermediate-dir");
+            finalArgs.Push(outputRoot);
+        }
+        for argument in compilerArgs { finalArgs.Push(argument); }
+        if (mode == "run") {
+            for argument in runArgs {
+                finalArgs.Push("--run-arg");
+                finalArgs.Push(argument);
+            }
+        }
+        return SelfHostedCli::Run(
+            SelfHostedCli::NativeCore(args[0usize]),
+            finalArgs,
+            fs::CurrentPath()
+        );
+    }
+
+    fn Execute(args: string[]) -> std::Result<i32> {
+        if (args.Count() < 3usize or args[2usize] == "--help" or args[2usize] == "-h") {
+            console::Print(Help());
+            return std::Ok<i32>(0);
+        }
+        if (args[2usize] == "--version" or args[2usize] == "-v") {
+            return SelfHostedCli::RunNativeVersion(args[0usize]);
+        }
+        let mode = args[2usize];
+        if (args.Count() > 3usize and (args[3usize] == "--help" or args[3usize] == "-h")) {
+            console::Print(Help());
+            return std::Ok<i32>(0);
+        }
+        if (mode == "run" or mode == "check" or mode == "tokens" or mode == "ast") {
+            return ExecuteMode(mode, args);
+        }
+        let suggestion = SelfHostedCli::Suggest(mode, ["run", "check", "tokens", "ast"]);
+        mut message = $"Unknown file subcommand: ${mode}";
+        if (suggestion != "") {
+            message.Append($"\nDid you mean 'wio file ${suggestion}'?");
+        }
+        message.Append("\nRun 'wio file --help' to list available file commands.");
+        return SelfHostedCli::Failure<i32>(message);
+    }
+}

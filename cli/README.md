@@ -18,6 +18,8 @@ Current ownership:
 
 - the complete `project new/describe/build/run/test/package` family and the
   `wio run` shorthand are fully Wio-owned;
+- `file run/check/tokens/ast`, repository `build/test`, `dev build/test`, and
+  `perf smoke` are fully Wio-owned;
 - raw Wio compilation is deliberately delegated to the native stage-0
   compiler;
 - other tooling commands are routed through the companion, then bridged.

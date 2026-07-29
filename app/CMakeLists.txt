@@ -4,6 +4,10 @@ set(WIO_SELFHOST_CLI_SOURCE "${CMAKE_SOURCE_DIR}/cli/main.wio")
 set(WIO_SELFHOST_PROJECT_NEW_SOURCE "${CMAKE_SOURCE_DIR}/cli/project_new.wio")
 set(WIO_SELFHOST_PROJECT_MANIFEST_SOURCE "${CMAKE_SOURCE_DIR}/cli/project_manifest.wio")
 set(WIO_SELFHOST_PROJECT_COMMANDS_SOURCE "${CMAKE_SOURCE_DIR}/cli/project_commands.wio")
+set(WIO_SELFHOST_COMMON_SOURCE "${CMAKE_SOURCE_DIR}/cli/common.wio")
+set(WIO_SELFHOST_FILE_COMMANDS_SOURCE "${CMAKE_SOURCE_DIR}/cli/file_commands.wio")
+set(WIO_SELFHOST_DEV_COMMANDS_SOURCE "${CMAKE_SOURCE_DIR}/cli/dev_commands.wio")
+set(WIO_SELFHOST_PERF_COMMANDS_SOURCE "${CMAKE_SOURCE_DIR}/cli/perf_commands.wio")
 set(WIO_SELFHOST_ARGONAUT_SOURCE "${CMAKE_SOURCE_DIR}/cli/vendor/argonaut.wio")
 
 source_group("tests" FILES ${WIO_TEST_FILES})
@@ -64,6 +68,10 @@ if(EXISTS "${WIO_SELFHOST_CLI_SOURCE}" AND EXISTS "${WIO_SELFHOST_ARGONAUT_SOURC
             "${WIO_SELFHOST_PROJECT_NEW_SOURCE}"
             "${WIO_SELFHOST_PROJECT_MANIFEST_SOURCE}"
             "${WIO_SELFHOST_PROJECT_COMMANDS_SOURCE}"
+            "${WIO_SELFHOST_COMMON_SOURCE}"
+            "${WIO_SELFHOST_FILE_COMMANDS_SOURCE}"
+            "${WIO_SELFHOST_DEV_COMMANDS_SOURCE}"
+            "${WIO_SELFHOST_PERF_COMMANDS_SOURCE}"
             "${WIO_SELFHOST_ARGONAUT_SOURCE}"
     )
 
@@ -679,6 +687,22 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
             -DWIO_EXE=$<TARGET_FILE:wio_app>
             -DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/entry_default_void_run.wio
             -P "${CMAKE_SOURCE_DIR}/cmake/RunWioSelfHostedCliSmoke.cmake"
+    )
+
+    add_test(
+        NAME wio_test_self_hosted_dev_cli_smoke
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DWIO_BUILD_DIR=${CMAKE_BINARY_DIR}
+            -DWIO_CONFIG=$<CONFIG>
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioSelfHostedDevCliSmoke.cmake"
+    )
+    set_tests_properties(
+        wio_test_self_hosted_dev_cli_smoke
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            TIMEOUT 300
     )
     set_tests_properties(
         wio_test_self_hosted_cli_smoke
@@ -1819,6 +1843,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_std_fs_recursive_run
         "${CMAKE_SOURCE_DIR}/tests/std_fs_recursive_run.wio"
         "Std fs recursive: true/1/true/true/true/true"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_std_environment_statistics_run
+        "${CMAKE_SOURCE_DIR}/tests/std_environment_statistics_run.wio"
+        "Std environment/statistics: true/true/true/true/true/true"
         --run
     )
 

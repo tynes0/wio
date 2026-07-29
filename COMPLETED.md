@@ -205,6 +205,13 @@ Notes:
       `build`, `run`, regex-driven `test`, directory `package`, and the
       `wio run` shorthand execute in Wio without calling the legacy native
       project handlers.
+- [x] The second self-hosted CLI wave landed: `file run/check/tokens/ast`,
+      repository `build/test`, `dev build/test`, and the five-scenario
+      `perf smoke` implementation now execute in Wio with parity, packaged
+      cache, and installed-layout tests.
+- [x] `std::environment` now exposes portable process environment,
+      home/cache/temp directory helpers, and `std::statistics` provides
+      reusable sum/mean/median/variance/summary operations.
 - [x] The first member-operator overloading slice landed.
 - [x] Operator overloading was fully closed:
       member/free unary-binary-assignment operators, `fit`, `[]`, `()`,
