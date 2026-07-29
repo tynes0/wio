@@ -1,5 +1,10 @@
 file(GLOB_RECURSE WIO_TEST_FILES "${CMAKE_SOURCE_DIR}/tests/*.wio")
 file(GLOB_RECURSE WIO_STD_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/std/*.wio")
+set(WIO_SELFHOST_CLI_SOURCE "${CMAKE_SOURCE_DIR}/cli/main.wio")
+set(WIO_SELFHOST_PROJECT_NEW_SOURCE "${CMAKE_SOURCE_DIR}/cli/project_new.wio")
+set(WIO_SELFHOST_PROJECT_MANIFEST_SOURCE "${CMAKE_SOURCE_DIR}/cli/project_manifest.wio")
+set(WIO_SELFHOST_PROJECT_COMMANDS_SOURCE "${CMAKE_SOURCE_DIR}/cli/project_commands.wio")
+set(WIO_SELFHOST_ARGONAUT_SOURCE "${CMAKE_SOURCE_DIR}/cli/vendor/argonaut.wio")
 
 source_group("tests" FILES ${WIO_TEST_FILES})
 source_group("std" FILES ${WIO_STD_FILES})
@@ -50,6 +55,35 @@ target_compile_definitions(wio_app
 install(TARGETS wio_app
     RUNTIME DESTINATION bin
 )
+
+if(EXISTS "${WIO_SELFHOST_CLI_SOURCE}" AND EXISTS "${WIO_SELFHOST_ARGONAUT_SOURCE}")
+    set_property(
+        TARGET wio_app
+        APPEND PROPERTY LINK_DEPENDS
+            "${WIO_SELFHOST_CLI_SOURCE}"
+            "${WIO_SELFHOST_PROJECT_NEW_SOURCE}"
+            "${WIO_SELFHOST_PROJECT_MANIFEST_SOURCE}"
+            "${WIO_SELFHOST_PROJECT_COMMANDS_SOURCE}"
+            "${WIO_SELFHOST_ARGONAUT_SOURCE}"
+    )
+
+    add_custom_command(TARGET wio_app POST_BUILD
+        COMMAND
+            $<TARGET_FILE:wio_app>
+            "${WIO_SELFHOST_CLI_SOURCE}"
+            --target exe
+            --output "$<TARGET_FILE_DIR:wio_app>/wio-selfhost${CMAKE_EXECUTABLE_SUFFIX}"
+            --module-dir "${CMAKE_SOURCE_DIR}/cli"
+            --module-dir "${CMAKE_SOURCE_DIR}/cli/vendor"
+        COMMENT "Building the Argonaut-Wio self-hosted CLI companion..."
+        VERBATIM
+    )
+
+    install(
+        PROGRAMS "$<TARGET_FILE_DIR:wio_app>/wio-selfhost${CMAKE_EXECUTABLE_SUFFIX}"
+        TYPE BIN
+    )
+endif()
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_custom_command(TARGET wio_app POST_BUILD
@@ -639,6 +673,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_test(
+        NAME wio_test_self_hosted_cli_smoke
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/entry_default_void_run.wio
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioSelfHostedCliSmoke.cmake"
+    )
+    set_tests_properties(
+        wio_test_self_hosted_cli_smoke
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
         NAME wio_test_package_cli_smoke
         COMMAND
             ${CMAKE_COMMAND}
@@ -679,6 +727,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
     set_tests_properties(
         wio_test_project_cli_smoke
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
+        NAME wio_test_project_test_package_smoke
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DWIO_SCRATCH_DIR=${CMAKE_BINARY_DIR}/project-test-package-smoke
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioProjectTestPackageSmoke.cmake"
+    )
+    set_tests_properties(
+        wio_test_project_test_package_smoke
         PROPERTIES
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )
@@ -767,6 +829,31 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
             -DWIO_CONFIG=$<CONFIG>
             -DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/file_run_args_forwarding_run.wio
             -P "${CMAKE_SOURCE_DIR}/cmake/RunWioPackagedFileRunSmoke.cmake"
+    )
+
+    set(WIO_QUALIFICATION_BACKEND_ROOT "")
+    get_filename_component(wio_qualification_compiler_name "${CMAKE_CXX_COMPILER}" NAME)
+    if(WIN32 AND wio_qualification_compiler_name MATCHES "^g\\+\\+(\\.exe)?$")
+        get_filename_component(wio_qualification_compiler_bin "${CMAKE_CXX_COMPILER}" DIRECTORY)
+        get_filename_component(WIO_QUALIFICATION_BACKEND_ROOT "${wio_qualification_compiler_bin}" DIRECTORY)
+    endif()
+
+    add_test(
+        NAME wio_test_installed_package_qualification
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DWIO_BUILD_DIR=${CMAKE_BINARY_DIR}
+            -DWIO_SCRATCH_DIR=${CMAKE_SOURCE_DIR}/.wio-qualification
+            -DWIO_CONFIG=$<CONFIG>
+            -DWIO_PORTABLE_BACKEND_ROOT=${WIO_QUALIFICATION_BACKEND_ROOT}
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioInstalledPackageQualification.cmake"
+    )
+    set_tests_properties(
+        wio_test_installed_package_qualification
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            TIMEOUT 900
     )
     set_tests_properties(
         wio_test_packaged_file_run_uses_user_cache
@@ -1089,6 +1176,27 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_component_extension_run
         "${CMAKE_SOURCE_DIR}/tests/component_extension_run.wio"
         "Component extension: ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_contextual_keyword_identifiers_run
+        "${CMAKE_SOURCE_DIR}/tests/contextual_keyword_identifiers_run.wio"
+        "Contextual keyword identifiers: ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_default_initialized_variables_run
+        "${CMAKE_SOURCE_DIR}/tests/default_initialized_variables_run.wio"
+        "Default initialized variables: ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_conditional_operator_run
+        "${CMAKE_SOURCE_DIR}/tests/conditional_operator_run.wio"
+        "Conditional operator: ok"
         --run
     )
 
@@ -1704,6 +1812,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_std_path_fs_surface_run
         "${CMAKE_SOURCE_DIR}/tests/std_path_fs_surface_run.wio"
         "Std path/fs surface: true/true/true/3/gamma/true/true/logs/final\\.log/final\\.log/2/logs/true/alpha\\|beta\\|gamma/true"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_std_fs_recursive_run
+        "${CMAKE_SOURCE_DIR}/tests/std_fs_recursive_run.wio"
+        "Std fs recursive: true/1/true/true/true/true"
         --run
     )
 
@@ -2707,33 +2822,27 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_failure_test(
-        wio_invalid_let_without_initializer
-        "${CMAKE_SOURCE_DIR}/tests/invalid/let_without_initializer.wio"
-        "Ordinary variable declarations must be initialized."
-    )
-
-    add_wio_failure_test(
-        wio_invalid_mut_without_initializer
-        "${CMAKE_SOURCE_DIR}/tests/invalid/mut_without_initializer.wio"
-        "Ordinary variable declarations must be initialized."
-    )
-
-    add_wio_failure_test(
         wio_invalid_let_without_type_or_initializer
         "${CMAKE_SOURCE_DIR}/tests/invalid/let_without_type_or_initializer.wio"
-        "Ordinary variable declarations must be initialized."
+        "A variable without an initializer must have an explicit type."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_conditional_operator_requires_bool
+        "${CMAKE_SOURCE_DIR}/tests/invalid/conditional_operator_requires_bool.wio"
+        "Conditional operator condition must be bool, but got 'i32'\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_conditional_operator_branch_type_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/conditional_operator_branch_type_mismatch.wio"
+        "Conditional operator branches must have compatible types\\. Got 'i32' and 'string'\\."
     )
 
     add_wio_failure_test(
         wio_invalid_const_without_initializer
         "${CMAKE_SOURCE_DIR}/tests/invalid/const_without_initializer.wio"
         "Constants must be initialized."
-    )
-
-    add_wio_failure_test(
-        wio_invalid_c_style_for_initializer_without_initializer
-        "${CMAKE_SOURCE_DIR}/tests/invalid/c_style_for_initializer_without_initializer.wio"
-        "Ordinary variable declarations must be initialized."
     )
 
     add_wio_failure_test(

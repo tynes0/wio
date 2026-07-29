@@ -184,6 +184,8 @@ namespace wio::tooling
                 << "  wio project describe [PROJECT] [--project PATH] [--config CFG] [--build-dir DIR]\n"
                 << "  wio project build    [PROJECT] [--project PATH] [--config CFG] [--build-dir DIR] [--rebuild]\n"
                 << "  wio project run      [PROJECT] [--project PATH] [--config CFG] [--build-dir DIR] [--no-build] [-- application args...]\n"
+                << "  wio project test     [PROJECT] [--project PATH] [--config CFG] [--build-dir DIR] [--filter REGEX] [--list] [--no-build]\n"
+                << "  wio project package  [PROJECT] [--project PATH] [--config CFG] [--build-dir DIR] [--output-dir DIR] [--clean] [--no-build]\n"
                 << "  wio bind new         --manifest FILE [--output FILE]\n"
                 << "  wio bind import      --header FILE --realm NAME [--output FILE] [--header-include FILE] [--prefer-flagset]\n"
                 << "  wio env print        [--wio-root DIR] [--shell powershell|cmd|sh] [--add-path]\n"
@@ -213,6 +215,8 @@ namespace wio::tooling
                 << "  wio project describe [PROJECT] [--config CFG] [--build-dir DIR]\n"
                 << "  wio project build    [PROJECT] [--config CFG] [--build-dir DIR] [--rebuild]\n"
                 << "  wio project run      [PROJECT] [--config CFG] [--build-dir DIR] [--no-build] [-- application args...]\n"
+                << "  wio project test     [PROJECT] [--config CFG] [--build-dir DIR] [--filter REGEX] [--list] [--no-build]\n"
+                << "  wio project package  [PROJECT] [--config CFG] [--build-dir DIR] [--output-dir DIR] [--clean] [--no-build]\n"
                 << "\n"
                 << "PROJECT may be a directory or a makewio manifest. When omitted, Wio searches\n"
                 << "the current directory and its ancestors for wio.makewio or makewio.\n";
@@ -1274,11 +1278,21 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
         std::string outputExtension(std::string_view kind)
         {
             if (kind == "shared")
+#if defined(_WIN32)
                 return ".dll";
+#elif defined(__APPLE__)
+                return ".dylib";
+#else
+                return ".so";
+#endif
             if (kind == "static")
                 return ".a";
             if (kind == "exe")
+#if defined(_WIN32)
                 return ".exe";
+#else
+                return {};
+#endif
             return {};
         }
 
@@ -1453,6 +1467,10 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
             std::vector<std::string> hostLinkLibraries;
             std::vector<std::string> hostCompilerArgs;
             std::vector<std::string> runArgs;
+            std::vector<std::filesystem::path> testFiles;
+            std::filesystem::path testWorkingDirectory;
+            std::vector<std::filesystem::path> packageAssets;
+            std::vector<std::filesystem::path> packageFiles;
         };
 
         ProjectInfo resolveProjectInfo(const std::string& projectValue,
@@ -1607,6 +1625,60 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
             const std::string workingDirectoryValue = manifestString(manifest, "run.workingDirectory", ".");
             info.runWorkingDirectory = resolveProjectPath(info.projectRoot, workingDirectoryValue);
 
+            if (manifestHas(manifest, "test.files"))
+            {
+                for (const auto& file : manifestArray(manifest, "test.files"))
+                {
+                    if (!file.empty())
+                        addUniquePath(info.testFiles, resolveProjectPath(info.projectRoot, file));
+                }
+            }
+            else
+            {
+                std::vector<std::filesystem::path> testRoots;
+                if (manifestHas(manifest, "test.sourceRoots"))
+                {
+                    for (const auto& root : manifestArray(manifest, "test.sourceRoots"))
+                        addUniquePath(testRoots, resolveProjectPath(info.projectRoot, root));
+                }
+                else
+                {
+                    testRoots = existingDirectories(info.projectRoot, { "tests" });
+                }
+                info.testFiles = filesByExtensions(testRoots, { ".wio" });
+            }
+            std::sort(info.testFiles.begin(), info.testFiles.end());
+            info.testWorkingDirectory = resolveProjectPath(
+                info.projectRoot,
+                manifestString(manifest, "test.workingDirectory", ".")
+            );
+
+            auto resolvePackagePaths = [&](const std::string& key,
+                                           const std::vector<std::string>& defaults)
+            {
+                std::vector<std::filesystem::path> paths;
+                const bool explicitlyConfigured = manifestHas(manifest, key);
+                const auto values = explicitlyConfigured ? manifestArray(manifest, key) : defaults;
+                for (const auto& value : values)
+                {
+                    if (value.empty())
+                        continue;
+
+                    const std::filesystem::path path = resolveProjectPath(info.projectRoot, value);
+                    std::error_code pathEc;
+                    if (!std::filesystem::exists(path, pathEc))
+                    {
+                        if (explicitlyConfigured)
+                            addUniquePath(paths, path);
+                        continue;
+                    }
+                    addUniquePath(paths, path);
+                }
+                return paths;
+            };
+            info.packageAssets = resolvePackagePaths("package.assets", { "assets" });
+            info.packageFiles = resolvePackagePaths("package.files", {});
+
             std::string baseName = manifestString(manifest, "outputs.baseName");
             if (baseName.empty())
                 baseName = toSafeIdentifier(info.name);
@@ -1708,6 +1780,14 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                 << "    \"workingDirectory\": " << jsonString(info.runWorkingDirectory.string()) << ",\n"
                 << "    \"passLibraryPath\": " << (info.passLibraryPath ? "true" : "false") << ",\n"
                 << "    \"args\": " << jsonStringArray(info.runArgs) << "\n"
+                << "  },\n"
+                << "  \"test\": {\n"
+                << "    \"workingDirectory\": " << jsonString(info.testWorkingDirectory.string()) << ",\n"
+                << "    \"files\": " << jsonPathArray(info.testFiles) << "\n"
+                << "  },\n"
+                << "  \"package\": {\n"
+                << "    \"assets\": " << jsonPathArray(info.packageAssets) << ",\n"
+                << "    \"files\": " << jsonPathArray(info.packageFiles) << "\n"
                 << "  }\n"
                 << "}\n";
         }
@@ -1962,6 +2042,50 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                     )
                     .SetUsageSuffix(" [-- <application-args...>]");
             }
+            else if (actionDescription == "test")
+            {
+                parser
+                    .Add(
+                        Argonaut::Argument("FILTER")
+                            .AddAlias("--filter")
+                            .SetDefaultValue("")
+                            .SetDescription("Regular expression matched against project-relative test paths.")
+                    )
+                    .Add(
+                        Argonaut::Argument("LIST")
+                            .AddAlias("--list")
+                            .Flag()
+                            .SetDescription("List matching project tests without compiling or running them.")
+                    )
+                    .Add(
+                        Argonaut::Argument("NO-BUILD")
+                            .AddAlias("--no-build")
+                            .Flag()
+                            .SetDescription("Run previously compiled test executables without rebuilding them.")
+                    );
+            }
+            else if (actionDescription == "package")
+            {
+                parser
+                    .Add(
+                        Argonaut::Argument("OUTPUT-DIR")
+                            .AddAlias("--output-dir")
+                            .SetDefaultValue("dist")
+                            .SetDescription("Package parent directory; relative paths resolve from the project root.")
+                    )
+                    .Add(
+                        Argonaut::Argument("CLEAN")
+                            .AddAlias("--clean")
+                            .Flag()
+                            .SetDescription("Replace an existing package directory.")
+                    )
+                    .Add(
+                        Argonaut::Argument("NO-BUILD")
+                            .AddAlias("--no-build")
+                            .Flag()
+                            .SetDescription("Package existing project outputs without checking or rebuilding them.")
+                    );
+            }
 
             parser
                 .AutoHelp()
@@ -2184,6 +2308,53 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
             return EXIT_SUCCESS;
         }
 
+        void appendProjectCompilerArguments(std::vector<std::string>& command,
+                                            const ProjectInfo& info,
+                                            const std::filesystem::path& extraModuleDirectory = {})
+        {
+            if (!extraModuleDirectory.empty())
+            {
+                command.push_back("--module-dir");
+                command.push_back(extraModuleDirectory.string());
+            }
+
+            for (const auto& moduleDir : info.wioSourceRoots)
+            {
+                command.push_back("--module-dir");
+                command.push_back(moduleDir.string());
+            }
+
+            for (const auto& includeDir : info.wioIncludeDirs)
+            {
+                command.push_back("--include-dir");
+                command.push_back(includeDir.string());
+            }
+
+            for (const auto& linkDir : info.wioLinkDirs)
+            {
+                command.push_back("--link-dir");
+                command.push_back(linkDir.string());
+            }
+
+            for (const auto& linkLibrary : info.wioLinkLibraries)
+            {
+                command.push_back("--link-lib");
+                command.push_back(linkLibrary);
+            }
+
+            for (const auto& nativeSource : info.wioNativeSources)
+            {
+                command.push_back("--backend-arg");
+                command.push_back(nativeSource.string());
+            }
+
+            for (const auto& backendArg : info.wioBackendArgs)
+            {
+                command.push_back("--backend-arg");
+                command.push_back(backendArg);
+            }
+        }
+
         int buildProject(const ProjectInfo& info, bool forceRebuild)
         {
             std::error_code ec;
@@ -2195,42 +2366,7 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                 "--target", info.wioTarget,
                 "--output", info.wioOutput.string()
             };
-
-            for (const auto& moduleDir : info.wioSourceRoots)
-            {
-                wioCommand.push_back("--module-dir");
-                wioCommand.push_back(moduleDir.string());
-            }
-
-            for (const auto& includeDir : info.wioIncludeDirs)
-            {
-                wioCommand.push_back("--include-dir");
-                wioCommand.push_back(includeDir.string());
-            }
-
-            for (const auto& linkDir : info.wioLinkDirs)
-            {
-                wioCommand.push_back("--link-dir");
-                wioCommand.push_back(linkDir.string());
-            }
-
-            for (const auto& linkLibrary : info.wioLinkLibraries)
-            {
-                wioCommand.push_back("--link-lib");
-                wioCommand.push_back(linkLibrary);
-            }
-
-            for (const auto& nativeSource : info.wioNativeSources)
-            {
-                wioCommand.push_back("--backend-arg");
-                wioCommand.push_back(nativeSource.string());
-            }
-
-            for (const auto& backendArg : info.wioBackendArgs)
-            {
-                wioCommand.push_back("--backend-arg");
-                wioCommand.push_back(backendArg);
-            }
+            appendProjectCompilerArguments(wioCommand, info);
 
             std::vector<std::filesystem::path> wioInputs{
                 info.manifestFile,
@@ -2540,6 +2676,377 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
             }
         }
 
+        std::string projectRelativeDisplayPath(const ProjectInfo& info,
+                                               const std::filesystem::path& path)
+        {
+            const std::filesystem::path relative = path.lexically_relative(info.projectRoot);
+            if (!relative.empty() && *relative.begin() != "..")
+                return relative.generic_string();
+            return path.generic_string();
+        }
+
+        std::filesystem::path projectTestOutputPath(const ProjectInfo& info,
+                                                    const std::filesystem::path& testFile)
+        {
+            std::filesystem::path relative = testFile.lexically_relative(info.projectRoot);
+            if (relative.empty() || *relative.begin() == "..")
+                relative = toSafeIdentifier(testFile.generic_string()) + ".wio";
+
+            std::filesystem::path output = info.projectBuildDirectory / "tests" / relative;
+            output.replace_extension(outputExtension("exe"));
+            return output.lexically_normal().make_preferred();
+        }
+
+        int handleProjectTestCommand(std::vector<std::string> args)
+        {
+            Argonaut::Parser parser = makeProjectActionParser("test");
+            if (const auto parseResult = parseWithHandling(parser, args); parseResult.has_value())
+                return *parseResult;
+
+            try
+            {
+                const ProjectInfo info = resolveProjectInfo(
+                    getProjectValue(parser),
+                    parser.GetValuesOf<std::string>("CONFIG").front(),
+                    parser.GetValuesOf<std::string>("BUILD-DIR").front()
+                );
+
+                std::regex filter;
+                const std::string filterValue = parser.GetValuesOf<std::string>("FILTER").front();
+                if (!filterValue.empty())
+                {
+                    try
+                    {
+                        filter = std::regex(filterValue);
+                    }
+                    catch (const std::regex_error& e)
+                    {
+                        throw std::runtime_error("Invalid --filter regular expression: " + std::string(e.what()));
+                    }
+                }
+
+                std::vector<std::filesystem::path> selectedTests;
+                for (const auto& testFile : info.testFiles)
+                {
+                    const std::string displayPath = projectRelativeDisplayPath(info, testFile);
+                    if (filterValue.empty() || std::regex_search(displayPath, filter))
+                        selectedTests.push_back(testFile);
+                }
+
+                if (getFlagValue(parser, "LIST"))
+                {
+                    for (const auto& testFile : selectedTests)
+                        std::cout << projectRelativeDisplayPath(info, testFile) << '\n';
+                    std::cout << selectedTests.size() << " project test(s) matched.\n";
+                    return EXIT_SUCCESS;
+                }
+
+                if (selectedTests.empty())
+                {
+                    std::cout << "No project tests matched. Add .wio tests under 'tests/' or configure test.files/test.sourceRoots.\n";
+                    return EXIT_SUCCESS;
+                }
+
+                std::error_code ec;
+                if (!std::filesystem::exists(info.testWorkingDirectory, ec) ||
+                    !std::filesystem::is_directory(info.testWorkingDirectory, ec))
+                {
+                    throw std::runtime_error(
+                        "Test working directory does not exist or is not a directory: " +
+                        info.testWorkingDirectory.string()
+                    );
+                }
+
+                const bool noBuild = getFlagValue(parser, "NO-BUILD");
+                const bool forceRebuild = getFlagValue(parser, "CONFIGURE");
+                if (noBuild && forceRebuild)
+                    throw std::runtime_error("--no-build cannot be combined with --rebuild or --configure.");
+
+                size_t passed = 0;
+                for (const auto& testFile : selectedTests)
+                {
+                    const std::string displayPath = projectRelativeDisplayPath(info, testFile);
+                    const std::filesystem::path outputPath = projectTestOutputPath(info, testFile);
+                    std::filesystem::create_directories(outputPath.parent_path(), ec);
+                    if (ec)
+                        throw std::runtime_error("Could not create project test output directory: " + outputPath.parent_path().string());
+
+                    if (!noBuild)
+                    {
+                        std::vector<std::filesystem::path> testInputs{
+                            info.manifestFile,
+                            info.toolchainExecutable,
+                            info.toolchainRoot / "std",
+                            info.toolchainRoot / "runtime" / "include",
+                            info.toolchainRoot / "sdk" / "include",
+                            testFile
+                        };
+                        testInputs.insert(testInputs.end(), info.wioSourceRoots.begin(), info.wioSourceRoots.end());
+                        testInputs.insert(testInputs.end(), info.wioIncludeDirs.begin(), info.wioIncludeDirs.end());
+                        testInputs.insert(testInputs.end(), info.wioNativeSources.begin(), info.wioNativeSources.end());
+
+                        if (forceRebuild || !outputUpToDate(outputPath, testInputs))
+                        {
+                            std::vector<std::string> compileCommand{
+                                info.toolchainExecutable.string(),
+                                testFile.string(),
+                                "--target", "exe",
+                                "--output", outputPath.string()
+                            };
+                            appendProjectCompilerArguments(compileCommand, info, testFile.parent_path());
+                            std::cout << "[ BUILD ] " << displayPath << '\n';
+                            if (const int compileResult = process::Run(compileCommand, info.projectRoot);
+                                compileResult != 0)
+                            {
+                                std::cerr << "[ FAIL  ] " << displayPath << " (compile)\n";
+                                return compileResult;
+                            }
+                        }
+                    }
+
+                    ec.clear();
+                    if (!std::filesystem::exists(outputPath, ec) ||
+                        !std::filesystem::is_regular_file(outputPath, ec))
+                    {
+                        throw std::runtime_error(
+                            std::string(noBuild ? "--no-build was requested, but" : "The compiler did not produce") +
+                            " the expected test executable: " + outputPath.string()
+                        );
+                    }
+
+                    std::cout << "[ RUN   ] " << displayPath << '\n';
+                    if (const int runResult = process::Run({ outputPath.string() }, info.testWorkingDirectory);
+                        runResult != 0)
+                    {
+                        std::cerr << "[ FAIL  ] " << displayPath << " (exit " << runResult << ")\n";
+                        return runResult;
+                    }
+
+                    ++passed;
+                    std::cout << "[ PASS  ] " << displayPath << '\n';
+                }
+
+                std::cout << passed << "/" << selectedTests.size() << " project test(s) passed.\n";
+                return EXIT_SUCCESS;
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "Project test failed: " << e.what() << '\n';
+                return EXIT_FAILURE;
+            }
+        }
+
+        void copyPackageInput(const std::filesystem::path& source,
+                              const std::filesystem::path& destination)
+        {
+            std::error_code ec;
+            std::filesystem::create_directories(destination.parent_path(), ec);
+            if (ec)
+                throw std::runtime_error("Could not create package directory: " + destination.parent_path().string());
+
+            if (std::filesystem::is_directory(source, ec))
+            {
+                std::filesystem::copy(
+                    source,
+                    destination,
+                    std::filesystem::copy_options::recursive |
+                        std::filesystem::copy_options::overwrite_existing,
+                    ec
+                );
+            }
+            else
+            {
+                std::filesystem::copy_file(
+                    source,
+                    destination,
+                    std::filesystem::copy_options::overwrite_existing,
+                    ec
+                );
+            }
+
+            if (ec)
+                throw std::runtime_error("Could not package '" + source.string() + "': " + ec.message());
+        }
+
+        bool isDynamicLibraryPath(const std::filesystem::path& path)
+        {
+            std::string extension = path.extension().string();
+            std::transform(extension.begin(), extension.end(), extension.begin(), [](const unsigned char ch)
+            {
+                return static_cast<char>(std::tolower(ch));
+            });
+            return extension == ".dll" || extension == ".so" || extension == ".dylib";
+        }
+
+        int handleProjectPackageCommand(std::vector<std::string> args)
+        {
+            Argonaut::Parser parser = makeProjectActionParser("package");
+            if (const auto parseResult = parseWithHandling(parser, args); parseResult.has_value())
+                return *parseResult;
+
+            try
+            {
+                const ProjectInfo info = resolveProjectInfo(
+                    getProjectValue(parser),
+                    parser.GetValuesOf<std::string>("CONFIG").front(),
+                    parser.GetValuesOf<std::string>("BUILD-DIR").front()
+                );
+
+                const bool noBuild = getFlagValue(parser, "NO-BUILD");
+                const bool forceRebuild = getFlagValue(parser, "CONFIGURE");
+                if (noBuild && forceRebuild)
+                    throw std::runtime_error("--no-build cannot be combined with --rebuild or --configure.");
+
+                if (!noBuild)
+                {
+                    if (const int buildResult = buildProject(info, forceRebuild); buildResult != 0)
+                        return buildResult;
+                }
+
+                const std::filesystem::path packageParent = resolveProjectPath(
+                    info.projectRoot,
+                    parser.GetValuesOf<std::string>("OUTPUT-DIR").front()
+                );
+                const std::filesystem::path packageRoot =
+                    (packageParent / toSafeIdentifier(info.name)).lexically_normal().make_preferred();
+                if (packageRoot == info.projectRoot || packageRoot == packageRoot.root_path())
+                    throw std::runtime_error("Refusing to use an unsafe package directory: " + packageRoot.string());
+
+                std::error_code ec;
+                if (std::filesystem::exists(packageRoot, ec))
+                {
+                    if (!getFlagValue(parser, "CLEAN"))
+                    {
+                        throw std::runtime_error(
+                            "Package directory already exists: " + packageRoot.string() +
+                            ". Pass --clean to replace it."
+                        );
+                    }
+                    std::filesystem::remove_all(packageRoot, ec);
+                    if (ec)
+                        throw std::runtime_error("Could not clean package directory: " + ec.message());
+                }
+                std::filesystem::create_directories(packageRoot, ec);
+                if (ec)
+                    throw std::runtime_error("Could not create package directory: " + packageRoot.string());
+
+                std::vector<std::filesystem::path> packagedArtifacts;
+                auto packageArtifact = [&](const std::filesystem::path& source, const std::string& folder)
+                {
+                    ec.clear();
+                    if (!std::filesystem::exists(source, ec) || !std::filesystem::is_regular_file(source, ec))
+                        throw std::runtime_error("Expected project output does not exist: " + source.string());
+                    const std::filesystem::path destination = packageRoot / folder / source.filename();
+                    copyPackageInput(source, destination);
+                    packagedArtifacts.push_back(destination.lexically_relative(packageRoot));
+                    return destination.lexically_relative(packageRoot);
+                };
+
+                std::filesystem::path packageEntrypoint;
+                std::vector<std::string> packageArguments;
+                if (info.hostEnabled)
+                {
+                    packageEntrypoint = packageArtifact(info.hostOutput, "bin");
+                    if (info.wioTarget == "shared")
+                        packageArguments.push_back(packageArtifact(info.wioOutput, "lib").generic_string());
+                }
+                else if (info.wioTarget == "exe")
+                {
+                    packageEntrypoint = packageArtifact(info.wioOutput, "bin");
+                }
+                else
+                {
+                    packageArtifact(info.wioOutput, "lib");
+                }
+
+                for (const auto& library : info.wioLinkLibraries)
+                {
+                    const std::filesystem::path libraryPath(library);
+                    if (looksLikeLibraryFile(library) && isDynamicLibraryPath(libraryPath))
+                    {
+                        ec.clear();
+                        if (std::filesystem::is_regular_file(libraryPath, ec))
+                            packageArtifact(libraryPath, "lib");
+                    }
+                }
+
+                for (const auto& asset : info.packageAssets)
+                {
+                    const std::filesystem::path destination =
+                        asset.filename() == "assets"
+                            ? packageRoot / "assets"
+                            : packageRoot / "assets" / asset.filename();
+                    copyPackageInput(asset, destination);
+                }
+
+                for (const auto& file : info.packageFiles)
+                {
+                    std::filesystem::path relative = file.lexically_relative(info.projectRoot);
+                    if (relative.empty() || *relative.begin() == "..")
+                        relative = file.filename();
+                    copyPackageInput(file, packageRoot / relative);
+                }
+
+                if (!packageEntrypoint.empty())
+                {
+#if defined(_WIN32)
+                    std::ostringstream launcher;
+                    launcher << "@echo off\r\n";
+                    launcher << "\"%~dp0" << packageEntrypoint.generic_string() << "\"";
+                    for (const auto& argument : packageArguments)
+                        launcher << " \"%~dp0" << argument << "\"";
+                    launcher << " %*\r\n";
+                    writeUtf8File(packageRoot / "run.cmd", launcher.str());
+#else
+                    std::ostringstream launcher;
+                    launcher << "#!/usr/bin/env sh\n";
+                    launcher << "package_root=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n";
+                    launcher << "exec \"$package_root/" << packageEntrypoint.generic_string() << "\"";
+                    for (const auto& argument : packageArguments)
+                        launcher << " \"$package_root/" << argument << "\"";
+                    launcher << " \"$@\"\n";
+                    const std::filesystem::path launcherPath = packageRoot / "run.sh";
+                    writeUtf8File(launcherPath, launcher.str());
+                    std::filesystem::permissions(
+                        launcherPath,
+                        std::filesystem::perms::owner_exec |
+                            std::filesystem::perms::group_exec |
+                            std::filesystem::perms::others_exec,
+                        std::filesystem::perm_options::add,
+                        ec
+                    );
+                    if (ec)
+                        throw std::runtime_error("Could not make package launcher executable: " + ec.message());
+#endif
+                }
+
+                std::ostringstream metadata;
+                metadata
+                    << "{\n"
+                    << "  \"schemaVersion\": 1,\n"
+                    << "  \"name\": " << jsonString(info.name) << ",\n"
+                    << "  \"configuration\": " << jsonString(info.config) << ",\n"
+                    << "  \"target\": " << jsonString(info.wioTarget) << ",\n"
+                    << "  \"hostEnabled\": " << (info.hostEnabled ? "true" : "false") << ",\n"
+                    << "  \"entrypoint\": "
+                    << (packageEntrypoint.empty() ? "null" : jsonString(packageEntrypoint.generic_string())) << ",\n"
+                    << "  \"arguments\": " << jsonStringArray(packageArguments) << ",\n"
+                    << "  \"artifacts\": " << jsonPathArray(packagedArtifacts) << "\n"
+                    << "}\n";
+                writeUtf8File(packageRoot / "wio-package.json", metadata.str());
+
+                std::cout
+                    << "Packaged project: " << packageRoot.string() << '\n'
+                    << "Artifacts       : " << packagedArtifacts.size() << '\n';
+                return EXIT_SUCCESS;
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "Project package failed: " << e.what() << '\n';
+                return EXIT_FAILURE;
+            }
+        }
+
         std::vector<std::string> collectCommandArgs(const std::string& programName, int argc, char* argv[], int firstArgumentIndex)
         {
             std::vector<std::string> args;
@@ -2702,11 +3209,15 @@ fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
                 return handleProjectBuildCommand(collectCommandArgs("wio project build", argc, argv, 3));
             if (subcommand == "run")
                 return handleProjectRunCommand(collectCommandArgs("wio project run", argc, argv, 3));
+            if (subcommand == "test")
+                return handleProjectTestCommand(collectCommandArgs("wio project test", argc, argv, 3));
+            if (subcommand == "package")
+                return handleProjectPackageCommand(collectCommandArgs("wio project package", argc, argv, 3));
 
             std::cerr << "Unknown project subcommand: " << subcommand << '\n';
             if (const auto suggestion = cli::SuggestCommand(
                     subcommand,
-                    { "new", "describe", "build", "run" });
+                    { "new", "describe", "build", "run", "test", "package" });
                 suggestion.has_value())
             {
                 std::cerr << "Did you mean 'wio project " << *suggestion << "'?\n";

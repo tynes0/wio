@@ -296,6 +296,14 @@ namespace wio::sema
                     traverse(current->right);
                     break;
                 }
+                case NodeKind::ConditionalExpression:
+                {
+                    auto* current = node->as<ConditionalExpression>();
+                    traverse(current->condition);
+                    traverse(current->whenTrue);
+                    traverse(current->whenFalse);
+                    break;
+                }
                 case NodeKind::IntegerLiteral:
                 case NodeKind::FloatLiteral:
                 case NodeKind::StringLiteral:
@@ -6452,6 +6460,79 @@ namespace wio::sema
         {
             // Todo: In arithmetic operations (for now), the result type is the same as the type of the left operand.
             node.refType = readableLhsType ? readableLhsType : lhsType;
+        }
+    }
+
+    void SemanticAnalyzer::visit(ConditionalExpression& node)
+    {
+        Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
+        bool previousAllowContextualNumericLiteralTyping = allowContextualNumericLiteralTyping_;
+
+        currentExpectedExpressionType_ = Compiler::get().getTypeContext().getBool();
+        allowContextualNumericLiteralTyping_ = false;
+        node.condition->accept(*this);
+
+        Ref<Type> conditionType = getAutoReadableType(node.condition->refType.Lock());
+        if (conditionType &&
+            !conditionType->isUnknown() &&
+            conditionType != Compiler::get().getTypeContext().getBool())
+        {
+            WIO_LOG_ADD_ERROR(
+                node.condition->location(),
+                "Conditional operator condition must be bool, but got '{}'.",
+                conditionType->toString()
+            );
+        }
+
+        currentExpectedExpressionType_ = previousExpectedExpressionType;
+        allowContextualNumericLiteralTyping_ = true;
+        node.whenTrue->accept(*this);
+        node.whenFalse->accept(*this);
+
+        currentExpectedExpressionType_ = previousExpectedExpressionType;
+        allowContextualNumericLiteralTyping_ = previousAllowContextualNumericLiteralTyping;
+
+        Ref<Type> trueType = getAutoReadableType(node.whenTrue->refType.Lock());
+        Ref<Type> falseType = getAutoReadableType(node.whenFalse->refType.Lock());
+
+        if (!trueType || trueType->isUnknown())
+        {
+            node.refType = falseType ? falseType : Compiler::get().getTypeContext().getUnknown();
+            return;
+        }
+        if (!falseType || falseType->isUnknown())
+        {
+            node.refType = trueType;
+            return;
+        }
+
+        if (!isAssignmentLikeCompatible(trueType, falseType) &&
+            !isAssignmentLikeCompatible(falseType, trueType))
+        {
+            WIO_LOG_ADD_ERROR(
+                node.location(),
+                "Conditional operator branches must have compatible types. Got '{}' and '{}'.",
+                trueType->toString(),
+                falseType->toString()
+            );
+            node.refType = Compiler::get().getTypeContext().getUnknown();
+            return;
+        }
+
+        if (previousExpectedExpressionType &&
+            !previousExpectedExpressionType->isUnknown() &&
+            isAssignmentLikeCompatible(previousExpectedExpressionType, trueType) &&
+            isAssignmentLikeCompatible(previousExpectedExpressionType, falseType))
+        {
+            node.refType = previousExpectedExpressionType;
+        }
+        else if (isAssignmentLikeCompatible(trueType, falseType))
+        {
+            node.refType = trueType;
+        }
+        else
+        {
+            node.refType = falseType;
         }
     }
 

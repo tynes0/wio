@@ -1,0 +1,205 @@
+use argonaut;
+use project_new;
+use project_manifest;
+use project_commands;
+use std::console as console;
+use std::fs as fs;
+use std::path as path;
+use std::process as process;
+use std::result as result;
+
+fn AddFlag(parser: ref Argonaut::Parser, id: string, aliases: string[], description: string) -> std::Result<std::ResultUnit> {
+    mut argument = Argonaut::Argument(id);
+    argument.SetDescription(description);
+    for alias in aliases {
+        argument.AddAlias(alias);
+    }
+    let flagged = argument.Flag?();
+    parser.Add?(flagged);
+    return std::OkUnit();
+}
+
+fn AddOption(parser: ref Argonaut::Parser, id: string, aliases: string[], description: string) -> std::Result<std::ResultUnit> {
+    mut argument = Argonaut::Argument(id);
+    argument.SetDescription(description);
+    for alias in aliases {
+        argument.AddAlias(alias);
+    }
+    parser.Add?(argument);
+    return std::OkUnit();
+}
+
+fn AddMultiOption(parser: ref Argonaut::Parser, id: string, aliases: string[], description: string) -> std::Result<std::ResultUnit> {
+    mut argument = Argonaut::Argument(id);
+    argument.SetDescription(description);
+    for alias in aliases {
+        argument.AddAlias(alias);
+    }
+    let multi = argument.MultiValue?();
+    parser.Add?(multi);
+    return std::OkUnit();
+}
+
+fn AddProjectBase(parser: ref Argonaut::Parser, rebuild: bool) -> std::Result<std::ResultUnit> {
+    mut projectPath = Argonaut::Argument("PROJECT-PATH");
+    projectPath.SetDescription("Optional project directory or makewio manifest path.");
+    parser.Add?(projectPath);
+
+    AddOption?(parser, "PROJECT", ["--project"], "Project directory or makewio manifest path.");
+    AddOption?(parser, "CONFIG", ["--config"], "Optional project build configuration override.");
+    AddOption?(parser, "BUILD-DIR", ["--build-dir"], "Optional project build directory override.");
+    if (rebuild) {
+        AddFlag?(parser, "REBUILD", ["--rebuild", "--configure"], "Force recompilation.");
+    }
+    AddFlag?(parser, "HELP", ["--help", "-h"], "Show this help menu.");
+    return std::OkUnit();
+}
+
+fn ProjectParser(command: string) -> std::Result<Argonaut::Parser> {
+    mut parser = Argonaut::Parser();
+    AddProjectBase?(ref parser, command != "describe");
+
+    if (command == "describe" or command == "build") {
+    }
+    else if (command == "run") {
+        AddFlag?(ref parser, "NO-BUILD", ["--no-build"], "Run existing project outputs.");
+        AddOption?(ref parser, "WORKING-DIRECTORY", ["--cwd", "--working-directory"], "Override the run working directory.");
+        AddFlag?(ref parser, "NO-MANIFEST-ARGS", ["--no-manifest-args"], "Do not prepend manifest arguments.");
+        AddMultiOption?(ref parser, "RUN-ARG", ["--arg"], "Append one application argument.");
+        AddFlag?(ref parser, "PRINT-COMMAND", ["--print-command"], "Print the resolved invocation.");
+    }
+    else if (command == "test") {
+        AddOption?(ref parser, "FILTER", ["--filter"], "Regex matched against project-relative test paths.");
+        AddFlag?(ref parser, "LIST", ["--list"], "List matching tests without running them.");
+        AddFlag?(ref parser, "NO-BUILD", ["--no-build"], "Run existing test executables.");
+    }
+    else if (command == "package") {
+        AddOption?(ref parser, "OUTPUT-DIR", ["--output-dir"], "Package parent directory.");
+        AddFlag?(ref parser, "CLEAN", ["--clean"], "Replace an existing package directory.");
+        AddFlag?(ref parser, "NO-BUILD", ["--no-build"], "Package existing project outputs.");
+    }
+    else {
+        return Argonaut::Fail<Argonaut::Parser>(
+            Argonaut::ErrorKind::Parse,
+            $"Unsupported self-hosted project command: ${command}"
+        );
+    }
+    return std::Ok<Argonaut::Parser>(parser);
+}
+
+fn Contains(args: string[], value: string) -> bool {
+    for argument in args {
+        if (argument == value) {
+            return true;
+        }
+    }
+    return false;
+}
+
+fn ValidateProjectCommand(args: string[]) -> std::Result<std::ResultUnit> {
+    let command = args[2usize];
+    mut parser = ProjectParser?(command);
+    mut commandArgs: string[] = [$"wio project ${command}"];
+    mut index = 3usize;
+    while (index < args.Count()) {
+        if (command == "run" and args[index] == "--") {
+            break;
+        }
+        commandArgs.Push(args[index]);
+        index += 1usize;
+    }
+
+    let parsed = parser.Parse(commandArgs);
+    if (parsed.IsError()) {
+        return std::Err<std::ResultUnit>(parsed.ErrorValue());
+    }
+    if (Contains(commandArgs, "--help") or Contains(commandArgs, "-h")) {
+        console::Print(parser.Help());
+    }
+    return std::OkUnit();
+}
+
+fn NativeCorePath(selfPath: string) -> string {
+    return path::Join(path::ParentPath(selfPath), "wio" + process::ExecutableSuffix());
+}
+
+fn ProxyNative(args: string[]) -> std::Result<i32> {
+    let core = NativeCorePath(args[0usize]);
+    if (not fs::IsFile(core)) {
+        return Argonaut::Fail<i32>(
+            Argonaut::ErrorKind::Parse,
+            $"Self-hosted CLI could not find its native core: ${core}"
+        );
+    }
+
+    mut nativeArgs: string[] = ["--native-cli"];
+    mut index = 1usize;
+    while (index < args.Count()) {
+        nativeArgs.Push(args[index]);
+        index += 1usize;
+    }
+    return process::Run(core, nativeArgs, fs::CurrentPath());
+}
+
+fn Entry(args: string[]) -> i32 {
+    if (args.Count() == 2usize and args[1usize] == "--self-hosted-info") {
+        console::PrintLine!("Wio self-hosted CLI: Argonaut-Wio bootstrap");
+        return 0;
+    }
+
+    mut cliArgs = args;
+    if (args.Count() >= 2usize and args[1usize] == "run") {
+        mut projectArgs: string[] = [args[0usize], "project", "run"];
+        mut projectArgIndex = 2usize;
+        while (projectArgIndex < args.Count()) {
+            projectArgs.Push(args[projectArgIndex]);
+            projectArgIndex += 1usize;
+        }
+        cliArgs = projectArgs;
+    }
+
+    if (cliArgs.Count() >= 3usize and cliArgs[1usize] == "project" and cliArgs[2usize] == "new") {
+        let generated = SelfHostedProject::RunNew(cliArgs);
+        if (generated.IsError()) {
+            console::PrintLine!(generated.ErrorValue().message);
+            return 1;
+        }
+        return generated.Value();
+    }
+
+    if (cliArgs.Count() < 3usize or cliArgs[1usize] != "project") {
+        let fallback = ProxyNative(cliArgs);
+        if (fallback.IsError()) {
+            console::PrintLine!(fallback.ErrorValue().message);
+            return 1;
+        }
+        return fallback.Value();
+    }
+
+    let command = cliArgs[2usize];
+    if (command != "describe" and command != "build" and command != "run" and
+        command != "test" and command != "package") {
+        let fallback = ProxyNative(cliArgs);
+        if (fallback.IsError()) {
+            console::PrintLine!(fallback.ErrorValue().message);
+            return 1;
+        }
+        return fallback.Value();
+    }
+
+    let validation = ValidateProjectCommand(cliArgs);
+    if (validation.IsError()) {
+        console::PrintLine!(validation.ErrorValue().message);
+        return 2;
+    }
+    if (Contains(cliArgs, "--help") or Contains(cliArgs, "-h")) {
+        return 0;
+    }
+
+    let run = SelfHostedProject::Execute(command, cliArgs);
+    if (run.IsError()) {
+        console::PrintLine!(run.ErrorValue().message);
+        return 1;
+    }
+    return run.Value();
+}

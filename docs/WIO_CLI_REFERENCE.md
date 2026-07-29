@@ -167,12 +167,21 @@ wio file run .\app.wio -- "two words" --verbose --
 
 `wio project` is the main user project workflow.
 
+The full project lifecycle is implemented by the Wio + Argonaut-Wio
+self-hosted frontend. It uses the native executable only for raw source
+compilation; manifest resolution and project orchestration do not cross the
+legacy native project-command bridge. See
+[the bootstrap architecture](./WIO_SELF_HOSTED_CLI.md) for the migration and
+release model.
+
 Subcommands:
 
 - `new`
 - `describe`
 - `build`
 - `run`
+- `test`
+- `package`
 
 ### 5.1 `project new`
 
@@ -237,6 +246,43 @@ Useful run options:
 - `--print-command` prints the resolved working directory and launch command
 
 The child program's exit code is returned unchanged by Wio.
+
+### 5.5 `project test`
+
+```powershell
+wio project test
+wio project test --filter "parser|interop"
+wio project test --list
+wio project test --no-build
+```
+
+By default, Wio recursively discovers `.wio` test programs under `tests/`.
+Each test is compiled as its own executable with the project's source roots,
+native include directories, native sources, link directories, link libraries,
+and backend arguments. A non-zero test exit code stops the run and is returned
+to the caller.
+
+The manifest may replace discovery with `[test].files`, select different roots
+with `[test].sourceRoots`, and set `[test].workingDirectory`. `--filter` is a
+regular expression matched against project-relative test paths.
+
+### 5.6 `project package`
+
+```powershell
+wio project package
+wio project package --output-dir .\artifacts --clean
+wio project package --no-build --output-dir .\artifacts --clean
+```
+
+This creates a distributable directory named after the project. Executables
+are placed under `bin/`, libraries under `lib/`, default project assets under
+`assets/`, a platform launcher is emitted for runnable targets, and
+`wio-package.json` records the entrypoint, required arguments, and packaged
+artifacts. Existing package directories are preserved unless `--clean` is
+supplied.
+
+Use `[package].assets` to choose asset files/directories and `[package].files`
+for additional files that should retain their project-relative layout.
 
 ---
 

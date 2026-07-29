@@ -1,0 +1,4 @@
+fn Entry() -> i32 {
+    let value = true ? 10 : "wrong";
+    return 0;
+}

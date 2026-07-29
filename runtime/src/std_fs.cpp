@@ -2,6 +2,8 @@
 
 #include "exception.h"
 
+#include <algorithm>
+
 namespace wio::runtime::std_fs
 {
     namespace
@@ -43,6 +45,17 @@ namespace wio::runtime::std_fs
         return !ec && result;
     }
 
+    bool IsDirectoryEmpty(const std::string& path)
+    {
+        std::error_code ec;
+        const std::filesystem::path fsPath = toPath(path);
+        if (!std::filesystem::is_directory(fsPath, ec) || ec)
+            return false;
+
+        const bool result = std::filesystem::is_empty(fsPath, ec);
+        return !ec && result;
+    }
+
     bool IsAbsolute(const std::string& path)
     {
         return toPath(path).is_absolute();
@@ -70,6 +83,17 @@ namespace wio::runtime::std_fs
         return !ec && removed;
     }
 
+    bool RemoveAll(const std::string& path)
+    {
+        std::error_code ec;
+        const std::filesystem::path fsPath = toPath(path);
+        if (!std::filesystem::exists(fsPath, ec))
+            return !ec;
+
+        std::filesystem::remove_all(fsPath, ec);
+        return !ec && !std::filesystem::exists(fsPath, ec);
+    }
+
     bool CopyFile(const std::string& source, const std::string& target)
     {
         std::error_code ec;
@@ -82,11 +106,65 @@ namespace wio::runtime::std_fs
         return !ec && copied;
     }
 
+    bool CopyRecursive(const std::string& source, const std::string& target)
+    {
+        std::error_code ec;
+        const std::filesystem::path sourcePath = toPath(source);
+        const std::filesystem::path targetPath = toPath(target);
+        if (!std::filesystem::exists(sourcePath, ec) || ec)
+            return false;
+
+        if (std::filesystem::is_directory(sourcePath, ec))
+        {
+            std::filesystem::create_directories(targetPath, ec);
+            if (ec)
+                return false;
+            std::filesystem::copy(
+                sourcePath,
+                targetPath,
+                std::filesystem::copy_options::recursive |
+                    std::filesystem::copy_options::overwrite_existing,
+                ec
+            );
+            return !ec;
+        }
+
+        std::filesystem::create_directories(targetPath.parent_path(), ec);
+        if (ec)
+            return false;
+        std::filesystem::copy_file(
+            sourcePath,
+            targetPath,
+            std::filesystem::copy_options::overwrite_existing,
+            ec
+        );
+        return !ec;
+    }
+
     bool MoveFile(const std::string& source, const std::string& target)
     {
         std::error_code ec;
         std::filesystem::rename(toPath(source), toPath(target), ec);
         return !ec;
+    }
+
+    std::vector<std::string> ListFilesRecursive(const std::string& path)
+    {
+        std::vector<std::string> files;
+        std::error_code ec;
+        const std::filesystem::path root = toPath(path);
+        if (!std::filesystem::is_directory(root, ec) || ec)
+            return files;
+
+        for (std::filesystem::recursive_directory_iterator it(root, ec), end;
+             it != end && !ec;
+             it.increment(ec))
+        {
+            if (!ec && it->is_regular_file(ec) && !ec)
+                files.push_back(toGenericString(it->path().lexically_normal()));
+        }
+        std::sort(files.begin(), files.end());
+        return files;
     }
 
     std::string CurrentPath()
@@ -142,6 +220,36 @@ namespace wio::runtime::std_fs
             throwFileError("Failed to query file size for: " + path + " (" + ec.message() + ")");
 
         return static_cast<std::int64_t>(size);
+    }
+
+    std::int64_t LastWriteTime(const std::string& path)
+    {
+        const std::filesystem::path fsPath = toPath(path);
+        std::error_code ec;
+        if (!std::filesystem::exists(fsPath, ec) || ec)
+            return -1;
+
+        auto timestamp = std::filesystem::last_write_time(fsPath, ec);
+        if (ec)
+            return -1;
+        std::int64_t latest = static_cast<std::int64_t>(timestamp.time_since_epoch().count());
+
+        if (!std::filesystem::is_directory(fsPath, ec) || ec)
+            return latest;
+
+        for (std::filesystem::recursive_directory_iterator it(fsPath, ec), end;
+             it != end && !ec;
+             it.increment(ec))
+        {
+            const auto childTimestamp = it->last_write_time(ec);
+            if (ec)
+                break;
+            latest = (std::max)(
+                latest,
+                static_cast<std::int64_t>(childTimestamp.time_since_epoch().count())
+            );
+        }
+        return ec ? -1 : latest;
     }
 
     std::string FileName(const std::string& path)

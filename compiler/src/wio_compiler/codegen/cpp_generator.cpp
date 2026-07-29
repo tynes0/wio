@@ -5224,6 +5224,17 @@ namespace wio::codegen
         emit(")");
     }
 
+    void CppGenerator::visit(ConditionalExpression& node)
+    {
+        emit("(");
+        emitReadableExpression(node.condition);
+        emit(" ? ");
+        emitExpressionWithExpectedType(node.whenTrue, node.refType.Lock(), false);
+        emit(" : ");
+        emitExpressionWithExpectedType(node.whenFalse, node.refType.Lock(), false);
+        emit(")");
+    }
+
     void CppGenerator::visit(UnaryExpression& node)
     {
         auto emitOperatorReceiverAndAccess = [&](const NodePtr<Expression>& receiver)
@@ -7063,6 +7074,12 @@ namespace wio::codegen
         {
             buffer_ << " = ";
             emitExpressionWithExpectedType(node.initializer, varType, false);
+        }
+        else
+        {
+            // Explicitly typed declarations without an initializer use value
+            // initialization, keeping scalar defaults deterministic as well.
+            buffer_ << "{}";
         }
 
         buffer_ << ";\n";

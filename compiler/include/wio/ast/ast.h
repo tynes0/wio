@@ -411,6 +411,21 @@ namespace wio
         ~AssignmentExpression() override;
     };
 
+    struct ConditionalExpression : Expression
+    {
+        WIO_EXP_NODE_BODY(ConditionalExpression)
+
+        NodePtr<Expression> condition;
+        NodePtr<Expression> whenTrue;
+        NodePtr<Expression> whenFalse;
+
+        ConditionalExpression(NodePtr<Expression> _condition,
+                              NodePtr<Expression> _whenTrue,
+                              NodePtr<Expression> _whenFalse,
+                              common::Location _loc = common::Location::invalid());
+        ~ConditionalExpression() override;
+    };
+
     struct IntegerLiteral : Expression
     {
         WIO_EXP_NODE_BODY(IntegerLiteral)

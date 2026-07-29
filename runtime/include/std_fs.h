@@ -5,22 +5,28 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 namespace wio::runtime::std_fs
 {
     bool Exists(const std::string& path);
     bool IsFile(const std::string& path);
     bool IsDirectory(const std::string& path);
+    bool IsDirectoryEmpty(const std::string& path);
     bool IsAbsolute(const std::string& path);
     bool CreateDirectories(const std::string& path);
     bool Remove(const std::string& path);
+    bool RemoveAll(const std::string& path);
     bool CopyFile(const std::string& source, const std::string& target);
+    bool CopyRecursive(const std::string& source, const std::string& target);
     bool MoveFile(const std::string& source, const std::string& target);
+    std::vector<std::string> ListFilesRecursive(const std::string& path);
     std::string CurrentPath();
     std::string ReadText(const std::string& path);
     bool WriteText(const std::string& path, const std::string& text);
     bool AppendText(const std::string& path, const std::string& text);
     std::int64_t FileSize(const std::string& path);
+    std::int64_t LastWriteTime(const std::string& path);
     std::string FileName(const std::string& path);
     std::string Stem(const std::string& path);
     std::string Extension(const std::string& path);

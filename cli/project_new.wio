@@ -1,0 +1,424 @@
+use argonaut;
+use std::console as console;
+use std::fs as fs;
+use std::path as path;
+use std::result as result;
+
+realm SelfHostedProject {
+    component TemplateSpec {
+        target: string;
+        hostEnabled: bool;
+        passLibraryPath: bool;
+        description: string;
+        wioSource: string;
+        hostSource: string;
+        nativeHeaderName: string;
+        nativeHeader: string;
+        nativeSourceName: string;
+        nativeSource: string;
+    }
+
+    fn Failure<T>(message: string) -> std::Result<T> {
+        return Argonaut::Fail<T>(Argonaut::ErrorKind::Parse, message);
+    }
+
+    fn JoinLines(lines: string[]) -> string {
+        return lines.Join("\n");
+    }
+
+    fn EscapeManifest(value: string) -> string {
+        return value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+    }
+
+    fn SafeName(name: string) -> string {
+        mut safe = name.ToLower()
+            .Replace(" ", "_")
+            .Replace("-", "_")
+            .Replace(".", "_")
+            .Replace("/", "_")
+            .Replace("\\", "_");
+        while (safe.StartsWith("_")) {
+            safe = safe.Skip(1usize);
+        }
+        while (safe.EndsWith("_")) {
+            safe = safe.Take(safe.Count() - 1usize);
+        }
+        if (safe == "") {
+            return "wio_project";
+        }
+        return safe;
+    }
+
+    fn PlainAppSource() -> string {
+        return JoinLines([
+            "use std::console as console;",
+            "",
+            "fn Entry(args: string[]) -> i32 {",
+            "    console::Print!(\"Hello from a plain Wio application.\");",
+            "    if (args.Count() > 1usize) {",
+            "        let applicationArguments = args.Skip(1usize).Join(\"|\");",
+            "        console::Print!(\"Application arguments: \" + applicationArguments);",
+            "    }",
+            "    return 0;",
+            "}",
+            ""
+        ]);
+    }
+
+    fn NativeAppSource() -> string {
+        return JoinLines([
+            "use std::console as console;",
+            "",
+            "realm ffi {",
+            "    @Native",
+            "    @CppHeader(\"native_math.h\")",
+            "    @CppName(native_math::Multiply)",
+            "    fn Multiply(lhs: i32, rhs: i32) -> i32;",
+            "}",
+            "",
+            "fn Entry(args: string[]) -> i32 {",
+            "    console::Print!(\"Native multiply:\");",
+            "    console::Print!(ffi::Multiply(6, 7));",
+            "    if (args.Count() > 1usize) {",
+            "        let applicationArguments = args.Skip(1usize).Join(\"|\");",
+            "        console::Print!(\"Application arguments: \" + applicationArguments);",
+            "    }",
+            "    return 0;",
+            "}",
+            ""
+        ]);
+    }
+
+    fn HybridSource() -> string {
+        return JoinLines([
+            "use std::console as console;",
+            "",
+            "mut gCounter: i32 = 0;",
+            "",
+            "@ModuleApiVersion",
+            "fn RuntimeAbi() -> u32 { return 1; }",
+            "",
+            "@ModuleLoad",
+            "fn BootModule() -> i32 {",
+            "    gCounter = 10;",
+            "    console::Print!(\"BootModule\");",
+            "    return 0;",
+            "}",
+            "",
+            "@ModuleUpdate",
+            "fn TickModule(deltaTime: f32) { gCounter += deltaTime fit i32; }",
+            "",
+            "@ModuleUnload",
+            "fn StopModule() { console::Print!(\"StopModule\"); }",
+            "",
+            "@Export",
+            "@Command(\"counter.get\")",
+            "@CppName(WioGetCounter)",
+            "fn GetCounter() -> i32 { return gCounter; }",
+            "",
+            "@Export",
+            "@Command(\"counter.add\")",
+            "@CppName(WioAddToCounter)",
+            "fn AddToCounter(delta: i32) -> i32 {",
+            "    gCounter += delta;",
+            "    return gCounter;",
+            "}",
+            "",
+            "@Export",
+            "@Event(\"game.tick\")",
+            "@CppName(WioApplyScriptTick)",
+            "fn ApplyScriptTick(deltaTime: f32) { gCounter += deltaTime fit i32; }",
+            ""
+        ]);
+    }
+
+    fn HybridHostSource() -> string {
+        return JoinLines([
+            "#include <cstdint>",
+            "#include <cstdlib>",
+            "#include <iostream>",
+            "#include <wio_sdk.h>",
+            "",
+            "int main(int argc, char** argv)",
+            "{",
+            "    if (argc < 2) {",
+            "        std::cerr << \"Expected a Wio module library path.\" << '\\n';",
+            "        return EXIT_FAILURE;",
+            "    }",
+            "    try {",
+            "        auto module = wio::sdk::Module::load(argv[1]);",
+            "        module.update(1.0f);",
+            "        auto getCounter = module.load_command<std::int32_t()>(\"counter.get\");",
+            "        auto addCounter = module.load_command<std::int32_t(std::int32_t)>(\"counter.add\");",
+            "        auto broadcastTick = module.load_event<void(float)>(\"game.tick\");",
+            "        const std::int32_t before = getCounter();",
+            "        const std::int32_t afterAdd = addCounter(5);",
+            "        broadcastTick(2.0f);",
+            "        const std::int32_t afterTick = getCounter();",
+            "        std::cout << \"Hybrid project: before=\" << before",
+            "                  << \" afterAdd=\" << afterAdd",
+            "                  << \" afterTick=\" << afterTick << '\\n';",
+            "    }",
+            "    catch (const std::exception& ex) {",
+            "        std::cerr << ex.what() << '\\n';",
+            "        return EXIT_FAILURE;",
+            "    }",
+            "    return EXIT_SUCCESS;",
+            "}",
+            ""
+        ]);
+    }
+
+    fn MakeSpec(templateName: string) -> std::Result<TemplateSpec> {
+        mut spec = TemplateSpec();
+        spec.target = "shared";
+        spec.hostEnabled = true;
+        spec.passLibraryPath = true;
+
+        if (templateName == "hybrid-module") {
+            spec.description = "Shared Wio module plus native C++ host.";
+            spec.wioSource = HybridSource();
+            spec.hostSource = HybridHostSource();
+            return std::Ok<TemplateSpec>(spec);
+        }
+        if (templateName == "wio-app") {
+            spec.target = "exe";
+            spec.hostEnabled = false;
+            spec.passLibraryPath = false;
+            spec.description = "Plain Wio executable.";
+            spec.wioSource = PlainAppSource();
+            return std::Ok<TemplateSpec>(spec);
+        }
+        if (templateName == "wio-native-app") {
+            spec.target = "exe";
+            spec.hostEnabled = false;
+            spec.passLibraryPath = false;
+            spec.description = "Plain Wio executable plus an example native bridge.";
+            spec.wioSource = NativeAppSource();
+            spec.nativeHeaderName = "native_math.h";
+            spec.nativeHeader = JoinLines([
+                "#pragma once",
+                "",
+                "namespace native_math",
+                "{",
+                "    int Multiply(int lhs, int rhs);",
+                "}",
+                ""
+            ]);
+            spec.nativeSourceName = "native_math.cpp";
+            spec.nativeSource = JoinLines([
+                "#include \"native_math.h\"",
+                "",
+                "namespace native_math",
+                "{",
+                "    int Multiply(int lhs, int rhs) { return lhs * rhs; }",
+                "}",
+                ""
+            ]);
+            return std::Ok<TemplateSpec>(spec);
+        }
+        if (templateName == "wio-module") {
+            spec.hostEnabled = false;
+            spec.passLibraryPath = false;
+            spec.description = "Exported Wio shared module without a host.";
+            spec.wioSource = JoinLines([
+                "@Export",
+                "@CppName(WioAddNumbers)",
+                "fn AddNumbers(lhs: i32, rhs: i32) -> i32 {",
+                "    return lhs + rhs;",
+                "}",
+                ""
+            ]);
+            return std::Ok<TemplateSpec>(spec);
+        }
+        return Failure<TemplateSpec>(
+            $"Unknown project template: ${templateName}. Expected one of: hybrid-module, wio-app, wio-native-app, wio-module."
+        );
+    }
+
+    fn Manifest(name: string, templateName: string, safeName: string, spec: TemplateSpec) -> string {
+        let hostEnabled = spec.hostEnabled ? "true" : "false";
+        let passLibraryPath = spec.passLibraryPath ? "true" : "false";
+        let escapedName = EscapeManifest(name);
+        let escapedTemplate = EscapeManifest(templateName);
+        return JoinLines([
+            "schemaVersion = 1",
+            $"name = \"${escapedName}\"",
+            $"template = \"${escapedTemplate}\"",
+            "",
+            "[toolchain]",
+            "buildDir = \"build\"",
+            "config = \"Debug\"",
+            "",
+            "[wio]",
+            "entry = \"wio/module.wio\"",
+            $"target = \"${spec.target}\"",
+            "sourceRoots = [\"wio\"]",
+            "usePaths = [\"wio\"]",
+            "includeDirs = [\"native/include\"]",
+            "linkDirs = [\"native/lib\"]",
+            "linkLibraries = []",
+            "backendArgs = []",
+            "",
+            "[host]",
+            $"enabled = ${hostEnabled}",
+            "compiler = \"g++\"",
+            "sourceRoots = [\"host\"]",
+            "includeDirs = [\"host/include\", \"native/include\"]",
+            "linkDirs = [\"native/lib\"]",
+            "linkLibraries = []",
+            "compilerArgs = []",
+            "",
+            "[build]",
+            "buildDir = \".wio-build\"",
+            "config = \"Debug\"",
+            "",
+            "[outputs]",
+            "directory = \".wio-build/interop\"",
+            $"baseName = \"${safeName}\"",
+            $"wioName = \"${safeName}\"",
+            $"hostName = \"${safeName}.host\"",
+            "",
+            "[run]",
+            $"passLibraryPath = ${passLibraryPath}",
+            "args = []",
+            "workingDirectory = \".\"",
+            ""
+        ]);
+    }
+
+    fn CMakeFile(safeName: string) -> string {
+        mut wioRootVariable = "$";
+        wioRootVariable.Append("{WIO_ROOT}");
+        return JoinLines([
+            "cmake_minimum_required(VERSION 3.24)",
+            $"project(${safeName} LANGUAGES NONE)",
+            "",
+            "set(WIO_ROOT \"$ENV{WIO_ROOT}\" CACHE PATH \"Path to the Wio toolchain root\")",
+            "if(NOT WIO_ROOT)",
+            "    message(FATAL_ERROR \"Set WIO_ROOT to the Wio toolchain root before configuring this project.\")",
+            "endif()",
+            "",
+            $"include(\"${wioRootVariable}/cmake/WioProject.cmake\")",
+            $"wio_add_project_targets(${safeName} WIO_ROOT \"${wioRootVariable}\")",
+            ""
+        ]);
+    }
+
+    fn Readme(name: string, templateName: string, spec: TemplateSpec) -> string {
+        return JoinLines([
+            $"# ${name}",
+            "",
+            $"Template: `${templateName}`",
+            "",
+            spec.description,
+            "",
+            "Generated by the self-hosted `wio project new` command.",
+            "",
+            "```powershell",
+            "wio project describe",
+            "wio project build",
+            "wio project run",
+            "wio project test",
+            "wio project package --clean",
+            "```",
+            ""
+        ]);
+    }
+
+    fn WriteRequired(filePath: string, content: string) -> std::Result<std::ResultUnit> {
+        if (not fs::WriteTextEnsured(filePath, content)) {
+            return Failure<std::ResultUnit>($"Could not write generated project file: ${filePath}");
+        }
+        return std::OkUnit();
+    }
+
+    fn Generate(name: string, outputDirectory: string, templateName: string, force: bool) -> std::Result<i32> {
+        let spec = MakeSpec?(templateName);
+        let safeName = SafeName(name);
+        let projectRoot = path::Absolute(path::Join(outputDirectory, name));
+
+        if (fs::Exists(projectRoot)) {
+            if (not fs::IsDirectory(projectRoot)) {
+                return Failure<i32>($"Project path already exists and is not a directory: ${projectRoot}");
+            }
+            if (not force and not fs::IsDirectoryEmpty(projectRoot)) {
+                return Failure<i32>(
+                    $"Project directory already exists and is not empty: ${projectRoot}\nUse --force to generate into it."
+                );
+            }
+        }
+        if (not fs::EnsureDirectory(projectRoot)) {
+            return Failure<i32>($"Could not create project directory: ${projectRoot}");
+        }
+
+        WriteRequired?(path::Join(projectRoot, "wio.makewio"), Manifest(name, templateName, safeName, spec));
+        WriteRequired?(path::Join(projectRoot, "CMakeLists.txt"), CMakeFile(safeName));
+        WriteRequired?(path::Join(projectRoot, "README.md"), Readme(name, templateName, spec));
+        WriteRequired?(path::Join(projectRoot, ".gitignore"), ".wio-build/\nbuild/\ncmake-build*/\n");
+        WriteRequired?(path::Join3(projectRoot, "wio", "module.wio"), spec.wioSource);
+        WriteRequired?(path::Join3(projectRoot, "native", "README.md"), "Place user-native integration files here.\n");
+        WriteRequired?(path::JoinAll([projectRoot, "host", "include", ".gitkeep"]), "# placeholder\n");
+        WriteRequired?(path::JoinAll([projectRoot, "native", "include", ".gitkeep"]), "# placeholder\n");
+        WriteRequired?(path::JoinAll([projectRoot, "native", "src", ".gitkeep"]), "# placeholder\n");
+        WriteRequired?(path::JoinAll([projectRoot, "native", "lib", ".gitkeep"]), "# placeholder\n");
+
+        if (spec.hostEnabled) {
+            WriteRequired?(path::Join3(projectRoot, "host", "main.cpp"), spec.hostSource);
+        }
+        if (spec.nativeHeaderName != "") {
+            WriteRequired?(path::JoinAll([projectRoot, "native", "include", spec.nativeHeaderName]), spec.nativeHeader);
+        }
+        if (spec.nativeSourceName != "") {
+            WriteRequired?(path::JoinAll([projectRoot, "native", "src", spec.nativeSourceName]), spec.nativeSource);
+        }
+
+        console::PrintLine!($"Generated project: ${projectRoot}");
+        console::PrintLine!($"Template         : ${templateName}");
+        console::PrintLine!($"Manifest         : ${path::Join(projectRoot, "wio.makewio")}");
+        return std::Ok<i32>(0);
+    }
+
+    fn RunNew(args: string[]) -> std::Result<i32> {
+        mut parser = Argonaut::Parser();
+        mut name = Argonaut::Argument("NAME");
+        name.SetDescription("Project name and generated directory name.");
+        parser.Add?(name.Required?());
+
+        mut output = Argonaut::Argument("OUTPUT-DIR");
+        output.AddAlias("--output-dir").SetDefaultValue(".").SetDescription("Generated project parent directory.");
+        parser.Add?(output);
+
+        mut template = Argonaut::Argument("TEMPLATE");
+        template.AddAlias("--template").SetDefaultValue("hybrid-module").SetDescription("Project template.");
+        parser.Add?(template);
+
+        mut force = Argonaut::Argument("FORCE");
+        force.AddAlias("--force").SetDescription("Generate into an existing directory.");
+        parser.Add?(force.Flag?());
+
+        mut help = Argonaut::Argument("HELP");
+        help.AddAlias("--help").AddAlias("-h").SetDescription("Show this help menu.");
+        parser.Add?(help.Flag?());
+
+        mut commandArgs: string[] = ["wio project new"];
+        mut index = 3usize;
+        while (index < args.Count()) {
+            commandArgs.Push(args[index]);
+            index += 1usize;
+        }
+
+        parser.Parse?(commandArgs);
+        if (parser.GetFlag("HELP")) {
+            console::Print(parser.Help());
+            return std::Ok<i32>(0);
+        }
+
+        return Generate(
+            parser.GetStringOr("NAME", ""),
+            parser.GetStringOr("OUTPUT-DIR", "."),
+            parser.GetStringOr("TEMPLATE", "hybrid-module"),
+            parser.GetFlag("FORCE")
+        );
+    }
+}

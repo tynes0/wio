@@ -1,0 +1,312 @@
+use std::result as result;
+
+// Bootstrap snapshot of the Argonaut-Wio parser surface used by Wio's
+// self-hosted CLI. Keep this module source-compatible with argonaut-wio.
+realm Argonaut {
+    @Type(i32)
+    enum ErrorKind {
+        None = 0,
+        ParsePrep = 1,
+        Parse = 2,
+        HelpRequested = 3,
+        VersionRequested = 4,
+        Conversion = 5
+    };
+
+    fn ErrorCode(kind: ErrorKind) -> i32 {
+        if (kind == ErrorKind::ParsePrep) { return 1; }
+        if (kind == ErrorKind::Parse) { return 2; }
+        if (kind == ErrorKind::HelpRequested) { return 3; }
+        if (kind == ErrorKind::VersionRequested) { return 4; }
+        if (kind == ErrorKind::Conversion) { return 5; }
+        return 0;
+    }
+
+    fn Fail<T>(kind: ErrorKind, message: string) -> result::Result<T> {
+        return result::Err<T>(
+            result::MakeError(std::ResultDomain::custom, ErrorCode(kind), message)
+        );
+    }
+
+    @Trust(Parser)
+    object Argument {
+        private id: string;
+        private description: string;
+        private aliases: string[];
+        private defaultValue: string;
+        private hasDefaultValue: bool;
+        private isFlag: bool;
+        private required: bool;
+        private isMultiValue: bool;
+
+        OnConstruct(argId: string) {
+            self.id = argId.ToUpper();
+        }
+
+        public fn SetDescription(value: string) -> ref Argument {
+            self.description = value;
+            return self;
+        }
+
+        public fn AddAlias(value: string) -> ref Argument {
+            self.aliases.Push(value);
+            return self;
+        }
+
+        public fn SetDefaultValue(value: string) -> ref Argument {
+            self.defaultValue = value;
+            self.hasDefaultValue = true;
+            return self;
+        }
+
+        public fn Required(value: bool = true) -> result::Result<Argument> {
+            if (value and self.isFlag) {
+                return Fail<Argument>(ErrorKind::ParsePrep, "Argonaut: A flag cannot be required.");
+            }
+            self.required = value;
+            return result::Ok<Argument>(deref self);
+        }
+
+        public fn Flag(value: bool = true) -> result::Result<Argument> {
+            if (value and self.required) {
+                return Fail<Argument>(ErrorKind::ParsePrep, "Argonaut: A required argument cannot be a flag.");
+            }
+            if (value and self.isMultiValue) {
+                return Fail<Argument>(ErrorKind::ParsePrep, "Argonaut: A multi-value argument cannot be a flag.");
+            }
+            self.isFlag = value;
+            return result::Ok<Argument>(deref self);
+        }
+
+        public fn MultiValue(value: bool = true) -> result::Result<Argument> {
+            if (value and self.isFlag) {
+                return Fail<Argument>(ErrorKind::ParsePrep, "Argonaut: A flag cannot be multi-value.");
+            }
+            self.isMultiValue = value;
+            return result::Ok<Argument>(deref self);
+        }
+    }
+
+    object Parser {
+        private programName: string;
+        private definitions: Dict<string, Argument>;
+        private positionalOrder: string[];
+        private aliasToId: Dict<string, string>;
+        private parsedValues: Dict<string, string[]>;
+
+        OnConstruct() {
+            self.definitions = ({});
+            self.aliasToId = ({});
+            self.parsedValues = ({});
+        }
+
+        private fn StoreValue(id: string, value: string) -> result::Result<result::Unit> {
+            let argument = self.definitions.Get(id);
+            mut values: string[] = [];
+            if (self.parsedValues.ContainsKey(id)) {
+                values = self.parsedValues.Get(id);
+            }
+            if (not argument.isMultiValue and not values.Empty()) {
+                return Fail<result::Unit>(
+                    ErrorKind::Parse,
+                    $"Argonaut: Argument is not multi-value: ${id}"
+                );
+            }
+            values.Push(value);
+            self.parsedValues.Set(id, values);
+            return result::OkUnit();
+        }
+
+        public fn Add(argument: Argument) -> result::Result<Parser> {
+            let id = argument.id;
+            if (id.Empty()) {
+                return Fail<Parser>(ErrorKind::ParsePrep, "Argonaut: Argument ID cannot be empty.");
+            }
+            if (self.definitions.ContainsKey(id)) {
+                return Fail<Parser>(ErrorKind::ParsePrep, $"Argonaut: Argument already exists: ${id}");
+            }
+
+            for alias in argument.aliases {
+                if (alias.Empty() or self.aliasToId.ContainsKey(alias)) {
+                    return Fail<Parser>(ErrorKind::ParsePrep, $"Argonaut: Alias already exists: ${alias}");
+                }
+            }
+            for alias in argument.aliases {
+                self.aliasToId.Set(alias, id);
+            }
+            if (argument.aliases.Empty()) {
+                self.positionalOrder.Push(id);
+            }
+            self.definitions.Set(id, argument);
+            return result::Ok<Parser>(deref self);
+        }
+
+        public fn Help() -> string {
+            mut positionals: Argument[] = [];
+            mut options: Argument[] = [];
+            for id in self.positionalOrder {
+                positionals.Push(self.definitions.Get(id));
+            }
+            for id | argument in self.definitions {
+                if (not argument.aliases.Empty()) {
+                    options.Push(argument);
+                }
+            }
+
+            mut text = $"Usage: ${self.programName}";
+            if (not options.Empty()) {
+                text.Append(" [OPTIONS]");
+            }
+            for argument in positionals {
+                if (argument.required) {
+                    text.Append($" <${argument.id}>");
+                }
+                else {
+                    text.Append($" [${argument.id}]");
+                }
+                if (argument.isMultiValue) {
+                    text.Append("...");
+                }
+            }
+            text.Append("\n\n");
+
+            if (not positionals.Empty()) {
+                text.Append("Positional Arguments:\n");
+                for argument in positionals {
+                    text.Append($"  ${argument.id}    ${argument.description}\n");
+                }
+                text.Append("\n");
+            }
+
+            if (not options.Empty()) {
+                text.Append("Options:\n");
+                for argument in options {
+                    mut label = argument.aliases.Join(", ");
+                    if (not argument.isFlag) {
+                        label.Append(" <value>");
+                    }
+                    text.Append($"  ${label}    ${argument.description}\n");
+                }
+            }
+            return text;
+        }
+
+        public fn WasProvided(argumentId: string) -> bool {
+            return self.parsedValues.ContainsKey(argumentId.ToUpper());
+        }
+
+        public fn GetStrings(argumentId: string) -> string[] {
+            let id = argumentId.ToUpper();
+            if (self.parsedValues.ContainsKey(id)) {
+                return self.parsedValues.Get(id);
+            }
+            if (self.definitions.ContainsKey(id)) {
+                let argument = self.definitions.Get(id);
+                if (argument.hasDefaultValue) {
+                    return [argument.defaultValue];
+                }
+            }
+            return [];
+        }
+
+        public fn GetStringOr(argumentId: string, fallback: string) -> string {
+            let values = self.GetStrings(argumentId);
+            if (values.Empty()) {
+                return fallback;
+            }
+            return values.First();
+        }
+
+        public fn GetFlag(argumentId: string) -> bool {
+            return self.GetStringOr(argumentId, "false") == "true";
+        }
+
+        public fn Parse(args: string[]) -> result::Result<result::Unit> {
+            if (args.Empty()) {
+                return Fail<result::Unit>(ErrorKind::Parse, "Argonaut: Argument list is empty.");
+            }
+
+            self.programName = args[0usize];
+            self.parsedValues.Clear();
+            mut positionalOnly = false;
+            mut expectingValue = false;
+            mut idForValue = "";
+            mut positionalIndex = 0usize;
+            mut index = 1usize;
+
+            while (index < args.Count()) {
+                let token = args[index];
+                if (expectingValue) {
+                    self.StoreValue?(idForValue, token);
+                    expectingValue = false;
+                    index += 1usize;
+                    continue;
+                }
+                if (token == "--" and not positionalOnly) {
+                    positionalOnly = true;
+                    index += 1usize;
+                    continue;
+                }
+
+                if (not positionalOnly and token.StartsWith("-")) {
+                    mut key = token;
+                    mut inlineValue = "";
+                    let hasEquals = token.StartsWith("--") and token.ContainsChar('=');
+                    if (hasEquals) {
+                        let equalsIndex = token.IndexOfChar('=');
+                        key = token.Take(equalsIndex);
+                        inlineValue = token.Skip(equalsIndex + 1usize);
+                    }
+                    if (not self.aliasToId.ContainsKey(key)) {
+                        return Fail<result::Unit>(ErrorKind::Parse, $"Argonaut: Undefined argument: ${key}");
+                    }
+                    let id = self.aliasToId.Get(key);
+                    let argument = self.definitions.Get(id);
+                    if (argument.isFlag) {
+                        if (hasEquals) {
+                            return Fail<result::Unit>(ErrorKind::Parse, $"Argonaut: Flag cannot have a value: ${key}");
+                        }
+                        self.StoreValue?(id, "true");
+                    }
+                    else if (hasEquals) {
+                        if (inlineValue.Empty()) {
+                            return Fail<result::Unit>(ErrorKind::Parse, $"Argonaut: Empty value for argument: ${key}");
+                        }
+                        self.StoreValue?(id, inlineValue);
+                    }
+                    else {
+                        expectingValue = true;
+                        idForValue = id;
+                    }
+                }
+                else {
+                    if (positionalIndex >= self.positionalOrder.Count()) {
+                        return Fail<result::Unit>(ErrorKind::Parse, "Argonaut: Too many positional arguments.");
+                    }
+                    let id = self.positionalOrder[positionalIndex];
+                    let argument = self.definitions.Get(id);
+                    self.StoreValue?(id, token);
+                    if (not argument.isMultiValue) {
+                        positionalIndex += 1usize;
+                    }
+                }
+                index += 1usize;
+            }
+
+            if (expectingValue) {
+                return Fail<result::Unit>(ErrorKind::Parse, "Argonaut: Last argument requires a value.");
+            }
+            if (self.parsedValues.ContainsKey("HELP")) {
+                return result::OkUnit();
+            }
+            for id | argument in self.definitions {
+                if (argument.required and
+                    not self.parsedValues.ContainsKey(id) and
+                    not argument.hasDefaultValue) {
+                    return Fail<result::Unit>(ErrorKind::Parse, $"Argonaut: Required value ${id} not found.");
+                }
+            }
+            return result::OkUnit();
+        }
+    }
+}

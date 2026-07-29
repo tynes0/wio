@@ -1,0 +1,448 @@
+use project_manifest;
+use std::console as console;
+use std::fs as fs;
+use std::path as path;
+use std::process as process;
+use std::regex as regex;
+use std::result as result;
+use std::serialization as serialization;
+
+realm SelfHostedProject {
+    fn HasFlag(args: string[], name: string) -> bool {
+        for value in args {
+            if (value == name) { return true; }
+        }
+        return false;
+    }
+
+    fn OptionValues(args: string[], name: string) -> string[] {
+        mut values: string[] = [];
+        mut index = 3usize;
+        while (index < args.Count()) {
+            if (args[index] == "--") { break; }
+            if (args[index] == name and index + 1usize < args.Count()) {
+                values.Push(args[index + 1usize]);
+                index += 2usize;
+                continue;
+            }
+            index += 1usize;
+        }
+        return values;
+    }
+
+    fn ArgumentsAfterSeparator(args: string[]) -> string[] {
+        mut values: string[] = [];
+        mut afterSeparator = false;
+        mut index = 3usize;
+        while (index < args.Count()) {
+            if (afterSeparator) {
+                values.Push(args[index]);
+            }
+            else if (args[index] == "--") {
+                afterSeparator = true;
+            }
+            index += 1usize;
+        }
+        return values;
+    }
+
+    fn AppendCompilerArguments(command: ref string[], info: ProjectInfo, extraModuleDirectory: string) {
+        if (extraModuleDirectory != "") {
+            command.Push("--module-dir");
+            command.Push(extraModuleDirectory);
+        }
+        for directory in info.wioSourceRoots {
+            command.Push("--module-dir");
+            command.Push(directory);
+        }
+        for directory in info.wioIncludeDirs {
+            command.Push("--include-dir");
+            command.Push(directory);
+        }
+        for directory in info.wioLinkDirs {
+            command.Push("--link-dir");
+            command.Push(directory);
+        }
+        for library in info.wioLinkLibraries {
+            command.Push("--link-lib");
+            command.Push((library.Contains("/") or library.Contains("\\"))
+                ? path::AbsoluteFrom(info.projectRoot, library)
+                : library);
+        }
+        for source in info.wioNativeSources {
+            command.Push("--backend-arg");
+            command.Push(source);
+        }
+        for argument in info.wioBackendArgs {
+            command.Push("--backend-arg");
+            command.Push(argument);
+        }
+    }
+
+    fn RunProcess(command: string, args: string[], workingDirectory: string) -> std::Result<i32> {
+        let launched = process::Run(command, args, workingDirectory);
+        if (launched.IsError()) {
+            return std::Err<i32>(launched.ErrorValue());
+        }
+        return std::Ok<i32>(launched.Value());
+    }
+
+    fn OutputUpToDate(output: string, inputs: string[]) -> bool {
+        let outputTime = fs::LastWriteTime(output);
+        if (outputTime < 0i64) { return false; }
+        for input in inputs {
+            let inputTime = fs::LastWriteTime(input);
+            if (inputTime < 0i64 or inputTime > outputTime) { return false; }
+        }
+        return true;
+    }
+
+    fn ProjectCompilerInputs(info: ProjectInfo, entry: string) -> string[] {
+        mut inputs: string[] = [
+            info.manifestFile, info.nativeCore, entry,
+            path::Join(info.toolchainRoot, "std"),
+            path::Join3(info.toolchainRoot, "runtime", "include"),
+            info.sdkIncludeDirectory
+        ];
+        for value in info.wioSourceRoots { inputs.Push(value); }
+        for value in info.wioIncludeDirs { inputs.Push(value); }
+        for value in info.wioNativeSources { inputs.Push(value); }
+        return inputs;
+    }
+
+    fn BuildResolved(info: ProjectInfo, forceRebuild: bool) -> std::Result<i32> {
+        if (not fs::IsFile(info.wioEntry)) {
+            return Failure<i32>($"Wio entry file was not found: ${info.wioEntry}");
+        }
+        if (not fs::EnsureDirectory(info.outputDirectory)) {
+            return Failure<i32>($"Could not create project output directory: ${info.outputDirectory}");
+        }
+        mut compileArgs: string[] = [
+            info.wioEntry, "--target", info.wioTarget, "--output", info.wioOutput
+        ];
+        AppendCompilerArguments(ref compileArgs, info, "");
+        if (forceRebuild or not OutputUpToDate(info.wioOutput, ProjectCompilerInputs(info, info.wioEntry))) {
+            let compileResult = RunProcess?(info.nativeCore, compileArgs, info.projectRoot);
+            if (compileResult != 0) { return std::Ok<i32>(compileResult); }
+        }
+        else {
+            console::PrintLine!("Project Wio compile: up to date, skipping compiler invocation.");
+        }
+        if (not info.hostEnabled) { return std::Ok<i32>(0); }
+
+        mut hostArgs: string[] = ["-std=c++20", "-I", info.sdkIncludeDirectory];
+        for source in info.hostSourceFiles { hostArgs.Push(source); }
+        for directory in info.hostIncludeDirs {
+            hostArgs.Push("-I");
+            hostArgs.Push(directory);
+        }
+        for directory in info.hostLinkDirs {
+            hostArgs.Push("-L");
+            hostArgs.Push(directory);
+        }
+        for library in info.hostLinkLibraries {
+            if (library.StartsWith("-")) {
+                hostArgs.Push(library);
+            }
+            else if (library.Contains("/") or library.Contains("\\") or
+                     library.EndsWith(".a") or library.EndsWith(".lib") or
+                     library.EndsWith(".so") or library.EndsWith(".dll") or
+                     library.EndsWith(".dylib")) {
+                hostArgs.Push(path::AbsoluteFrom(info.projectRoot, library));
+            }
+            else {
+                hostArgs.Push("-l" + library);
+            }
+        }
+        if (info.wioTarget == "static") {
+            if (info.runtimeStaticLibrary == "") {
+                return Failure<i32>("The Wio runtime static library could not be resolved.");
+            }
+            hostArgs.Push(info.wioOutput);
+            hostArgs.Push(info.runtimeStaticLibrary);
+        }
+        if (process::ExecutableSuffix() == ".exe") { hostArgs.Push("-static"); }
+        for argument in info.hostCompilerArgs { hostArgs.Push(argument); }
+        hostArgs.Push("-o");
+        hostArgs.Push(info.hostOutput);
+        mut hostInputs: string[] = [info.manifestFile, info.wioOutput, info.sdkIncludeDirectory];
+        for value in info.hostSourceFiles { hostInputs.Push(value); }
+        for value in info.hostIncludeDirs { hostInputs.Push(value); }
+        if (forceRebuild or not OutputUpToDate(info.hostOutput, hostInputs)) {
+            return RunProcess(info.hostCompiler, hostArgs, info.projectRoot);
+        }
+        console::PrintLine!("Project host compile: up to date, skipping host compiler invocation.");
+        return std::Ok<i32>(0);
+    }
+
+    fn Build(args: string[]) -> std::Result<i32> {
+        return BuildResolved(
+            ResolveInfo?(args),
+            HasFlag(args, "--rebuild") or HasFlag(args, "--configure")
+        );
+    }
+
+    fn QuoteCommandArgument(value: string) -> string {
+        if (value.Contains(" ") or value.Contains("\t") or value.Contains("\"")) {
+            return "\"" + value.Replace("\"", "\\\"") + "\"";
+        }
+        return value;
+    }
+
+    fn FormatCommand(command: string, args: string[]) -> string {
+        mut values: string[] = [QuoteCommandArgument(command)];
+        for argument in args { values.Push(QuoteCommandArgument(argument)); }
+        return values.Join(" ");
+    }
+
+    fn Run(args: string[]) -> std::Result<i32> {
+        let info = ResolveInfo?(args);
+        let noBuild = HasFlag(args, "--no-build");
+        if (noBuild and (HasFlag(args, "--rebuild") or HasFlag(args, "--configure"))) {
+            return Failure<i32>("--no-build cannot be combined with --rebuild or --configure.");
+        }
+        if (not noBuild) {
+            let buildResult = BuildResolved?(
+                info,
+                HasFlag(args, "--rebuild") or HasFlag(args, "--configure")
+            );
+            if (buildResult != 0) { return std::Ok<i32>(buildResult); }
+        }
+
+        mut executable = "";
+        mut runArgs: string[] = [];
+        if (info.hostEnabled) {
+            executable = info.hostOutput;
+            if (info.passLibraryPath and info.wioTarget == "shared") { runArgs.Push(info.wioOutput); }
+        }
+        else if (info.wioTarget == "exe") {
+            executable = info.wioOutput;
+        }
+        if (executable == "") { return Failure<i32>("This project does not define a runnable executable."); }
+        if (not fs::IsFile(executable)) {
+            return Failure<i32>($"Expected project executable does not exist: ${executable}");
+        }
+        if (not HasFlag(args, "--no-manifest-args")) {
+            for argument in info.runArgs { runArgs.Push(argument); }
+        }
+        for argument in OptionValues(args, "--arg") { runArgs.Push(argument); }
+        for argument in ArgumentsAfterSeparator(args) { runArgs.Push(argument); }
+
+        let workingOverride = OptionValue(args, "--cwd", OptionValue(args, "--working-directory", ""));
+        let workingDirectory = workingOverride == ""
+            ? info.runWorkingDirectory
+            : path::AbsoluteFrom(info.projectRoot, workingOverride);
+        if (not fs::IsDirectory(workingDirectory)) {
+            return Failure<i32>($"Run working directory does not exist: ${workingDirectory}");
+        }
+        if (HasFlag(args, "--print-command")) {
+            let formattedCommand = FormatCommand(executable, runArgs);
+            console::PrintLine!($"Working directory: ${workingDirectory}");
+            console::PrintLine!($"Command: ${formattedCommand}");
+        }
+        return RunProcess(executable, runArgs, workingDirectory);
+    }
+
+    fn ProjectRelative(info: ProjectInfo, file: string) -> string {
+        let relative = path::Relative(file, info.projectRoot);
+        return relative.StartsWith("..") ? file : relative;
+    }
+
+    fn TestOutput(info: ProjectInfo, file: string) -> string {
+        return path::ChangeExtension(
+            path::Join3(info.buildDirectory, "tests", ProjectRelative(info, file)),
+            process::ExecutableSuffix()
+        );
+    }
+
+    fn Test(args: string[]) -> std::Result<i32> {
+        let info = ResolveInfo?(args);
+        let filter = OptionValue(args, "--filter", "");
+        mut selected: string[] = [];
+        for file in info.testFiles {
+            let display = ProjectRelative(info, file);
+            if (filter == "" or regex::IsMatch?(display, filter)) { selected.Push(file); }
+        }
+        if (HasFlag(args, "--list")) {
+            for file in selected { console::PrintLine!(ProjectRelative(info, file)); }
+            let selectedCount = selected.Count();
+            console::PrintLine!($"${selectedCount} project test(s) matched.");
+            return std::Ok<i32>(0);
+        }
+        if (selected.Empty()) {
+            console::PrintLine!(
+                "No project tests matched. Add .wio tests under 'tests/' or configure test.files/test.sourceRoots."
+            );
+            return std::Ok<i32>(0);
+        }
+        if (not fs::IsDirectory(info.testWorkingDirectory)) {
+            return Failure<i32>($"Test working directory does not exist: ${info.testWorkingDirectory}");
+        }
+        let noBuild = HasFlag(args, "--no-build");
+        let forceRebuild = HasFlag(args, "--rebuild") or HasFlag(args, "--configure");
+        mut passed = 0usize;
+        for file in selected {
+            let display = ProjectRelative(info, file);
+            let output = TestOutput(info, file);
+            if (not noBuild and
+                (forceRebuild or not OutputUpToDate(output, ProjectCompilerInputs(info, file)))) {
+                fs::EnsureParentDirectory(output);
+                mut compileArgs: string[] = [file, "--target", "exe", "--output", output];
+                AppendCompilerArguments(ref compileArgs, info, path::ParentPath(file));
+                console::PrintLine!($"[ BUILD ] ${display}");
+                let compileResult = RunProcess?(info.nativeCore, compileArgs, info.projectRoot);
+                if (compileResult != 0) {
+                    console::PrintLine!($"[ FAIL  ] ${display} (compile)");
+                    return std::Ok<i32>(compileResult);
+                }
+            }
+            if (not fs::IsFile(output)) {
+                return Failure<i32>($"Expected project test executable does not exist: ${output}");
+            }
+            console::PrintLine!($"[ RUN   ] ${display}");
+            let testResult = RunProcess?(output, [], info.testWorkingDirectory);
+            if (testResult != 0) {
+                console::PrintLine!($"[ FAIL  ] ${display} (exit ${testResult})");
+                return std::Ok<i32>(testResult);
+            }
+            passed += 1usize;
+            console::PrintLine!($"[ PASS  ] ${display}");
+        }
+        let selectedCount = selected.Count();
+        console::PrintLine!($"${passed}/${selectedCount} project test(s) passed.");
+        return std::Ok<i32>(0);
+    }
+
+    fn CopyRequired(source: string, target: string) -> std::Result<std::ResultUnit> {
+        if (not fs::Exists(source)) {
+            return Failure<std::ResultUnit>($"Package input does not exist: ${source}");
+        }
+        if (not fs::CopyRecursive(source, target)) {
+            return Failure<std::ResultUnit>($"Could not package '${source}' as '${target}'.");
+        }
+        return std::OkUnit();
+    }
+
+    fn Package(args: string[]) -> std::Result<i32> {
+        let info = ResolveInfo?(args);
+        let noBuild = HasFlag(args, "--no-build");
+        if (noBuild and (HasFlag(args, "--rebuild") or HasFlag(args, "--configure"))) {
+            return Failure<i32>("--no-build cannot be combined with --rebuild or --configure.");
+        }
+        if (not noBuild) {
+            let buildResult = BuildResolved?(
+                info,
+                HasFlag(args, "--rebuild") or HasFlag(args, "--configure")
+            );
+            if (buildResult != 0) { return std::Ok<i32>(buildResult); }
+        }
+        let parentValue = OptionValue(args, "--output-dir", path::Join(info.buildDirectory, "packages"));
+        let packageParent = path::AbsoluteFrom(info.projectRoot, parentValue);
+        let packageRoot = path::Join(packageParent, SafeName(info.name));
+        if (path::Equivalent(packageRoot, info.projectRoot) or packageRoot == path::RootPath(packageRoot)) {
+            return Failure<i32>($"Refusing to use unsafe package directory: ${packageRoot}");
+        }
+        if (fs::Exists(packageRoot)) {
+            if (not HasFlag(args, "--clean")) {
+                return Failure<i32>(
+                    $"Package directory already exists: ${packageRoot}. Pass --clean to replace it."
+                );
+            }
+            if (not fs::RemoveAll(packageRoot)) {
+                return Failure<i32>($"Could not clean package directory: ${packageRoot}");
+            }
+        }
+        if (not fs::EnsureDirectory(packageRoot)) {
+            return Failure<i32>($"Could not create package directory: ${packageRoot}");
+        }
+
+        mut entrypoint = "";
+        mut packageArguments: string[] = [];
+        mut artifacts: string[] = [];
+        if (info.hostEnabled) {
+            entrypoint = path::Join("bin", path::FileName(info.hostOutput));
+            CopyRequired?(info.hostOutput, path::Join(packageRoot, entrypoint));
+            artifacts.Push(entrypoint);
+            if (info.wioTarget == "shared") {
+                let library = path::Join("lib", path::FileName(info.wioOutput));
+                CopyRequired?(info.wioOutput, path::Join(packageRoot, library));
+                packageArguments.Push(library);
+                artifacts.Push(library);
+            }
+        }
+        else if (info.wioTarget == "exe") {
+            entrypoint = path::Join("bin", path::FileName(info.wioOutput));
+            CopyRequired?(info.wioOutput, path::Join(packageRoot, entrypoint));
+            artifacts.Push(entrypoint);
+        }
+        else {
+            let library = path::Join("lib", path::FileName(info.wioOutput));
+            CopyRequired?(info.wioOutput, path::Join(packageRoot, library));
+            artifacts.Push(library);
+        }
+        for asset in info.packageAssets {
+            let destination = path::FileName(asset) == "assets"
+                ? path::Join(packageRoot, "assets")
+                : path::Join3(packageRoot, "assets", path::FileName(asset));
+            CopyRequired?(asset, destination);
+        }
+        for file in info.packageFiles {
+            mut relative = path::Relative(file, info.projectRoot);
+            if (relative.StartsWith("..")) { relative = path::FileName(file); }
+            CopyRequired?(file, path::Join(packageRoot, relative));
+        }
+
+        if (entrypoint != "") {
+            if (process::ExecutableSuffix() == ".exe") {
+                mut launcher = "@echo off\r\n\"%~dp0";
+                launcher.Append(entrypoint.Replace("/", "\\"));
+                launcher.Append("\"");
+                for argument in packageArguments {
+                    launcher.Append(" \"%~dp0");
+                    launcher.Append(argument.Replace("/", "\\"));
+                    launcher.Append("\"");
+                }
+                launcher.Append(" %*\r\n");
+                if (not fs::WriteText(path::Join(packageRoot, "run.cmd"), launcher)) {
+                    return Failure<i32>("Could not write the package launcher.");
+                }
+            }
+            else {
+                let launcherStart = "#!/usr/bin/env sh\n";
+                let launcher = launcherStart +
+                    "package_root=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n" +
+                    "exec \"$package_root/" + entrypoint + "\" \"$@\"\n";
+                if (not fs::WriteText(path::Join(packageRoot, "run.sh"), launcher)) {
+                    return Failure<i32>("Could not write the package launcher.");
+                }
+            }
+        }
+        let hostEnabled = info.hostEnabled ? "true" : "false";
+        let entrypointJson = entrypoint == "" ? "null" : serialization::QuoteJson(entrypoint);
+        let metadataOpening = "{\n";
+        let metadata = metadataOpening +
+            "  \"schemaVersion\": 1,\n" +
+            "  \"name\": " + serialization::QuoteJson(info.name) + ",\n" +
+            "  \"configuration\": " + serialization::QuoteJson(info.config) + ",\n" +
+            "  \"target\": " + serialization::QuoteJson(info.wioTarget) + ",\n" +
+            "  \"hostEnabled\": " + hostEnabled + ",\n" +
+            "  \"entrypoint\": " + entrypointJson + "\n" +
+            "}\n";
+        if (not fs::WriteText(path::Join(packageRoot, "wio-package.json"), metadata)) {
+            return Failure<i32>("Could not write package metadata.");
+        }
+        console::PrintLine!($"Packaged project: ${packageRoot}");
+        let artifactCount = artifacts.Count();
+        console::PrintLine!($"Artifacts       : ${artifactCount}");
+        return std::Ok<i32>(0);
+    }
+
+    fn Execute(command: string, args: string[]) -> std::Result<i32> {
+        if (command == "describe") { return Describe(args); }
+        if (command == "build") { return Build(args); }
+        if (command == "run") { return Run(args); }
+        if (command == "test") { return Test(args); }
+        if (command == "package") { return Package(args); }
+        return Failure<i32>($"Unsupported project command: ${command}");
+    }
+}

@@ -871,35 +871,31 @@ let static_arr: [i32; 3] = [1, 2, 3];
 
 ### 6.6 Initialization Rules
 
-Ordinary local/global variable declarations must be initialized.
+Ordinary local/global `let` and `mut` declarations may omit the initializer
+when they declare an explicit type. Such declarations are value-initialized:
+numeric values become zero, booleans become false, strings and containers are
+empty, and components receive their default/value-initialized state.
 
 Example:
 
 ```wio
 let X: i32 = 10;
 mut Y: i32 = 20;
+let EmptyName: string;
+mut Counter: i32;
 const X: i32 = 10;
 ```
 
-These are valid, but:
+An initializer or an explicit type is required, so these remain errors:
 
 ```wio
-let X: i32;
-mut Y: i32;
+let X;
+mut Y;
 const X: i32;
 ```
 
-are errors.
-
-For v1 semantic freeze, the rule is intentionally simple:
-
-- `let` must have an initializer,
-- `mut` must have an initializer,
-- `const` must have an initializer.
-
-Type inference therefore always happens from an initializer expression. There is
-currently no ordinary local/global declaration form that reserves storage
-without initializing it.
+`const` declarations always require an explicit compile-time initializer.
+Type inference is available only when an initializer expression exists.
 
 ### 6.7 Member Field Rules vs General Variable Rules
 
@@ -1408,6 +1404,20 @@ let label = match (hp) {
 };
 ```
 
+### 10.10 Conditional Operator
+
+The conditional operator selects and evaluates exactly one of two expressions:
+
+```wio
+let label = ready ? "ready" : "waiting";
+let nested = first ? 1 : second ? 2 : 3;
+```
+
+Its condition must be `bool`, its result branches must have compatible types,
+and it associates from right to left. The unselected branch is not evaluated.
+The postfix `Result?()` propagation form remains distinct because it is always
+followed by `()`.
+
 ## 11. Operator Reference and Precedence
 
 The current parser precedence, from higher to lower, is approximately:
@@ -1426,7 +1436,7 @@ The current parser precedence, from higher to lower, is approximately:
 | 4 | `&`, `^`, `|` |
 | 3 | `&&`, `and` |
 | 2 | `||`, `or` |
-| 1 | `|>`, `<|` |
+| 1 | `|>`, `<|`, conditional `? :` (right-associative) |
 | 0 | assignments such as `=`, `+=`, `-=`, `*=`, `/=`, `%=` and bitwise assignment forms |
 
 Special parse rule: `ref value fit Target` is parsed as

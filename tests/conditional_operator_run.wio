@@ -1,0 +1,31 @@
+use std::assert as assert;
+use std::console as console;
+
+component Counter {
+    value: i32;
+}
+
+fn Bump(target: ref Counter, amount: i32) -> i32 {
+    target.value += amount;
+    return target.value;
+}
+
+fn Entry() -> i32 {
+    let low = true ? 10 : 20;
+    let high = false ? 10 : 20;
+    let nested = false ? 1 : true ? 2 : 3;
+    let logicalPrecedence = false or true ? "yes" : "no";
+
+    mut counter = Counter();
+    let lazy = true ? Bump(ref counter, 4) : Bump(ref counter, 100);
+
+    assert::ExpectEqual(low, 10, "true branch should be selected");
+    assert::ExpectEqual(high, 20, "false branch should be selected");
+    assert::ExpectEqual(nested, 2, "conditional operator should associate right-to-left");
+    assert::ExpectEqual(logicalPrecedence, "yes", "logical OR should bind before conditional");
+    assert::ExpectEqual(lazy, 4, "selected expression should produce the value");
+    assert::ExpectEqual(counter.value, 4, "unselected branch must not be evaluated");
+
+    console::Print("Conditional operator: ok");
+    return 0;
+}

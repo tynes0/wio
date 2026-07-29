@@ -170,6 +170,26 @@ namespace wio
         utError(formattedErrMsg, current.loc);
     }
 
+    bool Parser::matchIdentifier(bool consume)
+    {
+        if (!peek().isIdentifier() && !peek().isKeyword())
+            return false;
+
+        if (consume)
+            advance();
+        return true;
+    }
+
+    Token Parser::consumeIdentifier()
+    {
+        if (!matchIdentifier())
+            return consume(TokenType::identifier);
+
+        Token token = advance();
+        token.type = TokenType::identifier;
+        return token;
+    }
+
     Location Parser::previousLocation() const
     {
         return previous().loc;
@@ -312,6 +332,25 @@ namespace wio
                 continue;
             }
 
+            if (match(TokenType::opQuestion) && peek(1).type != TokenType::leftParen)
+            {
+                constexpr int conditionalPrecedence = 1;
+                if (conditionalPrecedence < minPrecedence)
+                    break;
+
+                const Token question = advance();
+                NodePtr<Expression> whenTrue = parseExpression();
+                consume(TokenType::opColon);
+                NodePtr<Expression> whenFalse = parseExpression(conditionalPrecedence);
+                left = makeNodePtr<ConditionalExpression>(
+                    std::move(left),
+                    std::move(whenTrue),
+                    std::move(whenFalse),
+                    question.loc
+                );
+                continue;
+            }
+
             int precedence = getPrecedence(peek().type);
             if (precedence < minPrecedence)
                 break;
@@ -383,7 +422,7 @@ namespace wio
             if (matchOneOf({ TokenType::opDot, TokenType::opScope }))
             {
                 Token op = advance();
-                NodePtr<Identifier> member = makeNodePtr<Identifier>(consume(TokenType::identifier));
+                NodePtr<Identifier> member = makeNodePtr<Identifier>(consumeIdentifier());
                 left = makeNodePtr<MemberAccessExpression>(std::move(left), std::move(member), op.type);
                 continue;
             }
@@ -511,6 +550,12 @@ namespace wio
             return parseDictionaryLiteral();
         }
 
+        // At this point all grammatical keyword forms have already had their
+        // chance. Treat a remaining keyword token as an API identifier so
+        // keyword-shaped functions and realms remain callable.
+        if (peek().isKeyword())
+            return makeNodePtr<Identifier>(consumeIdentifier());
+
         utError("Expected expression.", peek().loc);
     }
 
@@ -630,7 +675,7 @@ namespace wio
         if (!match(TokenType::rightParen))
         {
             parameters.emplace_back(
-                makeNodePtr<Identifier>(consume(TokenType::identifier)),
+                makeNodePtr<Identifier>(consumeIdentifier()),
                 nullptr
             );
             if (match(TokenType::opColon, true))
@@ -642,7 +687,7 @@ namespace wio
             {
                 expectElementAfterComma(TokenType::rightParen, "lambda parameter");
 
-                NodePtr<Identifier> paramName = makeNodePtr<Identifier>(consume(TokenType::identifier));
+                NodePtr<Identifier> paramName = makeNodePtr<Identifier>(consumeIdentifier());
                 NodePtr<TypeSpecifier> paramType = nullptr;
 
                 if (match(TokenType::opColon, true))
@@ -724,7 +769,7 @@ namespace wio
 
         while (match(TokenType::opScope, true))
         {
-            Token nextSegment = consume(TokenType::identifier);
+            Token nextSegment = consumeIdentifier();
             arg.value += "::" + nextSegment.value;
             arg.type = TokenType::identifier;
         }
@@ -850,7 +895,7 @@ namespace wio
 
         while (typeName.type == TokenType::identifier && match(TokenType::opScope, true))
         {
-            Token nextSegment = consume(TokenType::identifier);
+            Token nextSegment = consumeIdentifier();
             typeName.value += "::" + nextSegment.value;
         }
         
@@ -992,7 +1037,7 @@ namespace wio
         Token startTok = consume(TokenType::atSign);
         Location startLoc = startTok.loc;
 
-        Token id = consume(TokenType::identifier);
+        Token id = consumeIdentifier();
 
         std::vector<Token> args;
         std::vector<NodePtr<TypeSpecifier>> typeArgs;
@@ -1060,7 +1105,7 @@ namespace wio
             utError("Unexpected variable qualifier.", startTok.loc);
         }
 
-        NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+        NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
 
         NodePtr<TypeSpecifier> specifier;
         if (match(TokenType::opColon, true))
@@ -1075,6 +1120,7 @@ namespace wio
 
         validateOrdinaryVariableDeclaration(
             mutability,
+            specifier != nullptr,
             initializer != nullptr,
             startTok.loc
         );
@@ -1103,7 +1149,7 @@ namespace wio
         }
 
         Token startTok = consume(TokenType::kwType);
-        NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+        NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
 
         std::vector<NodePtr<Identifier>> genericParameters;
         bool hasGenericParameterPack = false;
@@ -1193,7 +1239,7 @@ namespace wio
         }
         else
         {
-            name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+            name = makeNodePtr<Identifier>(consumeIdentifier());
         }
 
         std::vector<NodePtr<Identifier>> genericParameters;
@@ -1227,7 +1273,7 @@ namespace wio
         std::vector<Parameter> parameters;
         if (!match(TokenType::rightParen))
         {
-            NodePtr<Identifier> paramName = makeNodePtr<Identifier>(consume(TokenType::identifier));
+            NodePtr<Identifier> paramName = makeNodePtr<Identifier>(consumeIdentifier());
             NodePtr<TypeSpecifier> paramType = nullptr;
             NodePtr<Expression> defaultValue = nullptr;
             bool isParameterPack = false;
@@ -1247,7 +1293,7 @@ namespace wio
             {
                 expectElementAfterComma(TokenType::rightParen, "function parameter");
 
-                NodePtr<Identifier> nextParamName = makeNodePtr<Identifier>(consume(TokenType::identifier));
+                NodePtr<Identifier> nextParamName = makeNodePtr<Identifier>(consumeIdentifier());
                 NodePtr<TypeSpecifier> nextParamType = nullptr;
                 NodePtr<Expression> nextDefaultValue = nullptr;
                 bool nextIsParameterPack = false;
@@ -1320,7 +1366,7 @@ namespace wio
     NodePtr<Statement> Parser::parseInterfaceDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
     {
         Token startTok = consume(TokenType::kwInterface);
-        NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+        NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
         std::vector<NodePtr<Identifier>> genericParameters;
         bool hasGenericParameterPack = false;
 
@@ -1371,7 +1417,7 @@ namespace wio
     NodePtr<Statement> Parser::parseComponentDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
     {
         Token startTok = consume(TokenType::kwComponent);
-        NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+        NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
         std::vector<NodePtr<Identifier>> genericParameters;
         bool hasGenericParameterPack = false;
 
@@ -1437,7 +1483,7 @@ namespace wio
                 if (match(TokenType::kwConst, true))
                     memberMutability = Mutability::Const;
 
-                NodePtr<Identifier> memberName = makeNodePtr<Identifier>(consume(TokenType::identifier));
+                NodePtr<Identifier> memberName = makeNodePtr<Identifier>(consumeIdentifier());
                 
                 NodePtr<TypeSpecifier> memberType = nullptr;
                 if (match(TokenType::opColon, true)) memberType = parseType();
@@ -1480,7 +1526,7 @@ namespace wio
         if (!attributes.empty())
             utError("Extension declarations do not support attributes yet.", attributes.front()->location());
 
-        NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+        NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
         consume(TokenType::kwFor);
         NodePtr<TypeSpecifier> targetType = parseType();
         consume(TokenType::leftBrace);
@@ -1546,7 +1592,7 @@ namespace wio
     NodePtr<Statement> Parser::parseObjectDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
     {
         Token startTok = consume(TokenType::kwObject);
-        NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+        NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
         std::vector<NodePtr<Identifier>> genericParameters;
         bool hasGenericParameterPack = false;
 
@@ -1612,7 +1658,7 @@ namespace wio
                 if (match(TokenType::kwConst, true))
                     memberMutability = Mutability::Const;
 
-                NodePtr<Identifier> memberName = makeNodePtr<Identifier>(consume(TokenType::identifier));
+                NodePtr<Identifier> memberName = makeNodePtr<Identifier>(consumeIdentifier());
                 
                 NodePtr<TypeSpecifier> memberType = nullptr;
                 if (match(TokenType::opColon, true)) memberType = parseType();
@@ -1652,7 +1698,7 @@ namespace wio
     NodePtr<Statement> Parser::parseFlagDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
     {
         Token startTok = consume(TokenType::kwFlag);
-        NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+        NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
         consume(TokenType::semicolon); // flag IsDead;
         
         return makeNodePtr<FlagDeclaration>(std::move(attributes), std::move(name), startTok.loc);
@@ -1661,14 +1707,14 @@ namespace wio
     NodePtr<Statement> Parser::parseEnumDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
     {
         Token startTok = consume(TokenType::kwEnum);
-        NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+        NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
         
         consume(TokenType::leftBrace);
         std::vector<EnumMember> members;
         
         while (peek().isValid() && !match(TokenType::rightBrace))
         {
-            NodePtr<Identifier> memberName = makeNodePtr<Identifier>(consume(TokenType::identifier));
+            NodePtr<Identifier> memberName = makeNodePtr<Identifier>(consumeIdentifier());
             NodePtr<Expression> value = nullptr;
             
             if (match(TokenType::opAssign, true))
@@ -1685,14 +1731,14 @@ namespace wio
     NodePtr<Statement> Parser::parseFlagsetDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
     {
         Token startTok = consume(TokenType::kwFlagset);
-        NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+        NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
         
         consume(TokenType::leftBrace);
         std::vector<EnumMember> members;
         
         while (peek().isValid() && !match(TokenType::rightBrace))
         {
-            NodePtr<Identifier> memberName = makeNodePtr<Identifier>(consume(TokenType::identifier));
+            NodePtr<Identifier> memberName = makeNodePtr<Identifier>(consumeIdentifier());
             NodePtr<Expression> value = nullptr;
             
             if (match(TokenType::opAssign, true))
@@ -1860,7 +1906,7 @@ namespace wio
                     utError("Unexpected for-loop initializer qualifier.", startTok.loc);
                 }
 
-                NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+                NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
 
                 NodePtr<TypeSpecifier> specifier = nullptr;
                 if (match(TokenType::opColon, true))
@@ -1872,6 +1918,7 @@ namespace wio
 
                 validateOrdinaryVariableDeclaration(
                     mutability,
+                    specifier != nullptr,
                     value != nullptr,
                     startTok.loc
                 );
@@ -1968,7 +2015,9 @@ namespace wio
         std::vector<std::string> moduleParts;
         Location modulePathEndLoc = startLoc;
         
-        while (matchOneOf({TokenType::kwSuper, TokenType::kwSelf, TokenType::identifier}))
+        while (matchOneOf({TokenType::kwSuper, TokenType::kwSelf, TokenType::identifier}) ||
+               (peek().isKeyword() &&
+                (moduleParts.empty() || previous().type == TokenType::opScope)))
         {
             Token tok = advance();
             modulePathEndLoc = tok.loc;
@@ -2033,7 +2082,7 @@ namespace wio
 
         if (match(TokenType::kwAs, true))
         {
-            aliasName = consume(TokenType::identifier).value;
+            aliasName = consumeIdentifier().value;
         }
 
         consume(TokenType::semicolon);
@@ -2047,7 +2096,7 @@ namespace wio
             utError("Attributes are not supported on realm declarations yet.", attributes.front()->location());
 
         Token startTok = consume(TokenType::kwRealm);
-        NodePtr<Identifier> name = makeNodePtr<Identifier>(consume(TokenType::identifier));
+        NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
 
         consume(TokenType::leftBrace);
 
@@ -2204,6 +2253,7 @@ namespace wio
     }
 
     void Parser::validateOrdinaryVariableDeclaration(Mutability mutability,
+                                                     bool hasExplicitType,
                                                      bool hasInitializer,
                                                      Location location)
     {
@@ -2213,7 +2263,8 @@ namespace wio
         if (mutability == Mutability::Const)
             ucError(location);
 
-        utError("Ordinary variable declarations must be initialized.", location);
+        if (!hasExplicitType)
+            utError("A variable without an initializer must have an explicit type.", location);
     }
 
     void Parser::ucError(Location location)

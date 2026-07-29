@@ -64,6 +64,19 @@ namespace wio
 
     AssignmentExpression::~AssignmentExpression() = default;
 
+    ConditionalExpression::ConditionalExpression(NodePtr<Expression> _condition,
+                                                 NodePtr<Expression> _whenTrue,
+                                                 NodePtr<Expression> _whenFalse,
+                                                 common::Location _loc)
+        : Expression(std::move(_loc)),
+          condition(std::move(_condition)),
+          whenTrue(std::move(_whenTrue)),
+          whenFalse(std::move(_whenFalse))
+    {
+    }
+
+    ConditionalExpression::~ConditionalExpression() = default;
+
     IntegerLiteral::IntegerLiteral(Token _token, common::Location _loc)
         : Expression(_loc.isValid() ? _loc : _token.loc), token(std::move(_token))
     {

@@ -1,0 +1,35 @@
+use std::assert as assert;
+use std::console as console;
+
+component Point {
+    x: i32;
+    y: i32;
+}
+
+fn Entry() -> i32 {
+    mut text: string;
+    mut count: i32;
+    mut ratio: f64;
+    mut ready: bool;
+    mut values: i32[];
+    mut point: Point;
+    let immutableText: string;
+    let immutableCount: i32;
+
+    assert::ExpectEqual(text, "", "string should default to empty");
+    assert::ExpectEqual(count, 0, "integer should default to zero");
+    assert::ExpectNear(ratio, 0.0, 0.0001, "float should default to zero");
+    assert::Expect(not ready, "bool should default to false");
+    assert::ExpectEqual(values.Count() fit i32, 0, "array should default to empty");
+    assert::ExpectEqual(point.x + point.y, 0, "component fields should be value-initialized");
+    assert::ExpectEqual(immutableText, "", "typed let string should default to empty");
+    assert::ExpectEqual(immutableCount, 0, "typed let integer should default to zero");
+
+    text = "ready";
+    count = 7;
+    assert::ExpectEqual(text, "ready", "default-initialized mutable string should remain assignable");
+    assert::ExpectEqual(count, 7, "default-initialized mutable integer should remain assignable");
+
+    console::Print("Default initialized variables: ok");
+    return 0;
+}

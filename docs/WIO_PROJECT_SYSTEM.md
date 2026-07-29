@@ -72,6 +72,8 @@ wio project new MyGame --output-dir C:\Projects --template wio-app
 wio project describe --project C:\Projects\MyGame
 wio project build --project C:\Projects\MyGame
 wio project run --project C:\Projects\MyGame
+wio project test --project C:\Projects\MyGame
+wio project package --project C:\Projects\MyGame --output-dir .\artifacts --clean
 wio run C:\Projects\MyGame -- "two words" --verbose
 wio bind import --header .\tests\native\binding_import_smoke.h --realm binding_import_smoke --output .\build\generated\binding_import_smoke.wio
 wio bind new --manifest .\tests\native\binding_manifest_smoke.json --output .\build\generated\binding_manifest_smoke.wio
@@ -134,6 +136,8 @@ cd C:\Projects\MyGame
 wio project describe
 wio project build
 wio project run
+wio project test
+wio project package --clean
 wio run -- "two words" --verbose
 ```
 
@@ -148,6 +152,12 @@ For `project run`, arguments are appended in deterministic order: manifest
 existing output, `--cwd` to override the run directory, and `--print-command`
 to inspect the resolved invocation. Wio returns the child executable's exit
 code unchanged.
+
+Project tests are ordinary Wio entry programs. By default the CLI finds every
+`.wio` file below `tests/`, compiles each one with the same Wio/native settings
+as the project, and requires a zero exit code. Project packaging builds the
+configured target and emits a clean distribution layout with `bin/`, `lib/`,
+assets, extra package files, and `wio-package.json`.
 
 The older compatibility helper still exists:
 
@@ -493,7 +503,48 @@ Examples:
 
 This matters when you want total manual control.
 
-### 4.11 Compiler Backend Resolution
+### 4.11 Project Tests
+
+The default convention is one executable test per `.wio` file below `tests/`.
+Tests inherit the project's Wio module roots, include/link directories, native
+sources, libraries, and backend arguments.
+
+Override the convention when needed:
+
+```ini
+[test]
+sourceRoots = ["tests", "integration"]
+workingDirectory = "test-data"
+```
+
+Or select an exact set:
+
+```ini
+[test]
+files = ["tests/unit.wio", "integration/database.wio"]
+```
+
+An explicit empty `files = []` disables discovery.
+
+### 4.12 Project Packages
+
+`wio project package` always writes a directory distribution. By default it
+copies an existing `assets/` directory. Additional inputs are manifest-driven:
+
+```ini
+[package]
+assets = ["assets", "locales"]
+files = ["LICENSE.txt", "config/default.json"]
+```
+
+Asset entries are placed below `assets/`. Package files retain their
+project-relative paths. The generated `wio-package.json` identifies the
+configuration, target kind, host mode, entrypoint, required runtime arguments,
+and copied build artifacts. Runnable packages also receive `run.cmd` on
+Windows or an executable `run.sh` on POSIX; this is especially important for a
+hybrid host that must receive its packaged shared-module path.
+
+### 4.13 Compiler Backend Resolution
 
 When the standalone `wio` compiler needs its bundled runtime, SDK, std sources, or runtime archive, it resolves the toolchain root in this order:
 
@@ -511,7 +562,7 @@ From that root, the compiler resolves:
 
 This lookup is intentionally independent from the current working directory.
 
-### 4.12 Backend Argument Normalization
+### 4.14 Backend Argument Normalization
 
 Before the backend C++ compiler is invoked, Wio normalizes user-provided filesystem inputs to absolute paths.
 
@@ -528,7 +579,7 @@ The goal is:
 - deterministic backend command construction
 - cleaner diagnostics when native compilation fails
 
-### 4.13 Backend Debug Helpers
+### 4.15 Backend Debug Helpers
 
 The standalone compiler exposes two debug-oriented switches:
 

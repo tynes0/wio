@@ -1,95 +1,399 @@
-# Wio Todo List
+# Wio Active Backlog
 
-This file is now the active and simplified roadmap.
-
-- Completed work: `COMPLETED.md`
-- `v1.0.0` closes first.
-- Work that belongs after `v1` stays in the second section below.
+This file contains only unfinished work. Completed milestones live in
+`COMPLETED.md`.
 
 Status markers:
 
 - `[ ]` not started
-- `[~]` partially landed; hardening, docs, tests, or polish still needed
-- `[x]` done
+- `[~]` partially implemented or implemented but not sufficiently hardened
 
-## Work Required For Version 1.0.0
+The priorities below reflect the state of Wio after `v0.4.0`, including
+real-world validation with packaged projects and a native raylib desktop
+application.
 
-1. [x] Finish operator overloading.
-   Member/free unary-binary-assignment operators, `fit`, `[]`, `()`, generic overloads, and the `deref` ergonomics pass are now in place.
-2. [x] Freeze the language surface.
-   The stable contract is now written across the freeze snapshot, language draft, std docs, runtime type model, and SDK docs; remaining work is reference-quality tightening rather than unsettled surface direction.
-3. [x] Declare `makewio` as the official primary project format.
-   `wio.makewio` is now documented as the primary manifest and `wio.project.json` is explicitly legacy / compatibility only.
-4. [x] Make the CLI first-class and freeze its behavior.
-   `build`, `test`, `file`, `project`, `bind`, `env`, and `package` are now the documented stable command surface, and CLI help smoke coverage is in place.
-5. [x] Remove PowerShell from the primary path completely.
-   `scripts/*.ps1` are now documented and maintained as compatibility wrappers rather than the main user path.
-6. [x] Formalize the Wio-written tooling model.
-   The split between core CLI commands and `scripts/wio/*.wio` source tools is now explicit in the docs.
-7. [x] Finalize the `file run` and tool-script output/cache policy.
-   Single-file and tool workflows now avoid source-adjacent outputs and use hidden project/repo caches or user-cache fallbacks.
-8. [x] Finish the generated C++ cleanup policy.
-   Ordinary compiles now treat generated `.wio.cpp` files as backend intermediates near the output root, while `--emit-cpp` remains the explicit opt-in escape hatch.
-9. [x] Finalize cache/output policy for packaged builds.
-   Packaged `wio` now prefers safe user-cache output roots for single-file workflows instead of writing under non-writable install directories.
-10. [x] Seal packaging and installation UX.
-    `wio package`, installer wrappers, `env print/setup`, `QUICKSTART.md`, and the `WIO_ROOT`, `WIO_HOME`, and `PATH` story now share one documented model with smoke coverage.
-11. [x] Validate the cross-platform flow for real.
-    The release validation matrix is now defined as a real Windows/Linux GitHub Actions workflow, and the covered smoke set includes `project`, `bind`, packaged `file run`, and `std::process`.
-12. [x] Stabilize the std surface.
-    The stable vs experimental boundary is now documented for `std::Result<T>`, `std::console`, `std::io`, `std::process`, `std::fs`, `std::path`, `std::reflect`, `std::traits`, and `std::meta`.
-13. [x] Fully seal the `Result` model.
-    `std::Result<T>`, `Foo!()`, and `Foo?()` are now documented as the official `v1` error-flow model together with the existing test matrix.
-14. [x] Freeze the native interop contract.
-    `@Native`, `@CppHeader`, `@CppName`, POD/native enum/flagset handling, export rules, and ABI-safe surface rules are now documented as the intended `v1` bridge contract.
-15. [x] Make `any / Box / opaque` boundaries official.
-    Boxing rules, foreign-handle rules, the `is/fit` matrix, and native/runtime representation are now documented as one stable boundary.
-16. [x] Finalize mutable data ergonomics.
-    `ref values[i]`, nested `ref`, dict mutation, container mutability, and value-context auto-read are now documented as the intended `v1` behavior.
-17. [x] Make enum/flagset fully first-class.
-    Native support, const compatibility, helper APIs, and everyday state/kind/mode usage should be fully closed.
-18. [x] Expand the tooling test suite.
-    CLI smoke, package smoke, binding smoke, project smoke, Wio tool smoke, and packaged smoke now all have release-level coverage.
-19. [x] Raise the docs to release quality.
-    README, project system, language draft/spec, runtime type model, std, sdk, and traceability docs should tell one coherent story.
-    `WIO_SDK.md` especially needs a full refresh so the current host/runtime/export surface, `WioEnum` / `WioFlagset`, field-kind coverage, and stale-wrapper / reload expectations are described completely instead of partially.
-20. [x] Raise the example project set to release level.
-    The release-facing examples now include plain app, native app, hybrid module, binding import, packaged quickstart, static CMake consumer, and the heavier hybrid arena companion sample.
-21. [x] Write versioning and compatibility policy.
-    Stable / experimental / deprecated boundaries and the post-`1.0.0` contract are now written down explicitly.
-22. [x] Freeze the `v1`-scoped `const generics` / `std::meta` wave 3 slice.
-    `v1` now includes the narrow compile-time index slice used by packs and `std::meta`: top-level `const` integer declarations in pack index positions, simple compile-time integer expressions over those constants, and the current `std::meta` wave 3 helpers such as `Second`, `Penultimate`, `SecondValue`, `PenultimateValue`, and the matching `Values<...>` helpers.
-23. [x] Add a performance and memory story note.
-    The intended `v1` cost model for `view/ref/value`, `Box`, `any`, containers, and native passing is now documented.
-24. [x] Add first-class enum/flagset support on the SDK side.
-    `WioObject` / `WioComponent` should preserve reflection identity through `WioEnum` and `WioFlagset`.
-25. [x] Finish the normal Wio reflection API for enum/flagset.
-    `name`, `value`, `underlying_type`, `size`, and `index` support should become stable.
+## P0 - Release Blocking Correctness
 
-## Remaining Work After Version 1
+1. [ ] Stop cascading diagnostics after a root parser/type error.
+   One invalid token in a std module currently produces dozens of undefined
+   symbol, invalid operand, and unknown type errors. Track poisoned nodes/types
+   and suppress derivative diagnostics while preserving independent errors.
 
-This section collects the larger backlog items that belong after `v1`.
+2. [~] Finish `ref` / `view` / temporary lifetime semantics.
+   Rvalue component extension calls such as
+   `Parse(...).Value().ToString()` now have a targeted backend fix, but the full
+   matrix is not closed. Specify and test temporary components, nested member
+   access, returned arrays/spans, object handles, `self`, `deref self`, mutable
+   receiver rejection, and native borrow boundaries.
 
-1. [ ] Turn the draft reference into a real, versioned language spec.
-   Formal grammar, syntax, type system, and feature status markers should be completed.
-2. [ ] Design a stronger nullability model.
-   `null`, `ref`, `view`, object/reference, and container interactions may need to become stricter.
-3. [ ] Implement or formally settle generic defaults and partial specialization.
-4. [ ] Expand the variadic/pack metaprogramming surface.
-   Add deeper compile-time transforms such as `Take`, `Drop`, `Zip`, and `MapTypes`.
-5. [ ] Expand const generics beyond the v1-scoped pack/meta slice.
-   This includes broader non-type generic use cases such as `Vector<T, N>`, arbitrary value parameters, and richer compile-time integer substitution outside the current pack-index model.
-6. [ ] Continue beyond the v1 `std::meta` wave 3 slice with richer compile-time type/value tooling.
-7. [ ] Design the concurrency model.
-   This includes `async`, `await`, `yield`, `thread`, and scheduler/host interaction.
-8. [ ] Evaluate time/game scheduling keywords.
-   `every`, `after`, `during`, and `wait` should be tied clearly either to the core language or to a std DSL.
-9. [ ] Evaluate pipeline/data-flow operators.
-   The real value and semantic cost of `|>` and `<|` should be measured.
-10. [ ] Clarify higher-level `system` and `program` abstractions.
-11. [ ] Design the broader reflection/runtime metadata model beyond enum/flagset.
-12. [ ] Grow the std surface after `v1`.
-    Planned additions include `std::json`, `std::http`, `std::time`, `std::random`, `std::hash`, `std::log`, `std::bytes`, `Buffer<T>`, and related modules.
-13. [ ] Expand the editor/LSP/formatter/tooling ecosystem.
-14. [ ] Grow the Wio-written tooling side further and remove the remaining compatibility wrappers.
-15. [ ] Complete deeper backend portability and performance benchmarking work.
+3. [ ] Add parser, lexer, semantic, and generated-C++ fuzzing.
+   Include nested interpolation, malformed generics, deep type nesting, import
+   cycles, invalid UTF-8, arbitrary token streams, and differential
+   compile/check runs. Crashes, hangs, excessive diagnostics, and invalid
+   generated C++ should be release blockers.
+
+4. [ ] Audit and close known source TODOs that affect correctness.
+   At minimum: `Type::...` returning an empty placeholder in
+   `sema/type.cpp`, arithmetic result typing based only on the left operand,
+   incomplete null checks, parser refactor/improvement markers, and filesystem
+   exception policy. Convert each into a focused test before fixing it.
+
+## P1 - Language Semantics and Type System
+
+1. [ ] Turn the draft into a versioned normative language specification.
+   Publish formal lexical grammar, syntax grammar, name resolution, overload
+   resolution, type compatibility, ownership/reference rules, evaluation
+   order, initialization, destruction, generics, diagnostics, and feature
+   status. Version the specification alongside releases.
+
+2. [ ] Design a strict nullability model.
+   Separate non-null object handles, nullable handles, `Option<T>`, `null`,
+   `ref`, and `view`. Define null flow analysis, narrowing, container
+   interactions, native nullable pointers, and SDK behavior.
+
+3. [ ] Complete generic defaults, partial specialization, and specialization
+   ordering. Define ambiguity rules, constraint ordering, default type/value
+   parameters, specialization visibility across modules, and native/export
+   interactions.
+
+4. [ ] Expand const generics beyond pack indexing.
+   Support ordinary non-type parameters such as `Vector<T, N>`, value
+   substitution, constraints, constant evaluation, generic static arrays,
+   diagnostics, and ABI/mangling rules.
+
+5. [ ] Expand variadic and compile-time metaprogramming.
+   Add `Take`, `Drop`, `Zip`, `MapTypes`, filtering/folding, value transforms,
+   pack concatenation, pack constraints, and usable compile-time iteration.
+
+6. [ ] Add modern generic constraint syntax and associated types.
+   Provide readable `where` clauses, constraint composition, associated types,
+   default implementations, better inference, variance rules, and precise
+   generic failure diagnostics.
+
+7. [ ] Strengthen pattern matching.
+   Add Option/Result destructuring, enum payloads, component/array patterns,
+   guards, exhaustiveness checks, unreachable-case diagnostics, and binding
+   ownership/reference rules.
+
+8. [ ] Complete component extension ergonomics.
+   Add constrained generic extensions, extension properties, static extension
+   functions, explicit conflict resolution, import-scoped visibility,
+   documentation generation, reflection metadata, and editor completion.
+
+9. [ ] Define numeric promotion and conversion rules.
+   Remove the current left-operand result-type shortcut. Specify mixed signed
+   and unsigned arithmetic, literal inference, overflow behavior, checked and
+   saturating operations, enum conversions, and narrowing diagnostics.
+
+10. [ ] Add first-class enum value conversion.
+    Provide `Value`, `TryFromValue`, `FromValue`, validity queries, unknown
+    native value handling, generic enum constraints, and serialization without
+    manual `match` tables.
+
+11. [ ] Formalize initialization, copy, move, destruction, and resource
+    lifetime behavior. Cover objects, components, arrays, dictionaries, Box,
+    native resources, early returns, exceptions/panics, and assignment.
+
+12. [ ] Decide exception and panic semantics.
+    Specify whether Wio has recoverable exceptions, panic-only termination, or
+    Result-only recoverable errors; define stack cleanup, native exception
+    translation, diagnostics, and ABI behavior.
+
+13. [ ] Evaluate pipeline/data-flow operators only after semantics are stable.
+    Measure `|>` and `<|` against ordinary calls, method chaining, error
+    propagation, inference, and debugging before reserving syntax.
+
+14. [ ] Clarify whether `system`, `program`, `every`, `after`, `during`, and
+    `wait` belong to the core language, a standard DSL, or should be removed
+    from the planned surface.
+
+## P1 - Standard Library Correctness and Consistency
+
+1. [ ] Repair and regression-test `std::path` and `std::fs` in packaged builds.
+   Rename or contextually parse `Extension`, then test every path/fs function
+   through both repository and installed toolchains on Windows and Linux.
+
+2. [ ] Make filesystem APIs consistently `Result`-based.
+   `ReadText`, `WriteText`, directory enumeration, metadata, copy/move/remove,
+   permissions, canonicalization, and atomic replacement must preserve domain,
+   native code, and actionable messages instead of returning empty strings or
+   booleans.
+
+3. [ ] Finish `Result<T>` combinators.
+   Add `Map`, `MapError`, `AndThen`, `OrElse`, `Inspect`, `InspectError`,
+   `Flatten`, `ToOption`, collection helpers, and consistent integration with
+   `?()` / `!()`.
+
+4. [~] Finish `Option<T>` adoption.
+   Option, its core combinators, and array/string/span lookup APIs have landed.
+   Add intrinsic `Dict.Get(key) -> Option<V>` without requiring `V()`, audited
+   queue/set/map lookups, iteration helpers, `zip`, transpose with Result, and
+   consistent naming across std.
+
+5. [ ] Build a real Unicode text model.
+   Define UTF-8 validation, codepoints/runes, grapheme clusters, safe slicing,
+   Unicode case folding, normalization, categories, width, iteration, and
+   conversion. GUI text input must not require a native
+   `AppendCharacter` workaround.
+
+6. [ ] Add byte/codepoint/string builders.
+   Provide allocation-conscious `StringBuilder`, byte writer/reader,
+   codepoint append, formatting sinks, reusable buffers, and clear ownership
+   rules.
+
+7. [~] Consolidate container contracts.
+   Array, Dict, queue, ordered/unordered set, tuple, span, range, and buffer
+   exist. Align `Get`/`At`, `First`/`Last`, iteration, mutability, cloning,
+   capacity, reserve/shrink, removal, equality, hashing, sorting, and error
+   behavior.
+
+8. [~] Harden JSON into a production-grade module.
+   Parsing/writing, nested values, errors, and pretty output exist. Add exact
+   integer preservation, configurable duplicate-key policy, deterministic key
+   ordering, streaming parser/writer, depth/size limits, UTF validation,
+   JSON Pointer/Patch, schema hooks, and generic encode/decode traits.
+
+9. [ ] Add serialization beyond JSON.
+   Provide stable generic serialization traits and at least binary,
+   Base64/hex integration, CSV, and configuration-friendly formats. Define
+   versioning, unknown fields, migration, and enum policy.
+
+10. [~] Harden time, random, hash, log, numeric, encoding, stream, UUID, and
+    SemVer. These modules exist; add cross-platform vectors, deterministic
+    contracts, cryptographic/non-cryptographic distinctions, secure random,
+    time zones/calendars, structured log sinks, overflow matrices, streaming
+    encoders, UUID parsing/variants, and full SemVer prerelease/build metadata.
+
+11. [ ] Add regular-expression safety and completeness.
+    Document the engine, escaping, Unicode behavior, capture APIs, replacement,
+    iteration, catastrophic-backtracking limits/timeouts, and error model.
+
+12. [ ] Add networking foundations.
+    DNS, sockets, TCP/UDP, TLS, HTTP client/server primitives, URI, headers,
+    multipart, WebSocket, cancellation, timeouts, proxies, and certificate
+    validation are required before `std::http` can be considered.
+
+13. [ ] Add concurrency foundations.
+    Threads, mutexes, atomics, channels, task scheduling, futures, async I/O,
+    cancellation, structured concurrency, thread-local storage, and runtime/
+    host integration need one coherent model.
+
+14. [ ] Add OS/application facilities.
+    Environment variables, process pipes, signals, filesystem watching,
+    clipboard, notifications, dialogs, user/config/cache directories, dynamic
+    libraries, and platform capability queries.
+
+15. [ ] Add data and utility modules.
+    Date/time formatting, decimal/big integer, compression/archive, MIME,
+    TOML/INI, database primitives, statistics, geometry/color, localization,
+    and command-line parsing should be evaluated and prioritized by real
+    projects.
+
+## P1 - Native Interop, SDK, and Ecosystem
+
+1. [ ] Add a package/dependency manager.
+   Implement `wio add/remove/update/restore`, lockfiles, semantic version
+   resolution, checksums, registries, Git/path dependencies, offline cache,
+   transitive native assets, platform variants, and reproducible builds.
+
+2. [ ] Publish official native packages.
+   Start with `wio-raylib`, SDL, ImGui, SQLite, HTTP/TLS, and a C ABI helper.
+   Packages should carry headers, libraries, platform metadata, Wio bindings,
+   licenses, examples, smoke tests, and debug/release variants.
+
+3. [ ] Improve the binding importer to production quality.
+   Support macros/constants, callbacks, function pointers, unions, bitfields,
+   opaque handles, ownership annotations, nullability, arrays, strings,
+   overload naming, documentation, conditional compilation, and incremental
+   regeneration without destroying manual edits.
+
+4. [ ] Complete generic native/export support.
+   Resolve the current explicit rejections for native component
+   specialization and generic component/object export. Define concrete
+   instantiation lists, mangling, SDK generation, and ABI stability.
+
+5. [ ] Complete SDK dynamic field support.
+   Remove the current runtime “not yet supported” paths for dynamic field
+   access/assignment, broaden SDK-exportable field kinds, and test nested
+   arrays, dictionaries, Option/Result, objects, components, enums, flagsets,
+   any, Box, and opaque values.
+
+6. [ ] Add callback and event-loop interop.
+   Support native callbacks with captured Wio state, lifetime-safe userdata,
+   thread entry, exception/panic containment, and GUI/event-loop ownership.
+
+7. [ ] Define native resource ownership.
+   Add safe wrappers/traits for handles requiring close/free/unload, move-only
+   resources, borrowed handles, finalization, deterministic disposal, and
+   leak diagnostics.
+
+8. [ ] Establish ABI conformance testing.
+   Compare generated layouts/calling conventions against C/C++ probes across
+   compilers, architectures, optimization modes, shared/static builds, and
+   SDK versions.
+
+## P1 - CLI, Build, and Release Engineering
+
+1. [~] Continue general CLI hardening.
+   The primary command families and argument forwarding are substantially
+   improved. Finish consistent exit codes, JSON/machine output, quiet/verbose
+   modes, color policy, progress, cancellation, typo suggestions, help
+   examples, config precedence, and error formatting across every subcommand.
+   The self-hosted migration has started: every recognized tooling command
+   family now enters a Wio + Argonaut-Wio companion and uses an explicit
+   native fallback bridge. The complete
+   `project new/describe/build/run/test/package` lifecycle and `wio run`
+   shorthand are Wio-owned. Transfer argument ownership and behavior for every remaining command,
+   establish pinned stage-0/generated-C++ bootstrap reproducibility, and
+   remove the bridge and C++ argument parsers after parity is complete.
+
+2. [ ] Add `wio fmt` and a canonical formatter.
+   It must be syntax-aware, deterministic, idempotent, configurable only where
+   necessary, safe on invalid files, and usable by editors/CI.
+
+3. [ ] Add `wio lint`.
+   Cover unused imports/symbols, shadowing, suspicious conversions, ignored
+   Results, unreachable code, expensive copies, unsafe native boundaries,
+   naming, deprecated APIs, and configurable warning levels.
+
+4. [ ] Add `wio doc`.
+   Generate searchable API documentation with realms, generics, constraints,
+   extensions, reflection, examples, source links, package versions, and
+   stable URLs.
+
+5. [ ] Add an interactive REPL and scratch workflow.
+   Reuse compiler state, support imports and multiline declarations, preserve
+   history, expose generated types, and provide a safe native boundary.
+
+6. [ ] Add incremental and parallel builds.
+   Cache parsed/typed modules, generic instantiations, generated C++, native
+   objects, bindings, and package resolution. Explain cache hits/misses and
+   guarantee correct invalidation.
+
+7. [ ] Make builds reproducible.
+   Normalize paths/timestamps, pin toolchains/dependencies, emit build
+   manifests/SBOMs, support offline verification, and compare artifact hashes
+   in CI.
+
+8. [ ] Improve test tooling.
+   Add watch mode, parallel execution, sharding, retries for explicitly flaky
+   tests, timeouts, fixtures, temporary directories, snapshots, coverage,
+   benchmarks, JUnit/JSON output, and package-installed integration suites.
+
+9. [ ] Add project migration and doctor commands.
+   Detect obsolete manifests/std APIs, explain environment problems, verify
+   native libraries/architectures, migrate versions, and produce shareable
+   diagnostics.
+
+10. [ ] Remove or formally deprecate compatibility wrappers.
+    Finish moving useful PowerShell behavior into the CLI/Wio tools, announce
+    deprecation windows, and test wrapper-free installation.
+
+11. [ ] Establish release channels.
+    Automate nightly/preview/stable channels, signed artifacts, checksums,
+    provenance, release notes, rollback, upgrade testing, and compatibility
+    verification from previous releases.
+
+12. [ ] Add Windows, Linux, and macOS package/install matrices.
+    Include multiple compilers/architectures where practical and validate
+    native GUI, static/shared libraries, SDK consumers, clean uninstall, paths
+    with Unicode/spaces, and non-admin installs.
+
+## P2 - Editor and Developer Experience
+
+1. [ ] Build a production Language Server.
+   Diagnostics, completion, signature help, hover, go-to-definition, find
+   references, rename, symbols, semantic tokens, inlay hints, code actions,
+   formatting, workspace imports, generic constraints, and extension methods
+   must share compiler logic rather than reimplement it.
+
+2. [ ] Add debugger support.
+   Source breakpoints, stepping, locals, watches, Wio stack traces, object/
+   component/container visualization, panic mapping, generated-C++ source maps,
+   and native mixed-mode debugging are needed.
+
+3. [ ] Improve compiler diagnostics.
+   Add stable error codes, primary/secondary spans, notes, fix-its, candidate
+   ranking, generic substitution traces, import chains, lifetime explanations,
+   terminal/JSON rendering, and documentation links.
+
+4. [ ] Add package-aware editor features.
+   Dependency completion, version information, source navigation, package
+   docs, vulnerability/license notices, restore status, and native platform
+   diagnostics should be visible in the IDE.
+
+5. [ ] Provide project templates.
+   Console app, library, native library, raylib/SDL desktop app, service, test
+   package, binding package, and SDK host templates should be maintained and
+   continuously smoke-tested.
+
+6. [ ] Add refactoring support.
+   Extract function/type, organize imports, change signature, move symbol,
+   generate interface implementation, wrap with Option/Result handling, and
+   convert free functions to extensions.
+
+## P2 - Performance, Portability, and Security
+
+1. [ ] Build a repeatable benchmark suite.
+   Measure compiler phases, generated C++ compilation, startup, allocations,
+   containers, strings, generics, reflection, JSON, native calls, and realistic
+   applications. Track regressions per commit and release.
+
+2. [ ] Reduce generated-C++ size and compile time.
+   Audit template duplication, generic instantiation, headers, reflection
+   metadata, source directives, unity/PCH/module strategies, and dead code.
+
+3. [ ] Optimize runtime ownership costs.
+   Measure and improve reference counting, Box/any allocations, component
+   copies, string/container growth, bounds checks, temporary materialization,
+   and native wrapper overhead without weakening semantics.
+
+4. [ ] Add sanitizers and dynamic analysis.
+   ASan, UBSan, TSan where applicable, leak checks, Windows diagnostics, native
+   boundary stress, malformed input, and long-running runtime tests should run
+   regularly.
+
+5. [ ] Harden supply-chain and package security.
+   Signed metadata/artifacts, checksum enforcement, dependency provenance,
+   registry authentication, namespace ownership, malicious package isolation,
+   vulnerability reporting, and reproducible verification are required.
+
+6. [ ] Define a security model for native and untrusted code.
+   Document that native code is privileged, evaluate sandboxed tooling/build
+   scripts, constrain package hooks, protect credentials/environment, and
+   provide safe defaults for network/filesystem operations.
+
+7. [ ] Deepen backend portability.
+   Continuously test GCC, Clang, MSVC where supported; Windows/Linux/macOS;
+   x64/arm64; static/shared/PIC; endian/alignment assumptions; and alternative
+   backend feasibility.
+
+8. [ ] Evaluate an independent backend/IR only with evidence.
+   Keep C++ as the production backend while measuring whether a Wio IR,
+   LLVM-based path, or interpreter would materially improve diagnostics,
+   compile time, tooling, or portability.
+
+## P3 - Product Direction
+
+1. [ ] Define Wio's primary product profile.
+   Decide the supported priority among systems programming, native application
+   development, games, scripting/tooling, embeddable modules, and services.
+   Use that decision to control language and std scope.
+
+2. [ ] Define long-term compatibility and deprecation mechanics in tooling.
+   The written compatibility policy exists; add compiler deprecation
+   attributes, warnings, migration tooling, edition/spec selection, and
+   package compatibility constraints.
+
+3. [ ] Establish governance for language and std evolution.
+   Add proposal/RFC templates, acceptance criteria, feature gates,
+   experimental namespaces, stabilization checklists, and removal policy.
+
+4. [ ] Build a documentation website and searchable package portal.
+   Publish versioned language/std/SDK docs, tutorials, examples, migration
+   guides, package metadata, API search, and release compatibility tables.
+
+5. [ ] Create a real-world validation portfolio.
+   Maintain substantial applications covering CLI, native desktop GUI,
+   static/shared library, SDK host, networking/service, data processing, and
+   package consumption. Use them as release gates rather than demos only.

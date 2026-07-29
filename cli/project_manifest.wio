@@ -1,0 +1,446 @@
+use argonaut;
+use project_new;
+use std::console as console;
+use std::fs as fs;
+use std::path as path;
+use std::process as process;
+use std::result as result;
+use std::serialization as serialization;
+
+realm SelfHostedProject {
+    component ProjectInfo {
+        manifestFile: string;
+        projectRoot: string;
+        name: string;
+        templateName: string;
+        config: string;
+        buildDirectory: string;
+        outputDirectory: string;
+        wioEntry: string;
+        wioTarget: string;
+        wioOutput: string;
+        toolchainRoot: string;
+        nativeCore: string;
+        sdkIncludeDirectory: string;
+        runtimeStaticLibrary: string;
+        wioSourceRoots: string[];
+        wioIncludeDirs: string[];
+        wioLinkDirs: string[];
+        wioNativeSources: string[];
+        wioLinkLibraries: string[];
+        wioBackendArgs: string[];
+        hostEnabled: bool;
+        hostCompiler: string;
+        hostSourceFiles: string[];
+        hostIncludeDirs: string[];
+        hostLinkDirs: string[];
+        hostLinkLibraries: string[];
+        hostCompilerArgs: string[];
+        hostOutput: string;
+        runArgs: string[];
+        runWorkingDirectory: string;
+        passLibraryPath: bool;
+        testFiles: string[];
+        testWorkingDirectory: string;
+        packageAssets: string[];
+        packageFiles: string[];
+    }
+
+    fn Scalar(value: string) -> string {
+        let trimmed = value.Trim();
+        if (trimmed.Count() >= 2usize and
+            ((trimmed.StartsWith("\"") and trimmed.EndsWith("\"")) or
+             (trimmed.StartsWith("'") and trimmed.EndsWith("'")))) {
+            return trimmed.Slice(1usize, trimmed.Count() - 2usize);
+        }
+        return trimmed;
+    }
+
+    fn ParseManifest(filePath: string) -> std::Result<Dict<string, string> > {
+        if (not fs::IsFile(filePath)) {
+            return Failure<Dict<string, string> >($"Project manifest was not found: ${filePath}");
+        }
+        mut values: Dict<string, string> = ({});
+        mut section = "";
+        for rawLine in fs::ReadLines(filePath) {
+            let line = rawLine.Trim();
+            if (line == "" or line.StartsWith("#") or line.StartsWith("//")) {
+                continue;
+            }
+            if (line.StartsWith("[") and line.EndsWith("]")) {
+                section = line.Slice(1usize, line.Count() - 2usize).Trim();
+                continue;
+            }
+            if (not line.ContainsChar('=')) {
+                return Failure<Dict<string, string> >($"Invalid makewio line: ${line}");
+            }
+            let equals = line.IndexOfChar('=');
+            let key = line.Take(equals).Trim();
+            let value = line.Skip(equals + 1usize).Trim();
+            let fullKey = section == "" ? key : section + "." + key;
+            values.Set(fullKey, value);
+        }
+        return std::Ok<Dict<string, string> >(values);
+    }
+
+    fn ManifestValue(values: Dict<string, string>, key: string, fallback: string) -> string {
+        if (values.ContainsKey(key)) {
+            return Scalar(values.Get(key));
+        }
+        return fallback;
+    }
+
+    fn ManifestBool(values: Dict<string, string>, key: string, fallback: bool) -> bool {
+        if (not values.ContainsKey(key)) {
+            return fallback;
+        }
+        let value = Scalar(values.Get(key)).ToLower();
+        return value == "true" or value == "1" or value == "yes" or value == "on";
+    }
+
+    fn ManifestArray(values: Dict<string, string>, key: string) -> string[] {
+        if (not values.ContainsKey(key)) {
+            return [];
+        }
+        mut raw = values.Get(key).Trim();
+        if (raw.StartsWith("[") and raw.EndsWith("]") and raw.Count() >= 2usize) {
+            raw = raw.Slice(1usize, raw.Count() - 2usize);
+        }
+        if (raw.Trim() == "") {
+            return [];
+        }
+        mut items: string[] = [];
+        for part in raw.Split(",") {
+            let value = Scalar(part);
+            if (value != "") {
+                items.Push(value);
+            }
+        }
+        return items;
+    }
+
+    fn ResolvePaths(root: string, values: string[]) -> string[] {
+        mut resolved: string[] = [];
+        for value in values {
+            if (value != "") {
+                resolved.Push(path::AbsoluteFrom(root, value));
+            }
+        }
+        return resolved;
+    }
+
+    fn ExistingPaths(root: string, values: string[]) -> string[] {
+        mut resolved: string[] = [];
+        for value in values {
+            let candidate = path::AbsoluteFrom(root, value);
+            if (fs::Exists(candidate)) {
+                resolved.Push(candidate);
+            }
+        }
+        return resolved;
+    }
+
+    fn FilesWithExtensions(roots: string[], extensions: string[]) -> string[] {
+        mut files: string[] = [];
+        for root in roots {
+            for file in fs::ListFilesRecursive(root) {
+                let extension = path::Extension(file).ToLower();
+                if (extensions.Contains(extension)) {
+                    files.Push(file);
+                }
+            }
+        }
+        return files;
+    }
+
+    fn FindToolchainRoot(selfPath: string) -> string {
+        mut candidate = path::ParentPath(path::Absolute(selfPath));
+        mut remaining = 5usize;
+        while (remaining > 0usize and candidate != "") {
+            if (fs::IsDirectory(path::Join3(candidate, "sdk", "include")) and
+                fs::IsDirectory(path::Join3(candidate, "runtime", "include")) and
+                fs::IsDirectory(path::Join(candidate, "std"))) {
+                return candidate;
+            }
+            let parent = path::ParentPath(candidate);
+            if (parent == candidate) {
+                break;
+            }
+            candidate = parent;
+            remaining -= 1usize;
+        }
+        return "";
+    }
+
+    fn FindRuntimeStaticLibrary(root: string) -> string {
+        let candidates = [
+            path::JoinAll([root, "runtime", "lib", "libwio_runtime.a"]),
+            path::JoinAll([root, "build", "runtime", "backend", "libwio_runtime.a"]),
+            path::JoinAll([root, "build-codex-learn-mingw", "runtime", "backend", "libwio_runtime.a"])
+        ];
+        for candidate in candidates {
+            if (fs::IsFile(candidate)) {
+                return candidate;
+            }
+        }
+        return "";
+    }
+
+    fn FindHostCompiler(root: string, configured: string, projectRoot: string) -> string {
+        if (configured.Contains("/") or configured.Contains("\\")) {
+            return path::AbsoluteFrom(projectRoot, configured);
+        }
+        let windowsBundled = path::JoinAll([
+            root, "toolchains", "windows-x64-mingw", "bin",
+            "g++" + process::ExecutableSuffix()
+        ]);
+        if ((configured == "g++" or configured == "bundled") and fs::IsFile(windowsBundled)) {
+            return windowsBundled;
+        }
+        return configured;
+    }
+
+    fn ResolveManifest(projectValue: string) -> std::Result<string> {
+        mut current = projectValue == "" ? fs::CurrentPath() : path::Absolute(projectValue);
+        if (fs::IsFile(current)) {
+            return std::Ok<string>(current);
+        }
+        if (not fs::IsDirectory(current)) {
+            return Failure<string>($"Project path does not exist: ${current}");
+        }
+
+        while (current != "") {
+            let primary = path::Join(current, "wio.makewio");
+            if (fs::IsFile(primary)) {
+                return std::Ok<string>(primary);
+            }
+            let compatibility = path::Join(current, "makewio");
+            if (fs::IsFile(compatibility)) {
+                return std::Ok<string>(compatibility);
+            }
+            let parent = path::ParentPath(current);
+            if (parent == current) {
+                break;
+            }
+            current = parent;
+        }
+        return Failure<string>("No project manifest was found. Expected wio.makewio or makewio.");
+    }
+
+    fn OptionValue(args: string[], option: string, fallback: string) -> string {
+        mut index = 3usize;
+        while (index + 1usize < args.Count()) {
+            if (args[index] == option) {
+                return args[index + 1usize];
+            }
+            index += 1usize;
+        }
+        return fallback;
+    }
+
+    fn ProjectValue(args: string[]) -> string {
+        let explicitProject = OptionValue(args, "--project", "");
+        if (explicitProject != "") {
+            return explicitProject;
+        }
+        mut index = 3usize;
+        while (index < args.Count()) {
+            let value = args[index];
+            if (value == "--") {
+                break;
+            }
+            if (value == "--config" or value == "--build-dir" or value == "--cwd" or
+                value == "--working-directory" or value == "--arg" or value == "--filter" or
+                value == "--output-dir") {
+                index += 2usize;
+                continue;
+            }
+            if (not value.StartsWith("-")) {
+                return value;
+            }
+            index += 1usize;
+        }
+        return ".";
+    }
+
+    fn ResolveInfo(args: string[]) -> std::Result<ProjectInfo> {
+        mut info = ProjectInfo();
+        info.manifestFile = ResolveManifest?(ProjectValue(args));
+        info.projectRoot = path::ParentPath(info.manifestFile);
+        let manifest = ParseManifest?(info.manifestFile);
+        info.name = ManifestValue(manifest, "name", "");
+        if (info.name == "") {
+            return Failure<ProjectInfo>("Project manifest is missing a non-empty 'name'.");
+        }
+        info.templateName = ManifestValue(manifest, "template", "");
+        info.config = OptionValue(args, "--config", ManifestValue(manifest, "build.config", "Debug"));
+        let buildOverride = OptionValue(args, "--build-dir", "");
+        let buildValue = buildOverride == "" ? ManifestValue(manifest, "build.buildDir", ".wio-build") : buildOverride;
+        info.buildDirectory = path::AbsoluteFrom(info.projectRoot, buildValue);
+        let outputValue = ManifestValue(manifest, "outputs.directory", "");
+        info.outputDirectory = outputValue == ""
+            ? path::Join(info.buildDirectory, "interop")
+            : path::AbsoluteFrom(info.projectRoot, outputValue);
+        info.wioEntry = path::AbsoluteFrom(
+            info.projectRoot,
+            ManifestValue(manifest, "wio.entry", "wio/module.wio")
+        );
+        info.wioTarget = ManifestValue(manifest, "wio.target", "shared");
+        if (info.wioTarget != "exe" and info.wioTarget != "shared" and info.wioTarget != "static") {
+            return Failure<ProjectInfo>(
+                $"Unsupported wio.target '${info.wioTarget}'. Expected exe, shared, or static."
+            );
+        }
+        let baseName = ManifestValue(manifest, "outputs.baseName", SafeName(info.name));
+        let wioName = ManifestValue(manifest, "outputs.wioName", baseName);
+        let hostName = ManifestValue(manifest, "outputs.hostName", baseName + ".host");
+        mut wioSuffix = process::SharedLibrarySuffix();
+        if (info.wioTarget == "exe") { wioSuffix = process::ExecutableSuffix(); }
+        if (info.wioTarget == "static") { wioSuffix = process::StaticLibrarySuffix(); }
+        info.wioOutput = path::Join(info.outputDirectory, wioName + wioSuffix);
+        info.nativeCore = path::Join(path::ParentPath(path::Absolute(args[0usize])), "wio" + process::ExecutableSuffix());
+        info.toolchainRoot = FindToolchainRoot(args[0usize]);
+        if (info.toolchainRoot == "") {
+            return Failure<ProjectInfo>(
+                "Could not resolve the Wio toolchain root from the self-hosted CLI location."
+            );
+        }
+        if (not fs::IsFile(info.nativeCore)) {
+            return Failure<ProjectInfo>($"Could not resolve the Wio compiler executable: ${info.nativeCore}");
+        }
+        info.sdkIncludeDirectory = path::Join3(info.toolchainRoot, "sdk", "include");
+        info.runtimeStaticLibrary = FindRuntimeStaticLibrary(info.toolchainRoot);
+
+        if (manifest.ContainsKey("wio.sourceRoots")) {
+            info.wioSourceRoots = ResolvePaths(info.projectRoot, ManifestArray(manifest, "wio.sourceRoots"));
+        }
+        else if (manifest.ContainsKey("wio.usePaths")) {
+            info.wioSourceRoots = ResolvePaths(info.projectRoot, ManifestArray(manifest, "wio.usePaths"));
+        }
+        else if (manifest.ContainsKey("wio.moduleDirs")) {
+            info.wioSourceRoots = ResolvePaths(info.projectRoot, ManifestArray(manifest, "wio.moduleDirs"));
+        }
+        else {
+            info.wioSourceRoots = ExistingPaths(info.projectRoot, ["wio", "src"]);
+            info.wioSourceRoots.Push(path::ParentPath(info.wioEntry));
+        }
+
+        if (manifest.ContainsKey("wio.includeDirs")) {
+            info.wioIncludeDirs = ResolvePaths(info.projectRoot, ManifestArray(manifest, "wio.includeDirs"));
+        }
+        else {
+            info.wioIncludeDirs = ExistingPaths(info.projectRoot, ["native/include"]);
+        }
+        if (manifest.ContainsKey("wio.linkDirs")) {
+            info.wioLinkDirs = ResolvePaths(info.projectRoot, ManifestArray(manifest, "wio.linkDirs"));
+        }
+        else {
+            info.wioLinkDirs = ExistingPaths(info.projectRoot, ["native/lib"]);
+        }
+        if (manifest.ContainsKey("wio.nativeSources")) {
+            info.wioNativeSources = ResolvePaths(info.projectRoot, ManifestArray(manifest, "wio.nativeSources"));
+        }
+        else {
+            info.wioNativeSources = FilesWithExtensions(
+                ExistingPaths(info.projectRoot, ["native/src"]),
+                [".c", ".cc", ".cpp", ".cxx"]
+            );
+        }
+        info.wioLinkLibraries = ManifestArray(manifest, "wio.linkLibraries");
+        info.wioBackendArgs = ManifestArray(manifest, "wio.backendArgs");
+
+        info.hostEnabled = ManifestBool(manifest, "host.enabled", info.templateName == "hybrid-module");
+        if (info.wioTarget == "exe" and info.hostEnabled) {
+            return Failure<ProjectInfo>("host.enabled cannot be true when wio.target is 'exe'.");
+        }
+        info.hostCompiler = FindHostCompiler(
+            info.toolchainRoot,
+            ManifestValue(manifest, "host.compiler", "g++"),
+            info.projectRoot
+        );
+        if (info.hostEnabled) {
+            if (manifest.ContainsKey("host.sources")) {
+                info.hostSourceFiles = ResolvePaths(info.projectRoot, ManifestArray(manifest, "host.sources"));
+            }
+            else if (manifest.ContainsKey("host.source")) {
+                info.hostSourceFiles = ResolvePaths(
+                    info.projectRoot,
+                    [ManifestValue(manifest, "host.source", "")]
+                );
+            }
+            else if (manifest.ContainsKey("host.sourceRoots")) {
+                info.hostSourceFiles = FilesWithExtensions(
+                    ResolvePaths(info.projectRoot, ManifestArray(manifest, "host.sourceRoots")),
+                    [".c", ".cc", ".cpp", ".cxx"]
+                );
+            }
+            else {
+                info.hostSourceFiles = FilesWithExtensions(
+                    ExistingPaths(info.projectRoot, ["host"]),
+                    [".c", ".cc", ".cpp", ".cxx"]
+                );
+            }
+            if (info.hostSourceFiles.Empty()) {
+                return Failure<ProjectInfo>("No host source files were found.");
+            }
+        }
+        info.hostIncludeDirs = manifest.ContainsKey("host.includeDirs")
+            ? ResolvePaths(info.projectRoot, ManifestArray(manifest, "host.includeDirs"))
+            : ExistingPaths(info.projectRoot, ["host/include", "native/include"]);
+        info.hostLinkDirs = manifest.ContainsKey("host.linkDirs")
+            ? ResolvePaths(info.projectRoot, ManifestArray(manifest, "host.linkDirs"))
+            : ExistingPaths(info.projectRoot, ["native/lib"]);
+        info.hostLinkLibraries = ManifestArray(manifest, "host.linkLibraries");
+        info.hostCompilerArgs = ManifestArray(manifest, "host.compilerArgs");
+        info.hostOutput = path::Join(info.outputDirectory, hostName + process::ExecutableSuffix());
+        info.runArgs = ManifestArray(manifest, "run.args");
+        info.runWorkingDirectory = path::AbsoluteFrom(
+            info.projectRoot,
+            ManifestValue(manifest, "run.workingDirectory", ".")
+        );
+        info.passLibraryPath = ManifestBool(manifest, "run.passLibraryPath", info.wioTarget == "shared");
+        if (manifest.ContainsKey("test.files")) {
+            info.testFiles = ResolvePaths(info.projectRoot, ManifestArray(manifest, "test.files"));
+        }
+        else {
+            mut testRoots = ResolvePaths(info.projectRoot, ManifestArray(manifest, "test.sourceRoots"));
+            if (testRoots.Empty()) {
+                testRoots = ExistingPaths(info.projectRoot, ["tests"]);
+            }
+            info.testFiles = FilesWithExtensions(testRoots, [".wio"]);
+        }
+        info.testWorkingDirectory = path::AbsoluteFrom(
+            info.projectRoot,
+            ManifestValue(manifest, "test.workingDirectory", ".")
+        );
+        info.packageAssets = manifest.ContainsKey("package.assets")
+            ? ResolvePaths(info.projectRoot, ManifestArray(manifest, "package.assets"))
+            : ExistingPaths(info.projectRoot, ["assets"]);
+        info.packageFiles = ResolvePaths(info.projectRoot, ManifestArray(manifest, "package.files"));
+        return std::Ok<ProjectInfo>(info);
+    }
+
+    fn Describe(args: string[]) -> std::Result<i32> {
+        let info = ResolveInfo?(args);
+        let hostEnabled = info.hostEnabled ? "true" : "false";
+        let opening = "{\n";
+        console::PrintLine!(
+            opening +
+            "  \"manifest\": " + serialization::QuoteJson(info.manifestFile) + ",\n" +
+            "  \"projectRoot\": " + serialization::QuoteJson(info.projectRoot) + ",\n" +
+            "  \"name\": " + serialization::QuoteJson(info.name) + ",\n" +
+            "  \"template\": " + serialization::QuoteJson(info.templateName) + ",\n" +
+            "  \"config\": " + serialization::QuoteJson(info.config) + ",\n" +
+            "  \"buildDirectory\": " + serialization::QuoteJson(info.buildDirectory) + ",\n" +
+            "  \"outputDirectory\": " + serialization::QuoteJson(info.outputDirectory) + ",\n" +
+            "  \"wio\": {\"entry\": " + serialization::QuoteJson(info.wioEntry) +
+                ", \"target\": " + serialization::QuoteJson(info.wioTarget) +
+                ", \"output\": " + serialization::QuoteJson(info.wioOutput) + "},\n" +
+            "  \"host\": {\"enabled\": " + hostEnabled +
+                ", \"output\": " + serialization::QuoteJson(info.hostOutput) + "},\n" +
+            "  \"run\": {\"workingDirectory\": " + serialization::QuoteJson(info.runWorkingDirectory) + "}\n" +
+            "}"
+        );
+        return std::Ok<i32>(0);
+    }
+}

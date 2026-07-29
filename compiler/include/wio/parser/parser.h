@@ -28,6 +28,8 @@ namespace wio
         bool multiMatch(const std::initializer_list<TokenType>& types, bool consume = false);
         bool matchOneOf(const std::initializer_list<TokenType>& types, bool consume = false);
         Token consume(TokenType type, std::string_view value = "");
+        [[nodiscard]] bool matchIdentifier(bool consume = false);
+        Token consumeIdentifier();
         [[nodiscard]] common::Location previousLocation() const;
         [[nodiscard]] common::Location currentOrPreviousLocation() const;
         void expectElementAfterComma(TokenType closingType, std::string_view elementDescription);
@@ -71,6 +73,7 @@ namespace wio
         [[nodiscard]] static int getPrecedence(TokenType type);
         [[nodiscard]] bool canParseExplicitTypeArgumentCall() const;
         static void validateOrdinaryVariableDeclaration(Mutability mutability,
+                                                        bool hasExplicitType,
                                                         bool hasInitializer,
                                                         common::Location location);
 

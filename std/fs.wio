@@ -17,6 +17,10 @@ realm std {
         fn IsDirectory(path: string) -> bool;
 
         @Native
+        @CppName(wio::runtime::std_fs::IsDirectoryEmpty)
+        fn IsDirectoryEmpty(path: string) -> bool;
+
+        @Native
         @CppName(wio::runtime::std_fs::CreateDirectories)
         fn CreateDirectories(path: string) -> bool;
 
@@ -25,12 +29,24 @@ realm std {
         fn Remove(path: string) -> bool;
 
         @Native
+        @CppName(wio::runtime::std_fs::RemoveAll)
+        fn RemoveAll(path: string) -> bool;
+
+        @Native
         @CppName(wio::runtime::std_fs::CopyFile)
         fn CopyFile(source: string, target: string) -> bool;
 
         @Native
+        @CppName(wio::runtime::std_fs::CopyRecursive)
+        fn CopyRecursive(source: string, target: string) -> bool;
+
+        @Native
         @CppName(wio::runtime::std_fs::MoveFile)
         fn MoveFile(source: string, target: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_fs::ListFilesRecursive)
+        fn ListFilesRecursive(path: string) -> string[];
 
         @Native
         @CppName(wio::runtime::std_fs::CurrentPath)
@@ -51,6 +67,10 @@ realm std {
         @Native
         @CppName(wio::runtime::std_fs::FileSize)
         fn FileSize(path: string) -> i64;
+
+        @Native
+        @CppName(wio::runtime::std_fs::LastWriteTime)
+        fn LastWriteTime(path: string) -> i64;
 
         fn IsMissing(path: string) -> bool {
             return not Exists(path);

@@ -64,6 +64,10 @@ Notes:
 - [x] Nested mutable access and `ref` ergonomics improved significantly.
 - [x] The first real in-place mutation coverage landed for arrays, dicts, and
       components.
+- [x] Explicitly typed `let` / `mut` declarations may omit assignment and now
+      receive deterministic value initialization across scalars, strings,
+      containers, and components. Untyped declarations and `const` still
+      require initializers.
 - [x] The mutable reference/value-context behavior is now documented as part of
       the intended `v1` language contract.
 
@@ -162,6 +166,15 @@ Notes:
       packaged file-run cache behavior, and source-based Wio tool dry-runs.
 - [x] Packaged toolchains were validated through real project
       create/build/run flows.
+- [x] Installed-package qualification gained a real installer-based
+      Windows/Linux release gate: it uses a clean toolchain root, validates all
+      40 public std modules independently and together, exercises a complete
+      external project build/run/test/package lifecycle, validates native
+      interop, and rejects source-checkout resolution leakage. The first-class
+      `wio project test` command supports discovery, manifest overrides,
+      filtering, listing, incremental builds, and `--no-build`; `wio project
+      package` emits `bin`/`lib`/assets/additional files plus machine-readable
+      package metadata.
 - [x] The release-facing example set now includes plain app, native app,
       hybrid module, binding import, packaged quickstart, static consumer,
       and the heavier hybrid arena companion example.
@@ -180,6 +193,18 @@ Notes:
 
 ## Recent Partial Foundation
 
+- [x] The self-hosted CLI bootstrap landed: the native stage-0 compiler builds
+      and packages a Wio + Argonaut-Wio companion, provides a recursion-safe
+      internal fallback bridge, and routes `project test/package` through Wio
+      argument validation with lifecycle and installed-package probes.
+- [x] `wio project new` became the first command with both parsing and business
+      logic fully implemented in Wio; its plain, native, module, and hybrid
+      templates remain compatible with the existing project build/run tests.
+- [x] The complete project family moved behind the self-hosted boundary:
+      makewio discovery and normalization, `describe`, Wio/native-host
+      `build`, `run`, regex-driven `test`, directory `package`, and the
+      `wio run` shorthand execute in Wio without calling the legacy native
+      project handlers.
 - [x] The first member-operator overloading slice landed.
 - [x] Operator overloading was fully closed:
       member/free unary-binary-assignment operators, `fit`, `[]`, `()`,
@@ -191,3 +216,132 @@ Notes:
       predicates like `std::traits::IsNumeric<T>` during semantic checks.
       Unary/binary member operator resolution and codegen are working.
       Final hardening continues to be tracked in `TODOLIST.md`.
+
+## Version 1 Contract and Product Closure Milestones
+
+The following completed checklist used to remain in `TODOLIST.md`. It is kept
+here as historical evidence rather than active work:
+
+- [x] Operator overloading was completed across member/free,
+      unary/binary/assignment, `fit`, `[]`, `()`, generic overload, and
+      explicit `deref` paths.
+- [x] The intended language surface was frozen across the freeze snapshot,
+      language draft, std docs, runtime type model, SDK docs, examples, and
+      compatibility policy.
+- [x] `wio.makewio` became the official primary project format, with
+      `wio.project.json` retained only for compatibility.
+- [x] The primary CLI behavior was frozen around `build`, `test`, `file`,
+      `project`, `bind`, `env`, and `package`.
+- [x] PowerShell helpers were removed from the primary workflow and retained
+      only as compatibility wrappers.
+- [x] The split between native CLI orchestration and Wio-written tools under
+      `scripts/wio` was formalized.
+- [x] Single-file/tool output, generated-C++ cleanup, package cache, and
+      non-writable-install policies were settled.
+- [x] Packaging/install UX was unified around `wio package`, installer
+      wrappers, `env print/setup`, `QUICKSTART.md`, and executable-relative
+      discovery.
+- [x] Windows/Linux release validation was established for the critical
+      project, package, binding, process, and packaged-file flows.
+- [x] The stable/experimental std boundary was documented.
+- [x] `std::Result<T>`, `Foo!()`, and `Foo?()` were sealed as the official
+      recoverable error-flow model.
+- [x] The `@Native`, `@CppHeader`, `@CppName`, POD/native enum/flagset,
+      export, and ABI-safe interop contract was frozen.
+- [x] `any`, `Box`, and `opaque` boundaries were made official.
+- [x] Mutable indexed/container access and `ref` value-context ergonomics were
+      finalized for the chosen contract.
+- [x] Enum/flagset support was closed across constants, native interop,
+      reflection, helpers, normal Wio APIs, and SDK identity.
+- [x] Release-facing tooling tests, documentation, examples, compatibility
+      policy, and performance/memory notes were completed.
+- [x] The scoped const-generic/std-meta wave 3 slice was completed.
+
+## Standard Library Expansion Through v0.4
+
+- [x] `std::hash` landed with FNV-1a as the default and SHA-256 digest/hex
+      support.
+- [x] `std::random` landed with MT19937 as the default plus xoroshiro128+,
+      LXM, and Wichmann-Hill generators.
+- [x] `byte`/`bit`, `ByteBuffer`, generation-checked `BytePool`, and typed
+      `Pool<T>` landed.
+- [x] Queue, ordered/unordered sets, heterogeneous tuple, regex, time, span,
+      range, and adaptive sorting modules landed.
+- [x] Type traits expanded across built-in categories and user-defined nominal
+      predicates usable by `@Apply`.
+- [x] Reflection expanded beyond enum/flagset to component, object, interface,
+      field, method, access, base, size, and alignment metadata.
+- [x] Checked numeric/string conversion and parsing landed through
+      `std::convert`, including base-aware integer formatting/parsing and
+      generic `ToString`.
+- [x] `std::chars`, expanded string helpers, and the larger generic algorithms
+      wave landed.
+- [x] `std::Option<T>` landed with presence queries, `Value`, `ValueOr`,
+      `Map`, `AndThen`, `Filter`, `OrElse`, and `ToResult`.
+- [x] Option-returning lookup helpers landed for array algorithms,
+      collections, strings, spans, and iterator search.
+- [x] `std::iterator`, `std::range`, and `std::encoding` landed.
+- [x] `std::serialization` and the recursive `std::json::Value` system landed
+      with parsing, compact/pretty writing, nested arrays/objects, typed
+      access, source-positioned errors, and round-trip coverage.
+- [x] Checked/saturating `std::numeric`, in-memory `std::stream`, UUID v4,
+      packed component/extension SemVer, and structured `std::log` landed.
+
+## Component Extensions and Interpolation
+
+- [x] Stack-preserving component extensions landed as externally lowered
+      methods with member-call ergonomics.
+- [x] Mutable and immutable extension receivers, access isolation, semantic
+      resolution, code generation, documentation, and positive/negative tests
+      landed.
+- [x] Component extensions were applied to `Span` and vector components.
+- [x] Immutable component extension calls on temporary values were fixed in
+      the C++ backend by safely materializing the temporary through the complete
+      call expression.
+- [x] Interpolated-string lexing moved from global flags to balanced nested
+      frames.
+- [x] Interpolation expressions now support ordinary string literals, nested
+      function calls/parentheses/braces, dictionary calls with string
+      arguments, and nested interpolated strings.
+- [x] Contextual keyword identifiers were hardened across declarations,
+      component/object fields, member and realm qualification, imported APIs,
+      and native bindings. `std::path::Extension` no longer makes packaged
+      `std::path` / `std::fs` imports fail, and a focused end-to-end regression
+      test covers the complete path.
+- [x] The right-associative `condition ? whenTrue : whenFalse` conditional
+      expression landed with lazy branch evaluation, boolean-condition and
+      branch-compatibility diagnostics, direct C++ lowering, precedence
+      documentation, and focused positive/negative coverage.
+
+## CLI Expansion and Releases
+
+- [x] Bare project commands gained manifest discovery from the current
+      directory and its ancestors.
+- [x] `wio run` became a project-run shorthand.
+- [x] Contextual `wio help`, command-family version/help, application
+      arguments after `--`, repeated arguments, working-directory control,
+      command printing, and no-build/no-manifest-args controls landed.
+- [x] Direct cross-platform process launching replaced shell command strings
+      for project, package, and performance subprocesses.
+- [x] Argument forwarding now preserves spaces, flag-like values, shell
+      characters, literal separators, child exit codes, and Windows PATH
+      behavior.
+- [x] Wio `v0.2.0`, `v0.3.0`, and `v0.4.0` release branches/packages were
+      produced; `v0.4.0` also received a Git tag and GitHub Release with
+      installer and portable assets.
+
+## Real-World External Validation
+
+- [x] A large multi-module Wio colony simulation was built outside the repo
+      with deterministic generation, component extensions, missions, economy,
+      interactive CLI, native persistence, and JSON output.
+- [x] A non-game native desktop productivity application was built with Wio
+      and raylib, including a responsive task board, quick notes, search,
+      focus timer, mouse/keyboard interaction, and JSON persistence.
+- [x] The raylib desktop application compiled through the installed Wio
+      `v0.4.0` toolchain and completed a real GLFW/OpenGL render smoke test on
+      Windows.
+- [x] That external validation exposed the installed-package
+      `std::path::Extension` contextual-keyword regression; its fix and the
+      release gate preventing recurrence remain active P0 items in
+      `TODOLIST.md`.

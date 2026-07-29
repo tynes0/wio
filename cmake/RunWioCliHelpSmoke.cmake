@@ -91,6 +91,8 @@ endforeach()
 set(command_help_specs
     "project|run|--help"
     "project|build|--help"
+    "project|test|--help"
+    "project|package|--help"
     "file|run|--help"
     "bind|new|--help"
     "env|status|--help"

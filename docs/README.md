@@ -73,12 +73,14 @@ Use these when the question is about:
 
 - [CLI reference](./WIO_CLI_REFERENCE.md)
 - [Project system](./WIO_PROJECT_SYSTEM.md)
+- [Self-hosted CLI architecture](./WIO_SELF_HOSTED_CLI.md)
 
 Use these when the question is about:
 
 - commands
 - manifests
 - build/run/package/install behavior
+- CLI bootstrap and Wio/Argonaut-Wio migration
 - cache/output policy
 - packaged toolchain usage
 

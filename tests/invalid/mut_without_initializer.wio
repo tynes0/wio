@@ -1,4 +1,0 @@
-fn Entry(args: string[]) -> i32 {
-    mut value: i32;
-    return 0;
-}

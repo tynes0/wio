@@ -1,0 +1,37 @@
+use std::assert as assert;
+use std::console as console;
+use std::path as path;
+
+realm program {
+    component Record {
+        extension: i32;
+        return: i32;
+    }
+
+    object Service {
+        public fn Extension(value: i32) -> i32 {
+            return value + 1;
+        }
+    }
+
+    fn return() -> i32 {
+        return 40;
+    }
+}
+
+fn Entry() -> i32 {
+    mut record = program::Record();
+    record.extension = 1;
+    record.return = program::return();
+
+    let service = program::Service();
+    let nativeExtension = path::Extension("archive.tar.gz");
+
+    assert::ExpectEqual(record.extension, 1, "keyword-shaped field should remain accessible");
+    assert::ExpectEqual(record.return, 40, "keyword-shaped qualified function should remain callable");
+    assert::ExpectEqual(service.Extension(1), 2, "keyword-shaped method should remain callable");
+    assert::ExpectEqual(nativeExtension, ".gz", "imported native keyword-shaped API should remain callable");
+
+    console::Print("Contextual keyword identifiers: ok");
+    return 0;
+}
