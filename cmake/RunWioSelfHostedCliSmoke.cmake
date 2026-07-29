@@ -182,6 +182,36 @@ if(bind_typo_result EQUAL 0 OR
     )
 endif()
 
+execute_process(
+    COMMAND "${WIO_EXE}" package --selfhost-invalid-option
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    RESULT_VARIABLE package_invalid_result
+    OUTPUT_VARIABLE package_invalid_stdout
+    ERROR_VARIABLE package_invalid_stderr
+)
+set(package_invalid_output "${package_invalid_stdout}${package_invalid_stderr}")
+if(package_invalid_result EQUAL 0 OR
+   NOT package_invalid_output MATCHES "Argonaut: Undefined argument: --selfhost-invalid-option")
+    message(FATAL_ERROR
+        "Release package options were not validated by Argonaut-Wio.\n${package_invalid_output}"
+    )
+endif()
+
+execute_process(
+    COMMAND "${WIO_EXE}" package --visual-installer --no-visual-installer
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    RESULT_VARIABLE package_conflict_result
+    OUTPUT_VARIABLE package_conflict_stdout
+    ERROR_VARIABLE package_conflict_stderr
+)
+set(package_conflict_output "${package_conflict_stdout}${package_conflict_stderr}")
+if(package_conflict_result EQUAL 0 OR
+   NOT package_conflict_output MATCHES "cannot be used together")
+    message(FATAL_ERROR
+        "Release package option conflicts were not rejected by Wio.\n${package_conflict_output}"
+    )
+endif()
+
 run_success("Native CLI recursion bridge" --native-cli --version)
 run_success("Raw stage-0 compiler path" "${WIO_SOURCE}" --dry-run)
 

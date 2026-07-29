@@ -80,8 +80,13 @@ required-option checks, help/version handling, and typo diagnostics into Wio.
 The mature C/C++ header and JSON-manifest generators remain a native backend
 service while their reusable parser/model layers are prepared for migration.
 
+The first release-package wave moved its complete option surface, defaults,
+help/version handling, and incompatible installer-option validation into Wio.
+Distribution staging, portable-toolchain copying, archive generation, and
+installer generation remain a native backend service.
+
 The remaining migration work covers the platform-specific tail of environment
-management, binding generator internals, and release packaging.
+management, binding generator internals, and release-package backend internals.
 
 Every migrated command needs:
 

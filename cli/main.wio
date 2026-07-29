@@ -6,6 +6,7 @@ use common;
 use global_commands;
 use env_commands;
 use bind_commands;
+use package_commands;
 use file_commands;
 use dev_commands;
 use perf_commands;
@@ -244,13 +245,8 @@ fn Entry(args: string[]) -> i32 {
         return ExitResult(SelfHostedBind::Execute(cliArgs));
     }
 
-    if (cliArgs[1usize] == "package") {
-        let fallback = ProxyNative(cliArgs);
-        if (fallback.IsError()) {
-            console::PrintLine!(fallback.ErrorValue().message);
-            return 1;
-        }
-        return fallback.Value();
+    if (cliArgs.Count() >= 2usize and cliArgs[1usize] == "package") {
+        return ExitResult(SelfHostedPackage::Execute(cliArgs));
     }
 
     if (cliArgs[1usize] != "project") {

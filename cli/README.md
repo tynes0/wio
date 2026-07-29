@@ -28,6 +28,9 @@ Current ownership:
 - `bind new/import` argument parsing, required-option validation, help/version,
   and typo diagnostics are Wio-owned; header and manifest generation currently
   use the native binding backend;
+- release `package` argument parsing, defaults, help/version, and conflicting
+  installer-option validation are Wio-owned; distribution staging and archive/
+  installer generation currently use the native release backend;
 - raw Wio compilation is deliberately delegated to the native stage-0
   compiler;
 - other tooling commands are routed through the companion, then bridged.

@@ -249,8 +249,9 @@ application.
    are Wio-owned, while persistent mutation and detailed platform inspection
    remain behind the native service boundary. `bind new/import` parsing,
    required-option validation, help, and diagnostics are Wio-owned while the
-   header/manifest generator remains a native backend service. Finish those
-   backend tails, then transfer release `package`,
+   header/manifest generator remains a native backend service. Release
+   `package` parsing and validation are Wio-owned while distribution/archive/
+   installer production remains a native backend. Finish these backend tails,
    establish pinned stage-0/generated-C++ bootstrap reproducibility, and
    remove the bridge and C++ argument parsers after parity is complete.
 

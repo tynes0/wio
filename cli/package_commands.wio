@@ -1,0 +1,114 @@
+use argonaut;
+use common;
+use std::console as console;
+use std::result as result;
+
+realm SelfHostedPackage {
+    fn AddOption(
+        parser: ref Argonaut::Parser,
+        id: string,
+        alias: string,
+        fallback: string,
+        description: string
+    ) -> std::Result<std::ResultUnit> {
+        mut argument = Argonaut::Argument(id);
+        argument.AddAlias(alias).SetDefaultValue(fallback).SetDescription(description);
+        parser.Add?(argument);
+        return std::OkUnit();
+    }
+
+    fn AddFlag(parser: ref Argonaut::Parser, id: string, alias: string, description: string)
+        -> std::Result<std::ResultUnit> {
+        mut argument = Argonaut::Argument(id);
+        argument.AddAlias(alias).SetDescription(description);
+        parser.Add?(argument.Flag?());
+        return std::OkUnit();
+    }
+
+    fn Parser() -> std::Result<Argonaut::Parser> {
+        mut parser = Argonaut::Parser();
+        AddOption?(
+            ref parser,
+            "BUILD-DIR",
+            "--build-dir",
+            "build",
+            "Repo build directory used to configure and stage the package."
+        );
+        AddOption?(ref parser, "CONFIG", "--config", "Release", "Build configuration used for the package.");
+        AddOption?(
+            ref parser,
+            "OUTPUT-DIR",
+            "--output-dir",
+            "artifacts\\packages",
+            "Directory where the versioned package folder will be written."
+        );
+        AddOption?(
+            ref parser,
+            "VERSION-SUFFIX",
+            "--version-suffix",
+            "",
+            "Optional suffix appended to the package name."
+        );
+        AddOption?(ref parser, "GENERATOR", "--generator", "", "Optional CMake generator override.");
+        AddFlag?(
+            ref parser,
+            "VISUAL-INSTALLER",
+            "--visual-installer",
+            "Build the Windows visual installer .exe when supported."
+        );
+        AddFlag?(
+            ref parser,
+            "NO-VISUAL-INSTALLER",
+            "--no-visual-installer",
+            "Skip building the Windows visual installer .exe."
+        );
+        AddOption?(
+            ref parser,
+            "INNO-COMPILER",
+            "--inno-compiler",
+            "",
+            "Optional path to ISCC.exe used for the Windows visual installer."
+        );
+        AddFlag?(ref parser, "NO-ZIP", "--no-zip", "Skip creating the .zip archive.");
+        AddFlag?(ref parser, "CLEAN", "--clean", "Replace previous package outputs.");
+        AddFlag?(ref parser, "HELP", "--help", "Show this help menu.");
+        AddFlag?(ref parser, "HELP-SHORT", "-h", "Show this help menu.");
+        AddFlag?(ref parser, "VERSION", "--version", "Show the Wio version.");
+        AddFlag?(ref parser, "VERSION-SHORT", "-v", "Show the Wio version.");
+        return std::Ok<Argonaut::Parser>(parser);
+    }
+
+    fn CommandArgs(args: string[]) -> string[] {
+        mut values: string[] = ["wio package"];
+        mut index = 2usize;
+        while (index < args.Count()) {
+            values.Push(args[index]);
+            index += 1usize;
+        }
+        return values;
+    }
+
+    fn Execute(args: string[]) -> std::Result<i32> {
+        mut parser = Parser?();
+        parser.Parse?(CommandArgs(args));
+        if (parser.GetFlag("HELP") or parser.GetFlag("HELP-SHORT")) {
+            console::Print(parser.Help());
+            return std::Ok<i32>(0);
+        }
+        if (parser.GetFlag("VERSION") or parser.GetFlag("VERSION-SHORT")) {
+            return SelfHostedCli::RunNativeVersion(args[0usize]);
+        }
+        if (parser.GetFlag("VISUAL-INSTALLER") and parser.GetFlag("NO-VISUAL-INSTALLER")) {
+            return SelfHostedCli::Failure<i32>(
+                "Package options --visual-installer and --no-visual-installer cannot be used together."
+            );
+        }
+        if (parser.GetStringOr("INNO-COMPILER", "") != "" and
+            parser.GetFlag("NO-VISUAL-INSTALLER")) {
+            return SelfHostedCli::Failure<i32>(
+                "Package option --inno-compiler cannot be combined with --no-visual-installer."
+            );
+        }
+        return SelfHostedCli::RunNativeCli(args);
+    }
+}

@@ -38,6 +38,14 @@ Notes:
 - Existing header and JSON-manifest binding generation executes as an explicit
   native backend service after Wio validation.
 
+## Self-hosted release-package CLI first wave
+
+- Wio owns every top-level `package` option, default, help/version path, and
+  incompatible visual-installer option validation.
+- The existing distribution staging, portable backend copy, archive, and
+  installer generator executes as an explicit native backend service after Wio
+  validation.
+
 ## Core Language Foundations
 
 - [x] The first generic slice landed:
