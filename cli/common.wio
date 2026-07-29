@@ -30,7 +30,7 @@ realm SelfHostedCli {
         if (not fs::IsFile(core)) {
             return Failure<i32>($"Self-hosted CLI could not find its native core: ${core}");
         }
-        return Run(core, ["--version"], fs::CurrentPath());
+        return Run(core, ["--native-cli", "--version"], fs::CurrentPath());
     }
 
     fn IsRepositoryRoot(candidate: string) -> bool {

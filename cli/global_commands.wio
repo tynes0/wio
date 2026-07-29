@@ -1,0 +1,111 @@
+use common;
+use std::console as console;
+use std::result as result;
+
+realm SelfHostedGlobal {
+    fn Help() -> string {
+        let lines: string[] = [
+            "Wio command line interface\n",
+            "\n",
+            "Usage:\n",
+            "\n",
+            "  wio help      [COMMAND [SUBCOMMAND]]\n",
+            "  wio run       [PROJECT] [project options...] [-- application args...]\n",
+            "  wio build     [--build-dir DIR] [--config CFG] [--configure] [--test]\n",
+            "  wio test      [--build-dir DIR] [--config CFG] [--filter REGEX] [--list] [--configure]\n",
+            "  wio file run    [FILE] [compiler args...] [-- program args...]\n",
+            "  wio file check  [FILE] [extra compiler args...]\n",
+            "  wio file tokens [FILE] [extra compiler args...]\n",
+            "  wio file ast    [FILE] [extra compiler args...]\n",
+            "  wio project new <NAME> [--output-dir DIR] [--template NAME] [--force]\n",
+            "  wio project describe [PROJECT] [--project PATH] [--config CFG] [--build-dir DIR]\n",
+            "  wio project build    [PROJECT] [--project PATH] [--config CFG] [--build-dir DIR] [--rebuild]\n",
+            "  wio project run      [PROJECT] [--project PATH] [--config CFG] [--build-dir DIR] [--no-build] [-- application args...]\n",
+            "  wio project test     [PROJECT] [--project PATH] [--config CFG] [--build-dir DIR] [--filter REGEX] [--list] [--no-build]\n",
+            "  wio project package  [PROJECT] [--project PATH] [--config CFG] [--build-dir DIR] [--output-dir DIR] [--clean] [--no-build]\n",
+            "  wio bind new         --manifest FILE [--output FILE]\n",
+            "  wio bind import      --header FILE --realm NAME [--output FILE] [--header-include FILE] [--prefer-flagset]\n",
+            "  wio env print        [--wio-root DIR] [--shell powershell|cmd|sh] [--add-path]\n",
+            "  wio env setup        [--wio-root DIR] [--set-user] [--no-prompt] [--add-path]\n",
+            "  wio env status       [--wio-root DIR]\n",
+            "  wio env remove       [--wio-root DIR] [--shell powershell|cmd|sh] [--set-user] [--no-prompt] [--remove-path]\n",
+            "  wio env doctor       [--wio-root DIR] [--backend-smoke]\n",
+            "  wio package          [--build-dir DIR] [--config CFG] [--output-dir DIR] [--version-suffix TAG] [--generator NAME] [--no-zip] [--clean]\n",
+            "  wio perf smoke       [--iterations N] [--scratch-dir DIR] [--keep-scratch]\n",
+            "\n",
+            "Alias forms:\n",
+            "\n",
+            "  wio dev build [--build-dir DIR] [--config CFG] [--configure] [--test]\n",
+            "  wio dev test  [--build-dir DIR] [--config CFG] [--filter REGEX] [--list] [--configure]\n",
+            "\n",
+            "Project commands discover wio.makewio in the current directory or its ancestors.\n",
+            "Use '<command> --help' for command-specific options.\n"
+        ];
+        return lines.Join("");
+    }
+
+    fn ProjectHelp() -> string {
+        let lines: string[] = [
+            "Wio project commands\n",
+            "\n",
+            "Usage:\n",
+            "  wio project new <NAME> [--output-dir DIR] [--template NAME] [--force]\n",
+            "  wio project describe [PROJECT] [--config CFG] [--build-dir DIR]\n",
+            "  wio project build    [PROJECT] [--config CFG] [--build-dir DIR] [--rebuild]\n",
+            "  wio project run      [PROJECT] [--config CFG] [--build-dir DIR] [--no-build] [-- application args...]\n",
+            "  wio project test     [PROJECT] [--config CFG] [--build-dir DIR] [--filter REGEX] [--list] [--no-build]\n",
+            "  wio project package  [PROJECT] [--config CFG] [--build-dir DIR] [--output-dir DIR] [--clean] [--no-build]\n",
+            "\n",
+            "PROJECT may be a directory or a makewio manifest. When omitted, Wio searches\n",
+            "the current directory and its ancestors for wio.makewio or makewio.\n"
+        ];
+        return lines.Join("");
+    }
+
+    fn IsHelp(value: string) -> bool {
+        return value == "help" or value == "--help" or value == "-h";
+    }
+
+    fn IsVersion(value: string) -> bool {
+        return value == "version" or value == "--version" or value == "-v";
+    }
+
+    fn RewriteHelp(args: string[]) -> string[] {
+        mut rewritten: string[] = [args[0usize]];
+        mut index = 2usize;
+        while (index < args.Count()) {
+            rewritten.Push(args[index]);
+            index += 1usize;
+        }
+        rewritten.Push("--help");
+        return rewritten;
+    }
+
+    fn PrintUnknown(command: string) -> i32 {
+        mut message = $"Unknown Wio command: ${command}";
+        let suggestion = SelfHostedCli::Suggest(
+            command,
+            ["help", "run", "build", "test", "file", "project", "bind", "env", "package", "perf", "dev"]
+        );
+        if (suggestion != "") {
+            message.Append($"\nDid you mean 'wio ${suggestion}'?");
+        }
+        message.Append("\nRun 'wio --help' to list available commands.");
+        console::PrintLine!(message);
+        return 1;
+    }
+
+    fn PrintUnknownProject(command: string) -> i32 {
+        mut message = $"Unknown project subcommand: ${command}";
+        let suggestion = SelfHostedCli::Suggest(
+            command,
+            ["new", "describe", "build", "run", "test", "package"]
+        );
+        if (suggestion != "") {
+            message.Append($"\nDid you mean 'wio project ${suggestion}'?");
+        }
+        message.Append("\nRun 'wio project --help' to list available project commands.");
+        console::PrintLine!(message);
+        return 1;
+    }
+}

@@ -50,7 +50,19 @@ namespace
             if (command == candidate)
                 return true;
         }
-        return false;
+
+        if (command.empty() || command.front() == '-')
+            return false;
+
+        const std::filesystem::path possibleSource{ std::string(command) };
+        if (possibleSource.extension() == ".wio")
+            return false;
+
+        std::error_code ec;
+        if (std::filesystem::is_regular_file(possibleSource, ec) && !ec)
+            return false;
+
+        return true;
     }
 
     std::filesystem::path selfHostedCliPath(char* executableArgument)

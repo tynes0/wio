@@ -244,8 +244,9 @@ application.
    native fallback bridge. The complete
    `project new/describe/build/run/test/package` lifecycle, `wio run`,
    `file run/check/tokens/ast`, repository `build/test`, `dev build/test`, and
-   `perf smoke` are Wio-owned. Transfer argument ownership and behavior for
-   `env`, `bind`, release `package`, and the remaining global command layer,
+   `perf smoke`, global help/version routing, nested help, and typo suggestions
+   are Wio-owned. Transfer argument ownership and behavior for
+   `env`, `bind`, and release `package`,
    establish pinned stage-0/generated-C++ bootstrap reproducibility, and
    remove the bridge and C++ argument parsers after parity is complete.
 

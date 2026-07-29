@@ -10,6 +10,16 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## Self-hosted global CLI dispatch
+
+- Empty invocation, global help, nested `wio help ...` rewriting, version
+  routing, top-level command classification, and typo suggestions now run in
+  Wio.
+- Raw source/compiler invocations still bypass the companion, while unknown
+  tooling-shaped commands enter Wio for consistent diagnostics.
+- Native version lookup uses the explicit stage-0 bridge and cannot recurse
+  back into the self-hosted companion.
+
 ## Core Language Foundations
 
 - [x] The first generic slice landed:

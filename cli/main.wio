@@ -3,6 +3,7 @@ use project_new;
 use project_manifest;
 use project_commands;
 use common;
+use global_commands;
 use file_commands;
 use dev_commands;
 use perf_commands;
@@ -159,7 +160,30 @@ fn Entry(args: string[]) -> i32 {
         return 0;
     }
 
-    mut cliArgs = args;
+    if (args.Count() == 1usize) {
+        console::Print(SelfHostedGlobal::Help());
+        return 0;
+    }
+
+    if (SelfHostedGlobal::IsVersion(args[1usize])) {
+        return ExitResult(SelfHostedCli::RunNativeVersion(args[0usize]));
+    }
+
+    if (args[1usize] == "--help" or args[1usize] == "-h") {
+        console::Print(SelfHostedGlobal::Help());
+        return 0;
+    }
+
+    mut cliArgs = args[1usize] == "help"
+        ? SelfHostedGlobal::RewriteHelp(args)
+        : args;
+
+    if (cliArgs.Count() == 1usize or
+        (cliArgs.Count() == 2usize and SelfHostedGlobal::IsHelp(cliArgs[1usize]))) {
+        console::Print(SelfHostedGlobal::Help());
+        return 0;
+    }
+
     if (args.Count() >= 2usize and args[1usize] == "run") {
         mut projectArgs: string[] = [args[0usize], "project", "run"];
         mut projectArgIndex = 2usize;
@@ -168,6 +192,17 @@ fn Entry(args: string[]) -> i32 {
             projectArgIndex += 1usize;
         }
         cliArgs = projectArgs;
+    }
+
+    if (cliArgs.Count() >= 2usize and cliArgs[1usize] == "project") {
+        if (cliArgs.Count() == 2usize or
+            (cliArgs.Count() == 3usize and SelfHostedGlobal::IsHelp(cliArgs[2usize]))) {
+            console::Print(SelfHostedGlobal::ProjectHelp());
+            return 0;
+        }
+        if (cliArgs.Count() == 3usize and SelfHostedGlobal::IsVersion(cliArgs[2usize])) {
+            return ExitResult(SelfHostedCli::RunNativeVersion(cliArgs[0usize]));
+        }
     }
 
     if (cliArgs.Count() >= 3usize and cliArgs[1usize] == "project" and cliArgs[2usize] == "new") {
@@ -199,7 +234,7 @@ fn Entry(args: string[]) -> i32 {
         return ExitResult(SelfHostedPerf::Execute(cliArgs));
     }
 
-    if (cliArgs.Count() < 3usize or cliArgs[1usize] != "project") {
+    if (cliArgs[1usize] == "bind" or cliArgs[1usize] == "env" or cliArgs[1usize] == "package") {
         let fallback = ProxyNative(cliArgs);
         if (fallback.IsError()) {
             console::PrintLine!(fallback.ErrorValue().message);
@@ -208,15 +243,14 @@ fn Entry(args: string[]) -> i32 {
         return fallback.Value();
     }
 
+    if (cliArgs[1usize] != "project") {
+        return SelfHostedGlobal::PrintUnknown(cliArgs[1usize]);
+    }
+
     let command = cliArgs[2usize];
     if (command != "describe" and command != "build" and command != "run" and
         command != "test" and command != "package") {
-        let fallback = ProxyNative(cliArgs);
-        if (fallback.IsError()) {
-            console::PrintLine!(fallback.ErrorValue().message);
-            return 1;
-        }
-        return fallback.Value();
+        return SelfHostedGlobal::PrintUnknownProject(command);
     }
 
     let validation = ValidateProjectCommand(cliArgs);

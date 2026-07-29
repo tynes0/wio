@@ -32,9 +32,49 @@ if(NOT LAST_OUTPUT MATCHES "Wio command line interface")
     message(FATAL_ERROR "Root help did not survive self-hosted routing.\n${LAST_OUTPUT}")
 endif()
 
+run_success("Self-hosted empty invocation")
+if(NOT LAST_OUTPUT MATCHES "Wio command line interface")
+    message(FATAL_ERROR "Empty invocation was not handled by Wio.\n${LAST_OUTPUT}")
+endif()
+
+run_success("Self-hosted nested help" help project run)
+if(NOT LAST_OUTPUT MATCHES "Usage: wio project run")
+    message(FATAL_ERROR "Nested help was not rewritten by Wio.\n${LAST_OUTPUT}")
+endif()
+
 run_success("Self-hosted version" --version)
 if(NOT LAST_OUTPUT MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+")
     message(FATAL_ERROR "Version did not survive self-hosted routing.\n${LAST_OUTPUT}")
+endif()
+
+execute_process(
+    COMMAND "${WIO_EXE}" projec
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    RESULT_VARIABLE typo_result
+    OUTPUT_VARIABLE typo_stdout
+    ERROR_VARIABLE typo_stderr
+)
+set(typo_output "${typo_stdout}${typo_stderr}")
+if(typo_result EQUAL 0 OR
+   NOT typo_output MATCHES "Did you mean 'wio project'")
+    message(FATAL_ERROR
+        "Top-level command suggestions were not handled by Wio.\n${typo_output}"
+    )
+endif()
+
+execute_process(
+    COMMAND "${WIO_EXE}" project bild
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    RESULT_VARIABLE project_typo_result
+    OUTPUT_VARIABLE project_typo_stdout
+    ERROR_VARIABLE project_typo_stderr
+)
+set(project_typo_output "${project_typo_stdout}${project_typo_stderr}")
+if(project_typo_result EQUAL 0 OR
+   NOT project_typo_output MATCHES "Did you mean 'wio project build'")
+    message(FATAL_ERROR
+        "Project command suggestions were not handled by Wio.\n${project_typo_output}"
+    )
 endif()
 
 execute_process(

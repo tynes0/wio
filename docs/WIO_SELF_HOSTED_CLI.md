@@ -65,8 +65,12 @@ The second migration wave is also Wio-owned:
 This wave added public `std::environment` and `std::statistics` modules instead
 of embedding platform/cache and measurement logic inside the CLI.
 
+Global empty invocation, help rewriting, version routing, command
+classification, and typo suggestions are now Wio-owned as well. Direct source
+and raw compiler-option invocations continue to bypass the companion.
+
 The remaining migration work covers environment management, binding
-generation, release packaging, and global help/dispatch cleanup.
+generation, and release packaging.
 
 Every migrated command needs:
 
