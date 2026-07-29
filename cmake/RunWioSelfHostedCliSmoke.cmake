@@ -152,6 +152,36 @@ if(env_typo_result EQUAL 0 OR
     )
 endif()
 
+execute_process(
+    COMMAND "${WIO_EXE}" bind import --header sample.h --realm Sample --selfhost-invalid-option
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    RESULT_VARIABLE bind_invalid_result
+    OUTPUT_VARIABLE bind_invalid_stdout
+    ERROR_VARIABLE bind_invalid_stderr
+)
+set(bind_invalid_output "${bind_invalid_stdout}${bind_invalid_stderr}")
+if(bind_invalid_result EQUAL 0 OR
+   NOT bind_invalid_output MATCHES "Argonaut: Undefined argument: --selfhost-invalid-option")
+    message(FATAL_ERROR
+        "Binding commands were not validated by Argonaut-Wio.\n${bind_invalid_output}"
+    )
+endif()
+
+execute_process(
+    COMMAND "${WIO_EXE}" bind improt
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    RESULT_VARIABLE bind_typo_result
+    OUTPUT_VARIABLE bind_typo_stdout
+    ERROR_VARIABLE bind_typo_stderr
+)
+set(bind_typo_output "${bind_typo_stdout}${bind_typo_stderr}")
+if(bind_typo_result EQUAL 0 OR
+   NOT bind_typo_output MATCHES "Did you mean 'wio bind import'")
+    message(FATAL_ERROR
+        "Binding suggestions were not handled by Wio.\n${bind_typo_output}"
+    )
+endif()
+
 run_success("Native CLI recursion bridge" --native-cli --version)
 run_success("Raw stage-0 compiler path" "${WIO_SOURCE}" --dry-run)
 

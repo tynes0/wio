@@ -247,8 +247,10 @@ application.
    `perf smoke`, global help/version routing, nested help, and typo suggestions
    are Wio-owned. `env` parsing, help, rendering, and non-interactive previews
    are Wio-owned, while persistent mutation and detailed platform inspection
-   remain behind the native service boundary. Finish that tail, then transfer
-   `bind` and release `package`,
+   remain behind the native service boundary. `bind new/import` parsing,
+   required-option validation, help, and diagnostics are Wio-owned while the
+   header/manifest generator remains a native backend service. Finish those
+   backend tails, then transfer release `package`,
    establish pinned stage-0/generated-C++ bootstrap reproducibility, and
    remove the bridge and C++ argument parsers after parity is complete.
 

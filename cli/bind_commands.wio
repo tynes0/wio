@@ -1,0 +1,109 @@
+use argonaut;
+use common;
+use global_commands;
+use std::console as console;
+use std::result as result;
+
+realm SelfHostedBind {
+    fn Help() -> string {
+        let lines: string[] = [
+            "Wio binding commands\n\n",
+            "Usage:\n",
+            "  wio bind new    --manifest FILE [--output FILE]\n",
+            "  wio bind import --header FILE --realm NAME [--output FILE] [--header-include FILE] [--prefer-flagset]\n"
+        ];
+        return lines.Join("");
+    }
+
+    fn AddRequired(parser: ref Argonaut::Parser, id: string, alias: string, description: string)
+        -> std::Result<std::ResultUnit> {
+        mut argument = Argonaut::Argument(id);
+        argument.AddAlias(alias).SetDescription(description);
+        parser.Add?(argument.Required?());
+        return std::OkUnit();
+    }
+
+    fn AddOption(parser: ref Argonaut::Parser, id: string, alias: string, description: string)
+        -> std::Result<std::ResultUnit> {
+        mut argument = Argonaut::Argument(id);
+        argument.AddAlias(alias).SetDefaultValue("").SetDescription(description);
+        parser.Add?(argument);
+        return std::OkUnit();
+    }
+
+    fn AddFlag(parser: ref Argonaut::Parser, id: string, alias: string, description: string)
+        -> std::Result<std::ResultUnit> {
+        mut argument = Argonaut::Argument(id);
+        argument.AddAlias(alias).SetDescription(description);
+        parser.Add?(argument.Flag?());
+        return std::OkUnit();
+    }
+
+    fn Parser(action: string) -> std::Result<Argonaut::Parser> {
+        mut parser = Argonaut::Parser();
+        if (action == "new") {
+            AddRequired?(ref parser, "MANIFEST", "--manifest", "Path to the JSON binding manifest.");
+            AddOption?(ref parser, "OUTPUT", "--output", "Optional output .wio file override.");
+        }
+        else {
+            AddRequired?(ref parser, "HEADER", "--header", "Path to the C/C++ header to import.");
+            AddRequired?(ref parser, "REALM", "--realm", "Target Wio realm name for the generated bindings.");
+            AddOption?(ref parser, "OUTPUT", "--output", "Optional output .wio file override.");
+            AddOption?(
+                ref parser,
+                "HEADER-INCLUDE",
+                "--header-include",
+                "Header path string to place inside @CppHeader(...). Defaults to the header file name."
+            );
+            AddFlag?(ref parser, "PREFER-FLAGSET", "--prefer-flagset", "Treat imported enums as flagsets when possible.");
+        }
+        AddFlag?(ref parser, "HELP", "--help", "Show this help menu.");
+        AddFlag?(ref parser, "HELP-SHORT", "-h", "Show this help menu.");
+        AddFlag?(ref parser, "VERSION", "--version", "Show the Wio version.");
+        AddFlag?(ref parser, "VERSION-SHORT", "-v", "Show the Wio version.");
+        return std::Ok<Argonaut::Parser>(parser);
+    }
+
+    fn CommandArgs(action: string, args: string[]) -> string[] {
+        mut values: string[] = [$"wio bind ${action}"];
+        mut index = 3usize;
+        while (index < args.Count()) {
+            values.Push(args[index]);
+            index += 1usize;
+        }
+        return values;
+    }
+
+    fn Execute(args: string[]) -> std::Result<i32> {
+        if (args.Count() < 3usize or SelfHostedGlobal::IsHelp(args[2usize])) {
+            console::Print(Help());
+            return std::Ok<i32>(0);
+        }
+        if (SelfHostedGlobal::IsVersion(args[2usize])) {
+            return SelfHostedCli::RunNativeVersion(args[0usize]);
+        }
+
+        let action = args[2usize];
+        if (action != "new" and action != "import") {
+            let suggestion = SelfHostedCli::Suggest(action, ["new", "import"]);
+            mut message = $"Unknown bind subcommand: ${action}";
+            if (suggestion != "") {
+                message.Append($"\nDid you mean 'wio bind ${suggestion}'?");
+            }
+            message.Append("\nRun 'wio bind --help' to list available binding commands.");
+            return SelfHostedCli::Failure<i32>(message);
+        }
+
+        mut parser = Parser?(action);
+        parser.Parse?(CommandArgs(action, args));
+        if (parser.GetFlag("HELP") or parser.GetFlag("HELP-SHORT")) {
+            console::Print(parser.Help());
+            return std::Ok<i32>(0);
+        }
+        if (parser.GetFlag("VERSION") or parser.GetFlag("VERSION-SHORT")) {
+            return SelfHostedCli::RunNativeVersion(args[0usize]);
+        }
+
+        return SelfHostedCli::RunNativeCli(args);
+    }
+}

@@ -30,6 +30,14 @@ Notes:
   explicit native services until reusable cross-platform std APIs replace
   them.
 
+## Self-hosted binding CLI first wave
+
+- Wio owns the `bind new/import` group and subcommand contract, including
+  required inputs, optional output/header settings, flagset preference,
+  help/version handling, and typo suggestions.
+- Existing header and JSON-manifest binding generation executes as an explicit
+  native backend service after Wio validation.
+
 ## Core Language Foundations
 
 - [x] The first generic slice landed:

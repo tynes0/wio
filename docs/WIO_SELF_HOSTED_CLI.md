@@ -75,8 +75,13 @@ previews into Wio. Persistent user mutation and detailed status/doctor platform
 inspection currently cross the explicit native service boundary after Wio
 validation.
 
+The first binding wave moved the complete `bind new/import` command contract,
+required-option checks, help/version handling, and typo diagnostics into Wio.
+The mature C/C++ header and JSON-manifest generators remain a native backend
+service while their reusable parser/model layers are prepared for migration.
+
 The remaining migration work covers the platform-specific tail of environment
-management, binding generation, and release packaging.
+management, binding generator internals, and release packaging.
 
 Every migrated command needs:
 

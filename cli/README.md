@@ -25,6 +25,9 @@ Current ownership:
 - `env` argument parsing, group help, shell rendering, and non-interactive
   setup/removal previews are Wio-owned; persistent user mutation and detailed
   status/doctor probes temporarily use the native platform service;
+- `bind new/import` argument parsing, required-option validation, help/version,
+  and typo diagnostics are Wio-owned; header and manifest generation currently
+  use the native binding backend;
 - raw Wio compilation is deliberately delegated to the native stage-0
   compiler;
 - other tooling commands are routed through the companion, then bridged.
