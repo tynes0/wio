@@ -69,8 +69,14 @@ Global empty invocation, help rewriting, version routing, command
 classification, and typo suggestions are now Wio-owned as well. Direct source
 and raw compiler-option invocations continue to bypass the companion.
 
-The remaining migration work covers environment management, binding
-generation, and release packaging.
+The first environment wave moved all `env` argument parsing, group help,
+shell-command rendering, root discovery, and non-interactive setup/removal
+previews into Wio. Persistent user mutation and detailed status/doctor platform
+inspection currently cross the explicit native service boundary after Wio
+validation.
+
+The remaining migration work covers the platform-specific tail of environment
+management, binding generation, and release packaging.
 
 Every migrated command needs:
 

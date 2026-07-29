@@ -1,0 +1,297 @@
+use argonaut;
+use common;
+use global_commands;
+use std::console as console;
+use std::environment as environment;
+use std::fs as fs;
+use std::path as path;
+use std::process as process;
+use std::result as result;
+
+realm SelfHostedEnv {
+    fn Help() -> string {
+        let lines: string[] = [
+            "Wio environment commands\n\n",
+            "Usage:\n",
+            "  wio env print  [--wio-root DIR] [--shell powershell|cmd|sh] [--add-path]\n",
+            "  wio env setup  [--wio-root DIR] [--set-user] [--no-prompt] [--add-path]\n",
+            "  wio env status [--wio-root DIR]\n",
+            "  wio env remove [--wio-root DIR] [--shell powershell|cmd|sh] [--set-user] [--no-prompt] [--remove-path]\n",
+            "  wio env doctor [--wio-root DIR] [--backend-smoke]\n"
+        ];
+        return lines.Join("");
+    }
+
+    fn AddOption(parser: ref Argonaut::Parser, id: string, alias: string, fallback: string, description: string)
+        -> std::Result<std::ResultUnit> {
+        mut argument = Argonaut::Argument(id);
+        argument.AddAlias(alias).SetDefaultValue(fallback).SetDescription(description);
+        parser.Add?(argument);
+        return std::OkUnit();
+    }
+
+    fn AddFlag(parser: ref Argonaut::Parser, id: string, alias: string, description: string)
+        -> std::Result<std::ResultUnit> {
+        mut argument = Argonaut::Argument(id);
+        argument.AddAlias(alias).SetDescription(description);
+        parser.Add?(argument.Flag?());
+        return std::OkUnit();
+    }
+
+    fn DefaultShell() -> string {
+        return process::ExecutableSuffix() == ".exe" ? "powershell" : "sh";
+    }
+
+    fn Parser(action: string) -> std::Result<Argonaut::Parser> {
+        mut parser = Argonaut::Parser();
+        AddOption?(ref parser, "WIO-ROOT", "--wio-root", "", "Optional explicit Wio toolchain root.");
+        if (action == "print" or action == "remove") {
+            AddOption?(
+                ref parser,
+                "SHELL",
+                "--shell",
+                DefaultShell(),
+                action == "print"
+                    ? "Shell syntax to emit: powershell, cmd, or sh."
+                    : "Shell syntax to emit for preview mode: powershell, cmd, or sh."
+            );
+        }
+        if (action == "print" or action == "setup") {
+            AddFlag?(ref parser, "ADD-PATH", "--add-path", "Include the Wio bin directory in PATH.");
+        }
+        if (action == "setup" or action == "remove") {
+            AddFlag?(ref parser, "SET-USER", "--set-user", "Persist the environment change for the current user.");
+            AddFlag?(ref parser, "NO-PROMPT", "--no-prompt", "Do not ask interactive questions.");
+        }
+        if (action == "remove") {
+            AddFlag?(ref parser, "REMOVE-PATH", "--remove-path", "Also remove the Wio bin directory from PATH.");
+        }
+        if (action == "doctor") {
+            AddFlag?(ref parser, "BACKEND-SMOKE", "--backend-smoke", "Compile and run a tiny Wio backend probe.");
+        }
+        AddFlag?(ref parser, "HELP", "--help", "Show this help menu.");
+        AddFlag?(ref parser, "HELP-SHORT", "-h", "Show this help menu.");
+        AddFlag?(ref parser, "VERSION", "--version", "Show the Wio version.");
+        AddFlag?(ref parser, "VERSION-SHORT", "-v", "Show the Wio version.");
+        return std::Ok<Argonaut::Parser>(parser);
+    }
+
+    fn CommandArgs(action: string, args: string[]) -> string[] {
+        mut values: string[] = [$"wio env ${action}"];
+        mut index = 3usize;
+        while (index < args.Count()) {
+            values.Push(args[index]);
+            index += 1usize;
+        }
+        return values;
+    }
+
+    fn IsToolchainRoot(candidate: string) -> bool {
+        return fs::IsDirectory(path::Join(candidate, "std")) and
+            fs::IsDirectory(path::Join(candidate, "runtime")) and
+            fs::IsDirectory(path::Join(candidate, "sdk")) and
+            (fs::IsDirectory(path::Join(candidate, "bin")) or
+             fs::IsDirectory(path::Join(candidate, "compiler")) or
+             fs::IsDirectory(path::Join(candidate, "app")));
+    }
+
+    fn FindRootFrom(seed: string) -> string {
+        mut current = path::Absolute(seed);
+        while (current != "") {
+            if (IsToolchainRoot(current)) {
+                return current;
+            }
+            let parent = path::ParentPath(current);
+            if (parent == current) {
+                break;
+            }
+            current = parent;
+        }
+        return "";
+    }
+
+    fn ResolveRoot(selfPath: string, explicitRoot: string) -> string {
+        if (explicitRoot != "") {
+            let resolved = path::Absolute(explicitRoot);
+            return IsToolchainRoot(resolved) ? resolved : "";
+        }
+
+        let configuredRoot = environment::Get("WIO_ROOT", "");
+        if (configuredRoot != "") {
+            let resolved = FindRootFrom(configuredRoot);
+            if (resolved != "") { return resolved; }
+        }
+        let configuredHome = environment::Get("WIO_HOME", "");
+        if (configuredHome != "") {
+            let resolved = FindRootFrom(configuredHome);
+            if (resolved != "") { return resolved; }
+        }
+
+        let executableRoot = FindRootFrom(path::ParentPath(path::Absolute(selfPath)));
+        return executableRoot != "" ? executableRoot : FindRootFrom(fs::CurrentPath());
+    }
+
+    fn ResolveBin(selfPath: string, root: string) -> string {
+        let packaged = path::Join(root, "bin");
+        return fs::IsDirectory(packaged)
+            ? packaged
+            : path::ParentPath(path::Absolute(selfPath));
+    }
+
+    fn PowerShellEscape(value: string) -> string {
+        return value.Replace("'", "''");
+    }
+
+    fn ShellEscape(value: string) -> string {
+        return value.Replace("'", "'\"'\"'");
+    }
+
+    fn RenderSet(root: string, bin: string, shell: string, addPath: bool) -> std::Result<string> {
+        let shellId = shell.ToLower();
+        mut lines: string[] = [];
+        if (shellId == "powershell" or shellId == "pwsh" or shellId == "ps") {
+            lines.Push("$env:WIO_ROOT = '" + PowerShellEscape(root) + "'");
+            lines.Push("$env:WIO_HOME = '" + PowerShellEscape(root) + "'");
+            if (addPath) {
+                lines.Push("$env:Path = '" + PowerShellEscape(bin) + ";' + $env:Path");
+            }
+            return std::Ok<string>(lines.Join("\n"));
+        }
+        if (shellId == "cmd") {
+            lines.Push("set \"WIO_ROOT=" + root + "\"");
+            lines.Push("set \"WIO_HOME=" + root + "\"");
+            if (addPath) {
+                lines.Push("set \"PATH=" + bin + ";%PATH%\"");
+            }
+            return std::Ok<string>(lines.Join("\n"));
+        }
+        if (shellId == "sh" or shellId == "bash" or shellId == "zsh") {
+            lines.Push("export WIO_ROOT='" + ShellEscape(root) + "'");
+            lines.Push("export WIO_HOME='" + ShellEscape(root) + "'");
+            if (addPath) {
+                lines.Push("export PATH='" + ShellEscape(bin) + ":$PATH'");
+            }
+            return std::Ok<string>(lines.Join("\n"));
+        }
+        return SelfHostedCli::Failure<string>($"Unsupported shell '${shell}'. Expected powershell, cmd, or sh.");
+    }
+
+    fn RenderRemove(bin: string, shell: string, removePath: bool) -> std::Result<string> {
+        let shellId = shell.ToLower();
+        mut lines: string[] = [];
+        if (shellId == "powershell" or shellId == "pwsh" or shellId == "ps") {
+            lines.Push("Remove-Item Env:WIO_ROOT -ErrorAction SilentlyContinue");
+            lines.Push("Remove-Item Env:WIO_HOME -ErrorAction SilentlyContinue");
+            if (removePath) {
+                lines.Push("$wioBin = '" + PowerShellEscape(bin) + "'");
+                lines.Push("$env:Path = [string]::Join(';', (($env:Path -split ';') | Where-Object { $_ -and ([string]::Compare($_.TrimEnd('\\', '/'), $wioBin.TrimEnd('\\', '/'), $true) -ne 0) }))");
+            }
+            return std::Ok<string>(lines.Join("\n"));
+        }
+        if (shellId == "cmd") {
+            lines.Push("set \"WIO_ROOT=\"");
+            lines.Push("set \"WIO_HOME=\"");
+            if (removePath) {
+                lines.Push("REM Remove '" + bin + "' from PATH manually in this cmd.exe session.");
+            }
+            return std::Ok<string>(lines.Join("\n"));
+        }
+        if (shellId == "sh" or shellId == "bash" or shellId == "zsh") {
+            lines.Push("unset WIO_ROOT");
+            lines.Push("unset WIO_HOME");
+            if (removePath) {
+                lines.Push("export PATH=$(printf '%s' \"$PATH\" | awk -v RS=: -v ORS=: '$0 != \"" +
+                    ShellEscape(bin) + "\"' | sed 's/:$//')");
+            }
+            return std::Ok<string>(lines.Join("\n"));
+        }
+        return SelfHostedCli::Failure<string>($"Unsupported shell '${shell}'. Expected powershell, cmd, or sh.");
+    }
+
+    fn ExecutePreview(action: string, args: string[], parser: ref Argonaut::Parser) -> std::Result<i32> {
+        let rootArgument = parser.GetStringOr("WIO-ROOT", "");
+        let root = ResolveRoot(args[0usize], rootArgument);
+        if (root == "") {
+            return SelfHostedCli::Failure<i32>(
+                rootArgument == ""
+                    ? "Could not resolve a Wio toolchain root."
+                    : $"The provided WIO root does not look like a Wio toolchain root: ${path::Absolute(rootArgument)}"
+            );
+        }
+        let bin = ResolveBin(args[0usize], root);
+
+        if (action == "print") {
+            console::PrintLine!(RenderSet?(
+                root,
+                bin,
+                parser.GetStringOr("SHELL", DefaultShell()),
+                parser.GetFlag("ADD-PATH")
+            ));
+            return std::Ok<i32>(0);
+        }
+
+        if (action == "setup") {
+            console::PrintLine!("No persistent environment changes were applied.");
+            console::PrintLine!("This was a preview-only setup. If you want a persistent install, rerun with:");
+            mut command = "  wio env setup --wio-root " + root + " --set-user";
+            if (parser.GetFlag("ADD-PATH")) { command.Append(" --add-path"); }
+            console::PrintLine!(command);
+            console::PrintLine!("\nUse one of the following commands for the current shell:\n");
+            console::PrintLine!(RenderSet?(root, bin, DefaultShell(), parser.GetFlag("ADD-PATH")));
+            return std::Ok<i32>(0);
+        }
+
+        console::PrintLine!("No persistent environment changes were applied.");
+        console::PrintLine!("This was a preview-only removal. If you want a persistent cleanup, rerun with:");
+        mut command = "  wio env remove --wio-root " + root + " --set-user";
+        if (parser.GetFlag("REMOVE-PATH")) { command.Append(" --remove-path"); }
+        console::PrintLine!(command);
+        console::PrintLine!("\nUse one of the following commands for the current shell:\n");
+        console::PrintLine!(RenderRemove?(
+            bin,
+            parser.GetStringOr("SHELL", DefaultShell()),
+            parser.GetFlag("REMOVE-PATH")
+        ));
+        return std::Ok<i32>(0);
+    }
+
+    fn Execute(args: string[]) -> std::Result<i32> {
+        if (args.Count() < 3usize or SelfHostedGlobal::IsHelp(args[2usize])) {
+            console::Print(Help());
+            return std::Ok<i32>(0);
+        }
+        if (SelfHostedGlobal::IsVersion(args[2usize])) {
+            return SelfHostedCli::RunNativeVersion(args[0usize]);
+        }
+
+        let action = args[2usize];
+        if (action != "print" and action != "setup" and action != "status" and
+            action != "remove" and action != "doctor") {
+            let suggestion = SelfHostedCli::Suggest(action, ["print", "setup", "status", "remove", "doctor"]);
+            mut message = $"Unknown env subcommand: ${action}";
+            if (suggestion != "") {
+                message.Append($"\nDid you mean 'wio env ${suggestion}'?");
+            }
+            message.Append("\nRun 'wio env --help' to list available environment commands.");
+            return SelfHostedCli::Failure<i32>(message);
+        }
+
+        mut parser = Parser?(action);
+        parser.Parse?(CommandArgs(action, args));
+        if (parser.GetFlag("HELP") or parser.GetFlag("HELP-SHORT")) {
+            console::Print(parser.Help());
+            return std::Ok<i32>(0);
+        }
+        if (parser.GetFlag("VERSION") or parser.GetFlag("VERSION-SHORT")) {
+            return SelfHostedCli::RunNativeVersion(args[0usize]);
+        }
+
+        if (action == "print" or
+            (action == "setup" and parser.GetFlag("NO-PROMPT") and not parser.GetFlag("SET-USER")) or
+            (action == "remove" and parser.GetFlag("NO-PROMPT") and not parser.GetFlag("SET-USER"))) {
+            return ExecutePreview(action, args, ref parser);
+        }
+
+        return SelfHostedCli::RunNativeCli(args);
+    }
+}

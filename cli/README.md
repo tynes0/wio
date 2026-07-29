@@ -22,6 +22,9 @@ Current ownership:
   `perf smoke` are fully Wio-owned;
 - global help/version routing, nested help rewriting, and typo suggestions are
   fully Wio-owned;
+- `env` argument parsing, group help, shell rendering, and non-interactive
+  setup/removal previews are Wio-owned; persistent user mutation and detailed
+  status/doctor probes temporarily use the native platform service;
 - raw Wio compilation is deliberately delegated to the native stage-0
   compiler;
 - other tooling commands are routed through the companion, then bridged.

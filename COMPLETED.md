@@ -20,6 +20,16 @@ Notes:
 - Native version lookup uses the explicit stage-0 bridge and cannot recurse
   back into the self-hosted companion.
 
+## Self-hosted environment CLI first wave
+
+- Wio owns `env` group/subcommand parsing, help/version behavior, typo
+  suggestions, shell validation, root/bin discovery, and command rendering.
+- `env print` and non-interactive `setup/remove` previews execute entirely in
+  Wio.
+- Persistent user mutation and detailed status/doctor platform probes remain
+  explicit native services until reusable cross-platform std APIs replace
+  them.
+
 ## Core Language Foundations
 
 - [x] The first generic slice landed:

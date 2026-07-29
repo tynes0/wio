@@ -245,8 +245,10 @@ application.
    `project new/describe/build/run/test/package` lifecycle, `wio run`,
    `file run/check/tokens/ast`, repository `build/test`, `dev build/test`, and
    `perf smoke`, global help/version routing, nested help, and typo suggestions
-   are Wio-owned. Transfer argument ownership and behavior for
-   `env`, `bind`, and release `package`,
+   are Wio-owned. `env` parsing, help, rendering, and non-interactive previews
+   are Wio-owned, while persistent mutation and detailed platform inspection
+   remain behind the native service boundary. Finish that tail, then transfer
+   `bind` and release `package`,
    establish pinned stage-0/generated-C++ bootstrap reproducibility, and
    remove the bridge and C++ argument parsers after parity is complete.
 

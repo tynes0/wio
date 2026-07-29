@@ -122,6 +122,36 @@ if(perf_invalid_result EQUAL 0 OR
     )
 endif()
 
+execute_process(
+    COMMAND "${WIO_EXE}" env print --selfhost-invalid-option
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    RESULT_VARIABLE env_invalid_result
+    OUTPUT_VARIABLE env_invalid_stdout
+    ERROR_VARIABLE env_invalid_stderr
+)
+set(env_invalid_output "${env_invalid_stdout}${env_invalid_stderr}")
+if(env_invalid_result EQUAL 0 OR
+   NOT env_invalid_output MATCHES "Argonaut: Undefined argument: --selfhost-invalid-option")
+    message(FATAL_ERROR
+        "Environment commands were not validated by Argonaut-Wio.\n${env_invalid_output}"
+    )
+endif()
+
+execute_process(
+    COMMAND "${WIO_EXE}" env statsu
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    RESULT_VARIABLE env_typo_result
+    OUTPUT_VARIABLE env_typo_stdout
+    ERROR_VARIABLE env_typo_stderr
+)
+set(env_typo_output "${env_typo_stdout}${env_typo_stderr}")
+if(env_typo_result EQUAL 0 OR
+   NOT env_typo_output MATCHES "Did you mean 'wio env status'")
+    message(FATAL_ERROR
+        "Environment suggestions were not handled by Wio.\n${env_typo_output}"
+    )
+endif()
+
 run_success("Native CLI recursion bridge" --native-cli --version)
 run_success("Raw stage-0 compiler path" "${WIO_SOURCE}" --dry-run)
 

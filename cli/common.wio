@@ -33,6 +33,20 @@ realm SelfHostedCli {
         return Run(core, ["--native-cli", "--version"], fs::CurrentPath());
     }
 
+    fn RunNativeCli(args: string[]) -> std::Result<i32> {
+        let core = NativeCore(args[0usize]);
+        if (not fs::IsFile(core)) {
+            return Failure<i32>($"Self-hosted CLI could not find its native core: ${core}");
+        }
+        mut nativeArgs: string[] = ["--native-cli"];
+        mut index = 1usize;
+        while (index < args.Count()) {
+            nativeArgs.Push(args[index]);
+            index += 1usize;
+        }
+        return Run(core, nativeArgs, fs::CurrentPath());
+    }
+
     fn IsRepositoryRoot(candidate: string) -> bool {
         return fs::IsFile(path::Join(candidate, "CMakeLists.txt")) and
             fs::IsDirectory(path::Join(candidate, "compiler")) and
