@@ -11,9 +11,9 @@ A separately installed release is not required for ordinary development.
 2. During the same build it compiles `cli/main.wio` into the
    `wio-selfhost` companion.
 3. The native executable routes migrated commands to that companion.
-4. The companion uses the internal `--native-cli` bridge only for command
-   families that have not moved to Wio yet. Raw `.wio` compilation remains a
-   stage-0 compiler service.
+4. The companion uses the internal `--native-cli` bridge only for remaining
+   platform-heavy backend services. Raw `.wio` compilation remains a stage-0
+   compiler service.
 
 `--native-cli` exists solely to prevent recursive dispatch. It is not a public
 command contract. `WIO_FORCE_NATIVE_CLI=1` is the emergency/debug bypass.
@@ -36,9 +36,10 @@ an arbitrary Wio installation from the developer machine.
 
 ## Migration status
 
-Every recognized tooling command family now enters the Wio companion before
-using either Wio-owned behavior or the temporary bridge. Raw source/compiler
-invocations remain in the native stage-0 driver.
+Every recognized tooling command family now has Wio-owned parsing and enters
+the Wio companion before using either Wio-owned behavior or an explicit
+backend service. Raw source/compiler invocations remain in the native stage-0
+driver. The generic fallback path has been removed from `cli/main.wio`.
 
 The complete project lifecycle is Wio-owned:
 

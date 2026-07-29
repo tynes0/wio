@@ -11,9 +11,6 @@ use file_commands;
 use dev_commands;
 use perf_commands;
 use std::console as console;
-use std::fs as fs;
-use std::path as path;
-use std::process as process;
 use std::result as result;
 
 fn AddFlag(parser: ref Argonaut::Parser, id: string, aliases: string[], description: string) -> std::Result<std::ResultUnit> {
@@ -125,28 +122,6 @@ fn ValidateProjectCommand(args: string[]) -> std::Result<std::ResultUnit> {
         console::Print(parser.Help());
     }
     return std::OkUnit();
-}
-
-fn NativeCorePath(selfPath: string) -> string {
-    return path::Join(path::ParentPath(selfPath), "wio" + process::ExecutableSuffix());
-}
-
-fn ProxyNative(args: string[]) -> std::Result<i32> {
-    let core = NativeCorePath(args[0usize]);
-    if (not fs::IsFile(core)) {
-        return Argonaut::Fail<i32>(
-            Argonaut::ErrorKind::Parse,
-            $"Self-hosted CLI could not find its native core: ${core}"
-        );
-    }
-
-    mut nativeArgs: string[] = ["--native-cli"];
-    mut index = 1usize;
-    while (index < args.Count()) {
-        nativeArgs.Push(args[index]);
-        index += 1usize;
-    }
-    return process::Run(core, nativeArgs, fs::CurrentPath());
 }
 
 fn ExitResult(value: std::Result<i32>) -> i32 {

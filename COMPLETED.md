@@ -10,6 +10,14 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## Standard platform introspection
+
+- Added typed operating-system and CPU-architecture enums plus public
+  `std::platform` queries for pointer width, endian, hardware thread count,
+  path-list separator, and native newline.
+- Self-hosted environment commands now use platform identity directly instead
+  of inferring Windows from executable suffixes.
+
 ## Self-hosted global CLI dispatch
 
 - Empty invocation, global help, nested `wio help ...` rewriting, version

@@ -5,7 +5,7 @@ use std::console as console;
 use std::environment as environment;
 use std::fs as fs;
 use std::path as path;
-use std::process as process;
+use std::platform as platform;
 use std::result as result;
 
 realm SelfHostedEnv {
@@ -39,7 +39,7 @@ realm SelfHostedEnv {
     }
 
     fn DefaultShell() -> string {
-        return process::ExecutableSuffix() == ".exe" ? "powershell" : "sh";
+        return platform::IsWindows() ? "powershell" : "sh";
     }
 
     fn Parser(action: string) -> std::Result<Argonaut::Parser> {

@@ -1,0 +1,20 @@
+use std::console as console;
+use std::platform as platform;
+
+fn Entry() -> i32 {
+    let operatingSystem = platform::CurrentOperatingSystem();
+    let architecture = platform::CurrentArchitecture();
+    let names = platform::OperatingSystemName(operatingSystem) != "unknown" and
+        platform::ArchitectureName(architecture) != "unknown";
+    let pointerWidth = platform::PointerBits() == 32u32 or platform::PointerBits() == 64u32;
+    let separator = platform::PathListSeparator();
+    let separatorOkay = separator == ";" or separator == ":";
+    let newline = platform::NativeNewLine();
+    let newlineOkay = newline == "\n" or newline == "\r\n";
+    let family = platform::IsWindows() or platform::IsUnixLike();
+
+    console::Print(
+        $"Std platform: ${names}/${pointerWidth}/${separatorOkay}/${newlineOkay}/${family}"
+    );
+    return 0;
+}

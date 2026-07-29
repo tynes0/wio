@@ -5,8 +5,8 @@ frontend.
 
 - `main.wio` owns commands that have moved to Wio.
 - `vendor/argonaut.wio` is the bootstrap-compatible Argonaut-Wio surface.
-- the native `wio` executable remains the stage-0 source compiler and temporary
-  fallback for command families not migrated yet.
+- the native `wio` executable remains the stage-0 source compiler and backend
+  service host for platform-heavy command internals not migrated yet.
 - `--native-cli` is an internal recursion-breaking bridge and is not a public
   command.
 
@@ -33,4 +33,5 @@ Current ownership:
   installer generation currently use the native release backend;
 - raw Wio compilation is deliberately delegated to the native stage-0
   compiler;
-- other tooling commands are routed through the companion, then bridged.
+- remaining environment, binding-generator, and release-packager internals use
+  explicit backend service calls after Wio-owned parsing and validation.

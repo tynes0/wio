@@ -1862,6 +1862,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_std_platform_run
+        "${CMAKE_SOURCE_DIR}/tests/std_platform_run.wio"
+        "Std platform: true/true/true/true/true"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_std_console_surface_run
         "${CMAKE_SOURCE_DIR}/tests/std_console_surface_run.wio"
         "Std console surface: 1,2,3 xxx a/b"

@@ -1,5 +1,6 @@
 #include "std_process.h"
 
+#include <bit>
 #include <cctype>
 #include <cerrno>
 #include <cstdlib>
@@ -7,6 +8,7 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <thread>
 
 #if !defined(_WIN32)
     #include <sys/wait.h>
@@ -212,6 +214,104 @@ namespace wio::runtime::std_process
 #endif
 
         return true;
+    }
+}
+
+namespace wio::runtime::std_platform
+{
+    OperatingSystem CurrentOperatingSystem() noexcept
+    {
+#if defined(_WIN32)
+        return OperatingSystem::windows;
+#elif defined(__APPLE__) && defined(__MACH__)
+        return OperatingSystem::macos;
+#elif defined(__linux__)
+        return OperatingSystem::linux;
+#elif defined(__unix__)
+        return OperatingSystem::unix_like;
+#else
+        return OperatingSystem::unknown;
+#endif
+    }
+
+    Architecture CurrentArchitecture() noexcept
+    {
+#if defined(__wasm64__)
+        return Architecture::wasm64;
+#elif defined(__wasm32__)
+        return Architecture::wasm32;
+#elif defined(_M_ARM64) || defined(__aarch64__)
+        return Architecture::arm64;
+#elif defined(_M_ARM) || defined(__arm__)
+        return Architecture::arm32;
+#elif defined(_M_X64) || defined(__x86_64__) || defined(__amd64__)
+        return Architecture::x64;
+#elif defined(_M_IX86) || defined(__i386__)
+        return Architecture::x86;
+#else
+        return Architecture::unknown;
+#endif
+    }
+
+    const char* OperatingSystemName(const OperatingSystem value) noexcept
+    {
+        switch (value)
+        {
+        case OperatingSystem::windows: return "windows";
+        case OperatingSystem::linux: return "linux";
+        case OperatingSystem::macos: return "macos";
+        case OperatingSystem::unix_like: return "unix";
+        case OperatingSystem::unknown: break;
+        }
+        return "unknown";
+    }
+
+    const char* ArchitectureName(const Architecture value) noexcept
+    {
+        switch (value)
+        {
+        case Architecture::x86: return "x86";
+        case Architecture::x64: return "x64";
+        case Architecture::arm32: return "arm32";
+        case Architecture::arm64: return "arm64";
+        case Architecture::wasm32: return "wasm32";
+        case Architecture::wasm64: return "wasm64";
+        case Architecture::unknown: break;
+        }
+        return "unknown";
+    }
+
+    std::uint32_t PointerBits() noexcept
+    {
+        return static_cast<std::uint32_t>(sizeof(void*) * 8u);
+    }
+
+    bool IsLittleEndian() noexcept
+    {
+        return std::endian::native == std::endian::little;
+    }
+
+    std::uint32_t HardwareThreadCount() noexcept
+    {
+        return std::thread::hardware_concurrency();
+    }
+
+    std::string PathListSeparator()
+    {
+#if defined(_WIN32)
+        return ";";
+#else
+        return ":";
+#endif
+    }
+
+    std::string NativeNewLine()
+    {
+#if defined(_WIN32)
+        return "\r\n";
+#else
+        return "\n";
+#endif
     }
 }
 

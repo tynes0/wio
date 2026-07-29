@@ -1,0 +1,84 @@
+realm std {
+    realm platform {
+        use @CppHeader("std_process.h");
+
+        @Native
+        @Type(u8)
+        @CppName(wio::runtime::std_platform::OperatingSystem)
+        enum OperatingSystem {
+            unknown = 0u8,
+            windows = 1u8,
+            linux = 2u8,
+            macos = 3u8,
+            unix_like = 4u8
+        };
+
+        @Native
+        @Type(u8)
+        @CppName(wio::runtime::std_platform::Architecture)
+        enum Architecture {
+            unknown = 0u8,
+            x86 = 1u8,
+            x64 = 2u8,
+            arm32 = 3u8,
+            arm64 = 4u8,
+            wasm32 = 5u8,
+            wasm64 = 6u8
+        };
+
+        @Native
+        @CppName(wio::runtime::std_platform::CurrentOperatingSystem)
+        fn CurrentOperatingSystem() -> OperatingSystem;
+
+        @Native
+        @CppName(wio::runtime::std_platform::CurrentArchitecture)
+        fn CurrentArchitecture() -> Architecture;
+
+        @Native
+        @CppName(wio::runtime::std_platform::OperatingSystemName)
+        fn OperatingSystemName(value: OperatingSystem) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_platform::ArchitectureName)
+        fn ArchitectureName(value: Architecture) -> string;
+
+        @Native
+        @CppName(wio::runtime::std_platform::PointerBits)
+        fn PointerBits() -> u32;
+
+        @Native
+        @CppName(wio::runtime::std_platform::IsLittleEndian)
+        fn IsLittleEndian() -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_platform::HardwareThreadCount)
+        fn HardwareThreadCount() -> u32;
+
+        @Native
+        @CppName(wio::runtime::std_platform::PathListSeparator)
+        fn PathListSeparator() -> string;
+
+        @Native
+        @CppName(wio::runtime::std_platform::NativeNewLine)
+        fn NativeNewLine() -> string;
+
+        fn IsWindows() -> bool {
+            return CurrentOperatingSystem() == OperatingSystem::windows;
+        }
+
+        fn IsLinux() -> bool {
+            return CurrentOperatingSystem() == OperatingSystem::linux;
+        }
+
+        fn IsMacOS() -> bool {
+            return CurrentOperatingSystem() == OperatingSystem::macos;
+        }
+
+        fn IsUnixLike() -> bool {
+            let current = CurrentOperatingSystem();
+            return current == OperatingSystem::linux or
+                current == OperatingSystem::macos or
+                current == OperatingSystem::unix_like;
+        }
+    }
+}

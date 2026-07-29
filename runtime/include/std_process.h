@@ -44,3 +44,36 @@ namespace wio::runtime::std_environment
     [[nodiscard]] std::string HomeDirectory();
     [[nodiscard]] std::string CacheDirectory();
 }
+
+namespace wio::runtime::std_platform
+{
+    enum class OperatingSystem : std::uint8_t
+    {
+        unknown = 0,
+        windows = 1,
+        linux = 2,
+        macos = 3,
+        unix_like = 4
+    };
+
+    enum class Architecture : std::uint8_t
+    {
+        unknown = 0,
+        x86 = 1,
+        x64 = 2,
+        arm32 = 3,
+        arm64 = 4,
+        wasm32 = 5,
+        wasm64 = 6
+    };
+
+    [[nodiscard]] OperatingSystem CurrentOperatingSystem() noexcept;
+    [[nodiscard]] Architecture CurrentArchitecture() noexcept;
+    [[nodiscard]] const char* OperatingSystemName(OperatingSystem value) noexcept;
+    [[nodiscard]] const char* ArchitectureName(Architecture value) noexcept;
+    [[nodiscard]] std::uint32_t PointerBits() noexcept;
+    [[nodiscard]] bool IsLittleEndian() noexcept;
+    [[nodiscard]] std::uint32_t HardwareThreadCount() noexcept;
+    [[nodiscard]] std::string PathListSeparator();
+    [[nodiscard]] std::string NativeNewLine();
+}

@@ -3083,6 +3083,7 @@ Common current modules include:
 - `std::fs`
 - `std::path`
 - `std::environment`
+- `std::platform`
 - `std::statistics`
 - `std::algorithms`
 - `std::assert`

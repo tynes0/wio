@@ -181,7 +181,9 @@ application.
 14. [ ] Add OS/application facilities.
     Environment variables, process pipes, signals, filesystem watching,
     clipboard, notifications, dialogs, user/config/cache directories, dynamic
-    libraries, and platform capability queries.
+    libraries, and platform capability queries. Basic OS/architecture,
+    pointer-width, endian, hardware-thread, path-list separator, and native
+    newline queries now exist in `std::platform`.
 
 15. [ ] Add data and utility modules.
     Date/time formatting, decimal/big integer, compression/archive, MIME,
