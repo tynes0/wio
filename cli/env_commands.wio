@@ -6,6 +6,7 @@ use std::environment as environment;
 use std::fs as fs;
 use std::path as path;
 use std::platform as platform;
+use std::process as process;
 use std::result as result;
 
 realm SelfHostedEnv {
@@ -255,6 +256,233 @@ realm SelfHostedEnv {
         return std::Ok<i32>(0);
     }
 
+    fn NormalizePath(value: string) -> string {
+        mut normalized = value.Trim().Replace("\\", "/");
+        while (normalized.Count() > 1usize and normalized.EndsWith("/")) {
+            normalized = normalized.Take(normalized.Count() - 1usize);
+        }
+        return platform::IsWindows() ? normalized.ToLower() : normalized;
+    }
+
+    fn ProcessPathContains(bin: string) -> bool {
+        let processPath = environment::Get("Path", environment::Get("PATH", ""));
+        if (processPath == "") { return false; }
+        let expected = NormalizePath(bin);
+        for entry in processPath.Split(platform::PathListSeparator()) {
+            if (NormalizePath(entry) == expected) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    fn PromptYesNo(prompt: string) -> std::Result<bool> {
+        let response = console::Input?(prompt + " [y/N] ");
+        let normalized = response.Trim().ToLower();
+        return std::Ok<bool>(normalized == "y" or normalized == "yes");
+    }
+
+    fn ResolveRootAndBin(args: string[], parser: ref Argonaut::Parser, root: ref string, bin: ref string)
+        -> std::Result<std::ResultUnit> {
+        let rootArgument = parser.GetStringOr("WIO-ROOT", "");
+        root = ResolveRoot(args[0usize], rootArgument);
+        if (root == "") {
+            return SelfHostedCli::Failure<std::ResultUnit>(
+                rootArgument == ""
+                    ? "Could not resolve a Wio toolchain root."
+                    : $"The provided WIO root does not look like a Wio toolchain root: ${path::Absolute(rootArgument)}"
+            );
+        }
+        bin = ResolveBin(args[0usize], root);
+        return std::OkUnit();
+    }
+
+    fn Setup(args: string[], parser: ref Argonaut::Parser) -> std::Result<i32> {
+        mut root = "";
+        mut bin = "";
+        ResolveRootAndBin?(args, parser, ref root, ref bin);
+
+        mut setUser = parser.GetFlag("SET-USER");
+        mut addPath = parser.GetFlag("ADD-PATH");
+        let noPrompt = parser.GetFlag("NO-PROMPT");
+        if (not setUser and not noPrompt) {
+            setUser = PromptYesNo?("Persist WIO_ROOT and WIO_HOME for the current user?");
+        }
+        if (setUser and not addPath and not noPrompt) {
+            addPath = PromptYesNo?("Add the Wio bin directory to PATH for the current user?");
+        }
+        if (not setUser) {
+            return ExecutePreview("setup", args, parser);
+        }
+
+        if (not environment::SetUser("WIO_ROOT", root) or
+            not environment::SetUser("WIO_HOME", root)) {
+            return SelfHostedCli::Failure<i32>("Could not persist WIO_ROOT and WIO_HOME for the current user.");
+        }
+        if (addPath and not environment::AddUserPath(bin)) {
+            return SelfHostedCli::Failure<i32>($"Could not add the Wio bin directory to the user PATH: ${bin}");
+        }
+        environment::Set("WIO_ROOT", root);
+        environment::Set("WIO_HOME", root);
+
+        console::PrintLine!("Updated user environment for Wio.");
+        console::PrintLine!($"WIO_ROOT=${root}");
+        console::PrintLine!($"WIO_HOME=${root}");
+        if (addPath) {
+            console::PrintLine!($"PATH includes ${bin}");
+        }
+        console::PrintLine!("Open a new terminal to pick up the persistent PATH changes cleanly.");
+        return std::Ok<i32>(0);
+    }
+
+    fn RemovePersistent(args: string[], parser: ref Argonaut::Parser) -> std::Result<i32> {
+        mut root = "";
+        mut bin = "";
+        ResolveRootAndBin?(args, parser, ref root, ref bin);
+
+        mut setUser = parser.GetFlag("SET-USER");
+        mut removePath = parser.GetFlag("REMOVE-PATH");
+        let noPrompt = parser.GetFlag("NO-PROMPT");
+        if (not setUser and not noPrompt) {
+            setUser = PromptYesNo?("Remove persistent Wio environment values for the current user?");
+        }
+        if (setUser and not removePath and not noPrompt) {
+            removePath = PromptYesNo?("Also remove the Wio bin directory from PATH?");
+        }
+        if (not setUser) {
+            return ExecutePreview("remove", args, parser);
+        }
+
+        if (not environment::RemoveUser("WIO_ROOT") or
+            not environment::RemoveUser("WIO_HOME")) {
+            return SelfHostedCli::Failure<i32>("Could not remove persistent Wio environment values.");
+        }
+        if (removePath and not environment::RemoveUserPath(bin)) {
+            return SelfHostedCli::Failure<i32>($"Could not remove the Wio bin directory from the user PATH: ${bin}");
+        }
+        environment::Remove("WIO_ROOT");
+        environment::Remove("WIO_HOME");
+
+        console::PrintLine!("Removed persistent Wio environment values for the current user.");
+        if (removePath) {
+            console::PrintLine!($"PATH no longer includes ${bin}");
+        }
+        console::PrintLine!("Open a new terminal to observe the cleaned environment.");
+        return std::Ok<i32>(0);
+    }
+
+    fn Status(args: string[], parser: ref Argonaut::Parser) -> std::Result<i32> {
+        mut root = "";
+        mut bin = "";
+        ResolveRootAndBin?(args, parser, ref root, ref bin);
+
+        let processRoot = environment::Get("WIO_ROOT", "<unset>");
+        let processHome = environment::Get("WIO_HOME", "<unset>");
+        let userRoot = environment::GetUser("WIO_ROOT", "<unset>");
+        let userHome = environment::GetUser("WIO_HOME", "<unset>");
+        let processPathState = ProcessPathContains(bin) ? "yes" : "no";
+        let userPathState = environment::UserPathContains(bin) ? "yes" : "no";
+
+        console::PrintLine!("Wio environment status\n");
+        console::PrintLine!($"Resolved toolchain root : ${root}");
+        console::PrintLine!($"Resolved bin directory  : ${bin}\n");
+        console::PrintLine!("Current process");
+        console::PrintLine!($"  WIO_ROOT              : ${processRoot}");
+        console::PrintLine!($"  WIO_HOME              : ${processHome}");
+        console::PrintLine!($"  PATH contains Wio bin : ${processPathState}\n");
+        let duplicates = environment::DuplicateKeys();
+        if (platform::IsWindows()) {
+            console::PrintLine!(
+                duplicates.Empty()
+                    ? "Current shell duplicate env keys : none\n"
+                    : "Current shell duplicate env keys : " + duplicates.Join(", ") + "\n"
+            );
+        }
+        console::PrintLine!(
+            platform::IsWindows()
+                ? "Persistent user environment (registry)"
+                : "Persistent user environment (.profile)"
+        );
+        console::PrintLine!($"  WIO_ROOT              : ${userRoot}");
+        console::PrintLine!($"  WIO_HOME              : ${userHome}");
+        console::PrintLine!($"  PATH contains Wio bin : ${userPathState}");
+        return std::Ok<i32>(0);
+    }
+
+    fn BackendSmoke(args: string[]) -> std::Result<bool> {
+        let repositoryRoot = SelfHostedCli::FindRepositoryRoot(args[0usize]);
+        let scratch = repositoryRoot == ""
+            ? path::JoinAll([environment::CacheDirectory(), "Wio", "doctor"])
+            : path::JoinAll([repositoryRoot, ".wio-build", "doctor"]);
+        if (not fs::EnsureDirectory(scratch)) {
+            return SelfHostedCli::Failure<bool>($"Could not create Wio doctor directory: ${scratch}");
+        }
+        let source = path::Join(scratch, "backend-smoke.wio");
+        let output = path::Join(scratch, "backend-smoke" + process::ExecutableSuffix());
+        let sourceLines: string[] = [
+            "use std::console as console;\n\n",
+            "fn Entry() -> i32 {\n",
+            "    console::PrintLine!(\"Wio backend smoke ok\");\n",
+            "    return 0;\n",
+            "}\n"
+        ];
+        let sourceText = sourceLines.Join("");
+        if (not fs::WriteText(source, sourceText)) {
+            return SelfHostedCli::Failure<bool>($"Could not write Wio doctor source: ${source}");
+        }
+        let exitCode = SelfHostedCli::Run?(
+            SelfHostedCli::NativeCore(args[0usize]),
+            [source, "--run", "--output", output, "--intermediate-dir", scratch],
+            scratch
+        );
+        fs::RemoveAll(scratch);
+        return std::Ok<bool>(exitCode == 0);
+    }
+
+    fn Doctor(args: string[], parser: ref Argonaut::Parser) -> std::Result<i32> {
+        mut root = "";
+        mut bin = "";
+        ResolveRootAndBin?(args, parser, ref root, ref bin);
+        mut issues: string[] = [];
+        if (not ProcessPathContains(bin)) {
+            issues.Push("The current shell PATH does not contain the active Wio bin directory.");
+        }
+        if (not environment::HasUser("WIO_ROOT") or not environment::HasUser("WIO_HOME")) {
+            issues.Push("The persistent user environment is missing WIO_ROOT and/or WIO_HOME.");
+        }
+        if (not environment::UserPathContains(bin)) {
+            issues.Push("The persistent user PATH does not contain the Wio bin directory.");
+        }
+        if (not environment::DuplicateKeys().Empty()) {
+            issues.Push("The current shell exposes duplicate environment keys (for example Path/PATH), which can break MSBuild and other .NET tools on Windows.");
+        }
+
+        console::PrintLine!("Wio environment doctor\n");
+        if (issues.Empty()) {
+            console::PrintLine!("No obvious environment problems were detected.");
+        }
+        else {
+            console::PrintLine!("Detected issues:");
+            for issue in issues {
+                console::PrintLine!($"- ${issue}");
+            }
+        }
+        console::PrintLine!($"\nRecommended persistent install command:\nwio env setup --wio-root ${root} --set-user --add-path");
+        console::PrintLine!($"\nRecommended persistent cleanup command:\nwio env remove --wio-root ${root} --set-user --remove-path");
+
+        if (parser.GetFlag("BACKEND-SMOKE")) {
+            console::PrintLine!("\nBackend smoke:");
+            if (BackendSmoke?(args)) {
+                console::PrintLine!("- Success: compile + run passed.");
+            }
+            else {
+                console::PrintLine!("- Failed.");
+                return std::Ok<i32>(1);
+            }
+        }
+        return std::Ok<i32>(0);
+    }
+
     fn Execute(args: string[]) -> std::Result<i32> {
         if (args.Count() < 3usize or SelfHostedGlobal::IsHelp(args[2usize])) {
             console::Print(Help());
@@ -286,12 +514,10 @@ realm SelfHostedEnv {
             return SelfHostedCli::RunNativeVersion(args[0usize]);
         }
 
-        if (action == "print" or
-            (action == "setup" and parser.GetFlag("NO-PROMPT") and not parser.GetFlag("SET-USER")) or
-            (action == "remove" and parser.GetFlag("NO-PROMPT") and not parser.GetFlag("SET-USER"))) {
-            return ExecutePreview(action, args, ref parser);
-        }
-
-        return SelfHostedCli::RunNativeCli(args);
+        if (action == "print") { return ExecutePreview(action, args, ref parser); }
+        if (action == "setup") { return Setup(args, ref parser); }
+        if (action == "remove") { return RemovePersistent(args, ref parser); }
+        if (action == "status") { return Status(args, ref parser); }
+        return Doctor(args, ref parser);
     }
 }

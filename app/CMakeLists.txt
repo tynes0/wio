@@ -676,6 +676,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_test(
+        NAME wio_test_env_cli_backend_smoke
+        COMMAND $<TARGET_FILE:wio_app> env doctor --wio-root "${CMAKE_SOURCE_DIR}" --backend-smoke
+    )
+    set_tests_properties(
+        wio_test_env_cli_backend_smoke
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            TIMEOUT 120
+    )
+
+    add_test(
         NAME wio_test_cli_help_smoke
         COMMAND
             ${CMAKE_COMMAND}
@@ -1857,7 +1868,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_output_test(
         wio_test_std_environment_statistics_run
         "${CMAKE_SOURCE_DIR}/tests/std_environment_statistics_run.wio"
-        "Std environment/statistics: true/true/true/true/true/true"
+        "Std environment/statistics: true/true/true/true/true/true/true"
         --run
     )
 

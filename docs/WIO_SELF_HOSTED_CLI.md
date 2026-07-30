@@ -70,11 +70,12 @@ Global empty invocation, help rewriting, version routing, command
 classification, and typo suggestions are now Wio-owned as well. Direct source
 and raw compiler-option invocations continue to bypass the companion.
 
-The first environment wave moved all `env` argument parsing, group help,
-shell-command rendering, root discovery, and non-interactive setup/removal
-previews into Wio. Persistent user mutation and detailed status/doctor platform
-inspection currently cross the explicit native service boundary after Wio
-validation.
+The complete environment family is Wio-owned: argument parsing, group help,
+shell-command rendering, root discovery, interactive and non-interactive
+setup/removal, persistent user environment/PATH mutation, status inspection,
+diagnostics, and the backend smoke probe. Reusable process/user environment
+operations live in public `std::environment`; Windows uses the user Environment
+registry and POSIX uses a managed `.profile` block.
 
 The first binding wave moved the complete `bind new/import` command contract,
 required-option checks, help/version handling, and typo diagnostics into Wio.
@@ -86,8 +87,8 @@ help/version handling, and incompatible installer-option validation into Wio.
 Distribution staging, portable-toolchain copying, archive generation, and
 installer generation remain a native backend service.
 
-The remaining migration work covers the platform-specific tail of environment
-management, binding generator internals, and release-package backend internals.
+The remaining migration work covers binding generator internals and
+release-package backend internals.
 
 Every migrated command needs:
 

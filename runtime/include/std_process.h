@@ -40,6 +40,13 @@ namespace wio::runtime::std_environment
     [[nodiscard]] bool TryGet(std::string_view name, std::string& value) noexcept;
     [[nodiscard]] bool Set(std::string_view name, std::string_view value) noexcept;
     [[nodiscard]] bool Remove(std::string_view name) noexcept;
+    [[nodiscard]] bool TryGetUser(std::string_view name, std::string& value) noexcept;
+    [[nodiscard]] bool SetUser(std::string_view name, std::string_view value) noexcept;
+    [[nodiscard]] bool RemoveUser(std::string_view name) noexcept;
+    [[nodiscard]] bool UserPathContains(std::string_view entry) noexcept;
+    [[nodiscard]] bool AddUserPath(std::string_view entry) noexcept;
+    [[nodiscard]] bool RemoveUserPath(std::string_view entry) noexcept;
+    [[nodiscard]] std::vector<std::string> DuplicateKeys();
     [[nodiscard]] std::string TemporaryDirectory();
     [[nodiscard]] std::string HomeDirectory();
     [[nodiscard]] std::string CacheDirectory();

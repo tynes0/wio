@@ -15,6 +15,34 @@ realm std {
         fn Remove(name: string) -> bool;
 
         @Native
+        @CppName(wio::runtime::std_environment::TryGetUser)
+        fn TryGetUser(name: string, value: ref string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_environment::SetUser)
+        fn SetUser(name: string, value: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_environment::RemoveUser)
+        fn RemoveUser(name: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_environment::UserPathContains)
+        fn UserPathContains(entry: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_environment::AddUserPath)
+        fn AddUserPath(entry: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_environment::RemoveUserPath)
+        fn RemoveUserPath(entry: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_environment::DuplicateKeys)
+        fn DuplicateKeys() -> string[];
+
+        @Native
         @CppName(wio::runtime::std_environment::TemporaryDirectory)
         fn TemporaryDirectory() -> string;
 
@@ -41,6 +69,20 @@ realm std {
         fn Has(name: string) -> bool {
             mut value = "";
             return TryGet(name, ref value);
+        }
+
+        fn GetUser(name: string, fallback: string) -> string {
+            mut value = "";
+            return TryGetUser(name, ref value) ? value : fallback;
+        }
+
+        fn GetUser(name: string) -> string {
+            return GetUser(name, "");
+        }
+
+        fn HasUser(name: string) -> bool {
+            mut value = "";
+            return TryGetUser(name, ref value);
         }
     }
 }

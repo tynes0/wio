@@ -247,9 +247,9 @@ application.
    `project new/describe/build/run/test/package` lifecycle, `wio run`,
    `file run/check/tokens/ast`, repository `build/test`, `dev build/test`, and
    `perf smoke`, global help/version routing, nested help, and typo suggestions
-   are Wio-owned. `env` parsing, help, rendering, and non-interactive previews
-   are Wio-owned, while persistent mutation and detailed platform inspection
-   remain behind the native service boundary. `bind new/import` parsing,
+   are Wio-owned. The complete `env print/setup/status/remove/doctor` family,
+   including persistent user environment/PATH management and backend smoke,
+   is Wio-owned. `bind new/import` parsing,
    required-option validation, help, and diagnostics are Wio-owned while the
    header/manifest generator remains a native backend service. Release
    `package` parsing and validation are Wio-owned while distribution/archive/

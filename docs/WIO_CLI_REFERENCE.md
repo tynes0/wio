@@ -327,6 +327,8 @@ generation.
 ## 7. `wio env`
 
 `wio env` handles environment setup for repo-local and packaged toolchains.
+Its complete command behavior is implemented in Wio using the public
+`std::environment` and `std::platform` modules.
 
 Subcommands:
 

@@ -11,6 +11,12 @@ fn Entry() -> i32 {
     let removed = environment::Remove(variableName) and not environment::Has(variableName);
     let directories = environment::TemporaryDirectory() != "" and
         environment::CacheDirectory() != "";
+    mut ignoredUserValue = "";
+    let userGuards = not environment::TryGetUser("", ref ignoredUserValue) and
+        not environment::SetUser("", "value") and
+        not environment::RemoveUser("") and
+        not environment::AddUserPath("") and
+        not environment::RemoveUserPath("");
 
     let summary = statistics::Calculate([1.0f64, 2.0f64, 3.0f64, 4.0f64]);
     let statisticsOkay = summary.count == 4usize and
@@ -19,7 +25,7 @@ fn Entry() -> i32 {
         summary.maximum == 4.0f64 and summary.populationVariance == 1.25f64;
 
     console::Print(
-        $"Std environment/statistics: ${absent}/${set}/${read}/${removed}/${directories}/${statisticsOkay}"
+        $"Std environment/statistics: ${absent}/${set}/${read}/${removed}/${directories}/${statisticsOkay}/${userGuards}"
     );
     return 0;
 }

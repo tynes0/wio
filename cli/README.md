@@ -22,9 +22,8 @@ Current ownership:
   `perf smoke` are fully Wio-owned;
 - global help/version routing, nested help rewriting, and typo suggestions are
   fully Wio-owned;
-- `env` argument parsing, group help, shell rendering, and non-interactive
-  setup/removal previews are Wio-owned; persistent user mutation and detailed
-  status/doctor probes temporarily use the native platform service;
+- the complete `env print/setup/status/remove/doctor` family is Wio-owned,
+  backed by reusable `std::environment` process/user/PATH APIs;
 - `bind new/import` argument parsing, required-option validation, help/version,
   and typo diagnostics are Wio-owned; header and manifest generation currently
   use the native binding backend;
@@ -33,5 +32,5 @@ Current ownership:
   installer generation currently use the native release backend;
 - raw Wio compilation is deliberately delegated to the native stage-0
   compiler;
-- remaining environment, binding-generator, and release-packager internals use
-  explicit backend service calls after Wio-owned parsing and validation.
+- remaining binding-generator and release-packager internals use explicit
+  backend service calls after Wio-owned parsing and validation.
