@@ -1,6 +1,5 @@
 #include "binding_cli.h"
 #include "compiler.h"
-#include "package_cli.h"
 #include "process_cli.h"
 
 #include <cstdlib>
@@ -57,13 +56,6 @@ namespace
                 static_cast<int>(view.size()), view.data());
             return result.value_or(1);
         }
-        if (service == "package")
-        {
-            const auto result = wio::tooling::package::tryHandlePackageCommand(
-                static_cast<int>(view.size()), view.data());
-            return result.value_or(1);
-        }
-
         std::cerr << "Unknown Wio compiler service: " << service << '\n';
         return 1;
     }

@@ -157,6 +157,52 @@ namespace wio::runtime::std_process
         return ".a";
     }
 
+    std::string WhichExecutable(const std::string_view name)
+    {
+        if (name.empty())
+            return {};
+        const std::filesystem::path requested{ std::string(name) };
+        std::error_code ec;
+        if (requested.has_parent_path() && std::filesystem::is_regular_file(requested, ec))
+            return std::filesystem::absolute(requested, ec).lexically_normal().generic_string();
+
+        const char* pathValue = std::getenv(
+#if defined(_WIN32)
+            "Path"
+#else
+            "PATH"
+#endif
+        );
+        if (pathValue == nullptr)
+            return {};
+
+#if defined(_WIN32)
+        constexpr char separator = ';';
+        const std::vector<std::string> suffixes = requested.has_extension()
+            ? std::vector<std::string>{ "" }
+            : std::vector<std::string>{ "", ".exe", ".cmd", ".bat" };
+#else
+        constexpr char separator = ':';
+        const std::vector<std::string> suffixes{ "" };
+#endif
+        std::stringstream paths(pathValue);
+        std::string directory;
+        while (std::getline(paths, directory, separator))
+        {
+            if (directory.empty())
+                continue;
+            for (const auto& suffix : suffixes)
+            {
+                ec.clear();
+                const std::filesystem::path candidate =
+                    std::filesystem::path(directory) / (std::string(name) + suffix);
+                if (std::filesystem::is_regular_file(candidate, ec) && !ec)
+                    return std::filesystem::absolute(candidate, ec).lexically_normal().generic_string();
+            }
+        }
+        return {};
+    }
+
     bool TryRunResult(
         const std::string_view program,
         const std::vector<std::string>& args,

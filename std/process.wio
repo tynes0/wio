@@ -40,6 +40,10 @@ realm std {
         fn StaticLibrarySuffix() -> string;
 
         @Native
+        @CppName(wio::runtime::std_process::WhichExecutable)
+        fn FindExecutable(name: string) -> string;
+
+        @Native
         @CppName(wio::runtime::std_process::TryRunResult)
         fn TryRunResultNative(
             command: string,

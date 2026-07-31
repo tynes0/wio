@@ -24,6 +24,7 @@ namespace wio::runtime::std_process
     [[nodiscard]] std::string ExecutableSuffix();
     [[nodiscard]] std::string SharedLibrarySuffix();
     [[nodiscard]] std::string StaticLibrarySuffix();
+    [[nodiscard]] std::string WhichExecutable(std::string_view name);
 
     [[nodiscard]] bool TryRunResult(
         std::string_view program,

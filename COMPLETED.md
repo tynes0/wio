@@ -53,13 +53,15 @@ Notes:
 - Existing header and JSON-manifest binding generation executes as an explicit
   native backend service after Wio validation.
 
-## Self-hosted release-package CLI first wave
+## Self-hosted release-package CLI
 
 - Wio owns every top-level `package` option, default, help/version path, and
   incompatible visual-installer option validation.
-- The existing distribution staging, portable backend copy, archive, and
-  installer generator executes as an explicit native backend service after Wio
-  validation.
+- Distribution staging, portable backend discovery/copy, metadata and
+  quickstart generation, archive production, and installer orchestration now
+  execute in Wio. The obsolete C++ package service was deleted.
+- Public `std::process::FindExecutable` supports reusable PATH-based executable
+  discovery for packaging and other tooling.
 
 ## Core Language Foundations
 

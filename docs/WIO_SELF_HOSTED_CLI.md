@@ -11,9 +11,9 @@ A separately installed release is not required for ordinary development.
 2. During the same build it compiles `cli/main.wio` into the
    `wio-selfhost` companion.
 3. The native executable routes migrated commands to that companion.
-4. The companion uses named private compiler services only for remaining
-   binding/release backend internals. Raw `.wio` compilation remains a stage-0
-   compiler service.
+4. The companion uses a named private compiler service only for the remaining
+   binding backend internals. Raw `.wio` compilation remains a stage-0 compiler
+   service.
 
 `--wio-service` and `--compiler-version` are private bootstrap contracts, not
 public commands. The generic `--native-cli` fallback and
@@ -83,13 +83,13 @@ required-option checks, help/version handling, and typo diagnostics into Wio.
 The mature C/C++ header and JSON-manifest generators remain a native backend
 service while their reusable parser/model layers are prepared for migration.
 
-The first release-package wave moved its complete option surface, defaults,
-help/version handling, and incompatible installer-option validation into Wio.
-Distribution staging, portable-toolchain copying, archive generation, and
-installer generation remain a native backend service.
+The release-package migration is complete. Its option surface, validation,
+distribution staging, portable-toolchain discovery/copy, package metadata,
+quickstart and installer generation, archive production, and optional visual
+installer orchestration all run in Wio. The old C++ package service has been
+deleted.
 
-The remaining migration work covers binding generator internals and
-release-package backend internals.
+The remaining migration work covers binding generator internals.
 
 Every migrated command needs:
 

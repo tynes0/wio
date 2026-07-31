@@ -22,8 +22,6 @@ add_executable(wio_app
     cli_common.h
     binding_cli.cpp
     binding_cli.h
-    package_cli.cpp
-    package_cli.h
     process_cli.cpp
     process_cli.h
     ${WIO_STD_FILES}

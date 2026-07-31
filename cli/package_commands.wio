@@ -1,7 +1,14 @@
 use argonaut;
 use common;
 use std::console as console;
+use std::environment as environment;
+use std::fs as fs;
+use std::path as path;
+use std::platform as platform;
+use std::process as process;
 use std::result as result;
+use std::serialization as serialization;
+use std::time as time;
 
 realm SelfHostedPackage {
     fn AddOption(
@@ -88,6 +95,271 @@ realm SelfHostedPackage {
         return values;
     }
 
+    fn Failure<T>(message: string) -> std::Result<T> {
+        return SelfHostedCli::Failure<T>($"Package creation failed: ${message}");
+    }
+
+    fn Version(repositoryRoot: string) -> std::Result<string> {
+        for line in fs::ReadLines(path::Join(repositoryRoot, "CMakeLists.txt")) {
+            let trimmed = line.Trim();
+            if (trimmed.StartsWith("VERSION ")) {
+                return std::Ok<string>(trimmed.Slice(8usize).Trim());
+            }
+        }
+        return Failure<string>("Could not resolve the Wio version from CMakeLists.txt.");
+    }
+
+    fn NormalizeTag(value: string) -> string {
+        mut normalized = "";
+        mut index = 0usize;
+        while (index < value.Count()) {
+            let ch = value[index];
+            let alphaNumeric = (ch >= 'a' and ch <= 'z') or (ch >= 'A' and ch <= 'Z') or
+                (ch >= '0' and ch <= '9');
+            normalized.Append(alphaNumeric or ch == '.' or ch == '_' or ch == '-' ? value.Slice(index, 1usize) : "-");
+            index += 1usize;
+        }
+        return normalized;
+    }
+
+    fn PlatformTag() -> string {
+        return platform::OperatingSystemName(platform::CurrentOperatingSystem());
+    }
+
+    fn ArchitectureTag() -> string {
+        return platform::ArchitectureName(platform::CurrentArchitecture());
+    }
+
+    fn PortableBackendRoot() -> string {
+        let explicitRoot = environment::Get("WIO_PORTABLE_BACKEND_ROOT", "");
+        if (explicitRoot != "" and fs::IsDirectory(path::Join(explicitRoot, "bin"))) {
+            return path::Absolute(explicitRoot);
+        }
+        let compiler = process::FindExecutable(platform::IsWindows() ? "g++.exe" : "g++");
+        let archiver = process::FindExecutable(platform::IsWindows() ? "ar.exe" : "ar");
+        if (compiler == "" or archiver == "") { return ""; }
+        let compilerRoot = path::ParentPath(path::ParentPath(compiler));
+        let archiverRoot = path::ParentPath(path::ParentPath(archiver));
+        return path::Equivalent(compilerRoot, archiverRoot) ? compilerRoot : "";
+    }
+
+    fn CopyPortableBackend(packageRoot: string) -> std::Result<string> {
+        let sourceRoot = PortableBackendRoot();
+        if (sourceRoot == "") {
+            return Failure<string>("Could not resolve a portable backend compiler root. Ensure g++ and ar are on PATH or set WIO_PORTABLE_BACKEND_ROOT.");
+        }
+        let targetRoot = path::JoinAll([
+            packageRoot,
+            "toolchains",
+            platform::IsWindows() ? "windows-x64-mingw" : "host-backend"
+        ]);
+        if (fs::Exists(targetRoot) and not fs::RemoveAll(targetRoot)) {
+            return Failure<string>($"Could not replace bundled backend: ${targetRoot}");
+        }
+        if (not fs::EnsureDirectory(targetRoot)) {
+            return Failure<string>($"Could not create bundled backend: ${targetRoot}");
+        }
+        for name in ["bin", "include", "lib", "libexec", "x86_64-w64-mingw32"] {
+            let source = path::Join(sourceRoot, name);
+            if (fs::Exists(source) and not fs::CopyRecursive(source, path::Join(targetRoot, name))) {
+                return Failure<string>($"Could not copy backend subtree: ${source}");
+            }
+        }
+        for name in ["build-info.txt", "COPYING", "COPYING.txt", "LICENSE", "LICENSE.txt"] {
+            let source = path::Join(sourceRoot, name);
+            if (fs::IsFile(source) and not fs::CopyFileEnsured(source, path::Join(targetRoot, name))) {
+                return Failure<string>($"Could not copy backend metadata: ${source}");
+            }
+        }
+        return std::Ok<string>(targetRoot);
+    }
+
+    fn InstallPowerShell() -> string {
+        let lines: string[] = [
+            "param([string]$InstallRoot = (Join-Path $env:LOCALAPPDATA 'Programs\\Wio'), [switch]$NoPath)\n",
+            "$ErrorActionPreference = 'Stop'\n",
+            "$packageRoot = Split-Path $MyInvocation.MyCommand.Path -Parent\n",
+            "New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null\n",
+            "Get-ChildItem -LiteralPath $packageRoot -Force | Where-Object { $_.FullName -ne $InstallRoot } | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $InstallRoot -Recurse -Force }\n",
+            "$wio = Join-Path $InstallRoot 'bin\\wio.exe'\n",
+            "& $wio env setup --wio-root $InstallRoot --set-user --no-prompt $(if ($NoPath) { @() } else { '--add-path' })\n",
+            "Write-Host \"Installed Wio at $InstallRoot\"\n"
+        ];
+        return lines.Join("");
+    }
+
+    fn UninstallPowerShell() -> string {
+        let lines: string[] = [
+            "param([string]$InstallRoot = (Join-Path $env:LOCALAPPDATA 'Programs\\Wio'), [switch]$KeepFiles)\n",
+            "$ErrorActionPreference = 'Stop'\n",
+            "$wio = Join-Path $InstallRoot 'bin\\wio.exe'\n",
+            "if (Test-Path -LiteralPath $wio) { & $wio env remove --wio-root $InstallRoot --set-user --no-prompt --remove-path }\n",
+            "if (-not $KeepFiles -and (Test-Path -LiteralPath $InstallRoot)) { Remove-Item -LiteralPath $InstallRoot -Recurse -Force }\n"
+        ];
+        return lines.Join("");
+    }
+
+    fn InstallShell() -> string {
+        let dollar = "$";
+        let lines: string[] = [
+            "#!/usr/bin/env sh\nset -eu\n",
+            "SCRIPT_DIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n",
+            "INSTALL_ROOT=" + dollar + "{1:-\"$HOME/.local/share/wio\"}\n",
+            "mkdir -p \"$INSTALL_ROOT\"\ncp -R \"$SCRIPT_DIR/.\" \"$INSTALL_ROOT/\"\n",
+            "\"$INSTALL_ROOT/bin/wio\" env setup --wio-root \"$INSTALL_ROOT\" --set-user --no-prompt --add-path\n"
+        ];
+        return lines.Join("");
+    }
+
+    fn UninstallShell() -> string {
+        let dollar = "$";
+        let lines: string[] = [
+            "#!/usr/bin/env sh\nset -eu\n",
+            "INSTALL_ROOT=" + dollar + "{1:-\"$HOME/.local/share/wio\"}\n",
+            "if [ -x \"$INSTALL_ROOT/bin/wio\" ]; then \"$INSTALL_ROOT/bin/wio\" env remove --wio-root \"$INSTALL_ROOT\" --set-user --no-prompt --remove-path; fi\n",
+            "rm -rf -- \"$INSTALL_ROOT\"\n"
+        ];
+        return lines.Join("");
+    }
+
+    fn Quickstart(packageName: string) -> string {
+        let lines: string[] = [
+            "# Wio Package Quickstart\n\n",
+            $"This packaged toolchain was staged as `${packageName}`.\n\n",
+            "## 1. Try the CLI directly\n\n",
+            "```powershell\nbin\\wio.exe --help\nbin\\wio.exe env print --wio-root . --shell powershell --add-path\n```\n\n",
+            "```sh\n./bin/wio --help\n./bin/wio env print --wio-root . --shell sh --add-path\n```\n\n",
+            "## 2. Install\n\nRun `Install-Wio.ps1` on Windows or `install-wio.sh` on POSIX.\n\n",
+            "## 3. Create and run a project\n\n",
+            "```powershell\nwio project new MyApp --output-dir C:\\Projects --template wio-app\ncd C:\\Projects\\MyApp\nwio project build\nwio project run\n```\n\n",
+            "Environment setup is available through `wio env setup`; cleanup uses `wio env remove`.\n"
+        ];
+        return lines.Join("");
+    }
+
+    fn WritePackageFiles(
+        repositoryRoot: string,
+        packageRoot: string,
+        packageName: string,
+        version: string,
+        config: string,
+        buildDirectory: string,
+        backendRoot: string
+    ) -> std::Result<std::ResultUnit> {
+        for pair in [
+            "LICENSE|LICENSE",
+            "README.md|README.md",
+            "docs/WIO_LANGUAGE_DRAFT.md|docs/WIO_LANGUAGE_DRAFT.md",
+            "docs/README.md|docs/README.md",
+            "docs/WIO_PROJECT_SYSTEM.md|docs/WIO_PROJECT_SYSTEM.md"
+        ] {
+            let parts = pair.Split("|");
+            let source = path::Join(repositoryRoot, parts[0usize]);
+            if (fs::IsFile(source) and not fs::CopyFileEnsured(source, path::Join(packageRoot, parts[1usize]))) {
+                return Failure<std::ResultUnit>($"Could not copy package document: ${source}");
+            }
+        }
+        let generatedAt = time::UtcNow().ToIso8601();
+        let fields: string[] = [
+            "  \"name\": " + serialization::QuoteJson(packageName),
+            "  \"version\": " + serialization::QuoteJson(version),
+            "  \"platform\": " + serialization::QuoteJson(PlatformTag()),
+            "  \"architecture\": " + serialization::QuoteJson(ArchitectureTag()),
+            "  \"config\": " + serialization::QuoteJson(config),
+            "  \"buildDir\": " + serialization::QuoteJson(buildDirectory),
+            "  \"packageRoot\": " + serialization::QuoteJson(packageRoot),
+            "  \"bundledBackendRoot\": " + serialization::QuoteJson(backendRoot),
+            "  \"generatedAtUtc\": " + serialization::QuoteJson(generatedAt)
+        ];
+        if (not fs::WriteTextEnsured(path::Join(packageRoot, "WIO_PACKAGE_INFO.json"), "{\n" + fields.Join(",\n") + "\n}\n") or
+            not fs::WriteText(path::Join(packageRoot, "Install-Wio.ps1"), InstallPowerShell()) or
+            not fs::WriteText(path::Join(packageRoot, "Uninstall-Wio.ps1"), UninstallPowerShell()) or
+            not fs::WriteText(path::Join(packageRoot, "install-wio.sh"), InstallShell()) or
+            not fs::WriteText(path::Join(packageRoot, "uninstall-wio.sh"), UninstallShell()) or
+            not fs::WriteText(path::Join(packageRoot, "QUICKSTART.md"), Quickstart(packageName))) {
+            return Failure<std::ResultUnit>("Could not write package metadata or installer scripts.");
+        }
+        return std::OkUnit();
+    }
+
+    fn BuildPackage(args: string[], parser: ref Argonaut::Parser) -> std::Result<i32> {
+        let repositoryRoot = SelfHostedCli::FindRepositoryRoot(args[0usize]);
+        if (repositoryRoot == "") { return Failure<i32>("Could not resolve the Wio repository root."); }
+        let buildDirectory = path::AbsoluteFrom(repositoryRoot, parser.GetStringOr("BUILD-DIR", "build"));
+        let outputDirectory = path::AbsoluteFrom(repositoryRoot, parser.GetStringOr("OUTPUT-DIR", "artifacts\\packages"));
+        let config = parser.GetStringOr("CONFIG", "Release");
+        let version = Version?(repositoryRoot);
+        let suffix = NormalizeTag(parser.GetStringOr("VERSION-SUFFIX", ""));
+        let packageName = "wio-" + version + "-" + PlatformTag() + "-" + ArchitectureTag() + "-" +
+            config.ToLower() + (suffix == "" ? "" : "-" + suffix);
+        let packageRoot = path::Join(outputDirectory, packageName);
+        let distRoot = path::Join(buildDirectory, "dist");
+        let archive = path::Join(outputDirectory, packageName + ".zip");
+        if (path::Equivalent(packageRoot, repositoryRoot) or packageRoot == path::RootPath(packageRoot)) {
+            return Failure<i32>($"Refusing unsafe package directory: ${packageRoot}");
+        }
+        if (parser.GetFlag("CLEAN")) {
+            if (fs::Exists(packageRoot)) { fs::RemoveAll(packageRoot); }
+            if (fs::Exists(archive)) { fs::Remove(archive); }
+        }
+        if (not fs::EnsureDirectory(outputDirectory)) {
+            return Failure<i32>($"Could not create output directory: ${outputDirectory}");
+        }
+        if (fs::Exists(distRoot) and not fs::RemoveAll(distRoot)) {
+            return Failure<i32>($"Could not clean dist directory: ${distRoot}");
+        }
+
+        mut configureArgs: string[] = ["-S", repositoryRoot, "-B", buildDirectory, "-DWIO_DIST_DIR=" + distRoot];
+        let generator = parser.GetStringOr("GENERATOR", "");
+        if (generator != "") { configureArgs.Push("-G"); configureArgs.Push(generator); }
+        let configured = SelfHostedCli::Run?("cmake", configureArgs, repositoryRoot);
+        if (configured != 0) { return std::Ok<i32>(configured); }
+        let built = SelfHostedCli::Run?(
+            "cmake", ["--build", buildDirectory, "--target", "wio_dist", "--config", config], repositoryRoot);
+        if (built != 0) { return std::Ok<i32>(built); }
+        if (fs::Exists(packageRoot) and not fs::RemoveAll(packageRoot)) {
+            return Failure<i32>($"Could not replace package root: ${packageRoot}");
+        }
+        if (not fs::CopyRecursive(distRoot, packageRoot)) {
+            return Failure<i32>($"Could not copy staged distribution: ${distRoot}");
+        }
+        let backendRoot = CopyPortableBackend?(packageRoot);
+        WritePackageFiles?(repositoryRoot, packageRoot, packageName, version, config, buildDirectory, backendRoot);
+
+        let bootstrapInstaller = path::Join(outputDirectory, packageName + "-installer.ps1");
+        if (platform::IsWindows()) {
+            fs::WriteText(bootstrapInstaller, "$package = Join-Path $PSScriptRoot '" + packageName + "'\n& (Join-Path $package 'Install-Wio.ps1') @args\n");
+        }
+        if (not parser.GetFlag("NO-ZIP")) {
+            let zipped = SelfHostedCli::Run?(
+                "cmake", ["-E", "tar", "cf", path::FileName(archive), "--format=zip", packageName], outputDirectory);
+            if (zipped != 0) { return std::Ok<i32>(zipped); }
+        }
+
+        if (platform::IsWindows() and not parser.GetFlag("NO-VISUAL-INSTALLER")) {
+            let script = path::JoinAll([repositoryRoot, "tools", "Build-WioVisualInstaller.ps1"]);
+            if (fs::IsFile(script)) {
+                mut visualArgs: string[] = ["-ExecutionPolicy", "Bypass", "-File", script, "-Version", version,
+                    "-PackageRoot", packageRoot, "-OutputDir", outputDirectory];
+                let inno = parser.GetStringOr("INNO-COMPILER", "");
+                if (inno != "") { visualArgs.Push("-InnoCompiler"); visualArgs.Push(inno); }
+                let visual = SelfHostedCli::Run?("powershell", visualArgs, repositoryRoot);
+                if (visual != 0 and parser.GetFlag("VISUAL-INSTALLER")) { return std::Ok<i32>(visual); }
+            }
+            else if (parser.GetFlag("VISUAL-INSTALLER")) {
+                return Failure<i32>("Visual installer script was not found.");
+            }
+        }
+
+        console::PrintLine!($"Wio package root : ${packageRoot}");
+        if (not parser.GetFlag("NO-ZIP")) { console::PrintLine!($"Wio package zip  : ${archive}"); }
+        if (platform::IsWindows()) { console::PrintLine!($"Wio installer    : ${bootstrapInstaller}"); }
+        let quickstartPath = path::Join(packageRoot, "QUICKSTART.md");
+        let portableWio = path::JoinAll([packageRoot, "bin", "wio" + process::ExecutableSuffix()]);
+        console::PrintLine!($"Next steps:\n  1. Open ${quickstartPath}\n  2. Run the platform installer script\n  3. Portable use stays available via ${portableWio}");
+        return std::Ok<i32>(0);
+    }
+
     fn Execute(args: string[]) -> std::Result<i32> {
         mut parser = Parser?();
         parser.Parse?(CommandArgs(args));
@@ -109,12 +381,6 @@ realm SelfHostedPackage {
                 "Package option --inno-compiler cannot be combined with --no-visual-installer."
             );
         }
-        mut serviceArgs: string[] = [];
-        mut index = 2usize;
-        while (index < args.Count()) {
-            serviceArgs.Push(args[index]);
-            index += 1usize;
-        }
-        return SelfHostedCli::RunCompilerService(args[0usize], "package", serviceArgs);
+        return BuildPackage(args, ref parser);
     }
 }

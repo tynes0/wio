@@ -242,8 +242,7 @@ application.
    modes, color policy, progress, cancellation, typo suggestions, help
    examples, config precedence, and error formatting across every subcommand.
    The self-hosted migration has started: every recognized tooling command
-   family now enters a Wio + Argonaut-Wio companion and uses an explicit
-   native fallback bridge. The complete
+   family now enters a Wio + Argonaut-Wio companion. The complete
    `project new/describe/build/run/test/package` lifecycle, `wio run`,
    `file run/check/tokens/ast`, repository `build/test`, `dev build/test`, and
    `perf smoke`, global help/version routing, nested help, and typo suggestions
@@ -252,10 +251,10 @@ application.
    is Wio-owned. `bind new/import` parsing,
    required-option validation, help, and diagnostics are Wio-owned while the
    header/manifest generator remains a native backend service. Release
-   `package` parsing and validation are Wio-owned while distribution/archive/
-   installer production remains a named private compiler service. The generic
+   `package` parsing, validation, distribution staging, portable backend copy,
+   metadata, archive, and installer production are Wio-owned. The generic
    native fallback and old C++ project/env/file/perf CLI implementations have
-   been removed. Finish the two remaining service internals,
+   been removed. Finish the remaining binding service internals,
    establish pinned stage-0/generated-C++ bootstrap reproducibility, and
    remove the bridge and C++ argument parsers after parity is complete.
 
