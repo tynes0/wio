@@ -109,6 +109,12 @@ realm SelfHostedPackage {
                 "Package option --inno-compiler cannot be combined with --no-visual-installer."
             );
         }
-        return SelfHostedCli::RunNativeCli(args);
+        mut serviceArgs: string[] = [];
+        mut index = 2usize;
+        while (index < args.Count()) {
+            serviceArgs.Push(args[index]);
+            index += 1usize;
+        }
+        return SelfHostedCli::RunCompilerService(args[0usize], "package", serviceArgs);
     }
 }

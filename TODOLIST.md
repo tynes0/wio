@@ -253,7 +253,9 @@ application.
    required-option validation, help, and diagnostics are Wio-owned while the
    header/manifest generator remains a native backend service. Release
    `package` parsing and validation are Wio-owned while distribution/archive/
-   installer production remains a native backend. Finish these backend tails,
+   installer production remains a named private compiler service. The generic
+   native fallback and old C++ project/env/file/perf CLI implementations have
+   been removed. Finish the two remaining service internals,
    establish pinned stage-0/generated-C++ bootstrap reproducibility, and
    remove the bridge and C++ argument parsers after parity is complete.
 

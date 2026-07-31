@@ -212,7 +212,7 @@ if(package_conflict_result EQUAL 0 OR
     )
 endif()
 
-run_success("Native CLI recursion bridge" --native-cli --version)
+run_success("Private compiler version service" --compiler-version)
 run_success("Raw stage-0 compiler path" "${WIO_SOURCE}" --dry-run)
 
 message(STATUS "Self-hosted CLI bootstrap smoke succeeded.")

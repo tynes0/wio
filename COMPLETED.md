@@ -27,6 +27,10 @@ Notes:
   tooling-shaped commands enter Wio for consistent diagnostics.
 - Native version lookup uses the explicit stage-0 bridge and cannot recurse
   back into the self-hosted companion.
+- The generic `--native-cli`/environment-variable bypass was subsequently
+  removed. Binding and release packaging now use named private compiler
+  services, and the obsolete C++ tooling/env/file/perf CLI sources were
+  deleted.
 
 ## Self-hosted environment CLI
 

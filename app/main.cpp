@@ -1,9 +1,11 @@
+#include "binding_cli.h"
 #include "compiler.h"
+#include "package_cli.h"
 #include "process_cli.h"
-#include "tooling_cli.h"
 
 #include <cstdlib>
 #include <filesystem>
+#include <iostream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -15,16 +17,55 @@
 
 namespace
 {
-    int runNativeCli(int argc, char* argv[])
+    int runCompiler(int argc, char* argv[])
     {
-        if (const auto toolingResult = wio::tooling::tryHandleToolingCommand(argc, argv);
-            toolingResult.has_value())
-        {
-            return *toolingResult;
-        }
-
         wio::Compiler::get().loadArgs(argc, argv);
         return wio::Compiler::get().compile();
+    }
+
+    std::vector<char*> argvView(std::vector<std::string>& values)
+    {
+        std::vector<char*> result;
+        result.reserve(values.size());
+        for (std::string& value : values)
+            result.push_back(value.data());
+        return result;
+    }
+
+    int runPrivateService(int argc, char* argv[])
+    {
+        if (argc < 3 || argv[2] == nullptr)
+        {
+            std::cerr << "Missing Wio compiler service name.\n";
+            return 1;
+        }
+
+        const std::string_view service = argv[2];
+        std::vector<std::string> rewritten;
+        rewritten.emplace_back(argv[0] != nullptr ? argv[0] : "wio");
+        rewritten.emplace_back(service);
+        for (int index = 3; index < argc; ++index)
+        {
+            if (argv[index] != nullptr)
+                rewritten.emplace_back(argv[index]);
+        }
+        std::vector<char*> view = argvView(rewritten);
+
+        if (service == "bind")
+        {
+            const auto result = wio::tooling::binding::tryHandleBindCommand(
+                static_cast<int>(view.size()), view.data());
+            return result.value_or(1);
+        }
+        if (service == "package")
+        {
+            const auto result = wio::tooling::package::tryHandlePackageCommand(
+                static_cast<int>(view.size()), view.data());
+            return result.value_or(1);
+        }
+
+        std::cerr << "Unknown Wio compiler service: " << service << '\n';
+        return 1;
     }
 
     bool shouldUseSelfHostedCli(int argc, char* argv[])
@@ -90,17 +131,16 @@ int main(int argc, char* argv[])
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
 
-    if (argc >= 2 && argv[1] != nullptr && std::string_view(argv[1]) == "--native-cli")
+    if (argc >= 2 && argv[1] != nullptr && std::string_view(argv[1]) == "--compiler-version")
     {
-        std::vector<char*> nativeArgv;
-        nativeArgv.reserve(static_cast<size_t>(argc - 1));
-        nativeArgv.push_back(argv[0]);
-        for (int index = 2; index < argc; ++index)
-            nativeArgv.push_back(argv[index]);
-        return runNativeCli(static_cast<int>(nativeArgv.size()), nativeArgv.data());
+        std::cout << WIO_VERSION << '\n';
+        return 0;
     }
 
-    if (shouldUseSelfHostedCli(argc, argv) && std::getenv("WIO_FORCE_NATIVE_CLI") == nullptr)
+    if (argc >= 2 && argv[1] != nullptr && std::string_view(argv[1]) == "--wio-service")
+        return runPrivateService(argc, argv);
+
+    if (shouldUseSelfHostedCli(argc, argv))
     {
         const std::filesystem::path companion = selfHostedCliPath(argc > 0 ? argv[0] : nullptr);
         std::error_code ec;
@@ -116,5 +156,5 @@ int main(int argc, char* argv[])
         }
     }
 
-    return runNativeCli(argc, argv);
+    return runCompiler(argc, argv);
 }

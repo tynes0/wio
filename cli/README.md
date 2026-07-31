@@ -7,8 +7,8 @@ frontend.
 - `vendor/argonaut.wio` is the bootstrap-compatible Argonaut-Wio surface.
 - the native `wio` executable remains the stage-0 source compiler and backend
   service host for platform-heavy command internals not migrated yet.
-- `--native-cli` is an internal recursion-breaking bridge and is not a public
-  command.
+- `--wio-service` and `--compiler-version` are private compiler-service entry
+  points and are not public commands.
 
 Migration is command-by-command. A command is routed through this frontend
 only after parity tests cover its public argument surface. Its native business

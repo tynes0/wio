@@ -11,12 +11,13 @@ A separately installed release is not required for ordinary development.
 2. During the same build it compiles `cli/main.wio` into the
    `wio-selfhost` companion.
 3. The native executable routes migrated commands to that companion.
-4. The companion uses the internal `--native-cli` bridge only for remaining
-   platform-heavy backend services. Raw `.wio` compilation remains a stage-0
+4. The companion uses named private compiler services only for remaining
+   binding/release backend internals. Raw `.wio` compilation remains a stage-0
    compiler service.
 
-`--native-cli` exists solely to prevent recursive dispatch. It is not a public
-command contract. `WIO_FORCE_NATIVE_CLI=1` is the emergency/debug bypass.
+`--wio-service` and `--compiler-version` are private bootstrap contracts, not
+public commands. The generic `--native-cli` fallback and
+`WIO_FORCE_NATIVE_CLI` bypass no longer exist.
 
 Release packages install both binaries in `bin/`. Clean installed-package
 qualification must prove that the companion exists and that migrated commands

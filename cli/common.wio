@@ -30,19 +30,17 @@ realm SelfHostedCli {
         if (not fs::IsFile(core)) {
             return Failure<i32>($"Self-hosted CLI could not find its native core: ${core}");
         }
-        return Run(core, ["--native-cli", "--version"], fs::CurrentPath());
+        return Run(core, ["--compiler-version"], fs::CurrentPath());
     }
 
-    fn RunNativeCli(args: string[]) -> std::Result<i32> {
-        let core = NativeCore(args[0usize]);
+    fn RunCompilerService(selfPath: string, service: string, args: string[]) -> std::Result<i32> {
+        let core = NativeCore(selfPath);
         if (not fs::IsFile(core)) {
             return Failure<i32>($"Self-hosted CLI could not find its native core: ${core}");
         }
-        mut nativeArgs: string[] = ["--native-cli"];
-        mut index = 1usize;
-        while (index < args.Count()) {
-            nativeArgs.Push(args[index]);
-            index += 1usize;
+        mut nativeArgs: string[] = ["--wio-service", service];
+        for argument in args {
+            nativeArgs.Push(argument);
         }
         return Run(core, nativeArgs, fs::CurrentPath());
     }
