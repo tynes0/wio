@@ -36,13 +36,13 @@ try {
         throw "The extracted package does not contain Install-Wio.ps1."
     }
 
-    $installArgs = @()
-    if (-not [string]::IsNullOrWhiteSpace($InstallRoot)) { $installArgs += @('-InstallRoot', $InstallRoot) }
-    if ($AllUsers) { $installArgs += '-AllUsers' }
-    if ($NoPrompt) { $installArgs += '-NoPrompt' }
-    if ($Force) { $installArgs += '-Force' }
-    if ($SkipEnvironmentSetup) { $installArgs += '-SkipEnvironmentSetup' }
-    if ($SkipPath) { $installArgs += '-SkipPath' }
+    $installArgs = @{}
+    if (-not [string]::IsNullOrWhiteSpace($InstallRoot)) { $installArgs.InstallRoot = $InstallRoot }
+    if ($AllUsers) { $installArgs.AllUsers = $true }
+    if ($NoPrompt) { $installArgs.NoPrompt = $true }
+    if ($Force) { $installArgs.Force = $true }
+    if ($SkipEnvironmentSetup) { $installArgs.SkipEnvironmentSetup = $true }
+    if ($SkipPath) { $installArgs.SkipPath = $true }
 
     & $installScript @installArgs
     exit $LASTEXITCODE
