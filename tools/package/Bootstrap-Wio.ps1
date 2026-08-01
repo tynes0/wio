@@ -21,7 +21,15 @@ $stagingRoot = Join-Path $env:TEMP ("wio-installer-" + [guid]::NewGuid().ToStrin
 New-Item -ItemType Directory -Force -Path $stagingRoot | Out-Null
 
 try {
-    Expand-Archive -LiteralPath $PackageZipPath -DestinationPath $stagingRoot -Force
+    $tarCommand = Get-Command tar.exe -ErrorAction SilentlyContinue
+    if ($null -ne $tarCommand) {
+        & $tarCommand.Source -xf $PackageZipPath -C $stagingRoot
+        if ($LASTEXITCODE -ne 0) {
+            throw "tar.exe failed to extract the package (exit code $LASTEXITCODE)."
+        }
+    } else {
+        Expand-Archive -LiteralPath $PackageZipPath -DestinationPath $stagingRoot -Force
+    }
     $packageRoot = Join-Path $stagingRoot "__PACKAGE_NAME__"
     $installScript = Join-Path $packageRoot "Install-Wio.ps1"
     if (-not (Test-Path -LiteralPath $installScript)) {
