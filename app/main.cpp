@@ -1,5 +1,5 @@
 #include "compiler.h"
-#include "process_cli.h"
+#include "std_process.h"
 
 #include <cstdlib>
 #include <filesystem>
@@ -76,6 +76,34 @@ namespace
         return executable.parent_path() / "wio-selfhost";
 #endif
     }
+
+    int runSelfHostedCli(const std::filesystem::path& companion, int argc, char* argv[])
+    {
+        std::vector<std::string> args;
+        args.reserve(argc > 1 ? static_cast<std::size_t>(argc - 1) : 0u);
+        for (int index = 1; index < argc; ++index)
+        {
+            if (argv[index] != nullptr)
+                args.emplace_back(argv[index]);
+        }
+
+        int exitCode = EXIT_FAILURE;
+        int nativeError = 0;
+        std::string message;
+        wio::runtime::std_process::ProcessError error =
+            wio::runtime::std_process::ProcessError::none;
+        if (wio::runtime::std_process::TryRunResult(
+                companion.string(), args, {}, exitCode, error, nativeError, message))
+        {
+            return exitCode;
+        }
+
+        std::cerr << "Failed to launch the self-hosted CLI: " << message;
+        if (nativeError != 0)
+            std::cerr << " (native error " << nativeError << ')';
+        std::cerr << '\n';
+        return EXIT_FAILURE;
+    }
 }
 
 int main(int argc, char* argv[])
@@ -95,15 +123,7 @@ int main(int argc, char* argv[])
         const std::filesystem::path companion = selfHostedCliPath(argc > 0 ? argv[0] : nullptr);
         std::error_code ec;
         if (!companion.empty() && std::filesystem::is_regular_file(companion, ec))
-        {
-            std::vector<std::string> command{ companion.string() };
-            for (int index = 1; index < argc; ++index)
-            {
-                if (argv[index] != nullptr)
-                    command.emplace_back(argv[index]);
-            }
-            return wio::tooling::process::Run(command);
-        }
+            return runSelfHostedCli(companion, argc, argv);
     }
 
     return runCompiler(argc, argv);

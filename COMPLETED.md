@@ -54,6 +54,9 @@ Notes:
   in Wio using `std::json`, `std::regex`, `std::fs`, and `std::path`.
 - The private binding service, its C++/Argonaut parser and generator, and the
   last shared C++ CLI parsing helper were deleted.
+- The final standalone `process_cli.cpp/.h` launcher was removed. Stage-0 now
+  launches the Wio companion through the shared host build of the public
+  runtime process primitive, so process behavior has a single implementation.
 
 ## Self-hosted release-package CLI
 

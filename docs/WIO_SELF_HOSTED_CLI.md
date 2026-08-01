@@ -14,6 +14,10 @@ A separately installed release is not required for ordinary development.
 4. Raw `.wio` compilation remains a stage-0 compiler responsibility; tooling
    command parsing and behavior execute in the Wio companion.
 
+The stage-0 executable launches the companion through `wio_runtime_host`, the
+host-compiler build of the same process primitive exposed as `std::process`.
+There is no standalone C++ CLI process layer.
+
 `--compiler-version` is a private bootstrap contract, not a public command.
 The old `--wio-service` bridge, generic `--native-cli` fallback, and
 `WIO_FORCE_NATIVE_CLI` bypass no longer exist.

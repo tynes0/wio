@@ -65,6 +65,17 @@ add_library(wio_runtime_headers INTERFACE)
 target_include_directories(wio_runtime_headers INTERFACE "${WIO_RUNTIME_INCLUDE_DIR}")
 target_sources(wio_runtime_headers INTERFACE ${WIO_RUNTIME_HEADERS})
 
+# Host-side runtime primitives used by the stage-0 executable before a Wio
+# program can run. Generated Wio binaries continue to use wio_runtime_backend.
+add_library(wio_runtime_host STATIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/std_process.cpp"
+)
+target_include_directories(wio_runtime_host PUBLIC "${WIO_RUNTIME_INCLUDE_DIR}")
+if(WIN32)
+    target_link_libraries(wio_runtime_host PUBLIC advapi32)
+endif()
+set_target_properties(wio_runtime_host PROPERTIES FOLDER "runtime")
+
 add_custom_command(
     OUTPUT
         "${WIO_BACKEND_RUNTIME_OBJ_STD_HASH}"

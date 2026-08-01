@@ -19,8 +19,6 @@ source_group("std" FILES ${WIO_STD_FILES})
 
 add_executable(wio_app
     main.cpp
-    process_cli.cpp
-    process_cli.h
     ${WIO_STD_FILES}
     ${WIO_TEST_FILES}
 )
@@ -32,6 +30,7 @@ set_target_properties(wio_app PROPERTIES
 target_link_libraries(wio_app
     PRIVATE
         wio_compiler
+        wio_runtime_host
 )
 
 target_include_directories(wio_app
