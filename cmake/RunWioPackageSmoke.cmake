@@ -22,7 +22,7 @@ foreach(existing_entry IN LISTS existing_entries)
 endforeach()
 
 execute_process(
-    COMMAND "${WIO_EXE}" package --build-dir "${WIO_BUILD_DIR}" --config "${WIO_CONFIG}" --output-dir "${WIO_OUTPUT_DIR}" --no-zip --clean
+    COMMAND "${WIO_EXE}" package --build-dir "${WIO_BUILD_DIR}" --config "${WIO_CONFIG}" --output-dir "${WIO_OUTPUT_DIR}" --no-zip --no-visual-installer --clean
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     RESULT_VARIABLE wio_result
     OUTPUT_VARIABLE wio_stdout
@@ -79,6 +79,14 @@ foreach(required_file IN LISTS required_files)
         )
     endif()
 endforeach()
+
+if(NOT WIN32)
+    file(READ "${package_root}/WIO_PACKAGE_INFO.json" package_info_text)
+    string(FIND "${package_info_text}" "\"bundledBackendRoot\": \"\"" host_backend_index)
+    if(host_backend_index EQUAL -1)
+        message(FATAL_ERROR "POSIX package metadata incorrectly claims to bundle the host system toolchain.")
+    endif()
+endif()
 
 file(READ "${package_root}/QUICKSTART.md" quickstart_text)
 file(READ "${package_root}/Install-Wio.ps1" powershell_installer_text)

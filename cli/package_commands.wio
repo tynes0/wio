@@ -144,6 +144,9 @@ realm SelfHostedPackage {
     }
 
     fn CopyPortableBackend(packageRoot: string) -> std::Result<string> {
+        if (not platform::IsWindows()) {
+            return std::Ok<string>("");
+        }
         let sourceRoot = PortableBackendRoot();
         if (sourceRoot == "") {
             return Failure<string>("Could not resolve a portable backend compiler root. Ensure g++ and ar are on PATH or set WIO_PORTABLE_BACKEND_ROOT.");
@@ -190,6 +193,7 @@ realm SelfHostedPackage {
             "```powershell\nbin\\wio.exe --help\nbin\\wio.exe env print --wio-root . --shell powershell --add-path\n```\n\n",
             "```sh\n./bin/wio --help\n./bin/wio env print --wio-root . --shell sh --add-path\n```\n\n",
             "## 2. Install\n\nRun `Install-Wio.ps1` on Windows or `install-wio.sh` on POSIX.\n\n",
+            "Windows packages bundle the supported MinGW backend. POSIX packages use `g++` and `ar` from the host `PATH`.\n\n",
             "## 3. Create and run a project\n\n",
             "```powershell\nwio project new MyApp --output-dir C:\\Projects --template wio-app\ncd C:\\Projects\\MyApp\nwio project build\nwio project run\n```\n\n",
             "Environment setup is available through `wio env setup`; cleanup uses `wio env remove`.\n"

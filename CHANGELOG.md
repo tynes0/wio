@@ -49,8 +49,11 @@ All notable user-facing changes to Wio are recorded here.
   user-scoped PATH updates consistently on Windows and POSIX.
 - Contextual keyword parsing keeps packaged APIs such as
   `std::path::Extension` callable.
-- Release packaging bundles a discoverable portable backend and emits
-  actionable metadata, quickstart, install, and uninstall assets.
+- Windows release packaging bundles a discoverable MinGW backend; POSIX
+  packages use the host `g++` and `ar` without attempting to copy `/usr`.
+- Standalone Windows package installers extract their adjacent ZIP, forward
+  named installation options correctly, and prefer fast `tar.exe` extraction
+  with an `Expand-Archive` fallback.
 
 ## [0.3.0] - 2026-07-25
 
