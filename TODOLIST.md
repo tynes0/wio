@@ -248,15 +248,14 @@ application.
    `perf smoke`, global help/version routing, nested help, and typo suggestions
    are Wio-owned. The complete `env print/setup/status/remove/doctor` family,
    including persistent user environment/PATH management and backend smoke,
-   is Wio-owned. `bind new/import` parsing,
-   required-option validation, help, and diagnostics are Wio-owned while the
-   header/manifest generator remains a native backend service. Release
+   is Wio-owned. `bind new/import` parsing, validation, diagnostics, JSON
+   manifest generation, and C/C++ header importing are Wio-owned. Release
    `package` parsing, validation, distribution staging, portable backend copy,
    metadata, archive, and installer production are Wio-owned. The generic
    native fallback and old C++ project/env/file/perf CLI implementations have
-   been removed. Finish the remaining binding service internals,
-   establish pinned stage-0/generated-C++ bootstrap reproducibility, and
-   remove the bridge and C++ argument parsers after parity is complete.
+   been removed, along with every private compiler-service bridge and C++
+   tooling argument parser. Establish pinned stage-0/generated-C++ bootstrap
+   reproducibility and continue the cross-cutting hardening above.
 
 2. [ ] Add `wio fmt` and a canonical formatter.
    It must be syntax-aware, deterministic, idempotent, configurable only where

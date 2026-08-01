@@ -45,13 +45,15 @@ Notes:
   membership/add/remove, and duplicate process-key inspection. Windows uses
   the user Environment registry; POSIX uses a managed `.profile` block.
 
-## Self-hosted binding CLI first wave
+## Self-hosted binding CLI
 
 - Wio owns the `bind new/import` group and subcommand contract, including
   required inputs, optional output/header settings, flagset preference,
   help/version handling, and typo suggestions.
-- Existing header and JSON-manifest binding generation executes as an explicit
-  native backend service after Wio validation.
+- JSON-manifest generation and namespace-aware C/C++ header importing now run
+  in Wio using `std::json`, `std::regex`, `std::fs`, and `std::path`.
+- The private binding service, its C++/Argonaut parser and generator, and the
+  last shared C++ CLI parsing helper were deleted.
 
 ## Self-hosted release-package CLI
 

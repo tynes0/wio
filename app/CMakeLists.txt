@@ -19,9 +19,6 @@ source_group("std" FILES ${WIO_STD_FILES})
 
 add_executable(wio_app
     main.cpp
-    cli_common.h
-    binding_cli.cpp
-    binding_cli.h
     process_cli.cpp
     process_cli.h
     ${WIO_STD_FILES}
@@ -35,7 +32,6 @@ set_target_properties(wio_app PROPERTIES
 target_link_libraries(wio_app
     PRIVATE
         wio_compiler
-        argonaut
 )
 
 target_include_directories(wio_app

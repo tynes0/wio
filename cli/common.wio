@@ -33,18 +33,6 @@ realm SelfHostedCli {
         return Run(core, ["--compiler-version"], fs::CurrentPath());
     }
 
-    fn RunCompilerService(selfPath: string, service: string, args: string[]) -> std::Result<i32> {
-        let core = NativeCore(selfPath);
-        if (not fs::IsFile(core)) {
-            return Failure<i32>($"Self-hosted CLI could not find its native core: ${core}");
-        }
-        mut nativeArgs: string[] = ["--wio-service", service];
-        for argument in args {
-            nativeArgs.Push(argument);
-        }
-        return Run(core, nativeArgs, fs::CurrentPath());
-    }
-
     fn IsRepositoryRoot(candidate: string) -> bool {
         return fs::IsFile(path::Join(candidate, "CMakeLists.txt")) and
             fs::IsDirectory(path::Join(candidate, "compiler")) and

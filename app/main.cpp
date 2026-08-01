@@ -1,4 +1,3 @@
-#include "binding_cli.h"
 #include "compiler.h"
 #include "process_cli.h"
 
@@ -20,44 +19,6 @@ namespace
     {
         wio::Compiler::get().loadArgs(argc, argv);
         return wio::Compiler::get().compile();
-    }
-
-    std::vector<char*> argvView(std::vector<std::string>& values)
-    {
-        std::vector<char*> result;
-        result.reserve(values.size());
-        for (std::string& value : values)
-            result.push_back(value.data());
-        return result;
-    }
-
-    int runPrivateService(int argc, char* argv[])
-    {
-        if (argc < 3 || argv[2] == nullptr)
-        {
-            std::cerr << "Missing Wio compiler service name.\n";
-            return 1;
-        }
-
-        const std::string_view service = argv[2];
-        std::vector<std::string> rewritten;
-        rewritten.emplace_back(argv[0] != nullptr ? argv[0] : "wio");
-        rewritten.emplace_back(service);
-        for (int index = 3; index < argc; ++index)
-        {
-            if (argv[index] != nullptr)
-                rewritten.emplace_back(argv[index]);
-        }
-        std::vector<char*> view = argvView(rewritten);
-
-        if (service == "bind")
-        {
-            const auto result = wio::tooling::binding::tryHandleBindCommand(
-                static_cast<int>(view.size()), view.data());
-            return result.value_or(1);
-        }
-        std::cerr << "Unknown Wio compiler service: " << service << '\n';
-        return 1;
     }
 
     bool shouldUseSelfHostedCli(int argc, char* argv[])
@@ -128,9 +89,6 @@ int main(int argc, char* argv[])
         std::cout << WIO_VERSION << '\n';
         return 0;
     }
-
-    if (argc >= 2 && argv[1] != nullptr && std::string_view(argv[1]) == "--wio-service")
-        return runPrivateService(argc, argv);
 
     if (shouldUseSelfHostedCli(argc, argv))
     {

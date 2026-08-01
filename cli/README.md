@@ -5,10 +5,9 @@ frontend.
 
 - `main.wio` owns commands that have moved to Wio.
 - `vendor/argonaut.wio` is the bootstrap-compatible Argonaut-Wio surface.
-- the native `wio` executable remains the stage-0 source compiler and backend
-  service host for platform-heavy command internals not migrated yet.
-- `--wio-service` and `--compiler-version` are private compiler-service entry
-  points and are not public commands.
+- the native `wio` executable remains the stage-0 source compiler and companion
+  launcher.
+- `--compiler-version` is a private bootstrap entry point, not a public command.
 
 Migration is command-by-command. A command is routed through this frontend
 only after parity tests cover its public argument surface. Its native business
@@ -24,13 +23,9 @@ Current ownership:
   fully Wio-owned;
 - the complete `env print/setup/status/remove/doctor` family is Wio-owned,
   backed by reusable `std::environment` process/user/PATH APIs;
-- `bind new/import` argument parsing, required-option validation, help/version,
-  and typo diagnostics are Wio-owned; header and manifest generation currently
-  use the native binding backend;
-- release `package` argument parsing, defaults, help/version, and conflicting
-  installer-option validation are Wio-owned; distribution staging and archive/
-  installer generation currently use the native release backend;
+- `bind new/import`, including JSON-manifest generation and C/C++ header
+  importing, is fully Wio-owned;
+- release `package`, including distribution staging, portable backend copying,
+  metadata, archives, and installer orchestration, is fully Wio-owned;
 - raw Wio compilation is deliberately delegated to the native stage-0
-  compiler;
-- remaining binding-generator and release-packager internals use explicit
-  backend service calls after Wio-owned parsing and validation.
+  compiler.

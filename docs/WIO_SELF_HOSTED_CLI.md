@@ -11,12 +11,11 @@ A separately installed release is not required for ordinary development.
 2. During the same build it compiles `cli/main.wio` into the
    `wio-selfhost` companion.
 3. The native executable routes migrated commands to that companion.
-4. The companion uses a named private compiler service only for the remaining
-   binding backend internals. Raw `.wio` compilation remains a stage-0 compiler
-   service.
+4. Raw `.wio` compilation remains a stage-0 compiler responsibility; tooling
+   command parsing and behavior execute in the Wio companion.
 
-`--wio-service` and `--compiler-version` are private bootstrap contracts, not
-public commands. The generic `--native-cli` fallback and
+`--compiler-version` is a private bootstrap contract, not a public command.
+The old `--wio-service` bridge, generic `--native-cli` fallback, and
 `WIO_FORCE_NATIVE_CLI` bypass no longer exist.
 
 Release packages install both binaries in `bin/`. Clean installed-package
@@ -78,10 +77,9 @@ diagnostics, and the backend smoke probe. Reusable process/user environment
 operations live in public `std::environment`; Windows uses the user Environment
 registry and POSIX uses a managed `.profile` block.
 
-The first binding wave moved the complete `bind new/import` command contract,
-required-option checks, help/version handling, and typo diagnostics into Wio.
-The mature C/C++ header and JSON-manifest generators remain a native backend
-service while their reusable parser/model layers are prepared for migration.
+The binding migration is complete: the `bind new/import` command contract,
+required-option checks, help/version handling, typo diagnostics, JSON-manifest
+generation, and namespace-aware C/C++ header importing all run in Wio.
 
 The release-package migration is complete. Its option surface, validation,
 distribution staging, portable-toolchain discovery/copy, package metadata,
@@ -89,7 +87,7 @@ quickstart and installer generation, archive production, and optional visual
 installer orchestration all run in Wio. The old C++ package service has been
 deleted.
 
-The remaining migration work covers binding generator internals.
+No tooling command family uses the old C++ fallback or private-service bridge.
 
 Every migrated command needs:
 
