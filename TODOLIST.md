@@ -8,7 +8,7 @@ Status markers:
 - `[ ]` not started
 - `[~]` partially implemented or implemented but not sufficiently hardened
 
-The priorities below reflect the state of Wio after `v0.4.0`, including
+The priorities below reflect the state of Wio after `v0.5.0`, including
 real-world validation with packaged projects and a native raylib desktop
 application.
 
@@ -241,8 +241,8 @@ application.
    improved. Finish consistent exit codes, JSON/machine output, quiet/verbose
    modes, color policy, progress, cancellation, typo suggestions, help
    examples, config precedence, and error formatting across every subcommand.
-   The self-hosted migration has started: every recognized tooling command
-   family now enters a Wio + Argonaut-Wio companion. The complete
+   The self-hosted migration is complete: every recognized tooling command
+   family enters a Wio + Argonaut-Wio companion. The complete
    `project new/describe/build/run/test/package` lifecycle, `wio run`,
    `file run/check/tokens/ast`, repository `build/test`, `dev build/test`, and
    `perf smoke`, global help/version routing, nested help, and typo suggestions

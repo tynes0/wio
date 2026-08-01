@@ -13,7 +13,7 @@ Recommended on Windows:
 Or with the lightweight bootstrap script:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\wio-0.3.0-windows-x64-release-installer.ps1
+powershell -ExecutionPolicy Bypass -File .\wio-0.5.0-windows-x64-release-installer.ps1
 ```
 
 After installation, open a new terminal and verify:

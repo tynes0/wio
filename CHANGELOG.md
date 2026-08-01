@@ -4,6 +4,54 @@ All notable user-facing changes to Wio are recorded here.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-01
+
+### Added
+
+- Added the conditional expression operator (`condition ? whenTrue : whenFalse`)
+  with boolean-condition and compatible-branch diagnostics.
+- Explicitly typed `let` and `mut` declarations may omit an initializer and
+  receive deterministic value initialization.
+- Keyword-shaped API names can be used as contextual identifiers in realms,
+  imports, declarations, member access, and calls when the grammar is
+  unambiguous.
+- Added public `std::environment`, `std::platform`, and `std::statistics`
+  modules for process/user environment management, persistent user PATH
+  mutation, operating-system/architecture introspection, and measurement
+  summaries.
+- Added recursive filesystem copy/list helpers and PATH-based executable
+  discovery to the public standard-library tooling surface.
+- Added clean installed-package qualification that installs a staged package
+  into an isolated root and validates the self-hosted CLI, bundled backend,
+  project lifecycle, native interop, binding generation, and packaging.
+
+### Changed
+
+- Completed the self-hosted CLI migration. Project, file, environment,
+  binding, package, performance, developer, help, and global dispatch behavior
+  now execute in the Wio + Argonaut-Wio companion.
+- Binding JSON-manifest generation and C/C++ header importing now execute in
+  Wio through `std::json`, `std::regex`, `std::fs`, and `std::path`.
+- Release package staging, portable backend discovery/copy, metadata,
+  quickstart, archive, and installer orchestration now execute in Wio.
+- Removed the generic native fallback, private compiler-service bridge, and
+  obsolete C++ tooling, environment, file, performance, binding, package, and
+  process CLI layers.
+- Stage-0 companion launching now uses the shared host build of the public
+  runtime process primitive.
+
+### Fixed
+
+- Self-hosted command routing preserves application arguments and child exit
+  codes while raw source/compiler invocations continue to enter stage-0
+  directly.
+- Persistent environment setup/removal now handles duplicate process keys and
+  user-scoped PATH updates consistently on Windows and POSIX.
+- Contextual keyword parsing keeps packaged APIs such as
+  `std::path::Extension` callable.
+- Release packaging bundles a discoverable portable backend and emits
+  actionable metadata, quickstart, install, and uninstall assets.
+
 ## [0.3.0] - 2026-07-25
 
 ### Added

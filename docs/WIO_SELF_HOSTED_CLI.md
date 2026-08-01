@@ -1,7 +1,7 @@
 # Wio Self-Hosted CLI
 
-Wio is migrating its user-facing CLI from C++/Argonaut to
-Wio/Argonaut-Wio.
+Wio's user-facing CLI is implemented in Wio/Argonaut-Wio. The native
+executable remains the stage-0 compiler and companion launcher.
 
 ## Bootstrap model
 
@@ -40,10 +40,10 @@ an arbitrary Wio installation from the developer machine.
 
 ## Migration status
 
-Every recognized tooling command family now has Wio-owned parsing and enters
-the Wio companion before using either Wio-owned behavior or an explicit
-backend service. Raw source/compiler invocations remain in the native stage-0
-driver. The generic fallback path has been removed from `cli/main.wio`.
+Every recognized tooling command family has Wio-owned parsing and behavior in
+the Wio companion. Raw source/compiler invocations remain in the native
+stage-0 driver. The generic fallback and private backend-service paths have
+been removed.
 
 The complete project lifecycle is Wio-owned:
 
@@ -93,7 +93,7 @@ deleted.
 
 No tooling command family uses the old C++ fallback or private-service bridge.
 
-Every migrated command needs:
+Release validation must continue to cover:
 
 - native/self-hosted argument parity tests,
 - exit-code and output compatibility tests,

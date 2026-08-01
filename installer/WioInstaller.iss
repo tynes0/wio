@@ -7,7 +7,7 @@
 #endif
 
 #ifndef PackageRoot
-  #define PackageRoot "..\artifacts\packages-release\wio-0.3.0-windows-x64-release"
+  #define PackageRoot "..\artifacts\packages-release\wio-0.5.0-windows-x64-release"
 #endif
 
 #ifndef OutputDir
