@@ -174,52 +174,12 @@ realm SelfHostedPackage {
         return std::Ok<string>(targetRoot);
     }
 
-    fn InstallPowerShell() -> string {
-        let lines: string[] = [
-            "param([string]$InstallRoot = (Join-Path $env:LOCALAPPDATA 'Programs\\Wio'), [switch]$NoPath)\n",
-            "$ErrorActionPreference = 'Stop'\n",
-            "$packageRoot = Split-Path $MyInvocation.MyCommand.Path -Parent\n",
-            "New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null\n",
-            "Get-ChildItem -LiteralPath $packageRoot -Force | Where-Object { $_.FullName -ne $InstallRoot } | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $InstallRoot -Recurse -Force }\n",
-            "$wio = Join-Path $InstallRoot 'bin\\wio.exe'\n",
-            "& $wio env setup --wio-root $InstallRoot --set-user --no-prompt $(if ($NoPath) { @() } else { '--add-path' })\n",
-            "Write-Host \"Installed Wio at $InstallRoot\"\n"
-        ];
-        return lines.Join("");
-    }
-
-    fn UninstallPowerShell() -> string {
-        let lines: string[] = [
-            "param([string]$InstallRoot = (Join-Path $env:LOCALAPPDATA 'Programs\\Wio'), [switch]$KeepFiles)\n",
-            "$ErrorActionPreference = 'Stop'\n",
-            "$wio = Join-Path $InstallRoot 'bin\\wio.exe'\n",
-            "if (Test-Path -LiteralPath $wio) { & $wio env remove --wio-root $InstallRoot --set-user --no-prompt --remove-path }\n",
-            "if (-not $KeepFiles -and (Test-Path -LiteralPath $InstallRoot)) { Remove-Item -LiteralPath $InstallRoot -Recurse -Force }\n"
-        ];
-        return lines.Join("");
-    }
-
-    fn InstallShell() -> string {
-        let dollar = "$";
-        let lines: string[] = [
-            "#!/usr/bin/env sh\nset -eu\n",
-            "SCRIPT_DIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n",
-            "INSTALL_ROOT=" + dollar + "{1:-\"$HOME/.local/share/wio\"}\n",
-            "mkdir -p \"$INSTALL_ROOT\"\ncp -R \"$SCRIPT_DIR/.\" \"$INSTALL_ROOT/\"\n",
-            "\"$INSTALL_ROOT/bin/wio\" env setup --wio-root \"$INSTALL_ROOT\" --set-user --no-prompt --add-path\n"
-        ];
-        return lines.Join("");
-    }
-
-    fn UninstallShell() -> string {
-        let dollar = "$";
-        let lines: string[] = [
-            "#!/usr/bin/env sh\nset -eu\n",
-            "INSTALL_ROOT=" + dollar + "{1:-\"$HOME/.local/share/wio\"}\n",
-            "if [ -x \"$INSTALL_ROOT/bin/wio\" ]; then \"$INSTALL_ROOT/bin/wio\" env remove --wio-root \"$INSTALL_ROOT\" --set-user --no-prompt --remove-path; fi\n",
-            "rm -rf -- \"$INSTALL_ROOT\"\n"
-        ];
-        return lines.Join("");
+    fn PackageTemplate(repositoryRoot: string, name: string) -> std::Result<string> {
+        let templatePath = path::JoinAll([repositoryRoot, "tools", "package", name]);
+        if (not fs::IsFile(templatePath)) {
+            return Failure<string>($"Package template was not found: ${templatePath}");
+        }
+        return std::Ok<string>(fs::ReadText(templatePath));
     }
 
     fn Quickstart(packageName: string) -> string {
@@ -260,6 +220,10 @@ realm SelfHostedPackage {
             }
         }
         let generatedAt = time::UtcNow().ToIso8601();
+        let installPowerShell = PackageTemplate?(repositoryRoot, "Install-Wio.ps1");
+        let uninstallPowerShell = PackageTemplate?(repositoryRoot, "Uninstall-Wio.ps1");
+        let installShell = PackageTemplate?(repositoryRoot, "install-wio.sh");
+        let uninstallShell = PackageTemplate?(repositoryRoot, "uninstall-wio.sh");
         let fields: string[] = [
             "  \"name\": " + serialization::QuoteJson(packageName),
             "  \"version\": " + serialization::QuoteJson(version),
@@ -272,10 +236,10 @@ realm SelfHostedPackage {
             "  \"generatedAtUtc\": " + serialization::QuoteJson(generatedAt)
         ];
         if (not fs::WriteTextEnsured(path::Join(packageRoot, "WIO_PACKAGE_INFO.json"), "{\n" + fields.Join(",\n") + "\n}\n") or
-            not fs::WriteText(path::Join(packageRoot, "Install-Wio.ps1"), InstallPowerShell()) or
-            not fs::WriteText(path::Join(packageRoot, "Uninstall-Wio.ps1"), UninstallPowerShell()) or
-            not fs::WriteText(path::Join(packageRoot, "install-wio.sh"), InstallShell()) or
-            not fs::WriteText(path::Join(packageRoot, "uninstall-wio.sh"), UninstallShell()) or
+            not fs::WriteText(path::Join(packageRoot, "Install-Wio.ps1"), installPowerShell) or
+            not fs::WriteText(path::Join(packageRoot, "Uninstall-Wio.ps1"), uninstallPowerShell) or
+            not fs::WriteText(path::Join(packageRoot, "install-wio.sh"), installShell) or
+            not fs::WriteText(path::Join(packageRoot, "uninstall-wio.sh"), uninstallShell) or
             not fs::WriteText(path::Join(packageRoot, "QUICKSTART.md"), Quickstart(packageName))) {
             return Failure<std::ResultUnit>("Could not write package metadata or installer scripts.");
         }
@@ -328,7 +292,10 @@ realm SelfHostedPackage {
 
         let bootstrapInstaller = path::Join(outputDirectory, packageName + "-installer.ps1");
         if (platform::IsWindows()) {
-            fs::WriteText(bootstrapInstaller, "$package = Join-Path $PSScriptRoot '" + packageName + "'\n& (Join-Path $package 'Install-Wio.ps1') @args\n");
+            let bootstrap = PackageTemplate?(repositoryRoot, "Bootstrap-Wio.ps1").Replace("__PACKAGE_NAME__", packageName);
+            if (not fs::WriteText(bootstrapInstaller, bootstrap)) {
+                return Failure<i32>($"Could not write bootstrap installer: ${bootstrapInstaller}");
+            }
         }
         if (not parser.GetFlag("NO-ZIP")) {
             let zipped = SelfHostedCli::Run?(
