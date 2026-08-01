@@ -1851,6 +1851,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_std_fs_executable_run
+        "${CMAKE_SOURCE_DIR}/tests/std_fs_executable_run.wio"
+        "Std fs executable: true/true/true/true"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_std_environment_statistics_run
         "${CMAKE_SOURCE_DIR}/tests/std_environment_statistics_run.wio"
         "Std environment/statistics: true/true/true/true/true/true/true"

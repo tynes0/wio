@@ -21,6 +21,8 @@ All notable user-facing changes to Wio are recorded here.
   summaries.
 - Added recursive filesystem copy/list helpers and PATH-based executable
   discovery to the public standard-library tooling surface.
+- Added executable-permission queries and mutation to `std::fs`; POSIX project
+  packages now emit directly runnable `run.sh` launchers.
 - Added clean installed-package qualification that installs a staged package
   into an isolated root and validates the self-hosted CLI, bundled backend,
   project lifecycle, native interop, binding generation, and packaging.

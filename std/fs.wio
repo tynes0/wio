@@ -65,6 +65,14 @@ realm std {
         fn AppendText(path: string, text: string) -> bool;
 
         @Native
+        @CppName(wio::runtime::std_fs::IsExecutable)
+        fn IsExecutable(path: string) -> bool;
+
+        @Native
+        @CppName(wio::runtime::std_fs::SetExecutable)
+        fn SetExecutable(path: string, executable: bool) -> bool;
+
+        @Native
         @CppName(wio::runtime::std_fs::FileSize)
         fn FileSize(path: string) -> i64;
 
@@ -135,6 +143,10 @@ realm std {
             }
 
             return AppendText(filePath, text);
+        }
+
+        fn MakeExecutable(filePath: string) -> bool {
+            return SetExecutable(filePath, true);
         }
 
         fn AppendLine(filePath: string, line: string) -> bool {

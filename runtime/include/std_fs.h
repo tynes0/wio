@@ -25,6 +25,8 @@ namespace wio::runtime::std_fs
     std::string ReadText(const std::string& path);
     bool WriteText(const std::string& path, const std::string& text);
     bool AppendText(const std::string& path, const std::string& text);
+    bool IsExecutable(const std::string& path);
+    bool SetExecutable(const std::string& path, bool executable);
     std::int64_t FileSize(const std::string& path);
     std::int64_t LastWriteTime(const std::string& path);
     std::string FileName(const std::string& path);

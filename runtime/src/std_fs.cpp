@@ -212,6 +212,52 @@ namespace wio::runtime::std_fs
         return output.good();
     }
 
+    bool IsExecutable(const std::string& path)
+    {
+        std::error_code ec;
+        const std::filesystem::path fsPath = toPath(path);
+        if (!std::filesystem::is_regular_file(fsPath, ec) || ec)
+            return false;
+
+#if defined(_WIN32)
+        return true;
+#else
+        const auto permissions = std::filesystem::status(fsPath, ec).permissions();
+        if (ec)
+            return false;
+        constexpr auto executableBits =
+            std::filesystem::perms::owner_exec |
+            std::filesystem::perms::group_exec |
+            std::filesystem::perms::others_exec;
+        return (permissions & executableBits) != std::filesystem::perms::none;
+#endif
+    }
+
+    bool SetExecutable(const std::string& path, const bool executable)
+    {
+        std::error_code ec;
+        const std::filesystem::path fsPath = toPath(path);
+        if (!std::filesystem::is_regular_file(fsPath, ec) || ec)
+            return false;
+
+#if defined(_WIN32)
+        (void)executable;
+        return true;
+#else
+        constexpr auto executableBits =
+            std::filesystem::perms::owner_exec |
+            std::filesystem::perms::group_exec |
+            std::filesystem::perms::others_exec;
+        std::filesystem::permissions(
+            fsPath,
+            executableBits,
+            executable ? std::filesystem::perm_options::add : std::filesystem::perm_options::remove,
+            ec
+        );
+        return !ec;
+#endif
+    }
+
     std::int64_t FileSize(const std::string& path)
     {
         std::error_code ec;

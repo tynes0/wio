@@ -412,7 +412,8 @@ realm SelfHostedProject {
                 let launcher = launcherStart +
                     "package_root=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n" +
                     "exec \"$package_root/" + entrypoint + "\" \"$@\"\n";
-                if (not fs::WriteText(path::Join(packageRoot, "run.sh"), launcher)) {
+                let launcherPath = path::Join(packageRoot, "run.sh");
+                if (not fs::WriteText(launcherPath, launcher) or not fs::MakeExecutable(launcherPath)) {
                     return Failure<i32>("Could not write the package launcher.");
                 }
             }
