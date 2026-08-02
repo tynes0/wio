@@ -169,8 +169,8 @@ def main() -> int:
         ]
     )
     for index in range(args.iterations):
-        name, seed = candidates[index % len(candidates)]
-        candidates.append((f"mut_{index:04d}_{name}", mutate(seed, rng, index)))
+        _, seed = candidates[index % len(candidates)]
+        candidates.append((f"mut_{index:04d}", mutate(seed, rng, index)))
 
     for index, (name, data) in enumerate(candidates):
         candidate = args.work / f"{index:04d}_{name}.wio"
