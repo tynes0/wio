@@ -1,0 +1,7 @@
+fn BrokenValue( -> i32 {
+    return 41;
+}
+
+fn MissingAfterBrokenDeclaration() -> i32 {
+    return 1;
+}

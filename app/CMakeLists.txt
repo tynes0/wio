@@ -962,6 +962,15 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/imports"
     )
 
+    add_wio_failure_test_clean(
+        wio_invalid_imported_parser_error_no_cascade
+        "${CMAKE_SOURCE_DIR}/tests/invalid/imported_parser_error_no_cascade.wio"
+        "Unexpected token: expected identifier"
+        "Undefined symbol|No matching overload|Generated C\\+\\+ output:"
+        --module-dir
+        "${CMAKE_SOURCE_DIR}/tests/modules"
+    )
+
     add_wio_output_test(
         wio_test_realm_merge_across_modules_run
         "${CMAKE_SOURCE_DIR}/tests/modules/realm_merge_root.wio"

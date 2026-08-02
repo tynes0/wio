@@ -3088,6 +3088,11 @@ namespace wio
         Lexer lexer(source, actualPath.string());
         Parser parser(lexer.lex());
         auto subProgram = parser.parseProgram();
+        // A recovered parser error leaves a deliberately incomplete AST. Do not
+        // merge that tree into the importing program: semantic analysis would
+        // otherwise diagnose every symbol omitted by recovery as an unrelated
+        // error and hide the actual syntax failure in a cascade.
+        WIO_LOG_PROCESS_ERRORS(CompilationError);
         collectRequiredCppHeaders(subProgram->statements, actualPath, gAppData.requiredCppHeaders);
         const bool moduleDeclaresTopLevelRealms = hasDeclaredTopLevelRealms(subProgram->statements);
 

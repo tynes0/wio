@@ -1,0 +1,5 @@
+use imported_parser_error;
+
+fn Entry(args: string[]) -> i32 {
+    return BrokenValue() + MissingAfterBrokenDeclaration();
+}
