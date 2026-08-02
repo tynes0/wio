@@ -28,6 +28,7 @@ if (MSVC)
 endif()
 
 option(WIO_BUILD_APP "Build application" ON)
+option(WIO_BUILD_FUZZERS "Build Clang libFuzzer/ASan/UBSan frontend targets" OFF)
 set(WIO_DIST_DIR "${CMAKE_BINARY_DIR}/dist" CACHE PATH "Default packaged Wio distribution directory.")
 
 # If the project is added to someone else's project, let's set the app to OFF by default.

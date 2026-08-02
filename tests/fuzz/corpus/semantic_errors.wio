@@ -1,0 +1,4 @@
+fn Entry() -> i32 {
+    let value: MissingType = missingSymbol + 1;
+    return value;
+}

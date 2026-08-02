@@ -1,0 +1,8 @@
+fn Echo(value: string) -> string {
+    return value;
+}
+
+fn Entry() -> i32 {
+    let text = $"outer ${Echo($"inner ${"quoted"}")} tail";
+    return text.Count() fit i32;
+}

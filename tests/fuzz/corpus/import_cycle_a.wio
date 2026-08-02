@@ -1,0 +1,9 @@
+use import_cycle_b;
+
+fn FromA() -> i32 {
+    return 1;
+}
+
+fn Entry() -> i32 {
+    return import_cycle_b::FromB();
+}

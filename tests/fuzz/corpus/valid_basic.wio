@@ -1,0 +1,8 @@
+fn Add(left: i32, right: i64) -> i64 {
+    return left + right;
+}
+
+fn Entry() -> i32 {
+    let value = Add(1, 2i64);
+    return value fit i32;
+}

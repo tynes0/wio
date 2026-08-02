@@ -1,0 +1,5 @@
+use import_cycle_a;
+
+fn FromB() -> i32 {
+    return 2;
+}

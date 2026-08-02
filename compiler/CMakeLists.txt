@@ -81,3 +81,26 @@ if(BUILD_TESTING)
         COMMAND wio_filesystem_policy_test
     )
 endif()
+
+if(WIO_BUILD_FUZZERS)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        message(FATAL_ERROR "WIO_BUILD_FUZZERS requires Clang with libFuzzer support.")
+    endif()
+
+    add_executable(wio_frontend_fuzzer
+        "${CMAKE_SOURCE_DIR}/tests/fuzz/wio_frontend_fuzzer.cpp"
+    )
+    target_compile_options(wio_compiler PRIVATE
+        -fsanitize=fuzzer-no-link,address,undefined
+        -fno-omit-frame-pointer
+    )
+    target_link_libraries(wio_frontend_fuzzer PRIVATE wio_compiler)
+    target_compile_options(wio_frontend_fuzzer PRIVATE
+        -fsanitize=fuzzer,address,undefined
+        -fno-omit-frame-pointer
+    )
+    target_link_options(wio_frontend_fuzzer PRIVATE
+        -fsanitize=fuzzer,address,undefined
+        -fno-omit-frame-pointer
+    )
+endif()
