@@ -1259,6 +1259,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_parser_precedence_run
+        "${CMAKE_SOURCE_DIR}/tests/parser_precedence_run.wio"
+        "parser-precedence-ok"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_contextual_keyword_identifiers_run
         "${CMAKE_SOURCE_DIR}/tests/contextual_keyword_identifiers_run.wio"
         "Contextual keyword identifiers: ok"
@@ -2843,6 +2850,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_null_inference_requires_type
         "${CMAKE_SOURCE_DIR}/tests/invalid/null_inference_requires_type.wio"
         "Cannot infer a variable type from null"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_use_path_empty_segment
+        "${CMAKE_SOURCE_DIR}/tests/invalid/use_path_empty_segment.wio"
+        "Expected a module name after '::'"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_use_import_all_alias
+        "${CMAKE_SOURCE_DIR}/tests/invalid/use_import_all_alias.wio"
+        "Import-all use statements cannot declare an alias"
         "Compiling failed:"
     )
 

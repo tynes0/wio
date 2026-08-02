@@ -1990,7 +1990,6 @@ namespace wio
         return makeNodePtr<ReturnStatement>(std::move(value), startLoc);
     }
 
-    // TODO: Refactor
     NodePtr<Statement> Parser::parseUseStatement()
     {
         Token startTok = consume(TokenType::kwUse);
@@ -2014,54 +2013,62 @@ namespace wio
         
         std::vector<std::string> moduleParts;
         Location modulePathEndLoc = startLoc;
-        
-        while (matchOneOf({TokenType::kwSuper, TokenType::kwSelf, TokenType::identifier}) ||
-               (peek().isKeyword() &&
-                (moduleParts.empty() || previous().type == TokenType::opScope)))
+
+        bool isFirstPart = true;
+        bool expectsPart = true;
+        bool sawPathToken = false;
+        while (expectsPart)
         {
-            Token tok = advance();
+            if (!matchIdentifier())
+            {
+                if (!sawPathToken)
+                    utError("Use statement must include a module path.", startLoc);
+
+                if (match(TokenType::semicolon))
+                    utError("Unfinished use statement. Use statements should finish with a module name.", modulePathEndLoc);
+
+                utError("Expected a module name after '::'.", currentOrPreviousLocation());
+            }
+
+            Token tok = consumeIdentifier();
+            sawPathToken = true;
             modulePathEndLoc = tok.loc;
-            bool skipScope = false;
-            if (tok.type == TokenType::kwSuper)
+
+            if (tok.value == "super")
             {
                 moduleParts.emplace_back("..");
             }
-            else if (tok.type == TokenType::kwSelf)
+            else if (tok.value == "self")
             {
-                skipScope = true;
+                if (!isFirstPart)
+                    utError("'self' may appear only at the beginning of a use path.", tok.loc);
+            }
+            else if (tok.value == "std" && isFirstPart)
+            {
+                isStdLib = true;
             }
             else
             {
-                if (tok.value == "std" && moduleParts.empty())
-                {
-                    skipScope = true;
-                    isStdLib = true;
-                }
-                else
-                {
-                    moduleParts.push_back(tok.value);
-                }
+                moduleParts.push_back(tok.value);
             }
 
-              if (match(TokenType::opScope, false))
-              {
-                  if (peek(1).type == TokenType::opStar)
-                      break;
+            isFirstPart = false;
+            if (!match(TokenType::opScope))
+            {
+                expectsPart = false;
+                break;
+            }
 
-                  advance();
+            if (peek(1).type == TokenType::opStar)
+                break;
 
-                  if (!skipScope)
-                  {
-                      modulePathEndLoc = previousLocation();
-                      moduleParts.emplace_back("/");
-                  }
-              }
+            advance();
         }
 
         if (moduleParts.empty())
             utError("Use statement must include a module path.", startLoc);
 
-        if (moduleParts.back() == ".." || moduleParts.back() == "/")
+        if (moduleParts.back() == "..")
             utError("Unfinished use statement. Use statements should finish with a module name.", modulePathEndLoc);
 
         std::string moduleName = moduleParts.back();
@@ -2069,10 +2076,12 @@ namespace wio
         std::string aliasName;
         bool importAllIntoScope = false;
 
-        std::ranges::for_each(moduleParts, [&modulePath](const std::string& part)
+        for (size_t i = 0; i < moduleParts.size(); ++i)
         {
-            modulePath.append(part);
-        });
+            if (i > 0)
+                modulePath.push_back('/');
+            modulePath.append(moduleParts[i]);
+        }
 
         if (match(TokenType::opScope, true))
         {
@@ -2082,6 +2091,8 @@ namespace wio
 
         if (match(TokenType::kwAs, true))
         {
+            if (importAllIntoScope)
+                utError("Import-all use statements cannot declare an alias.", previousLocation());
             aliasName = consumeIdentifier().value;
         }
 
@@ -2111,7 +2122,6 @@ namespace wio
         return makeNodePtr<RealmDeclaration>(std::move(name), std::move(statements), startTok.loc);
     }
 
-    // todo: improve
     int Parser::getPrecedence(TokenType type)
     {
         // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
@@ -2121,7 +2131,7 @@ namespace wio
         // fit
         // ---------------------------------
         case TokenType::kwFit:
-            return 13;
+            return 15;
             
         // ---------------------------------
         // Postfix / access / call
@@ -2130,7 +2140,7 @@ namespace wio
         case TokenType::opScope:
         case TokenType::leftParen:    // call
         case TokenType::leftBracket:  // index
-            return 12;
+            return 14;
     
         // ---------------------------------
         // Prefix (unary)
@@ -2140,7 +2150,7 @@ namespace wio
         case TokenType::kwNot:        // not
         case TokenType::opLogicalNot: // !
         case TokenType::opBitNot:     // ~
-            return 11;
+            return 13;
     
         // ---------------------------------
         // Multiplicative
@@ -2148,28 +2158,28 @@ namespace wio
         case TokenType::opStar:
         case TokenType::opSlash:
         case TokenType::opPercent:
-            return 10;
+            return 12;
     
         // ---------------------------------
         // Additive
         // ---------------------------------
         case TokenType::opPlus:
         case TokenType::opMinus:
-            return 9;
+            return 11;
     
         // ---------------------------------
         // Shift
         // ---------------------------------
         case TokenType::opShiftLeft:
         case TokenType::opShiftRight:
-            return 8;
+            return 10;
             
         // ---------------------------------
         // Range
         // ---------------------------------
         case TokenType::opRangeInclusive:
         case TokenType::opRangeExclusive:
-            return 7;
+            return 9;
     
         // ---------------------------------
         // Relational
@@ -2179,7 +2189,7 @@ namespace wio
         case TokenType::opGreater:
         case TokenType::opGreaterEqual:
         case TokenType::kwIn:
-            return 6;
+            return 8;
     
         // ---------------------------------
         // Equality
@@ -2187,13 +2197,15 @@ namespace wio
         case TokenType::opEqual:
         case TokenType::opNotEqual:
         case TokenType::kwIs:
-            return 5;
+            return 7;
     
         // ---------------------------------
         // Bitwise
         // ---------------------------------
         case TokenType::opBitAnd:
+            return 6;
         case TokenType::opBitXor:
+            return 5;
         case TokenType::opBitOr:
             return 4;
 

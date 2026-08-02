@@ -1,0 +1,14 @@
+use std::assert as assert;
+use std::console as console;
+
+fn Entry() -> i32 {
+    let bitwise = 1u32 | 2u32 ^ 3u32 & 1u32;
+    let arithmetic = 2 + 3 * 4 << 1;
+    let logical = false or true and false;
+
+    assert::ExpectEqual(bitwise, 3u32, "bitwise precedence should be &: then ^, then |");
+    assert::ExpectEqual(arithmetic, 28, "multiplicative/additive/shift precedence should be stable");
+    assert::ExpectFalse(logical, "logical and should bind tighter than logical or");
+    console::PrintLine("parser-precedence-ok");
+    return 0;
+}
