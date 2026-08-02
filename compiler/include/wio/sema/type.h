@@ -43,6 +43,7 @@ namespace wio
             bool isCompatibleWith(const Ref<Type>& other) const;
             bool isVoid() const;
             bool isUnknown() const;
+            bool isPoisoned() const;
 
             static Ref<Type> getTypeFromIntegerResult(const IntegerResult& result);
             static Ref<Type> getTypeFromFloatResult(const FloatResult& result);

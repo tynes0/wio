@@ -5,6 +5,9 @@
 #include "wio/sema/symbol.h"
 #include "wio/sema/scope.h"
 
+#include <functional>
+#include <unordered_set>
+
 // NOLINTBEGIN(cppcoreguidelines-pro-type-static-cast-downcast)
 namespace wio::sema
 {
@@ -473,6 +476,70 @@ namespace wio::sema
     bool Type::isUnknown() const
     {
         return this == Compiler::get().getTypeContext().getUnknown().Get();
+    }
+
+    bool Type::isPoisoned() const
+    {
+        std::unordered_set<const Type*> visited;
+        std::function<bool(const Type*)> containsUnknown = [&](const Type* type) -> bool
+        {
+            if (!type)
+                return true;
+            if (type->isUnknown())
+                return true;
+            if (!visited.insert(type).second)
+                return false;
+
+            auto anyPoisoned = [&](const std::vector<Ref<Type>>& types)
+            {
+                return std::ranges::any_of(types, [&](const Ref<Type>& candidate)
+                {
+                    return containsUnknown(candidate.Get());
+                });
+            };
+
+            switch (type->kind())
+            {
+            case TypeKind::Null:
+            {
+                const auto* nullType = static_cast<const NullType*>(type);
+                return nullType->transformedType && containsUnknown(nullType->transformedType.Get());
+            }
+            case TypeKind::Reference:
+                return containsUnknown(static_cast<const ReferenceType*>(type)->referredType.Get());
+            case TypeKind::Array:
+                return containsUnknown(static_cast<const ArrayType*>(type)->elementType.Get());
+            case TypeKind::Dictionary:
+            {
+                const auto* dictionaryType = static_cast<const DictionaryType*>(type);
+                return containsUnknown(dictionaryType->keyType.Get()) ||
+                       containsUnknown(dictionaryType->valueType.Get());
+            }
+            case TypeKind::Function:
+            {
+                const auto* functionType = static_cast<const FunctionType*>(type);
+                return containsUnknown(functionType->returnType.Get()) || anyPoisoned(functionType->paramTypes);
+            }
+            case TypeKind::Struct:
+                return anyPoisoned(static_cast<const StructType*>(type)->genericArguments);
+            case TypeKind::Alias:
+                return containsUnknown(static_cast<const AliasType*>(type)->aliasedType.Get());
+            case TypeKind::ValuePackView:
+                return anyPoisoned(static_cast<const ValuePackViewType*>(type)->elementTypes);
+            case TypeKind::TypePackView:
+                return anyPoisoned(static_cast<const TypePackViewType*>(type)->elementTypes);
+            case TypeKind::PackStorage:
+                return anyPoisoned(static_cast<const PackStorageType*>(type)->elementTypes);
+            case TypeKind::Primitive:
+            case TypeKind::GenericParameter:
+            case TypeKind::GenericParameterPack:
+                return false;
+            }
+
+            return false;
+        };
+
+        return containsUnknown(this);
     }
 
     Ref<Type> Type::getTypeFromIntegerResult(const IntegerResult& result)

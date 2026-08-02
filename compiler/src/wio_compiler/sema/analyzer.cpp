@@ -5956,6 +5956,15 @@ namespace wio::sema
         node.left->accept(*this);
         node.right->accept(*this);
 
+        const Ref<Type> initialLeftType = node.left->refType.Lock();
+        const Ref<Type> initialRightType = node.right->refType.Lock();
+        if (!initialLeftType || !initialRightType ||
+            initialLeftType->isPoisoned() || initialRightType->isPoisoned())
+        {
+            node.refType = Compiler::get().getTypeContext().getUnknown();
+            return;
+        }
+
         if (node.op.type == TokenType::kwIn && node.right->is<RangeExpression>())
         {
             auto leftType = node.left->refType.Lock();
@@ -9297,6 +9306,27 @@ namespace wio::sema
             return formatDiagnosticTypeList(getUncontextualizedArgumentTypes());
         };
 
+        auto diagnosePoisonedCallArguments = [&]() -> bool
+        {
+            const auto& argumentTypes = getUncontextualizedArgumentTypes();
+            bool hasPoisonedArgument = false;
+            for (size_t i = 0; i < argumentTypes.size(); ++i)
+            {
+                if (!argumentTypes[i] || !argumentTypes[i]->isPoisoned())
+                    continue;
+
+                hasPoisonedArgument = true;
+                // Candidate probing intentionally suppresses diagnostics. Replay
+                // only poisoned arguments outside the probe so the root error is
+                // preserved without adding a derivative overload diagnostic.
+                (void)analyzeArgumentWithExpectedType(node.arguments[i], nullptr, false);
+            }
+
+            if (hasPoisonedArgument)
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+            return hasPoisonedArgument;
+        };
+
         auto scoreResolvedCall = [&](const Ref<FunctionType>& functionType,
                                      const std::vector<Ref<Type>>& actualArgumentTypes,
                                      size_t requiredArgumentCount,
@@ -10066,6 +10096,9 @@ namespace wio::sema
 
             if (isAmbiguous)
             {
+                if (diagnosePoisonedCallArguments())
+                    return;
+
                 const std::string candidateSummary = buildCandidateSummary();
                 if (candidateSummary.empty())
                 {
@@ -10091,6 +10124,9 @@ namespace wio::sema
             }
             if (!bestMatch.has_value())
             {
+                if (diagnosePoisonedCallArguments())
+                    return;
+
                 if (rejectedByInstantiationWhitelist)
                 {
                     WIO_LOG_ADD_ERROR(
@@ -10380,6 +10416,9 @@ namespace wio::sema
 
             if (isAmbiguous)
             {
+                if (diagnosePoisonedCallArguments())
+                    return;
+
                 WIO_LOG_ADD_ERROR(
                     node.location(),
                     "Ambiguous function call to intrinsic member '{}' with arguments {}.",
@@ -10392,6 +10431,9 @@ namespace wio::sema
 
             if (!bestIndex.has_value())
             {
+                if (diagnosePoisonedCallArguments())
+                    return;
+
                 WIO_LOG_ADD_ERROR(
                     node.location(),
                     "No matching overload for intrinsic member '{}' with arguments {}.",
@@ -10437,6 +10479,12 @@ namespace wio::sema
 
         if (!calleeSym && (!calleeType || calleeType->kind() != TypeKind::Function))
         {
+            if (calleeType && calleeType->isPoisoned())
+            {
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+
             WIO_LOG_ADD_ERROR(node.location(), "Called expression is undefined.");
             node.refType = Compiler::get().getTypeContext().getUnknown();
             return;
@@ -10497,6 +10545,9 @@ namespace wio::sema
         {
             auto expectedType = funcType->paramTypes[i];
             const auto& actualType = argTypes[i];
+
+            if (!expectedType || !actualType || expectedType->isPoisoned() || actualType->isPoisoned())
+                continue;
 
             if (!isAssignmentLikeCompatible(expectedType, actualType) &&
                 !isImplicitObjectViewBridge(expectedType, actualType) &&

@@ -1,0 +1,7 @@
+fn Select(value: i32) -> i32 { return value; }
+fn Select(value: string) -> i32 { return 0; }
+
+fn Entry(args: string[]) -> i32 {
+    let selected = Select(missingArgument);
+    return missingCallable(selected);
+}

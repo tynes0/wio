@@ -1,0 +1,12 @@
+fn Consume(value: i32) -> i32 {
+    return value;
+}
+
+fn Broken(value: MissingType) -> i32 {
+    let derived = missingSymbol.member + 1;
+    return Consume(value) + derived;
+}
+
+fn Entry(args: string[]) -> i32 {
+    return Broken(1);
+}

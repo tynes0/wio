@@ -971,6 +971,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/modules"
     )
 
+    add_wio_failure_test_clean(
+        wio_invalid_semantic_poison_no_cascade
+        "${CMAKE_SOURCE_DIR}/tests/invalid/semantic_poison_no_cascade.wio"
+        "Unknown type: 'MissingType'"
+        "Type mismatch in binary operation|Argument mismatch at index|No matching overload|Generated C\\+\\+ output:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_overload_poison_no_cascade
+        "${CMAKE_SOURCE_DIR}/tests/invalid/overload_poison_no_cascade.wio"
+        "Undefined symbol: 'missingArgument'"
+        "No matching overload|Ambiguous function call|Called expression is undefined|Called expression is not a function|Generated C\\+\\+ output:"
+    )
+
     add_wio_output_test(
         wio_test_realm_merge_across_modules_run
         "${CMAKE_SOURCE_DIR}/tests/modules/realm_merge_root.wio"
