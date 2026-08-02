@@ -4,6 +4,8 @@ All notable user-facing changes to Wio are recorded here.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-03
+
 ### Added
 
 - Added `std::process::ExecutablePath()` for resolving the current process image
