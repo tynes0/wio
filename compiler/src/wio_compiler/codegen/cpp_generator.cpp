@@ -5526,6 +5526,8 @@ namespace wio::codegen
     void CppGenerator::visit(FloatLiteral& node)
     {
         std::string valStr = common::stripFloatLiteralTypeSuffix(node.token.value);
+        if (valStr.find_first_of(".eE") == std::string::npos)
+            valStr += ".0";
 
         auto type = node.refType.Lock();
         if (type && type->toString() == "f64")

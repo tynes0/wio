@@ -1245,6 +1245,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_numeric_promotion_run
+        "${CMAKE_SOURCE_DIR}/tests/numeric_promotion_run.wio"
+        "numeric-promotion-ok"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_contextual_keyword_identifiers_run
         "${CMAKE_SOURCE_DIR}/tests/contextual_keyword_identifiers_run.wio"
         "Contextual keyword identifiers: ok"
@@ -2794,6 +2801,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_native_reference_return_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/native_reference_return_not_supported.wio"
         "@Native functions cannot return ref/view values"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_floating_modulo_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/floating_modulo_not_supported.wio"
+        "Operator '%' requires integer operands"
         "Compiling failed:"
     )
 

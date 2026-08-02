@@ -1,0 +1,34 @@
+use std::assert as assert;
+use std::console as console;
+
+fn TypeNameOf(value: i64) -> string { return "i64"; }
+fn TypeNameOf(value: u32) -> string { return "u32"; }
+fn TypeNameOf(value: f32) -> string { return "f32"; }
+fn TypeNameOf(value: f64) -> string { return "f64"; }
+
+fn Entry() -> i32 {
+    let signedWideA = 1i32 + 2i64;
+    let signedWideB = 2i64 + 1i32;
+    let signedMixedA = 1u32 + 2i64;
+    let signedMixedB = 2i64 + 1u32;
+    let unsignedMixedA = 1i32 + 2u32;
+    let unsignedMixedB = 2u32 + 1i32;
+    let floatMixedA = 1f32 + 2i64;
+    let floatMixedB = 2i64 + 1f32;
+    let doubleMixedA = 1f64 + 2f32;
+    let doubleMixedB = 2f32 + 1f64;
+
+    assert::ExpectEqual(TypeNameOf(signedWideA), "i64", "i32 + i64 should promote to i64");
+    assert::ExpectEqual(TypeNameOf(signedWideB), "i64", "promotion must not depend on operand order");
+    assert::ExpectEqual(TypeNameOf(signedMixedA), "i64", "i64 can represent every u32 value");
+    assert::ExpectEqual(TypeNameOf(signedMixedB), "i64", "mixed promotion must be symmetric");
+    assert::ExpectEqual(TypeNameOf(unsignedMixedA), "u32", "equal-width signed/unsigned arithmetic should use unsigned");
+    assert::ExpectEqual(TypeNameOf(unsignedMixedB), "u32", "equal-width mixed promotion must be symmetric");
+    assert::ExpectEqual(TypeNameOf(floatMixedA), "f32", "f32 arithmetic should absorb integer operands");
+    assert::ExpectEqual(TypeNameOf(floatMixedB), "f32", "float/integer promotion must be symmetric");
+    assert::ExpectEqual(TypeNameOf(doubleMixedA), "f64", "f64 should dominate f32");
+    assert::ExpectEqual(TypeNameOf(doubleMixedB), "f64", "floating promotion must be symmetric");
+
+    console::PrintLine("numeric-promotion-ok");
+    return 0;
+}

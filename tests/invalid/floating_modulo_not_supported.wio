@@ -1,0 +1,4 @@
+fn Entry() -> i32 {
+    let invalid = 5.0f32 % 2.0f32;
+    return invalid fit i32;
+}

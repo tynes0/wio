@@ -1020,6 +1020,78 @@ namespace wio::sema
                    name == "char" || name == "uchar";
         }
 
+        Ref<Type> getCommonNumericType(const Ref<Type>& left, const Ref<Type>& right)
+        {
+            Ref<Type> lhs = unwrapAliasType(left);
+            Ref<Type> rhs = unwrapAliasType(right);
+            if (!lhs || !rhs || !lhs->isNumeric() || !rhs->isNumeric())
+                return nullptr;
+
+            if (lhs.Get() == rhs.Get())
+                return lhs;
+
+            struct NumericInfo
+            {
+                int bits = 0;
+                bool isSigned = false;
+                bool isFloat = false;
+                bool isSize = false;
+            };
+
+            auto describe = [](const Ref<Type>& type) -> NumericInfo
+            {
+                const std::string& name = type.AsFast<PrimitiveType>()->name;
+                if (name == "f32") return {32, true, true, false};
+                if (name == "f64") return {64, true, true, false};
+                if (name == "isize") return {64, true, false, true};
+                if (name == "usize") return {64, false, false, true};
+                const bool isSigned = name.starts_with('i');
+                if (name.ends_with("8")) return {8, isSigned, false, false};
+                if (name.ends_with("16")) return {16, isSigned, false, false};
+                if (name.ends_with("32")) return {32, isSigned, false, false};
+                return {64, isSigned, false, false};
+            };
+
+            const NumericInfo lhsInfo = describe(lhs);
+            const NumericInfo rhsInfo = describe(rhs);
+            auto& types = Compiler::get().getTypeContext();
+
+            if (lhsInfo.isFloat || rhsInfo.isFloat)
+            {
+                const bool hasF64 =
+                    (lhsInfo.isFloat && lhsInfo.bits == 64) ||
+                    (rhsInfo.isFloat && rhsInfo.bits == 64);
+                return hasF64 ? types.getF64() : types.getF32();
+            }
+
+            const NumericInfo* resultInfo = nullptr;
+            if (lhsInfo.isSigned == rhsInfo.isSigned)
+                resultInfo = lhsInfo.bits >= rhsInfo.bits ? &lhsInfo : &rhsInfo;
+            else
+            {
+                const NumericInfo& signedInfo = lhsInfo.isSigned ? lhsInfo : rhsInfo;
+                const NumericInfo& unsignedInfo = lhsInfo.isSigned ? rhsInfo : lhsInfo;
+                resultInfo = signedInfo.bits > unsignedInfo.bits ? &signedInfo : &unsignedInfo;
+            }
+
+            const int bits = resultInfo->bits;
+            const bool useSizeType = resultInfo->isSize && bits == 64;
+            if (resultInfo->isSigned)
+            {
+                if (useSizeType) return types.getISize();
+                if (bits <= 8) return types.getI8();
+                if (bits <= 16) return types.getI16();
+                if (bits <= 32) return types.getI32();
+                return types.getI64();
+            }
+
+            if (useSizeType) return types.getUSize();
+            if (bits <= 8) return types.getU8();
+            if (bits <= 16) return types.getU16();
+            if (bits <= 32) return types.getU32();
+            return types.getU64();
+        }
+
         std::optional<IntegerType> tryGetContextualIntegerLiteralType(const Ref<Type>& type)
         {
             Ref<Type> resolved = unwrapAliasType(type);
@@ -6443,7 +6515,13 @@ namespace wio::sema
             return;
         }
 
+        const Ref<Type> semanticLhsType = readableLhsType ? readableLhsType : lhsType;
+        const Ref<Type> semanticRhsType = readableRhsType ? readableRhsType : rhsType;
+        const Ref<Type> commonNumericType = getCommonNumericType(semanticLhsType, semanticRhsType);
+
         bool isCompatible = lhsType->isCompatibleWith(rhsType);
+        if (!node.op.isAssignment() && commonNumericType)
+            isCompatible = true;
         if (!isCompatible && readableLhsType && readableRhsType &&
             (shouldAutoReadReferenceType(lhsType) || shouldAutoReadReferenceType(rhsType)))
         {
@@ -6480,8 +6558,27 @@ namespace wio::sema
             return;
         }
 
-        const Ref<Type> semanticLhsType = readableLhsType ? readableLhsType : lhsType;
-        const Ref<Type> semanticRhsType = readableRhsType ? readableRhsType : rhsType;
+        const bool requiresIntegerOperands =
+            node.op.type == TokenType::opPercent ||
+            node.op.type == TokenType::opBitAnd ||
+            node.op.type == TokenType::opBitOr ||
+            node.op.type == TokenType::opBitXor ||
+            node.op.type == TokenType::opShiftLeft ||
+            node.op.type == TokenType::opShiftRight;
+        if (requiresIntegerOperands && commonNumericType &&
+            (!isIntegralLikeType(semanticLhsType) || !isIntegralLikeType(semanticRhsType)))
+        {
+            WIO_LOG_ADD_ERROR(
+                node.op.loc,
+                "Operator '{}' requires integer operands, but got '{}' and '{}'.",
+                node.op.value,
+                semanticLhsType->toString(),
+                semanticRhsType->toString()
+            );
+            node.refType = Compiler::get().getTypeContext().getUnknown();
+            return;
+        }
+
         if (isAnyType(semanticLhsType) || isAnyType(semanticRhsType))
         {
             const bool isAssignment = node.op.type == TokenType::opAssign;
@@ -6528,8 +6625,18 @@ namespace wio::sema
         }
         else
         {
-            // Todo: In arithmetic operations (for now), the result type is the same as the type of the left operand.
-            node.refType = readableLhsType ? readableLhsType : lhsType;
+            const bool producesCommonNumericType =
+                node.op.type == TokenType::opPlus ||
+                node.op.type == TokenType::opMinus ||
+                node.op.type == TokenType::opStar ||
+                node.op.type == TokenType::opSlash ||
+                node.op.type == TokenType::opPercent ||
+                node.op.type == TokenType::opBitAnd ||
+                node.op.type == TokenType::opBitOr ||
+                node.op.type == TokenType::opBitXor;
+            node.refType = producesCommonNumericType && commonNumericType
+                ? commonNumericType
+                : semanticLhsType;
         }
     }
 
