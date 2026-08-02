@@ -815,7 +815,18 @@ namespace wio::sema
 
     std::string FunctionType::toCppString() const
     {
-        return ""; // TODO: Impl
+        std::stringstream ss;
+        ss << "std::function<";
+        ss << (returnType ? returnType->toCppString() : "void");
+        ss << "(";
+        for (size_t i = 0; i < paramTypes.size(); ++i)
+        {
+            ss << (paramTypes[i] ? paramTypes[i]->toCppString() : "void");
+            if (i + 1 < paramTypes.size())
+                ss << ", ";
+        }
+        ss << ")>";
+        return ss.str();
     }
 
     ReferenceType::ReferenceType(Ref<Type> referredType, bool isMutable)

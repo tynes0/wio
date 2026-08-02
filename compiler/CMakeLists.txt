@@ -61,3 +61,14 @@ target_compile_options(wio_compiler PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
     $<$<CXX_COMPILER_ID:MSVC>:/W4>
 )
+
+if(BUILD_TESTING)
+    add_executable(wio_function_type_cpp_string_test
+        "${CMAKE_SOURCE_DIR}/tests/function_type_cpp_string_test.cpp"
+    )
+    target_link_libraries(wio_function_type_cpp_string_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_function_type_cpp_string
+        COMMAND wio_function_type_cpp_string_test
+    )
+endif()
