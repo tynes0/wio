@@ -41,6 +41,6 @@ namespace wio::common::filesystem
             (void)fclose(file);
             return result;
         }
-        throw FileError(("File '" + filepath.string() + "' cannot be opened!").c_str());
+        return false;
     }
 }

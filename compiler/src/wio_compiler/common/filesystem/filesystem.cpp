@@ -34,7 +34,9 @@ namespace wio::common::filesystem
 
     std::filesystem::path getAbsPath(const std::filesystem::path& filepath)
     {
-        return std::filesystem::absolute(filepath);
+        std::error_code ec;
+        std::filesystem::path absolutePath = std::filesystem::absolute(filepath, ec);
+        return ec ? filepath : absolutePath;
     }
 
     std::filesystem::path getCanonicalPath(const std::filesystem::path& filepath)
@@ -64,7 +66,11 @@ namespace wio::common::filesystem
     bool createDirectories(const std::filesystem::path& path)
     {
         std::error_code ec;
-        return std::filesystem::create_directories(path, ec);
+        if (std::filesystem::is_directory(path, ec) && !ec)
+            return true;
+
+        ec.clear();
+        return std::filesystem::create_directories(path, ec) && !ec;
     }
 
     bool hasPrefix(const std::string& str, const std::string& prefix)
@@ -95,7 +101,11 @@ namespace wio::common::filesystem
             return {};
         }
 
-        if (fseek(file, 0, SEEK_SET)) return {};
+        if (fseek(file, 0, SEEK_SET) != 0)
+        {
+            (void)fclose(file);
+            return {};
+        }
 
         std::string buffer; 
         try
@@ -109,11 +119,17 @@ namespace wio::common::filesystem
         }
 
         size_t readSize = fread(buffer.data(), 1, fileSize, file);
+        const bool readFailed = std::ferror(file) != 0;
         (void)fclose(file);
+
+        if (readFailed)
+            return {};
 
         // NOLINTNEXTLINE(modernize-use-integer-sign-comparison)
         if (readSize != static_cast<size_t>(fileSize))
+        {
             buffer.resize(readSize);
+        }
 
         return buffer;
     }
@@ -131,6 +147,8 @@ namespace wio::common::filesystem
         buffer.resize(fileSize);
         
         size_t readSize = fread(buffer.data(), 1, fileSize, file);
+        if (std::ferror(file))
+            return {};
         buffer.resize(readSize);
 
         return buffer;
@@ -164,9 +182,7 @@ namespace wio::common::filesystem
     bool writeFileBase(FILE* file, const std::string& output)
     {
         if (!file)
-        {
-            throw FileError("Writing failed: Null file.");
-        }
+            return false;
         
         const char* data = output.data();
         size_t total = output.size();
@@ -179,10 +195,7 @@ namespace wio::common::filesystem
             if (n == 0)
             {
                 if (std::ferror(file))
-                {
-                    std::error_code ec(errno, std::generic_category());
-                    throw FileError(("Writing failed: " + ec.message()).c_str()); // Todo: should we throw?
-                }
+                    return false;
                 break;
             }
             written += n;
@@ -202,27 +215,29 @@ namespace wio::common::filesystem
         if (!std::filesystem::exists(dir_path, ec) || !std::filesystem::is_directory(dir_path, ec))
             return files;
 
-        try
+        const std::filesystem::directory_options options =
+            std::filesystem::directory_options::skip_permission_denied;
+        if (recursive)
         {
-            if (recursive)
+            for (std::filesystem::recursive_directory_iterator it(dir_path, options, ec), end;
+                 it != end && !ec;
+                 it.increment(ec))
             {
-                for (const auto& entry : std::filesystem::recursive_directory_iterator(dir_path, ec))
-                {
-                    if (entry.is_regular_file(ec))
-                        files.push_back(entry.path().string());
-                }
-            } else
-            {
-                for (const auto& entry : std::filesystem::directory_iterator(dir_path, ec))
-                {
-                    if (entry.is_regular_file(ec))
-                        files.push_back(entry.path().string());
-                }
+                std::error_code entryError;
+                if (it->is_regular_file(entryError) && !entryError)
+                    files.push_back(it->path().string());
             }
         }
-        catch (...)
+        else
         {
-            return {}; 
+            for (std::filesystem::directory_iterator it(dir_path, options, ec), end;
+                 it != end && !ec;
+                 it.increment(ec))
+            {
+                std::error_code entryError;
+                if (it->is_regular_file(entryError) && !entryError)
+                    files.push_back(it->path().string());
+            }
         }
         return files;
     }

@@ -71,4 +71,13 @@ if(BUILD_TESTING)
         NAME wio_function_type_cpp_string
         COMMAND wio_function_type_cpp_string_test
     )
+
+    add_executable(wio_filesystem_policy_test
+        "${CMAKE_SOURCE_DIR}/tests/filesystem_policy_test.cpp"
+    )
+    target_link_libraries(wio_filesystem_policy_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_filesystem_policy
+        COMMAND wio_filesystem_policy_test
+    )
 endif()
