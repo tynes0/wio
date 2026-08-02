@@ -1,5 +1,6 @@
 use std::assert as assert;
 use std::console as console;
+use std::span as span;
 
 component Cell {
     public value: i32;
@@ -60,6 +61,14 @@ fn First(values: ref i32[]) -> ref i32 {
     return ref values[0usize];
 }
 
+fn CopyArray(values: view i32[]) -> i32[] {
+    return values.Clone();
+}
+
+fn WholeSpan(values: view i32[]) -> span::Span {
+    return span::Full<i32>(values);
+}
+
 fn Entry() -> i32 {
     assert::ExpectEqual(Cell(7).Read(), 7, "a temporary component view is valid for the complete call");
 
@@ -84,6 +93,12 @@ fn Entry() -> i32 {
     let first: ref i32 = First(ref values);
     first += 5;
     assert::ExpectEqual(values[0usize], 16, "array element borrows inherit their array lifetime");
+
+    let arrayCopy = CopyArray(ref values);
+    let full = WholeSpan(ref values);
+    values[1usize] = 99;
+    assert::ExpectEqual(arrayCopy[1usize], 22, "returned arrays own their storage");
+    assert::ExpectEqual(span::At<i32>(ref values, full, 1usize), 99, "returned spans are range tokens applied to caller-owned arrays");
 
     let box = Boxed(30);
     let boxRef: ref Boxed = box.AsRef();
