@@ -1,0 +1,8 @@
+component Point {
+    public x: i32;
+}
+
+fn Entry() -> i32 {
+    let point: Point = null;
+    return point.x;
+}

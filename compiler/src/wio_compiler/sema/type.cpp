@@ -11,6 +11,48 @@
 // NOLINTBEGIN(cppcoreguidelines-pro-type-static-cast-downcast)
 namespace wio::sema
 {
+    namespace
+    {
+        bool acceptsNull(const Type* type)
+        {
+            while (type && type->kind() == TypeKind::Alias)
+                type = static_cast<const AliasType*>(type)->aliasedType.Get();
+
+            if (!type)
+                return false;
+
+            if (type->kind() == TypeKind::Null ||
+                type->kind() == TypeKind::Function ||
+                type->kind() == TypeKind::Reference)
+            {
+                return true;
+            }
+
+            if (type->kind() == TypeKind::Primitive)
+            {
+                const std::string& name = static_cast<const PrimitiveType*>(type)->name;
+                return name == "any" || name == "opaque";
+            }
+
+            if (type->kind() == TypeKind::Struct)
+            {
+                const auto* structType = static_cast<const StructType*>(type);
+                return structType->isObject || structType->isInterface;
+            }
+
+            return false;
+        }
+
+        bool bindNullToTarget(const Ref<Type>& target, const Ref<Type>& candidate)
+        {
+            if (!target || !candidate || candidate->kind() != TypeKind::Null || !acceptsNull(target.Get()))
+                return false;
+
+            candidate.AsFast<NullType>()->transformedType = target;
+            return true;
+        }
+    }
+
     // =============================================================
     // Type Helper Methods
     // =============================================================
@@ -20,55 +62,15 @@ namespace wio::sema
         if (!lhs || !rhs)
             return false;
 
-        if (lhs->kind() == TypeKind::Primitive)
-        {
-            if (rhs->kind() == TypeKind::Null)
-                rhs.AsFast<NullType>()->transformedType = lhs;
-            
-            return true;
-        }
+        if (rhs->kind() == TypeKind::Null)
+            return bindNullToTarget(lhs, rhs);
+
         if (lhs->kind() == TypeKind::Null)
-        {
-            return true;
-        }
-        if (lhs->kind() == TypeKind::Function)
-        {
-            if (rhs->kind() == TypeKind::Null)
-            {
-                rhs.AsFast<NullType>()->transformedType = lhs;
-                return true;
-            }
-            if (rhs->kind() == TypeKind::Function)
-            {
-                return lhs->isCompatibleWith(rhs);
-            }
-            return false;
-        }
-        if (lhs->kind() == TypeKind::GenericParameterPack)
-        {
-            return rhs->kind() == TypeKind::GenericParameterPack &&
-                   lhs.AsFast<GenericParameterPackType>()->name == rhs.AsFast<GenericParameterPackType>()->name;
-        }
-        if (lhs->kind() == TypeKind::ValuePackView ||
-            lhs->kind() == TypeKind::TypePackView ||
-            lhs->kind() == TypeKind::PackStorage)
-        {
-            return lhs->isCompatibleWith(rhs);
-        }
-        if (lhs->kind() == TypeKind::Reference)
-        {
-            if (rhs->kind() == TypeKind::Null)
-                rhs.AsFast<NullType>()->transformedType = lhs;
-        
-            return false; // Reference types should not be mixed with each other.
-        }
+            return rhs->kind() == TypeKind::Null;
+
         if (lhs->kind() == TypeKind::Array)
         {
-            if (rhs->kind() == TypeKind::Null)
-            {
-                rhs.AsFast<NullType>()->transformedType = lhs;
-            }
-            else if (rhs->kind() == TypeKind::Array)
+            if (rhs->kind() == TypeKind::Array)
             {
                 const Ref<ArrayType> initializerArrayType = rhs.AsFast<ArrayType>();
                 Ref<ArrayType> lhsArrayType = lhs.AsFast<ArrayType>();
@@ -77,15 +79,10 @@ namespace wio::sema
                     lhsArrayType->size = initializerArrayType->size;
             }
         
-            return true;
         }
         if (lhs->kind() == TypeKind::Dictionary)
         {
-            if (rhs->kind() == TypeKind::Null)
-            {
-                rhs.AsFast<NullType>()->transformedType = lhs;
-            }
-            else if (rhs->kind() == TypeKind::Dictionary)
+            if (rhs->kind() == TypeKind::Dictionary)
             {
                 auto lDict = lhs.AsFast<DictionaryType>();
                 auto rDict = rhs.AsFast<DictionaryType>();
@@ -97,31 +94,9 @@ namespace wio::sema
                     rDict->valueType = lDict->valueType;
             }
 
-            return true;
-        }
-        if (lhs->kind() == TypeKind::Struct)
-        {
-            if (rhs->kind() == TypeKind::Null)
-            {
-                rhs.AsFast<NullType>()->transformedType = lhs;
-                return true;
-            }
-            if (rhs->kind() == TypeKind::Struct)
-            {
-                auto lStruct = lhs.AsFast<StructType>();
-                auto rStruct = rhs.AsFast<StructType>();
-            
-                return lStruct->name == rStruct->name && lStruct->scopePath == rStruct->scopePath;
-            }
-        
-            return false;
-        }
-        if (lhs->kind() == TypeKind::Alias)
-        {
-            return true;
         }
 
-        return false; // Unexpected TypeKind (Shouldn't be possible. I think)
+        return lhs->isCompatibleWith(rhs);
     }
 
     bool Type::isNumeric() const
@@ -200,9 +175,12 @@ namespace wio::sema
         {
             if (kind2 == TypeKind::Null)
             {
+                if (!acceptsNull(t1))
+                    return false;
+
                 const_cast<NullType*>(static_cast<const NullType*>(t2))->transformedType =
                     Ref<Type>(const_cast<Type*>(t1));
-                return true; // Null compatible with all types
+                return true;
             }
 
             const bool isPackViewStoragePair =

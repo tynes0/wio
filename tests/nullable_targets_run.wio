@@ -1,0 +1,29 @@
+use std::assert as assert;
+use std::console as console;
+
+object Boxed {
+    public value: i32;
+
+    OnConstruct(value: i32) {
+        self.value = value;
+    }
+}
+
+fn Entry() -> i32 {
+    mut objectValue: Boxed = null;
+    let callback: fn(i32) -> i32 = null;
+    let numberView: view i32 = null;
+    let payload: any = null;
+    let handle: opaque = null;
+
+    assert::ExpectTrue(objectValue == null, "object handles support null");
+    assert::ExpectTrue(callback == null, "function values support null");
+    assert::ExpectTrue(numberView == null, "views support null");
+    assert::ExpectTrue(payload == null, "any supports null");
+    assert::ExpectTrue(handle == null, "opaque supports null");
+
+    objectValue = Boxed(7);
+    assert::ExpectTrue(objectValue != null, "object handles can transition from null to an object");
+    console::PrintLine("nullable-targets-ok");
+    return 0;
+}

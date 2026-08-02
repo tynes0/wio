@@ -1252,6 +1252,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_nullable_targets_run
+        "${CMAKE_SOURCE_DIR}/tests/nullable_targets_run.wio"
+        "nullable-targets-ok"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_contextual_keyword_identifiers_run
         "${CMAKE_SOURCE_DIR}/tests/contextual_keyword_identifiers_run.wio"
         "Contextual keyword identifiers: ok"
@@ -2808,6 +2815,34 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_floating_modulo_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/floating_modulo_not_supported.wio"
         "Operator '%' requires integer operands"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_null_primitive_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/null_primitive_not_supported.wio"
+        "Type 'i32' cannot be initialized with null"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_null_component_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/null_component_not_supported.wio"
+        "Type 'Point' cannot be initialized with null"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_null_array_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/null_array_not_supported.wio"
+        "Type 'i32\\[\\]' cannot be initialized with null"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_null_inference_requires_type
+        "${CMAKE_SOURCE_DIR}/tests/invalid/null_inference_requires_type.wio"
+        "Cannot infer a variable type from null"
         "Compiling failed:"
     )
 

@@ -11845,6 +11845,17 @@ namespace wio::sema
 
             if (!sym->type || sym->type->isUnknown()) 
             {
+                if (resolvedInitializerType && resolvedInitializerType->kind() == TypeKind::Null)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.initializer->location(),
+                        "Cannot infer a variable type from null. Add an explicit nullable type."
+                    );
+                    sym->type = Compiler::get().getTypeContext().getUnknown();
+                    node.name->refType = sym->type;
+                    return;
+                }
+
                 Ref<Type> inferredType = initType;
                 if (shouldAutoReadInferredInitializer(node.initializer, initType))
                     inferredType = getAutoReadableType(initType);
@@ -11854,7 +11865,18 @@ namespace wio::sema
             }
             else if (initType && !initType->isUnknown() && !isAssignmentLikeCompatible(sym->type, initType)) 
             {
-                WIO_LOG_ADD_ERROR(node.location(), "Type mismatch for '{}'.", node.name->token.value);
+                if (resolvedInitializerType && resolvedInitializerType->kind() == TypeKind::Null)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.initializer->location(),
+                        "Type '{}' cannot be initialized with null.",
+                        sym->type->toString()
+                    );
+                }
+                else
+                {
+                    WIO_LOG_ADD_ERROR(node.location(), "Type mismatch for '{}'.", node.name->token.value);
+                }
             }
 
             if (node.mutability == Mutability::Const)

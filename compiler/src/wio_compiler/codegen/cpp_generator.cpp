@@ -5208,8 +5208,17 @@ namespace wio::codegen
         }
         
         emit("(");
+        const Ref<sema::Type> leftType = unwrapAliasTypeForCodegen(node.left->refType.Lock());
+        const Ref<sema::Type> rightType = unwrapAliasTypeForCodegen(node.right->refType.Lock());
+        const bool comparesWithNull =
+            (node.op.type == TokenType::opEqual || node.op.type == TokenType::opNotEqual) &&
+            ((leftType && leftType->kind() == sema::TypeKind::Null) ||
+             (rightType && rightType->kind() == sema::TypeKind::Null));
+
         if (node.op.type == TokenType::opAssign)
             emitAssignableLeftExpression(node.left);
+        else if (comparesWithNull && leftType && leftType->kind() == sema::TypeKind::Reference)
+            node.left->accept(*this);
         else
             emitReadableExpression(node.left);
         
@@ -5220,7 +5229,10 @@ namespace wio::codegen
             opStr = "||";
         
         emit(" " + opStr + " ");
-        emitReadableExpression(node.right);
+        if (comparesWithNull && rightType && rightType->kind() == sema::TypeKind::Reference)
+            node.right->accept(*this);
+        else
+            emitReadableExpression(node.right);
         emit(")");
     }
 

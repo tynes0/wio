@@ -1,0 +1,4 @@
+fn Entry() -> i32 {
+    let values: i32[] = null;
+    return values.Count() fit i32;
+}
