@@ -32,6 +32,10 @@ realm std {
         fn ExecutableSuffix() -> string;
 
         @Native
+        @CppName(wio::runtime::std_process::CurrentExecutablePath)
+        fn ExecutablePath() -> string;
+
+        @Native
         @CppName(wio::runtime::std_process::SharedLibrarySuffix)
         fn SharedLibrarySuffix() -> string;
 

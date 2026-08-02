@@ -4,6 +4,19 @@ All notable user-facing changes to Wio are recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- Added `std::process::ExecutablePath()` for resolving the current process image
+  independently of the working directory and `argv[0]` spelling.
+
+### Fixed
+
+- PATH-dispatched `wio` invocations now find the adjacent self-hosted companion
+  from the real executable location, including bare `wio` calls from `cmd.exe`.
+- CLI-intended commands no longer fall through to the native compiler when the
+  companion is missing, and compiler diagnostics no longer expose timestamped
+  `[level] WIO LOG` envelopes in normal console output.
+
 ## [0.5.0] - 2026-08-01
 
 ### Added

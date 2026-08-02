@@ -6,7 +6,7 @@
 namespace wio
 {
     Logger::Logger()
-            : logger_("WIO LOG", "[%D-%T] [%L] %N: %V%n"), warningCount_(0), errorCount_(0)
+            : logger_("Wio", "%V%n"), warningCount_(0), errorCount_(0)
     {
 #if defined(_DEBUG) || defined(DEBUG)
         logger_.add_sink(std::make_shared<dtlog::debug_sink>());

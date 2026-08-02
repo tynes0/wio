@@ -19,8 +19,13 @@
 
 #if defined(_WIN32)
     #include <windows.h>
+#elif defined(__APPLE__)
+    #include <mach-o/dyld.h>
+    #include <sys/wait.h>
+    #include <unistd.h>
 #else
     #include <sys/wait.h>
+    #include <unistd.h>
 #endif
 
 namespace wio::runtime::std_process
@@ -138,6 +143,51 @@ namespace wio::runtime::std_process
         return ".exe";
 #else
         return "";
+#endif
+    }
+
+    std::string CurrentExecutablePath()
+    {
+#if defined(_WIN32)
+        std::wstring buffer(MAX_PATH, L'\0');
+        for (;;)
+        {
+            const DWORD copied = GetModuleFileNameW(
+                nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+            if (copied == 0)
+                return {};
+            if (copied < buffer.size())
+            {
+                buffer.resize(copied);
+                return std::filesystem::path(buffer).lexically_normal().generic_string();
+            }
+            buffer.resize(buffer.size() * 2u);
+        }
+#elif defined(__APPLE__)
+        std::uint32_t size = 0;
+        if (_NSGetExecutablePath(nullptr, &size) != -1 || size == 0)
+            return {};
+        std::vector<char> buffer(size, '\0');
+        if (_NSGetExecutablePath(buffer.data(), &size) != 0)
+            return {};
+        std::error_code ec;
+        const auto resolved = std::filesystem::weakly_canonical(buffer.data(), ec);
+        return ec ? std::filesystem::path(buffer.data()).lexically_normal().generic_string()
+                  : resolved.generic_string();
+#else
+        std::vector<char> buffer(1024, '\0');
+        for (;;)
+        {
+            const ssize_t copied = ::readlink("/proc/self/exe", buffer.data(), buffer.size() - 1u);
+            if (copied < 0)
+                return {};
+            if (static_cast<std::size_t>(copied) < buffer.size() - 1u)
+            {
+                buffer[static_cast<std::size_t>(copied)] = '\0';
+                return std::filesystem::path(buffer.data()).lexically_normal().generic_string();
+            }
+            buffer.resize(buffer.size() * 2u);
+        }
 #endif
     }
 

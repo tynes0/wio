@@ -59,15 +59,28 @@ namespace
         return true;
     }
 
-    std::filesystem::path selfHostedCliPath(char* executableArgument)
+    std::filesystem::path selfHostedCliPath(const char* executableArgument)
     {
-        if (executableArgument == nullptr || executableArgument[0] == '\0')
-            return {};
+        std::filesystem::path executable =
+            wio::runtime::std_process::CurrentExecutablePath();
 
-        std::error_code ec;
-        const std::filesystem::path executable =
-            std::filesystem::absolute(std::filesystem::path(executableArgument), ec);
-        if (ec)
+        if (executable.empty() && executableArgument != nullptr && executableArgument[0] != '\0')
+        {
+            const std::string resolved =
+                wio::runtime::std_process::WhichExecutable(executableArgument);
+            if (!resolved.empty())
+                executable = resolved;
+        }
+
+        if (executable.empty() && executableArgument != nullptr && executableArgument[0] != '\0')
+        {
+            std::error_code ec;
+            executable = std::filesystem::absolute(executableArgument, ec);
+            if (ec)
+                executable.clear();
+        }
+
+        if (executable.empty())
             return {};
 
 #if defined(_WIN32)
@@ -124,6 +137,12 @@ int main(int argc, char* argv[])
         std::error_code ec;
         if (!companion.empty() && std::filesystem::is_regular_file(companion, ec))
             return runSelfHostedCli(companion, argc, argv);
+
+        std::cerr << "Wio CLI companion was not found";
+        if (!companion.empty())
+            std::cerr << " at '" << companion.string() << '\'';
+        std::cerr << ". Reinstall Wio or keep wio and wio-selfhost in the same bin directory.\n";
+        return EXIT_FAILURE;
     }
 
     return runCompiler(argc, argv);

@@ -906,6 +906,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         --run
     )
 
+    add_wio_output_test(
+        wio_test_std_process_executable_path_run
+        "${CMAKE_SOURCE_DIR}/tests/std_process_executable_path_run.wio"
+        "Std process executable path: true/true"
+        --run
+    )
+
     add_test(
         NAME wio_test_binding_import_smoke
         COMMAND
@@ -1848,6 +1855,21 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/std_fs_recursive_run.wio"
         "Std fs recursive: true/1/true/true/true/true"
         --run
+    )
+
+    add_test(
+        NAME wio_test_cli_path_dispatch_console_output
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/entry_default_void_run.wio
+            -DWIO_SCRATCH_DIR=${CMAKE_BINARY_DIR}/cli_path_dispatch_console_output
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioCliPathDispatchConsoleSmoke.cmake"
+    )
+    set_tests_properties(
+        wio_test_cli_path_dispatch_console_output
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )
 
     add_wio_output_test(

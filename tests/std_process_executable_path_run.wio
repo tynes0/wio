@@ -1,0 +1,9 @@
+use std::console as console;
+use std::fs as fs;
+use std::process as process;
+
+fn Entry() -> i32 {
+    let executable = process::ExecutablePath();
+    console::Print($"Std process executable path: ${executable != ""}/${fs::IsFile(executable)}");
+    return 0;
+}
