@@ -1,0 +1,8 @@
+fn BorrowLocalElement() -> ref i32 {
+    mut values = [1, 2];
+    return ref values[0usize];
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

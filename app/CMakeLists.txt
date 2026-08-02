@@ -1238,6 +1238,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_ref_view_lifetime_matrix_run
+        "${CMAKE_SOURCE_DIR}/tests/ref_view_lifetime_matrix_run.wio"
+        "ref-view-lifetime-matrix-ok"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_contextual_keyword_identifiers_run
         "${CMAKE_SOURCE_DIR}/tests/contextual_keyword_identifiers_run.wio"
         "Contextual keyword identifiers: ok"
@@ -2760,6 +2767,34 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_extension_mutable_receiver_requires_mut
         "${CMAKE_SOURCE_DIR}/tests/invalid/extension_mutable_receiver_requires_mut.wio"
         "Extension method 'AddOne' requires a mutable receiver"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_return_local_component_reference
+        "${CMAKE_SOURCE_DIR}/tests/invalid/return_local_component_reference.wio"
+        "Cannot return a reference borrowed from a local value"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_return_local_array_reference
+        "${CMAKE_SOURCE_DIR}/tests/invalid/return_local_array_reference.wio"
+        "Cannot return a reference borrowed from a local value"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_temporary_object_view_escape
+        "${CMAKE_SOURCE_DIR}/tests/invalid/temporary_object_view_escape.wio"
+        "Cannot store a reference borrowed from a temporary value"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_native_reference_return_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/native_reference_return_not_supported.wio"
+        "@Native functions cannot return ref/view values"
+        "Compiling failed:"
     )
 
     add_wio_failure_test(

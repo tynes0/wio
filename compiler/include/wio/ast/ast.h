@@ -125,6 +125,15 @@ namespace wio
         Free
     );
 
+    enum class BorrowOrigin : uint8_t
+    {
+        None,
+        Static,
+        Caller,
+        Local,
+        Temporary
+    };
+
     FrenumClassInNamespace(wio, IntrinsicMember, uint8_t,
         None,
         PackSize,
@@ -322,6 +331,7 @@ namespace wio
         ~Expression() override;
         
         WeakRef<sema::Symbol> referencedSymbol = nullptr;
+        BorrowOrigin borrowOrigin = BorrowOrigin::None;
     };
 
     struct Statement : ASTNode

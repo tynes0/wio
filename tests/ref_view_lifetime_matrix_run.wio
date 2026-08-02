@@ -1,0 +1,100 @@
+use std::assert as assert;
+use std::console as console;
+
+component Cell {
+    public value: i32;
+}
+
+component Holder {
+    public cell: Cell;
+}
+
+extension CellOps for Cell {
+    public view fn Read() -> i32 {
+        return self.value;
+    }
+
+    public ref fn AddOne() -> ref Cell {
+        self.value += 1;
+        return self;
+    }
+
+    public view fn AsView() -> view Cell {
+        return self;
+    }
+
+    public view fn Copy() -> Cell {
+        return deref self;
+    }
+}
+
+object Boxed {
+    public value: i32;
+
+    OnConstruct(value: i32) {
+        self.value = value;
+    }
+
+    public fn AsValue() -> Boxed {
+        return deref self;
+    }
+
+    public fn AsRef() -> ref Boxed {
+        return self;
+    }
+
+    public fn AsView() -> view Boxed {
+        return self;
+    }
+
+    public fn Read() -> i32 {
+        return self.value;
+    }
+}
+
+fn BorrowNested(holder: ref Holder) -> ref i32 {
+    return ref holder.cell.value;
+}
+
+fn First(values: ref i32[]) -> ref i32 {
+    return ref values[0usize];
+}
+
+fn Entry() -> i32 {
+    assert::ExpectEqual(Cell(7).Read(), 7, "a temporary component view is valid for the complete call");
+
+    mut cell = Cell(10);
+    let sameCell: ref Cell = cell.AddOne();
+    sameCell.value += 4;
+    assert::ExpectEqual(cell.value, 15, "a reference returned from a stable receiver keeps that receiver's lifetime");
+
+    let observed: view Cell = cell.AsView();
+    assert::ExpectEqual(observed.value, 15, "a view returned from a stable receiver can be stored");
+
+    let copied = cell.Copy();
+    cell.value = 20;
+    assert::ExpectEqual(copied.value, 15, "deref self copies a component value");
+
+    mut holder = Holder(Cell(3));
+    let nested: ref i32 = BorrowNested(ref holder);
+    nested += 6;
+    assert::ExpectEqual(holder.cell.value, 9, "nested member borrows inherit their container lifetime");
+
+    mut values = [11, 22];
+    let first: ref i32 = First(ref values);
+    first += 5;
+    assert::ExpectEqual(values[0usize], 16, "array element borrows inherit their array lifetime");
+
+    let box = Boxed(30);
+    let boxRef: ref Boxed = box.AsRef();
+    let boxView: view Boxed = box.AsView();
+    assert::ExpectEqual(boxRef.value, 30, "object refs can borrow a stable handle");
+    assert::ExpectEqual(boxView.value, 30, "object views can borrow a stable handle");
+    assert::ExpectEqual(Boxed(40).AsView().Read(), 40, "a temporary object borrow can be consumed in the same expression");
+
+    let survivor = Boxed(50).AsValue();
+    assert::ExpectEqual(survivor.value, 50, "deref self returns an owning object handle");
+
+    console::PrintLine("ref-view-lifetime-matrix-ok");
+    return 0;
+}

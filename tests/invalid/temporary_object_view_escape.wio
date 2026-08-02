@@ -1,0 +1,16 @@
+object Boxed {
+    public value: i32;
+
+    OnConstruct(value: i32) {
+        self.value = value;
+    }
+
+    public fn AsView() -> view Boxed {
+        return self;
+    }
+}
+
+fn Entry() -> i32 {
+    let escaped: view Boxed = Boxed(1).AsView();
+    return escaped.value;
+}

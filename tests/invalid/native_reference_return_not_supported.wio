@@ -1,0 +1,6 @@
+@Native
+fn NativeBorrow() -> view i32;
+
+fn Entry() -> i32 {
+    return 0;
+}

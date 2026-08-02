@@ -1574,6 +1574,52 @@ namespace wio::sema
             return false;
         }
 
+        BorrowOrigin classifyBorrowOrigin(const NodePtr<Expression>& expression)
+        {
+            if (!expression)
+                return BorrowOrigin::Temporary;
+
+            if (expression->borrowOrigin != BorrowOrigin::None)
+                return expression->borrowOrigin;
+
+            if (expression->is<SelfExpression>() || expression->is<SuperExpression>())
+                return BorrowOrigin::Caller;
+
+            // A selected member or indexed element is owned by its receiver,
+            // not by the field symbol recorded on the access expression.
+            if (const auto* memberAccess = expression->as<MemberAccessExpression>())
+                return classifyBorrowOrigin(memberAccess->object);
+            if (const auto* arrayAccess = expression->as<ArrayAccessExpression>())
+                return classifyBorrowOrigin(arrayAccess->object);
+            if (const auto* refExpression = expression->as<RefExpression>())
+                return classifyBorrowOrigin(refExpression->operand);
+
+            if (const auto symbol = expression->referencedSymbol.Lock(); symbol)
+            {
+                if (symbol->flags.get_isGlobal())
+                    return BorrowOrigin::Static;
+                if (symbol->kind == SymbolKind::Parameter && symbol->type && symbol->type->kind() == TypeKind::Reference)
+                    return BorrowOrigin::Caller;
+                if (symbol->kind == SymbolKind::Variable || symbol->kind == SymbolKind::Parameter)
+                    return BorrowOrigin::Local;
+            }
+
+            return BorrowOrigin::Temporary;
+        }
+
+        std::string_view borrowOriginName(BorrowOrigin origin)
+        {
+            switch (origin)
+            {
+            case BorrowOrigin::Static: return "static storage";
+            case BorrowOrigin::Caller: return "caller-owned storage";
+            case BorrowOrigin::Local: return "a local value";
+            case BorrowOrigin::Temporary: return "a temporary value";
+            case BorrowOrigin::None: return "an untracked value";
+            }
+            return "an unknown value";
+        }
+
         Ref<StructType> getObjectOrInterfaceStructType(const Ref<Type>& type)
         {
             Ref<Type> resolved = unwrapAliasType(type);
@@ -6373,6 +6419,21 @@ namespace wio::sema
 
         Ref<Type> lhsType = node.left->refType.Lock();
         Ref<Type> rhsType = node.right->refType.Lock();
+
+        Ref<Type> resolvedLhsType = unwrapAliasType(lhsType);
+        Ref<Type> resolvedRhsType = unwrapAliasType(rhsType);
+        if (resolvedLhsType && resolvedRhsType &&
+            resolvedLhsType->kind() == TypeKind::Reference &&
+            resolvedRhsType->kind() == TypeKind::Reference &&
+            classifyBorrowOrigin(node.right) == BorrowOrigin::Temporary)
+        {
+            WIO_LOG_ADD_ERROR(
+                node.right->location(),
+                "Cannot assign a reference borrowed from a temporary value; the borrow would outlive its owner."
+            );
+            node.refType = Compiler::get().getTypeContext().getUnknown();
+            return;
+        }
         Ref<Type> readableLhsType = getAutoReadableType(lhsType);
         Ref<Type> readableRhsType = getAutoReadableType(rhsType);
 
@@ -7681,6 +7742,12 @@ namespace wio::sema
 
         node.referencedSymbol = sym;
         node.refType = sym->type;
+        if (sym->flags.get_isGlobal())
+            node.borrowOrigin = BorrowOrigin::Static;
+        else if (sym->kind == SymbolKind::Parameter && sym->type && sym->type->kind() == TypeKind::Reference)
+            node.borrowOrigin = BorrowOrigin::Caller;
+        else if (sym->kind == SymbolKind::Variable || sym->kind == SymbolKind::Parameter)
+            node.borrowOrigin = BorrowOrigin::Local;
 
         if (sym->flags.get_isParameterPack() && !allowParameterPackIdentifierReference_)
         {
@@ -8169,6 +8236,7 @@ namespace wio::sema
             }
 
             node.refType = arrType->elementType;
+            node.borrowOrigin = classifyBorrowOrigin(node.object);
             return;
         }
 
@@ -8646,6 +8714,37 @@ namespace wio::sema
             if (!node.unwrapResult && !node.propagateResult)
             {
                 node.refType = resultType;
+                Ref<Type> resolvedResultType = unwrapAliasType(resultType);
+                if (resolvedResultType && resolvedResultType->kind() == TypeKind::Reference)
+                {
+                    if (const auto* memberAccess = node.callee->as<MemberAccessExpression>())
+                    {
+                        node.borrowOrigin = classifyBorrowOrigin(memberAccess->object);
+                    }
+                    else if (node.operatorDispatchKind == OperatorDispatchKind::Member)
+                    {
+                        node.borrowOrigin = classifyBorrowOrigin(node.callee);
+                    }
+                    else
+                    {
+                        Ref<Type> callableType = node.callee ? unwrapAliasType(node.callee->refType.Lock()) : nullptr;
+                        auto functionType = callableType ? callableType.AsFast<FunctionType>() : nullptr;
+                        node.borrowOrigin = BorrowOrigin::Static;
+                        if (functionType)
+                        {
+                            const size_t argumentCount = std::min(node.arguments.size(), functionType->paramTypes.size());
+                            for (size_t i = 0; i < argumentCount; ++i)
+                            {
+                                Ref<Type> parameterType = unwrapAliasType(functionType->paramTypes[i]);
+                                if (parameterType && parameterType->kind() == TypeKind::Reference)
+                                {
+                                    node.borrowOrigin = classifyBorrowOrigin(node.arguments[i]);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
                 return true;
             }
 
@@ -10717,6 +10816,7 @@ namespace wio::sema
 
         node.isMut = isMut;
         node.refType = Compiler::get().getTypeContext().getOrCreateReferenceType(node.operand->refType.Lock(), isMut);
+        node.borrowOrigin = classifyBorrowOrigin(node.operand);
     }
 
     void SemanticAnalyzer::visit(FitExpression& node)
@@ -11289,6 +11389,7 @@ namespace wio::sema
         Ref<Type> selfType = currentExtensionTargetType_ ? currentExtensionTargetType_ : currentStructType_;
         node.refType = Compiler::get().getTypeContext().getOrCreateReferenceType(
             selfType, currentExtensionTargetType_ ? currentExtensionMutableReceiver_ : true);
+        node.borrowOrigin = BorrowOrigin::Caller;
     }
 
     void SemanticAnalyzer::visit(SuperExpression& node)
@@ -11622,6 +11723,19 @@ namespace wio::sema
             allowContextualNumericLiteralTyping_ = previousAllowContextualNumericLiteralTyping;
             Ref<Type> initType = node.initializer->refType.Lock();
 
+            Ref<Type> resolvedDeclaredType = unwrapAliasType(sym->type);
+            Ref<Type> resolvedInitializerType = unwrapAliasType(initType);
+            if (resolvedDeclaredType && resolvedInitializerType &&
+                resolvedDeclaredType->kind() == TypeKind::Reference &&
+                resolvedInitializerType->kind() == TypeKind::Reference &&
+                classifyBorrowOrigin(node.initializer) == BorrowOrigin::Temporary)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.initializer->location(),
+                    "Cannot store a reference borrowed from a temporary value; the borrow would outlive its owner."
+                );
+            }
+
             if (!sym->type || sym->type->isUnknown()) 
             {
                 Ref<Type> inferredType = initType;
@@ -11868,6 +11982,18 @@ namespace wio::sema
             return parameter.isParameterPack;
         });
         const bool isPackFunction = node.hasGenericParameterPack || hasFunctionParameterPack;
+
+        if (isNative)
+        {
+            Ref<Type> nativeReturnType = unwrapAliasType(funcType->returnType);
+            if (nativeReturnType && nativeReturnType->kind() == TypeKind::Reference)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "@Native functions cannot return ref/view values because the native borrow lifetime cannot be proven. Return an owning value or handle instead."
+                );
+            }
+        }
         std::string activeFunctionPackName = node.hasGenericParameterPack && !node.genericParameters.empty()
             ? node.genericParameters.back()->token.value
             : "";
@@ -15049,6 +15175,24 @@ namespace wio::sema
             currentExpectedExpressionType_ = previousExpectedExpressionType;
             allowContextualNumericLiteralTyping_ = previousAllowContextualNumericLiteralTyping;
             actualType = node.value->refType.Lock();
+        }
+
+        Ref<Type> resolvedExpectedReturnType = unwrapAliasType(currentFunctionReturnType_);
+        Ref<Type> resolvedActualReturnType = unwrapAliasType(actualType);
+        if (node.value &&
+            resolvedExpectedReturnType && resolvedActualReturnType &&
+            resolvedExpectedReturnType->kind() == TypeKind::Reference &&
+            resolvedActualReturnType->kind() == TypeKind::Reference)
+        {
+            const BorrowOrigin origin = classifyBorrowOrigin(node.value);
+            if (origin == BorrowOrigin::Local || origin == BorrowOrigin::Temporary)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.value->location(),
+                    "Cannot return a reference borrowed from {}; the borrow would outlive its owner.",
+                    borrowOriginName(origin)
+                );
+            }
         }
 
         if (currentFunctionReturnType_)

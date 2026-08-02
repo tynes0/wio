@@ -1,0 +1,12 @@
+component Cell {
+    public value: i32;
+}
+
+fn BorrowLocal() -> ref i32 {
+    mut cell = Cell(1);
+    return ref cell.value;
+}
+
+fn Entry() -> i32 {
+    return 0;
+}
