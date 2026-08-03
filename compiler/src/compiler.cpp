@@ -1471,6 +1471,8 @@ namespace wio
                     .severity = BackendDiagnosticSeverity::Note,
                     .domain = BackendDiagnosticDomain::Compiler,
                     .location = buildBackendDiagnosticLocation(std::move(fileText), lineText, columnText),
+                    .sourceLabel = {},
+                    .code = {},
                     .message = trimWhitespace(message)
                 };
             };
@@ -1529,6 +1531,8 @@ namespace wio
                     .severity = parseBackendSeverity(match[4].str()),
                     .domain = domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain,
                     .location = buildBackendDiagnosticLocation(match[1].str(), match[2].str(), match[3].str()),
+                    .sourceLabel = {},
+                    .code = {},
                     .message = normalizeBackendMessage(domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain, match[5].str())
                 };
             }
@@ -1540,6 +1544,8 @@ namespace wio
                     .severity = parseBackendSeverity(match[3].str()),
                     .domain = domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain,
                     .location = buildBackendDiagnosticLocation(match[1].str(), match[2].str(), ""),
+                    .sourceLabel = {},
+                    .code = {},
                     .message = normalizeBackendMessage(domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain, match[4].str())
                 };
             }
@@ -1551,6 +1557,7 @@ namespace wio
                     .severity = parseBackendSeverity(match[4].str()),
                     .domain = domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain,
                     .location = buildBackendDiagnosticLocation(match[1].str(), match[2].str(), match[3].str()),
+                    .sourceLabel = {},
                     .code = trimWhitespace(match[5].str()),
                     .message = normalizeBackendMessage(domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain, match[6].str())
                 };
@@ -1564,12 +1571,11 @@ namespace wio
                 const std::string toolText = trimWhitespace(match[1].str());
                 const BackendDiagnosticDomain domain = classifyBackendTool(toolText);
 
-                BackendDiagnostic diagnostic{
-                    .severity = parseBackendSeverity(match[2].str()),
-                    .domain = domain,
-                    .code = trimWhitespace(match[3].str()),
-                    .message = normalizeBackendMessage(domain, match[4].str())
-                };
+                BackendDiagnostic diagnostic;
+                diagnostic.severity = parseBackendSeverity(match[2].str());
+                diagnostic.domain = domain;
+                diagnostic.code = trimWhitespace(match[3].str());
+                diagnostic.message = normalizeBackendMessage(domain, match[4].str());
 
                 if (looksLikeSourceFilePath(toolText))
                 {
@@ -1584,12 +1590,12 @@ namespace wio
 
             if (std::regex_match(line, match, linkerToolPattern))
             {
-                return BackendDiagnostic{
-                    .severity = BackendDiagnosticSeverity::Error,
-                    .domain = BackendDiagnosticDomain::Linker,
-                    .sourceLabel = backendDomainLabel(BackendDiagnosticDomain::Linker),
-                    .message = normalizeBackendMessage(BackendDiagnosticDomain::Linker, match[2].str())
-                };
+                BackendDiagnostic diagnostic;
+                diagnostic.severity = BackendDiagnosticSeverity::Error;
+                diagnostic.domain = BackendDiagnosticDomain::Linker;
+                diagnostic.sourceLabel = backendDomainLabel(BackendDiagnosticDomain::Linker);
+                diagnostic.message = normalizeBackendMessage(BackendDiagnosticDomain::Linker, match[2].str());
+                return diagnostic;
             }
 
             return std::nullopt;
