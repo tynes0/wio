@@ -1373,6 +1373,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_dict_option_intrinsic_run
+        "${CMAKE_SOURCE_DIR}/tests/dict_option_intrinsic_run.wio"
+        "dict-option-intrinsic-ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_std_option_adoption_run
+        "${CMAKE_SOURCE_DIR}/tests/std_option_adoption_run.wio"
+        "std-option-adoption-ok"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_generic_object_explicit_specialization_run
         "${CMAKE_SOURCE_DIR}/tests/generic_object_explicit_specialization_run.wio"
         "Generic object specialization: ok"

@@ -175,6 +175,7 @@ namespace wio
         DictContainsKey,
         DictContainsValue,
         DictGet,
+        DictAt,
         DictGetOr,
         DictTryGet,
         DictSet,

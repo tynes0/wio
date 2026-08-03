@@ -2717,6 +2717,17 @@ namespace wio
                     finalStatements.push_back(std::move(stmt));
                 }
             }
+
+            // Option is part of the intrinsic container contract: Dict.Get
+            // returns Option<V> even when user code does not explicitly import
+            // std::option. Load it after ordinary imports so explicit aliases
+            // retain their normal module-merge behavior.
+            if (!gAppData.flags.get_NoBuiltin())
+            {
+                auto optionProgram = parseAndMerge("option", true, sourcePath.parent_path());
+                for (auto& optionStatement : optionProgram->statements)
+                    finalStatements.push_back(std::move(optionStatement));
+            }
             
             program->statements = std::move(finalStatements);
 

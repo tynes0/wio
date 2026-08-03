@@ -213,6 +213,8 @@ namespace wio::sema
                 appendMethodResolution(overloads, IntrinsicMember::DictContainsValue, typeContext.getBool(), { valueType }, typeContext, false);
             else if (memberName == "Get")
                 appendMethodResolution(overloads, IntrinsicMember::DictGet, valueType, { keyType }, typeContext, false);
+            else if (memberName == "At")
+                appendMethodResolution(overloads, IntrinsicMember::DictAt, valueType, { keyType }, typeContext, false);
             else if (memberName == "GetOr")
                 appendMethodResolution(overloads, IntrinsicMember::DictGetOr, valueType, { keyType, valueType }, typeContext, false);
             else if (memberName == "TryGet")

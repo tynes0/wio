@@ -51,8 +51,8 @@ fn Entry() -> i32 {
     assert::ExpectEqual(bag.stats[0usize].value, 8, "ref object.array[index].field should stay mutable");
     assert::ExpectEqual(bag.stats[1usize].value, 12, "ref object.array[index] should mutate the underlying element");
     assert::ExpectEqual(bag.grid[1usize][0usize], 10, "ref nested array indexing should mutate in place");
-    assert::ExpectEqual(bag.weights.Get("hp"), 12, "for view key | ref value should allow mutating dictionary values");
-    assert::ExpectEqual(bag.weights.Get("mp"), 6, "dictionary value ref binding should keep non-selected values mutable too");
+    assert::ExpectEqual(bag.weights.At("hp"), 12, "for view key | ref value should allow mutating dictionary values");
+    assert::ExpectEqual(bag.weights.At("mp"), 6, "dictionary value ref binding should keep non-selected values mutable too");
 
     console::Print("Mutable ergonomics: ok");
     return 0;

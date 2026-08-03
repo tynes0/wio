@@ -1,0 +1,61 @@
+use std::assert as assert;
+use std::console as console;
+use std::option as option;
+use std::queue as queue;
+use std::sets as sets;
+
+mut inspected: i32 = 0;
+mut iterated: i32 = 0;
+
+fn InspectValue(value: i32) { inspected = value; }
+fn IterateValue(value: i32) { iterated += value; }
+
+fn Entry() -> i32 {
+    let some = std::Some<i32>(7);
+    let none = std::None<i32>();
+    assert::ExpectEqual(some.Inspect(InspectValue).Value(), 7, "Option.Inspect value");
+    none.Inspect(InspectValue);
+    assert::ExpectEqual(inspected, 7, "Option.Inspect callback");
+
+    some.ForEach(IterateValue);
+    none.ForEach(IterateValue);
+    assert::ExpectEqual(iterated, 7, "Option.ForEach");
+    assert::ExpectEqual(some.ToArray().Count(), 1usize, "Option.ToArray some");
+    assert::ExpectEqual(none.ToArray().Count(), 0usize, "Option.ToArray none");
+
+    let zipped = some.Zip<string>(std::Some<string>("wio"));
+    assert::ExpectEqual(zipped.Value().first, 7, "Option.Zip first");
+    assert::ExpectEqual(zipped.Value().second, "wio", "Option.Zip second");
+    assert::Expect(none.Zip<string>(std::Some<string>("wio")).IsNone(), "Option.Zip none");
+
+    let nestedOk = std::Some(std::Ok<i32>(11));
+    let transposedOk = option::Transpose<i32>(nestedOk);
+    assert::ExpectEqual(transposedOk.Value().Value(), 11, "Option transpose success");
+    let nestedNone: std::Option<std::Result<i32> > = std::Option<std::Result<i32> >();
+    assert::Expect(option::Transpose<i32>(nestedNone).Value().IsNone(), "Option transpose none");
+    let error = std::MakeResultError(std::ResultDomain::custom, 31, "transpose");
+    let nestedError = std::Some(std::Err<i32>(error));
+    assert::ExpectEqual(option::Transpose<i32>(nestedError).ErrorValue().code, 31, "Option transpose error");
+
+    mut work = queue::Queue<i32>();
+    assert::Expect(work.PeekOption().IsNone(), "Queue.PeekOption empty");
+    work.Enqueue(4);
+    work.Enqueue(5);
+    assert::ExpectEqual(work.PeekOption().Value(), 4, "Queue.PeekOption value");
+    assert::ExpectEqual(work.DequeueOption().Value(), 4, "Queue.DequeueOption value");
+
+    mut hash = sets::UnorderedSet<i32>();
+    assert::Expect(hash.Find(2).IsNone(), "Set.Find absent");
+    hash.Add(2);
+    assert::ExpectEqual(hash.Find(2).Value(), 2, "Set.Find present");
+
+    mut ordered = sets::OrderedSet<i32>();
+    assert::Expect(ordered.FirstOption().IsNone(), "OrderedSet.FirstOption empty");
+    ordered.Add(9);
+    ordered.Add(3);
+    assert::ExpectEqual(ordered.FirstOption().Value(), 3, "OrderedSet.FirstOption");
+    assert::ExpectEqual(ordered.LastOption().Value(), 9, "OrderedSet.LastOption");
+
+    console::PrintLine!("std-option-adoption-ok");
+    return 0;
+}

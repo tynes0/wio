@@ -1,6 +1,16 @@
 use std::result as result;
 
 realm std {
+    component OptionPair<A, B> {
+        public first: A;
+        public second: B;
+
+        OnConstruct(first: A, second: B) {
+            self.first = first;
+            self.second = second;
+        }
+    }
+
     object Option<T> {
         private present: bool;
         private value: T;
@@ -55,6 +65,31 @@ realm std {
             return std::Err<T>(error);
         }
 
+        public fn Inspect(action: fn(T)) -> Option<T> {
+            if (self.present) {
+                action(self.value);
+                return std::Some<T>(self.value);
+            }
+            return std::None<T>();
+        }
+
+        public fn ForEach(action: fn(T)) {
+            if (self.present) { action(self.value); }
+        }
+
+        public fn ToArray() -> T[] {
+            if (self.present) { return [self.value]; }
+            return [];
+        }
+
+        public fn Zip<U>(other: Option<U>) -> Option<OptionPair<T, U> > {
+            if (self.present and other.IsSome()) {
+                let pair: OptionPair<T, U> = OptionPair<T, U>(self.value, other.Value());
+                return std::Some(pair);
+            }
+            return Option<OptionPair<T, U> >();
+        }
+
     }
 
     fn Some<T>(value: T) -> Option<T> { return Option<T>(value); }
@@ -65,12 +100,25 @@ realm std {
         return None<T>();
     }
 
+    fn TransposeOptionResult<T>(optionValue: Option<Result<T> >) -> Result<Option<T> > {
+        if (optionValue.IsNone()) { return std::Ok(std::None<T>()); }
+        let resultValue = optionValue.Value();
+        if (resultValue.IsError()) {
+            return std::ErrLike(resultValue.ErrorValue(), std::None<T>());
+        }
+        return std::Ok(std::Some<T>(resultValue.Value()));
+    }
+
     realm option {
         type Option<T> = std::Option<T>;
+        type Pair<A, B> = std::OptionPair<A, B>;
         fn Some<T>(value: T) -> Option<T> { return std::Some<T>(value); }
         fn None<T>() -> Option<T> { return std::None<T>(); }
         fn FromResult<T>(resultValue: std::Result<T>) -> Option<T> {
             return std::ResultToOption<T>(resultValue);
+        }
+        fn Transpose<T>(optionValue: Option<std::Result<T> >) -> std::Result<Option<T> > {
+            return std::TransposeOptionResult<T>(optionValue);
         }
     }
 

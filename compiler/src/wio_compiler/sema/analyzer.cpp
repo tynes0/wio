@@ -8519,7 +8519,37 @@ namespace wio::sema
             {
                 if (overloads.size() == 1)
                 {
-                    const auto& resolution = overloads.front();
+                    auto resolution = overloads.front();
+                    if (resolution.member == IntrinsicMember::DictGet)
+                    {
+                        Ref<Type> resolvedCandidate = unwrapAliasType(candidateType);
+                        auto dictionaryType = resolvedCandidate && resolvedCandidate->kind() == TypeKind::Dictionary
+                            ? resolvedCandidate.AsFast<DictionaryType>()
+                            : nullptr;
+                        Ref<Symbol> optionSymbol = resolveQualifiedSymbol(currentScope_, "std::Option");
+                        auto optionStruct = optionSymbol && optionSymbol->type && optionSymbol->type->kind() == TypeKind::Struct
+                            ? optionSymbol->type.AsFast<StructType>()
+                            : nullptr;
+                        if (!dictionaryType || !optionStruct)
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                node.member->location(),
+                                "Dict.Get requires the built-in std::Option<T> module."
+                            );
+                            node.refType = Compiler::get().getTypeContext().getUnknown();
+                            return true;
+                        }
+
+                        Ref<Type> optionType = instantiateGenericStructType(
+                            optionStruct,
+                            { dictionaryType->valueType },
+                            node.location()
+                        );
+                        resolution.memberType = Compiler::get().getTypeContext().getOrCreateFunctionType(
+                            optionType,
+                            { dictionaryType->keyType }
+                        );
+                    }
                     node.intrinsicMember = resolution.member;
                     node.refType = resolution.memberType;
 

@@ -21,6 +21,6 @@ fn Entry(args: string[]) -> i32 {
 
     assert::ExpectEqual(box.values.Count(), 1usize, "field-backed ref array should allow mutating members");
     assert::ExpectEqual(box.values[0usize], "item", "field-backed ref array should mutate in place");
-    assert::ExpectEqual(box.counts.Get("answer"), 42, "field-backed ref dict should allow mutating members");
+    assert::ExpectEqual(box.counts.At("answer"), 42, "field-backed ref dict should allow mutating members");
     return 0;
 }

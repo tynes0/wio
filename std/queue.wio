@@ -1,4 +1,5 @@
 use std::result as result;
+use std::option;
 
 realm std {
     realm collections {
@@ -34,6 +35,11 @@ realm std {
                 return self.values[self.head];
             }
 
+            public fn PeekOption() -> std::Option<T> {
+                if (self.Empty()) { return std::None<T>(); }
+                return std::Some<T>(self.values[self.head]);
+            }
+
             public fn Dequeue() -> T {
                 if (self.Empty()) {
                     std::Panic("Queue<T>.Dequeue cannot read an empty queue.");
@@ -58,6 +64,11 @@ realm std {
                 }
                 value = self.Dequeue();
                 return true;
+            }
+
+            public fn DequeueOption() -> std::Option<T> {
+                if (self.Empty()) { return std::None<T>(); }
+                return std::Some<T>(self.Dequeue());
             }
 
             public fn Clear() {

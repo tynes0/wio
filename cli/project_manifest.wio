@@ -85,7 +85,7 @@ realm SelfHostedProject {
 
     fn ManifestValue(values: Dict<string, string>, key: string, fallback: string) -> string {
         if (values.ContainsKey(key)) {
-            return Scalar(values.Get(key));
+            return Scalar(values.At(key));
         }
         return fallback;
     }
@@ -94,7 +94,7 @@ realm SelfHostedProject {
         if (not values.ContainsKey(key)) {
             return fallback;
         }
-        let value = Scalar(values.Get(key)).ToLower();
+        let value = Scalar(values.At(key)).ToLower();
         return value == "true" or value == "1" or value == "yes" or value == "on";
     }
 
@@ -102,7 +102,7 @@ realm SelfHostedProject {
         if (not values.ContainsKey(key)) {
             return [];
         }
-        mut raw = values.Get(key).Trim();
+        mut raw = values.At(key).Trim();
         if (raw.StartsWith("[") and raw.EndsWith("]") and raw.Count() >= 2usize) {
             raw = raw.Slice(1usize, raw.Count() - 2usize);
         }

@@ -1,3 +1,5 @@
+use std::option;
+
 realm std {
     realm collections {
         object UnorderedSet<T> {
@@ -29,6 +31,11 @@ realm std {
 
             public fn Contains(value: T) -> bool {
                 return self.values.ContainsKey(value);
+            }
+
+            public fn Find(value: T) -> std::Option<T> {
+                if (self.Contains(value)) { return std::Some<T>(value); }
+                return std::None<T>();
             }
 
             public fn Remove(value: T) -> bool {
@@ -79,6 +86,11 @@ realm std {
                 return self.values.ContainsKey(value);
             }
 
+            public fn Find(value: T) -> std::Option<T> {
+                if (self.Contains(value)) { return std::Some<T>(value); }
+                return std::None<T>();
+            }
+
             public fn Remove(value: T) -> bool {
                 if (not self.values.ContainsKey(value)) {
                     return false;
@@ -99,8 +111,18 @@ realm std {
                 return self.values.FirstKey();
             }
 
+            public fn FirstOption() -> std::Option<T> {
+                if (self.Empty()) { return std::None<T>(); }
+                return std::Some<T>(self.First());
+            }
+
             public fn Last() -> T {
                 return self.values.LastKey();
+            }
+
+            public fn LastOption() -> std::Option<T> {
+                if (self.Empty()) { return std::None<T>(); }
+                return std::Some<T>(self.Last());
             }
         }
 

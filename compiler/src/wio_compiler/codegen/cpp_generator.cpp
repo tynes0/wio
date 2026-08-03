@@ -1470,6 +1470,8 @@ namespace wio::codegen
             case IntrinsicMember::DictContainsValue:
                 return "DictContainsValue";
             case IntrinsicMember::DictGet:
+                return "DictGetOption";
+            case IntrinsicMember::DictAt:
                 return "DictGet";
             case IntrinsicMember::DictGetOr:
                 return "DictGetOr";
@@ -6093,6 +6095,24 @@ namespace wio::codegen
         emit(") -> ");
         emit(toCppType(intrinsicFunctionType->returnType));
         emit(" { ");
+
+        if (node.intrinsicMember == IntrinsicMember::DictGet)
+        {
+            Ref<sema::Type> valueType = nullptr;
+            Ref<sema::Type> resolvedReceiverType = unwrapAliasTypeForCodegen(receiverType);
+            if (resolvedReceiverType && resolvedReceiverType->kind() == sema::TypeKind::Dictionary)
+                valueType = resolvedReceiverType.AsFast<sema::DictionaryType>()->valueType;
+            if (!valueType)
+                return false;
+
+            const std::string cppValueType = toCppType(valueType);
+            emit("auto&& _wio_values = ");
+            emitReceiver();
+            emit("; auto _wio_it = _wio_values.find(_wio_arg0); ");
+            emit("if (_wio_it != _wio_values.end()) return _WF_std_Some_T<" + cppValueType + ">(_wio_it->second); ");
+            emit("return _WF_std_None<" + cppValueType + ">(); })");
+            return true;
+        }
 
         if (intrinsicFunctionType->returnType && !intrinsicFunctionType->returnType->isVoid())
             emit("return ");

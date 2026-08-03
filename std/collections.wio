@@ -184,8 +184,12 @@ realm std {
             return values.ContainsValue(target);
         }
 
-        fn Get<K, V>(values: Dict<K, V>, key: K) -> V {
+        fn Get<K, V>(values: Dict<K, V>, key: K) -> std::Option<V> {
             return values.Get(key);
+        }
+
+        fn At<K, V>(values: Dict<K, V>, key: K) -> V {
+            return values.At(key);
         }
 
         fn GetOr<K, V>(values: Dict<K, V>, key: K, fallback: V) -> V {

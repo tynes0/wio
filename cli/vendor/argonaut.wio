@@ -101,10 +101,10 @@ realm Argonaut {
         }
 
         private fn StoreValue(id: string, value: string) -> result::Result<result::Unit> {
-            let argument = self.definitions.Get(id);
+            let argument = self.definitions.At(id);
             mut values: string[] = [];
             if (self.parsedValues.ContainsKey(id)) {
-                values = self.parsedValues.Get(id);
+                values = self.parsedValues.At(id);
             }
             if (not argument.isMultiValue and not values.Empty()) {
                 return Fail<result::Unit>(
@@ -145,7 +145,7 @@ realm Argonaut {
             mut positionals: Argument[] = [];
             mut options: Argument[] = [];
             for id in self.positionalOrder {
-                positionals.Push(self.definitions.Get(id));
+                positionals.Push(self.definitions.At(id));
             }
             for id | argument in self.definitions {
                 if (not argument.aliases.Empty()) {
@@ -198,10 +198,10 @@ realm Argonaut {
         public fn GetStrings(argumentId: string) -> string[] {
             let id = argumentId.ToUpper();
             if (self.parsedValues.ContainsKey(id)) {
-                return self.parsedValues.Get(id);
+                return self.parsedValues.At(id);
             }
             if (self.definitions.ContainsKey(id)) {
-                let argument = self.definitions.Get(id);
+                let argument = self.definitions.At(id);
                 if (argument.hasDefaultValue) {
                     return [argument.defaultValue];
                 }
@@ -260,8 +260,8 @@ realm Argonaut {
                     if (not self.aliasToId.ContainsKey(key)) {
                         return Fail<result::Unit>(ErrorKind::Parse, $"Argonaut: Undefined argument: ${key}");
                     }
-                    let id = self.aliasToId.Get(key);
-                    let argument = self.definitions.Get(id);
+                    let id = self.aliasToId.At(key);
+                    let argument = self.definitions.At(id);
                     if (argument.isFlag) {
                         if (hasEquals) {
                             return Fail<result::Unit>(ErrorKind::Parse, $"Argonaut: Flag cannot have a value: ${key}");
@@ -284,7 +284,7 @@ realm Argonaut {
                         return Fail<result::Unit>(ErrorKind::Parse, "Argonaut: Too many positional arguments.");
                     }
                     let id = self.positionalOrder[positionalIndex];
-                    let argument = self.definitions.Get(id);
+                    let argument = self.definitions.At(id);
                     self.StoreValue?(id, token);
                     if (not argument.isMultiValue) {
                         positionalIndex += 1usize;

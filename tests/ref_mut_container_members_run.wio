@@ -16,6 +16,6 @@ fn Entry(args: string[]) -> i32 {
 
     mut dict: Dict<string, i32> = {};
     Put(ref dict);
-    assert::ExpectEqual(dict.Get("answer"), 42, "ref mut dict receiver should allow Set");
+    assert::ExpectEqual(dict.At("answer"), 42, "ref mut dict receiver should allow Set");
     return 0;
 }

@@ -9,7 +9,8 @@ fn Entry() -> i32 {
 
     let hasHp = scores.ContainsKey("hp");
     let hasValueThree = scores.ContainsValue(3);
-    let hp = scores.Get("hp");
+    let hp = scores.Get("hp").Value();
+    let absent = scores.Get("armor").IsNone();
     let missing = scores.GetOr("armor", -1);
 
     mut foundHp = 0;
@@ -46,6 +47,6 @@ fn Entry() -> i32 {
     scores.Clear();
     let isEmpty = scores.Empty();
 
-    console::Print($"Dict members: ${hasHp}/${hasValueThree}/${hp}/${missing}/${tryHp}/${foundHp}/${rage}/${keys.Count() fit i32}/${keysHaveArmor}/${valuesHaveRage}/${cloneHasMana}/${mergedHasShield}/${afterExtendCount}/${removed}/${afterRemoveCount}/${firstKey}/${firstValue}/${lastKey}/${lastValue}/${floorKey}/${ceilKey}/${isEmpty}");
+    console::Print($"Dict members: ${hasHp}/${hasValueThree}/${hp}/${absent}/${missing}/${tryHp}/${foundHp}/${rage}/${keys.Count() fit i32}/${keysHaveArmor}/${valuesHaveRage}/${cloneHasMana}/${mergedHasShield}/${afterExtendCount}/${removed}/${afterRemoveCount}/${firstKey}/${firstValue}/${lastKey}/${lastValue}/${floorKey}/${ceilKey}/${isEmpty}");
     return 0;
 }

@@ -1,0 +1,17 @@
+use std::assert as assert;
+use std::console as console;
+
+fn Entry() -> i32 {
+    let values: Dict<string, i32> = { "answer": 42 };
+
+    let present = values.Get("answer");
+    let missing = values.Get("missing");
+    assert::Expect(present.IsSome(), "Dict.Get present key");
+    assert::ExpectEqual(present.Value(), 42, "Dict.Get value");
+    assert::Expect(missing.IsNone(), "Dict.Get missing key");
+    assert::ExpectEqual(values.At("answer"), 42, "Dict.At strict value");
+    assert::ExpectEqual(values.GetOr("missing", 9), 9, "Dict.GetOr fallback");
+
+    console::PrintLine!("dict-option-intrinsic-ok");
+    return 0;
+}
