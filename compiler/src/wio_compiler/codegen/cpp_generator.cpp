@@ -4671,7 +4671,9 @@ namespace wio::codegen
                 baseTypes.push_back(resolvedBase->toString());
             }
 
-            std::string cppTypeName = mangleStructTypeName(structType);
+            std::string cppTypeName = reflectedKind == "interface_type"
+                ? Mangler::mangleInterface(structType->name, structType->scopePath)
+                : mangleStructTypeName(structType);
             if (!declaration.genericParameters.empty())
             {
                 cppTypeName =
