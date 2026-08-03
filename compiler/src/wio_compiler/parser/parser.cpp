@@ -2091,8 +2091,6 @@ namespace wio
 
         if (match(TokenType::kwAs, true))
         {
-            if (importAllIntoScope)
-                utError("Import-all use statements cannot declare an alias.", previousLocation());
             aliasName = consumeIdentifier().value;
         }
 

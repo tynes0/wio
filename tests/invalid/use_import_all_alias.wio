@@ -1,5 +1,0 @@
-use std::console::* as console;
-
-fn Entry() -> i32 {
-    return 0;
-}

@@ -951,6 +951,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_import_all_alias_run
+        "${CMAKE_SOURCE_DIR}/tests/modules/import_all_alias_root.wio"
+        "import-all-alias-ok"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_std_process_executable_path_run
         "${CMAKE_SOURCE_DIR}/tests/std_process_executable_path_run.wio"
         "Std process executable path: true/true"
@@ -2901,13 +2908,6 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_use_path_empty_segment
         "${CMAKE_SOURCE_DIR}/tests/invalid/use_path_empty_segment.wio"
         "Expected a module name after '::'"
-        "Compiling failed:"
-    )
-
-    add_wio_failure_test_clean(
-        wio_invalid_use_import_all_alias
-        "${CMAKE_SOURCE_DIR}/tests/invalid/use_import_all_alias.wio"
-        "Import-all use statements cannot declare an alias"
         "Compiling failed:"
     )
 

@@ -2638,7 +2638,9 @@ namespace wio
                             bool declaresTopLevelRealms = false;
                             auto moduleProg = parseAndMerge(useStmt->modulePath, true, sourcePath.parent_path(), &importedSymbols, &declaresTopLevelRealms);
 
-                            if (!useStmt->aliasName.empty() && !declaresTopLevelRealms)
+                            if (!useStmt->aliasName.empty() &&
+                                !useStmt->importAllIntoScope &&
+                                !declaresTopLevelRealms)
                             {
                                 finalStatements.push_back(
                                     wrapStatementsInAliasRealm(
@@ -2675,7 +2677,9 @@ namespace wio
                                 bool declaresTopLevelRealms = false;
                                 auto moduleProg = parseAndMerge(useStmt->modulePath, useStmt->isStdLib, sourcePath.parent_path(), &importedSymbols, &declaresTopLevelRealms);
 
-                                if (!useStmt->aliasName.empty() && !declaresTopLevelRealms)
+                                if (!useStmt->aliasName.empty() &&
+                                    !useStmt->importAllIntoScope &&
+                                    !declaresTopLevelRealms)
                                 {
                                     finalStatements.push_back(
                                         wrapStatementsInAliasRealm(
@@ -3117,7 +3121,9 @@ namespace wio
                         bool childDeclaresTopLevelRealms = false;
                         auto childProgram = parseAndMerge(useStmt->modulePath, true, actualPath.parent_path(), &childExportedSymbols, &childDeclaresTopLevelRealms);
 
-                        if (!useStmt->aliasName.empty() && !childDeclaresTopLevelRealms)
+                        if (!useStmt->aliasName.empty() &&
+                            !useStmt->importAllIntoScope &&
+                            !childDeclaresTopLevelRealms)
                         {
                             mergedStatements.push_back(
                                 wrapStatementsInAliasRealm(
@@ -3156,7 +3162,9 @@ namespace wio
                             bool childDeclaresTopLevelRealms = false;
                             auto childProgram = parseAndMerge(useStmt->modulePath, useStmt->isStdLib, actualPath.parent_path(), &childExportedSymbols, &childDeclaresTopLevelRealms);
 
-                            if (!useStmt->aliasName.empty() && !childDeclaresTopLevelRealms)
+                            if (!useStmt->aliasName.empty() &&
+                                !useStmt->importAllIntoScope &&
+                                !childDeclaresTopLevelRealms)
                             {
                                 mergedStatements.push_back(
                                     wrapStatementsInAliasRealm(

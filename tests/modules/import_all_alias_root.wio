@@ -1,0 +1,10 @@
+use std::assert as assert;
+use std::console as console;
+use helper::* as gp;
+
+fn Entry() -> i32 {
+    assert::ExpectEqual(GetValue(), 42, "import-all should expose module symbols directly");
+    assert::ExpectEqual(gp::GetValue(), 42, "import-all aliases should preserve namespaced access");
+    console::PrintLine("import-all-alias-ok");
+    return 0;
+}
