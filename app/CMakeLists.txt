@@ -3368,6 +3368,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "Float literal '1\\.0e100' does not fit into expected type 'f32'"
     )
 
+    add_wio_failure_test_clean(
+        wio_invalid_null_object_requires_nullable
+        "${CMAKE_SOURCE_DIR}/tests/invalid/null_object_requires_nullable.wio"
+        "Type 'Service' cannot be initialized with null"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_nullable_member_requires_narrowing
+        "${CMAKE_SOURCE_DIR}/tests/invalid/nullable_member_requires_narrowing.wio"
+        "Member access requires a non-null value"
+        "Compiling failed:"
+    )
+
     add_wio_failure_test(
         wio_invalid_implicit_narrowing_requires_fit
         "${CMAKE_SOURCE_DIR}/tests/invalid/implicit_narrowing_requires_fit.wio"

@@ -43,6 +43,13 @@ namespace wio::sema
         return makeType<NullType>(std::move(transformedType));
     }
 
+    Ref<Type> TypeContext::getOrCreateNullableType(Ref<Type> valueType)
+    {
+        if (valueType && valueType->kind() == TypeKind::Nullable)
+            return valueType;
+        return makeType<NullableType>(std::move(valueType));
+    }
+
     Ref<Type> TypeContext::getOrCreateArrayType(Ref<Type> elementType, ArrayType::ArrayKind arrayKind, size_t size)
     {
         return makeType<ArrayType>(std::move(elementType), arrayKind, size);

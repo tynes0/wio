@@ -774,6 +774,27 @@ namespace wio::sema
             return type;
         }
 
+        bool isNullableCapableType(const Ref<Type>& type)
+        {
+            Ref<Type> current = unwrapAliasType(type);
+            if (!current || current->isUnknown() || current->kind() == TypeKind::Nullable)
+                return false;
+
+            if (current->kind() == TypeKind::Reference || current->kind() == TypeKind::Function)
+                return true;
+
+            if (current->kind() == TypeKind::Primitive)
+                return current.AsFast<PrimitiveType>()->name == "opaque";
+
+            if (current->kind() == TypeKind::Struct)
+            {
+                auto structType = current.AsFast<StructType>();
+                return structType->isObject || structType->isInterface;
+            }
+
+            return false;
+        }
+
         bool isMutableReferenceTypeChain(Ref<Type> type)
         {
             Ref<Type> current = unwrapAliasType(type);
@@ -2540,6 +2561,8 @@ namespace wio::sema
             }
             case TypeKind::Reference:
                 return containsGenericParameterType(current.AsFast<ReferenceType>()->referredType);
+            case TypeKind::Nullable:
+                return containsGenericParameterType(current.AsFast<NullableType>()->valueType);
             case TypeKind::Array:
                 return containsGenericParameterType(current.AsFast<ArrayType>()->elementType);
             case TypeKind::Dictionary:
@@ -3129,6 +3152,10 @@ namespace wio::sema
                     refType->isMutable
                 );
             }
+            case TypeKind::Nullable:
+                return ctx.getOrCreateNullableType(
+                    instantiateGenericType(current.AsFast<NullableType>()->valueType, bindings)
+                );
             case TypeKind::Array:
             {
                 auto arrayType = current.AsFast<ArrayType>();
@@ -5812,6 +5839,24 @@ namespace wio::sema
             return result;
         };
 
+        auto applyNullableSuffix = [&](Ref<Type> type) -> Ref<Type>
+        {
+            if (!node.isNullable)
+                return type;
+
+            if (!isNullableCapableType(type))
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Type '{}' cannot be nullable. Only object/interface handles, ref/view, function, and opaque types support '?'.",
+                    type ? type->toString() : "<unknown>"
+                );
+                return Compiler::get().getTypeContext().getUnknown();
+            }
+
+            return Compiler::get().getTypeContext().getOrCreateNullableType(std::move(type));
+        };
+
         auto satisfiesApplyForSymbol = [&](const Ref<Symbol>& symbol,
                                            const std::vector<Ref<Type>>& explicitTypeArguments,
                                            std::string_view declarationKind) -> bool
@@ -5873,7 +5918,9 @@ namespace wio::sema
                 return;
             }
 
-            node.refType = Compiler::get().getTypeContext().getOrCreateFunctionType(retType, paramTypes, hasParameterPack);
+            node.refType = applyNullableSuffix(
+                Compiler::get().getTypeContext().getOrCreateFunctionType(retType, paramTypes, hasParameterPack)
+            );
             return;
         }
 
@@ -5891,11 +5938,11 @@ namespace wio::sema
             node.generics[0]->accept(*this);
             node.generics[1]->accept(*this);
 
-            node.refType = Compiler::get().getTypeContext().getOrCreateDictionaryType(
+            node.refType = applyNullableSuffix(Compiler::get().getTypeContext().getOrCreateDictionaryType(
                 node.generics[0]->refType.Lock(),
                 node.generics[1]->refType.Lock(),
                 isOrdered
-            );
+            ));
             return;
         }
         
@@ -6149,7 +6196,7 @@ namespace wio::sema
             type = Compiler::get().getTypeContext().getUnknown();
         }
 
-        node.refType = type;
+        node.refType = applyNullableSuffix(type);
     }
 
     void SemanticAnalyzer::visit(BinaryExpression& node)
@@ -7103,16 +7150,24 @@ namespace wio::sema
     void SemanticAnalyzer::visit(AssignmentExpression& node)
     {
         node.left->accept(*this);
+        Ref<Symbol> directlyAssignedSymbol = node.left->is<Identifier>()
+            ? node.left->referencedSymbol.Lock()
+            : nullptr;
+        Ref<Type> declaredAssignmentType = directlyAssignedSymbol
+            ? directlyAssignedSymbol->type
+            : node.left->refType.Lock();
         Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
         bool previousAllowContextualNumericLiteralTyping = allowContextualNumericLiteralTyping_;
-        currentExpectedExpressionType_ = getAutoReadableType(node.left->refType.Lock());
+        currentExpectedExpressionType_ = getAutoReadableType(declaredAssignmentType);
         allowContextualNumericLiteralTyping_ = true;
         node.right->accept(*this);
         currentExpectedExpressionType_ = previousExpectedExpressionType;
         allowContextualNumericLiteralTyping_ = previousAllowContextualNumericLiteralTyping;
 
-        Ref<Type> lhsType = node.left->refType.Lock();
+        Ref<Type> lhsType = declaredAssignmentType;
         Ref<Type> rhsType = node.right->refType.Lock();
+        if (directlyAssignedSymbol)
+            nonNullNarrowedSymbols_.erase(directlyAssignedSymbol.Get());
 
         auto emitWriteabilityDiagnosticsForSymbol = [&](const Ref<Symbol>& referSym)
         {
@@ -7938,7 +7993,17 @@ namespace wio::sema
         }
 
         node.referencedSymbol = sym;
-        node.refType = sym->type;
+        if (nonNullNarrowedSymbols_.contains(sym.Get()))
+        {
+            Ref<Type> narrowedType = unwrapAliasType(sym->type);
+            node.refType = narrowedType && narrowedType->kind() == TypeKind::Nullable
+                ? narrowedType.AsFast<NullableType>()->valueType
+                : sym->type;
+        }
+        else
+        {
+            node.refType = sym->type;
+        }
         if (sym->flags.get_isGlobal())
             node.borrowOrigin = BorrowOrigin::Static;
         else if (sym->kind == SymbolKind::Parameter && sym->type && sym->type->kind() == TypeKind::Reference)
@@ -8470,6 +8535,16 @@ namespace wio::sema
         }
 
         Ref<Type> resolvedLeftType = unwrapAliasType(leftType);
+        if (resolvedLeftType && resolvedLeftType->kind() == TypeKind::Nullable)
+        {
+            WIO_LOG_ADD_ERROR(
+                node.object->location(),
+                "Member access requires a non-null value, but '{}' is nullable. Check it against null first.",
+                leftType ? leftType->toString() : "<unknown>"
+            );
+            node.refType = Compiler::get().getTypeContext().getUnknown();
+            return;
+        }
         if (resolvedLeftType &&
             (resolvedLeftType->kind() == TypeKind::GenericParameterPack ||
              resolvedLeftType->kind() == TypeKind::ValuePackView ||
@@ -15085,6 +15160,34 @@ namespace wio::sema
     {
         node.condition->accept(*this);
 
+        const auto narrowedSymbolForNullComparison = [&](bool nonNullBranch) -> Ref<Symbol>
+        {
+            auto binary = node.condition->as<BinaryExpression>();
+            if (!binary ||
+                (binary->op.type != TokenType::opEqual && binary->op.type != TokenType::opNotEqual))
+            {
+                return nullptr;
+            }
+
+            const bool leftIsNull = binary->left->is<NullExpression>();
+            const bool rightIsNull = binary->right->is<NullExpression>();
+            if (leftIsNull == rightIsNull)
+                return nullptr;
+
+            auto candidate = leftIsNull ? binary->right : binary->left;
+            auto symbol = candidate->is<Identifier>() ? candidate->referencedSymbol.Lock() : nullptr;
+            Ref<Type> symbolType = symbol ? unwrapAliasType(symbol->type) : nullptr;
+            if (!symbolType || symbolType->kind() != TypeKind::Nullable)
+                return nullptr;
+
+            const bool conditionMeansNonNull = binary->op.type == TokenType::opNotEqual;
+            return conditionMeansNonNull == nonNullBranch ? symbol : nullptr;
+        };
+
+        const auto previousNarrowing = nonNullNarrowedSymbols_;
+        if (auto thenNarrowed = narrowedSymbolForNullComparison(true))
+            nonNullNarrowedSymbols_.insert(thenNarrowed.Get());
+
         auto ifScope = Ref<Scope>::Create(currentScope_, ScopeKind::Block);
         auto prevScope = currentScope_;
         currentScope_ = ifScope;
@@ -15126,7 +15229,11 @@ namespace wio::sema
         if (node.thenBranch) node.thenBranch->accept(*this);
         
         currentScope_ = prevScope;
+        nonNullNarrowedSymbols_ = previousNarrowing;
+        if (auto elseNarrowed = narrowedSymbolForNullComparison(false))
+            nonNullNarrowedSymbols_.insert(elseNarrowed.Get());
         if (node.elseBranch) node.elseBranch->accept(*this);
+        nonNullNarrowedSymbols_ = previousNarrowing;
     }
     
     void SemanticAnalyzer::visit(WhileStatement& node)

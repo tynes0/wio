@@ -779,6 +779,17 @@ namespace wio
 
     NodePtr<TypeSpecifier> Parser::parseType()
     {
+        auto finishType = [&](NodePtr<TypeSpecifier> type) -> NodePtr<TypeSpecifier>
+        {
+            if (match(TokenType::opQuestion, true))
+            {
+                type->isNullable = true;
+                if (match(TokenType::opQuestion))
+                    utError("A type can only have one nullable suffix '?'.", peek().loc);
+            }
+            return type;
+        };
+
         if (match(TokenType::kwRef))
         {
             const Token refToken = advance();
@@ -788,7 +799,14 @@ namespace wio
             std::vector<NodePtr<TypeSpecifier>> generics;
             generics.push_back(std::move(innerType));
             
-            return makeNodePtr<TypeSpecifier>(std::move(token), std::move(generics), nullptr, 0, true, true, false, refToken.loc);
+            auto result = makeNodePtr<TypeSpecifier>(std::move(token), std::move(generics), nullptr, 0, true, true, false, refToken.loc);
+            if (result->generics[0]->isNullable)
+            {
+                result->generics[0]->isNullable = false;
+                result->isNullable = true;
+                return result;
+            }
+            return finishType(std::move(result));
         }
         if (match(TokenType::kwView))
         {
@@ -799,7 +817,14 @@ namespace wio
             std::vector<NodePtr<TypeSpecifier>> generics;
             generics.push_back(std::move(innerType));
             
-            return makeNodePtr<TypeSpecifier>(std::move(token), std::move(generics), nullptr, 0, true, false, false, viewToken.loc);
+            auto result = makeNodePtr<TypeSpecifier>(std::move(token), std::move(generics), nullptr, 0, true, false, false, viewToken.loc);
+            if (result->generics[0]->isNullable)
+            {
+                result->generics[0]->isNullable = false;
+                result->isNullable = true;
+                return result;
+            }
+            return finishType(std::move(result));
         }
 
         if (match(TokenType::leftBracket))
@@ -837,7 +862,7 @@ namespace wio
             std::vector<NodePtr<TypeSpecifier>> generics;
             generics.push_back(std::move(innerType));
 
-            return makeNodePtr<TypeSpecifier>(arrayToken, std::move(generics), nullptr, size, false, false, false, leftBracketToken.loc);
+            return finishType(makeNodePtr<TypeSpecifier>(arrayToken, std::move(generics), nullptr, size, false, false, false, leftBracketToken.loc));
         }
 
         if (match(TokenType::kwFn))
@@ -881,7 +906,7 @@ namespace wio
                 .value = "fn",
                 .loc = fnToken.loc
             };
-            return makeNodePtr<TypeSpecifier>(std::move(fnTok), std::move(generics), nullptr, 0, false, false, false, fnToken.loc);
+            return finishType(makeNodePtr<TypeSpecifier>(std::move(fnTok), std::move(generics), nullptr, 0, false, false, false, fnToken.loc));
         }
 
         match(TokenType::kwConst, true);
@@ -942,7 +967,7 @@ namespace wio
         if (match(TokenType::opRangeInclusive, true))
             result->isPackExpansion = true;
 
-        return result;
+        return finishType(std::move(result));
     }
 
     NodePtr<Statement> Parser::parseStatement()

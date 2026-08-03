@@ -15,7 +15,8 @@ namespace wio
     {
         enum class TypeKind : uint8_t {
             Primitive,  // i32, f32, bool, void
-            Null,       // null
+            Null,       // null literal
+            Nullable,   // T?
             GenericParameter, // T
             GenericParameterPack, // Args...
             ValuePackView, // args.array
@@ -70,6 +71,17 @@ namespace wio
             std::string toString() const override;
             std::string toCppString() const override;
             
+        };
+
+        struct NullableType : Type
+        {
+            Ref<Type> valueType;
+
+            explicit NullableType(Ref<Type> valueType);
+
+            TypeKind kind() const override;
+            std::string toString() const override;
+            std::string toCppString() const override;
         };
 
         struct GenericParameterType : Type
@@ -231,4 +243,4 @@ namespace wio
     }
 }
 
-MakeFrenumWithNamespace(wio::sema, TypeKind, Primitive, Null, GenericParameter, GenericParameterPack, ValuePackView, TypePackView, PackStorage, Reference, Array, Dictionary, Function, Struct, Alias)
+MakeFrenumWithNamespace(wio::sema, TypeKind, Primitive, Null, Nullable, GenericParameter, GenericParameterPack, ValuePackView, TypePackView, PackStorage, Reference, Array, Dictionary, Function, Struct, Alias)

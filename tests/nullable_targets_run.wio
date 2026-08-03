@@ -7,23 +7,28 @@ object Boxed {
     OnConstruct(value: i32) {
         self.value = value;
     }
+
+    public fn Value() -> i32 {
+        return self.value;
+    }
 }
 
 fn Entry() -> i32 {
-    mut objectValue: Boxed = null;
-    let callback: fn(i32) -> i32 = null;
-    let numberView: view i32 = null;
+    mut objectValue: Boxed? = null;
+    let numberView: view i32? = null;
     let payload: any = null;
-    let handle: opaque = null;
+    let handle: opaque? = null;
 
-    assert::ExpectTrue(objectValue == null, "object handles support null");
-    assert::ExpectTrue(callback == null, "function values support null");
-    assert::ExpectTrue(numberView == null, "views support null");
+    assert::ExpectTrue(objectValue == null, "nullable object handles support null");
+    assert::ExpectTrue(numberView == null, "nullable views support null");
     assert::ExpectTrue(payload == null, "any supports null");
-    assert::ExpectTrue(handle == null, "opaque supports null");
+    assert::ExpectTrue(handle == null, "nullable opaque handles support null");
 
     objectValue = Boxed(7);
     assert::ExpectTrue(objectValue != null, "object handles can transition from null to an object");
+    if (objectValue != null) {
+        assert::ExpectEqual(objectValue.Value(), 7, "null checks narrow nullable object handles");
+    }
     console::PrintLine("nullable-targets-ok");
     return 0;
 }

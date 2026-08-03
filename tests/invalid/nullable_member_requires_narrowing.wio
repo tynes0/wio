@@ -1,0 +1,10 @@
+object Service {
+    public fn Value() -> i32 {
+        return 1;
+    }
+}
+
+fn Entry() -> i32 {
+    let service: Service? = null;
+    return service.Value();
+}

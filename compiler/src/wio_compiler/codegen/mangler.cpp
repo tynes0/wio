@@ -25,6 +25,7 @@ namespace wio::codegen
         std::ranges::replace(typeStr, '>', '_');
         std::ranges::replace(typeStr, '.', '_');
         std::ranges::replace(typeStr, ':', '_');
+        std::ranges::replace(typeStr, '?', 'N');
         
         return typeStr;
     }

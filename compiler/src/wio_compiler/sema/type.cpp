@@ -20,27 +20,10 @@ namespace wio::sema
 
             if (!type)
                 return false;
-
-            if (type->kind() == TypeKind::Null ||
-                type->kind() == TypeKind::Function ||
-                type->kind() == TypeKind::Reference)
-            {
+            if (type->kind() == TypeKind::Null || type->kind() == TypeKind::Nullable)
                 return true;
-            }
-
-            if (type->kind() == TypeKind::Primitive)
-            {
-                const std::string& name = static_cast<const PrimitiveType*>(type)->name;
-                return name == "any" || name == "opaque";
-            }
-
-            if (type->kind() == TypeKind::Struct)
-            {
-                const auto* structType = static_cast<const StructType*>(type);
-                return structType->isObject || structType->isInterface;
-            }
-
-            return false;
+            return type->kind() == TypeKind::Primitive &&
+                   static_cast<const PrimitiveType*>(type)->name == "any";
         }
 
         bool bindNullToTarget(const Ref<Type>& target, const Ref<Type>& candidate)
@@ -130,6 +113,28 @@ namespace wio::sema
         TypeKind kind1 = t1->kind();
         TypeKind kind2 = t2->kind();
 
+        if (kind1 == TypeKind::Nullable)
+        {
+            const auto* nullable = static_cast<const NullableType*>(t1);
+            if (kind2 == TypeKind::Null)
+            {
+                const_cast<NullType*>(static_cast<const NullType*>(t2))->transformedType =
+                    Ref<Type>(const_cast<Type*>(t1));
+                return true;
+            }
+
+            if (kind2 == TypeKind::Nullable)
+            {
+                const auto* otherNullable = static_cast<const NullableType*>(t2);
+                return nullable->valueType->isCompatibleWith(otherNullable->valueType);
+            }
+
+            return nullable->valueType->isCompatibleWith(Ref<Type>(const_cast<Type*>(t2)));
+        }
+
+        if (kind2 == TypeKind::Nullable)
+            return false;
+
         auto isAnyPrimitive = [](const Type* type) -> bool
         {
             return type &&
@@ -153,6 +158,7 @@ namespace wio::sema
             case TypeKind::Array:
             case TypeKind::Dictionary:
             case TypeKind::Struct:
+            case TypeKind::Nullable:
                 return true;
             default:
                 return false;
@@ -483,6 +489,8 @@ namespace wio::sema
                 const auto* nullType = static_cast<const NullType*>(type);
                 return nullType->transformedType && containsUnknown(nullType->transformedType.Get());
             }
+            case TypeKind::Nullable:
+                return containsUnknown(static_cast<const NullableType*>(type)->valueType.Get());
             case TypeKind::Reference:
                 return containsUnknown(static_cast<const ReferenceType*>(type)->referredType.Get());
             case TypeKind::Array:
@@ -580,6 +588,26 @@ namespace wio::sema
     std::string NullType::toCppString() const
     {
         return "nullptr";
+    }
+
+    NullableType::NullableType(Ref<Type> valueType)
+        : valueType(std::move(valueType))
+    {
+    }
+
+    TypeKind NullableType::kind() const
+    {
+        return TypeKind::Nullable;
+    }
+
+    std::string NullableType::toString() const
+    {
+        return valueType->toString() + "?";
+    }
+
+    std::string NullableType::toCppString() const
+    {
+        return valueType->toCppString();
     }
 
     GenericParameterType::GenericParameterType(std::string name)

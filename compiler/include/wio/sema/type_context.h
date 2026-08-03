@@ -47,6 +47,7 @@ namespace wio::sema
         Ref<Type> getNull() const { return t_null; }
         Ref<Type> getObject() const { return t_object; }
         Ref<Type> getOrCreateNullType(Ref<Type> transformedType);
+        Ref<Type> getOrCreateNullableType(Ref<Type> valueType);
         
         Ref<Type> getOrCreateReferenceType(Ref<Type> referredType, bool isMutable);
         Ref<Type> getOrCreateArrayType(Ref<Type> elementType, ArrayType::ArrayKind arrayKind, size_t size = 0);

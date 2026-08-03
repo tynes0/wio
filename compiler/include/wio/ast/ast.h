@@ -368,6 +368,7 @@ namespace wio
 
         bool isMut = false;
         bool isRef = false;
+        bool isNullable = false;
         bool isPackExpansion = false;
 
         TypeSpecifier(Token _name,

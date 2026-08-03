@@ -322,6 +322,9 @@ namespace wio::codegen
             if (!current)
                 current = type;
 
+            if (current->kind() == sema::TypeKind::Nullable)
+                return toCppType(current.AsFast<sema::NullableType>()->valueType);
+
             auto buildReferenceCppType = [](const Ref<sema::ReferenceType>& refType) -> std::string
             {
                 if (!refType || !refType->referredType)
@@ -957,6 +960,8 @@ namespace wio::codegen
                 return true;
             case sema::TypeKind::Reference:
                 return containsGenericParameterTypeForCodegen(resolvedType.AsFast<sema::ReferenceType>()->referredType);
+            case sema::TypeKind::Nullable:
+                return containsGenericParameterTypeForCodegen(resolvedType.AsFast<sema::NullableType>()->valueType);
             case sema::TypeKind::Array:
                 return containsGenericParameterTypeForCodegen(resolvedType.AsFast<sema::ArrayType>()->elementType);
             case sema::TypeKind::Dictionary:
@@ -1162,6 +1167,10 @@ namespace wio::codegen
                     refType->isMutable
                 );
             }
+            case sema::TypeKind::Nullable:
+                return ctx.getOrCreateNullableType(
+                    instantiateGenericType(current.AsFast<sema::NullableType>()->valueType, bindings)
+                );
             case sema::TypeKind::Array:
             {
                 auto arrayType = current.AsFast<sema::ArrayType>();
@@ -5861,6 +5870,10 @@ namespace wio::codegen
         {
             auto transformedType = lockedRefType.AsFast<sema::NullType>()->transformedType;
             auto resolvedTransformedType = unwrapAliasTypeForCodegen(transformedType);
+            if (resolvedTransformedType && resolvedTransformedType->kind() == sema::TypeKind::Nullable)
+                resolvedTransformedType = unwrapAliasTypeForCodegen(
+                    resolvedTransformedType.AsFast<sema::NullableType>()->valueType
+                );
             const bool isPointerLikeNull =
                 !resolvedTransformedType ||
                 resolvedTransformedType->kind() == sema::TypeKind::Null ||
