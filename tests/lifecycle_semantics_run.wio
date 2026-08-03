@@ -1,0 +1,62 @@
+use std::assert as assert;
+use std::console as console;
+
+mut objectDestructions: i32 = 0;
+mut componentDestructions: i32 = 0;
+
+object ResourceOwner {
+    private id: i32;
+
+    OnConstruct(id: i32) {
+        self.id = id;
+    }
+
+    OnDestruct() {
+        objectDestructions += 1;
+    }
+
+    public fn Id() -> i32 {
+        return self.id;
+    }
+}
+
+component ValueResource {
+    id: i32;
+
+    OnConstruct(id: i32) {
+        self.id = id;
+    }
+
+    OnDestruct() {
+        componentDestructions += 1;
+    }
+}
+
+fn ExerciseObjectLifetime() {
+    let owner = ResourceOwner(17);
+    {
+        let shared = owner;
+        assert::ExpectEqual(shared.Id(), 17, "object assignment shares an owning handle");
+    }
+    assert::ExpectEqual(objectDestructions, 0, "an object survives while one strong handle remains");
+}
+
+fn ExerciseComponentLifetime() {
+    let first = ValueResource(3);
+    {
+        let copied = first;
+        assert::ExpectEqual(copied.id, 3, "component assignment copies the value");
+    }
+    assert::ExpectEqual(componentDestructions, 1, "the copied component owns an independent lifetime");
+}
+
+fn Entry() -> i32 {
+    ExerciseObjectLifetime();
+    assert::ExpectEqual(objectDestructions, 1, "the final object handle runs OnDestruct exactly once");
+
+    ExerciseComponentLifetime();
+    assert::ExpectEqual(componentDestructions, 2, "each component value runs OnDestruct exactly once");
+
+    console::PrintLine("lifecycle-semantics-ok");
+    return 0;
+}

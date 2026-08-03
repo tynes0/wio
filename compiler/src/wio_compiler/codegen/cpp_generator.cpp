@@ -4889,6 +4889,33 @@ namespace wio::codegen
             }
         });
 
+        // Member functions are emitted inline with their owning type. Declare
+        // mutable globals before those type definitions so lifecycle hooks and
+        // ordinary methods can safely reference globals declared later in the
+        // source module.
+        emitPhase(emitPhase, statements, [&](const auto& stmt)
+        {
+            if (!stmt->template is<VariableDeclaration>())
+                return;
+
+            auto variable = stmt->template as<VariableDeclaration>();
+            if (variable->mutability == Mutability::Const)
+                return;
+
+            auto symbol = variable->name->referencedSymbol.Lock();
+            Ref<sema::Type> type = symbol && symbol->type
+                ? symbol->type
+                : variable->name->refType.Lock();
+            if (!type)
+                return;
+
+            emitLine(common::formatString(
+                "extern {} {};",
+                toCppType(type),
+                Mangler::mangleGlobalVar(variable->name->token.value, symbol ? symbol->scopePath : "")
+            ));
+        });
+
         isEmittingPrototypes_ = true;
         emitPhase(emitPhase, statements, [&](const auto& stmt)
         {

@@ -1377,6 +1377,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_lifecycle_semantics_run
+        "${CMAKE_SOURCE_DIR}/tests/lifecycle_semantics_run.wio"
+        "lifecycle-semantics-ok"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_dict_option_intrinsic_run
         "${CMAKE_SOURCE_DIR}/tests/dict_option_intrinsic_run.wio"
         "dict-option-intrinsic-ok"
@@ -3379,6 +3386,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_nullable_member_requires_narrowing
         "${CMAKE_SOURCE_DIR}/tests/invalid/nullable_member_requires_narrowing.wio"
         "Member access requires a non-null value"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_destructor_parameters_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/destructor_parameters_not_supported.wio"
+        "OnDestruct must not declare parameters"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_lifecycle_return_must_be_void
+        "${CMAKE_SOURCE_DIR}/tests/invalid/lifecycle_return_must_be_void.wio"
+        "OnDestruct must return void"
         "Compiling failed:"
     )
 

@@ -12330,6 +12330,19 @@ namespace wio::sema
         });
         const bool isPackFunction = node.hasGenericParameterPack || hasFunctionParameterPack;
 
+        if (isLifecycleMethod && funcType->returnType && !funcType->returnType->isVoid())
+        {
+            WIO_LOG_ADD_ERROR(node.location(), "{} must return void.", node.name->token.value);
+        }
+
+        if (node.name->token.value == "OnDestruct")
+        {
+            if (!node.parameters.empty())
+                WIO_LOG_ADD_ERROR(node.location(), "OnDestruct must not declare parameters.");
+            if (node.whenCondition || node.whenFallback)
+                WIO_LOG_ADD_ERROR(node.location(), "OnDestruct does not support when/else clauses.");
+        }
+
         if (isNative)
         {
             Ref<Type> nativeReturnType = unwrapAliasType(funcType->returnType);
