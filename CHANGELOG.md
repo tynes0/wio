@@ -4,6 +4,44 @@ All notable user-facing changes to Wio are recorded here.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-03
+
+### Added
+
+- Added an explicit `ref`/`view` lifetime model that tracks static, caller,
+  local, and temporary borrow origins across members, arrays, spans, object
+  handles, `self`, and `deref self`.
+- Added deterministic compiler-pipeline fuzzing for malformed syntax, invalid
+  UTF-8, import cycles, nested interpolation, dry-run/emission agreement,
+  backend syntax, timeouts, and diagnostic/output budgets.
+- Added optional Clang libFuzzer plus ASan/UBSan frontend integration and
+  documented filesystem-error and reference-lifetime policies.
+
+### Changed
+
+- Numeric promotion is now operand-order independent, with semantic rejection
+  for floating-point modulo, bitwise, and shift operations.
+- `null` is restricted to nullable runtime categories instead of being
+  accepted for primitive, component, array, and dictionary values.
+- Function types lower to nested C++ `std::function` callables, including
+  higher-order signatures.
+- `use` parsing now follows a hardened state machine, import-all aliases retain
+  both direct and namespaced symbols, and bitwise operator precedence follows
+  conventional ordering.
+
+### Fixed
+
+- Local and temporary references can no longer escape through returns,
+  storage, assignment, nested members, arrays, or spans; unsupported native
+  reference returns now receive a targeted diagnostic.
+- Imported parser failures and poisoned semantic types no longer produce
+  derivative diagnostic cascades.
+- Compiler filesystem failures now report deterministic diagnostics instead of
+  throwing, including directory creation and short-read failures.
+- Integer-looking floating literals now emit valid C++, null-reference
+  comparisons lower correctly, backend diagnostics initialize deterministically,
+  and interface reflection uses interface symbols in generated C++.
+
 ## [0.5.1] - 2026-08-03
 
 ### Added
