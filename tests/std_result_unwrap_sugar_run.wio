@@ -12,7 +12,7 @@ fn Entry() -> i32 {
     assert::ExpectEqual(greeting, "unwrap", "unwrap sugar should return the success payload");
 
     let filePath = path::JoinAll(["build", "wio_std", "result", "unwrap", "data.txt"]);
-    if (not fs::EnsureParentDirectory(filePath)) {
+    if (fs::EnsureParentDirectory(filePath).IsError()) {
         return 1;
     }
 

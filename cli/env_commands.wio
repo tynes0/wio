@@ -97,7 +97,7 @@ realm SelfHostedEnv {
     }
 
     fn FindRootFrom(seed: string) -> string {
-        mut current = path::Absolute(seed);
+        mut current = path::AbsoluteRaw(seed);
         while (current != "") {
             if (IsToolchainRoot(current)) {
                 return current;
@@ -113,7 +113,7 @@ realm SelfHostedEnv {
 
     fn ResolveRoot(selfPath: string, explicitRoot: string) -> string {
         if (explicitRoot != "") {
-            let resolved = path::Absolute(explicitRoot);
+            let resolved = path::AbsoluteRaw(explicitRoot);
             return IsToolchainRoot(resolved) ? resolved : "";
         }
 
@@ -128,15 +128,15 @@ realm SelfHostedEnv {
             if (resolved != "") { return resolved; }
         }
 
-        let executableRoot = FindRootFrom(path::ParentPath(path::Absolute(selfPath)));
-        return executableRoot != "" ? executableRoot : FindRootFrom(fs::CurrentPath());
+        let executableRoot = FindRootFrom(path::ParentPath(path::AbsoluteRaw(selfPath)));
+        return executableRoot != "" ? executableRoot : FindRootFrom(fs::CurrentPathRaw());
     }
 
     fn ResolveBin(selfPath: string, root: string) -> string {
         let packaged = path::Join(root, "bin");
         return fs::IsDirectory(packaged)
             ? packaged
-            : path::ParentPath(path::Absolute(selfPath));
+            : path::ParentPath(path::AbsoluteRaw(selfPath));
     }
 
     fn PowerShellEscape(value: string) -> string {
@@ -216,7 +216,7 @@ realm SelfHostedEnv {
             return SelfHostedCli::Failure<i32>(
                 rootArgument == ""
                     ? "Could not resolve a Wio toolchain root."
-                    : $"The provided WIO root does not look like a Wio toolchain root: ${path::Absolute(rootArgument)}"
+                    : $"The provided WIO root does not look like a Wio toolchain root: ${path::AbsoluteRaw(rootArgument)}"
             );
         }
         let bin = ResolveBin(args[0usize], root);
@@ -290,7 +290,7 @@ realm SelfHostedEnv {
             return SelfHostedCli::Failure<std::ResultUnit>(
                 rootArgument == ""
                     ? "Could not resolve a Wio toolchain root."
-                    : $"The provided WIO root does not look like a Wio toolchain root: ${path::Absolute(rootArgument)}"
+                    : $"The provided WIO root does not look like a Wio toolchain root: ${path::AbsoluteRaw(rootArgument)}"
             );
         }
         bin = ResolveBin(args[0usize], root);
@@ -414,7 +414,7 @@ realm SelfHostedEnv {
         let scratch = repositoryRoot == ""
             ? path::JoinAll([environment::CacheDirectory(), "Wio", "doctor"])
             : path::JoinAll([repositoryRoot, ".wio-build", "doctor"]);
-        if (not fs::EnsureDirectory(scratch)) {
+        if (not fs::TryEnsureDirectory(scratch)) {
             return SelfHostedCli::Failure<bool>($"Could not create Wio doctor directory: ${scratch}");
         }
         let source = path::Join(scratch, "backend-smoke.wio");
@@ -427,7 +427,7 @@ realm SelfHostedEnv {
             "}\n"
         ];
         let sourceText = sourceLines.Join("");
-        if (not fs::WriteText(source, sourceText)) {
+        if (not fs::TryWriteText(source, sourceText)) {
             return SelfHostedCli::Failure<bool>($"Could not write Wio doctor source: ${source}");
         }
         let exitCode = SelfHostedCli::Run?(
@@ -435,7 +435,7 @@ realm SelfHostedEnv {
             [source, "--run", "--output", output, "--intermediate-dir", scratch],
             scratch
         );
-        fs::RemoveAll(scratch);
+        fs::TryRemoveAll(scratch);
         return std::Ok<bool>(exitCode == 0);
     }
 

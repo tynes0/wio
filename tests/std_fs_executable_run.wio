@@ -5,12 +5,12 @@ use std::path as path;
 fn Entry() -> i32 {
     let root = path::Join4("build", "wio_std", "fs", "executable");
     let launcher = path::Join(root, "launcher.sh");
-    fs::RemoveAll(root);
+    fs::RemoveAll!(root);
 
-    let wrote = fs::WriteTextEnsured(launcher, "#!/usr/bin/env sh\nexit 0\n");
-    let marked = fs::MakeExecutable(launcher);
+    let wrote = fs::WriteTextEnsured(launcher, "#!/usr/bin/env sh\nexit 0\n").IsOk();
+    let marked = fs::MakeExecutable(launcher).IsOk();
     let executable = fs::IsExecutable(launcher);
-    let removed = fs::RemoveAll(root);
+    let removed = fs::RemoveAll(root).IsOk();
 
     console::Print($"Std fs executable: ${wrote}/${marked}/${executable}/${removed}");
     return 0;

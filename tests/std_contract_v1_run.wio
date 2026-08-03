@@ -21,14 +21,14 @@ fn Entry() -> i32 {
     let clamped = math::Clamp(19, 0, 9);
 
     let targetPath = path::JoinAll(["build", "wio_std", "contract", "surface.txt"]);
-    let ensured = fs::EnsureParentDirectory(targetPath);
-    let wrote = fs::WriteTextEnsured(targetPath, upper);
-    let readBack = fs::ReadText(targetPath);
+    let ensured = fs::EnsureParentDirectory(targetPath).IsOk();
+    let wrote = fs::WriteTextEnsured(targetPath, upper).IsOk();
+    let readBack = fs::ReadText!(targetPath);
     let normalized = path::Normalize(targetPath);
     let segments = path::Segments(normalized);
     let empty: string = "";
     let lastSegment = collections::LastOr(segments, empty);
-    let deleted = fs::DeleteIfExists(targetPath);
+    let deleted = fs::DeleteIfExists(targetPath).IsOk();
 
     assert::ExpectTrue(anyLarge, "expected a value larger than four");
     assert::ExpectEqual(positiveCount, 5, "positive count mismatch");

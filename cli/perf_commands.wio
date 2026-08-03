@@ -71,8 +71,8 @@ realm SelfHostedPerf {
     }
 
     fn IsUnsafeScratch(scratch: string, selfPath: string) -> bool {
-        let absolute = path::Absolute(scratch);
-        if (absolute == path::RootPath(absolute) or path::Equivalent(absolute, fs::CurrentPath())) {
+        let absolute = path::AbsoluteRaw(scratch);
+        if (absolute == path::RootPath(absolute) or path::Equivalent(absolute, fs::CurrentPathRaw())) {
             return true;
         }
         let repositoryRoot = SelfHostedCli::FindRepositoryRoot(selfPath);
@@ -125,14 +125,14 @@ realm SelfHostedPerf {
         let configuredScratch = parser.GetStringOr("SCRATCH-DIR", "");
         let scratch = configuredScratch == ""
             ? DefaultScratch(args[0usize])
-            : path::Absolute(configuredScratch);
+            : path::AbsoluteRaw(configuredScratch);
         if (IsUnsafeScratch(scratch, args[0usize])) {
             return SelfHostedCli::Failure<i32>($"Refusing to use unsafe perf scratch directory: ${scratch}");
         }
-        if (fs::Exists(scratch) and not fs::RemoveAll(scratch)) {
+        if (fs::Exists(scratch) and not fs::TryRemoveAll(scratch)) {
             return SelfHostedCli::Failure<i32>($"Could not clean perf scratch directory: ${scratch}");
         }
-        if (not fs::EnsureDirectory(scratch)) {
+        if (not fs::TryEnsureDirectory(scratch)) {
             return SelfHostedCli::Failure<i32>($"Could not create perf scratch directory: ${scratch}");
         }
 
@@ -141,9 +141,9 @@ realm SelfHostedPerf {
         let checkSource = path::Join(sources, "perf_check.wio");
         let runSource = path::Join(sources, "perf_run.wio");
         let tinyProgram = "fn Entry() -> i32 {\n    return 0;\n}\n";
-        if (not fs::WriteTextEnsured(checkSource, tinyProgram) or
-            not fs::WriteTextEnsured(runSource, tinyProgram) or
-            not fs::EnsureDirectory(projects)) {
+        if (not fs::TryWriteTextEnsured(checkSource, tinyProgram) or
+            not fs::TryWriteTextEnsured(runSource, tinyProgram) or
+            not fs::TryEnsureDirectory(projects)) {
             return SelfHostedCli::Failure<i32>($"Could not prepare perf inputs under: ${scratch}");
         }
 
@@ -174,8 +174,8 @@ realm SelfHostedPerf {
             let name = $"PerfSmokeApp${ordinal}";
             let iterationRoot = path::Join(projects, name);
             let projectRoot = path::Join(iterationRoot, name);
-            fs::RemoveAll(iterationRoot);
-            fs::EnsureDirectory(iterationRoot);
+            fs::TryRemoveAll(iterationRoot);
+            fs::TryEnsureDirectory(iterationRoot);
 
             let created = SelfHostedCli::Run?(
                 executable,
@@ -212,7 +212,7 @@ realm SelfHostedPerf {
         PrintScenario(projectRun);
 
         if (not parser.GetFlag("KEEP-SCRATCH")) {
-            fs::RemoveAll(scratch);
+            fs::TryRemoveAll(scratch);
         }
         return std::Ok<i32>(0);
     }

@@ -8,7 +8,7 @@ fn Entry() -> i32 {
     let base = path::Join4("build", "wio_std", "io", "surface");
     let filePath = path::Join3(base, "data", "sample.bin");
 
-    if (not fs::EnsureParentDirectory(filePath)) {
+    if (fs::EnsureParentDirectory(filePath).IsError()) {
         return 1;
     }
 

@@ -4,65 +4,75 @@ use std::fs as fs;
 use std::path as path;
 
 fn Entry() -> i32 {
-    let current = fs::CurrentPath();
-    assert::ExpectEqual(fs::CurrentDirectory(), current, "current directory alias");
+    let current = fs::CurrentPath!();
+    assert::ExpectEqual(fs::CurrentDirectory!(), current, "current directory alias");
     assert::Expect(path::IsAbsolute(current), "current path is absolute");
     assert::Expect(not path::IsRelative(current), "absolute path is not relative");
 
     let scratch = path::Join(current, ".wio-fs-path-contract");
-    fs::RemoveAll(scratch);
+    fs::RemoveAll!(scratch);
     assert::Expect(fs::IsMissing(scratch), "scratch starts missing");
-    assert::Expect(fs::CreateDirectories(path::Join3(scratch, "source", "nested")), "create nested directories");
-    assert::Expect(fs::EnsureDirectory(path::Join(scratch, "source")), "ensure existing directory");
+    assert::Expect(fs::CreateDirectories(path::Join3(scratch, "source", "nested")).IsOk(), "create nested directories");
+    assert::Expect(fs::EnsureDirectory(path::Join(scratch, "source")).IsOk(), "ensure existing directory");
     assert::Expect(fs::IsDirectory(scratch), "scratch is directory");
     assert::Expect(fs::IsDirectoryEmpty(path::Join3(scratch, "source", "nested")), "nested directory starts empty");
 
     let note = path::Join3(scratch, "source", "note.txt");
-    assert::Expect(fs::EnsureParentDirectory(note), "ensure parent directory");
-    assert::Expect(fs::WriteText(note, "alpha"), "write text");
-    assert::Expect(fs::AppendText(note, " beta"), "append text");
-    assert::ExpectEqual(fs::ReadText(note), "alpha beta", "read text");
+    assert::Expect(fs::EnsureParentDirectory(note).IsOk(), "ensure parent directory");
+    assert::Expect(fs::WriteText(note, "alpha").IsOk(), "write text");
+    assert::Expect(fs::AppendText(note, " beta").IsOk(), "append text");
+    assert::ExpectEqual(fs::ReadText!(note), "alpha beta", "read text");
     assert::Expect(fs::IsFile(note), "note is file");
-    assert::Expect(fs::HasText(note), "note has text");
-    assert::ExpectEqual(fs::FileSize(note), 10i64, "file size");
-    assert::Expect(fs::LastWriteTime(note) != -1i64, "last write time");
-    assert::ExpectEqual(fs::ReadTextOr(note, "missing"), "alpha beta", "read text or existing");
-    assert::ExpectEqual(fs::ReadTextOr(path::Join(scratch, "missing.txt"), "fallback"), "fallback", "read text fallback");
-    assert::ExpectEqual(fs::ReadTextOrEmpty(path::Join(scratch, "missing.txt")), "", "read text or empty");
+    assert::Expect(fs::HasText!(note), "note has text");
+    assert::ExpectEqual(fs::FileSize!(note), 10i64, "file size");
+    assert::Expect(fs::LastWriteTime!(note) != -1i64, "last write time");
+    assert::ExpectEqual(fs::ReadTextOr!(note, "missing"), "alpha beta", "read text or existing");
+    assert::ExpectEqual(fs::ReadTextOr!(path::Join(scratch, "missing.txt"), "fallback"), "fallback", "read text fallback");
+    assert::ExpectEqual(fs::ReadTextOrEmpty!(path::Join(scratch, "missing.txt")), "", "read text or empty");
+    let missingRead = fs::ReadText(path::Join(scratch, "missing.txt"));
+    assert::Expect(missingRead.IsError(), "missing read is structured error");
+    assert::ExpectEqual(missingRead.ErrorValue().domain, std::ResultDomain::fs, "filesystem error domain");
+    assert::Expect(missingRead.ErrorValue().code != 0, "filesystem error code");
+    assert::Expect(missingRead.ErrorValue().nativeCode != 0i64, "filesystem native error code");
+    assert::ExpectStringContains(missingRead.ErrorValue().message, "missing.txt", "filesystem actionable message");
+
+    let metadata = fs::Metadata!(note);
+    assert::Expect(metadata.isFile and not metadata.isDirectory, "file metadata kinds");
+    assert::ExpectEqual(metadata.size, 10i64, "file metadata size");
 
     let trimmed = path::Join(scratch, "trimmed.txt");
-    assert::Expect(fs::WriteTextEnsured(trimmed, "  value  \n"), "write ensured");
-    assert::ExpectEqual(fs::ReadTextTrimmed(trimmed), "value", "read trimmed");
-    assert::Expect(fs::AppendTextEnsured(trimmed, "tail"), "append ensured");
-    assert::Expect(fs::AppendLine(trimmed, "line"), "append line");
+    assert::Expect(fs::WriteTextEnsured(trimmed, "  value  \n").IsOk(), "write ensured");
+    assert::ExpectEqual(fs::ReadTextTrimmed!(trimmed), "value", "read trimmed");
+    assert::Expect(fs::AppendTextEnsured(trimmed, "tail").IsOk(), "append ensured");
+    assert::Expect(fs::AppendLine(trimmed, "line").IsOk(), "append line");
 
     let linesFile = path::Join3(scratch, "lines", "values.txt");
-    assert::Expect(fs::WriteLinesEnsured(linesFile, ["one", "two", "three"]), "write lines ensured");
-    let lines = fs::ReadLines(linesFile);
+    assert::Expect(fs::WriteLinesEnsured(linesFile, ["one", "two", "three"]).IsOk(), "write lines ensured");
+    let lines = fs::ReadLines!(linesFile);
     assert::ExpectEqual(lines.Count(), 3usize, "read lines count");
     assert::ExpectEqual(lines[1usize], "two", "read lines value");
-    assert::Expect(fs::WriteLines(linesFile, ["four", "five"]), "write lines");
+    assert::Expect(fs::WriteLines(linesFile, ["four", "five"]).IsOk(), "write lines");
 
     let emptyFile = path::Join(scratch, "empty.txt");
-    assert::Expect(fs::Touch(emptyFile), "touch file");
-    assert::Expect(not fs::HasText(emptyFile), "touched file is empty");
+    assert::Expect(fs::Touch(emptyFile).IsOk(), "touch file");
+    assert::Expect(not (fs::HasText!(emptyFile)), "touched file is empty");
 
     let copied = path::Join3(scratch, "copies", "note-copy.txt");
-    assert::Expect(fs::CopyFileEnsured(note, copied), "copy file ensured");
-    assert::ExpectEqual(fs::ReadText(copied), "alpha beta", "copied content");
+    assert::Expect(fs::CopyFileEnsured(note, copied).IsOk(), "copy file ensured");
+    assert::ExpectEqual(fs::ReadText!(copied), "alpha beta", "copied content");
     let directCopy = path::Join(scratch, "direct-copy.txt");
-    assert::Expect(fs::CopyFile(note, directCopy), "copy file");
+    assert::Expect(fs::CopyFile(note, directCopy).IsOk(), "copy file");
     let moved = path::Join3(scratch, "moved", "note-moved.txt");
-    assert::Expect(fs::MoveFileEnsured(directCopy, moved), "move file ensured");
+    assert::Expect(fs::MoveFileEnsured(directCopy, moved).IsOk(), "move file ensured");
     let movedAgain = path::Join(scratch, "moved-again.txt");
-    assert::Expect(fs::MoveFile(moved, movedAgain), "move file");
-    assert::Expect(fs::MakeExecutable(movedAgain), "make executable");
-    assert::Expect(fs::SetExecutable(movedAgain, true), "set executable");
+    assert::Expect(fs::MoveFile(moved, movedAgain).IsOk(), "move file");
+    assert::Expect(fs::MakeExecutable(movedAgain).IsOk(), "make executable");
+    assert::Expect(fs::SetExecutable(movedAgain, true).IsOk(), "set executable");
     assert::Expect(fs::IsExecutable(movedAgain), "is executable");
 
     let mirror = path::Join(scratch, "mirror");
-    assert::Expect(fs::CopyRecursive(path::Join(scratch, "source"), mirror), "copy recursive");
-    assert::Expect(not fs::ListFilesRecursive(scratch).Empty(), "recursive listing");
+    assert::Expect(fs::CopyRecursive(path::Join(scratch, "source"), mirror).IsOk(), "copy recursive");
+    assert::Expect(not (fs::ListFilesRecursive!(scratch).Empty()), "recursive listing");
 
     assert::ExpectEqual(path::FileName(note), "note.txt", "file name");
     assert::ExpectEqual(path::BaseName(note), "note.txt", "base name");
@@ -88,21 +98,29 @@ fn Entry() -> i32 {
     assert::ExpectEqual(path::EnsureExtension("note.md", ".txt"), "note.md", "preserve extension");
     assert::ExpectEqual(path::ReplaceFileName("alpha/note.txt", "other.md"), "alpha/other.md", "replace file name");
     assert::ExpectEqual(path::ReplaceStem("alpha/note.txt", "other"), "alpha/other.txt", "replace stem");
-    assert::Expect(path::Absolute(".") != "", "absolute");
-    assert::Expect(path::AbsoluteFrom(current, "child").EndsWith("child"), "absolute from");
-    assert::ExpectEqual(path::RelativeTo(note, scratch), "source/note.txt", "relative to");
-    assert::ExpectEqual(path::Relative(note, scratch), "source/note.txt", "relative");
+    assert::Expect(path::Absolute!(".") != "", "absolute");
+    assert::Expect(path::AbsoluteFrom!(current, "child").EndsWith("child"), "absolute from");
+    assert::ExpectEqual(path::RelativeTo!(note, scratch), "source/note.txt", "relative to");
+    assert::ExpectEqual(path::Relative!(note, scratch), "source/note.txt", "relative");
     assert::Expect(path::Equivalent(note, path::Normalize(note)), "equivalent");
+    assert::ExpectEqual(path::Canonical!(note), path::Canonical!(path::Normalize(note)), "canonical path");
     assert::ExpectEqual(path::Segments("alpha/beta/file.txt").Count(), 3usize, "segments");
     assert::ExpectEqual(path::Depth("alpha/beta/file.txt"), 3usize, "depth");
     assert::ExpectEqual(path::Ancestor("alpha/beta/file.txt", 2usize), "alpha", "ancestor");
 
-    assert::Expect(fs::DeleteIfExists(emptyFile), "delete if exists");
-    assert::Expect(fs::DeleteIfExists(emptyFile), "delete missing is success");
+    let atomicTarget = path::Join(scratch, "atomic.txt");
+    let atomicSource = path::Join(scratch, "atomic.tmp");
+    fs::WriteText!(atomicTarget, "old");
+    fs::WriteText!(atomicSource, "new");
+    assert::Expect(fs::ReplaceFileAtomic(atomicSource, atomicTarget).IsOk(), "atomic replacement");
+    assert::ExpectEqual(fs::ReadText!(atomicTarget), "new", "atomic replacement content");
+
+    assert::Expect(fs::DeleteIfExists(emptyFile).IsOk(), "delete if exists");
+    assert::Expect(fs::DeleteIfExists(emptyFile).IsOk(), "delete missing is success");
     let removable = path::Join(scratch, "remove-me.txt");
-    assert::Expect(fs::WriteText(removable, "x"), "prepare remove");
-    assert::Expect(fs::Remove(removable), "remove");
-    assert::Expect(fs::RemoveAll(scratch), "remove all");
+    assert::Expect(fs::WriteText(removable, "x").IsOk(), "prepare remove");
+    assert::Expect(fs::Remove!(removable), "remove");
+    assert::Expect(fs::RemoveAll(scratch).IsOk(), "remove all");
     assert::Expect(fs::IsMissing(scratch), "scratch cleaned");
 
     console::PrintLine!("std-path-fs-contract-ok");

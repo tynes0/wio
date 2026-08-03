@@ -10,7 +10,7 @@ fn Entry() -> i32 {
     assert::ExpectTrue(printResult.IsOk(), "Print should succeed");
 
     let filePath = path::JoinAll(["build", "wio_std", "result", "surface", "data.txt"]);
-    if (not fs::EnsureParentDirectory(filePath)) {
+    if (fs::EnsureParentDirectory(filePath).IsError()) {
         return 1;
     }
 

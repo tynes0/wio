@@ -19,7 +19,7 @@ fn WriteMessage(pathValue: string, value: string) -> std::Result<usize> {
 
 fn Entry() -> i32 {
     let filePath = path::JoinAll(["build", "wio_std", "result", "propagate", "data.txt"]);
-    if (not fs::EnsureParentDirectory(filePath)) {
+    if (fs::EnsureParentDirectory(filePath).IsError()) {
         return 1;
     }
 

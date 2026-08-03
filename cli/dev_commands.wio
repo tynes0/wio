@@ -88,7 +88,7 @@ realm SelfHostedDev {
                 $"Could not resolve the Wio repository root for 'wio ${action}'."
             );
         }
-        let buildDirectory = path::AbsoluteFrom(
+        let buildDirectory = path::AbsoluteFromRaw(
             repositoryRoot,
             parser.GetStringOr("BUILD-DIR", "build")
         );

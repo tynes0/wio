@@ -62,7 +62,7 @@ realm SelfHostedProject {
         }
         mut values: Dict<string, string> = ({});
         mut section = "";
-        for rawLine in fs::ReadLines(filePath) {
+        for rawLine in fs::ReadLinesRaw(filePath) {
             let line = rawLine.Trim();
             if (line == "" or line.StartsWith("#") or line.StartsWith("//")) {
                 continue;
@@ -123,7 +123,7 @@ realm SelfHostedProject {
         mut resolved: string[] = [];
         for value in values {
             if (value != "") {
-                resolved.Push(path::AbsoluteFrom(root, value));
+                resolved.Push(path::AbsoluteFromRaw(root, value));
             }
         }
         return resolved;
@@ -132,7 +132,7 @@ realm SelfHostedProject {
     fn ExistingPaths(root: string, values: string[]) -> string[] {
         mut resolved: string[] = [];
         for value in values {
-            let candidate = path::AbsoluteFrom(root, value);
+            let candidate = path::AbsoluteFromRaw(root, value);
             if (fs::Exists(candidate)) {
                 resolved.Push(candidate);
             }
@@ -143,7 +143,7 @@ realm SelfHostedProject {
     fn FilesWithExtensions(roots: string[], extensions: string[]) -> string[] {
         mut files: string[] = [];
         for root in roots {
-            for file in fs::ListFilesRecursive(root) {
+            for file in fs::ListFilesRecursiveRaw(root) {
                 let extension = path::Extension(file).ToLower();
                 if (extensions.Contains(extension)) {
                     files.Push(file);
@@ -154,7 +154,7 @@ realm SelfHostedProject {
     }
 
     fn FindToolchainRoot(selfPath: string) -> string {
-        mut candidate = path::ParentPath(path::Absolute(selfPath));
+        mut candidate = path::ParentPath(path::AbsoluteRaw(selfPath));
         mut remaining = 5usize;
         while (remaining > 0usize and candidate != "") {
             if (fs::IsDirectory(path::Join3(candidate, "sdk", "include")) and
@@ -188,7 +188,7 @@ realm SelfHostedProject {
 
     fn FindHostCompiler(root: string, configured: string, projectRoot: string) -> string {
         if (configured.Contains("/") or configured.Contains("\\")) {
-            return path::AbsoluteFrom(projectRoot, configured);
+            return path::AbsoluteFromRaw(projectRoot, configured);
         }
         let windowsBundled = path::JoinAll([
             root, "toolchains", "windows-x64-mingw", "bin",
@@ -201,7 +201,7 @@ realm SelfHostedProject {
     }
 
     fn ResolveManifest(projectValue: string) -> std::Result<string> {
-        mut current = projectValue == "" ? fs::CurrentPath() : path::Absolute(projectValue);
+        mut current = projectValue == "" ? fs::CurrentPathRaw() : path::AbsoluteRaw(projectValue);
         if (fs::IsFile(current)) {
             return std::Ok<string>(current);
         }
@@ -276,12 +276,12 @@ realm SelfHostedProject {
         info.config = OptionValue(args, "--config", ManifestValue(manifest, "build.config", "Debug"));
         let buildOverride = OptionValue(args, "--build-dir", "");
         let buildValue = buildOverride == "" ? ManifestValue(manifest, "build.buildDir", ".wio-build") : buildOverride;
-        info.buildDirectory = path::AbsoluteFrom(info.projectRoot, buildValue);
+        info.buildDirectory = path::AbsoluteFromRaw(info.projectRoot, buildValue);
         let outputValue = ManifestValue(manifest, "outputs.directory", "");
         info.outputDirectory = outputValue == ""
             ? path::Join(info.buildDirectory, "interop")
-            : path::AbsoluteFrom(info.projectRoot, outputValue);
-        info.wioEntry = path::AbsoluteFrom(
+            : path::AbsoluteFromRaw(info.projectRoot, outputValue);
+        info.wioEntry = path::AbsoluteFromRaw(
             info.projectRoot,
             ManifestValue(manifest, "wio.entry", "wio/module.wio")
         );
@@ -298,7 +298,7 @@ realm SelfHostedProject {
         if (info.wioTarget == "exe") { wioSuffix = process::ExecutableSuffix(); }
         if (info.wioTarget == "static") { wioSuffix = process::StaticLibrarySuffix(); }
         info.wioOutput = path::Join(info.outputDirectory, wioName + wioSuffix);
-        info.nativeCore = path::Join(path::ParentPath(path::Absolute(args[0usize])), "wio" + process::ExecutableSuffix());
+        info.nativeCore = path::Join(path::ParentPath(path::AbsoluteRaw(args[0usize])), "wio" + process::ExecutableSuffix());
         info.toolchainRoot = FindToolchainRoot(args[0usize]);
         if (info.toolchainRoot == "") {
             return Failure<ProjectInfo>(
@@ -394,7 +394,7 @@ realm SelfHostedProject {
         info.hostCompilerArgs = ManifestArray(manifest, "host.compilerArgs");
         info.hostOutput = path::Join(info.outputDirectory, hostName + process::ExecutableSuffix());
         info.runArgs = ManifestArray(manifest, "run.args");
-        info.runWorkingDirectory = path::AbsoluteFrom(
+        info.runWorkingDirectory = path::AbsoluteFromRaw(
             info.projectRoot,
             ManifestValue(manifest, "run.workingDirectory", ".")
         );
@@ -409,7 +409,7 @@ realm SelfHostedProject {
             }
             info.testFiles = FilesWithExtensions(testRoots, [".wio"]);
         }
-        info.testWorkingDirectory = path::AbsoluteFrom(
+        info.testWorkingDirectory = path::AbsoluteFromRaw(
             info.projectRoot,
             ManifestValue(manifest, "test.workingDirectory", ".")
         );

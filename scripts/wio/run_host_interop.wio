@@ -60,7 +60,7 @@ fn RunChecked(command: string, args: string[], workingDirectory: string, label: 
 fn EnsureToolchain(repoRoot: string, buildDir: string, config: string, configure: bool) -> std::Result<tools::ToolchainInfo> {
     let buildRoot = path::Join(repoRoot, buildDir);
     let interopDir = path::Join(buildRoot, "interop");
-    if (not fs::EnsureDirectory(interopDir)) {
+    if (not fs::TryEnsureDirectory(interopDir)) {
         return tools::ToolError<tools::ToolchainInfo>($"Could not create interop directory: ${interopDir}");
     }
 
@@ -96,7 +96,7 @@ fn Run(args: string[]) -> std::Result<i32> {
         return std::Ok<i32>(0);
     }
 
-    let repoRoot = fs::CurrentPath();
+    let repoRoot = fs::CurrentPathRaw();
     let buildDir = tools::OptionValueOr(args, "--build-dir", "build");
     let config = tools::OptionValueOr(args, "--config", "Debug");
     let target = tools::OptionValueOr(args, "--target", "shared");

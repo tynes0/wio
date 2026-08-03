@@ -83,7 +83,7 @@ realm tooling_support {
     }
 
     fn ResolveExistingFile(repoRoot: string, value: string, label: string) -> std::Result<string> {
-        let resolved = path::AbsoluteFrom(repoRoot, value);
+        let resolved = path::AbsoluteFromRaw(repoRoot, value);
         if (not fs::Exists(resolved) or not fs::IsFile(resolved)) {
             return ToolError<string>($"${label} was not found: ${resolved}");
         }

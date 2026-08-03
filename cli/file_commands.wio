@@ -29,7 +29,7 @@ realm SelfHostedFile {
     }
 
     fn FindProjectRoot(seed: string) -> string {
-        mut current = path::Absolute(seed);
+        mut current = path::AbsoluteRaw(seed);
         while (current != "") {
             if (HasManifest(current)) {
                 return current;
@@ -51,19 +51,19 @@ realm SelfHostedFile {
         ];
         for candidate in candidates {
             if (fs::IsFile(candidate)) {
-                return path::Absolute(candidate);
+                return path::AbsoluteRaw(candidate);
             }
         }
         return "";
     }
 
     fn DefaultSource(selfPath: string) -> string {
-        let projectRoot = FindProjectRoot(fs::CurrentPath());
+        let projectRoot = FindProjectRoot(fs::CurrentPathRaw());
         if (projectRoot != "") {
             let entry = ConventionalEntry(projectRoot);
             if (entry != "") { return entry; }
         }
-        let currentEntry = ConventionalEntry(fs::CurrentPath());
+        let currentEntry = ConventionalEntry(fs::CurrentPathRaw());
         if (currentEntry != "") { return currentEntry; }
 
         let repositoryRoot = SelfHostedCli::FindRepositoryRoot(selfPath);
@@ -71,7 +71,7 @@ realm SelfHostedFile {
             let playground = path::Join3(repositoryRoot, "playground", "main.wio");
             if (fs::IsFile(playground)) { return playground; }
         }
-        return path::Absolute("main.wio");
+        return path::AbsoluteRaw("main.wio");
     }
 
     fn RunOutputRoot(selfPath: string, source: string) -> string {
@@ -111,7 +111,7 @@ realm SelfHostedFile {
         mut source = DefaultSource(args[0usize]);
         mut nextIndex = 3usize;
         if (args.Count() > 3usize and not args[3usize].StartsWith("-")) {
-            source = path::Absolute(args[3usize]);
+            source = path::AbsoluteRaw(args[3usize]);
             nextIndex = 4usize;
         }
         if (not fs::IsFile(source)) {
@@ -154,7 +154,7 @@ realm SelfHostedFile {
 
         if (mode == "run" and not HasOutputOverride(compilerArgs)) {
             let outputRoot = RunOutputRoot(args[0usize], source);
-            if (not fs::EnsureDirectory(outputRoot)) {
+            if (not fs::TryEnsureDirectory(outputRoot)) {
                 return SelfHostedCli::Failure<i32>($"Could not create file-run cache: ${outputRoot}");
             }
             let fingerprint = hash::Sha256(source).Take(12usize);
@@ -177,7 +177,7 @@ realm SelfHostedFile {
         return SelfHostedCli::Run(
             SelfHostedCli::NativeCore(args[0usize]),
             finalArgs,
-            fs::CurrentPath()
+            fs::CurrentPathRaw()
         );
     }
 

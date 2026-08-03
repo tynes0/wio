@@ -1,3 +1,5 @@
+use std::result;
+
 realm std {
     realm path {
         use @CppHeader("std_fs.h");
@@ -34,13 +36,15 @@ realm std {
         @CppName(wio::runtime::std_fs::Normalize)
         fn Normalize(path: string) -> string;
 
-        @Native
-        @CppName(wio::runtime::std_fs::Absolute)
-        fn Absolute(path: string) -> string;
+        @Native @CppName(wio::runtime::std_fs::Absolute) fn AbsoluteRaw(path: string) -> string;
+        @Native @CppName(wio::runtime::std_fs::Relative) fn RelativeRaw(path: string, base: string) -> string;
 
-        @Native
-        @CppName(wio::runtime::std_fs::Relative)
-        fn Relative(path: string, base: string) -> string;
+        @Native @CppName(wio::runtime::std_fs::TryAbsoluteResult)
+        fn AbsoluteNative(path: string, value: ref string, error: ref i32, nativeError: ref i64, message: ref string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::TryCanonicalResult)
+        fn CanonicalNative(path: string, value: ref string, error: ref i32, nativeError: ref i64, message: ref string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::TryRelativeResult)
+        fn RelativeNative(path: string, base: string, value: ref string, error: ref i32, nativeError: ref i64, message: ref string) -> bool;
 
         @Native
         @CppName(wio::runtime::std_fs::Equivalent)
@@ -60,6 +64,28 @@ realm std {
 
         fn IsRelative(path: string) -> bool {
             return not IsAbsolute(path);
+        }
+
+        fn PathFailure(code: i32, nativeCode: i64, message: string) -> std::Result<string> {
+            return std::Err<string>(std::MakeResultError(std::ResultDomain::fs, code, nativeCode, message));
+        }
+
+        fn Absolute(path: string) -> std::Result<string> {
+            mut value = ""; mut code = 0; mut nativeCode = 0i64; mut message = "";
+            if (AbsoluteNative(path, ref value, ref code, ref nativeCode, ref message)) { return std::Ok<string>(value); }
+            return PathFailure(code, nativeCode, message);
+        }
+
+        fn Canonical(path: string) -> std::Result<string> {
+            mut value = ""; mut code = 0; mut nativeCode = 0i64; mut message = "";
+            if (CanonicalNative(path, ref value, ref code, ref nativeCode, ref message)) { return std::Ok<string>(value); }
+            return PathFailure(code, nativeCode, message);
+        }
+
+        fn Relative(path: string, base: string) -> std::Result<string> {
+            mut value = ""; mut code = 0; mut nativeCode = 0i64; mut message = "";
+            if (RelativeNative(path, base, ref value, ref code, ref nativeCode, ref message)) { return std::Ok<string>(value); }
+            return PathFailure(code, nativeCode, message);
         }
 
         fn HasParent(path: string) -> bool {
@@ -138,16 +164,46 @@ realm std {
             return ReplaceFileName(path, stem + Extension(path));
         }
 
-        fn AbsoluteFrom(base: string, value: string) -> string {
+        fn AbsoluteFrom(base: string, value: string) -> std::Result<string> {
             if (IsAbsolute(value)) {
-                return Normalize(value);
+                return std::Ok<string>(Normalize(value));
             }
 
             return Absolute(Join(base, value));
         }
 
-        fn RelativeTo(path: string, base: string) -> string {
+        fn RelativeTo(path: string, base: string) -> std::Result<string> {
             return Relative(path, base);
+        }
+
+        fn AbsoluteFromRaw(base: string, value: string) -> string {
+            if (IsAbsolute(value)) { return Normalize(value); }
+            return AbsoluteRaw(Join(base, value));
+        }
+
+        fn RelativeToRaw(path: string, base: string) -> string {
+            return RelativeRaw(path, base);
+        }
+
+        fn TryAbsolute(path: string, value: ref string) -> bool {
+            let result = Absolute(path);
+            if (result.IsError()) { return false; }
+            value = result.Value();
+            return true;
+        }
+
+        fn TryCanonical(path: string, value: ref string) -> bool {
+            let result = Canonical(path);
+            if (result.IsError()) { return false; }
+            value = result.Value();
+            return true;
+        }
+
+        fn TryRelative(path: string, base: string, value: ref string) -> bool {
+            let result = Relative(path, base);
+            if (result.IsError()) { return false; }
+            value = result.Value();
+            return true;
         }
 
         fn Segments(path: string) -> string[] {

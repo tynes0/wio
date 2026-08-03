@@ -327,7 +327,7 @@ realm SelfHostedProject {
     }
 
     fn WriteRequired(filePath: string, content: string) -> std::Result<std::ResultUnit> {
-        if (not fs::WriteTextEnsured(filePath, content)) {
+        if (not fs::TryWriteTextEnsured(filePath, content)) {
             return Failure<std::ResultUnit>($"Could not write generated project file: ${filePath}");
         }
         return std::OkUnit();
@@ -336,7 +336,7 @@ realm SelfHostedProject {
     fn Generate(name: string, outputDirectory: string, templateName: string, force: bool) -> std::Result<i32> {
         let spec = MakeSpec?(templateName);
         let safeName = SafeName(name);
-        let projectRoot = path::Absolute(path::Join(outputDirectory, name));
+        let projectRoot = path::AbsoluteRaw(path::Join(outputDirectory, name));
 
         if (fs::Exists(projectRoot)) {
             if (not fs::IsDirectory(projectRoot)) {
@@ -348,7 +348,7 @@ realm SelfHostedProject {
                 );
             }
         }
-        if (not fs::EnsureDirectory(projectRoot)) {
+        if (not fs::TryEnsureDirectory(projectRoot)) {
             return Failure<i32>($"Could not create project directory: ${projectRoot}");
         }
 

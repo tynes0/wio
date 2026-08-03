@@ -66,7 +66,7 @@ realm SelfHostedProject {
         for library in info.wioLinkLibraries {
             command.Push("--link-lib");
             command.Push((library.Contains("/") or library.Contains("\\"))
-                ? path::AbsoluteFrom(info.projectRoot, library)
+                ? path::AbsoluteFromRaw(info.projectRoot, library)
                 : library);
         }
         for source in info.wioNativeSources {
@@ -88,10 +88,10 @@ realm SelfHostedProject {
     }
 
     fn OutputUpToDate(output: string, inputs: string[]) -> bool {
-        let outputTime = fs::LastWriteTime(output);
+        let outputTime = fs::LastWriteTimeRaw(output);
         if (outputTime < 0i64) { return false; }
         for input in inputs {
-            let inputTime = fs::LastWriteTime(input);
+            let inputTime = fs::LastWriteTimeRaw(input);
             if (inputTime < 0i64 or inputTime > outputTime) { return false; }
         }
         return true;
@@ -114,7 +114,7 @@ realm SelfHostedProject {
         if (not fs::IsFile(info.wioEntry)) {
             return Failure<i32>($"Wio entry file was not found: ${info.wioEntry}");
         }
-        if (not fs::EnsureDirectory(info.outputDirectory)) {
+        if (not fs::TryEnsureDirectory(info.outputDirectory)) {
             return Failure<i32>($"Could not create project output directory: ${info.outputDirectory}");
         }
         mut compileArgs: string[] = [
@@ -148,7 +148,7 @@ realm SelfHostedProject {
                      library.EndsWith(".a") or library.EndsWith(".lib") or
                      library.EndsWith(".so") or library.EndsWith(".dll") or
                      library.EndsWith(".dylib")) {
-                hostArgs.Push(path::AbsoluteFrom(info.projectRoot, library));
+                hostArgs.Push(path::AbsoluteFromRaw(info.projectRoot, library));
             }
             else {
                 hostArgs.Push("-l" + library);
@@ -231,7 +231,7 @@ realm SelfHostedProject {
         let workingOverride = OptionValue(args, "--cwd", OptionValue(args, "--working-directory", ""));
         let workingDirectory = workingOverride == ""
             ? info.runWorkingDirectory
-            : path::AbsoluteFrom(info.projectRoot, workingOverride);
+            : path::AbsoluteFromRaw(info.projectRoot, workingOverride);
         if (not fs::IsDirectory(workingDirectory)) {
             return Failure<i32>($"Run working directory does not exist: ${workingDirectory}");
         }
@@ -244,7 +244,7 @@ realm SelfHostedProject {
     }
 
     fn ProjectRelative(info: ProjectInfo, file: string) -> string {
-        let relative = path::Relative(file, info.projectRoot);
+        let relative = path::RelativeRaw(file, info.projectRoot);
         return relative.StartsWith("..") ? file : relative;
     }
 
@@ -286,7 +286,7 @@ realm SelfHostedProject {
             let output = TestOutput(info, file);
             if (not noBuild and
                 (forceRebuild or not OutputUpToDate(output, ProjectCompilerInputs(info, file)))) {
-                fs::EnsureParentDirectory(output);
+                fs::TryEnsureParentDirectory(output);
                 mut compileArgs: string[] = [file, "--target", "exe", "--output", output];
                 AppendCompilerArguments(ref compileArgs, info, path::ParentPath(file));
                 console::PrintLine!($"[ BUILD ] ${display}");
@@ -317,7 +317,7 @@ realm SelfHostedProject {
         if (not fs::Exists(source)) {
             return Failure<std::ResultUnit>($"Package input does not exist: ${source}");
         }
-        if (not fs::CopyRecursive(source, target)) {
+        if (not fs::TryCopyRecursive(source, target)) {
             return Failure<std::ResultUnit>($"Could not package '${source}' as '${target}'.");
         }
         return std::OkUnit();
@@ -337,7 +337,7 @@ realm SelfHostedProject {
             if (buildResult != 0) { return std::Ok<i32>(buildResult); }
         }
         let parentValue = OptionValue(args, "--output-dir", path::Join(info.buildDirectory, "packages"));
-        let packageParent = path::AbsoluteFrom(info.projectRoot, parentValue);
+        let packageParent = path::AbsoluteFromRaw(info.projectRoot, parentValue);
         let packageRoot = path::Join(packageParent, SafeName(info.name));
         if (path::Equivalent(packageRoot, info.projectRoot) or packageRoot == path::RootPath(packageRoot)) {
             return Failure<i32>($"Refusing to use unsafe package directory: ${packageRoot}");
@@ -348,11 +348,11 @@ realm SelfHostedProject {
                     $"Package directory already exists: ${packageRoot}. Pass --clean to replace it."
                 );
             }
-            if (not fs::RemoveAll(packageRoot)) {
+            if (not fs::TryRemoveAll(packageRoot)) {
                 return Failure<i32>($"Could not clean package directory: ${packageRoot}");
             }
         }
-        if (not fs::EnsureDirectory(packageRoot)) {
+        if (not fs::TryEnsureDirectory(packageRoot)) {
             return Failure<i32>($"Could not create package directory: ${packageRoot}");
         }
 
@@ -387,7 +387,7 @@ realm SelfHostedProject {
             CopyRequired?(asset, destination);
         }
         for file in info.packageFiles {
-            mut relative = path::Relative(file, info.projectRoot);
+            mut relative = path::RelativeRaw(file, info.projectRoot);
             if (relative.StartsWith("..")) { relative = path::FileName(file); }
             CopyRequired?(file, path::Join(packageRoot, relative));
         }
@@ -403,7 +403,7 @@ realm SelfHostedProject {
                     launcher.Append("\"");
                 }
                 launcher.Append(" %*\r\n");
-                if (not fs::WriteText(path::Join(packageRoot, "run.cmd"), launcher)) {
+                if (not fs::TryWriteText(path::Join(packageRoot, "run.cmd"), launcher)) {
                     return Failure<i32>("Could not write the package launcher.");
                 }
             }
@@ -413,7 +413,7 @@ realm SelfHostedProject {
                     "package_root=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n" +
                     "exec \"$package_root/" + entrypoint + "\" \"$@\"\n";
                 let launcherPath = path::Join(packageRoot, "run.sh");
-                if (not fs::WriteText(launcherPath, launcher) or not fs::MakeExecutable(launcherPath)) {
+                if (not fs::TryWriteText(launcherPath, launcher) or not fs::TryMakeExecutable(launcherPath)) {
                     return Failure<i32>("Could not write the package launcher.");
                 }
             }
@@ -429,7 +429,7 @@ realm SelfHostedProject {
             "  \"hostEnabled\": " + hostEnabled + ",\n" +
             "  \"entrypoint\": " + entrypointJson + "\n" +
             "}\n";
-        if (not fs::WriteText(path::Join(packageRoot, "wio-package.json"), metadata)) {
+        if (not fs::TryWriteText(path::Join(packageRoot, "wio-package.json"), metadata)) {
             return Failure<i32>("Could not write package metadata.");
         }
         console::PrintLine!($"Packaged project: ${packageRoot}");

@@ -6,15 +6,15 @@ fn Entry() -> i32 {
     let root = path::Join4("build", "wio_std", "fs", "recursive");
     let source = path::Join(root, "source");
     let nestedFile = path::Join4(source, "nested", "deeper", "value.txt");
-    fs::RemoveAll(root);
+    fs::RemoveAll!(root);
 
-    let wrote = fs::WriteTextEnsured(nestedFile, "recursive-ok");
-    let listed = fs::ListFilesRecursive(source);
+    let wrote = fs::WriteTextEnsured(nestedFile, "recursive-ok").IsOk();
+    let listed = fs::ListFilesRecursive!(source);
     let target = path::Join(root, "copy");
-    let copied = fs::CopyRecursive(source, target);
+    let copied = fs::CopyRecursive(source, target).IsOk();
     let copiedFile = path::Join4(target, "nested", "deeper", "value.txt");
-    let preserved = fs::ReadTextOrEmpty(copiedFile) == "recursive-ok";
-    let removed = fs::RemoveAll(root);
+    let preserved = fs::ReadTextOrEmpty!(copiedFile) == "recursive-ok";
+    let removed = fs::RemoveAll(root).IsOk();
     let gone = not fs::Exists(root);
     let count: i32 = listed.Count() fit i32;
 

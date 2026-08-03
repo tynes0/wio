@@ -12,7 +12,7 @@ realm SelfHostedCli {
 
     fn NativeCore(selfPath: string) -> string {
         return path::Join(
-            path::ParentPath(path::Absolute(selfPath)),
+            path::ParentPath(path::AbsoluteRaw(selfPath)),
             "wio" + process::ExecutableSuffix()
         );
     }
@@ -30,7 +30,7 @@ realm SelfHostedCli {
         if (not fs::IsFile(core)) {
             return Failure<i32>($"Self-hosted CLI could not find its native core: ${core}");
         }
-        return Run(core, ["--compiler-version"], fs::CurrentPath());
+        return Run(core, ["--compiler-version"], fs::CurrentPathRaw());
     }
 
     fn IsRepositoryRoot(candidate: string) -> bool {
@@ -40,7 +40,7 @@ realm SelfHostedCli {
     }
 
     fn FindAncestor(seed: string, marker: string) -> string {
-        mut current = path::Absolute(seed);
+        mut current = path::AbsoluteRaw(seed);
         while (current != "") {
             if (fs::Exists(path::Join(current, marker))) {
                 return current;
@@ -55,7 +55,7 @@ realm SelfHostedCli {
     }
 
     fn FindRepositoryRoot(selfPath: string) -> string {
-        mut current = path::Absolute(fs::CurrentPath());
+        mut current = path::AbsoluteRaw(fs::CurrentPathRaw());
         while (current != "") {
             if (IsRepositoryRoot(current)) {
                 return current;
@@ -67,7 +67,7 @@ realm SelfHostedCli {
             current = parent;
         }
 
-        current = path::ParentPath(path::Absolute(selfPath));
+        current = path::ParentPath(path::AbsoluteRaw(selfPath));
         while (current != "") {
             if (IsRepositoryRoot(current)) {
                 return current;

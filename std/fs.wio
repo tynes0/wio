@@ -1,227 +1,320 @@
 use std::path as path;
+use std::result;
 
 realm std {
     realm fs {
         use @CppHeader("std_fs.h");
 
-        @Native
-        @CppName(wio::runtime::std_fs::Exists)
-        fn Exists(path: string) -> bool;
+        @Type(i32)
+        enum Error {
+            fs_none = 0,
+            fs_invalid_path = 1,
+            fs_not_found = 2,
+            fs_already_exists = 3,
+            fs_not_directory = 4,
+            fs_is_directory = 5,
+            fs_permission_denied = 6,
+            fs_io = 7,
+            fs_unsupported = 8,
+            fs_unknown = 9
+        };
 
-        @Native
-        @CppName(wio::runtime::std_fs::IsFile)
-        fn IsFile(path: string) -> bool;
-
-        @Native
-        @CppName(wio::runtime::std_fs::IsDirectory)
-        fn IsDirectory(path: string) -> bool;
-
-        @Native
-        @CppName(wio::runtime::std_fs::IsDirectoryEmpty)
-        fn IsDirectoryEmpty(path: string) -> bool;
-
-        @Native
-        @CppName(wio::runtime::std_fs::CreateDirectories)
-        fn CreateDirectories(path: string) -> bool;
-
-        @Native
-        @CppName(wio::runtime::std_fs::Remove)
-        fn Remove(path: string) -> bool;
-
-        @Native
-        @CppName(wio::runtime::std_fs::RemoveAll)
-        fn RemoveAll(path: string) -> bool;
-
-        @Native
-        @CppName(wio::runtime::std_fs::CopyFile)
-        fn CopyFile(source: string, target: string) -> bool;
-
-        @Native
-        @CppName(wio::runtime::std_fs::CopyRecursive)
-        fn CopyRecursive(source: string, target: string) -> bool;
-
-        @Native
-        @CppName(wio::runtime::std_fs::MoveFile)
-        fn MoveFile(source: string, target: string) -> bool;
-
-        @Native
-        @CppName(wio::runtime::std_fs::ListFilesRecursive)
-        fn ListFilesRecursive(path: string) -> string[];
-
-        @Native
-        @CppName(wio::runtime::std_fs::CurrentPath)
-        fn CurrentPath() -> string;
-
-        @Native
-        @CppName(wio::runtime::std_fs::ReadText)
-        fn ReadText(path: string) -> string;
-
-        @Native
-        @CppName(wio::runtime::std_fs::WriteText)
-        fn WriteText(path: string, text: string) -> bool;
-
-        @Native
-        @CppName(wio::runtime::std_fs::AppendText)
-        fn AppendText(path: string, text: string) -> bool;
-
-        @Native
-        @CppName(wio::runtime::std_fs::IsExecutable)
-        fn IsExecutable(path: string) -> bool;
-
-        @Native
-        @CppName(wio::runtime::std_fs::SetExecutable)
-        fn SetExecutable(path: string, executable: bool) -> bool;
-
-        @Native
-        @CppName(wio::runtime::std_fs::FileSize)
-        fn FileSize(path: string) -> i64;
-
-        @Native
-        @CppName(wio::runtime::std_fs::LastWriteTime)
-        fn LastWriteTime(path: string) -> i64;
-
-        fn IsMissing(path: string) -> bool {
-            return not Exists(path);
+        component MetadataValue {
+            path: string;
+            isFile: bool;
+            isDirectory: bool;
+            size: i64;
+            lastWriteTime: i64;
+            executable: bool;
         }
 
-        fn CurrentDirectory() -> string {
-            return CurrentPath();
+        @Native @CppName(wio::runtime::std_fs::Exists) fn Exists(path: string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::IsFile) fn IsFile(path: string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::IsDirectory) fn IsDirectory(path: string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::IsDirectoryEmpty) fn IsDirectoryEmpty(path: string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::IsExecutable) fn IsExecutable(path: string) -> bool;
+
+        // Compatibility/raw primitives. New code should use the Result-returning
+        // names below; Try* intentionally discards structured error details.
+        @Native @CppName(wio::runtime::std_fs::CreateDirectories) fn TryCreateDirectories(path: string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::Remove) fn TryRemove(path: string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::RemoveAll) fn TryRemoveAll(path: string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::CopyFile) fn TryCopyFile(source: string, target: string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::CopyRecursive) fn TryCopyRecursive(source: string, target: string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::MoveFile) fn TryMoveFile(source: string, target: string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::ListFilesRecursive) fn ListFilesRecursiveRaw(path: string) -> string[];
+        @Native @CppName(wio::runtime::std_fs::CurrentPath) fn CurrentPathRaw() -> string;
+        @Native @CppName(wio::runtime::std_fs::ReadText) fn ReadTextRaw(path: string) -> string;
+        @Native @CppName(wio::runtime::std_fs::WriteText) fn TryWriteText(path: string, text: string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::AppendText) fn TryAppendText(path: string, text: string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::SetExecutable) fn TrySetExecutable(path: string, executable: bool) -> bool;
+        @Native @CppName(wio::runtime::std_fs::FileSize) fn FileSizeRaw(path: string) -> i64;
+        @Native @CppName(wio::runtime::std_fs::LastWriteTime) fn LastWriteTimeRaw(path: string) -> i64;
+
+        @Native @CppName(wio::runtime::std_fs::TryCurrentPathResult)
+        fn CurrentPathNative(value: ref string, error: ref i32, nativeError: ref i64, message: ref string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::TryCreateDirectoriesResult)
+        fn CreateDirectoriesNative(path: string, error: ref i32, nativeError: ref i64, message: ref string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::TryRemoveResult)
+        fn RemoveNative(path: string, removed: ref bool, error: ref i32, nativeError: ref i64, message: ref string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::TryRemoveAllResult)
+        fn RemoveAllNative(path: string, error: ref i32, nativeError: ref i64, message: ref string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::TryCopyFileResult)
+        fn CopyFileNative(source: string, target: string, error: ref i32, nativeError: ref i64, message: ref string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::TryCopyRecursiveResult)
+        fn CopyRecursiveNative(source: string, target: string, error: ref i32, nativeError: ref i64, message: ref string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::TryMoveFileResult)
+        fn MoveFileNative(source: string, target: string, error: ref i32, nativeError: ref i64, message: ref string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::TryReplaceFileAtomicResult)
+        fn ReplaceFileAtomicNative(source: string, target: string, error: ref i32, nativeError: ref i64, message: ref string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::TryListFilesRecursiveResult)
+        fn ListFilesRecursiveNative(path: string, value: ref string[], error: ref i32, nativeError: ref i64, message: ref string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::TryReadTextResult)
+        fn ReadTextNative(path: string, value: ref string, error: ref i32, nativeError: ref i64, message: ref string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::TryWriteTextResult)
+        fn WriteTextNative(path: string, text: string, error: ref i32, nativeError: ref i64, message: ref string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::TryAppendTextResult)
+        fn AppendTextNative(path: string, text: string, error: ref i32, nativeError: ref i64, message: ref string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::TrySetExecutableResult)
+        fn SetExecutableNative(path: string, executable: bool, error: ref i32, nativeError: ref i64, message: ref string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::TryFileSizeResult)
+        fn FileSizeNative(path: string, value: ref i64, error: ref i32, nativeError: ref i64, message: ref string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::TryLastWriteTimeResult)
+        fn LastWriteTimeNative(path: string, value: ref i64, error: ref i32, nativeError: ref i64, message: ref string) -> bool;
+        @Native @CppName(wio::runtime::std_fs::TryMetadataResult)
+        fn MetadataNative(path: string, isFile: ref bool, isDirectory: ref bool, size: ref i64, lastWriteTime: ref i64, executable: ref bool, error: ref i32, nativeError: ref i64, message: ref string) -> bool;
+
+        fn Failure<T>(code: i32, nativeCode: i64, message: string) -> std::Result<T> {
+            return std::Err<T>(std::MakeResultError(std::ResultDomain::fs, code, nativeCode, message));
         }
 
-        fn EnsureDirectory(path: string) -> bool {
-            if (Exists(path)) {
-                return IsDirectory(path);
+        fn CreateDirectories(path: string) -> std::Result<std::ResultUnit> {
+            mut code = 0; mut nativeCode = 0i64; mut message = "";
+            if (CreateDirectoriesNative(path, ref code, ref nativeCode, ref message)) { return std::OkUnit(); }
+            return Failure<std::ResultUnit>(code, nativeCode, message);
+        }
+
+        fn Remove(path: string) -> std::Result<bool> {
+            mut removed = false; mut code = 0; mut nativeCode = 0i64; mut message = "";
+            if (RemoveNative(path, ref removed, ref code, ref nativeCode, ref message)) { return std::Ok<bool>(removed); }
+            return Failure<bool>(code, nativeCode, message);
+        }
+
+        fn RemoveAll(path: string) -> std::Result<std::ResultUnit> {
+            mut code = 0; mut nativeCode = 0i64; mut message = "";
+            if (RemoveAllNative(path, ref code, ref nativeCode, ref message)) { return std::OkUnit(); }
+            return Failure<std::ResultUnit>(code, nativeCode, message);
+        }
+
+        fn CopyFile(source: string, target: string) -> std::Result<std::ResultUnit> {
+            mut code = 0; mut nativeCode = 0i64; mut message = "";
+            if (CopyFileNative(source, target, ref code, ref nativeCode, ref message)) { return std::OkUnit(); }
+            return Failure<std::ResultUnit>(code, nativeCode, message);
+        }
+
+        fn CopyRecursive(source: string, target: string) -> std::Result<std::ResultUnit> {
+            mut code = 0; mut nativeCode = 0i64; mut message = "";
+            if (CopyRecursiveNative(source, target, ref code, ref nativeCode, ref message)) { return std::OkUnit(); }
+            return Failure<std::ResultUnit>(code, nativeCode, message);
+        }
+
+        fn MoveFile(source: string, target: string) -> std::Result<std::ResultUnit> {
+            mut code = 0; mut nativeCode = 0i64; mut message = "";
+            if (MoveFileNative(source, target, ref code, ref nativeCode, ref message)) { return std::OkUnit(); }
+            return Failure<std::ResultUnit>(code, nativeCode, message);
+        }
+
+        fn ReplaceFileAtomic(source: string, target: string) -> std::Result<std::ResultUnit> {
+            mut code = 0; mut nativeCode = 0i64; mut message = "";
+            if (ReplaceFileAtomicNative(source, target, ref code, ref nativeCode, ref message)) { return std::OkUnit(); }
+            return Failure<std::ResultUnit>(code, nativeCode, message);
+        }
+
+        fn ListFilesRecursive(path: string) -> std::Result<string[]> {
+            mut value: string[] = []; mut code = 0; mut nativeCode = 0i64; mut message = "";
+            if (ListFilesRecursiveNative(path, ref value, ref code, ref nativeCode, ref message)) { return std::Ok(value); }
+            return Failure<string[]>(code, nativeCode, message);
+        }
+
+        fn CurrentPath() -> std::Result<string> {
+            mut value = ""; mut code = 0; mut nativeCode = 0i64; mut message = "";
+            if (CurrentPathNative(ref value, ref code, ref nativeCode, ref message)) { return std::Ok<string>(value); }
+            return Failure<string>(code, nativeCode, message);
+        }
+
+        fn ReadText(path: string) -> std::Result<string> {
+            mut value = ""; mut code = 0; mut nativeCode = 0i64; mut message = "";
+            if (ReadTextNative(path, ref value, ref code, ref nativeCode, ref message)) { return std::Ok<string>(value); }
+            return Failure<string>(code, nativeCode, message);
+        }
+
+        fn WriteText(path: string, text: string) -> std::Result<std::ResultUnit> {
+            mut code = 0; mut nativeCode = 0i64; mut message = "";
+            if (WriteTextNative(path, text, ref code, ref nativeCode, ref message)) { return std::OkUnit(); }
+            return Failure<std::ResultUnit>(code, nativeCode, message);
+        }
+
+        fn AppendText(path: string, text: string) -> std::Result<std::ResultUnit> {
+            mut code = 0; mut nativeCode = 0i64; mut message = "";
+            if (AppendTextNative(path, text, ref code, ref nativeCode, ref message)) { return std::OkUnit(); }
+            return Failure<std::ResultUnit>(code, nativeCode, message);
+        }
+
+        fn SetExecutable(path: string, executable: bool) -> std::Result<std::ResultUnit> {
+            mut code = 0; mut nativeCode = 0i64; mut message = "";
+            if (SetExecutableNative(path, executable, ref code, ref nativeCode, ref message)) { return std::OkUnit(); }
+            return Failure<std::ResultUnit>(code, nativeCode, message);
+        }
+
+        fn FileSize(path: string) -> std::Result<i64> {
+            mut value = 0i64; mut code = 0; mut nativeCode = 0i64; mut message = "";
+            if (FileSizeNative(path, ref value, ref code, ref nativeCode, ref message)) { return std::Ok<i64>(value); }
+            return Failure<i64>(code, nativeCode, message);
+        }
+
+        fn LastWriteTime(path: string) -> std::Result<i64> {
+            mut value = 0i64; mut code = 0; mut nativeCode = 0i64; mut message = "";
+            if (LastWriteTimeNative(path, ref value, ref code, ref nativeCode, ref message)) { return std::Ok<i64>(value); }
+            return Failure<i64>(code, nativeCode, message);
+        }
+
+        fn Metadata(pathValue: string) -> std::Result<MetadataValue> {
+            mut isFile = false; mut isDirectory = false; mut size = -1i64; mut lastWriteTime = 0i64; mut executable = false;
+            mut code = 0; mut nativeCode = 0i64; mut message = "";
+            if (not MetadataNative(pathValue, ref isFile, ref isDirectory, ref size, ref lastWriteTime, ref executable, ref code, ref nativeCode, ref message)) {
+                return Failure<MetadataValue>(code, nativeCode, message);
             }
-
-            return CreateDirectories(path);
+            mut value = MetadataValue();
+            value.path = pathValue; value.isFile = isFile; value.isDirectory = isDirectory;
+            value.size = size; value.lastWriteTime = lastWriteTime; value.executable = executable;
+            return std::Ok<MetadataValue>(value);
         }
 
-        fn ReadTextOr(path: string, fallback: string) -> string {
-            if (Exists(path)) {
-                return ReadText(path);
+        fn IsMissing(path: string) -> bool { return not Exists(path); }
+
+        fn CurrentDirectory() -> std::Result<string> { return CurrentPath(); }
+
+        fn EnsureDirectory(pathValue: string) -> std::Result<std::ResultUnit> {
+            if (Exists(pathValue)) {
+                if (IsDirectory(pathValue)) { return std::OkUnit(); }
+                return Failure<std::ResultUnit>(4, 0i64, "Path exists but is not a directory: " + pathValue);
             }
-
-            return fallback;
+            return CreateDirectories(pathValue);
         }
 
-        fn ReadTextOrEmpty(path: string) -> string {
-            return ReadTextOr(path, "");
+        fn ReadTextOr(pathValue: string, fallback: string) -> std::Result<string> {
+            let value = ReadText(pathValue);
+            if (value.IsOk()) { return value; }
+            if (value.ErrorValue().code == 2) { return std::Ok<string>(fallback); }
+            return value;
         }
 
-        fn ReadTextTrimmed(path: string) -> string {
-            return ReadTextOrEmpty(path).Trim();
+        fn ReadTextOrEmpty(pathValue: string) -> std::Result<string> { return ReadTextOr(pathValue, ""); }
+
+        fn ReadTextTrimmed(pathValue: string) -> std::Result<string> {
+            let value = ReadTextOrEmpty(pathValue);
+            if (value.IsError()) { return value; }
+            return std::Ok<string>(value.Value().Trim());
         }
 
-        fn EnsureParentDirectory(filePath: string) -> bool {
+        fn EnsureParentDirectory(filePath: string) -> std::Result<std::ResultUnit> {
             let parent = path::ParentPath(filePath);
-            if (parent == "") {
-                return true;
-            }
-
+            if (parent == "") { return std::OkUnit(); }
             return EnsureDirectory(parent);
         }
 
-        fn DeleteIfExists(path: string) -> bool {
-            if (Exists(path)) {
-                return Remove(path);
-            }
-
-            return true;
+        fn DeleteIfExists(pathValue: string) -> std::Result<std::ResultUnit> {
+            if (not Exists(pathValue)) { return std::OkUnit(); }
+            let removed = Remove(pathValue);
+            if (removed.IsError()) { return std::Err<std::ResultUnit>(removed.ErrorValue()); }
+            return std::OkUnit();
         }
 
-        fn WriteTextEnsured(filePath: string, text: string) -> bool {
-            if (not EnsureParentDirectory(filePath)) {
-                return false;
-            }
-
+        fn WriteTextEnsured(filePath: string, text: string) -> std::Result<std::ResultUnit> {
+            let ensured = EnsureParentDirectory(filePath);
+            if (ensured.IsError()) { return ensured; }
             return WriteText(filePath, text);
         }
 
-        fn AppendTextEnsured(filePath: string, text: string) -> bool {
-            if (not EnsureParentDirectory(filePath)) {
-                return false;
-            }
-
+        fn AppendTextEnsured(filePath: string, text: string) -> std::Result<std::ResultUnit> {
+            let ensured = EnsureParentDirectory(filePath);
+            if (ensured.IsError()) { return ensured; }
             return AppendText(filePath, text);
         }
 
-        fn MakeExecutable(filePath: string) -> bool {
-            return SetExecutable(filePath, true);
-        }
+        fn MakeExecutable(filePath: string) -> std::Result<std::ResultUnit> { return SetExecutable(filePath, true); }
 
-        fn AppendLine(filePath: string, line: string) -> bool {
-            if (not EnsureParentDirectory(filePath)) {
-                return false;
-            }
-
+        fn AppendLine(filePath: string, line: string) -> std::Result<std::ResultUnit> {
+            let ensured = EnsureParentDirectory(filePath);
+            if (ensured.IsError()) { return ensured; }
             mut prefix = "";
-            if (HasText(filePath)) {
+            if (Exists(filePath)) {
                 let current = ReadText(filePath);
-                if (not current.EndsWith("\n") and not current.EndsWith("\r")) {
-                    prefix = "\n";
-                }
+                if (current.IsError()) { return std::Err<std::ResultUnit>(current.ErrorValue()); }
+                if (not current.Value().EndsWith("\n") and not current.Value().EndsWith("\r")) { prefix = "\n"; }
             }
-
-            let payload = prefix + line + "\n";
-            return AppendText(filePath, payload);
+            return AppendText(filePath, prefix + line + "\n");
         }
 
-        fn Touch(filePath: string) -> bool {
-            if (Exists(filePath)) {
-                return true;
-            }
-
+        fn Touch(filePath: string) -> std::Result<std::ResultUnit> {
+            if (Exists(filePath)) { return std::OkUnit(); }
             return WriteTextEnsured(filePath, "");
         }
 
-        fn ReadLines(path: string) -> string[] {
-            let text = ReadTextOrEmpty(path).Replace("\r\n", "\n").Replace("\r", "\n");
-            if (text == "") {
-                return [];
-            }
-
+        fn ReadLines(pathValue: string) -> std::Result<string[]> {
+            let read = ReadText(pathValue);
+            if (read.IsError()) { return std::Err<string[]>(read.ErrorValue()); }
+            let text = read.Value().Replace("\r\n", "\n").Replace("\r", "\n");
+            if (text == "") { return std::Ok<string[]>([]); }
             let lines = text.Split("\n");
-            if (text.EndsWith("\n") and not lines.Empty()) {
-            return lines.Slice(0usize, lines.Count() - 1usize);
-            }
-
-            return lines;
+            if (text.EndsWith("\n") and not lines.Empty()) { return std::Ok(lines.Slice(0usize, lines.Count() - 1usize)); }
+            return std::Ok(lines);
         }
 
-        fn WriteLines(path: string, lines: string[]) -> bool {
-            return WriteText(path, lines.Join("\n"));
+        fn WriteLines(pathValue: string, lines: string[]) -> std::Result<std::ResultUnit> { return WriteText(pathValue, lines.Join("\n")); }
+
+        fn WriteLinesEnsured(pathValue: string, lines: string[]) -> std::Result<std::ResultUnit> {
+            let ensured = EnsureParentDirectory(pathValue);
+            if (ensured.IsError()) { return ensured; }
+            return WriteLines(pathValue, lines);
         }
 
-        fn WriteLinesEnsured(path: string, lines: string[]) -> bool {
-            if (not EnsureParentDirectory(path)) {
-                return false;
-            }
-
-            return WriteLines(path, lines);
-        }
-
-        fn CopyFileEnsured(source: string, target: string) -> bool {
-            if (not EnsureParentDirectory(target)) {
-                return false;
-            }
-
+        fn CopyFileEnsured(source: string, target: string) -> std::Result<std::ResultUnit> {
+            let ensured = EnsureParentDirectory(target);
+            if (ensured.IsError()) { return ensured; }
             return CopyFile(source, target);
         }
 
-        fn MoveFileEnsured(source: string, target: string) -> bool {
-            if (not EnsureParentDirectory(target)) {
-                return false;
-            }
-
+        fn MoveFileEnsured(source: string, target: string) -> std::Result<std::ResultUnit> {
+            let ensured = EnsureParentDirectory(target);
+            if (ensured.IsError()) { return ensured; }
             return MoveFile(source, target);
         }
 
-        fn HasText(path: string) -> bool {
-            if (not Exists(path)) {
-                return false;
-            }
-
-            return FileSize(path) > 0i64;
+        fn HasText(pathValue: string) -> std::Result<bool> {
+            if (not Exists(pathValue)) { return std::Ok<bool>(false); }
+            let size = FileSize(pathValue);
+            if (size.IsError()) { return std::Err<bool>(size.ErrorValue()); }
+            return std::Ok<bool>(size.Value() > 0i64);
         }
+
+        // Compatibility helpers used by pre-Result code.
+        fn TryEnsureDirectory(pathValue: string) -> bool { return EnsureDirectory(pathValue).IsOk(); }
+        fn TryEnsureParentDirectory(filePath: string) -> bool { return EnsureParentDirectory(filePath).IsOk(); }
+        fn TryWriteTextEnsured(filePath: string, text: string) -> bool { return WriteTextEnsured(filePath, text).IsOk(); }
+        fn TryAppendTextEnsured(filePath: string, text: string) -> bool { return AppendTextEnsured(filePath, text).IsOk(); }
+        fn TryDeleteIfExists(pathValue: string) -> bool { return DeleteIfExists(pathValue).IsOk(); }
+        fn TryAppendLine(filePath: string, line: string) -> bool { return AppendLine(filePath, line).IsOk(); }
+        fn TryTouch(filePath: string) -> bool { return Touch(filePath).IsOk(); }
+        fn TryMakeExecutable(filePath: string) -> bool { return MakeExecutable(filePath).IsOk(); }
+        fn ReadTextOrRaw(pathValue: string, fallback: string) -> string { return ReadTextOr(pathValue, fallback).ValueOr(fallback); }
+        fn ReadTextOrEmptyRaw(pathValue: string) -> string { return ReadTextOrRaw(pathValue, ""); }
+        fn ReadTextTrimmedRaw(pathValue: string) -> string { return ReadTextOrEmptyRaw(pathValue).Trim(); }
+        fn ReadLinesRaw(pathValue: string) -> string[] { return ReadLines(pathValue).ValueOr([]); }
+        fn TryWriteLines(pathValue: string, lines: string[]) -> bool { return WriteLines(pathValue, lines).IsOk(); }
+        fn TryWriteLinesEnsured(pathValue: string, lines: string[]) -> bool { return WriteLinesEnsured(pathValue, lines).IsOk(); }
+        fn TryCopyFileEnsured(source: string, target: string) -> bool { return CopyFileEnsured(source, target).IsOk(); }
+        fn TryMoveFileEnsured(source: string, target: string) -> bool { return MoveFileEnsured(source, target).IsOk(); }
+        fn HasTextRaw(pathValue: string) -> bool { return HasText(pathValue).ValueOr(false); }
     }
 }

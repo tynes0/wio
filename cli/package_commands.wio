@@ -100,7 +100,7 @@ realm SelfHostedPackage {
     }
 
     fn Version(repositoryRoot: string) -> std::Result<string> {
-        for line in fs::ReadLines(path::Join(repositoryRoot, "CMakeLists.txt")) {
+        for line in fs::ReadLinesRaw(path::Join(repositoryRoot, "CMakeLists.txt")) {
             let trimmed = line.Trim();
             if (trimmed.StartsWith("VERSION ")) {
                 return std::Ok<string>(trimmed.Slice(8usize).Trim());
@@ -133,7 +133,7 @@ realm SelfHostedPackage {
     fn PortableBackendRoot() -> string {
         let explicitRoot = environment::Get("WIO_PORTABLE_BACKEND_ROOT", "");
         if (explicitRoot != "" and fs::IsDirectory(path::Join(explicitRoot, "bin"))) {
-            return path::Absolute(explicitRoot);
+            return path::AbsoluteRaw(explicitRoot);
         }
         let compiler = process::FindExecutable(platform::IsWindows() ? "g++.exe" : "g++");
         let archiver = process::FindExecutable(platform::IsWindows() ? "ar.exe" : "ar");
@@ -156,21 +156,21 @@ realm SelfHostedPackage {
             "toolchains",
             platform::IsWindows() ? "windows-x64-mingw" : "host-backend"
         ]);
-        if (fs::Exists(targetRoot) and not fs::RemoveAll(targetRoot)) {
+        if (fs::Exists(targetRoot) and not fs::TryRemoveAll(targetRoot)) {
             return Failure<string>($"Could not replace bundled backend: ${targetRoot}");
         }
-        if (not fs::EnsureDirectory(targetRoot)) {
+        if (not fs::TryEnsureDirectory(targetRoot)) {
             return Failure<string>($"Could not create bundled backend: ${targetRoot}");
         }
         for name in ["bin", "include", "lib", "libexec", "x86_64-w64-mingw32"] {
             let source = path::Join(sourceRoot, name);
-            if (fs::Exists(source) and not fs::CopyRecursive(source, path::Join(targetRoot, name))) {
+            if (fs::Exists(source) and not fs::TryCopyRecursive(source, path::Join(targetRoot, name))) {
                 return Failure<string>($"Could not copy backend subtree: ${source}");
             }
         }
         for name in ["build-info.txt", "COPYING", "COPYING.txt", "LICENSE", "LICENSE.txt"] {
             let source = path::Join(sourceRoot, name);
-            if (fs::IsFile(source) and not fs::CopyFileEnsured(source, path::Join(targetRoot, name))) {
+            if (fs::IsFile(source) and not fs::TryCopyFileEnsured(source, path::Join(targetRoot, name))) {
                 return Failure<string>($"Could not copy backend metadata: ${source}");
             }
         }
@@ -182,7 +182,7 @@ realm SelfHostedPackage {
         if (not fs::IsFile(templatePath)) {
             return Failure<string>($"Package template was not found: ${templatePath}");
         }
-        return std::Ok<string>(fs::ReadText(templatePath));
+        return std::Ok<string>(fs::ReadTextRaw(templatePath));
     }
 
     fn Quickstart(packageName: string) -> string {
@@ -219,7 +219,7 @@ realm SelfHostedPackage {
         ] {
             let parts = pair.Split("|");
             let source = path::Join(repositoryRoot, parts[0usize]);
-            if (fs::IsFile(source) and not fs::CopyFileEnsured(source, path::Join(packageRoot, parts[1usize]))) {
+            if (fs::IsFile(source) and not fs::TryCopyFileEnsured(source, path::Join(packageRoot, parts[1usize]))) {
                 return Failure<std::ResultUnit>($"Could not copy package document: ${source}");
             }
         }
@@ -239,12 +239,12 @@ realm SelfHostedPackage {
             "  \"bundledBackendRoot\": " + serialization::QuoteJson(backendRoot),
             "  \"generatedAtUtc\": " + serialization::QuoteJson(generatedAt)
         ];
-        if (not fs::WriteTextEnsured(path::Join(packageRoot, "WIO_PACKAGE_INFO.json"), "{\n" + fields.Join(",\n") + "\n}\n") or
-            not fs::WriteText(path::Join(packageRoot, "Install-Wio.ps1"), installPowerShell) or
-            not fs::WriteText(path::Join(packageRoot, "Uninstall-Wio.ps1"), uninstallPowerShell) or
-            not fs::WriteText(path::Join(packageRoot, "install-wio.sh"), installShell) or
-            not fs::WriteText(path::Join(packageRoot, "uninstall-wio.sh"), uninstallShell) or
-            not fs::WriteText(path::Join(packageRoot, "QUICKSTART.md"), Quickstart(packageName))) {
+        if (not fs::TryWriteTextEnsured(path::Join(packageRoot, "WIO_PACKAGE_INFO.json"), "{\n" + fields.Join(",\n") + "\n}\n") or
+            not fs::TryWriteText(path::Join(packageRoot, "Install-Wio.ps1"), installPowerShell) or
+            not fs::TryWriteText(path::Join(packageRoot, "Uninstall-Wio.ps1"), uninstallPowerShell) or
+            not fs::TryWriteText(path::Join(packageRoot, "install-wio.sh"), installShell) or
+            not fs::TryWriteText(path::Join(packageRoot, "uninstall-wio.sh"), uninstallShell) or
+            not fs::TryWriteText(path::Join(packageRoot, "QUICKSTART.md"), Quickstart(packageName))) {
             return Failure<std::ResultUnit>("Could not write package metadata or installer scripts.");
         }
         return std::OkUnit();
@@ -253,8 +253,8 @@ realm SelfHostedPackage {
     fn BuildPackage(args: string[], parser: ref Argonaut::Parser) -> std::Result<i32> {
         let repositoryRoot = SelfHostedCli::FindRepositoryRoot(args[0usize]);
         if (repositoryRoot == "") { return Failure<i32>("Could not resolve the Wio repository root."); }
-        let buildDirectory = path::AbsoluteFrom(repositoryRoot, parser.GetStringOr("BUILD-DIR", "build"));
-        let outputDirectory = path::AbsoluteFrom(repositoryRoot, parser.GetStringOr("OUTPUT-DIR", "artifacts\\packages"));
+        let buildDirectory = path::AbsoluteFromRaw(repositoryRoot, parser.GetStringOr("BUILD-DIR", "build"));
+        let outputDirectory = path::AbsoluteFromRaw(repositoryRoot, parser.GetStringOr("OUTPUT-DIR", "artifacts\\packages"));
         let config = parser.GetStringOr("CONFIG", "Release");
         let version = Version?(repositoryRoot);
         let suffix = NormalizeTag(parser.GetStringOr("VERSION-SUFFIX", ""));
@@ -267,13 +267,13 @@ realm SelfHostedPackage {
             return Failure<i32>($"Refusing unsafe package directory: ${packageRoot}");
         }
         if (parser.GetFlag("CLEAN")) {
-            if (fs::Exists(packageRoot)) { fs::RemoveAll(packageRoot); }
-            if (fs::Exists(archive)) { fs::Remove(archive); }
+            if (fs::Exists(packageRoot)) { fs::TryRemoveAll(packageRoot); }
+            if (fs::Exists(archive)) { fs::TryRemove(archive); }
         }
-        if (not fs::EnsureDirectory(outputDirectory)) {
+        if (not fs::TryEnsureDirectory(outputDirectory)) {
             return Failure<i32>($"Could not create output directory: ${outputDirectory}");
         }
-        if (fs::Exists(distRoot) and not fs::RemoveAll(distRoot)) {
+        if (fs::Exists(distRoot) and not fs::TryRemoveAll(distRoot)) {
             return Failure<i32>($"Could not clean dist directory: ${distRoot}");
         }
 
@@ -285,10 +285,10 @@ realm SelfHostedPackage {
         let built = SelfHostedCli::Run?(
             "cmake", ["--build", buildDirectory, "--target", "wio_dist", "--config", config], repositoryRoot);
         if (built != 0) { return std::Ok<i32>(built); }
-        if (fs::Exists(packageRoot) and not fs::RemoveAll(packageRoot)) {
+        if (fs::Exists(packageRoot) and not fs::TryRemoveAll(packageRoot)) {
             return Failure<i32>($"Could not replace package root: ${packageRoot}");
         }
-        if (not fs::CopyRecursive(distRoot, packageRoot)) {
+        if (not fs::TryCopyRecursive(distRoot, packageRoot)) {
             return Failure<i32>($"Could not copy staged distribution: ${distRoot}");
         }
         let backendRoot = CopyPortableBackend?(packageRoot);
@@ -297,7 +297,7 @@ realm SelfHostedPackage {
         let bootstrapInstaller = path::Join(outputDirectory, packageName + "-installer.ps1");
         if (platform::IsWindows()) {
             let bootstrap = PackageTemplate?(repositoryRoot, "Bootstrap-Wio.ps1").Replace("__PACKAGE_NAME__", packageName);
-            if (not fs::WriteText(bootstrapInstaller, bootstrap)) {
+            if (not fs::TryWriteText(bootstrapInstaller, bootstrap)) {
                 return Failure<i32>($"Could not write bootstrap installer: ${bootstrapInstaller}");
             }
         }
