@@ -2578,6 +2578,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_std_result_combinators_run
+        "${CMAKE_SOURCE_DIR}/tests/std_result_combinators_run.wio"
+        "std-result-combinators-ok"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_std_result_explicit_generic_sugar_run
         "${CMAKE_SOURCE_DIR}/tests/std_result_explicit_generic_sugar_run.wio"
         "std-result-explicit-generic-ok"

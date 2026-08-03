@@ -89,6 +89,56 @@ realm std {
         public fn ErrorValue() -> ResultError {
             return self.error;
         }
+
+        public fn Map<U>(transform: fn(T) -> U) -> Result<U> {
+            if (self.ok) {
+                return std::Ok<U>(transform(self.value));
+            }
+
+            return std::Err<U>(self.error);
+        }
+
+        public fn MapError(transform: fn(ResultError) -> ResultError) -> Result<T> {
+            if (self.ok) {
+                return std::Ok<T>(self.value);
+            }
+
+            return std::Err<T>(transform(self.error));
+        }
+
+        public fn AndThen<U>(transform: fn(T) -> Result<U>) -> Result<U> {
+            if (self.ok) {
+                return transform(self.value);
+            }
+
+            return std::Err<U>(self.error);
+        }
+
+        public fn OrElse(recover: fn(ResultError) -> Result<T>) -> Result<T> {
+            if (self.ok) {
+                return std::Ok<T>(self.value);
+            }
+
+            return recover(self.error);
+        }
+
+        public fn Inspect(action: fn(T)) -> Result<T> {
+            if (self.ok) {
+                action(self.value);
+                return std::Ok<T>(self.value);
+            }
+
+            return std::Err<T>(self.error);
+        }
+
+        public fn InspectError(action: fn(ResultError)) -> Result<T> {
+            if (not self.ok) {
+                action(self.error);
+                return std::Err<T>(self.error);
+            }
+
+            return std::Ok<T>(self.value);
+        }
     }
 
     type ResultValue<T> = Result<T>;
@@ -135,6 +185,34 @@ realm std {
         return Err<T>(error);
     }
 
+    fn Flatten<T>(nested: Result<Result<T> >) -> Result<T> {
+        if (nested.IsOk()) {
+            return nested.Value();
+        }
+
+        return Err<T>(nested.ErrorValue());
+    }
+
+    fn ErrLike<T>(error: ResultError, typeHint: T) -> Result<T> {
+        return Err<T>(error);
+    }
+
+    fn Collect<T>(values: Result<T>[]) -> Result<T[]> {
+        mut collected: T[] = [];
+        collected.Reserve(values.Count());
+        for (value in values) {
+            if (value.IsError()) {
+                return ErrLike(value.ErrorValue(), collected);
+            }
+            collected.Push(value.Value());
+        }
+        return Ok(collected);
+    }
+
+    fn Sequence<T>(values: Result<T>[]) -> Result<T[]> {
+        return Collect<T>(values);
+    }
+
     realm result {
         type Domain = ResultDomain;
         type Unit = ResultUnit;
@@ -159,6 +237,18 @@ realm std {
 
         fn Err<T>(error: Error) -> Result<T> {
             return std::Err<T>(error);
+        }
+
+        fn Flatten<T>(nested: Result<Result<T> >) -> Result<T> {
+            return std::Flatten<T>(nested);
+        }
+
+        fn Collect<T>(values: Result<T>[]) -> Result<T[]> {
+            return std::Collect<T>(values);
+        }
+
+        fn Sequence<T>(values: Result<T>[]) -> Result<T[]> {
+            return std::Sequence<T>(values);
         }
     }
 }

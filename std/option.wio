@@ -60,9 +60,23 @@ realm std {
     fn Some<T>(value: T) -> Option<T> { return Option<T>(value); }
     fn None<T>() -> Option<T> { return Option<T>(); }
 
+    fn ResultToOption<T>(resultValue: Result<T>) -> Option<T> {
+        if (resultValue.IsOk()) { return Some<T>(resultValue.Value()); }
+        return None<T>();
+    }
+
     realm option {
         type Option<T> = std::Option<T>;
         fn Some<T>(value: T) -> Option<T> { return std::Some<T>(value); }
         fn None<T>() -> Option<T> { return std::None<T>(); }
+        fn FromResult<T>(resultValue: std::Result<T>) -> Option<T> {
+            return std::ResultToOption<T>(resultValue);
+        }
+    }
+
+    realm result {
+        fn ToOption<T>(resultValue: std::Result<T>) -> std::Option<T> {
+            return std::ResultToOption<T>(resultValue);
+        }
     }
 }

@@ -1,0 +1,61 @@
+use std::assert as assert;
+use std::console as console;
+use std::option;
+
+mut observedValue: i32 = 0;
+mut observedErrorCode: i32 = 0;
+
+fn Double(value: i32) -> i32 { return value * 2; }
+
+fn PositiveText(value: i32) -> std::Result<string> {
+    if (value > 0) { return std::Ok<string>($"value=${value}"); }
+    return std::Err<string>(std::MakeResultError(std::ResultDomain::custom, 10, "not positive"));
+}
+
+fn RewriteError(error: std::ResultError) -> std::ResultError {
+    return std::MakeResultError(error.domain, error.code + 100, error.nativeCode, "rewritten: " + error.message);
+}
+
+fn Recover(error: std::ResultError) -> std::Result<i32> {
+    return std::Ok<i32>(error.code * 3);
+}
+
+fn ObserveValue(value: i32) { observedValue = value; }
+fn ObserveError(error: std::ResultError) { observedErrorCode = error.code; }
+
+fn Entry() -> i32 {
+    let error = std::MakeResultError(std::ResultDomain::custom, 7, 99i64, "broken");
+    let ok = std::Ok<i32>(21);
+    let failed = std::Err<i32>(error);
+
+    assert::ExpectEqual(ok.Map<i32>(Double).Value(), 42, "Result.Map success");
+    assert::ExpectEqual(failed.Map<i32>(Double).ErrorValue().code, 7, "Result.Map error passthrough");
+    assert::ExpectEqual(failed.MapError(RewriteError).ErrorValue().code, 107, "Result.MapError");
+    assert::ExpectEqual(ok.AndThen<string>(PositiveText).Value(), "value=21", "Result.AndThen success");
+    assert::ExpectEqual(failed.AndThen<string>(PositiveText).ErrorValue().nativeCode, 99i64, "Result.AndThen error passthrough");
+    assert::ExpectEqual(failed.OrElse(Recover).Value(), 21, "Result.OrElse recovery");
+    assert::ExpectEqual(ok.OrElse(Recover).Value(), 21, "Result.OrElse success passthrough");
+
+    let inspected = ok.Inspect(ObserveValue);
+    let inspectedError = failed.InspectError(ObserveError);
+    assert::ExpectEqual(inspected.Value(), 21, "Result.Inspect preserves value");
+    assert::ExpectEqual(inspectedError.ErrorValue().code, 7, "Result.InspectError preserves error");
+    assert::ExpectEqual(observedValue, 21, "Result.Inspect callback");
+    assert::ExpectEqual(observedErrorCode, 7, "Result.InspectError callback");
+
+    let nested = std::Ok<std::Result<i32> >(std::Ok<i32>(5));
+    assert::ExpectEqual(std::Flatten<i32>(nested).Value(), 5, "Result.Flatten");
+
+    let collected = std::Collect<i32>([std::Ok<i32>(1), std::Ok<i32>(2), std::Ok<i32>(3)]);
+    assert::ExpectEqual(collected.Value().Count(), 3usize, "Result.Collect count");
+    assert::ExpectEqual(collected.Value()[2usize], 3, "Result.Collect values");
+    let rejected = std::Sequence<i32>([std::Ok<i32>(1), failed, std::Ok<i32>(3)]);
+    assert::ExpectEqual(rejected.ErrorValue().code, 7, "Result.Sequence first error");
+
+    assert::ExpectEqual(std::ResultToOption<i32>(ok).Value(), 21, "Result.ToOption success");
+    assert::Expect(std::ResultToOption<i32>(failed).IsNone(), "Result.ToOption error");
+    assert::ExpectEqual(std::option::FromResult<i32>(ok).Value(), 21, "Option.FromResult");
+
+    console::PrintLine!("std-result-combinators-ok");
+    return 0;
+}
