@@ -212,6 +212,22 @@ run_installed(
     file check "${combined_file}"
 )
 
+set(path_fs_contract_source "${repository_root}/tests/std_path_fs_contract_run.wio")
+set(path_fs_contract_file "${external_root}/std-path-fs-contract.wio")
+file(COPY_FILE "${path_fs_contract_source}" "${path_fs_contract_file}")
+run_installed(
+    "Installed std::path/std::fs contract"
+    "${external_root}"
+    file run "${path_fs_contract_file}"
+)
+string(FIND "${LAST_INSTALLED_OUTPUT}" "std-path-fs-contract-ok" path_fs_marker_index)
+if(path_fs_marker_index EQUAL -1)
+    message(FATAL_ERROR
+        "Installed std::path/std::fs contract did not print its success marker.\n"
+        "${LAST_INSTALLED_OUTPUT}"
+    )
+endif()
+
 run_installed(
     "External project creation"
     "${external_root}"
