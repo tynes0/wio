@@ -1,0 +1,13 @@
+use std::console as console;
+
+object CleanupProbe {
+    OnDestruct() {
+        console::PrintLine("panic-cleanup-ran");
+    }
+}
+
+fn Entry() -> i32 {
+    let probe = CleanupProbe();
+    std::Panic("panic-boundary-probe");
+    return 0;
+}

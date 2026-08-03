@@ -1,0 +1,10 @@
+realm ffi {
+    @Native
+    @CppHeader("native_exception_boundary.h")
+    @CppName(native_exception_boundary::ThrowStandardException)
+    fn ThrowStandardException() -> i32;
+}
+
+fn Entry() -> i32 {
+    return ffi::ThrowStandardException();
+}

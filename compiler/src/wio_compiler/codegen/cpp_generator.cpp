@@ -4284,6 +4284,20 @@ namespace wio::codegen
         emitLine("return 1;");
         dedent();
         emitLine("}"); 
+        emitLine("catch (const std::exception& ex)");
+        emitLine("{");
+        indent();
+        emitLine(R"(std::cout << "Runtime Error: Unhandled native exception: " << ex.what() << '\n';)");
+        emitLine("return 1;");
+        dedent();
+        emitLine("}");
+        emitLine("catch (...)");
+        emitLine("{");
+        indent();
+        emitLine(R"(std::cout << "Runtime Error: Unknown native exception" << '\n';)");
+        emitLine("return 1;");
+        dedent();
+        emitLine("}");
         
         emitLine("return 0;"); 
         dedent();
@@ -7792,6 +7806,8 @@ namespace wio::codegen
             emitLine();
             emitLine("{");
             indent();
+            emitLine("try {");
+            indent();
 
             if (isNativeMember)
             {
@@ -8155,6 +8171,34 @@ namespace wio::codegen
                 }
             }
 
+            dedent();
+            emitLine("}");
+            emitLine("catch (const wio::runtime::RuntimeException&)");
+            emitLine("{");
+            indent();
+            emitLine("throw;");
+            dedent();
+            emitLine("}");
+            emitLine("catch (const std::exception& ex)");
+            emitLine("{");
+            indent();
+            emitLine(
+                "throw wio::runtime::RuntimeException(\"Native call '" +
+                common::wioStringToEscapedCppString(nativeSymbol) +
+                "' failed: \" + std::string(ex.what()));"
+            );
+            dedent();
+            emitLine("}");
+            emitLine("catch (...)");
+            emitLine("{");
+            indent();
+            emitLine(
+                "throw wio::runtime::RuntimeException(\"Native call '" +
+                common::wioStringToEscapedCppString(nativeSymbol) +
+                "' failed with an unknown exception.\");"
+            );
+            dedent();
+            emitLine("}");
             dedent();
             emitLine("}");
         }

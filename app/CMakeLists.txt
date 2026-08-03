@@ -2112,6 +2112,24 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_non_dry_failure_test_clean(
+        wio_runtime_native_exception_boundary
+        "${CMAKE_SOURCE_DIR}/tests/native/native_exception_boundary.wio"
+        "Runtime Error: Native call 'native_exception_boundary::ThrowStandardException' failed: native-boom"
+        "terminate called|std::runtime_error|Unhandled native exception"
+        --run
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
+    )
+
+    add_wio_non_dry_failure_test_clean(
+        wio_runtime_panic_runs_cleanup
+        "${CMAKE_SOURCE_DIR}/tests/panic_cleanup_runtime_failure.wio"
+        "panic-cleanup-ran"
+        "terminate called|Aborted|segmentation fault"
+        --run
+    )
+
+    add_wio_non_dry_failure_test_clean(
         wio_runtime_integer_divide_by_zero
         "${CMAKE_SOURCE_DIR}/tests/integer_divide_by_zero_runtime_failure.wio"
         "Runtime Error: Integer division by zero\."
