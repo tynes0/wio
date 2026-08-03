@@ -10,6 +10,43 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## P0 release-blocking correctness sprint
+
+- [x] Cascading diagnostics are stopped at their source. Imported modules with
+      parser errors are no longer merged as partial ASTs, poisoned types flow
+      through expressions/calls, and derivative overload/operator diagnostics
+      are suppressed while independent root errors remain visible.
+- [x] `ref` / `view` lifetime semantics now track static, caller, local, and
+      temporary borrow origins. The checked matrix covers temporary component
+      calls, nested fields, array elements, returned owning arrays, span range
+      tokens, object handles, `self`, `deref self`, mutable receivers, and
+      native boundaries. The contract is documented in
+      `docs/REFERENCE_LIFETIMES.md`.
+- [x] Deterministic lexer/parser/semantic/generated-C++ pipeline fuzzing and an
+      optional Clang libFuzzer+ASan+UBSan frontend target landed. Corpus and
+      mutations cover nested interpolation, malformed generics, deep types,
+      import cycles, invalid UTF-8, arbitrary bytes, diagnostic/output budgets,
+      timeouts, dry-run/emission differentials, and backend syntax checking.
+      The sprint qualification run passed 259 candidates.
+- [x] `FunctionType::toCppString()` now emits nested `std::function` types and
+      has a direct type-layer regression test.
+- [x] Arithmetic result typing no longer depends on the left operand. Mixed
+      signed/unsigned and float/integer operations use a deterministic common
+      type, float modulo/bit/shift misuse is rejected semantically, and
+      integer-looking float literals generate valid C++.
+- [x] `null` is restricted to runtime-nullable targets: object/interface
+      handles, functions, `ref`/`view`, `any`, and `opaque`. Primitive,
+      component, array, dictionary, and context-free inferred nulls are
+      rejected before code generation; reference/null comparison codegen is
+      covered.
+- [x] `use` parsing now has explicit path-segment recovery, stable diagnostics,
+      and conventional bitwise precedence. `use path::* as alias` was also
+      repaired in module merge so direct and namespaced access both work.
+- [x] Compiler filesystem helpers now follow a documented non-throwing policy
+      for ordinary OS failures, close failed seek paths, detect short-read
+      errors safely, iterate with `error_code`, and make directory creation
+      idempotent. Allocation failure remains explicitly exceptional.
+
 ## Standard platform introspection
 
 - Added typed operating-system and CPU-architecture enums plus public

@@ -8,35 +8,9 @@ Status markers:
 - `[ ]` not started
 - `[~]` partially implemented or implemented but not sufficiently hardened
 
-The priorities below reflect the state of Wio after `v0.5.0`, including
-real-world validation with packaged projects and a native raylib desktop
-application.
-
-## P0 - Release Blocking Correctness
-
-1. [ ] Stop cascading diagnostics after a root parser/type error.
-   One invalid token in a std module currently produces dozens of undefined
-   symbol, invalid operand, and unknown type errors. Track poisoned nodes/types
-   and suppress derivative diagnostics while preserving independent errors.
-
-2. [~] Finish `ref` / `view` / temporary lifetime semantics.
-   Rvalue component extension calls such as
-   `Parse(...).Value().ToString()` now have a targeted backend fix, but the full
-   matrix is not closed. Specify and test temporary components, nested member
-   access, returned arrays/spans, object handles, `self`, `deref self`, mutable
-   receiver rejection, and native borrow boundaries.
-
-3. [ ] Add parser, lexer, semantic, and generated-C++ fuzzing.
-   Include nested interpolation, malformed generics, deep type nesting, import
-   cycles, invalid UTF-8, arbitrary token streams, and differential
-   compile/check runs. Crashes, hangs, excessive diagnostics, and invalid
-   generated C++ should be release blockers.
-
-4. [ ] Audit and close known source TODOs that affect correctness.
-   At minimum: `Type::...` returning an empty placeholder in
-   `sema/type.cpp`, arithmetic result typing based only on the left operand,
-   incomplete null checks, parser refactor/improvement markers, and filesystem
-   exception policy. Convert each into a focused test before fixing it.
+The priorities below reflect the state of Wio after `v0.5.1` and the P0
+correctness sprint. The completed release-blocking work is recorded in
+`COMPLETED.md`; this file now starts with the remaining P1 work.
 
 ## P1 - Language Semantics and Type System
 
@@ -80,10 +54,11 @@ application.
    functions, explicit conflict resolution, import-scoped visibility,
    documentation generation, reflection metadata, and editor completion.
 
-9. [ ] Define numeric promotion and conversion rules.
-   Remove the current left-operand result-type shortcut. Specify mixed signed
-   and unsigned arithmetic, literal inference, overflow behavior, checked and
-   saturating operations, enum conversions, and narrowing diagnostics.
+9. [~] Finish numeric promotion and conversion rules.
+   Operand-order-independent mixed integer/float promotion and integer-only
+   operator validation have landed. Still specify overflow behavior, checked
+   and saturating operations, enum conversions, and complete narrowing
+   diagnostics.
 
 10. [ ] Add first-class enum value conversion.
     Provide `Value`, `TryFromValue`, `FromValue`, validity queries, unknown
