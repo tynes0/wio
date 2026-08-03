@@ -8,9 +8,10 @@ Status markers:
 - `[ ]` not started
 - `[~]` partially implemented or implemented but not sufficiently hardened
 
-The priorities below reflect the state of Wio after `v0.5.1` and the P0
-correctness sprint. The completed release-blocking work is recorded in
-`COMPLETED.md`; this file now starts with the remaining P1 work.
+The priorities below reflect the state of Wio after `v0.5.1`, the P0
+correctness sprint, and the P1-A language/std correctness sprint. Completed
+work is recorded in `COMPLETED.md`; this file contains only the remaining P1
+and later work.
 
 ## P1 - Language Semantics and Type System
 
@@ -54,113 +55,76 @@ correctness sprint. The completed release-blocking work is recorded in
    functions, explicit conflict resolution, import-scoped visibility,
    documentation generation, reflection metadata, and editor completion.
 
-9. [~] Finish numeric promotion and conversion rules.
-   Operand-order-independent mixed integer/float promotion and integer-only
-   operator validation have landed. Still specify overflow behavior, checked
-   and saturating operations, enum conversions, and complete narrowing
-   diagnostics.
-
-10. [ ] Add first-class enum value conversion.
-    Provide `Value`, `TryFromValue`, `FromValue`, validity queries, unknown
-    native value handling, generic enum constraints, and serialization without
-    manual `match` tables.
-
-11. [ ] Formalize initialization, copy, move, destruction, and resource
+9. [ ] Formalize initialization, copy, move, destruction, and resource
     lifetime behavior. Cover objects, components, arrays, dictionaries, Box,
     native resources, early returns, exceptions/panics, and assignment.
 
-12. [ ] Decide exception and panic semantics.
+10. [ ] Decide exception and panic semantics.
     Specify whether Wio has recoverable exceptions, panic-only termination, or
     Result-only recoverable errors; define stack cleanup, native exception
     translation, diagnostics, and ABI behavior.
 
-13. [ ] Evaluate pipeline/data-flow operators only after semantics are stable.
+11. [ ] Evaluate pipeline/data-flow operators only after semantics are stable.
     Measure `|>` and `<|` against ordinary calls, method chaining, error
     propagation, inference, and debugging before reserving syntax.
 
-14. [ ] Clarify whether `system`, `program`, `every`, `after`, `during`, and
+12. [ ] Clarify whether `system`, `program`, `every`, `after`, `during`, and
     `wait` belong to the core language, a standard DSL, or should be removed
     from the planned surface.
 
 ## P1 - Standard Library Correctness and Consistency
 
-1. [ ] Repair and regression-test `std::path` and `std::fs` in packaged builds.
-   Rename or contextually parse `Extension`, then test every path/fs function
-   through both repository and installed toolchains on Windows and Linux.
-
-2. [ ] Make filesystem APIs consistently `Result`-based.
-   `ReadText`, `WriteText`, directory enumeration, metadata, copy/move/remove,
-   permissions, canonicalization, and atomic replacement must preserve domain,
-   native code, and actionable messages instead of returning empty strings or
-   booleans.
-
-3. [ ] Finish `Result<T>` combinators.
-   Add `Map`, `MapError`, `AndThen`, `OrElse`, `Inspect`, `InspectError`,
-   `Flatten`, `ToOption`, collection helpers, and consistent integration with
-   `?()` / `!()`.
-
-4. [~] Finish `Option<T>` adoption.
-   Option, its core combinators, and array/string/span lookup APIs have landed.
-   Add intrinsic `Dict.Get(key) -> Option<V>` without requiring `V()`, audited
-   queue/set/map lookups, iteration helpers, `zip`, transpose with Result, and
-   consistent naming across std.
-
-5. [ ] Build a real Unicode text model.
+1. [ ] Build a real Unicode text model.
    Define UTF-8 validation, codepoints/runes, grapheme clusters, safe slicing,
    Unicode case folding, normalization, categories, width, iteration, and
    conversion. GUI text input must not require a native
    `AppendCharacter` workaround.
 
-6. [ ] Add byte/codepoint/string builders.
+2. [ ] Add byte/codepoint/string builders.
    Provide allocation-conscious `StringBuilder`, byte writer/reader,
    codepoint append, formatting sinks, reusable buffers, and clear ownership
    rules.
 
-7. [~] Consolidate container contracts.
-   Array, Dict, queue, ordered/unordered set, tuple, span, range, and buffer
-   exist. Align `Get`/`At`, `First`/`Last`, iteration, mutability, cloning,
-   capacity, reserve/shrink, removal, equality, hashing, sorting, and error
-   behavior.
-
-8. [~] Harden JSON into a production-grade module.
+3. [~] Harden JSON into a production-grade module.
    Parsing/writing, nested values, errors, and pretty output exist. Add exact
    integer preservation, configurable duplicate-key policy, deterministic key
    ordering, streaming parser/writer, depth/size limits, UTF validation,
    JSON Pointer/Patch, schema hooks, and generic encode/decode traits.
 
-9. [ ] Add serialization beyond JSON.
+4. [ ] Add serialization beyond JSON.
    Provide stable generic serialization traits and at least binary,
    Base64/hex integration, CSV, and configuration-friendly formats. Define
    versioning, unknown fields, migration, and enum policy.
 
-10. [~] Harden time, random, hash, log, numeric, encoding, stream, UUID, and
+5. [~] Harden time, random, hash, log, numeric, encoding, stream, UUID, and
     SemVer. These modules exist; add cross-platform vectors, deterministic
     contracts, cryptographic/non-cryptographic distinctions, secure random,
-    time zones/calendars, structured log sinks, overflow matrices, streaming
-    encoders, UUID parsing/variants, and full SemVer prerelease/build metadata.
+    time zones/calendars, structured log sinks, floating-point edge matrices,
+    streaming encoders, UUID parsing/variants, and full SemVer
+    prerelease/build metadata.
 
-11. [ ] Add regular-expression safety and completeness.
+6. [ ] Add regular-expression safety and completeness.
     Document the engine, escaping, Unicode behavior, capture APIs, replacement,
     iteration, catastrophic-backtracking limits/timeouts, and error model.
 
-12. [ ] Add networking foundations.
+7. [ ] Add networking foundations.
     DNS, sockets, TCP/UDP, TLS, HTTP client/server primitives, URI, headers,
     multipart, WebSocket, cancellation, timeouts, proxies, and certificate
     validation are required before `std::http` can be considered.
 
-13. [ ] Add concurrency foundations.
+8. [ ] Add concurrency foundations.
     Threads, mutexes, atomics, channels, task scheduling, futures, async I/O,
     cancellation, structured concurrency, thread-local storage, and runtime/
     host integration need one coherent model.
 
-14. [ ] Add OS/application facilities.
+9. [ ] Add OS/application facilities.
     Environment variables, process pipes, signals, filesystem watching,
     clipboard, notifications, dialogs, user/config/cache directories, dynamic
     libraries, and platform capability queries. Basic OS/architecture,
     pointer-width, endian, hardware-thread, path-list separator, and native
     newline queries now exist in `std::platform`.
 
-15. [ ] Add data and utility modules.
+10. [ ] Add data and utility modules.
     Date/time formatting, decimal/big integer, compression/archive, MIME,
     TOML/INI, database primitives, statistics, geometry/color, localization,
     and command-line parsing should be evaluated and prioritized by real

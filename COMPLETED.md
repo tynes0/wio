@@ -47,6 +47,38 @@ Notes:
       errors safely, iterate with `error_code`, and make directory creation
       idempotent. Allocation failure remains explicitly exceptional.
 
+## P1-A language and standard-library correctness sprint
+
+- [x] Integer arithmetic now has explicit semantics across all ten integer
+      types. Ordinary `+`, `-`, `*`, unary negation, division, remainder, and
+      compound assignment wrap deterministically; division by zero is a Wio
+      runtime error. `std::numeric` provides checked and saturating add,
+      subtract, and multiply for every integer type.
+- [x] Implicit numeric conversion now permits safe widening only. Lossy or
+      potentially lossy narrowing requires explicit `fit`, and diagnostics
+      identify the source and destination types.
+- [x] Enums expose `Value()` and `IsValid()`. `std::reflect` provides generic
+      `IsValid`, `TryFromValue`, and strict `FromValue` overloads for every
+      integer representation; unknown native values remain representable but
+      are rejected by checked conversion and reflection validity checks.
+- [x] `Result<T>` gained `Map`, `MapError`, `AndThen`, `OrElse`, `Inspect`,
+      `InspectError`, `Flatten`, `ToOption`, `Collect`, and `Sequence`, with
+      focused propagation and collection coverage.
+- [x] `Option<T>` adoption is complete across intrinsic dictionary lookup and
+      std containers. `Get`, `First`, and `Last` represent expected absence;
+      strict `At` retains bounds/key failure behavior; iteration helpers,
+      `Zip`, Result transpose, cloning, capacity, equality, and removal
+      contracts are covered by one cross-container regression suite.
+- [x] Canonical `std::fs` operations return structured `Result` values carrying
+      the filesystem domain, portable code, native OS code, and actionable
+      message. Reads/writes, enumeration, metadata, permissions, copy/move/
+      remove, canonicalization, and atomic replacement share the model; legacy
+      `Try*`/`*Raw` helpers are explicit compatibility escapes.
+- [x] Every public `std::path` and `std::fs` operation is exercised from the
+      repository and from a clean installed package. Windows and Linux
+      qualification covers contextual `Extension` parsing and rejects source
+      checkout leakage.
+
 ## Standard platform introspection
 
 - Added typed operating-system and CPU-architecture enums plus public

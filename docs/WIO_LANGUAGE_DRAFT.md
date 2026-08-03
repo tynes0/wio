@@ -1121,7 +1121,26 @@ let d = -1 fit u8;      // expected to clamp to 0 in intent
 The current backend emits numeric `fit` using `std::clamp(...)` and then
 `static_cast<...>`.
 
-### 8.4 Object and Interface `fit`
+### 8.4 Implicit Numeric Conversion
+
+Implicit integer conversion is accepted only when every value of the source
+type is representable by the destination type. Potentially lossy assignment,
+initialization, return, and argument conversion is rejected with a diagnostic
+that names both types and requires explicit `fit`.
+
+### 8.5 Integer Overflow and Division
+
+For `i8/i16/i32/i64/isize` and `u8/u16/u32/u64/usize`, ordinary integer `+`,
+`-`, `*`, unary `-`, `/`, `%`, and their compound-assignment forms use
+deterministic two's-complement modular behavior. This includes signed minimum
+divided by `-1`, which yields the signed minimum. Division or remainder by zero
+raises a Wio runtime error.
+
+Code that must detect overflow uses `std::numeric::CheckedAdd`, `CheckedSub`,
+or `CheckedMul`, which return `Option<T>`. Code that must clamp uses the matching
+`Saturating*` operation.
+
+### 8.6 Object and Interface `fit`
 
 Examples:
 
@@ -2628,15 +2647,26 @@ flag Dirty;
 flag NeedsSave;
 ```
 
-### 19.4 Reflection Plans
+### 19.4 Value Conversion and Validity
 
-You explicitly mentioned wanting default reflection support for:
+Every enum value exposes `Value()` using its declared underlying integer type
+and `IsValid()` to test whether the raw value names a declared member.
+`std::reflect::TryFromValue<T>(raw)` returns `Option<T>` and rejects unknown or
+out-of-range input; `std::reflect::FromValue<T>(raw)` is the strict form and
+raises a runtime error on failure. `std::reflect::IsValid(value)` is the generic
+equivalent of the member query.
 
-- `enum`
-- `flagset`
+Native code may return an enum representation that is not currently declared
+by Wio. The raw value remains observable through `Value()` for forward
+compatibility, while `IsValid()` is false, `TryFromValue` returns `None`, and
+the normal reflection name is empty.
 
-That should be documented as a future design direction, not as a current
-feature.
+### 19.5 Reflection
+
+Enum and flagset name, value, index, count, underlying-type, and flag-operation
+reflection are current stable features. Component, object, interface, field,
+method, access, base, size, and alignment metadata are provided by
+`std::reflect` as documented in the standard-library reference.
 
 ## 20. Attributes
 

@@ -79,8 +79,8 @@ Current v1 expectation:
 
 ### 2.1.1 Shared Result Convention
 
-- `std::Result<T>` is the shared fallible result model used by `std::io` and
-  `std::console`
+- `std::Result<T>` is the shared fallible result model used by `std::io`,
+  `std::console`, `std::fs`, and other recoverable std operations
 - `std::result` remains as a helper/compatibility realm for factories and
   legacy aliases
 - `Foo!()` unwraps a `Result<T>`-returning call and panics if it contains
@@ -94,11 +94,28 @@ Current v1 expectation:
   follow this `Result` model
 - `Try*` and `*Raw` names remain available as low-level escape hatches, but
   they are no longer the recommended surface for normal Wio code
+- `Result<T>` supports `Map`, `MapError`, `AndThen`, `OrElse`, `Inspect`, and
+  `InspectError`; `std::Flatten`, `Collect`, and `Sequence` compose nested or
+  repeated results, and `ToOption` deliberately discards error detail when
+  only presence matters
 
 For `v1`, this should be treated as the sealed std error-flow model rather than
 as a transition toward a second competing API family.
 
-### 2.1.2 Runtime-Backed Stable Module With Explicit Caveat
+### 2.1.2 Filesystem Result Contract
+
+Canonical `std::fs` operations return `Result<T>` for reads, writes, recursive
+enumeration, metadata, permissions, copy/move/remove, canonicalization, and
+atomic replacement. A failure carries `ResultDomain::fs`, a portable operation
+code, the native OS error code, and an actionable message. Empty content,
+missing content, and an operating-system failure are therefore distinct.
+
+`Try*` and `*Raw` filesystem functions remain explicit compatibility and
+low-level escape hatches. Public `std::path` and `std::fs` surfaces are tested
+both from the repository and through clean installed packages on Windows and
+Linux.
+
+### 2.1.3 Runtime-Backed Stable Module With Explicit Caveat
 
 - `std::process`
 
@@ -220,10 +237,12 @@ remain available for source compatibility.
 The foundation module wave also adds:
 
 - `std::Option<T>` with `Some`, `None`, `Value`, `ValueOr`, presence queries,
-  `Map`, `AndThen`, `Filter`, `OrElse`, and `ToResult`
+  `Map`, `AndThen`, `Filter`, `OrElse`, `Inspect`, `ForEach`, `ToArray`, `Zip`,
+  `ToResult`, and Result transpose helpers
 - absence-oriented collection APIs return `Option`: `algorithms::First`,
   `Last`, `Find`, and `FindIndex`; `collections::First`, `Last`, and `Get`;
-  `strings::First`, `Last`, and `Get`; and `span::Get`
+  `strings::First`, `Last`, and `Get`; `span::Get`; and intrinsic
+  array/string/dictionary `Get`
 - `std::iterator` array algorithms: `Map`, `Filter`, `Fold`, `Any`, `All`, and
   `Find`
 - `std::range::IndexRange`, including member-style `Count`, `Contains`, and
@@ -235,13 +254,16 @@ The foundation module wave also adds:
 
 `Option<T>` represents an expected absence such as an empty collection or a
 missing match. `Result<T>` represents an operation that can fail and carries a
-structured error. Existing `...Or` and `Try...` functions remain available for
-source compatibility, while new code can use the Option-returning counterparts.
+structured error. Strict `At` operations return the value and fail on a
+missing index/key; `Get`, `First`, and `Last` return `Option` when absence is
+expected. Existing `...Or` and `Try...` functions remain available for source
+compatibility.
 
 The utility and stream wave adds:
 
-- `std::numeric` checked `i64`/`u64` addition, subtraction, multiplication, and
-  saturating arithmetic; checked value APIs integrate with `Option<T>`
+- `std::numeric` checked and saturating addition, subtraction, and
+  multiplication for `i8/i16/i32/i64/isize` and
+  `u8/u16/u32/u64/usize`; checked value APIs integrate with `Option<T>`
 - `std::stream::StringReader` and `StringWriter` for in-memory sequential text
   processing
 - `std::uuid` UUID v4 generation and format validation
@@ -288,6 +310,8 @@ The stable ergonomic surface is:
 - `reflect::Name(value)`
 - `reflect::Value<T>(index)`
 - `reflect::Index(value)`
+- `reflect::IsValid(value)`
+- `reflect::TryFromValue<T>(raw)` and strict `reflect::FromValue<T>(raw)`
 - `reflect::UnderlyingType<T>()`
 - `reflect::Size<T>()`
 - `reflect::Has(flags, mask)`
@@ -303,6 +327,10 @@ The stable ergonomic surface is:
   `MethodAccess<T>()`
 - `reflect::BaseTypes<T>()`
 - `reflect::Describe<T>()`, which composes those arrays into `TypeInfo`
+
+Enum values also provide member-style `Value()` and `IsValid()`. Unknown raw
+values received from native code remain inspectable for forward compatibility,
+but validity is false and `TryFromValue` returns `None`.
 
 This keeps common state/kind/mode style code readable without forcing all
 flag-oriented operations back to raw integer math, while also giving enum and

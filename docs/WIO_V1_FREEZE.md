@@ -173,10 +173,17 @@ This is a deliberate `v1` boundary, not an accident.
 That should now be treated as the sealed `v1` direction:
 
 - canonical fallible std APIs return `std::Result<T>`,
+- filesystem failures preserve a std domain, portable operation code, native
+  OS code, and message instead of collapsing to empty values or booleans,
 - `!` is the explicit unwrap / panic path,
 - `?` is the explicit propagation path,
 - and a second competing `v1` source-level error model is not part of the
   current contract.
+
+`std::Option<T>` is the complementary expected-absence model. Container
+`Get`, `First`, and `Last` use `Option`; strict `At` remains the explicit
+failure-on-missing operation. `Option` does not replace `Result` when an
+actionable error must be preserved.
 
 ### 3.3 `any / Box / opaque`
 
