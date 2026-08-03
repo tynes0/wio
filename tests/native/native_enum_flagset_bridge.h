@@ -47,4 +47,9 @@ namespace native_enum_flagset
 
         return state::idle;
     }
+
+    [[nodiscard]] inline state UnknownState() noexcept
+    {
+        return static_cast<state>(99);
+    }
 }

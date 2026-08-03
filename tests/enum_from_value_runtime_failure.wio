@@ -1,0 +1,11 @@
+use std::reflect as reflect;
+
+enum State {
+    idle = 0,
+    ready = 1
+};
+
+fn Entry() -> i32 {
+    let state = reflect::FromValue<State>(99);
+    return state.Value();
+}

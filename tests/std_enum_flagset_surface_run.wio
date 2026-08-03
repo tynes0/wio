@@ -48,6 +48,13 @@ fn Entry() -> i32 {
         return 7;
     }
 
+    assert::ExpectEqual(DefaultState.Value(), 1, "enum member raw value");
+    assert::Expect(DefaultState.IsValid(), "declared enum value validity");
+    assert::Expect(reflect::IsValid(DefaultState), "generic enum validity");
+    assert::ExpectEqual(reflect::TryFromValue<State>(2).Value(), State::Paused, "try enum from value");
+    assert::Expect(reflect::TryFromValue<State>(99).IsNone(), "try enum rejects unknown value");
+    assert::ExpectEqual(reflect::FromValue<State>(0), State::Menu, "enum from value");
+
     if (reflect::Index(Feature::All) != 4isize) {
         return 8;
     }

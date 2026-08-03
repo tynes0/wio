@@ -1,3 +1,5 @@
+use std::option;
+
 realm std {
     realm reflect {
         use @CppHeader("enum_reflection.h");
@@ -152,6 +154,150 @@ realm std {
         @Native
         @CppName(wio::runtime::EnumSize)
         fn Size<T>() -> usize;
+
+        @Native
+        @CppName(wio::runtime::EnumIsValid)
+        fn IsValid<T>(value: T) -> bool;
+
+        @Native
+        @CppName(wio::runtime::EnumTryFromRaw)
+        fn TryFromValueNative<T>(value: i8, output: ref T) -> bool;
+
+        @Native
+        @CppName(wio::runtime::EnumFromRaw)
+        fn FromValue<T>(value: i8) -> T;
+
+        @Native
+        @CppName(wio::runtime::EnumTryFromRaw)
+        fn TryFromValueNative<T>(value: i16, output: ref T) -> bool;
+
+        @Native
+        @CppName(wio::runtime::EnumFromRaw)
+        fn FromValue<T>(value: i16) -> T;
+
+        @Native
+        @CppName(wio::runtime::EnumTryFromRaw)
+        fn TryFromValueNative<T>(value: i32, output: ref T) -> bool;
+
+        @Native
+        @CppName(wio::runtime::EnumFromRaw)
+        fn FromValue<T>(value: i32) -> T;
+
+        @Native
+        @CppName(wio::runtime::EnumTryFromRaw)
+        fn TryFromValueNative<T>(value: i64, output: ref T) -> bool;
+
+        @Native
+        @CppName(wio::runtime::EnumFromRaw)
+        fn FromValue<T>(value: i64) -> T;
+
+        @Native
+        @CppName(wio::runtime::EnumTryFromRaw)
+        fn TryFromValueNative<T>(value: isize, output: ref T) -> bool;
+
+        @Native
+        @CppName(wio::runtime::EnumFromRaw)
+        fn FromValue<T>(value: isize) -> T;
+
+        @Native
+        @CppName(wio::runtime::EnumTryFromRaw)
+        fn TryFromValueNative<T>(value: u8, output: ref T) -> bool;
+
+        @Native
+        @CppName(wio::runtime::EnumFromRaw)
+        fn FromValue<T>(value: u8) -> T;
+
+        @Native
+        @CppName(wio::runtime::EnumTryFromRaw)
+        fn TryFromValueNative<T>(value: u16, output: ref T) -> bool;
+
+        @Native
+        @CppName(wio::runtime::EnumFromRaw)
+        fn FromValue<T>(value: u16) -> T;
+
+        @Native
+        @CppName(wio::runtime::EnumTryFromRaw)
+        fn TryFromValueNative<T>(value: u32, output: ref T) -> bool;
+
+        @Native
+        @CppName(wio::runtime::EnumFromRaw)
+        fn FromValue<T>(value: u32) -> T;
+
+        @Native
+        @CppName(wio::runtime::EnumTryFromRaw)
+        fn TryFromValueNative<T>(value: u64, output: ref T) -> bool;
+
+        @Native
+        @CppName(wio::runtime::EnumFromRaw)
+        fn FromValue<T>(value: u64) -> T;
+
+        @Native
+        @CppName(wio::runtime::EnumTryFromRaw)
+        fn TryFromValueNative<T>(value: usize, output: ref T) -> bool;
+
+        @Native
+        @CppName(wio::runtime::EnumFromRaw)
+        fn FromValue<T>(value: usize) -> T;
+
+        fn TryFromValue<T>(value: i8) -> std::Option<T> {
+            mut output: T;
+            if (TryFromValueNative<T>(value, ref output)) { return std::Some<T>(output); }
+            return std::None<T>();
+        }
+
+        fn TryFromValue<T>(value: i16) -> std::Option<T> {
+            mut output: T;
+            if (TryFromValueNative<T>(value, ref output)) { return std::Some<T>(output); }
+            return std::None<T>();
+        }
+
+        fn TryFromValue<T>(value: i32) -> std::Option<T> {
+            mut output: T;
+            if (TryFromValueNative<T>(value, ref output)) { return std::Some<T>(output); }
+            return std::None<T>();
+        }
+
+        fn TryFromValue<T>(value: i64) -> std::Option<T> {
+            mut output: T;
+            if (TryFromValueNative<T>(value, ref output)) { return std::Some<T>(output); }
+            return std::None<T>();
+        }
+
+        fn TryFromValue<T>(value: isize) -> std::Option<T> {
+            mut output: T;
+            if (TryFromValueNative<T>(value, ref output)) { return std::Some<T>(output); }
+            return std::None<T>();
+        }
+
+        fn TryFromValue<T>(value: u8) -> std::Option<T> {
+            mut output: T;
+            if (TryFromValueNative<T>(value, ref output)) { return std::Some<T>(output); }
+            return std::None<T>();
+        }
+
+        fn TryFromValue<T>(value: u16) -> std::Option<T> {
+            mut output: T;
+            if (TryFromValueNative<T>(value, ref output)) { return std::Some<T>(output); }
+            return std::None<T>();
+        }
+
+        fn TryFromValue<T>(value: u32) -> std::Option<T> {
+            mut output: T;
+            if (TryFromValueNative<T>(value, ref output)) { return std::Some<T>(output); }
+            return std::None<T>();
+        }
+
+        fn TryFromValue<T>(value: u64) -> std::Option<T> {
+            mut output: T;
+            if (TryFromValueNative<T>(value, ref output)) { return std::Some<T>(output); }
+            return std::None<T>();
+        }
+
+        fn TryFromValue<T>(value: usize) -> std::Option<T> {
+            mut output: T;
+            if (TryFromValueNative<T>(value, ref output)) { return std::Some<T>(output); }
+            return std::None<T>();
+        }
 
         fn Has<T>(value: T, mask: T) -> bool {
             return (value & mask) == mask;

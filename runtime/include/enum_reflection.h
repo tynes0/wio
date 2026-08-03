@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <type_traits>
+#include <utility>
 
 #include "exception.h"
 
@@ -48,5 +50,40 @@ namespace wio::runtime
     [[nodiscard]] constexpr std::size_t EnumSize() noexcept
     {
         return EnumReflection<T>::Size;
+    }
+
+    template <typename T>
+    [[nodiscard]] constexpr std::underlying_type_t<T> EnumRawValue(const T value) noexcept
+    {
+        return static_cast<std::underlying_type_t<T>>(value);
+    }
+
+    template <typename T>
+    [[nodiscard]] bool EnumIsValid(const T value) noexcept
+    {
+        return EnumReflection<T>::Index(value) >= 0;
+    }
+
+    template <typename T, typename TRaw>
+    [[nodiscard]] bool EnumTryFromRaw(const TRaw raw, T& value) noexcept
+    {
+        static_assert(std::is_enum_v<T> && std::is_integral_v<TRaw>);
+        using Underlying = std::underlying_type_t<T>;
+        if (!std::in_range<Underlying>(raw))
+            return false;
+        const T candidate = static_cast<T>(static_cast<Underlying>(raw));
+        if (!EnumIsValid(candidate))
+            return false;
+        value = candidate;
+        return true;
+    }
+
+    template <typename T, typename TRaw>
+    [[nodiscard]] T EnumFromRaw(const TRaw raw)
+    {
+        T value{};
+        if (!EnumTryFromRaw(raw, value))
+            throw RuntimeException("Enum value is outside the declared value set.");
+        return value;
     }
 }

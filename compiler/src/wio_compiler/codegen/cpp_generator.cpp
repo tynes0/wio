@@ -1420,8 +1420,6 @@ namespace wio::codegen
             case IntrinsicMember::ArrayLast:
                 return "ArrayLast";
             case IntrinsicMember::ArrayGet:
-                return "ArrayGetOption";
-            case IntrinsicMember::ArrayAt:
                 return "Index";
             case IntrinsicMember::ArrayGetOr:
                 return "ArrayGetOr";
@@ -1474,8 +1472,6 @@ namespace wio::codegen
             case IntrinsicMember::DictContainsValue:
                 return "DictContainsValue";
             case IntrinsicMember::DictGet:
-                return "DictGetOption";
-            case IntrinsicMember::DictAt:
                 return "DictGet";
             case IntrinsicMember::DictGetOr:
                 return "DictGetOr";
@@ -1532,8 +1528,6 @@ namespace wio::codegen
             case IntrinsicMember::StringLast:
                 return "StringLast";
             case IntrinsicMember::StringGet:
-                return "StringGetOption";
-            case IntrinsicMember::StringAt:
                 return "Index";
             case IntrinsicMember::StringGetOr:
                 return "StringGetOr";
@@ -1624,6 +1618,10 @@ namespace wio::codegen
             case IntrinsicMember::EnumName:
             case IntrinsicMember::FlagsetName:
                 return "EnumName";
+            case IntrinsicMember::EnumRawValue:
+                return "EnumRawValue";
+            case IntrinsicMember::EnumIsValid:
+                return "EnumIsValid";
             case IntrinsicMember::FlagsetHasAll:
                 return "FlagsetHasAll";
             case IntrinsicMember::FlagsetHasAny:
@@ -6198,9 +6196,16 @@ namespace wio::codegen
         emit(toCppType(intrinsicFunctionType->returnType));
         emit(" { ");
 
-        if (node.intrinsicMember == IntrinsicMember::ArrayGet ||
-            node.intrinsicMember == IntrinsicMember::DictGet ||
-            node.intrinsicMember == IntrinsicMember::StringGet)
+        Ref<sema::Type> resolvedReturnType = unwrapAliasTypeForCodegen(intrinsicFunctionType->returnType);
+        const bool returnsStdOption = resolvedReturnType &&
+            resolvedReturnType->kind() == sema::TypeKind::Struct &&
+            resolvedReturnType.AsFast<sema::StructType>()->name == "Option" &&
+            resolvedReturnType.AsFast<sema::StructType>()->scopePath == "std";
+
+        if (returnsStdOption &&
+            (node.intrinsicMember == IntrinsicMember::ArrayGet ||
+             node.intrinsicMember == IntrinsicMember::DictGet ||
+             node.intrinsicMember == IntrinsicMember::StringGet))
         {
             Ref<sema::Type> valueType = nullptr;
             Ref<sema::Type> resolvedReceiverType = unwrapAliasTypeForCodegen(receiverType);
@@ -6239,7 +6244,7 @@ namespace wio::codegen
             return true;
         }
 
-        if (node.intrinsicMember == IntrinsicMember::StringAt)
+        if (node.intrinsicMember == IntrinsicMember::StringGet)
         {
             emit("return wio::intrinsics::Index(wio::String(");
             emitReceiver();
@@ -7896,7 +7901,10 @@ namespace wio::codegen
                            cppNameArg->value == "wio::runtime::EnumValue" ||
                            cppNameArg->value == "wio::runtime::EnumIndex" ||
                            cppNameArg->value == "wio::runtime::EnumUnderlyingTypeName" ||
-                           cppNameArg->value == "wio::runtime::EnumSize";
+                           cppNameArg->value == "wio::runtime::EnumSize" ||
+                           cppNameArg->value == "wio::runtime::EnumIsValid" ||
+                           cppNameArg->value == "wio::runtime::EnumTryFromRaw" ||
+                           cppNameArg->value == "wio::runtime::EnumFromRaw";
                 }();
 
             auto emitNativeSymbolInvocationTarget = [&]()

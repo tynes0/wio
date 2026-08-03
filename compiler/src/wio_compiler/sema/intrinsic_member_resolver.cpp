@@ -137,7 +137,7 @@ namespace wio::sema
             else if (memberName == "Get")
                 appendMethodResolution(overloads, IntrinsicMember::ArrayGet, elementType, { typeContext.getUSize() }, typeContext, false);
             else if (memberName == "At")
-                appendMethodResolution(overloads, IntrinsicMember::ArrayAt, elementType, { typeContext.getUSize() }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::ArrayGet, elementType, { typeContext.getUSize() }, typeContext, false);
             else if (memberName == "GetOr")
                 appendMethodResolution(overloads, IntrinsicMember::ArrayGetOr, elementType, { typeContext.getUSize(), elementType }, typeContext, false);
             else if (memberName == "Clone")
@@ -218,7 +218,7 @@ namespace wio::sema
             else if (memberName == "Get")
                 appendMethodResolution(overloads, IntrinsicMember::DictGet, valueType, { keyType }, typeContext, false);
             else if (memberName == "At")
-                appendMethodResolution(overloads, IntrinsicMember::DictAt, valueType, { keyType }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::DictGet, valueType, { keyType }, typeContext, false);
             else if (memberName == "GetOr")
                 appendMethodResolution(overloads, IntrinsicMember::DictGetOr, valueType, { keyType, valueType }, typeContext, false);
             else if (memberName == "TryGet")
@@ -304,7 +304,7 @@ namespace wio::sema
             else if (memberName == "Get")
                 appendMethodResolution(overloads, IntrinsicMember::StringGet, typeContext.getChar(), { typeContext.getUSize() }, typeContext, false);
             else if (memberName == "At")
-                appendMethodResolution(overloads, IntrinsicMember::StringAt, typeContext.getChar(), { typeContext.getUSize() }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::StringGet, typeContext.getChar(), { typeContext.getUSize() }, typeContext, false);
             else if (memberName == "GetOr")
                 appendMethodResolution(overloads, IntrinsicMember::StringGetOr, typeContext.getChar(), { typeContext.getUSize(), typeContext.getChar() }, typeContext, false);
             else if (memberName == "Slice")
@@ -444,6 +444,10 @@ namespace wio::sema
 
             if (memberName == "Name")
                 appendMethodResolution(overloads, IntrinsicMember::EnumName, typeContext.getString(), {}, typeContext, false);
+            else if (memberName == "Value")
+                appendMethodResolution(overloads, IntrinsicMember::EnumRawValue, structType->enumUnderlyingType, {}, typeContext, false);
+            else if (memberName == "IsValid")
+                appendMethodResolution(overloads, IntrinsicMember::EnumIsValid, typeContext.getBool(), {}, typeContext, false);
 
             return overloads;
         }

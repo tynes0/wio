@@ -4209,6 +4209,9 @@ namespace wio::sema
                    cppNameArg->value == "wio::runtime::EnumIndex" ||
                    cppNameArg->value == "wio::runtime::EnumUnderlyingTypeName" ||
                    cppNameArg->value == "wio::runtime::EnumSize" ||
+                   cppNameArg->value == "wio::runtime::EnumIsValid" ||
+                   cppNameArg->value == "wio::runtime::EnumTryFromRaw" ||
+                   cppNameArg->value == "wio::runtime::EnumFromRaw" ||
                    cppNameArg->value == "wio::runtime::ReflectedTypeName" ||
                    cppNameArg->value == "wio::runtime::ReflectedKind" ||
                    cppNameArg->value == "wio::runtime::ReflectedSize" ||
@@ -4251,10 +4254,17 @@ namespace wio::sema
                 cppNameArg->value == "wio::runtime::EnumValue" ||
                 cppNameArg->value == "wio::runtime::EnumIndex" ||
                 cppNameArg->value == "wio::runtime::EnumUnderlyingTypeName" ||
-                cppNameArg->value == "wio::runtime::EnumSize")
+                cppNameArg->value == "wio::runtime::EnumSize" ||
+                cppNameArg->value == "wio::runtime::EnumIsValid" ||
+                cppNameArg->value == "wio::runtime::EnumTryFromRaw" ||
+                cppNameArg->value == "wio::runtime::EnumFromRaw")
             {
                 return bindingTypes.size() == 1 &&
-                       (isEnumConstraintType(bindingTypes.front()) || isFlagsetConstraintType(bindingTypes.front()));
+                       (cppNameArg->value == "wio::runtime::EnumIsValid" ||
+                        cppNameArg->value == "wio::runtime::EnumTryFromRaw" ||
+                        cppNameArg->value == "wio::runtime::EnumFromRaw"
+                            ? isEnumConstraintType(bindingTypes.front())
+                            : (isEnumConstraintType(bindingTypes.front()) || isFlagsetConstraintType(bindingTypes.front())));
             }
 
             return true;
@@ -8600,9 +8610,10 @@ namespace wio::sema
                 if (overloads.size() == 1)
                 {
                     auto resolution = overloads.front();
-                    if (resolution.member == IntrinsicMember::ArrayGet ||
-                        resolution.member == IntrinsicMember::DictGet ||
-                        resolution.member == IntrinsicMember::StringGet)
+                    if (node.member->token.value == "Get" &&
+                        (resolution.member == IntrinsicMember::ArrayGet ||
+                         resolution.member == IntrinsicMember::DictGet ||
+                         resolution.member == IntrinsicMember::StringGet))
                     {
                         Ref<Type> resolvedCandidate = unwrapAliasType(candidateType);
                         Ref<Type> optionPayloadType = nullptr;

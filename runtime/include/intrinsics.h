@@ -339,6 +339,19 @@ namespace wio::intrinsics
     }
 
     template <typename T>
+    [[nodiscard]] constexpr auto EnumRawValue(const T value) noexcept
+        -> std::underlying_type_t<T>
+    {
+        return runtime::EnumRawValue(value);
+    }
+
+    template <typename T>
+    [[nodiscard]] bool EnumIsValid(const T value) noexcept
+    {
+        return runtime::EnumIsValid(value);
+    }
+
+    template <typename T>
     [[nodiscard]] bool FlagsetHasAll(const T value, const T mask) noexcept
     {
         return (value & mask) == mask;

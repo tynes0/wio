@@ -1855,7 +1855,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_output_test(
         wio_test_dictionary_member_methods_run
         "${CMAKE_SOURCE_DIR}/tests/dictionary_member_methods.wio"
-        "Dict members: true/true/7/-1/true/7/11/4/true/true/true/true/5/true/4/1/10/5/50/3/5/true"
+        "Dict members: true/true/7/true/-1/true/7/11/4/true/true/true/true/5/true/4/1/10/5/50/3/5/true"
         --run
     )
 
@@ -2105,6 +2105,14 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/integer_divide_by_zero_runtime_failure.wio"
         "Runtime Error: Integer division by zero\."
         "floating point exception|SIGFPE|Assertion"
+        --run
+    )
+
+    add_wio_non_dry_failure_test_clean(
+        wio_runtime_enum_from_value_unknown
+        "${CMAKE_SOURCE_DIR}/tests/enum_from_value_runtime_failure.wio"
+        "Runtime Error: Enum value is outside the declared value set\."
+        "segmentation fault|Assertion|SIG"
         --run
     )
 

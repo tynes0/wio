@@ -1,4 +1,6 @@
+use std::assert as assert;
 use std::console as console;
+use std::reflect as reflect;
 
 realm ffi {
     use @CppHeader("native_enum_flagset_bridge.h");
@@ -27,6 +29,10 @@ realm ffi {
     fn Advance(value: State) -> State;
 
     @Native
+    @CppName(native_enum_flagset::UnknownState)
+    fn UnknownState() -> State;
+
+    @Native
     @CppName(native_enum_flagset::HasFeature)
     fn HasFeature(value: Feature, mask: Feature) -> bool;
 }
@@ -39,6 +45,13 @@ fn Entry() -> i32 {
     if (not ffi::HasFeature(ffi::Feature::all, ffi::Feature::debug)) {
         return 2;
     }
+
+    let unknown = ffi::UnknownState();
+    assert::ExpectEqual(unknown.Value(), 99u8, "native unknown raw value");
+    assert::Expect(not unknown.IsValid(), "native unknown value validity");
+    assert::Expect(not reflect::IsValid(unknown), "generic native unknown validity");
+    assert::ExpectEqual(unknown.Name(), "<unknown>", "native unknown name");
+    assert::Expect(reflect::TryFromValue<ffi::State>(99u8).IsNone(), "unknown native TryFromValue");
 
     console::PrintLine("native-enum-flagset-ok");
     return 0;
