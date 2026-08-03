@@ -29,7 +29,7 @@ namespace wio::intrinsics
     }
 
     template <typename TResult, typename TLeft, typename TRight>
-    inline TResult WrappingAdd(TLeft left, TRight right) noexcept
+    constexpr TResult WrappingAdd(TLeft left, TRight right) noexcept
     {
         using Unsigned = std::make_unsigned_t<TResult>;
         const Unsigned bits = static_cast<Unsigned>(static_cast<TResult>(left)) +
@@ -39,7 +39,7 @@ namespace wio::intrinsics
     }
 
     template <typename TResult, typename TLeft, typename TRight>
-    inline TResult WrappingSub(TLeft left, TRight right) noexcept
+    constexpr TResult WrappingSub(TLeft left, TRight right) noexcept
     {
         using Unsigned = std::make_unsigned_t<TResult>;
         const Unsigned bits = static_cast<Unsigned>(static_cast<TResult>(left)) -
@@ -49,7 +49,7 @@ namespace wio::intrinsics
     }
 
     template <typename TResult, typename TLeft, typename TRight>
-    inline TResult WrappingMul(TLeft left, TRight right) noexcept
+    constexpr TResult WrappingMul(TLeft left, TRight right) noexcept
     {
         using Unsigned = std::make_unsigned_t<TResult>;
         const Unsigned bits = static_cast<Unsigned>(
@@ -60,7 +60,7 @@ namespace wio::intrinsics
     }
 
     template <typename TResult, typename TValue>
-    inline TResult WrappingNeg(TValue value) noexcept
+    constexpr TResult WrappingNeg(TValue value) noexcept
     {
         using Unsigned = std::make_unsigned_t<TResult>;
         const Unsigned bits = Unsigned{0} - static_cast<Unsigned>(static_cast<TResult>(value));
@@ -69,7 +69,7 @@ namespace wio::intrinsics
     }
 
     template <typename TResult, typename TLeft, typename TRight>
-    inline TResult IntegerDivide(TLeft left, TRight right)
+    constexpr TResult IntegerDivide(TLeft left, TRight right)
     {
         const TResult lhs = static_cast<TResult>(left);
         const TResult rhs = static_cast<TResult>(right);
@@ -84,7 +84,7 @@ namespace wio::intrinsics
     }
 
     template <typename TResult, typename TLeft, typename TRight>
-    inline TResult IntegerRemainder(TLeft left, TRight right)
+    constexpr TResult IntegerRemainder(TLeft left, TRight right)
     {
         const TResult lhs = static_cast<TResult>(left);
         const TResult rhs = static_cast<TResult>(right);
@@ -99,23 +99,23 @@ namespace wio::intrinsics
     }
 
     template <typename TTarget, typename TValue>
-    inline void WrappingAddAssign(TTarget& target, TValue value) noexcept
+    constexpr void WrappingAddAssign(TTarget& target, TValue value) noexcept
     { target = WrappingAdd<TTarget>(target, value); }
 
     template <typename TTarget, typename TValue>
-    inline void WrappingSubAssign(TTarget& target, TValue value) noexcept
+    constexpr void WrappingSubAssign(TTarget& target, TValue value) noexcept
     { target = WrappingSub<TTarget>(target, value); }
 
     template <typename TTarget, typename TValue>
-    inline void WrappingMulAssign(TTarget& target, TValue value) noexcept
+    constexpr void WrappingMulAssign(TTarget& target, TValue value) noexcept
     { target = WrappingMul<TTarget>(target, value); }
 
     template <typename TTarget, typename TValue>
-    inline void IntegerDivideAssign(TTarget& target, TValue value)
+    constexpr void IntegerDivideAssign(TTarget& target, TValue value)
     { target = IntegerDivide<TTarget>(target, value); }
 
     template <typename TTarget, typename TValue>
-    inline void IntegerRemainderAssign(TTarget& target, TValue value)
+    constexpr void IntegerRemainderAssign(TTarget& target, TValue value)
     { target = IntegerRemainder<TTarget>(target, value); }
 
     struct NativeStringArg
