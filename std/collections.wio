@@ -74,18 +74,20 @@ realm std {
         }
 
         fn Get<T>(values: T[], index: usize) -> std::Option<T> {
-            if (index >= values.Count()) { return std::None<T>(); }
-            return std::Some<T>(values[index]);
+            return values.Get(index);
+        }
+
+        fn At<T>(values: T[], index: usize) -> T {
+            return values.At(index);
         }
 
         fn First<T>(values: T[]) -> std::Option<T> {
-            if (values.Empty()) { return std::None<T>(); }
-            return std::Some<T>(values[0usize]);
+            return values.Get(0usize);
         }
 
         fn Last<T>(values: T[]) -> std::Option<T> {
             if (values.Empty()) { return std::None<T>(); }
-            return std::Some<T>(values.Last());
+            return values.Get(values.Count() - 1usize);
         }
 
         fn Clone<T>(values: T[]) -> T[] {

@@ -8520,21 +8520,28 @@ namespace wio::sema
                 if (overloads.size() == 1)
                 {
                     auto resolution = overloads.front();
-                    if (resolution.member == IntrinsicMember::DictGet)
+                    if (resolution.member == IntrinsicMember::ArrayGet ||
+                        resolution.member == IntrinsicMember::DictGet ||
+                        resolution.member == IntrinsicMember::StringGet)
                     {
                         Ref<Type> resolvedCandidate = unwrapAliasType(candidateType);
-                        auto dictionaryType = resolvedCandidate && resolvedCandidate->kind() == TypeKind::Dictionary
-                            ? resolvedCandidate.AsFast<DictionaryType>()
-                            : nullptr;
+                        Ref<Type> optionPayloadType = nullptr;
+                        if (resolvedCandidate && resolvedCandidate->kind() == TypeKind::Array)
+                            optionPayloadType = resolvedCandidate.AsFast<ArrayType>()->elementType;
+                        else if (resolvedCandidate && resolvedCandidate->kind() == TypeKind::Dictionary)
+                            optionPayloadType = resolvedCandidate.AsFast<DictionaryType>()->valueType;
+                        else if (resolvedCandidate && resolvedCandidate->kind() == TypeKind::Primitive &&
+                                 resolvedCandidate.AsFast<PrimitiveType>()->name == "string")
+                            optionPayloadType = Compiler::get().getTypeContext().getChar();
                         Ref<Symbol> optionSymbol = resolveQualifiedSymbol(currentScope_, "std::Option");
                         auto optionStruct = optionSymbol && optionSymbol->type && optionSymbol->type->kind() == TypeKind::Struct
                             ? optionSymbol->type.AsFast<StructType>()
                             : nullptr;
-                        if (!dictionaryType || !optionStruct)
+                        if (!optionPayloadType || !optionStruct)
                         {
                             WIO_LOG_ADD_ERROR(
                                 node.member->location(),
-                                "Dict.Get requires the built-in std::Option<T> module."
+                                "Container Get requires the built-in std::Option<T> module."
                             );
                             node.refType = Compiler::get().getTypeContext().getUnknown();
                             return true;
@@ -8542,12 +8549,12 @@ namespace wio::sema
 
                         Ref<Type> optionType = instantiateGenericStructType(
                             optionStruct,
-                            { dictionaryType->valueType },
+                            { optionPayloadType },
                             node.location()
                         );
                         resolution.memberType = Compiler::get().getTypeContext().getOrCreateFunctionType(
                             optionType,
-                            { dictionaryType->keyType }
+                            resolution.memberType.AsFast<FunctionType>()->paramTypes
                         );
                     }
                     node.intrinsicMember = resolution.member;

@@ -1,4 +1,5 @@
 use std::result as result;
+use std::option;
 
 realm std {
     realm heap {
@@ -56,6 +57,10 @@ realm std {
 
             public fn Reserve(capacity: usize) {
                 self.data.Reserve(capacity);
+            }
+
+            public fn ShrinkToFit() {
+                self.data.ShrinkToFit();
             }
 
             public fn Rewind() {
@@ -169,6 +174,10 @@ realm std {
                 return self.data[index];
             }
 
+            public fn Get(index: usize) -> std::Option<byte> {
+                return self.data.Get(index);
+            }
+
             public fn Set(index: usize, value: byte) -> bool {
                 if (index >= self.data.Count()) {
                     return false;
@@ -183,6 +192,12 @@ realm std {
 
             public fn ToArray() -> byte[] {
                 return self.data.Clone();
+            }
+
+            public fn Clone() -> ByteBuffer {
+                let copy = ByteBuffer(self.data);
+                copy.Seek(self.position);
+                return copy;
             }
         }
 
@@ -232,11 +247,16 @@ realm std {
                     self.generations[handle.index] == handle.generation;
             }
 
-            public fn Get(handle: PoolHandle) -> ByteBuffer {
+            public fn At(handle: PoolHandle) -> ByteBuffer {
                 if (not self.Owns(handle)) {
-                    std::Panic("BytePool.Get received a stale or foreign handle.");
+                    std::Panic("BytePool.At received a stale or foreign handle.");
                 }
                 return self.buffers[handle.index];
+            }
+
+            public fn Get(handle: PoolHandle) -> std::Option<ByteBuffer> {
+                if (not self.Owns(handle)) { return std::None<ByteBuffer>(); }
+                return std::Some<ByteBuffer>(self.buffers[handle.index]);
             }
 
             public fn Return(handle: PoolHandle) -> bool {
@@ -317,6 +337,18 @@ realm std {
                 }
                 value = self.values[handle.index];
                 return true;
+            }
+
+            public fn Get(handle: PoolHandle) -> std::Option<T> {
+                if (not self.Owns(handle)) { return std::None<T>(); }
+                return std::Some<T>(self.values[handle.index]);
+            }
+
+            public fn At(handle: PoolHandle) -> T {
+                if (not self.Owns(handle)) {
+                    std::Panic("Pool<T>.At received a stale or foreign handle.");
+                }
+                return self.values[handle.index];
             }
 
             public fn Set(handle: PoolHandle, value: T) -> bool {

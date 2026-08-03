@@ -1,0 +1,65 @@
+use std::assert as assert;
+use std::buffer as buffer;
+use std::console as console;
+use std::queue as queue;
+use std::range as range;
+use std::sets as sets;
+use std::span as span;
+use std::strings as strings;
+
+fn Entry() -> i32 {
+    let values: i32[] = [4, 8, 15];
+    assert::ExpectEqual(values.Get(1usize).Value(), 8, "array Get");
+    assert::Expect(values.Get(9usize).IsNone(), "array Get missing");
+    assert::ExpectEqual(values.At(2usize), 15, "array At");
+    assert::ExpectEqual("wio".Get(1usize).Value(), 'i', "string Get");
+    assert::Expect("wio".Get(9usize).IsNone(), "string Get missing");
+    assert::ExpectEqual(strings::At("wio", 2usize), 'o', "strings At");
+
+    mut work = queue::Queue<i32>();
+    work.Reserve(16usize);
+    work.Enqueue(4);
+    work.Enqueue(8);
+    let clonedQueue = work.Clone();
+    assert::Expect(work.Capacity() >= 16usize, "queue reserve");
+    assert::Expect(work.SequenceEqual(clonedQueue), "queue sequence equality");
+    assert::ExpectEqual(work.First().Value(), 4, "queue first");
+    assert::ExpectEqual(work.Last().Value(), 8, "queue last");
+    work.DequeueOption();
+    work.ShrinkToFit();
+    assert::ExpectEqual(work.Count(), 1usize, "queue compact");
+
+    mut firstSet = sets::UnorderedSet<i32>();
+    firstSet.Add(3);
+    firstSet.Add(7);
+    let secondSet = firstSet.Clone();
+    assert::Expect(firstSet.SetEquals(secondSet), "unordered set equality");
+    assert::ExpectEqual(secondSet.ToArray().Count(), 2usize, "set ToArray");
+
+    mut bytes = buffer::ByteBuffer(32usize);
+    bytes.Write(5u8);
+    bytes.Write(9u8);
+    assert::ExpectEqual(bytes.Get(1usize).Value(), 9u8, "buffer Get");
+    assert::Expect(bytes.Get(3usize).IsNone(), "buffer Get missing");
+    let bytesCopy = bytes.Clone();
+    assert::ExpectEqual(bytesCopy.Position(), bytes.Position(), "buffer clone position");
+
+    mut pool = buffer::Pool<string>();
+    let handle = pool.Rent("value");
+    assert::ExpectEqual(pool.Get(handle).Value(), "value", "pool Get");
+    pool.Return(handle);
+    assert::Expect(pool.Get(handle).IsNone(), "pool stale Get");
+
+    let indices = range::Make(2isize, 9isize, 2isize);
+    assert::ExpectEqual(indices.Get(2usize).Value(), 6 fit isize, "range Get");
+    assert::ExpectEqual(indices.At(3usize), 8 fit isize, "range At");
+    assert::ExpectEqual(indices.First().Value(), 2 fit isize, "range first");
+    assert::ExpectEqual(indices.Last().Value(), 8 fit isize, "range last");
+
+    let window = span::Make<i32>(ref values, 1usize, 2usize);
+    assert::ExpectEqual(span::First<i32>(ref values, window).Value(), 8, "span first");
+    assert::ExpectEqual(span::Last<i32>(ref values, window).Value(), 15, "span last");
+
+    console::PrintLine!("std-container-contracts-ok");
+    return 0;
+}

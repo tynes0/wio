@@ -118,8 +118,11 @@ realm std {
         }
 
         fn Get(value: string, index: usize) -> std::Option<char> {
-            if (index >= value.Count()) { return std::None<char>(); }
-            return std::Some<char>(value[index]);
+            return value.Get(index);
+        }
+
+        fn At(value: string, index: usize) -> char {
+            return value.At(index);
         }
 
         fn Slice(value: string, start: usize) -> string {

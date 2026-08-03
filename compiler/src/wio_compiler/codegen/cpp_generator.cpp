@@ -1419,6 +1419,10 @@ namespace wio::codegen
                 return "ArrayFirst";
             case IntrinsicMember::ArrayLast:
                 return "ArrayLast";
+            case IntrinsicMember::ArrayGet:
+                return "ArrayGetOption";
+            case IntrinsicMember::ArrayAt:
+                return "Index";
             case IntrinsicMember::ArrayGetOr:
                 return "ArrayGetOr";
             case IntrinsicMember::ArrayClone:
@@ -1527,6 +1531,10 @@ namespace wio::codegen
                 return "StringFirst";
             case IntrinsicMember::StringLast:
                 return "StringLast";
+            case IntrinsicMember::StringGet:
+                return "StringGetOption";
+            case IntrinsicMember::StringAt:
+                return "Index";
             case IntrinsicMember::StringGetOr:
                 return "StringGetOr";
             case IntrinsicMember::StringSlice:
@@ -6096,21 +6104,52 @@ namespace wio::codegen
         emit(toCppType(intrinsicFunctionType->returnType));
         emit(" { ");
 
-        if (node.intrinsicMember == IntrinsicMember::DictGet)
+        if (node.intrinsicMember == IntrinsicMember::ArrayGet ||
+            node.intrinsicMember == IntrinsicMember::DictGet ||
+            node.intrinsicMember == IntrinsicMember::StringGet)
         {
             Ref<sema::Type> valueType = nullptr;
             Ref<sema::Type> resolvedReceiverType = unwrapAliasTypeForCodegen(receiverType);
-            if (resolvedReceiverType && resolvedReceiverType->kind() == sema::TypeKind::Dictionary)
+            if (resolvedReceiverType && resolvedReceiverType->kind() == sema::TypeKind::Array)
+                valueType = resolvedReceiverType.AsFast<sema::ArrayType>()->elementType;
+            else if (resolvedReceiverType && resolvedReceiverType->kind() == sema::TypeKind::Dictionary)
                 valueType = resolvedReceiverType.AsFast<sema::DictionaryType>()->valueType;
+            else if (resolvedReceiverType && resolvedReceiverType->kind() == sema::TypeKind::Primitive &&
+                     resolvedReceiverType.AsFast<sema::PrimitiveType>()->name == "string")
+                valueType = Compiler::get().getTypeContext().getChar();
             if (!valueType)
                 return false;
 
             const std::string cppValueType = toCppType(valueType);
-            emit("auto&& _wio_values = ");
-            emitReceiver();
-            emit("; auto _wio_it = _wio_values.find(_wio_arg0); ");
-            emit("if (_wio_it != _wio_values.end()) return _WF_std_Some_T<" + cppValueType + ">(_wio_it->second); ");
+            if (node.intrinsicMember == IntrinsicMember::StringGet)
+            {
+                emit("wio::String _wio_values = wio::String(");
+                emitReceiver();
+                emit(")");
+            }
+            else
+            {
+                emit("auto&& _wio_values = ");
+                emitReceiver();
+            }
+            if (node.intrinsicMember == IntrinsicMember::DictGet)
+            {
+                emit("; auto _wio_it = _wio_values.find(_wio_arg0); ");
+                emit("if (_wio_it != _wio_values.end()) return _WF_std_Some_T<" + cppValueType + ">(_wio_it->second); ");
+            }
+            else
+            {
+                emit("; if (_wio_arg0 < _wio_values.size()) return _WF_std_Some_T<" + cppValueType + ">(wio::intrinsics::Index(_wio_values, _wio_arg0)); ");
+            }
             emit("return _WF_std_None<" + cppValueType + ">(); })");
+            return true;
+        }
+
+        if (node.intrinsicMember == IntrinsicMember::StringAt)
+        {
+            emit("return wio::intrinsics::Index(wio::String(");
+            emitReceiver();
+            emit("), _wio_arg0); })");
             return true;
         }
 

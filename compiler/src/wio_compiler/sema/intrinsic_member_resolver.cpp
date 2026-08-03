@@ -134,6 +134,10 @@ namespace wio::sema
                 appendMethodResolution(overloads, IntrinsicMember::ArrayFirst, elementType, {}, typeContext, false);
             else if (memberName == "Last")
                 appendMethodResolution(overloads, IntrinsicMember::ArrayLast, elementType, {}, typeContext, false);
+            else if (memberName == "Get")
+                appendMethodResolution(overloads, IntrinsicMember::ArrayGet, elementType, { typeContext.getUSize() }, typeContext, false);
+            else if (memberName == "At")
+                appendMethodResolution(overloads, IntrinsicMember::ArrayAt, elementType, { typeContext.getUSize() }, typeContext, false);
             else if (memberName == "GetOr")
                 appendMethodResolution(overloads, IntrinsicMember::ArrayGetOr, elementType, { typeContext.getUSize(), elementType }, typeContext, false);
             else if (memberName == "Clone")
@@ -297,6 +301,10 @@ namespace wio::sema
                 appendMethodResolution(overloads, IntrinsicMember::StringFirst, typeContext.getChar(), {}, typeContext, false);
             else if (memberName == "Last")
                 appendMethodResolution(overloads, IntrinsicMember::StringLast, typeContext.getChar(), {}, typeContext, false);
+            else if (memberName == "Get")
+                appendMethodResolution(overloads, IntrinsicMember::StringGet, typeContext.getChar(), { typeContext.getUSize() }, typeContext, false);
+            else if (memberName == "At")
+                appendMethodResolution(overloads, IntrinsicMember::StringAt, typeContext.getChar(), { typeContext.getUSize() }, typeContext, false);
             else if (memberName == "GetOr")
                 appendMethodResolution(overloads, IntrinsicMember::StringGetOr, typeContext.getChar(), { typeContext.getUSize(), typeContext.getChar() }, typeContext, false);
             else if (memberName == "Slice")

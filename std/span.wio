@@ -79,6 +79,15 @@ realm std {
             return std::Some<T>(values[source.start + index]);
         }
 
+        fn First<T>(values: view T[], source: Span) -> std::Option<T> {
+            return Get<T>(values, source, 0usize);
+        }
+
+        fn Last<T>(values: view T[], source: Span) -> std::Option<T> {
+            if (source.count == 0usize) { return std::None<T>(); }
+            return Get<T>(values, source, source.count - 1usize);
+        }
+
         fn ToArray<T>(values: view T[], source: Span) -> T[] {
             return values.Slice(source.start, source.count);
         }

@@ -53,6 +53,26 @@ realm std {
             public fn Values() -> T[] {
                 return self.values.Keys();
             }
+
+            public fn ToArray() -> T[] {
+                return self.Values();
+            }
+
+            public fn Clone() -> UnorderedSet<T> {
+                mut copy = UnorderedSet<T>();
+                for (value in self.Values()) {
+                    copy.Add(value);
+                }
+                return copy;
+            }
+
+            public fn SetEquals(other: UnorderedSet<T>) -> bool {
+                if (self.Count() != other.Count()) { return false; }
+                for (value in self.Values()) {
+                    if (not other.Contains(value)) { return false; }
+                }
+                return true;
+            }
         }
 
         object OrderedSet<T> {
@@ -105,6 +125,26 @@ realm std {
 
             public fn Values() -> T[] {
                 return self.values.Keys();
+            }
+
+            public fn ToArray() -> T[] {
+                return self.Values();
+            }
+
+            public fn Clone() -> OrderedSet<T> {
+                mut copy = OrderedSet<T>();
+                for (value in self.Values()) {
+                    copy.Add(value);
+                }
+                return copy;
+            }
+
+            public fn SetEquals(other: OrderedSet<T>) -> bool {
+                if (self.Count() != other.Count()) { return false; }
+                for (value in self.Values()) {
+                    if (not other.Contains(value)) { return false; }
+                }
+                return true;
             }
 
             public fn First() -> T {

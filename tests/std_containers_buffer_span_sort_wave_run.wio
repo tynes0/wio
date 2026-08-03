@@ -37,8 +37,8 @@ fn Entry() -> i32 {
 
     let bytePool = buffer::BytePool(32usize);
     let lease = bytePool.Rent();
-    bytePool.Get(lease).Write(42u8);
-    let pooledValue = bytePool.Get(lease).At(0usize);
+    bytePool.At(lease).Write(42u8);
+    let pooledValue = bytePool.At(lease).At(0usize);
     let returned = bytePool.Return(lease);
     let staleRejected = not bytePool.Return(lease);
 

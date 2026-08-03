@@ -20,6 +20,22 @@ realm std {
                 return self.head >= self.values.Count();
             }
 
+            public fn Capacity() -> usize {
+                return self.values.Capacity();
+            }
+
+            public fn Reserve(capacity: usize) {
+                self.values.Reserve(self.head + capacity);
+            }
+
+            public fn ShrinkToFit() {
+                if (self.head > 0usize) {
+                    self.values = self.values.Slice(self.head);
+                    self.head = 0usize;
+                }
+                self.values.ShrinkToFit();
+            }
+
             public fn Enqueue(value: T) {
                 self.values.Push(value);
             }
@@ -38,6 +54,24 @@ realm std {
             public fn PeekOption() -> std::Option<T> {
                 if (self.Empty()) { return std::None<T>(); }
                 return std::Some<T>(self.values[self.head]);
+            }
+
+            public fn First() -> std::Option<T> {
+                return self.PeekOption();
+            }
+
+            public fn Last() -> std::Option<T> {
+                if (self.Empty()) { return std::None<T>(); }
+                return std::Some<T>(self.values[self.values.Count() - 1usize]);
+            }
+
+            public fn Contains(value: T) -> bool {
+                mut index = self.head;
+                while (index < self.values.Count()) {
+                    if (self.values[index] == value) { return true; }
+                    index += 1usize;
+                }
+                return false;
             }
 
             public fn Dequeue() -> T {
@@ -78,6 +112,26 @@ realm std {
 
             public fn ToArray() -> T[] {
                 return self.values.Slice(self.head);
+            }
+
+            public fn Clone() -> Queue<T> {
+                mut copy = Queue<T>();
+                for (value in self.ToArray()) {
+                    copy.Enqueue(value);
+                }
+                return copy;
+            }
+
+            public fn SequenceEqual(other: Queue<T>) -> bool {
+                if (self.Count() != other.Count()) { return false; }
+                let left = self.ToArray();
+                let right = other.ToArray();
+                mut index = 0usize;
+                while (index < left.Count()) {
+                    if (left[index] != right[index]) { return false; }
+                    index += 1usize;
+                }
+                return true;
             }
         }
     }

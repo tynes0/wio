@@ -2101,6 +2101,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_std_container_contracts_run
+        "${CMAKE_SOURCE_DIR}/tests/std_container_contracts_run.wio"
+        "std-container-contracts-ok"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_std_regex_wave_run
         "${CMAKE_SOURCE_DIR}/tests/std_regex_wave_run.wio"
         "std-regex-wave-ok"

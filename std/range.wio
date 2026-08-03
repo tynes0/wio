@@ -1,3 +1,5 @@
+use std::option;
+
 realm std {
     realm range {
         component IndexRange {
@@ -39,6 +41,32 @@ realm std {
             return (value - source.start) % source.stride == 0isize;
         }
 
+        fn Empty(source: IndexRange) -> bool {
+            return Count(source) == 0usize;
+        }
+
+        fn At(source: IndexRange, index: usize) -> isize {
+            if (index >= Count(source)) {
+                std::Panic("range::At index is out of range.");
+            }
+            return source.start + (index fit isize) * source.stride;
+        }
+
+        fn Get(source: IndexRange, index: usize) -> std::Option<isize> {
+            if (index >= Count(source)) { return std::None<isize>(); }
+            return std::Some<isize>(source.start + (index fit isize) * source.stride);
+        }
+
+        fn First(source: IndexRange) -> std::Option<isize> {
+            return Get(source, 0usize);
+        }
+
+        fn Last(source: IndexRange) -> std::Option<isize> {
+            let count = Count(source);
+            if (count == 0usize) { return std::None<isize>(); }
+            return Get(source, count - 1usize);
+        }
+
         fn ToArray(source: IndexRange) -> isize[] {
             mut output: isize[] = [];
             mut value = source.start;
@@ -52,7 +80,12 @@ realm std {
 
         extension IndexRangeMethods for IndexRange {
             public view fn Count() -> usize { return range::Count(deref self); }
+            public view fn Empty() -> bool { return range::Empty(deref self); }
             public view fn Contains(value: isize) -> bool { return range::Contains(deref self, value); }
+            public view fn At(index: usize) -> isize { return range::At(deref self, index); }
+            public view fn Get(index: usize) -> std::Option<isize> { return range::Get(deref self, index); }
+            public view fn First() -> std::Option<isize> { return range::First(deref self); }
+            public view fn Last() -> std::Option<isize> { return range::Last(deref self); }
             public view fn ToArray() -> isize[] { return range::ToArray(deref self); }
         }
     }
