@@ -6,11 +6,13 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <iterator>
+#include <limits>
 #include <map>
 #include <string>
 #include <string_view>
@@ -21,6 +23,101 @@
 
 namespace wio::intrinsics
 {
+    namespace detail
+    {
+        [[noreturn]] inline void throwRuntimeError(const std::string& message);
+    }
+
+    template <typename TResult, typename TLeft, typename TRight>
+    inline TResult WrappingAdd(TLeft left, TRight right) noexcept
+    {
+        using Unsigned = std::make_unsigned_t<TResult>;
+        const Unsigned bits = static_cast<Unsigned>(static_cast<TResult>(left)) +
+                              static_cast<Unsigned>(static_cast<TResult>(right));
+        if constexpr (std::is_signed_v<TResult>) return std::bit_cast<TResult>(bits);
+        else return static_cast<TResult>(bits);
+    }
+
+    template <typename TResult, typename TLeft, typename TRight>
+    inline TResult WrappingSub(TLeft left, TRight right) noexcept
+    {
+        using Unsigned = std::make_unsigned_t<TResult>;
+        const Unsigned bits = static_cast<Unsigned>(static_cast<TResult>(left)) -
+                              static_cast<Unsigned>(static_cast<TResult>(right));
+        if constexpr (std::is_signed_v<TResult>) return std::bit_cast<TResult>(bits);
+        else return static_cast<TResult>(bits);
+    }
+
+    template <typename TResult, typename TLeft, typename TRight>
+    inline TResult WrappingMul(TLeft left, TRight right) noexcept
+    {
+        using Unsigned = std::make_unsigned_t<TResult>;
+        const Unsigned bits = static_cast<Unsigned>(
+            static_cast<Unsigned>(static_cast<TResult>(left)) *
+            static_cast<Unsigned>(static_cast<TResult>(right)));
+        if constexpr (std::is_signed_v<TResult>) return std::bit_cast<TResult>(bits);
+        else return static_cast<TResult>(bits);
+    }
+
+    template <typename TResult, typename TValue>
+    inline TResult WrappingNeg(TValue value) noexcept
+    {
+        using Unsigned = std::make_unsigned_t<TResult>;
+        const Unsigned bits = Unsigned{0} - static_cast<Unsigned>(static_cast<TResult>(value));
+        if constexpr (std::is_signed_v<TResult>) return std::bit_cast<TResult>(bits);
+        else return static_cast<TResult>(bits);
+    }
+
+    template <typename TResult, typename TLeft, typename TRight>
+    inline TResult IntegerDivide(TLeft left, TRight right)
+    {
+        const TResult lhs = static_cast<TResult>(left);
+        const TResult rhs = static_cast<TResult>(right);
+        if (rhs == 0)
+            detail::throwRuntimeError("Integer division by zero.");
+        if constexpr (std::is_signed_v<TResult>)
+        {
+            if (lhs == std::numeric_limits<TResult>::min() && rhs == static_cast<TResult>(-1))
+                return std::numeric_limits<TResult>::min();
+        }
+        return static_cast<TResult>(lhs / rhs);
+    }
+
+    template <typename TResult, typename TLeft, typename TRight>
+    inline TResult IntegerRemainder(TLeft left, TRight right)
+    {
+        const TResult lhs = static_cast<TResult>(left);
+        const TResult rhs = static_cast<TResult>(right);
+        if (rhs == 0)
+            detail::throwRuntimeError("Integer remainder by zero.");
+        if constexpr (std::is_signed_v<TResult>)
+        {
+            if (lhs == std::numeric_limits<TResult>::min() && rhs == static_cast<TResult>(-1))
+                return 0;
+        }
+        return static_cast<TResult>(lhs % rhs);
+    }
+
+    template <typename TTarget, typename TValue>
+    inline void WrappingAddAssign(TTarget& target, TValue value) noexcept
+    { target = WrappingAdd<TTarget>(target, value); }
+
+    template <typename TTarget, typename TValue>
+    inline void WrappingSubAssign(TTarget& target, TValue value) noexcept
+    { target = WrappingSub<TTarget>(target, value); }
+
+    template <typename TTarget, typename TValue>
+    inline void WrappingMulAssign(TTarget& target, TValue value) noexcept
+    { target = WrappingMul<TTarget>(target, value); }
+
+    template <typename TTarget, typename TValue>
+    inline void IntegerDivideAssign(TTarget& target, TValue value)
+    { target = IntegerDivide<TTarget>(target, value); }
+
+    template <typename TTarget, typename TValue>
+    inline void IntegerRemainderAssign(TTarget& target, TValue value)
+    { target = IntegerRemainder<TTarget>(target, value); }
+
     struct NativeStringArg
     {
         explicit NativeStringArg(const std::string& value) noexcept

@@ -5218,6 +5218,41 @@ namespace wio::codegen
             emit(")");
             return;//
         }
+
+        const Ref<sema::Type> arithmeticResultType = unwrapAliasTypeForCodegen(node.refType.Lock());
+        const auto isIntegerPrimitive = [](const Ref<sema::Type>& type)
+        {
+            if (!type || type->kind() != sema::TypeKind::Primitive)
+                return false;
+            const std::string& name = type.AsFast<sema::PrimitiveType>()->name;
+            return name == "i8" || name == "i16" || name == "i32" || name == "i64" ||
+                   name == "isize" || name == "u8" || name == "u16" || name == "u32" ||
+                   name == "u64" || name == "usize" || name == "byte";
+        };
+
+        std::string_view integerHelper;
+        if (isIntegerPrimitive(arithmeticResultType))
+        {
+            switch (node.op.type)
+            {
+            case TokenType::opPlus: integerHelper = "WrappingAdd"; break;
+            case TokenType::opMinus: integerHelper = "WrappingSub"; break;
+            case TokenType::opStar: integerHelper = "WrappingMul"; break;
+            case TokenType::opSlash: integerHelper = "IntegerDivide"; break;
+            case TokenType::opPercent: integerHelper = "IntegerRemainder"; break;
+            default: break;
+            }
+        }
+
+        if (!integerHelper.empty())
+        {
+            emit("wio::intrinsics::" + std::string(integerHelper) + "<" + toCppType(arithmeticResultType) + ">(");
+            emitReadableExpression(node.left);
+            emit(", ");
+            emitReadableExpression(node.right);
+            emit(")");
+            return;
+        }
         
         emit("(");
         const Ref<sema::Type> leftType = unwrapAliasTypeForCodegen(node.left->refType.Lock());
@@ -5377,6 +5412,23 @@ namespace wio::codegen
             return;
         }
 
+        Ref<sema::Type> unaryResultType = unwrapAliasTypeForCodegen(node.refType.Lock());
+        if (node.op.type == TokenType::opMinus &&
+            unaryResultType && unaryResultType->kind() == sema::TypeKind::Primitive)
+        {
+            const std::string& name = unaryResultType.AsFast<sema::PrimitiveType>()->name;
+            const bool isInteger =
+                name == "i8" || name == "i16" || name == "i32" || name == "i64" || name == "isize" ||
+                name == "u8" || name == "u16" || name == "u32" || name == "u64" || name == "usize" || name == "byte";
+            if (isInteger)
+            {
+                emit("wio::intrinsics::WrappingNeg<" + toCppType(unaryResultType) + ">(");
+                emitReadableExpression(node.operand);
+                emit(")");
+                return;
+            }
+        }
+
         std::string opStr = node.op.value;
         if (node.op.type == TokenType::kwNot) opStr = "!";
         
@@ -5488,36 +5540,78 @@ namespace wio::codegen
 
         auto lhsType = node.left->refType.Lock();
         auto rhsType = node.right->refType.Lock();
-        if (shouldTreatReferenceAsHandleForAssignment(lhsType))
+        auto emitAssignmentTarget = [&]()
         {
-            node.left->accept(*this);
-        }
-        else
-        {
-            int derefCount = 0;
-
-            if (lhsType && rhsType && !lhsType->isCompatibleWith(rhsType))
+            if (shouldTreatReferenceAsHandleForAssignment(lhsType))
             {
-                Ref<sema::Type> current = lhsType;
-
-                while (current && current->kind() == sema::TypeKind::Reference)
-                {
-                    auto rType = current.AsFast<sema::ReferenceType>();
-                    derefCount++;
-
-                    if (rType->referredType->isCompatibleWith(rhsType)) {
-                        break;
-                    }
-                    current = rType->referredType;
-                }
+                node.left->accept(*this);
             }
+            else
+            {
+                int derefCount = 0;
 
-            for (int i = 0; i < derefCount; ++i) emit("*(");
-    
-            node.left->accept(*this);
-    
-            for (int i = 0; i < derefCount; ++i) emit(")");
+                if (lhsType && rhsType && !lhsType->isCompatibleWith(rhsType))
+                {
+                    Ref<sema::Type> current = lhsType;
+
+                    while (current && current->kind() == sema::TypeKind::Reference)
+                    {
+                        auto rType = current.AsFast<sema::ReferenceType>();
+                        derefCount++;
+
+                        if (rType->referredType->isCompatibleWith(rhsType)) {
+                            break;
+                        }
+                        current = rType->referredType;
+                    }
+                }
+
+                for (int i = 0; i < derefCount; ++i) emit("*(");
+
+                node.left->accept(*this);
+
+                for (int i = 0; i < derefCount; ++i) emit(")");
+            }
+        };
+
+        Ref<sema::Type> assignmentValueType = unwrapAliasTypeForCodegen(lhsType);
+        while (assignmentValueType && assignmentValueType->kind() == sema::TypeKind::Reference)
+            assignmentValueType = unwrapAliasTypeForCodegen(assignmentValueType.AsFast<sema::ReferenceType>()->referredType);
+
+        bool isIntegerAssignment = false;
+        if (assignmentValueType && assignmentValueType->kind() == sema::TypeKind::Primitive)
+        {
+            const std::string& name = assignmentValueType.AsFast<sema::PrimitiveType>()->name;
+            isIntegerAssignment =
+                name == "i8" || name == "i16" || name == "i32" || name == "i64" || name == "isize" ||
+                name == "u8" || name == "u16" || name == "u32" || name == "u64" || name == "usize" || name == "byte";
         }
+
+        std::string_view assignmentHelper;
+        if (isIntegerAssignment)
+        {
+            switch (node.op.type)
+            {
+            case TokenType::opPlusAssign: assignmentHelper = "WrappingAddAssign"; break;
+            case TokenType::opMinusAssign: assignmentHelper = "WrappingSubAssign"; break;
+            case TokenType::opStarAssign: assignmentHelper = "WrappingMulAssign"; break;
+            case TokenType::opSlashAssign: assignmentHelper = "IntegerDivideAssign"; break;
+            case TokenType::opPercentAssign: assignmentHelper = "IntegerRemainderAssign"; break;
+            default: break;
+            }
+        }
+
+        if (!assignmentHelper.empty())
+        {
+            emit("wio::intrinsics::" + std::string(assignmentHelper) + "(");
+            emitAssignmentTarget();
+            emit(", ");
+            emitExpressionWithExpectedType(node.right, assignmentValueType, false);
+            emit(")");
+            return;
+        }
+
+        emitAssignmentTarget();
 
         emit(" " + node.op.value + " "); // =, +=, -= ...
 

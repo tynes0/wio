@@ -1,0 +1,5 @@
+fn Entry() -> i32 {
+    let wide: i32 = 300;
+    let narrow: u8 = wide;
+    return narrow fit i32;
+}

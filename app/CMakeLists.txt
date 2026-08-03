@@ -2100,10 +2100,25 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         --run
     )
 
+    add_wio_non_dry_failure_test_clean(
+        wio_runtime_integer_divide_by_zero
+        "${CMAKE_SOURCE_DIR}/tests/integer_divide_by_zero_runtime_failure.wio"
+        "Runtime Error: Integer division by zero\."
+        "floating point exception|SIGFPE|Assertion"
+        --run
+    )
+
     add_wio_output_test(
         wio_test_std_container_contracts_run
         "${CMAKE_SOURCE_DIR}/tests/std_container_contracts_run.wio"
         "std-container-contracts-ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_std_numeric_integer_matrix_run
+        "${CMAKE_SOURCE_DIR}/tests/std_numeric_integer_matrix_run.wio"
+        "std-numeric-integer-matrix-ok"
         --run
     )
 
@@ -3339,6 +3354,30 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_numeric_literal_context_f32_out_of_range
         "${CMAKE_SOURCE_DIR}/tests/invalid/numeric_literal_context_f32_out_of_range.wio"
         "Float literal '1\\.0e100' does not fit into expected type 'f32'"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_implicit_narrowing_requires_fit
+        "${CMAKE_SOURCE_DIR}/tests/invalid/implicit_narrowing_requires_fit.wio"
+        "Implicit narrowing conversion from 'i32' to 'u8' requires explicit 'fit'"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_implicit_narrowing_assignment_requires_fit
+        "${CMAKE_SOURCE_DIR}/tests/invalid/implicit_narrowing_assignment_requires_fit.wio"
+        "Implicit narrowing conversion from 'i32' to 'u8' requires explicit 'fit'"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_implicit_narrowing_return_requires_fit
+        "${CMAKE_SOURCE_DIR}/tests/invalid/implicit_narrowing_return_requires_fit.wio"
+        "Implicit narrowing return conversion from 'i32' to 'u8' requires explicit 'fit'"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_implicit_narrowing_argument_requires_fit
+        "${CMAKE_SOURCE_DIR}/tests/invalid/implicit_narrowing_argument_requires_fit.wio"
+        "Implicit narrowing argument conversion from 'i32' to 'u8' at index 0 requires explicit 'fit'"
     )
 
     add_wio_backend_failure_test(

@@ -4,12 +4,62 @@ realm std {
     realm numeric {
         use @CppHeader("std_utility.h");
 
+        @Native @CppName(wio::runtime::std_numeric::CheckedAddI8)
+        fn TryAdd(left: i8, right: i8, value: ref i8) -> bool;
+        @Native @CppName(wio::runtime::std_numeric::CheckedSubI8)
+        fn TrySub(left: i8, right: i8, value: ref i8) -> bool;
+        @Native @CppName(wio::runtime::std_numeric::CheckedMulI8)
+        fn TryMul(left: i8, right: i8, value: ref i8) -> bool;
+
+        @Native @CppName(wio::runtime::std_numeric::CheckedAddI16)
+        fn TryAdd(left: i16, right: i16, value: ref i16) -> bool;
+        @Native @CppName(wio::runtime::std_numeric::CheckedSubI16)
+        fn TrySub(left: i16, right: i16, value: ref i16) -> bool;
+        @Native @CppName(wio::runtime::std_numeric::CheckedMulI16)
+        fn TryMul(left: i16, right: i16, value: ref i16) -> bool;
+
+        @Native @CppName(wio::runtime::std_numeric::CheckedAddI32)
+        fn TryAdd(left: i32, right: i32, value: ref i32) -> bool;
+        @Native @CppName(wio::runtime::std_numeric::CheckedSubI32)
+        fn TrySub(left: i32, right: i32, value: ref i32) -> bool;
+        @Native @CppName(wio::runtime::std_numeric::CheckedMulI32)
+        fn TryMul(left: i32, right: i32, value: ref i32) -> bool;
+
         @Native @CppName(wio::runtime::std_numeric::CheckedAddI64)
         fn TryAdd(left: i64, right: i64, value: ref i64) -> bool;
         @Native @CppName(wio::runtime::std_numeric::CheckedSubI64)
         fn TrySub(left: i64, right: i64, value: ref i64) -> bool;
         @Native @CppName(wio::runtime::std_numeric::CheckedMulI64)
         fn TryMul(left: i64, right: i64, value: ref i64) -> bool;
+
+        @Native @CppName(wio::runtime::std_numeric::CheckedAddISize)
+        fn TryAdd(left: isize, right: isize, value: ref isize) -> bool;
+        @Native @CppName(wio::runtime::std_numeric::CheckedSubISize)
+        fn TrySub(left: isize, right: isize, value: ref isize) -> bool;
+        @Native @CppName(wio::runtime::std_numeric::CheckedMulISize)
+        fn TryMul(left: isize, right: isize, value: ref isize) -> bool;
+
+        @Native @CppName(wio::runtime::std_numeric::CheckedAddU8)
+        fn TryAdd(left: u8, right: u8, value: ref u8) -> bool;
+        @Native @CppName(wio::runtime::std_numeric::CheckedSubU8)
+        fn TrySub(left: u8, right: u8, value: ref u8) -> bool;
+        @Native @CppName(wio::runtime::std_numeric::CheckedMulU8)
+        fn TryMul(left: u8, right: u8, value: ref u8) -> bool;
+
+        @Native @CppName(wio::runtime::std_numeric::CheckedAddU16)
+        fn TryAdd(left: u16, right: u16, value: ref u16) -> bool;
+        @Native @CppName(wio::runtime::std_numeric::CheckedSubU16)
+        fn TrySub(left: u16, right: u16, value: ref u16) -> bool;
+        @Native @CppName(wio::runtime::std_numeric::CheckedMulU16)
+        fn TryMul(left: u16, right: u16, value: ref u16) -> bool;
+
+        @Native @CppName(wio::runtime::std_numeric::CheckedAddU32)
+        fn TryAdd(left: u32, right: u32, value: ref u32) -> bool;
+        @Native @CppName(wio::runtime::std_numeric::CheckedSubU32)
+        fn TrySub(left: u32, right: u32, value: ref u32) -> bool;
+        @Native @CppName(wio::runtime::std_numeric::CheckedMulU32)
+        fn TryMul(left: u32, right: u32, value: ref u32) -> bool;
+
         @Native @CppName(wio::runtime::std_numeric::CheckedAddU64)
         fn TryAdd(left: u64, right: u64, value: ref u64) -> bool;
         @Native @CppName(wio::runtime::std_numeric::CheckedSubU64)
@@ -17,18 +67,136 @@ realm std {
         @Native @CppName(wio::runtime::std_numeric::CheckedMulU64)
         fn TryMul(left: u64, right: u64, value: ref u64) -> bool;
 
+        @Native @CppName(wio::runtime::std_numeric::CheckedAddUSize)
+        fn TryAdd(left: usize, right: usize, value: ref usize) -> bool;
+        @Native @CppName(wio::runtime::std_numeric::CheckedSubUSize)
+        fn TrySub(left: usize, right: usize, value: ref usize) -> bool;
+        @Native @CppName(wio::runtime::std_numeric::CheckedMulUSize)
+        fn TryMul(left: usize, right: usize, value: ref usize) -> bool;
+
+        @Native @CppName(wio::runtime::std_numeric::SaturatingAddI8)
+        fn SaturatingAdd(left: i8, right: i8) -> i8;
+        @Native @CppName(wio::runtime::std_numeric::SaturatingSubI8)
+        fn SaturatingSub(left: i8, right: i8) -> i8;
+        @Native @CppName(wio::runtime::std_numeric::SaturatingMulI8)
+        fn SaturatingMul(left: i8, right: i8) -> i8;
+
+        @Native @CppName(wio::runtime::std_numeric::SaturatingAddI16)
+        fn SaturatingAdd(left: i16, right: i16) -> i16;
+        @Native @CppName(wio::runtime::std_numeric::SaturatingSubI16)
+        fn SaturatingSub(left: i16, right: i16) -> i16;
+        @Native @CppName(wio::runtime::std_numeric::SaturatingMulI16)
+        fn SaturatingMul(left: i16, right: i16) -> i16;
+
+        @Native @CppName(wio::runtime::std_numeric::SaturatingAddI32)
+        fn SaturatingAdd(left: i32, right: i32) -> i32;
+        @Native @CppName(wio::runtime::std_numeric::SaturatingSubI32)
+        fn SaturatingSub(left: i32, right: i32) -> i32;
+        @Native @CppName(wio::runtime::std_numeric::SaturatingMulI32)
+        fn SaturatingMul(left: i32, right: i32) -> i32;
+
         @Native @CppName(wio::runtime::std_numeric::SaturatingAddI64)
         fn SaturatingAdd(left: i64, right: i64) -> i64;
         @Native @CppName(wio::runtime::std_numeric::SaturatingSubI64)
         fn SaturatingSub(left: i64, right: i64) -> i64;
         @Native @CppName(wio::runtime::std_numeric::SaturatingMulI64)
         fn SaturatingMul(left: i64, right: i64) -> i64;
+
+        @Native @CppName(wio::runtime::std_numeric::SaturatingAddISize)
+        fn SaturatingAdd(left: isize, right: isize) -> isize;
+        @Native @CppName(wio::runtime::std_numeric::SaturatingSubISize)
+        fn SaturatingSub(left: isize, right: isize) -> isize;
+        @Native @CppName(wio::runtime::std_numeric::SaturatingMulISize)
+        fn SaturatingMul(left: isize, right: isize) -> isize;
+
+        @Native @CppName(wio::runtime::std_numeric::SaturatingAddU8)
+        fn SaturatingAdd(left: u8, right: u8) -> u8;
+        @Native @CppName(wio::runtime::std_numeric::SaturatingSubU8)
+        fn SaturatingSub(left: u8, right: u8) -> u8;
+        @Native @CppName(wio::runtime::std_numeric::SaturatingMulU8)
+        fn SaturatingMul(left: u8, right: u8) -> u8;
+
+        @Native @CppName(wio::runtime::std_numeric::SaturatingAddU16)
+        fn SaturatingAdd(left: u16, right: u16) -> u16;
+        @Native @CppName(wio::runtime::std_numeric::SaturatingSubU16)
+        fn SaturatingSub(left: u16, right: u16) -> u16;
+        @Native @CppName(wio::runtime::std_numeric::SaturatingMulU16)
+        fn SaturatingMul(left: u16, right: u16) -> u16;
+
+        @Native @CppName(wio::runtime::std_numeric::SaturatingAddU32)
+        fn SaturatingAdd(left: u32, right: u32) -> u32;
+        @Native @CppName(wio::runtime::std_numeric::SaturatingSubU32)
+        fn SaturatingSub(left: u32, right: u32) -> u32;
+        @Native @CppName(wio::runtime::std_numeric::SaturatingMulU32)
+        fn SaturatingMul(left: u32, right: u32) -> u32;
+
         @Native @CppName(wio::runtime::std_numeric::SaturatingAddU64)
         fn SaturatingAdd(left: u64, right: u64) -> u64;
         @Native @CppName(wio::runtime::std_numeric::SaturatingSubU64)
         fn SaturatingSub(left: u64, right: u64) -> u64;
         @Native @CppName(wio::runtime::std_numeric::SaturatingMulU64)
         fn SaturatingMul(left: u64, right: u64) -> u64;
+
+        @Native @CppName(wio::runtime::std_numeric::SaturatingAddUSize)
+        fn SaturatingAdd(left: usize, right: usize) -> usize;
+        @Native @CppName(wio::runtime::std_numeric::SaturatingSubUSize)
+        fn SaturatingSub(left: usize, right: usize) -> usize;
+        @Native @CppName(wio::runtime::std_numeric::SaturatingMulUSize)
+        fn SaturatingMul(left: usize, right: usize) -> usize;
+
+        fn CheckedAdd(left: i8, right: i8) -> std::Option<i8> {
+            mut value = 0 fit i8;
+            if (TryAdd(left, right, ref value)) { return std::Some<i8>(value); }
+            return std::None<i8>();
+        }
+
+        fn CheckedSub(left: i8, right: i8) -> std::Option<i8> {
+            mut value = 0 fit i8;
+            if (TrySub(left, right, ref value)) { return std::Some<i8>(value); }
+            return std::None<i8>();
+        }
+
+        fn CheckedMul(left: i8, right: i8) -> std::Option<i8> {
+            mut value = 0 fit i8;
+            if (TryMul(left, right, ref value)) { return std::Some<i8>(value); }
+            return std::None<i8>();
+        }
+
+        fn CheckedAdd(left: i16, right: i16) -> std::Option<i16> {
+            mut value = 0 fit i16;
+            if (TryAdd(left, right, ref value)) { return std::Some<i16>(value); }
+            return std::None<i16>();
+        }
+
+        fn CheckedSub(left: i16, right: i16) -> std::Option<i16> {
+            mut value = 0 fit i16;
+            if (TrySub(left, right, ref value)) { return std::Some<i16>(value); }
+            return std::None<i16>();
+        }
+
+        fn CheckedMul(left: i16, right: i16) -> std::Option<i16> {
+            mut value = 0 fit i16;
+            if (TryMul(left, right, ref value)) { return std::Some<i16>(value); }
+            return std::None<i16>();
+        }
+
+        fn CheckedAdd(left: i32, right: i32) -> std::Option<i32> {
+            mut value = 0;
+            if (TryAdd(left, right, ref value)) { return std::Some<i32>(value); }
+            return std::None<i32>();
+        }
+
+        fn CheckedSub(left: i32, right: i32) -> std::Option<i32> {
+            mut value = 0;
+            if (TrySub(left, right, ref value)) { return std::Some<i32>(value); }
+            return std::None<i32>();
+        }
+
+        fn CheckedMul(left: i32, right: i32) -> std::Option<i32> {
+            mut value = 0;
+            if (TryMul(left, right, ref value)) { return std::Some<i32>(value); }
+            return std::None<i32>();
+        }
 
         fn CheckedAdd(left: i64, right: i64) -> std::Option<i64> {
             mut value = 0i64;
@@ -48,10 +216,113 @@ realm std {
             return std::None<i64>();
         }
 
+        fn CheckedAdd(left: isize, right: isize) -> std::Option<isize> {
+            mut value = 0 fit isize;
+            if (TryAdd(left, right, ref value)) { return std::Some<isize>(value); }
+            return std::None<isize>();
+        }
+
+        fn CheckedSub(left: isize, right: isize) -> std::Option<isize> {
+            mut value = 0 fit isize;
+            if (TrySub(left, right, ref value)) { return std::Some<isize>(value); }
+            return std::None<isize>();
+        }
+
+        fn CheckedMul(left: isize, right: isize) -> std::Option<isize> {
+            mut value = 0 fit isize;
+            if (TryMul(left, right, ref value)) { return std::Some<isize>(value); }
+            return std::None<isize>();
+        }
+
+        fn CheckedAdd(left: u8, right: u8) -> std::Option<u8> {
+            mut value = 0u8;
+            if (TryAdd(left, right, ref value)) { return std::Some<u8>(value); }
+            return std::None<u8>();
+        }
+
+        fn CheckedSub(left: u8, right: u8) -> std::Option<u8> {
+            mut value = 0u8;
+            if (TrySub(left, right, ref value)) { return std::Some<u8>(value); }
+            return std::None<u8>();
+        }
+
+        fn CheckedMul(left: u8, right: u8) -> std::Option<u8> {
+            mut value = 0u8;
+            if (TryMul(left, right, ref value)) { return std::Some<u8>(value); }
+            return std::None<u8>();
+        }
+
+        fn CheckedAdd(left: u16, right: u16) -> std::Option<u16> {
+            mut value = 0 fit u16;
+            if (TryAdd(left, right, ref value)) { return std::Some<u16>(value); }
+            return std::None<u16>();
+        }
+
+        fn CheckedSub(left: u16, right: u16) -> std::Option<u16> {
+            mut value = 0 fit u16;
+            if (TrySub(left, right, ref value)) { return std::Some<u16>(value); }
+            return std::None<u16>();
+        }
+
+        fn CheckedMul(left: u16, right: u16) -> std::Option<u16> {
+            mut value = 0 fit u16;
+            if (TryMul(left, right, ref value)) { return std::Some<u16>(value); }
+            return std::None<u16>();
+        }
+
+        fn CheckedAdd(left: u32, right: u32) -> std::Option<u32> {
+            mut value = 0u32;
+            if (TryAdd(left, right, ref value)) { return std::Some<u32>(value); }
+            return std::None<u32>();
+        }
+
+        fn CheckedSub(left: u32, right: u32) -> std::Option<u32> {
+            mut value = 0u32;
+            if (TrySub(left, right, ref value)) { return std::Some<u32>(value); }
+            return std::None<u32>();
+        }
+
+        fn CheckedMul(left: u32, right: u32) -> std::Option<u32> {
+            mut value = 0u32;
+            if (TryMul(left, right, ref value)) { return std::Some<u32>(value); }
+            return std::None<u32>();
+        }
+
         fn CheckedAdd(left: u64, right: u64) -> std::Option<u64> {
             mut value = 0u64;
             if (TryAdd(left, right, ref value)) { return std::Some<u64>(value); }
             return std::None<u64>();
         }
+
+        fn CheckedSub(left: u64, right: u64) -> std::Option<u64> {
+            mut value = 0u64;
+            if (TrySub(left, right, ref value)) { return std::Some<u64>(value); }
+            return std::None<u64>();
+        }
+
+        fn CheckedMul(left: u64, right: u64) -> std::Option<u64> {
+            mut value = 0u64;
+            if (TryMul(left, right, ref value)) { return std::Some<u64>(value); }
+            return std::None<u64>();
+        }
+
+        fn CheckedAdd(left: usize, right: usize) -> std::Option<usize> {
+            mut value = 0usize;
+            if (TryAdd(left, right, ref value)) { return std::Some<usize>(value); }
+            return std::None<usize>();
+        }
+
+        fn CheckedSub(left: usize, right: usize) -> std::Option<usize> {
+            mut value = 0usize;
+            if (TrySub(left, right, ref value)) { return std::Some<usize>(value); }
+            return std::None<usize>();
+        }
+
+        fn CheckedMul(left: usize, right: usize) -> std::Option<usize> {
+            mut value = 0usize;
+            if (TryMul(left, right, ref value)) { return std::Some<usize>(value); }
+            return std::None<usize>();
+        }
+
     }
 }

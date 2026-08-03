@@ -1124,6 +1124,79 @@ namespace wio::sema
             return std::nullopt;
         }
 
+        struct NumericConversionInfo
+        {
+            int bits = 0;
+            bool isSigned = false;
+            bool isFloat = false;
+        };
+
+        std::optional<NumericConversionInfo> describeNumericConversionType(const Ref<Type>& type)
+        {
+            Ref<Type> resolved = unwrapAliasType(type);
+            if (!resolved || resolved->kind() != TypeKind::Primitive || !resolved->isNumeric())
+                return std::nullopt;
+
+            const std::string& name = resolved.AsFast<PrimitiveType>()->name;
+            if (name == "f32") return NumericConversionInfo{32, true, true};
+            if (name == "f64") return NumericConversionInfo{64, true, true};
+            if (name == "isize") return NumericConversionInfo{64, true, false};
+            if (name == "usize") return NumericConversionInfo{64, false, false};
+            if (name == "byte") return NumericConversionInfo{8, false, false};
+            const bool isSigned = name.starts_with('i');
+            if (name.ends_with("8")) return NumericConversionInfo{8, isSigned, false};
+            if (name.ends_with("16")) return NumericConversionInfo{16, isSigned, false};
+            if (name.ends_with("32")) return NumericConversionInfo{32, isSigned, false};
+            if (name.ends_with("64")) return NumericConversionInfo{64, isSigned, false};
+            return std::nullopt;
+        }
+
+        bool isSafeImplicitNumericConversion(const Ref<Type>& destination, const Ref<Type>& source)
+        {
+            Ref<Type> resolvedDestination = unwrapAliasType(destination);
+            Ref<Type> resolvedSource = unwrapAliasType(source);
+            if (!resolvedDestination || !resolvedSource)
+                return false;
+            if (resolvedDestination.Get() == resolvedSource.Get())
+                return true;
+
+            const auto destinationInfo = describeNumericConversionType(resolvedDestination);
+            const auto sourceInfo = describeNumericConversionType(resolvedSource);
+            if (!destinationInfo || !sourceInfo)
+                return false;
+
+            if (destinationInfo->isFloat)
+            {
+                if (sourceInfo->isFloat)
+                    return destinationInfo->bits >= sourceInfo->bits;
+
+                // IEEE-754 f32/f64 exactly represent all integers with at most
+                // 24/53 value bits respectively. Wider integer conversions must
+                // be explicit because they may silently lose precision.
+                const int exactIntegerBits = destinationInfo->bits == 32 ? 24 : 53;
+                const int sourceValueBits = sourceInfo->bits - (sourceInfo->isSigned ? 1 : 0);
+                return sourceValueBits <= exactIntegerBits;
+            }
+
+            if (sourceInfo->isFloat)
+                return false;
+
+            if (destinationInfo->isSigned == sourceInfo->isSigned)
+                return destinationInfo->bits >= sourceInfo->bits;
+            if (destinationInfo->isSigned && !sourceInfo->isSigned)
+                return destinationInfo->bits > sourceInfo->bits;
+            return false;
+        }
+
+        bool isRejectedImplicitNumericConversion(const Ref<Type>& destination, const Ref<Type>& source)
+        {
+            Ref<Type> resolvedDestination = unwrapAliasType(destination);
+            Ref<Type> resolvedSource = unwrapAliasType(source);
+            return resolvedDestination && resolvedSource &&
+                   resolvedDestination->isNumeric() && resolvedSource->isNumeric() &&
+                   !isSafeImplicitNumericConversion(resolvedDestination, resolvedSource);
+        }
+
         std::optional<std::string> tryGetNormalizedSymbolicPackName(const Ref<Type>& type);
 
         bool isAssignmentLikeCompatible(const Ref<Type>& destination, const Ref<Type>& source)
@@ -1273,7 +1346,7 @@ namespace wio::sema
             }
 
             if (destination->isCompatibleWith(source) ||
-                (destination->isNumeric() && source->isNumeric()))
+                isSafeImplicitNumericConversion(destination, source))
             {
                 return true;
             }
@@ -1283,7 +1356,7 @@ namespace wio::sema
                 Ref<Type> readableSource = getAutoReadableType(source);
                 if (readableSource &&
                     (destination->isCompatibleWith(readableSource) ||
-                     (destination->isNumeric() && readableSource->isNumeric())))
+                     isSafeImplicitNumericConversion(destination, readableSource)))
                 {
                     return true;
                 }
@@ -7430,11 +7503,18 @@ namespace wio::sema
 
         if (lhsType && rhsType && !lhsType->isUnknown() && !rhsType->isUnknown() && !isCompatible)
         {
-            WIO_LOG_ADD_ERROR(node.op.loc,
-                "Type mismatch in assignment: Cannot assign '{}' to '{}'.",
-                rhsType->toString(),
-                lhsType->toString()
-            );
+            if (isRejectedImplicitNumericConversion(lhsType, rhsType))
+            {
+                WIO_LOG_ADD_ERROR(node.op.loc,
+                    "Implicit narrowing conversion from '{}' to '{}' requires explicit 'fit'.",
+                    rhsType->toString(), lhsType->toString());
+            }
+            else
+            {
+                WIO_LOG_ADD_ERROR(node.op.loc,
+                    "Type mismatch in assignment: Cannot assign '{}' to '{}'.",
+                    rhsType->toString(), lhsType->toString());
+            }
         }
 
         if (auto* arrayAccess = node.left->as<ArrayAccessExpression>())
@@ -10794,9 +10874,17 @@ namespace wio::sema
 
             if (!isAssignmentLikeCompatible(expectedType, actualType) &&
                 !isImplicitObjectViewBridge(expectedType, actualType) &&
-                !isSafeRefCast(expectedType, actualType) &&
-                !(expectedType->isNumeric() && actualType->isNumeric()))
+                !isSafeRefCast(expectedType, actualType))
             {
+                if (isRejectedImplicitNumericConversion(expectedType, actualType))
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.arguments[i]->location(),
+                        "Implicit narrowing argument conversion from '{}' to '{}' at index {} requires explicit 'fit'.",
+                        actualType->toString(), expectedType->toString(), i);
+                    continue;
+                }
+
                 std::string extraHint;
                 
                 if (expectedType->kind() == TypeKind::Reference && actualType->kind() == TypeKind::Reference)
@@ -11902,7 +11990,14 @@ namespace wio::sema
             }
             else if (initType && !initType->isUnknown() && !isAssignmentLikeCompatible(sym->type, initType)) 
             {
-                if (resolvedInitializerType && resolvedInitializerType->kind() == TypeKind::Null)
+                if (isRejectedImplicitNumericConversion(sym->type, initType))
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.initializer->location(),
+                        "Implicit narrowing conversion from '{}' to '{}' requires explicit 'fit'.",
+                        initType->toString(), sym->type->toString());
+                }
+                else if (resolvedInitializerType && resolvedInitializerType->kind() == TypeKind::Null)
                 {
                     WIO_LOG_ADD_ERROR(
                         node.initializer->location(),
@@ -15368,12 +15463,21 @@ namespace wio::sema
                 !actualType->isUnknown() &&
                 !isAssignmentLikeCompatible(currentFunctionReturnType_, actualType))
             {
-                WIO_LOG_ADD_ERROR(
-                    node.location(),
-                    "Return type mismatch! Expected '{}', but got '{}'.",
-                    currentFunctionReturnType_->toString(),
-                    actualType->toString()
-                );
+                if (isRejectedImplicitNumericConversion(currentFunctionReturnType_, actualType))
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "Implicit narrowing return conversion from '{}' to '{}' requires explicit 'fit'.",
+                        actualType->toString(), currentFunctionReturnType_->toString());
+                }
+                else
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "Return type mismatch! Expected '{}', but got '{}'.",
+                        currentFunctionReturnType_->toString(),
+                        actualType->toString());
+                }
             }
         }
         else

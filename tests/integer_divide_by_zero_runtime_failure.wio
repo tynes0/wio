@@ -1,0 +1,4 @@
+fn Entry() -> i32 {
+    let zero = 0;
+    return 42 / zero;
+}

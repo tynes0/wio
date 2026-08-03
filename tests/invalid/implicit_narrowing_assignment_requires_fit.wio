@@ -1,0 +1,6 @@
+fn Entry() -> i32 {
+    mut narrow = 0u8;
+    let wide: i32 = 300;
+    narrow = wide;
+    return 0;
+}

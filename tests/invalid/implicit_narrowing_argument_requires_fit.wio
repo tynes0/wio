@@ -1,0 +1,8 @@
+fn Take(narrow: u8) -> i32 {
+    return narrow fit i32;
+}
+
+fn Entry() -> i32 {
+    let wide: i32 = 300;
+    return Take(wide);
+}

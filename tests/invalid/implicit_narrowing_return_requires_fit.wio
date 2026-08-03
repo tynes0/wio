@@ -1,0 +1,7 @@
+fn Narrow(wide: i32) -> u8 {
+    return wide;
+}
+
+fn Entry() -> i32 {
+    return Narrow(300) fit i32;
+}
