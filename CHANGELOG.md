@@ -4,6 +4,44 @@ All notable user-facing changes to Wio are recorded here.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-03
+
+### Added
+
+- Added the complete `Result<T>` combinator surface: `Map`, `MapError`,
+  `AndThen`, `OrElse`, `Inspect`, `InspectError`, `Flatten`, `ToOption`,
+  `Collect`, and `Sequence`.
+- Added checked and saturating add/subtract/multiply operations for all ten
+  integer types, plus explicit wrapping semantics for ordinary integer
+  arithmetic and runtime diagnostics for division by zero.
+- Added first-class enum raw-value conversion through member `Value()` and
+  `IsValid()` plus generic `reflect::TryFromValue`, `FromValue`, and
+  `IsValid` APIs, including safe handling of unknown native enum values.
+- Added structured filesystem metadata, canonicalization, atomic replacement,
+  native error codes, and clean installed-package path/filesystem qualification
+  on Windows and Linux.
+
+### Changed
+
+- Canonical `std::fs` operations now return `Result<T>` with filesystem domain,
+  portable code, native OS code, and actionable messages. Explicit `Try*` and
+  `*Raw` compatibility helpers remain available for low-level use.
+- Intrinsic array, string, and dictionary `Get` operations now return
+  `Option<T>` while strict `At` operations retain failure-on-missing behavior.
+- Queue, set, span, range, buffer, pool, array, string, and dictionary access,
+  cloning, capacity, equality, removal, and iteration contracts are aligned.
+- Implicit numeric conversion now permits safe widening only; narrowing in
+  initialization, assignment, arguments, and returns requires explicit `fit`.
+
+### Fixed
+
+- Wrapping integer helpers remain valid in compile-time scalar and std-meta
+  expressions.
+- Self-hosted CLI filesystem call sites now preserve and propagate structured
+  errors instead of collapsing failures into empty values or booleans.
+- Distribution packaging, installed-package qualification, packaged file-run,
+  and performance smoke tests no longer race while sharing the build tree.
+
 ## [0.6.0] - 2026-08-03
 
 ### Added
