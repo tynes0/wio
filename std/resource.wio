@@ -1,0 +1,57 @@
+realm std {
+    realm resource {
+        object Owned<T> {
+            private value: T;
+            private closer: fn(T);
+            private disposed: bool;
+
+            OnConstruct(value: T, closer: fn(T)) {
+                self.value = value;
+                self.closer = closer;
+                self.disposed = false;
+            }
+
+            OnDestruct() {
+                if (not self.disposed) {
+                    self.closer(self.value);
+                    self.disposed = true;
+                }
+            }
+
+            public fn IsDisposed() -> bool {
+                return self.disposed;
+            }
+
+            public fn Dispose() -> bool {
+                if (self.disposed) {
+                    return false;
+                }
+
+                self.closer(self.value);
+                self.disposed = true;
+                return true;
+            }
+
+            public fn Value() -> T {
+                if (self.disposed) {
+                    std::Panic("resource::Owned<T>.Value cannot access a disposed resource.");
+                }
+
+                return self.value;
+            }
+
+            public fn Release() -> T {
+                if (self.disposed) {
+                    std::Panic("resource::Owned<T>.Release cannot release a disposed resource.");
+                }
+
+                self.disposed = true;
+                return self.value;
+            }
+        }
+
+        fn MakeOwned<T>(value: T, closer: fn(T)) -> Owned<T> {
+            return Owned<T>(value, closer);
+        }
+    }
+}

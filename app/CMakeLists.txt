@@ -1384,6 +1384,22 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_std_resource_owned_run
+        "${CMAKE_SOURCE_DIR}/tests/std_resource_owned_run.wio"
+        "std-resource-owned-ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_native_resource_owned_run
+        "${CMAKE_SOURCE_DIR}/tests/native/native_resource_owned_run.wio"
+        "native-resource-owned-ok"
+        --run
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
+    )
+
+    add_wio_output_test(
         wio_test_dict_option_intrinsic_run
         "${CMAKE_SOURCE_DIR}/tests/dict_option_intrinsic_run.wio"
         "dict-option-intrinsic-ok"
@@ -2126,6 +2142,14 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/panic_cleanup_runtime_failure.wio"
         "panic-cleanup-ran"
         "terminate called|Aborted|segmentation fault"
+        --run
+    )
+
+    add_wio_non_dry_failure_test_clean(
+        wio_runtime_std_resource_use_after_dispose
+        "${CMAKE_SOURCE_DIR}/tests/std_resource_use_after_dispose_runtime_failure.wio"
+        "Runtime Error: Assertion failed: resource::Owned<T>.Value cannot access a disposed resource"
+        "terminate called|segmentation fault"
         --run
     )
 

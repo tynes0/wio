@@ -1,0 +1,38 @@
+use std::assert as assert;
+use std::console as console;
+use std::resource as resource;
+
+realm ffi {
+    @Native
+    @CppHeader("native_resource_owned.h")
+    @CppName(native_resource_owned::Open)
+    fn Open(value: i32) -> opaque;
+
+    @Native
+    @CppHeader("native_resource_owned.h")
+    @CppName(native_resource_owned::Read)
+    fn Read(handle: opaque) -> i32;
+
+    @Native
+    @CppHeader("native_resource_owned.h")
+    @CppName(native_resource_owned::Close)
+    fn Close(handle: opaque);
+
+    @Native
+    @CppHeader("native_resource_owned.h")
+    @CppName(native_resource_owned::CloseCount)
+    fn CloseCount() -> i32;
+}
+
+fn ExerciseAutomaticClose() {
+    let handle = ffi::Open(41);
+    let owner = resource::MakeOwned<opaque>(handle, ffi::Close);
+    assert::ExpectEqual(ffi::Read(owner.Value()), 41, "Owned<opaque> preserves the native handle");
+}
+
+fn Entry() -> i32 {
+    ExerciseAutomaticClose();
+    assert::ExpectEqual(ffi::CloseCount(), 1, "native handles close exactly once at final owner destruction");
+    console::PrintLine("native-resource-owned-ok");
+    return 0;
+}

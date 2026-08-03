@@ -1,0 +1,46 @@
+use std::assert as assert;
+use std::console as console;
+use std::resource as resource;
+
+mut closeCount: i32 = 0;
+mut lastClosed: i32 = 0;
+
+fn CloseValue(value: i32) {
+    closeCount += 1;
+    lastClosed = value;
+}
+
+fn DisposeExplicitly() {
+    let owner = resource::MakeOwned<i32>(17, CloseValue);
+    let shared = owner;
+
+    assert::ExpectEqual(shared.Value(), 17, "shared owner handles observe the same resource");
+    assert::ExpectTrue(owner.Dispose(), "the first Dispose closes the resource");
+    assert::ExpectFalse(shared.Dispose(), "Dispose is idempotent across shared owner handles");
+}
+
+fn DisposeAutomatically() {
+    let owner = resource::MakeOwned<i32>(23, CloseValue);
+    assert::ExpectEqual(owner.Value(), 23, "owned resources expose their live value");
+}
+
+fn ReleaseOwnership() -> i32 {
+    let owner = resource::MakeOwned<i32>(31, CloseValue);
+    return owner.Release();
+}
+
+fn Entry() -> i32 {
+    DisposeExplicitly();
+    assert::ExpectEqual(closeCount, 1, "explicit disposal closes exactly once");
+    assert::ExpectEqual(lastClosed, 17, "the closer receives the owned value");
+
+    DisposeAutomatically();
+    assert::ExpectEqual(closeCount, 2, "OnDestruct closes a live resource");
+    assert::ExpectEqual(lastClosed, 23, "automatic disposal uses the same closer");
+
+    assert::ExpectEqual(ReleaseOwnership(), 31, "Release transfers the raw value");
+    assert::ExpectEqual(closeCount, 2, "released resources are not closed by the old owner");
+
+    console::PrintLine("std-resource-owned-ok");
+    return 0;
+}
