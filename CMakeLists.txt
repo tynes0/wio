@@ -82,8 +82,15 @@ install(DIRECTORY "${CMAKE_SOURCE_DIR}/std/"
 )
 
 install(FILES
+    "${CMAKE_SOURCE_DIR}/docs/README.md"
+    "${CMAKE_SOURCE_DIR}/docs/WIO_LANGUAGE_DRAFT.md"
     "${CMAKE_SOURCE_DIR}/docs/WIO_PROJECT_SYSTEM.md"
     DESTINATION docs
+)
+
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/docs/spec/"
+    DESTINATION docs/spec
+    FILES_MATCHING PATTERN "*.md"
 )
 
 if (WIO_BUILD_APP)
