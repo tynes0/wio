@@ -1,5 +1,19 @@
 realm std {
     realm resource {
+        mut liveResourceCount: usize = 0usize;
+
+        object Borrowed<T> {
+            private value: T;
+
+            OnConstruct(value: T) {
+                self.value = value;
+            }
+
+            public fn Value() -> T {
+                return self.value;
+            }
+        }
+
         object Owned<T> {
             private value: T;
             private closer: fn(T);
@@ -9,12 +23,14 @@ realm std {
                 self.value = value;
                 self.closer = closer;
                 self.disposed = false;
+                liveResourceCount += 1usize;
             }
 
             OnDestruct() {
                 if (not self.disposed) {
-                    self.closer(self.value);
                     self.disposed = true;
+                    liveResourceCount -= 1usize;
+                    self.closer(self.value);
                 }
             }
 
@@ -27,8 +43,9 @@ realm std {
                     return false;
                 }
 
-                self.closer(self.value);
                 self.disposed = true;
+                liveResourceCount -= 1usize;
+                self.closer(self.value);
                 return true;
             }
 
@@ -46,12 +63,29 @@ realm std {
                 }
 
                 self.disposed = true;
+                liveResourceCount -= 1usize;
                 return self.value;
+            }
+
+            public fn Borrow() -> Borrowed<T> {
+                if (self.disposed) {
+                    std::Panic("resource::Owned<T>.Borrow cannot borrow a disposed resource.");
+                }
+
+                return Borrowed<T>(self.value);
             }
         }
 
         fn MakeOwned<T>(value: T, closer: fn(T)) -> Owned<T> {
             return Owned<T>(value, closer);
+        }
+
+        fn MakeBorrowed<T>(value: T) -> Borrowed<T> {
+            return Borrowed<T>(value);
+        }
+
+        fn LiveResourceCount() -> usize {
+            return liveResourceCount;
         }
     }
 }
