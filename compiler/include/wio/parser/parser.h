@@ -16,6 +16,12 @@ namespace wio
         
         NodePtr<Program> parseProgram();
     private:
+        struct GenericParameterList
+        {
+            std::vector<NodePtr<Identifier>> parameters;
+            bool hasParameterPack = false;
+        };
+
         std::vector<Token> tokens_;
         size_t currentTokenIndex_;
 
@@ -46,6 +52,7 @@ namespace wio
         Token parseAttributeArgumentToken();
         
         NodePtr<TypeSpecifier> parseType();
+        GenericParameterList parseGenericParameterList();
         
         NodePtr<Statement> parseStatement();
         NodePtr<Statement> parseBlockStatement();

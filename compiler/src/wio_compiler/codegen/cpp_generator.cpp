@@ -6880,7 +6880,18 @@ namespace wio::codegen
         {
             node.callee->accept(*this);
         }
-        if (!node.explicitTypeArguments.empty())
+        if (!node.resolvedGenericArguments.empty())
+        {
+            emit("<");
+            for (size_t i = 0; i < node.resolvedGenericArguments.size(); ++i)
+            {
+                emit(toCppType(node.resolvedGenericArguments[i].Lock()));
+                if (i + 1 < node.resolvedGenericArguments.size())
+                    emit(", ");
+            }
+            emit(">");
+        }
+        else if (!node.explicitTypeArguments.empty())
         {
             emit("<");
             for (size_t i = 0; i < node.explicitTypeArguments.size(); ++i)

@@ -96,6 +96,7 @@ namespace wio::sema
                 FunctionCallExpression* node;
                 OperatorDispatchKind operatorDispatchKind;
                 WeakRef<Type> overloadFunctionType;
+                std::vector<WeakRef<Type>> resolvedGenericArguments;
             };
 
             struct MemberAccessState
@@ -163,6 +164,7 @@ namespace wio::sema
                 {
                     state.node->operatorDispatchKind = state.operatorDispatchKind;
                     state.node->overloadFunctionType = state.overloadFunctionType;
+                    state.node->resolvedGenericArguments = state.resolvedGenericArguments;
                 }
 
                 for (const auto& state : memberAccessStates)
@@ -237,7 +239,8 @@ namespace wio::sema
                     functionCallExpressionStates.push_back(FunctionCallExpressionState{
                         functionCallExpression,
                         functionCallExpression->operatorDispatchKind,
-                        functionCallExpression->overloadFunctionType
+                        functionCallExpression->overloadFunctionType,
+                        functionCallExpression->resolvedGenericArguments
                     });
                 }
 
@@ -3033,6 +3036,7 @@ namespace wio::sema
 
             instantiatedType->scopePath = structType->scopePath;
             instantiatedType->genericParameterNames = structType->genericParameterNames;
+            instantiatedType->genericParameterDefaults = structType->genericParameterDefaults;
             instantiatedType->genericArguments = explicitTypeArguments;
             instantiatedType->hasGenericParameterPack = structType->hasGenericParameterPack;
             instantiatedType->fieldNames = structType->fieldNames;
@@ -3291,6 +3295,101 @@ namespace wio::sema
             default:
                 return current;
             }
+        }
+
+        std::vector<Ref<Type>> resolveGenericParameterDefaults(
+            SemanticAnalyzer& analyzer,
+            const std::vector<NodePtr<Identifier>>& parameters,
+            const bool hasGenericParameterPack,
+            const std::string_view declarationKind)
+        {
+            std::vector<Ref<Type>> defaults(parameters.size());
+            std::vector<std::string> parameterNames;
+            parameterNames.reserve(parameters.size());
+            for (const auto& parameter : parameters)
+                parameterNames.push_back(parameter ? parameter->token.value : std::string{});
+
+            for (size_t index = 0; index < parameters.size(); ++index)
+            {
+                const auto& parameter = parameters[index];
+                if (!parameter || !parameter->genericDefaultType)
+                    continue;
+
+                if (hasGenericParameterPack && index + 1 == parameters.size())
+                {
+                    WIO_LOG_ADD_ERROR(parameter->location(), "Generic parameter packs cannot have default arguments.");
+                    continue;
+                }
+
+                parameter->genericDefaultType->accept(analyzer);
+                Ref<Type> defaultType = parameter->genericDefaultType->refType.Lock();
+                defaults[index] = defaultType;
+
+                std::unordered_map<std::string, const Type*> referencedParameters;
+                collectGenericParameterInstances(defaultType, parameterNames, referencedParameters);
+                for (size_t referencedIndex = index; referencedIndex < parameterNames.size(); ++referencedIndex)
+                {
+                    if (!parameterNames[referencedIndex].empty() &&
+                        referencedParameters.contains(parameterNames[referencedIndex]))
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            parameter->genericDefaultType->location(),
+                            "Default for generic parameter '{}' on {} cannot reference '{}' because defaults may only use earlier parameters.",
+                            parameter->token.value,
+                            declarationKind,
+                            parameterNames[referencedIndex]
+                        );
+                    }
+                }
+            }
+
+            return defaults;
+        }
+
+        size_t getRequiredGenericArgumentCount(const std::vector<Ref<Type>>& defaults,
+                                               const size_t fixedParameterCount)
+        {
+            size_t requiredCount = fixedParameterCount;
+            while (requiredCount > 0 &&
+                   requiredCount - 1 < defaults.size() &&
+                   defaults[requiredCount - 1])
+            {
+                --requiredCount;
+            }
+            return requiredCount;
+        }
+
+        std::optional<std::vector<Ref<Type>>> completeGenericTypeArguments(
+            const std::vector<std::string>& parameterNames,
+            const std::vector<Ref<Type>>& defaults,
+            const bool hasGenericParameterPack,
+            const std::vector<Ref<Type>>& providedArguments)
+        {
+            const size_t fixedCount = getMinimumGenericArgumentCount(parameterNames, hasGenericParameterPack);
+            const size_t requiredCount = getRequiredGenericArgumentCount(defaults, fixedCount);
+            if (providedArguments.size() < requiredCount ||
+                (!hasGenericParameterPack && providedArguments.size() > fixedCount))
+            {
+                return std::nullopt;
+            }
+
+            std::vector<Ref<Type>> completed = providedArguments;
+            const size_t providedFixedCount = std::min(providedArguments.size(), fixedCount);
+            GenericBindingSet bindings;
+            for (size_t index = 0; index < providedFixedCount; ++index)
+                bindings.directBindings[parameterNames[index]] = providedArguments[index];
+
+            for (size_t index = providedFixedCount; index < fixedCount; ++index)
+            {
+                if (index >= defaults.size() || !defaults[index])
+                    return std::nullopt;
+
+                Ref<Type> instantiatedDefault = instantiateGenericType(defaults[index], bindings);
+                completed.insert(completed.begin() + static_cast<std::ptrdiff_t>(index), instantiatedDefault);
+                bindings.directBindings[parameterNames[index]] = instantiatedDefault;
+            }
+
+            return completed;
         }
 
         bool deduceGenericBindings(const Ref<Type>& expected,
@@ -6016,29 +6115,32 @@ namespace wio::sema
                         auto structType = sym->type.AsFast<StructType>();
                         if (!structType->genericParameterNames.empty())
                         {
-                            const size_t minimumArgumentCount = getMinimumGenericArgumentCount(
+                            const size_t fixedArgumentCount = getMinimumGenericArgumentCount(
                                 structType->genericParameterNames,
                                 structType->hasGenericParameterPack
                             );
-                            const bool invalidGenericArity =
-                                structType->hasGenericParameterPack
-                                    ? explicitTypeArguments.size() < minimumArgumentCount
-                                    : explicitTypeArguments.size() != structType->genericParameterNames.size();
-                            if (invalidGenericArity)
+                            const size_t requiredArgumentCount = getRequiredGenericArgumentCount(
+                                structType->genericParameterDefaults, fixedArgumentCount);
+                            auto completedArguments = completeGenericTypeArguments(
+                                structType->genericParameterNames,
+                                structType->genericParameterDefaults,
+                                structType->hasGenericParameterPack,
+                                explicitTypeArguments);
+                            if (!completedArguments)
                             {
                                 WIO_LOG_ADD_ERROR(
                                     node.location(),
-                                    structType->hasGenericParameterPack
-                                        ? "Generic type '{}' expects at least {} generic arguments, but got {}."
-                                        : "Generic type '{}' expects {} generic arguments, but got {}.",
+                                    "Generic type '{}' expects {} to {} generic arguments, but got {}.",
                                     node.name.value,
-                                    structType->hasGenericParameterPack ? minimumArgumentCount : structType->genericParameterNames.size(),
+                                    requiredArgumentCount,
+                                    structType->hasGenericParameterPack ? std::string("unbounded") : std::to_string(fixedArgumentCount),
                                     explicitTypeArguments.size()
                                 );
                                 type = Compiler::get().getTypeContext().getUnknown();
                             }
                             else
                             {
+                                explicitTypeArguments = std::move(*completedArguments);
                                 if (!satisfiesApplyForSymbol(sym, explicitTypeArguments, "type"))
                                 {
                                     type = Compiler::get().getTypeContext().getUnknown();
@@ -6070,29 +6172,32 @@ namespace wio::sema
                     {
                         if (!sym->genericParameterNames.empty())
                         {
-                            const size_t minimumArgumentCount = getMinimumGenericArgumentCount(
+                            const size_t fixedArgumentCount = getMinimumGenericArgumentCount(
                                 sym->genericParameterNames,
                                 sym->hasGenericParameterPack
                             );
-                            const bool invalidGenericArity =
-                                sym->hasGenericParameterPack
-                                    ? explicitTypeArguments.size() < minimumArgumentCount
-                                    : explicitTypeArguments.size() != sym->genericParameterNames.size();
-                            if (invalidGenericArity)
+                            const size_t requiredArgumentCount = getRequiredGenericArgumentCount(
+                                sym->genericParameterDefaults, fixedArgumentCount);
+                            auto completedArguments = completeGenericTypeArguments(
+                                sym->genericParameterNames,
+                                sym->genericParameterDefaults,
+                                sym->hasGenericParameterPack,
+                                explicitTypeArguments);
+                            if (!completedArguments)
                             {
                                 WIO_LOG_ADD_ERROR(
                                     node.location(),
-                                    sym->hasGenericParameterPack
-                                        ? "Type alias '{}' expects at least {} generic arguments, but got {}."
-                                        : "Type alias '{}' expects {} generic arguments, but got {}.",
+                                    "Type alias '{}' expects {} to {} generic arguments, but got {}.",
                                     node.name.value,
-                                    sym->hasGenericParameterPack ? minimumArgumentCount : sym->genericParameterNames.size(),
+                                    requiredArgumentCount,
+                                    sym->hasGenericParameterPack ? std::string("unbounded") : std::to_string(fixedArgumentCount),
                                     explicitTypeArguments.size()
                                 );
                                 type = Compiler::get().getTypeContext().getUnknown();
                             }
                             else
                             {
+                                explicitTypeArguments = std::move(*completedArguments);
                                 if (!satisfiesApplyForSymbol(sym, explicitTypeArguments, "type alias"))
                                 {
                                     type = Compiler::get().getTypeContext().getUnknown();
@@ -9207,28 +9312,32 @@ namespace wio::sema
 
             if (!calleeSym->genericParameterNames.empty())
             {
-                const size_t minimumArgumentCount = getMinimumGenericArgumentCount(
+                const size_t fixedArgumentCount = getMinimumGenericArgumentCount(
                     calleeSym->genericParameterNames,
                     calleeSym->hasGenericParameterPack
                 );
-                const bool invalidGenericArity =
-                    calleeSym->hasGenericParameterPack
-                        ? explicitTypeArguments.size() < minimumArgumentCount
-                        : explicitTypeArguments.size() != calleeSym->genericParameterNames.size();
-                if (invalidGenericArity)
+                const size_t requiredArgumentCount = getRequiredGenericArgumentCount(
+                    calleeSym->genericParameterDefaults, fixedArgumentCount);
+                auto completedArguments = completeGenericTypeArguments(
+                    calleeSym->genericParameterNames,
+                    calleeSym->genericParameterDefaults,
+                    calleeSym->hasGenericParameterPack,
+                    explicitTypeArguments);
+                if (!completedArguments)
                 {
                     WIO_LOG_ADD_ERROR(
                         node.location(),
-                        calleeSym->hasGenericParameterPack
-                            ? "Type alias '{}' expects at least {} generic arguments, but got {}."
-                            : "Type alias '{}' expects {} generic arguments, but got {}.",
+                        "Type alias '{}' expects {} to {} generic arguments, but got {}.",
                         calleeSym->name,
-                        calleeSym->hasGenericParameterPack ? minimumArgumentCount : calleeSym->genericParameterNames.size(),
+                        requiredArgumentCount,
+                        calleeSym->hasGenericParameterPack ? std::string("unbounded") : std::to_string(fixedArgumentCount),
                         explicitTypeArguments.size()
                     );
                     node.refType = Compiler::get().getTypeContext().getUnknown();
                     return;
                 }
+
+                explicitTypeArguments = std::move(*completedArguments);
 
                 if (!satisfiesApplyForSymbol(calleeSym, explicitTypeArguments, "type alias"))
                 {
@@ -9312,27 +9421,34 @@ namespace wio::sema
 
             if (!structType->genericParameterNames.empty())
             {
-                  const size_t minimumArgumentCount = getMinimumGenericArgumentCount(
+                  const size_t fixedArgumentCount = getMinimumGenericArgumentCount(
                       structType->genericParameterNames,
                       structType->hasGenericParameterPack
                   );
-                  if (!explicitTypeArguments.empty() &&
-                      (structType->hasGenericParameterPack
-                          ? explicitTypeArguments.size() < minimumArgumentCount
-                          : explicitTypeArguments.size() != structType->genericParameterNames.size()))
+                  if (!explicitTypeArguments.empty())
                   {
-                      WIO_LOG_ADD_ERROR(
-                          node.location(),
-                          structType->hasGenericParameterPack
-                              ? "Generic type '{}' expects at least {} generic arguments, but got {}."
-                              : "Generic type '{}' expects {} generic arguments, but got {}.",
-                          structType->name,
-                          structType->hasGenericParameterPack ? minimumArgumentCount : structType->genericParameterNames.size(),
-                          explicitTypeArguments.size()
-                      );
-                    node.refType = Compiler::get().getTypeContext().getUnknown();
-                    return;
-                }
+                      const size_t requiredArgumentCount = getRequiredGenericArgumentCount(
+                          structType->genericParameterDefaults, fixedArgumentCount);
+                      auto completedArguments = completeGenericTypeArguments(
+                          structType->genericParameterNames,
+                          structType->genericParameterDefaults,
+                          structType->hasGenericParameterPack,
+                          explicitTypeArguments);
+                      if (!completedArguments)
+                      {
+                          WIO_LOG_ADD_ERROR(
+                              node.location(),
+                              "Generic type '{}' expects {} to {} generic arguments, but got {}.",
+                              structType->name,
+                              requiredArgumentCount,
+                              structType->hasGenericParameterPack ? std::string("unbounded") : std::to_string(fixedArgumentCount),
+                              explicitTypeArguments.size()
+                          );
+                          node.refType = Compiler::get().getTypeContext().getUnknown();
+                          return;
+                      }
+                      explicitTypeArguments = std::move(*completedArguments);
+                  }
 
                 if (!explicitTypeArguments.empty())
                 {
@@ -9374,7 +9490,7 @@ namespace wio::sema
                             expectedStructType->name == structType->name &&
                             expectedStructType->scopePath == structType->scopePath &&
                               (structType->hasGenericParameterPack
-                                  ? expectedStructType->genericArguments.size() >= minimumArgumentCount
+                                  ? expectedStructType->genericArguments.size() >= fixedArgumentCount
                                   : expectedStructType->genericArguments.size() == structType->genericParameterNames.size()))
                         {
                             bool hasConcreteExpectedArguments = true;
@@ -9996,6 +10112,7 @@ namespace wio::sema
                 int score = -1;
                 std::unordered_map<std::string, Ref<Type>> genericBindings;
                 GenericBindingSet bindingSet;
+                bool usedGenericDefaults = false;
             };
 
             auto formatCandidateSignature = [&](const Ref<Symbol>& overload) -> std::string
@@ -10077,8 +10194,12 @@ namespace wio::sema
                 const bool hasCandidatePack = isConstructorCall && constructorStructType
                     ? constructorStructType->hasGenericParameterPack
                     : candidate->hasGenericParameterPack;
-                const size_t minimumArity = getMinimumGenericArgumentCount(genericParameterNames, hasCandidatePack);
-                return hasCandidatePack ? explicitArity >= minimumArity : explicitArity == genericParameterNames.size();
+                const auto& defaults = isConstructorCall && constructorStructType
+                    ? constructorStructType->genericParameterDefaults
+                    : candidate->genericParameterDefaults;
+                const size_t fixedArity = getMinimumGenericArgumentCount(genericParameterNames, hasCandidatePack);
+                const size_t minimumArity = getRequiredGenericArgumentCount(defaults, fixedArity);
+                return explicitArity >= minimumArity && (hasCandidatePack || explicitArity <= fixedArity);
             };
 
             auto formatInstantiationSignature = [&](const std::vector<Ref<Type>>& types) -> std::string
@@ -10229,7 +10350,11 @@ namespace wio::sema
                 const bool hasGenericParameterPack = isConstructorCall && constructorStructType
                     ? constructorStructType->hasGenericParameterPack
                     : overload->hasGenericParameterPack;
+                const std::vector<Ref<Type>>& genericParameterDefaults = isConstructorCall && constructorStructType
+                    ? constructorStructType->genericParameterDefaults
+                    : overload->genericParameterDefaults;
                 GenericBindingSet bindingSet;
+                bool usedGenericDefaults = false;
                 if (isConstructorCall &&
                     (!constructorGenericBindingSet.directBindings.empty() ||
                      !constructorGenericBindingSet.packBindings.empty() ||
@@ -10244,15 +10369,18 @@ namespace wio::sema
                     if (!isGenericCandidate && activeGenericParameterNames.empty())
                         return std::nullopt;
 
-                    const size_t minimumExplicitTypeCount =
-                        getMinimumGenericArgumentCount(activeGenericParameterNames, hasGenericParameterPack);
-                    if ((!hasGenericParameterPack && explicitTypeArguments.size() != activeGenericParameterNames.size()) ||
-                        (hasGenericParameterPack && explicitTypeArguments.size() < minimumExplicitTypeCount))
+                    auto completedExplicitArguments = completeGenericTypeArguments(
+                        activeGenericParameterNames,
+                        genericParameterDefaults,
+                        hasGenericParameterPack,
+                        explicitTypeArguments);
+                    if (!completedExplicitArguments)
                     {
                         return std::nullopt;
                     }
+                    usedGenericDefaults = completedExplicitArguments->size() > explicitTypeArguments.size();
 
-                    for (const auto& explicitTypeArgument : explicitTypeArguments)
+                    for (const auto& explicitTypeArgument : *completedExplicitArguments)
                     {
                         if (!explicitTypeArgument ||
                             explicitTypeArgument->isUnknown())
@@ -10264,7 +10392,7 @@ namespace wio::sema
                     bindingSet = buildExtendedGenericBindings(
                         activeGenericParameterNames,
                         hasGenericParameterPack,
-                        explicitTypeArguments
+                        *completedExplicitArguments
                     );
                     resolvedFunctionType = instantiateGenericType(resolvedFunctionType, bindingSet);
                     declaredFunctionType = resolvedFunctionType.AsFast<FunctionType>();
@@ -10401,6 +10529,25 @@ namespace wio::sema
                 if (std::ranges::any_of(analyzedArguments, [](bool analyzed) { return !analyzed; }))
                     return std::nullopt;
 
+                // Deduction wins for parameters mentioned by the function
+                // signature. Defaults then fill only the remaining holes.
+                const size_t fixedGenericParameterCount = getMinimumGenericArgumentCount(
+                    activeGenericParameterNames, hasGenericParameterPack);
+                for (size_t genericIndex = 0; genericIndex < fixedGenericParameterCount; ++genericIndex)
+                {
+                    const std::string& parameterName = activeGenericParameterNames[genericIndex];
+                    if (bindings.contains(parameterName) && bindings.at(parameterName) && !bindings.at(parameterName)->isUnknown())
+                        continue;
+                    if (genericIndex >= genericParameterDefaults.size() || !genericParameterDefaults[genericIndex])
+                        continue;
+
+                    bindingSet.directBindings = bindings;
+                    Ref<Type> defaultType = instantiateGenericType(genericParameterDefaults[genericIndex], bindingSet);
+                    bindings[parameterName] = defaultType;
+                    bindingSet.directBindings[parameterName] = defaultType;
+                    usedGenericDefaults = true;
+                }
+
                 if (isGenericCandidate)
                 {
                     for (const auto& genericParameterName : deducibleGenericParameterNames)
@@ -10524,7 +10671,8 @@ namespace wio::sema
                         .fullFunctionType = resolvedFunctionType.AsFast<FunctionType>(),
                         .score = *score,
                         .genericBindings = bindings,
-                        .bindingSet = bindingSet
+                        .bindingSet = bindingSet,
+                        .usedGenericDefaults = usedGenericDefaults
                     };
                 }
 
@@ -10781,6 +10929,20 @@ namespace wio::sema
 
             if (bestMatch->symbol)
             {
+                if (!isConstructorCall && bestMatch->usedGenericDefaults && !bestMatch->symbol->genericParameterNames.empty())
+                {
+                    if (auto resolvedArguments = tryMaterializeConcreteInstantiation(
+                            bestMatch->symbol->genericParameterNames,
+                            bestMatch->symbol->hasGenericParameterPack,
+                            bestMatch->bindingSet))
+                    {
+                        node.resolvedGenericArguments.clear();
+                        node.resolvedGenericArguments.reserve(resolvedArguments->size());
+                        for (const auto& argument : *resolvedArguments)
+                            node.resolvedGenericArguments.emplace_back(argument);
+                    }
+                }
+
                 auto declarationIt = functionDeclarationsBySymbol_.find(bestMatch->symbol.Get());
                 Ref<StructType> concreteOwnerType = getConcreteCallableOwnerType();
                 if (declarationIt != functionDeclarationsBySymbol_.end() &&
@@ -12237,6 +12399,9 @@ namespace wio::sema
                 genericParameterNames.push_back(genericParameter->token.value);
         }
 
+        auto genericParameterDefaults = resolveGenericParameterDefaults(
+            *this, node.genericParameters, node.hasGenericParameterPack, "type alias");
+
         validateApplyAttributes(*this, node.attributes, genericParameterNames, "type alias", node.location());
 
         node.aliasedType->accept(*this);
@@ -12245,6 +12410,7 @@ namespace wio::sema
         Ref<Symbol> aliasSym = createSymbol(node.name->token.value, aliasType, SymbolKind::TypeAlias, node.location());
         aliasSym->aliasTargetType = aliasedType;
         aliasSym->genericParameterNames = genericParameterNames;
+        aliasSym->genericParameterDefaults = std::move(genericParameterDefaults);
         aliasSym->hasGenericParameterPack = node.hasGenericParameterPack;
 
         currentScope_->define(node.name->token.value, aliasSym);
@@ -12302,6 +12468,9 @@ namespace wio::sema
             auto genericScope = buildGenericTypeParameterScope();
             genericTypeParameterScopes_.push_back(genericScope);
 
+            auto genericParameterDefaults = resolveGenericParameterDefaults(
+                *this, node.genericParameters, node.hasGenericParameterPack, "function");
+
             Ref<Type> returnType = Compiler::get().getTypeContext().getVoid();
             if (node.returnType)
             {
@@ -12341,6 +12510,7 @@ namespace wio::sema
                     funcSym->genericParameterNames.push_back(genericParameter->token.value);
             }
             funcSym->hasGenericParameterPack = node.hasGenericParameterPack;
+            funcSym->genericParameterDefaults = std::move(genericParameterDefaults);
             currentScope_->define(node.name->token.value, funcSym);
             functionDeclarationsBySymbol_[funcSym.Get()] = &node;
             attributeListsBySymbol_[funcSym.Get()] = &node.attributes;
@@ -13536,12 +13706,16 @@ namespace wio::sema
             interfaceType.AsFast<StructType>()->hasGenericParameterPack = node.hasGenericParameterPack;
             auto genericScope = buildGenericTypeParameterScope();
             genericTypeParameterScopes_.push_back(genericScope);
+            auto genericParameterDefaults = resolveGenericParameterDefaults(
+                *this, node.genericParameters, node.hasGenericParameterPack, "interface");
             validateApplyAttributes(*this, node.attributes, interfaceType.AsFast<StructType>()->genericParameterNames, "interface", node.location());
             genericTypeParameterScopes_.pop_back();
             Ref<Symbol> interfaceSym = createSymbol(node.name->token.value, interfaceType, SymbolKind::Struct, node.location());
             interfaceSym->innerScope = interfaceScope;
             interfaceSym->flags.set_isInterface(true);
             interfaceSym->genericParameterNames = interfaceType.AsFast<StructType>()->genericParameterNames;
+            interfaceType.AsFast<StructType>()->genericParameterDefaults = genericParameterDefaults;
+            interfaceSym->genericParameterDefaults = std::move(genericParameterDefaults);
             interfaceSym->hasGenericParameterPack = node.hasGenericParameterPack;
             currentScope_->define(node.name->token.value, interfaceSym);
             attributeListsBySymbol_[interfaceSym.Get()] = &node.attributes;
@@ -13890,6 +14064,8 @@ namespace wio::sema
 
             auto genericScope = buildGenericTypeParameterScope();
             genericTypeParameterScopes_.push_back(genericScope);
+            auto genericParameterDefaults = resolveGenericParameterDefaults(
+                *this, node.genericParameters, node.hasGenericParameterPack, "component");
             if (!isExplicitSpecialization)
                 validateApplyAttributes(*this, node.attributes, structType.AsFast<StructType>()->genericParameterNames, "component", node.location());
             else if (hasAttribute(node.attributes, Attribute::Apply))
@@ -13898,6 +14074,8 @@ namespace wio::sema
             Ref<Symbol> compSym = createSymbol(node.name->token.value, structType, SymbolKind::Struct, node.location());
             compSym->innerScope = structScope;
             compSym->genericParameterNames = structType.AsFast<StructType>()->genericParameterNames;
+            structType.AsFast<StructType>()->genericParameterDefaults = genericParameterDefaults;
+            compSym->genericParameterDefaults = std::move(genericParameterDefaults);
             compSym->hasGenericParameterPack = structType.AsFast<StructType>()->hasGenericParameterPack;
             if (isExplicitSpecialization)
             {
@@ -14421,6 +14599,8 @@ namespace wio::sema
 
             auto genericScope = buildGenericTypeParameterScope();
             genericTypeParameterScopes_.push_back(genericScope);
+            auto genericParameterDefaults = resolveGenericParameterDefaults(
+                *this, node.genericParameters, node.hasGenericParameterPack, "object");
             if (!isExplicitSpecialization)
                 validateApplyAttributes(*this, node.attributes, structType.AsFast<StructType>()->genericParameterNames, "object", node.location());
             else if (hasAttribute(node.attributes, Attribute::Apply))
@@ -14429,6 +14609,8 @@ namespace wio::sema
             Ref<Symbol> objSym = createSymbol(node.name->token.value, structType, SymbolKind::Struct, node.location());
             objSym->innerScope = structScope;
             objSym->genericParameterNames = structType.AsFast<StructType>()->genericParameterNames;
+            structType.AsFast<StructType>()->genericParameterDefaults = genericParameterDefaults;
+            objSym->genericParameterDefaults = std::move(genericParameterDefaults);
             objSym->hasGenericParameterPack = structType.AsFast<StructType>()->hasGenericParameterPack;
             if (isExplicitSpecialization)
             {

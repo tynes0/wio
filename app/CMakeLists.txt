@@ -1428,6 +1428,25 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_generic_default_type_arguments_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_default_type_arguments_run.wio"
+        "Generic defaults: ok"
+        --run
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_default_non_trailing
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_default_non_trailing.wio"
+        "Generic parameters without defaults cannot follow a defaulted parameter"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_default_forward_reference
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_default_forward_reference.wio"
+        "defaults may only use earlier parameters"
+    )
+
+    add_wio_output_test(
         wio_test_native_bridge_run
         "${CMAKE_SOURCE_DIR}/tests/native/native_bridge.wio"
         "Native multiply: 42"

@@ -1,0 +1,7 @@
+component Invalid<T = U, U = i32> {
+    value: T;
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

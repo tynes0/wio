@@ -1,0 +1,8 @@
+fn Invalid<T = i32, U>(value: U) -> T {
+    let result: T;
+    return result;
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

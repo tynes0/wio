@@ -549,6 +549,10 @@ namespace wio
         WIO_EXP_NODE_BODY(Identifier)
         
         Token token;
+        // Populated only when the identifier is used as a generic parameter.
+        // Keeping the default beside the parameter preserves source order and
+        // avoids parallel AST vectors drifting out of sync.
+        NodePtr<TypeSpecifier> genericDefaultType;
 
         explicit Identifier(Token _token, common::Location _loc = common::Location::invalid());
         ~Identifier() override;
@@ -606,6 +610,9 @@ namespace wio
 
         NodePtr<Expression> callee;
         std::vector<NodePtr<TypeSpecifier>> explicitTypeArguments;
+        // Concrete type arguments selected by semantic deduction/defaulting.
+        // Codegen uses this when the written argument list was only partial.
+        std::vector<WeakRef<sema::Type>> resolvedGenericArguments;
         std::vector<NodePtr<Expression>> arguments;
         OperatorDispatchKind operatorDispatchKind = OperatorDispatchKind::None;
         WeakRef<sema::Type> overloadFunctionType = nullptr;

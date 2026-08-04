@@ -1,0 +1,54 @@
+use std::assert as assert;
+use std::console as console;
+
+component Pair<T = i32, U = T> {
+    public first: T;
+    public second: U;
+}
+
+type DefaultPair<T = i32, U = T> = Pair<T, U>;
+
+interface Reader<T = string> {
+    fn Read() -> T;
+}
+
+@From(Reader<T>)
+object Box<T = string> {
+    public value: T;
+
+    OnConstruct(value: T) {
+        self.value = value;
+    }
+
+    public fn Read() -> T {
+        return self.value;
+    }
+}
+
+fn Zero<T = i32>() -> T {
+    let value: T;
+    return value;
+}
+
+fn Keep<T, U = T>(value: U) -> U {
+    return value;
+}
+
+fn Consume(reader: view Reader) -> string {
+    return reader.Read();
+}
+
+fn Entry() -> i32 {
+    let pair: Pair = Pair<i32>(7, 9);
+    let aliasPair: DefaultPair<i16> = DefaultPair<i16>(2i16, 3i16);
+    let box: Box = Box("wio");
+
+    assert::ExpectEqual(pair.first + pair.second, 16, "component defaults should fill omitted type arguments");
+    assert::ExpectEqual(aliasPair.first + aliasPair.second, 5i16, "alias defaults may reference earlier parameters");
+    assert::ExpectEqual(Consume(box), "wio", "interface and object defaults should form the same type");
+    assert::ExpectEqual(Zero(), 0, "function defaults should fill non-deduced parameters");
+    assert::ExpectEqual(Keep<i32>(11), 11, "partial explicit function arguments should use trailing defaults");
+
+    console::Print("Generic defaults: ok");
+    return 0;
+}

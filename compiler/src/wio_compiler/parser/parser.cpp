@@ -1177,6 +1177,46 @@ namespace wio
         );
     }
 
+    Parser::GenericParameterList Parser::parseGenericParameterList()
+    {
+        GenericParameterList result;
+        if (!match(TokenType::opLess, true))
+            return result;
+
+        bool sawDefault = false;
+        while (true)
+        {
+            auto parameter = makeNodePtr<Identifier>(consume(TokenType::identifier));
+            const bool isPack = match(TokenType::opRangeInclusive, true);
+            if (isPack)
+            {
+                result.hasParameterPack = true;
+                if (match(TokenType::opAssign, false))
+                    utError("Generic parameter packs cannot have default arguments.", peek().loc);
+            }
+            else if (match(TokenType::opAssign, true))
+            {
+                parameter->genericDefaultType = parseType();
+                sawDefault = true;
+            }
+            else if (sawDefault)
+            {
+                utError("Generic parameters without defaults cannot follow a defaulted parameter.", parameter->location());
+            }
+
+            result.parameters.push_back(std::move(parameter));
+            if (!match(TokenType::comma, true))
+                break;
+
+            expectElementAfterComma(TokenType::opGreater, "generic parameter");
+            if (result.hasParameterPack)
+                utError("Generic parameter packs must be trailing.", currentOrPreviousLocation());
+        }
+
+        consume(TokenType::opGreater);
+        return result;
+    }
+
     NodePtr<TypeAliasDeclaration> Parser::parseTypeAliasDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
     {
         for (const auto& attribute : attributes)
@@ -1190,29 +1230,7 @@ namespace wio
         Token startTok = consume(TokenType::kwType);
         NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
 
-        std::vector<NodePtr<Identifier>> genericParameters;
-        bool hasGenericParameterPack = false;
-        if (match(TokenType::opLess, true))
-        {
-            auto firstGeneric = makeNodePtr<Identifier>(consume(TokenType::identifier));
-            if (match(TokenType::opRangeInclusive, true))
-                hasGenericParameterPack = true;
-
-            genericParameters.push_back(std::move(firstGeneric));
-            while (match(TokenType::comma, true))
-            {
-                expectElementAfterComma(TokenType::opGreater, "generic parameter");
-                if (hasGenericParameterPack)
-                    utError("Generic parameter packs must be trailing.", currentOrPreviousLocation());
-                auto genericParameter = makeNodePtr<Identifier>(consume(TokenType::identifier));
-                if (match(TokenType::opRangeInclusive, true))
-                    hasGenericParameterPack = true;
-
-                genericParameters.push_back(std::move(genericParameter));
-            }
-
-            consume(TokenType::opGreater);
-        }
+        auto genericParameterList = parseGenericParameterList();
 
         consume(TokenType::opAssign);
         NodePtr<TypeSpecifier> aliasedType = parseType();
@@ -1221,8 +1239,8 @@ namespace wio
         return makeNodePtr<TypeAliasDeclaration>(
             std::move(attributes),
             std::move(name),
-            std::move(genericParameters),
-            hasGenericParameterPack,
+            std::move(genericParameterList.parameters),
+            genericParameterList.hasParameterPack,
             std::move(aliasedType),
             startTok.loc
         );
@@ -1281,31 +1299,7 @@ namespace wio
             name = makeNodePtr<Identifier>(consumeIdentifier());
         }
 
-        std::vector<NodePtr<Identifier>> genericParameters;
-        bool hasGenericParameterPack = false;
-
-        if (match(TokenType::opLess, true))
-        {
-            auto firstGeneric = makeNodePtr<Identifier>(consume(TokenType::identifier));
-            if (match(TokenType::opRangeInclusive, true))
-                hasGenericParameterPack = true;
-
-            genericParameters.push_back(std::move(firstGeneric));
-            while (match(TokenType::comma, true))
-            {
-                expectElementAfterComma(TokenType::opGreater, "generic parameter");
-                if (hasGenericParameterPack)
-                    utError("Generic parameter packs must be trailing.", currentOrPreviousLocation());
-
-                auto genericParameter = makeNodePtr<Identifier>(consume(TokenType::identifier));
-                if (match(TokenType::opRangeInclusive, true))
-                    hasGenericParameterPack = true;
-
-                genericParameters.push_back(std::move(genericParameter));
-            }
-
-            consume(TokenType::opGreater);
-        }
+        auto genericParameterList = parseGenericParameterList();
 
         consume(TokenType::leftParen);
         
@@ -1391,8 +1385,8 @@ namespace wio
         return makeNodePtr<FunctionDeclaration>(
             std::move(attributes),
             std::move(name),
-            std::move(genericParameters),
-            hasGenericParameterPack,
+            std::move(genericParameterList.parameters),
+            genericParameterList.hasParameterPack,
             std::move(parameters),
             std::move(returnType),
             std::move(whenCond),
@@ -1406,30 +1400,7 @@ namespace wio
     {
         Token startTok = consume(TokenType::kwInterface);
         NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
-        std::vector<NodePtr<Identifier>> genericParameters;
-        bool hasGenericParameterPack = false;
-
-        if (match(TokenType::opLess, true))
-        {
-            auto firstGeneric = makeNodePtr<Identifier>(consume(TokenType::identifier));
-            if (match(TokenType::opRangeInclusive, true))
-                hasGenericParameterPack = true;
-
-            genericParameters.push_back(std::move(firstGeneric));
-            while (match(TokenType::comma, true))
-            {
-                expectElementAfterComma(TokenType::opGreater, "generic parameter");
-                if (hasGenericParameterPack)
-                    utError("Generic parameter packs must be trailing.", currentOrPreviousLocation());
-                auto genericParameter = makeNodePtr<Identifier>(consume(TokenType::identifier));
-                if (match(TokenType::opRangeInclusive, true))
-                    hasGenericParameterPack = true;
-
-                genericParameters.push_back(std::move(genericParameter));
-            }
-
-            consume(TokenType::opGreater);
-        }
+        auto genericParameterList = parseGenericParameterList();
 
         consume(TokenType::leftBrace);
         std::vector<NodePtr<FunctionDeclaration>> methods;
@@ -1450,37 +1421,14 @@ namespace wio
         }
         consume(TokenType::rightBrace);
         
-        return makeNodePtr<InterfaceDeclaration>(std::move(attributes), std::move(name), std::move(genericParameters), hasGenericParameterPack, std::move(methods), startTok.loc);
+        return makeNodePtr<InterfaceDeclaration>(std::move(attributes), std::move(name), std::move(genericParameterList.parameters), genericParameterList.hasParameterPack, std::move(methods), startTok.loc);
     }
 
     NodePtr<Statement> Parser::parseComponentDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
     {
         Token startTok = consume(TokenType::kwComponent);
         NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
-        std::vector<NodePtr<Identifier>> genericParameters;
-        bool hasGenericParameterPack = false;
-
-        if (match(TokenType::opLess, true))
-        {
-            auto firstGeneric = makeNodePtr<Identifier>(consume(TokenType::identifier));
-            if (match(TokenType::opRangeInclusive, true))
-                hasGenericParameterPack = true;
-
-            genericParameters.push_back(std::move(firstGeneric));
-            while (match(TokenType::comma, true))
-            {
-                expectElementAfterComma(TokenType::opGreater, "generic parameter");
-                if (hasGenericParameterPack)
-                    utError("Generic parameter packs must be trailing.", currentOrPreviousLocation());
-                auto genericParameter = makeNodePtr<Identifier>(consume(TokenType::identifier));
-                if (match(TokenType::opRangeInclusive, true))
-                    hasGenericParameterPack = true;
-
-                genericParameters.push_back(std::move(genericParameter));
-            }
-
-            consume(TokenType::opGreater);
-        }
+        auto genericParameterList = parseGenericParameterList();
 
         consume(TokenType::leftBrace);
         std::vector<ComponentMember> members;
@@ -1556,7 +1504,7 @@ namespace wio
             }
         }
         consume(TokenType::rightBrace);
-        return makeNodePtr<ComponentDeclaration>(std::move(attributes), std::move(name), std::move(genericParameters), hasGenericParameterPack, std::move(members), startTok.loc);
+        return makeNodePtr<ComponentDeclaration>(std::move(attributes), std::move(name), std::move(genericParameterList.parameters), genericParameterList.hasParameterPack, std::move(members), startTok.loc);
     }
 
     NodePtr<Statement> Parser::parseExtensionDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
@@ -1632,30 +1580,7 @@ namespace wio
     {
         Token startTok = consume(TokenType::kwObject);
         NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
-        std::vector<NodePtr<Identifier>> genericParameters;
-        bool hasGenericParameterPack = false;
-
-        if (match(TokenType::opLess, true))
-        {
-            auto firstGeneric = makeNodePtr<Identifier>(consume(TokenType::identifier));
-            if (match(TokenType::opRangeInclusive, true))
-                hasGenericParameterPack = true;
-
-            genericParameters.push_back(std::move(firstGeneric));
-            while (match(TokenType::comma, true))
-            {
-                expectElementAfterComma(TokenType::opGreater, "generic parameter");
-                if (hasGenericParameterPack)
-                    utError("Generic parameter packs must be trailing.", currentOrPreviousLocation());
-                auto genericParameter = makeNodePtr<Identifier>(consume(TokenType::identifier));
-                if (match(TokenType::opRangeInclusive, true))
-                    hasGenericParameterPack = true;
-
-                genericParameters.push_back(std::move(genericParameter));
-            }
-
-            consume(TokenType::opGreater);
-        }
+        auto genericParameterList = parseGenericParameterList();
 
         consume(TokenType::leftBrace);
         std::vector<ObjectMember> members;
@@ -1731,7 +1656,7 @@ namespace wio
             }
         }
         consume(TokenType::rightBrace);
-        return makeNodePtr<ObjectDeclaration>(std::move(attributes), std::move(name), std::move(genericParameters), hasGenericParameterPack, std::move(members), startTok.loc);
+        return makeNodePtr<ObjectDeclaration>(std::move(attributes), std::move(name), std::move(genericParameterList.parameters), genericParameterList.hasParameterPack, std::move(members), startTok.loc);
     }
 
     NodePtr<Statement> Parser::parseFlagDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)

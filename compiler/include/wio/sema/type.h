@@ -201,6 +201,9 @@ namespace wio
             std::string scopePath;
             WeakRef<Scope> structScope;
             std::vector<std::string> genericParameterNames;
+            // Aligned with genericParameterNames. Defaults may refer to an
+            // earlier generic parameter and are instantiated at the use site.
+            std::vector<Ref<Type>> genericParameterDefaults;
             std::vector<Ref<Type>> genericArguments;
             std::unordered_map<std::string, WeakRef<StructType>> explicitSpecializations;
             WeakRef<StructType> genericPrimaryType;
