@@ -3487,7 +3487,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_backend_failure_test(
         wio_invalid_backend_cpp_line_mapping_native_name
         "${CMAKE_SOURCE_DIR}/tests/invalid/backend_cpp_line_mapping_native_name.wio"
-        "Error \\[.*backend_cpp_line_mapping_native_name\\.wio:6:12\\]:"
+        "Error \\[.*backend_cpp_line_mapping_native_name\\.wio:3:16\\]:"
         --run
     )
 

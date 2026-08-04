@@ -8019,6 +8019,12 @@ namespace wio::codegen
                 emit(")");
             };
 
+            // Keep backend errors in a native symbol expression anchored to the
+            // declaration that introduced that symbol. The exception boundary
+            // adds generated wrapper lines, so relying on the function-level
+            // directive alone would otherwise report non-existent Wio lines.
+            emitSourceDirective(node.location());
+
             if (usesNativeReferenceWrappers)
             {
                 EMIT_TABS();
@@ -8157,6 +8163,7 @@ namespace wio::codegen
                 emit(";");
             }
             emit("\n");
+            emitGeneratedDirective();
 
             for (const auto& preparedArgument : preparedArguments)
             {

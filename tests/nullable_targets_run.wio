@@ -53,6 +53,27 @@ fn Entry() -> i32 {
         cursor = null;
     }
     assert::ExpectEqual(total, 3, "while null checks narrow the loop body");
+
+    let values: Boxed?[] = [Boxed(11), null];
+    assert::ExpectTrue(values[1] == null, "dynamic arrays can contain nullable handles");
+    let first = values[0];
+    if (first != null) {
+        assert::ExpectEqual(first.Value(), 11, "nullable array elements narrow after extraction");
+    }
+
+    let groupedValues: (Boxed?)[] = [null, Boxed(13)];
+    let second = groupedValues[1];
+    if (second != null) {
+        assert::ExpectEqual(second.Value(), 13, "grouped nullable types accept array suffixes");
+    }
+
+    let lookup: Dict<string, Boxed?> = {"missing": null, "found": Boxed(17)};
+    assert::ExpectTrue(lookup.Get("missing").IsSome(), "dictionary option distinguishes a stored null from a missing key");
+    assert::ExpectTrue(lookup.Get("missing").Value() == null, "dictionary options preserve nullable values");
+    let found = lookup.Get("found").Value();
+    if (found != null) {
+        assert::ExpectEqual(found.Value(), 17, "generic containers preserve nullable arguments");
+    }
     console::PrintLine("nullable-targets-ok");
     return 0;
 }

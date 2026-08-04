@@ -781,11 +781,48 @@ namespace wio
     {
         auto finishType = [&](NodePtr<TypeSpecifier> type) -> NodePtr<TypeSpecifier>
         {
-            if (match(TokenType::opQuestion, true))
+            while (true)
             {
-                type->isNullable = true;
-                if (match(TokenType::opQuestion))
-                    utError("A type can only have one nullable suffix '?'.", peek().loc);
+                if (match(TokenType::opQuestion, true))
+                {
+                    if (type->isNullable)
+                        utError("A type can only have one nullable suffix '?'.", previous().loc);
+                    type->isNullable = true;
+                    continue;
+                }
+
+                if (match(TokenType::leftBracket, true))
+                {
+                    const Token leftBracketToken = previous();
+                    consume(TokenType::rightBracket);
+
+                    Token arrayToken {
+                        .type = TokenType::DynamicArray,
+                        .value = "",
+                        .loc = leftBracketToken.loc
+                    };
+                    std::vector<NodePtr<TypeSpecifier>> args;
+                    args.push_back(std::move(type));
+                    type = makeNodePtr<TypeSpecifier>(
+                        std::move(arrayToken),
+                        std::move(args),
+                        nullptr,
+                        0,
+                        false,
+                        false,
+                        false,
+                        leftBracketToken.loc
+                    );
+                    continue;
+                }
+
+                if (match(TokenType::opRangeInclusive, true))
+                {
+                    type->isPackExpansion = true;
+                    continue;
+                }
+
+                break;
             }
             return type;
         };
@@ -943,24 +980,6 @@ namespace wio
         }
 
         auto result = makeNodePtr<TypeSpecifier>(std::move(typeName), std::move(generics), std::move(packIndex), 0, false, false, false, startLoc);
-
-        while (match(TokenType::leftBracket, true))
-        {
-            consume(TokenType::rightBracket);
-
-            Token DynArrayToken{
-                .type = TokenType::DynamicArray,
-                .value ="",
-                .loc = startLoc
-            }; 
-            std::vector<NodePtr<TypeSpecifier>> args;
-            args.push_back(std::move(result));
-
-            result = makeNodePtr<TypeSpecifier>(std::move(DynArrayToken), std::move(args), nullptr, 0, false, false, false, startLoc);
-        }
-
-        if (match(TokenType::opRangeInclusive, true))
-            result->isPackExpansion = true;
 
         return finishType(std::move(result));
     }

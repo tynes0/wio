@@ -10,6 +10,11 @@ realm ffi {
 
     @Native
     @CppHeader("native_resource_owned.h")
+    @CppName(native_resource_owned::MaybeOpen)
+    fn MaybeOpen(shouldOpen: bool, value: i32) -> opaque?;
+
+    @Native
+    @CppHeader("native_resource_owned.h")
     @CppName(native_resource_owned::Read)
     fn Read(handle: opaque) -> i32;
 
@@ -31,8 +36,19 @@ fn ExerciseAutomaticClose() {
 }
 
 fn Entry() -> i32 {
+    let missing = ffi::MaybeOpen(false, 0);
+    assert::ExpectTrue(missing == null, "native nullable opaque returns preserve null");
+
+    let available = ffi::MaybeOpen(true, 7);
+    if (available != null) {
+        let temporaryOwner = resource::MakeOwned<opaque>(available, ffi::Close);
+        assert::ExpectEqual(ffi::Read(temporaryOwner.Value()), 7, "narrowed native handles enter owned resource management");
+        temporaryOwner.Dispose();
+    }
+    assert::ExpectEqual(ffi::CloseCount(), 1, "explicitly disposed native nullable handles close once");
+
     ExerciseAutomaticClose();
-    assert::ExpectEqual(ffi::CloseCount(), 1, "native handles close exactly once at final owner destruction");
+    assert::ExpectEqual(ffi::CloseCount(), 2, "native handles close exactly once at final owner destruction");
     console::PrintLine("native-resource-owned-ok");
     return 0;
 }

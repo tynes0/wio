@@ -11,6 +11,11 @@ namespace native_resource_owned
         return new std::int32_t(value);
     }
 
+    inline void* MaybeOpen(const bool shouldOpen, const std::int32_t value)
+    {
+        return shouldOpen ? Open(value) : nullptr;
+    }
+
     inline std::int32_t Read(const void* handle)
     {
         return *static_cast<const std::int32_t*>(handle);
