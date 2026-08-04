@@ -1,0 +1,17 @@
+use std::assert as assert;
+use std::console as console;
+
+realm ffi {
+    @Native
+    @CppHeader("native_generic_math.h")
+    @CppName(native_generic::DoubleValue)
+    @Instantiate()
+    fn DoubleDefault<T = i32>(value: T) -> T;
+}
+
+fn Entry() -> i32 {
+    let result = ffi::DoubleDefault(21);
+    assert::ExpectEqual(result, 42, "defaulted @Instantiate should materialize i32");
+    console::Print("Generic native defaults: ok");
+    return 0;
+}

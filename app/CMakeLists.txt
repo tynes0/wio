@@ -1448,6 +1448,15 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         --run
     )
 
+    add_wio_output_test(
+        wio_test_generic_native_default_instantiation_run
+        "${CMAKE_SOURCE_DIR}/tests/native/generic_native_default_instantiation_run.wio"
+        "Generic native defaults: ok"
+        --run
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
+    )
+
     add_wio_failure_test(
         wio_invalid_generic_where_constraint_reject
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_where_constraint_reject.wio"

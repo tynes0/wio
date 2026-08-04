@@ -4927,6 +4927,7 @@ namespace wio::sema
         std::vector<std::vector<Ref<Type>>> resolveInstantiateAttributes(SemanticAnalyzer& analyzer,
                                                                          const std::vector<NodePtr<AttributeStatement>>& attributes,
                                                                          const std::vector<std::string>& genericParameterNames,
+                                                                         const std::vector<Ref<Type>>& genericParameterDefaults,
                                                                          const bool hasGenericParameterPack)
         {
             std::vector<std::vector<Ref<Type>>> instantiations;
@@ -4935,20 +4936,23 @@ namespace wio::sema
                 return instantiations;
 
             const size_t fixedCount = getMinimumGenericArgumentCount(genericParameterNames, hasGenericParameterPack);
+            const size_t requiredCount = getRequiredGenericArgumentCount(genericParameterDefaults, fixedCount);
             std::unordered_set<std::string> seenInstantiationSignatures;
             for (const auto* instantiateAttribute : instantiateAttributes)
             {
                 if (!instantiateAttribute)
                     continue;
 
-                if ((!hasGenericParameterPack && instantiateAttribute->args.size() != genericParameterNames.size()) ||
-                    (hasGenericParameterPack && instantiateAttribute->args.size() < fixedCount))
+                if (instantiateAttribute->args.size() < requiredCount ||
+                    (!hasGenericParameterPack && instantiateAttribute->args.size() > fixedCount))
                 {
                     WIO_LOG_ADD_ERROR(
                         instantiateAttribute->location(),
                         hasGenericParameterPack
-                            ? common::formatString("@Instantiate expects at least {} arguments for this generic pack declaration.", fixedCount)
-                            : common::formatString("@Instantiate expects exactly {} arguments.", genericParameterNames.size())
+                            ? common::formatString("@Instantiate expects at least {} arguments for this generic pack declaration.", requiredCount)
+                            : requiredCount == fixedCount
+                                ? common::formatString("@Instantiate expects exactly {} arguments.", fixedCount)
+                                : common::formatString("@Instantiate expects {} to {} arguments.", requiredCount, fixedCount)
                     );
                     continue;
                 }
@@ -4957,8 +4961,9 @@ namespace wio::sema
                 candidateLists.reserve(fixedCount);
                 std::vector<Ref<Type>> concretePackTypes;
                 bool isValidInstantiation = true;
+                const size_t providedFixedCount = std::min(instantiateAttribute->args.size(), fixedCount);
 
-                for (size_t i = 0; i < fixedCount; ++i)
+                for (size_t i = 0; i < providedFixedCount; ++i)
                 {
                     const auto argument = getAttributeTypeArgument(*instantiateAttribute, i);
                     if (!validateGenericConstraintArgument(
@@ -5050,7 +5055,7 @@ namespace wio::sema
 
                 std::function<void(size_t)> expandCandidates = [&](size_t index)
                 {
-                    if (index == candidateLists.size())
+                    if (index == fixedCount)
                     {
                         std::vector<Ref<Type>> fullInstantiation = currentInstantiation;
                         fullInstantiation.insert(fullInstantiation.end(), concretePackTypes.begin(), concretePackTypes.end());
@@ -5074,6 +5079,22 @@ namespace wio::sema
                         }
 
                         instantiations.push_back(std::move(fullInstantiation));
+                        return;
+                    }
+
+                    if (index >= candidateLists.size())
+                    {
+                        GenericBindingSet bindings;
+                        for (size_t bindingIndex = 0; bindingIndex < currentInstantiation.size(); ++bindingIndex)
+                            bindings.directBindings[genericParameterNames[bindingIndex]] = currentInstantiation[bindingIndex];
+                        Ref<Type> defaultType = index < genericParameterDefaults.size()
+                            ? instantiateGenericType(genericParameterDefaults[index], bindings)
+                            : nullptr;
+                        if (!defaultType || defaultType->isUnknown() || containsGenericParameterType(defaultType))
+                            return;
+                        currentInstantiation.push_back(defaultType);
+                        expandCandidates(index + 1);
+                        currentInstantiation.pop_back();
                         return;
                     }
 
@@ -9674,7 +9695,7 @@ namespace wio::sema
                         return;
                     }
 
-                    structReturnType = instantiateGenericStructType(structType, explicitTypeArguments);
+                    structReturnType = instantiateGenericStructType(structType, explicitTypeArguments, node.location());
                     node.callee->refType = structReturnType;
                 }
                 else if (currentExpectedExpressionType_)
@@ -9730,7 +9751,7 @@ namespace wio::sema
                                     return;
                                 }
 
-                                structReturnType = instantiateGenericStructType(structType, expectedStructType->genericArguments);
+                                structReturnType = instantiateGenericStructType(structType, expectedStructType->genericArguments, node.location());
                                 node.callee->refType = structReturnType;
                             }
                         }
@@ -11099,7 +11120,7 @@ namespace wio::sema
 
                 constructorGenericBindings = bestMatch->bindingSet.directBindings;
                 constructorGenericBindingSet = bestMatch->bindingSet;
-                structReturnType = instantiateGenericStructType(constructorStructType, *deducedGenericArguments);
+                structReturnType = instantiateGenericStructType(constructorStructType, *deducedGenericArguments, node.location());
                 node.callee->refType = structReturnType;
             }
 
@@ -12718,6 +12739,7 @@ namespace wio::sema
                     *this,
                     node.attributes,
                     funcSym->genericParameterNames,
+                    funcSym->genericParameterDefaults,
                     funcSym->hasGenericParameterPack
                 );
             }
