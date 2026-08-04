@@ -57,7 +57,9 @@ These documents answer practical workflow questions such as:
 
 ### 3.1 Language And Runtime
 
+- [Wio 0.8 nullability and lifetime specification](./spec/WIO_LANGUAGE_SPEC_0_8.md)
 - [Language reference](./WIO_LANGUAGE_DRAFT.md)
+- [Reference and view lifetimes](./REFERENCE_LIFETIMES.md)
 - [Runtime type model](./WIO_RUNTIME_TYPE_MODEL.md)
 
 Use these when the question is about:

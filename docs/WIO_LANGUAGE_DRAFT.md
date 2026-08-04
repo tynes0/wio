@@ -1,5 +1,11 @@
 # Wio Language Reference
 
+The nullability, initialization, lifecycle, panic, and native exception rules
+for Wio 0.8 are normative in
+[`spec/WIO_LANGUAGE_SPEC_0_8.md`](./spec/WIO_LANGUAGE_SPEC_0_8.md). Where this
+broad reference conflicts with that versioned slice, the 0.8 specification
+wins.
+
 This document reorganizes the current Wio design into a real language-reference
 style document rather than a raw feature list. It is written in English and is
 intended to be detailed enough for future implementation, compiler work, test

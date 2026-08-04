@@ -396,6 +396,9 @@ for (const auto& field : stateType.list_fields())
 
 `TypeDescriptorView` lets the host inspect:
 
+- whether a type is explicitly nullable through `is_nullable()`; for a
+  nullable descriptor, `element_type()` returns the non-null value type
+
 - primitive ABI type
 - logical type name
 - element type for arrays

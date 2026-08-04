@@ -7,6 +7,11 @@ Wio has two non-owning reference types:
 
 Neither type owns or extends the lifetime of the value it points to. Object values remain owning runtime handles; component values remain stack-friendly values.
 
+Borrow nullability is explicit. `ref T?` means a borrow of nullable storage,
+whereas `(ref T)?` means that the borrow itself may be null. The same distinction
+applies to `view`. A nullable borrow must be narrowed before it is read, and a
+borrow of nullable storage observes later assignments to that storage.
+
 ## Borrow origins
 
 The semantic analyzer tracks where every borrow originates:

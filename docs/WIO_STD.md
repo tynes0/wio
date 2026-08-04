@@ -133,6 +133,14 @@ explicit caveat:
 - `std::convert`
 - `std::chars`
 - `std::strings`
+- `std::resource`
+
+`std::resource` provides `Owned<T>` for deterministic, idempotent native
+cleanup and `Borrowed<T>` for explicit non-closing handle transport.
+`Owned<T>.Dispose()` closes early, `Release()` transfers the raw value,
+`OnDestruct` closes a still-live value at final-owner destruction, and
+`LiveResourceCount()` supports leak-oriented tests and diagnostics. Close
+callbacks must not throw or panic.
 
 `std::assert` is a mixed module:
 

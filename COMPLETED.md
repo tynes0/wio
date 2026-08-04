@@ -10,6 +10,32 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## P1-B nullability, lifetime, and failure safety sprint
+
+- [x] Explicit nullable types now use `T?`; object/interface, opaque,
+      function, `ref`, and `view` values are non-null by default. Grouped type
+      syntax distinguishes `ref T?` from `(ref T)?`.
+- [x] Null-flow analysis narrows direct variables through if/else comparisons,
+      short-circuit boolean expressions, while conditions, and early-return
+      guards. Assignment invalidates the proof, and nullable member use without
+      narrowing receives a targeted diagnostic.
+- [x] The initialization and lifecycle matrix is executable: non-null local and
+      global handles require initializers, components copy/destruct per value,
+      objects share identity and destruct at the last strong handle, and
+      `OnDestruct` is restricted to a parameterless void hook.
+- [x] Panic is the unrecoverable path, `Result<T>` remains the recoverable path,
+      panic unwinding runs Wio cleanup, and generated native wrappers translate
+      standard/unknown C++ exceptions into stable Wio runtime failures.
+- [x] `std::resource` ships `Owned<T>`, `Borrowed<T>`, idempotent `Dispose`,
+      `Release`, automatic final-owner close, use-after-dispose protection, and
+      live-resource diagnostics, including a real native opaque-handle test.
+- [x] SDK module descriptors preserve nullable types through the appended
+      `WIO_MODULE_TYPE_DESC_NULLABLE` kind and
+      `TypeDescriptorView::is_nullable()`.
+- [x] The first versioned normative document is published at
+      `docs/spec/WIO_LANGUAGE_SPEC_0_8.md`; completing the full lexical/syntax/
+      resolution specification remains active work.
+
 ## P0 release-blocking correctness sprint
 
 - [x] Cascading diagnostics are stopped at their source. Imported modules with
