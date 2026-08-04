@@ -790,6 +790,13 @@ namespace wio
             return type;
         };
 
+        if (match(TokenType::leftParen, true))
+        {
+            auto groupedType = parseType();
+            consume(TokenType::rightParen);
+            return finishType(std::move(groupedType));
+        }
+
         if (match(TokenType::kwRef))
         {
             const Token refToken = advance();

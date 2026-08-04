@@ -13,22 +13,46 @@ object Boxed {
     }
 }
 
+fn Double(value: i32) -> i32 {
+    return value * 2;
+}
+
+fn GuardedValue(value: Boxed?) -> i32 {
+    if (value == null) {
+        return -1;
+    }
+    return value.Value();
+}
+
 fn Entry() -> i32 {
     mut objectValue: Boxed? = null;
     let numberView: view i32? = null;
     let payload: any = null;
     let handle: opaque? = null;
+    mut callback: (fn(i32) -> i32)? = null;
 
     assert::ExpectTrue(objectValue == null, "nullable object handles support null");
     assert::ExpectTrue(numberView == null, "nullable views support null");
     assert::ExpectTrue(payload == null, "any supports null");
     assert::ExpectTrue(handle == null, "nullable opaque handles support null");
+    assert::ExpectTrue(callback == null, "nullable function values support null");
 
     objectValue = Boxed(7);
     assert::ExpectTrue(objectValue != null, "object handles can transition from null to an object");
     if (objectValue != null) {
         assert::ExpectEqual(objectValue.Value(), 7, "null checks narrow nullable object handles");
     }
+    callback = Double;
+    assert::ExpectTrue(callback != null and callback(9) == 18, "short-circuit conditions narrow nullable functions");
+    assert::ExpectEqual(GuardedValue(objectValue), 7, "returning null guards narrow the following path");
+
+    mut cursor: Boxed? = Boxed(3);
+    mut total = 0;
+    while (cursor != null) {
+        total += cursor.Value();
+        cursor = null;
+    }
+    assert::ExpectEqual(total, 3, "while null checks narrow the loop body");
     console::PrintLine("nullable-targets-ok");
     return 0;
 }

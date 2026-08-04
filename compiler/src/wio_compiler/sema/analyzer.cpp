@@ -795,6 +795,23 @@ namespace wio::sema
             return false;
         }
 
+        bool requiresExplicitNonNullInitialization(const Ref<Type>& type)
+        {
+            Ref<Type> current = unwrapAliasType(type);
+            if (!current || current->isUnknown() || current->kind() == TypeKind::Nullable)
+                return false;
+            if (current->kind() == TypeKind::Reference || current->kind() == TypeKind::Function)
+                return true;
+            if (current->kind() == TypeKind::Primitive)
+                return current.AsFast<PrimitiveType>()->name == "opaque";
+            if (current->kind() == TypeKind::Struct)
+            {
+                auto structType = current.AsFast<StructType>();
+                return structType->isObject || structType->isInterface;
+            }
+            return false;
+        }
+
         bool isMutableReferenceTypeChain(Ref<Type> type)
         {
             Ref<Type> current = unwrapAliasType(type);
@@ -6202,7 +6219,36 @@ namespace wio::sema
     void SemanticAnalyzer::visit(BinaryExpression& node)
     {
         node.left->accept(*this);
+        const auto previousNarrowing = nonNullNarrowedSymbols_;
+        const bool isShortCircuitAnd =
+            node.op.type == TokenType::opLogicalAnd || node.op.type == TokenType::kwAnd;
+        const bool isShortCircuitOr =
+            node.op.type == TokenType::opLogicalOr || node.op.type == TokenType::kwOr;
+        if (isShortCircuitAnd || isShortCircuitOr)
+        {
+            auto comparison = node.left->as<BinaryExpression>();
+            if (comparison &&
+                (comparison->op.type == TokenType::opEqual || comparison->op.type == TokenType::opNotEqual))
+            {
+                const bool leftIsNull = comparison->left->is<NullExpression>();
+                const bool rightIsNull = comparison->right->is<NullExpression>();
+                if (leftIsNull != rightIsNull)
+                {
+                    auto candidate = leftIsNull ? comparison->right : comparison->left;
+                    auto symbol = candidate->is<Identifier>() ? candidate->referencedSymbol.Lock() : nullptr;
+                    Ref<Type> symbolType = symbol ? unwrapAliasType(symbol->type) : nullptr;
+                    const bool trueMeansNonNull = comparison->op.type == TokenType::opNotEqual;
+                    const bool rightExecutesOnTrue = isShortCircuitAnd;
+                    if (symbol && symbolType && symbolType->kind() == TypeKind::Nullable &&
+                        trueMeansNonNull == rightExecutesOnTrue)
+                    {
+                        nonNullNarrowedSymbols_.insert(symbol.Get());
+                    }
+                }
+            }
+        }
         node.right->accept(*this);
+        nonNullNarrowedSymbols_ = previousNarrowing;
 
         const Ref<Type> initialLeftType = node.left->refType.Lock();
         const Ref<Type> initialRightType = node.right->refType.Lock();
@@ -12117,6 +12163,17 @@ namespace wio::sema
                 }
             }
         }
+        else if (sym &&
+                 currentScope_->getKind() != ScopeKind::Struct &&
+                 requiresExplicitNonNullInitialization(sym->type))
+        {
+            WIO_LOG_ADD_ERROR(
+                node.location(),
+                "Non-null type '{}' requires an initializer. Use '{}?' if an empty state is required.",
+                sym->type->toString(),
+                sym->type->toString()
+            );
+        }
     }
 
     void SemanticAnalyzer::visit(TypeAliasDeclaration& node)
@@ -15247,6 +15304,23 @@ namespace wio::sema
             nonNullNarrowedSymbols_.insert(elseNarrowed.Get());
         if (node.elseBranch) node.elseBranch->accept(*this);
         nonNullNarrowedSymbols_ = previousNarrowing;
+
+        const auto definitelyReturns = [&](const auto& self, const NodePtr<Statement>& statement) -> bool
+        {
+            if (!statement)
+                return false;
+            if (statement->is<ReturnStatement>())
+                return true;
+            if (auto block = statement->as<BlockStatement>())
+                return !block->statements.empty() && self(self, block->statements.back());
+            return false;
+        };
+
+        if (!node.elseBranch && definitelyReturns(definitelyReturns, node.thenBranch))
+        {
+            if (auto guardNarrowed = narrowedSymbolForNullComparison(false))
+                nonNullNarrowedSymbols_.insert(guardNarrowed.Get());
+        }
     }
     
     void SemanticAnalyzer::visit(WhileStatement& node)
@@ -15267,9 +15341,26 @@ namespace wio::sema
             }
         }
 
+        const auto previousNarrowing = nonNullNarrowedSymbols_;
+        if (auto comparison = node.condition->as<BinaryExpression>();
+            comparison && comparison->op.type == TokenType::opNotEqual)
+        {
+            const bool leftIsNull = comparison->left->is<NullExpression>();
+            const bool rightIsNull = comparison->right->is<NullExpression>();
+            if (leftIsNull != rightIsNull)
+            {
+                auto candidate = leftIsNull ? comparison->right : comparison->left;
+                auto symbol = candidate->is<Identifier>() ? candidate->referencedSymbol.Lock() : nullptr;
+                Ref<Type> symbolType = symbol ? unwrapAliasType(symbol->type) : nullptr;
+                if (symbol && symbolType && symbolType->kind() == TypeKind::Nullable)
+                    nonNullNarrowedSymbols_.insert(symbol.Get());
+            }
+        }
+
         loopDepth_++;
         if (node.body) node.body->accept(*this);
         loopDepth_--;
+        nonNullNarrowedSymbols_ = previousNarrowing;
     }
 
     void SemanticAnalyzer::visit(ForInStatement& node)

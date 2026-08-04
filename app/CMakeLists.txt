@@ -3445,6 +3445,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "Compiling failed:"
     )
 
+    add_wio_failure_test_clean(
+        wio_invalid_non_null_local_requires_initializer
+        "${CMAKE_SOURCE_DIR}/tests/invalid/non_null_local_requires_initializer.wio"
+        "Non-null type 'Service' requires an initializer"
+        "Compiling failed:"
+    )
+
     add_wio_failure_test(
         wio_invalid_implicit_narrowing_requires_fit
         "${CMAKE_SOURCE_DIR}/tests/invalid/implicit_narrowing_requires_fit.wio"

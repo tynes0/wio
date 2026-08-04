@@ -1,0 +1,7 @@
+object Service {
+}
+
+fn Entry() -> i32 {
+    mut service: Service;
+    return 0;
+}
