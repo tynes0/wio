@@ -2547,6 +2547,7 @@ namespace wio::sema
             switch (current->kind())
             {
             case TypeKind::GenericParameter:
+            case TypeKind::ConstGenericParameter:
             case TypeKind::GenericParameterPack:
                 return true;
             case TypeKind::ValuePackView:
@@ -2584,7 +2585,11 @@ namespace wio::sema
             case TypeKind::Nullable:
                 return containsGenericParameterType(current.AsFast<NullableType>()->valueType);
             case TypeKind::Array:
-                return containsGenericParameterType(current.AsFast<ArrayType>()->elementType);
+            {
+                auto arrayType = current.AsFast<ArrayType>();
+                return containsGenericParameterType(arrayType->elementType) ||
+                       (arrayType->extentType && containsGenericParameterType(arrayType->extentType));
+            }
             case TypeKind::Dictionary:
             {
                 auto dictType = current.AsFast<DictionaryType>();
@@ -2643,6 +2648,11 @@ namespace wio::sema
 
                 return false;
             }
+            case TypeKind::ConstGenericParameter:
+            {
+                auto genericParam = current.AsFast<ConstGenericParameterType>();
+                return std::ranges::find(genericParameterNames, genericParam->name) != genericParameterNames.end();
+            }
             case TypeKind::GenericParameterPack:
             {
                 auto genericParam = current.AsFast<GenericParameterPackType>();
@@ -2681,7 +2691,11 @@ namespace wio::sema
             case TypeKind::Reference:
                 return containsNamedGenericParameterType(current.AsFast<ReferenceType>()->referredType, genericParameterNames);
             case TypeKind::Array:
-                return containsNamedGenericParameterType(current.AsFast<ArrayType>()->elementType, genericParameterNames);
+            {
+                auto arrayType = current.AsFast<ArrayType>();
+                return containsNamedGenericParameterType(arrayType->elementType, genericParameterNames) ||
+                       (arrayType->extentType && containsNamedGenericParameterType(arrayType->extentType, genericParameterNames));
+            }
             case TypeKind::Dictionary:
             {
                 auto dictType = current.AsFast<DictionaryType>();
@@ -2742,6 +2756,14 @@ namespace wio::sema
                 }
                 return;
             }
+            case TypeKind::ConstGenericParameter:
+            {
+                auto genericParam = current.AsFast<ConstGenericParameterType>();
+                if (std::ranges::find(genericParameterNames, genericParam->name) != genericParameterNames.end() &&
+                    !instances.contains(genericParam->name))
+                    instances.emplace(genericParam->name, current.Get());
+                return;
+            }
             case TypeKind::GenericParameterPack:
                 return;
             case TypeKind::ValuePackView:
@@ -2769,8 +2791,13 @@ namespace wio::sema
                 collectGenericParameterInstances(current.AsFast<ReferenceType>()->referredType, genericParameterNames, instances);
                 return;
             case TypeKind::Array:
-                collectGenericParameterInstances(current.AsFast<ArrayType>()->elementType, genericParameterNames, instances);
+            {
+                auto arrayType = current.AsFast<ArrayType>();
+                collectGenericParameterInstances(arrayType->elementType, genericParameterNames, instances);
+                if (arrayType->extentType)
+                    collectGenericParameterInstances(arrayType->extentType, genericParameterNames, instances);
                 return;
+            }
             case TypeKind::Dictionary:
             {
                 auto dictType = current.AsFast<DictionaryType>();
@@ -2828,6 +2855,13 @@ namespace wio::sema
 
                 return false;
             }
+            case TypeKind::ConstGenericParameter:
+            {
+                auto genericParam = current.AsFast<ConstGenericParameterType>();
+                if (auto foundInstance = instances.find(genericParam->name); foundInstance != instances.end())
+                    return foundInstance->second == current.Get();
+                return false;
+            }
             case TypeKind::GenericParameterPack:
                 return true;
             case TypeKind::ValuePackView:
@@ -2857,7 +2891,11 @@ namespace wio::sema
             case TypeKind::Reference:
                 return containsGenericParameterInstance(current.AsFast<ReferenceType>()->referredType, instances);
             case TypeKind::Array:
-                return containsGenericParameterInstance(current.AsFast<ArrayType>()->elementType, instances);
+            {
+                auto arrayType = current.AsFast<ArrayType>();
+                return containsGenericParameterInstance(arrayType->elementType, instances) ||
+                       (arrayType->extentType && containsGenericParameterInstance(arrayType->extentType, instances));
+            }
             case TypeKind::Dictionary:
             {
                 auto dictType = current.AsFast<DictionaryType>();
@@ -3018,6 +3056,16 @@ namespace wio::sema
                 bindings.emplace(name, candidate);
                 return true;
             }
+            if (expected->kind() == TypeKind::ConstGenericParameter)
+            {
+                const std::string& name = expected.AsFast<ConstGenericParameterType>()->name;
+                if (auto found = bindings.find(name); found != bindings.end())
+                    return getGenericSpecializationKey({found->second}) == getGenericSpecializationKey({candidate});
+                if (candidate->kind() != TypeKind::ConstValue && candidate->kind() != TypeKind::ConstGenericParameter)
+                    return false;
+                bindings.emplace(name, candidate);
+                return true;
+            }
             if (expected->kind() != candidate->kind())
                 return false;
 
@@ -3025,6 +3073,8 @@ namespace wio::sema
             {
             case TypeKind::Primitive:
                 return expected.AsFast<PrimitiveType>()->name == candidate.AsFast<PrimitiveType>()->name;
+            case TypeKind::ConstValue:
+                return expected.AsFast<ConstValueType>()->value == candidate.AsFast<ConstValueType>()->value;
             case TypeKind::Reference:
             {
                 auto expectedRef = expected.AsFast<ReferenceType>();
@@ -3090,7 +3140,9 @@ namespace wio::sema
         size_t getSpecializationPatternSpecificity(const Ref<Type>& pattern)
         {
             Ref<Type> type = unwrapAliasType(pattern);
-            if (!type || type->kind() == TypeKind::GenericParameter || type->kind() == TypeKind::GenericParameterPack)
+            if (!type || type->kind() == TypeKind::GenericParameter ||
+                type->kind() == TypeKind::ConstGenericParameter ||
+                type->kind() == TypeKind::GenericParameterPack)
                 return 0;
 
             size_t score = 1;
@@ -3188,6 +3240,7 @@ namespace wio::sema
                 ).AsFast<StructType>();
                 instantiatedType->scopePath = selectedPartialSpecialization->scopePath;
                 instantiatedType->genericParameterNames = selectedPartialSpecialization->genericParameterNames;
+                instantiatedType->genericParameterTypes = selectedPartialSpecialization->genericParameterTypes;
                 instantiatedType->genericParameterDefaults = selectedPartialSpecialization->genericParameterDefaults;
                 instantiatedType->genericArguments = explicitTypeArguments;
                 instantiatedType->genericPrimaryType = structType;
@@ -3196,6 +3249,9 @@ namespace wio::sema
                 instantiatedType->fieldNames = selectedPartialSpecialization->fieldNames;
                 instantiatedType->trustedTypeKeys = selectedPartialSpecialization->trustedTypeKeys;
                 instantiatedType->isFinal = selectedPartialSpecialization->isFinal;
+                instantiatedType->isNativePodComponent = selectedPartialSpecialization->isNativePodComponent;
+                instantiatedType->nativeCppName = selectedPartialSpecialization->nativeCppName;
+                instantiatedType->nativeCppHeader = selectedPartialSpecialization->nativeCppHeader;
                 for (const auto& fieldType : selectedPartialSpecialization->fieldTypes)
                     instantiatedType->fieldTypes.push_back(instantiateGenericType(fieldType, selectedBindings));
                 for (const auto& baseType : selectedPartialSpecialization->baseTypes)
@@ -3219,6 +3275,7 @@ namespace wio::sema
 
             instantiatedType->scopePath = structType->scopePath;
             instantiatedType->genericParameterNames = structType->genericParameterNames;
+            instantiatedType->genericParameterTypes = structType->genericParameterTypes;
             instantiatedType->genericParameterDefaults = structType->genericParameterDefaults;
             instantiatedType->genericArguments = explicitTypeArguments;
             instantiatedType->hasGenericParameterPack = structType->hasGenericParameterPack;
@@ -3285,6 +3342,15 @@ namespace wio::sema
                 }
                 return current;
             }
+            case TypeKind::ConstGenericParameter:
+            {
+                auto genericParam = current.AsFast<ConstGenericParameterType>();
+                if (auto it = bindings.directBindings.find(genericParam->name); it != bindings.directBindings.end())
+                    return it->second;
+                return current;
+            }
+            case TypeKind::ConstValue:
+                return current;
             case TypeKind::GenericParameterPack:
             {
                 auto genericPack = current.AsFast<GenericParameterPackType>();
@@ -3363,10 +3429,21 @@ namespace wio::sema
             case TypeKind::Array:
             {
                 auto arrayType = current.AsFast<ArrayType>();
+                Ref<Type> instantiatedExtent = arrayType->extentType
+                    ? instantiateGenericType(arrayType->extentType, bindings)
+                    : nullptr;
+                size_t concreteSize = arrayType->size;
+                if (instantiatedExtent && instantiatedExtent->kind() == TypeKind::ConstValue)
+                {
+                    const std::string rawValue = common::stripIntegerLiteralTypeSuffix(
+                        instantiatedExtent.AsFast<ConstValueType>()->value);
+                    concreteSize = static_cast<size_t>(std::stoull(rawValue));
+                }
                 return ctx.getOrCreateArrayType(
                     instantiateGenericType(arrayType->elementType, bindings),
                     arrayType->arrayKind,
-                    arrayType->size
+                    concreteSize,
+                    instantiatedExtent
                 );
             }
             case TypeKind::Dictionary:
@@ -3480,6 +3557,130 @@ namespace wio::sema
             }
         }
 
+        bool isConstGenericIntegerType(const Ref<Type>& type)
+        {
+            Ref<Type> current = unwrapAliasType(type);
+            if (!current || current->kind() != TypeKind::Primitive)
+                return false;
+
+            const std::string& name = current.AsFast<PrimitiveType>()->name;
+            return name == "i8" || name == "i16" || name == "i32" || name == "i64" ||
+                   name == "isize" || name == "u8" || name == "u16" || name == "u32" ||
+                   name == "u64" || name == "usize";
+        }
+
+        Ref<Type> createGenericParameterSemanticType(SemanticAnalyzer& analyzer,
+                                                     const NodePtr<Identifier>& parameter,
+                                                     const bool isPack,
+                                                     std::string_view declarationKind)
+        {
+            if (!parameter)
+                return Compiler::get().getTypeContext().getUnknown();
+
+            if (parameter->genericParameterTypeValidated)
+            {
+                if (Ref<Type> previous = parameter->refType.Lock())
+                    return previous;
+            }
+            parameter->genericParameterTypeValidated = true;
+
+            const std::string& name = parameter->token.value;
+            if (!parameter->isConstGenericParameter)
+            {
+                return isPack
+                    ? Compiler::get().getTypeContext().getOrCreateGenericParameterPackType(name)
+                    : Compiler::get().getTypeContext().getOrCreateGenericParameterType(name);
+            }
+
+            if (isPack)
+            {
+                WIO_LOG_ADD_ERROR(parameter->location(), "Const generic parameter packs are not supported.");
+                return Compiler::get().getTypeContext().getUnknown();
+            }
+
+            if (!parameter->genericValueType)
+            {
+                WIO_LOG_ADD_ERROR(parameter->location(), "Const generic parameter '{}' on {} requires an integer value type.", name, declarationKind);
+                return Compiler::get().getTypeContext().getUnknown();
+            }
+
+            parameter->genericValueType->accept(analyzer);
+            Ref<Type> valueType = parameter->genericValueType->refType.Lock();
+            if (!isConstGenericIntegerType(valueType))
+            {
+                WIO_LOG_ADD_ERROR(
+                    parameter->genericValueType->location(),
+                    "Const generic parameter '{}' on {} must use an integer type, but got '{}'.",
+                    name, declarationKind, valueType ? valueType->toString() : "<unknown>"
+                );
+                return Compiler::get().getTypeContext().getUnknown();
+            }
+
+            return Compiler::get().getTypeContext().getOrCreateConstGenericParameterType(name, valueType);
+        }
+
+        std::vector<Ref<Type>> collectGenericParameterSemanticTypes(const std::vector<NodePtr<Identifier>>& parameters)
+        {
+            std::vector<Ref<Type>> result;
+            result.reserve(parameters.size());
+            for (const auto& parameter : parameters)
+                result.push_back(parameter ? parameter->refType.Lock() : nullptr);
+            return result;
+        }
+
+        bool validateGenericArgumentKinds(const std::vector<std::string>& parameterNames,
+                                          const std::vector<Ref<Type>>& parameterTypes,
+                                          const std::vector<Ref<Type>>& arguments,
+                                          const common::Location& location)
+        {
+            bool valid = true;
+            const size_t count = std::min(parameterTypes.size(), arguments.size());
+            for (size_t index = 0; index < count; ++index)
+            {
+                const Ref<Type>& parameterType = parameterTypes[index];
+                const Ref<Type>& argument = arguments[index];
+                if (!parameterType || !argument)
+                    continue;
+
+                const bool expectsValue = parameterType->kind() == TypeKind::ConstGenericParameter;
+                const bool receivesValue = argument->kind() == TypeKind::ConstValue ||
+                                           argument->kind() == TypeKind::ConstGenericParameter;
+                if (expectsValue != receivesValue)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        location,
+                        expectsValue
+                            ? "Generic parameter '{}' expects a compile-time integer value, but got type '{}'."
+                            : "Generic parameter '{}' expects a type, but got compile-time value '{}'.",
+                        index < parameterNames.size() ? parameterNames[index] : "<unknown>",
+                        argument->toString()
+                    );
+                    valid = false;
+                    continue;
+                }
+
+                if (expectsValue)
+                {
+                    auto declared = parameterType.AsFast<ConstGenericParameterType>();
+                    Ref<Type> actualValueType = argument->kind() == TypeKind::ConstValue
+                        ? argument.AsFast<ConstValueType>()->valueType
+                        : argument.AsFast<ConstGenericParameterType>()->valueType;
+                    if (!declared->valueType->isCompatibleWith(actualValueType))
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            location,
+                            "Const generic argument '{}' is not compatible with parameter '{}: {}'.",
+                            argument->toString(),
+                            index < parameterNames.size() ? parameterNames[index] : "<unknown>",
+                            declared->valueType->toString()
+                        );
+                        valid = false;
+                    }
+                }
+            }
+            return valid;
+        }
+
         std::vector<Ref<Type>> resolveGenericParameterDefaults(
             SemanticAnalyzer& analyzer,
             const std::vector<NodePtr<Identifier>>& parameters,
@@ -3507,6 +3708,38 @@ namespace wio::sema
                 parameter->genericDefaultType->accept(analyzer);
                 Ref<Type> defaultType = parameter->genericDefaultType->refType.Lock();
                 defaults[index] = defaultType;
+
+                if (parameter->isConstGenericParameter)
+                {
+                    Ref<Type> declaredParameterType = parameter->refType.Lock();
+                    auto constParameter = declaredParameterType && declaredParameterType->kind() == TypeKind::ConstGenericParameter
+                        ? declaredParameterType.AsFast<ConstGenericParameterType>()
+                        : nullptr;
+                    Ref<Type> defaultValueType = defaultType && defaultType->kind() == TypeKind::ConstValue
+                        ? defaultType.AsFast<ConstValueType>()->valueType
+                        : defaultType && defaultType->kind() == TypeKind::ConstGenericParameter
+                            ? defaultType.AsFast<ConstGenericParameterType>()->valueType
+                            : nullptr;
+                    if (!constParameter || !defaultValueType ||
+                        !constParameter->valueType->isCompatibleWith(defaultValueType))
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            parameter->genericDefaultType->location(),
+                            "Default for const generic parameter '{}' must be an integer constant compatible with '{}'.",
+                            parameter->token.value,
+                            constParameter && constParameter->valueType ? constParameter->valueType->toString() : "<unknown>"
+                        );
+                    }
+                }
+                else if (defaultType && (defaultType->kind() == TypeKind::ConstValue ||
+                                         defaultType->kind() == TypeKind::ConstGenericParameter))
+                {
+                    WIO_LOG_ADD_ERROR(
+                        parameter->genericDefaultType->location(),
+                        "Default for type parameter '{}' must be a type, not a const value.",
+                        parameter->token.value
+                    );
+                }
 
                 std::unordered_map<std::string, const Type*> referencedParameters;
                 collectGenericParameterInstances(defaultType, parameterNames, referencedParameters);
@@ -3634,6 +3867,21 @@ namespace wio::sema
                 return true;
             }
 
+            if (resolvedExpected->kind() == TypeKind::ConstGenericParameter)
+            {
+                if (resolvedActual->kind() != TypeKind::ConstValue &&
+                    resolvedActual->kind() != TypeKind::ConstGenericParameter)
+                    return false;
+
+                auto genericParam = resolvedExpected.AsFast<ConstGenericParameterType>();
+                if (auto it = bindings.find(genericParam->name); it != bindings.end())
+                    return it->second->isCompatibleWith(resolvedActual) &&
+                           resolvedActual->isCompatibleWith(it->second);
+
+                bindings.emplace(genericParam->name, resolvedActual);
+                return true;
+            }
+
             if (resolvedExpected->kind() == TypeKind::GenericParameterPack)
                 return resolvedActual->kind() == TypeKind::GenericParameterPack &&
                        resolvedExpected.AsFast<GenericParameterPackType>()->name == resolvedActual.AsFast<GenericParameterPackType>()->name;
@@ -3699,7 +3947,20 @@ namespace wio::sema
                 if (actualArray->arrayKind == ArrayType::ArrayKind::Dynamic)
                     return false;
 
-                if (actualArray->size > expectedArray->size)
+                Ref<Type> expectedExtent = expectedArray->extentType;
+                Ref<Type> actualExtent = actualArray->extentType;
+                if (!actualExtent)
+                {
+                    actualExtent = Compiler::get().getTypeContext().getOrCreateConstValueType(
+                        std::to_string(actualArray->size), Compiler::get().getTypeContext().getUSize());
+                }
+
+                if (expectedExtent)
+                {
+                    if (!deduceGenericBindings(expectedExtent, actualExtent, bindings))
+                        return false;
+                }
+                else if (actualArray->size > expectedArray->size)
                     return false;
 
                 return deduceGenericBindings(expectedArray->elementType, actualArray->elementType, bindings);
@@ -4040,7 +4301,7 @@ namespace wio::sema
             const auto* specializationAttribute = specializationAttributes.front();
             if (!specializationAttribute || specializationAttribute->args.empty())
             {
-                WIO_LOG_ADD_ERROR(declarationLocation, "@Specialize expects at least one concrete type argument.");
+                WIO_LOG_ADD_ERROR(declarationLocation, "@Specialize expects at least one concrete generic argument.");
                 return {};
             }
 
@@ -4057,7 +4318,7 @@ namespace wio::sema
                 {
                     WIO_LOG_ADD_ERROR(
                         specializationAttribute->location(),
-                        "@Specialize arguments must be concrete types."
+                        "@Specialize arguments must be concrete types or compile-time integer values."
                     );
                     arguments.push_back(Compiler::get().getTypeContext().getUnknown());
                     continue;
@@ -4070,7 +4331,7 @@ namespace wio::sema
                 {
                     WIO_LOG_ADD_ERROR(
                         typeSpecifier->location(),
-                        "@Specialize arguments must be fully concrete types."
+                        "@Specialize arguments must be fully concrete types or compile-time integer values."
                     );
                     argumentType = Compiler::get().getTypeContext().getUnknown();
                 }
@@ -5317,6 +5578,7 @@ namespace wio::sema
                 return typeName != "void" && typeName != "string" && typeName != "object";
             }
             case TypeKind::GenericParameter:
+            case TypeKind::ConstGenericParameter:
                 return allowGenericPlaceholders;
             case TypeKind::Array:
             {
@@ -5689,9 +5951,8 @@ namespace wio::sema
                     node.hasGenericParameterPack &&
                     genericIndex + 1 == node.genericParameters.size();
 
-                Ref<Type> parameterType = isGenericParameterPack
-                    ? Compiler::get().getTypeContext().getOrCreateGenericParameterPackType(parameterName)
-                    : Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
+                Ref<Type> parameterType = createGenericParameterSemanticType(
+                    *this, genericParameter, isGenericParameterPack, "generic declaration");
                 functionGenericScope.emplace(
                     parameterName,
                     isGenericParameterPack
@@ -6248,6 +6509,14 @@ namespace wio::sema
             return true;
         };
 
+        if (node.name.type == TokenType::integerLiteral)
+        {
+            IntegerResult parsed = common::getInteger(node.name.value);
+            Ref<Type> valueType = Type::getTypeFromIntegerResult(parsed);
+            node.refType = Compiler::get().getTypeContext().getOrCreateConstValueType(node.name.value, valueType);
+            return;
+        }
+
         if (node.name.type == TokenType::kwFn)
         {
             node.generics[0]->accept(*this);
@@ -6328,7 +6597,20 @@ namespace wio::sema
             if (node.name.type == TokenType::StaticArray)
             {
                 node.generics[0]->accept(*this);
-                type = Compiler::get().getTypeContext().getOrCreateArrayType(node.generics[0]->refType.Lock(), ArrayType::ArrayKind::Static, node.size);
+                Ref<Type> extentType = nullptr;
+                if (node.arrayExtent)
+                {
+                    node.arrayExtent->accept(*this);
+                    extentType = node.arrayExtent->refType.Lock();
+                    if (!extentType ||
+                        (extentType->kind() != TypeKind::ConstGenericParameter && extentType->kind() != TypeKind::ConstValue))
+                    {
+                        WIO_LOG_ADD_ERROR(node.arrayExtent->location(), "Static array extent must be an integer const generic parameter or integer literal.");
+                        extentType = Compiler::get().getTypeContext().getUnknown();
+                    }
+                }
+                type = Compiler::get().getTypeContext().getOrCreateArrayType(
+                    node.generics[0]->refType.Lock(), ArrayType::ArrayKind::Static, node.size, extentType);
             }
             else if (node.name.type == TokenType::DynamicArray)
             {
@@ -6345,6 +6627,34 @@ namespace wio::sema
             {
                 if (auto sym = resolveQualifiedSymbol(currentScope_, node.name.value))
                 {
+                    if (sym->kind == SymbolKind::Variable && sym->flags.get_isConst())
+                    {
+                        auto declarationIt = variableDeclarationsBySymbol_.find(sym.Get());
+                        if (declarationIt == variableDeclarationsBySymbol_.end() ||
+                            !declarationIt->second || !declarationIt->second->initializer)
+                        {
+                            WIO_LOG_ADD_ERROR(node.location(), "Const generic argument '{}' has no evaluable initializer.", node.name.value);
+                            node.refType = Compiler::get().getTypeContext().getUnknown();
+                            return;
+                        }
+
+                        std::unordered_set<const Symbol*> activeSymbols;
+                        auto value = tryEvaluateStaticIntegerExpression(
+                            declarationIt->second->initializer,
+                            variableDeclarationsBySymbol_,
+                            activeSymbols);
+                        if (!value || *value < 0 || !isConstGenericIntegerType(sym->type))
+                        {
+                            WIO_LOG_ADD_ERROR(node.location(), "Const generic argument '{}' must evaluate to a non-negative integer.", node.name.value);
+                            node.refType = Compiler::get().getTypeContext().getUnknown();
+                            return;
+                        }
+
+                        node.refType = Compiler::get().getTypeContext().getOrCreateConstValueType(
+                            std::to_string(*value), sym->type);
+                        return;
+                    }
+
                     std::vector<Ref<Type>> explicitTypeArguments;
                     explicitTypeArguments.reserve(node.generics.size());
                     for (auto& genericArgument : node.generics)
@@ -6358,6 +6668,16 @@ namespace wio::sema
                         auto structType = sym->type.AsFast<StructType>();
                         if (!structType->genericParameterNames.empty())
                         {
+                            if (!validateGenericArgumentKinds(
+                                    structType->genericParameterNames,
+                                    structType->genericParameterTypes,
+                                    explicitTypeArguments,
+                                    node.location()))
+                            {
+                                type = Compiler::get().getTypeContext().getUnknown();
+                                node.refType = type;
+                                return;
+                            }
                             const size_t fixedArgumentCount = getMinimumGenericArgumentCount(
                                 structType->genericParameterNames,
                                 structType->hasGenericParameterPack
@@ -6418,6 +6738,16 @@ namespace wio::sema
                     {
                         if (!sym->genericParameterNames.empty())
                         {
+                            if (!validateGenericArgumentKinds(
+                                    sym->genericParameterNames,
+                                    sym->genericParameterTypes,
+                                    explicitTypeArguments,
+                                    node.location()))
+                            {
+                                type = Compiler::get().getTypeContext().getUnknown();
+                                node.refType = type;
+                                return;
+                            }
                             const size_t fixedArgumentCount = getMinimumGenericArgumentCount(
                                 sym->genericParameterNames,
                                 sym->hasGenericParameterPack
@@ -8389,6 +8719,20 @@ namespace wio::sema
                 }
             }
 
+            for (auto& genericTypeParameterScope : std::ranges::reverse_view(genericTypeParameterScopes_))
+            {
+                auto genericIt = genericTypeParameterScope.find(node.token.value);
+                if (genericIt == genericTypeParameterScope.end() || !genericIt->second ||
+                    (genericIt->second->kind() != TypeKind::ConstGenericParameter &&
+                     genericIt->second->kind() != TypeKind::ConstValue))
+                    continue;
+
+                node.refType = genericIt->second->kind() == TypeKind::ConstGenericParameter
+                    ? genericIt->second.AsFast<ConstGenericParameterType>()->valueType
+                    : genericIt->second.AsFast<ConstValueType>()->valueType;
+                return;
+            }
+
             WIO_LOG_ADD_ERROR(node.location(), "Undefined symbol: '{}'", node.token.value);
             node.refType = Compiler::get().getTypeContext().getUnknown();
             return;
@@ -9505,6 +9849,18 @@ namespace wio::sema
         {
             explicitTypeArgument->accept(*this);
             explicitTypeArguments.push_back(explicitTypeArgument->refType.Lock());
+        }
+
+        if (calleeSym && calleeSym->kind == SymbolKind::Function &&
+            !explicitTypeArguments.empty() && !calleeSym->genericParameterNames.empty() &&
+            !validateGenericArgumentKinds(
+                calleeSym->genericParameterNames,
+                calleeSym->genericParameterTypes,
+                explicitTypeArguments,
+                node.location()))
+        {
+            node.refType = Compiler::get().getTypeContext().getUnknown();
+            return;
         }
 
         if (auto* memberAccess = node.callee->as<MemberAccessExpression>();
@@ -12625,9 +12981,8 @@ namespace wio::sema
                 const bool isGenericParameterPack =
                     node.hasGenericParameterPack &&
                     genericIndex + 1 == node.genericParameters.size();
-                Ref<Type> parameterType = isGenericParameterPack
-                    ? Compiler::get().getTypeContext().getOrCreateGenericParameterPackType(parameterName)
-                    : Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
+                Ref<Type> parameterType = createGenericParameterSemanticType(
+                    *this, genericParameter, isGenericParameterPack, "generic declaration");
                 genericParameter->refType = parameterType;
                 scope.emplace(parameterName, parameterType);
             }
@@ -12666,6 +13021,7 @@ namespace wio::sema
         Ref<Symbol> aliasSym = createSymbol(node.name->token.value, aliasType, SymbolKind::TypeAlias, node.location());
         aliasSym->aliasTargetType = aliasedType;
         aliasSym->genericParameterNames = genericParameterNames;
+        aliasSym->genericParameterTypes = collectGenericParameterSemanticTypes(node.genericParameters);
         aliasSym->genericParameterDefaults = std::move(genericParameterDefaults);
         aliasSym->hasGenericParameterPack = node.hasGenericParameterPack;
 
@@ -12701,9 +13057,8 @@ namespace wio::sema
                     node.hasGenericParameterPack &&
                     genericIndex + 1 == node.genericParameters.size();
 
-                Ref<Type> parameterType = isGenericParameterPack
-                    ? Compiler::get().getTypeContext().getOrCreateGenericParameterPackType(parameterName)
-                    : Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
+                Ref<Type> parameterType = createGenericParameterSemanticType(
+                    *this, genericParameter, isGenericParameterPack, "generic declaration");
                 genericParameter->refType = parameterType;
                 scope.emplace(parameterName, parameterType);
             }
@@ -12765,6 +13120,7 @@ namespace wio::sema
                 if (genericParameter)
                     funcSym->genericParameterNames.push_back(genericParameter->token.value);
             }
+            funcSym->genericParameterTypes = collectGenericParameterSemanticTypes(node.genericParameters);
             funcSym->hasGenericParameterPack = node.hasGenericParameterPack;
             funcSym->genericParameterDefaults = std::move(genericParameterDefaults);
             currentScope_->define(node.name->token.value, funcSym);
@@ -13929,9 +14285,8 @@ namespace wio::sema
                 const bool isGenericParameterPack =
                     node.hasGenericParameterPack &&
                     genericIndex + 1 == node.genericParameters.size();
-                Ref<Type> parameterType = isGenericParameterPack
-                    ? Compiler::get().getTypeContext().getOrCreateGenericParameterPackType(parameterName)
-                    : Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
+                Ref<Type> parameterType = createGenericParameterSemanticType(
+                    *this, genericParameter, isGenericParameterPack, "generic declaration");
                 genericParameter->refType = parameterType;
                 scope.emplace(parameterName, parameterType);
             }
@@ -13971,6 +14326,8 @@ namespace wio::sema
             interfaceSym->innerScope = interfaceScope;
             interfaceSym->flags.set_isInterface(true);
             interfaceSym->genericParameterNames = interfaceType.AsFast<StructType>()->genericParameterNames;
+            interfaceType.AsFast<StructType>()->genericParameterTypes = collectGenericParameterSemanticTypes(node.genericParameters);
+            interfaceSym->genericParameterTypes = interfaceType.AsFast<StructType>()->genericParameterTypes;
             interfaceType.AsFast<StructType>()->genericParameterDefaults = genericParameterDefaults;
             interfaceSym->genericParameterDefaults = std::move(genericParameterDefaults);
             interfaceSym->hasGenericParameterPack = node.hasGenericParameterPack;
@@ -14142,9 +14499,8 @@ namespace wio::sema
                 const bool isGenericParameterPack =
                     node.hasGenericParameterPack &&
                     genericIndex + 1 == node.genericParameters.size();
-                Ref<Type> parameterType = isGenericParameterPack
-                    ? Compiler::get().getTypeContext().getOrCreateGenericParameterPackType(parameterName)
-                    : Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
+                Ref<Type> parameterType = createGenericParameterSemanticType(
+                    *this, genericParameter, isGenericParameterPack, "generic declaration");
                 genericParameter->refType = parameterType;
                 scope.emplace(parameterName, parameterType);
             }
@@ -14162,13 +14518,6 @@ namespace wio::sema
             if (isExplicitSpecialization)
             {
                 const bool hasDeclarationLevelNativeInterop = hasAttribute(node.attributes, Attribute::Native);
-                if (hasDeclarationLevelNativeInterop)
-                {
-                    WIO_LOG_ADD_ERROR(
-                        node.location(),
-                        "@Specialize cannot be combined with declaration-level @Native component interop."
-                    );
-                }
 
                 auto specializationScope = buildGenericTypeParameterScope();
                 genericTypeParameterScopes_.push_back(specializationScope);
@@ -14201,12 +14550,15 @@ namespace wio::sema
                     {
                         WIO_LOG_ADD_ERROR(node.location(), "@Specialize target '{}' is not generic.", node.name->token.value);
                     }
-                    else if (genericPrimaryType->isNativePodComponent)
-                    {
-                        WIO_LOG_ADD_ERROR(node.location(), "@Specialize is not yet supported for declaration-level @Native components.");
-                    }
                     else
                     {
+                        if (hasDeclarationLevelNativeInterop && !genericPrimaryType->isNativePodComponent)
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                node.location(),
+                                "A declaration-level @Native specialization requires an @Native generic component primary. Native ABI identity cannot begin at a specialization."
+                            );
+                        }
                         const size_t minimumArgumentCount = getMinimumGenericArgumentCount(
                             genericPrimaryType->genericParameterNames,
                             genericPrimaryType->hasGenericParameterPack
@@ -14230,7 +14582,7 @@ namespace wio::sema
                         }
                         else
                         {
-                            specializationCanRegister = !hasDeclarationLevelNativeInterop && std::ranges::all_of(
+                            specializationCanRegister = std::ranges::all_of(
                                 specializationArguments,
                                 [](const Ref<Type>& type)
                                 {
@@ -14271,19 +14623,32 @@ namespace wio::sema
                 structType.AsFast<StructType>()->hasGenericParameterPack = node.hasGenericParameterPack;
             }
             structType.AsFast<StructType>()->isFinal = hasAttribute(node.attributes, Attribute::Final);
-            const bool isNativePodComponent = hasAttribute(node.attributes, Attribute::Native);
+            const bool isNativePodComponent = isExplicitSpecialization && genericPrimaryType
+                ? genericPrimaryType->isNativePodComponent
+                : hasAttribute(node.attributes, Attribute::Native);
             structType.AsFast<StructType>()->isNativePodComponent = isNativePodComponent;
-            structType.AsFast<StructType>()->nativeCppName = node.name ? node.name->token.value : "";
-            structType.AsFast<StructType>()->nativeCppHeader.clear();
+            structType.AsFast<StructType>()->nativeCppName =
+                isExplicitSpecialization && genericPrimaryType
+                    ? genericPrimaryType->nativeCppName
+                    : node.name ? node.name->token.value : "";
+            structType.AsFast<StructType>()->nativeCppHeader =
+                isExplicitSpecialization && genericPrimaryType
+                    ? genericPrimaryType->nativeCppHeader
+                    : "";
 
             if (isNativePodComponent)
             {
+                const bool inheritsNativeMapping = isExplicitSpecialization && genericPrimaryType;
                 if (hasAttribute(node.attributes, Attribute::CppHeader))
                 {
                     auto headerArgs = getAttributeArgs(node.attributes, Attribute::CppHeader);
                     if (headerArgs.size() != 1 || headerArgs.front().type != TokenType::stringLiteral)
                     {
                         WIO_LOG_ADD_ERROR(node.location(), "@CppHeader on a native component expects exactly one string literal argument.");
+                    }
+                    else if (inheritsNativeMapping && headerArgs.front().value != genericPrimaryType->nativeCppHeader)
+                    {
+                        WIO_LOG_ADD_ERROR(node.location(), "A native component specialization must inherit @CppHeader from its generic primary.");
                     }
                     else
                     {
@@ -14307,6 +14672,10 @@ namespace wio::sema
                         else if (!isValidCppSymbolPath(cppNameArg->value, true))
                         {
                             WIO_LOG_ADD_ERROR(node.location(), "@CppName on a native component must be a valid C++ identifier path like foo::bar.");
+                        }
+                        else if (inheritsNativeMapping && cppNameArg->value != genericPrimaryType->nativeCppName)
+                        {
+                            WIO_LOG_ADD_ERROR(node.location(), "A native component specialization must inherit @CppName from its generic primary.");
                         }
                         else
                         {
@@ -14335,6 +14704,8 @@ namespace wio::sema
             Ref<Symbol> compSym = createSymbol(node.name->token.value, structType, SymbolKind::Struct, node.location());
             compSym->innerScope = structScope;
             compSym->genericParameterNames = structType.AsFast<StructType>()->genericParameterNames;
+            structType.AsFast<StructType>()->genericParameterTypes = collectGenericParameterSemanticTypes(node.genericParameters);
+            compSym->genericParameterTypes = structType.AsFast<StructType>()->genericParameterTypes;
             structType.AsFast<StructType>()->genericParameterDefaults = genericParameterDefaults;
             compSym->genericParameterDefaults = std::move(genericParameterDefaults);
             compSym->hasGenericParameterPack = structType.AsFast<StructType>()->hasGenericParameterPack;
@@ -14743,9 +15114,8 @@ namespace wio::sema
                 const bool isGenericParameterPack =
                     node.hasGenericParameterPack &&
                     genericIndex + 1 == node.genericParameters.size();
-                Ref<Type> parameterType = isGenericParameterPack
-                    ? Compiler::get().getTypeContext().getOrCreateGenericParameterPackType(parameterName)
-                    : Compiler::get().getTypeContext().getOrCreateGenericParameterType(parameterName);
+                Ref<Type> parameterType = createGenericParameterSemanticType(
+                    *this, genericParameter, isGenericParameterPack, "generic declaration");
                 genericParameter->refType = parameterType;
                 scope.emplace(parameterName, parameterType);
             }
@@ -14885,6 +15255,8 @@ namespace wio::sema
             Ref<Symbol> objSym = createSymbol(node.name->token.value, structType, SymbolKind::Struct, node.location());
             objSym->innerScope = structScope;
             objSym->genericParameterNames = structType.AsFast<StructType>()->genericParameterNames;
+            structType.AsFast<StructType>()->genericParameterTypes = collectGenericParameterSemanticTypes(node.genericParameters);
+            objSym->genericParameterTypes = structType.AsFast<StructType>()->genericParameterTypes;
             structType.AsFast<StructType>()->genericParameterDefaults = genericParameterDefaults;
             objSym->genericParameterDefaults = std::move(genericParameterDefaults);
             objSym->hasGenericParameterPack = structType.AsFast<StructType>()->hasGenericParameterPack;

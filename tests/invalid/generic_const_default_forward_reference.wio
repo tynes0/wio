@@ -1,0 +1,7 @@
+component Invalid<const N: usize = M, const M: usize = 4> {
+    value: i32;
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

@@ -18,6 +18,8 @@ namespace wio
             Null,       // null literal
             Nullable,   // T?
             GenericParameter, // T
+            ConstGenericParameter, // const N: usize
+            ConstValue, // 4 used as a generic argument
             GenericParameterPack, // Args...
             ValuePackView, // args.array
             TypePackView, // Args.array
@@ -89,6 +91,30 @@ namespace wio
             std::string name;
 
             explicit GenericParameterType(std::string name);
+
+            TypeKind kind() const override;
+            std::string toString() const override;
+            std::string toCppString() const override;
+        };
+
+        struct ConstGenericParameterType : Type
+        {
+            std::string name;
+            Ref<Type> valueType;
+
+            ConstGenericParameterType(std::string name, Ref<Type> valueType);
+
+            TypeKind kind() const override;
+            std::string toString() const override;
+            std::string toCppString() const override;
+        };
+
+        struct ConstValueType : Type
+        {
+            std::string value;
+            Ref<Type> valueType;
+
+            ConstValueType(std::string value, Ref<Type> valueType);
 
             TypeKind kind() const override;
             std::string toString() const override;
@@ -174,8 +200,9 @@ namespace wio
             Ref<Type> elementType;
             ArrayKind arrayKind;
             size_t size;
+            Ref<Type> extentType;
 
-            ArrayType(Ref<Type> elementType, ArrayKind arrayKind, size_t size = 0);
+            ArrayType(Ref<Type> elementType, ArrayKind arrayKind, size_t size = 0, Ref<Type> extentType = nullptr);
             
             TypeKind kind() const override;
             std::string toString() const override;
@@ -201,6 +228,7 @@ namespace wio
             std::string scopePath;
             WeakRef<Scope> structScope;
             std::vector<std::string> genericParameterNames;
+            std::vector<Ref<Type>> genericParameterTypes;
             // Aligned with genericParameterNames. Defaults may refer to an
             // earlier generic parameter and are instantiated at the use site.
             std::vector<Ref<Type>> genericParameterDefaults;
@@ -248,4 +276,4 @@ namespace wio
     }
 }
 
-MakeFrenumWithNamespace(wio::sema, TypeKind, Primitive, Null, Nullable, GenericParameter, GenericParameterPack, ValuePackView, TypePackView, PackStorage, Reference, Array, Dictionary, Function, Struct, Alias)
+MakeFrenumWithNamespace(wio::sema, TypeKind, Primitive, Null, Nullable, GenericParameter, ConstGenericParameter, ConstValue, GenericParameterPack, ValuePackView, TypePackView, PackStorage, Reference, Array, Dictionary, Function, Struct, Alias)

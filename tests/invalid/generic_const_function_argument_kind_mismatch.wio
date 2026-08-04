@@ -1,0 +1,8 @@
+fn Capacity<const N: usize>() -> usize {
+    return N;
+}
+
+fn Entry() -> i32 {
+    let invalid = Capacity<i32>();
+    return invalid fit i32;
+}

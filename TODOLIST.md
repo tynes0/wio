@@ -26,13 +26,7 @@ and later work.
    partial specialization ordering, ambiguity diagnostics, cross-module
    visibility, and defaulted native instantiation are implemented. Default
    value parameters depend on the ordinary const-generic work below; generic
-   component/object export and native component specialization remain under
-   the native/export item.
-
-4. [ ] Expand const generics beyond pack indexing.
-   Support ordinary non-type parameters such as `Vector<T, N>`, value
-   substitution, constraints, constant evaluation, generic static arrays,
-   diagnostics, and ABI/mangling rules.
+   Generic component/object export remains under the native/export item.
 
 5. [~] Expand variadic and compile-time metaprogramming.
    `AllSame`, `IndexOf`, and `UniqueCount` now complement the existing pack
@@ -142,10 +136,11 @@ and later work.
    overload naming, documentation, conditional compilation, and incremental
    regeneration without destroying manual edits.
 
-4. [ ] Complete generic native/export support.
-   Resolve the current explicit rejections for native component
-   specialization and generic component/object export. Define concrete
-   instantiation lists, mangling, SDK generation, and ABI stability.
+4. [~] Complete generic native/export support.
+   Native generic POD components, type/value C++ template aliases, and native
+   component specialization now follow the versioned 0.10 ABI contract.
+   Generic component/object export, concrete SDK instantiation tables, and
+   cross-toolchain ABI conformance remain.
 
 5. [ ] Complete SDK dynamic field support.
    Remove the current runtime “not yet supported” paths for dynamic field

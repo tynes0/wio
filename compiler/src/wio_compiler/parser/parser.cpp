@@ -21,6 +21,7 @@ namespace wio
         {
             return token.isIdentifier() ||
                    token.isType() ||
+                   token.type == TokenType::integerLiteral ||
                    token.type == TokenType::kwRef ||
                    token.type == TokenType::kwView ||
                    token.type == TokenType::kwFn ||
@@ -595,16 +596,30 @@ namespace wio
         std::vector<NodePtr<TypeSpecifier>> typeArguments;
         if (!match(TokenType::opGreater))
         {
-            typeArguments.push_back(parseType());
+            typeArguments.push_back(parseGenericArgument());
             while (match(TokenType::comma, true))
             {
                 expectElementAfterComma(TokenType::opGreater, "explicit type argument");
-                typeArguments.push_back(parseType());
+                typeArguments.push_back(parseGenericArgument());
             }
         }
 
         consume(TokenType::opGreater);
         return typeArguments;
+    }
+
+    NodePtr<TypeSpecifier> Parser::parseGenericArgument()
+    {
+        if (match(TokenType::integerLiteral))
+        {
+            Token value = advance();
+            const auto location = value.loc;
+            return makeNodePtr<TypeSpecifier>(
+                std::move(value), std::vector<NodePtr<TypeSpecifier>>{}, nullptr,
+                0, false, false, false, location);
+        }
+
+        return parseType();
     }
 
     NodePtr<Expression> Parser::parseArrayLiteral()
@@ -866,6 +881,7 @@ namespace wio
             auto innerType = parseType();
 
             size_t size = 0;
+            NodePtr<TypeSpecifier> arrayExtent = nullptr;
             if (match(TokenType::semicolon, true))
             {
                 if (match(TokenType::integerLiteral))
@@ -873,14 +889,11 @@ namespace wio
                     const Token sizeToken = advance();
                     size = traits::IntegerTraits<size_t>::IntegerResultCastedAs(getInteger(sizeToken.value));
                 }
-                else if (match(TokenType::floatLiteral))
-                {
-                    const Token sizeToken = advance();
-                    size = static_cast<size_t>(traits::FloatTraits<f64>::FloatResultCastedAs(getFloat(sizeToken.value)));
-                }
+                else if (match(TokenType::identifier))
+                    arrayExtent = parseGenericArgument();
                 else
                 {
-                    utError("Static array types must declare a size after ';'.", currentOrPreviousLocation());
+                    utError("Static array extents must be a non-negative integer literal or const generic parameter.", currentOrPreviousLocation());
                 }
             }
             
@@ -894,7 +907,9 @@ namespace wio
             std::vector<NodePtr<TypeSpecifier>> generics;
             generics.push_back(std::move(innerType));
 
-            return finishType(makeNodePtr<TypeSpecifier>(arrayToken, std::move(generics), nullptr, size, false, false, false, leftBracketToken.loc));
+            auto arrayType = makeNodePtr<TypeSpecifier>(arrayToken, std::move(generics), nullptr, size, false, false, false, leftBracketToken.loc);
+            arrayType->arrayExtent = std::move(arrayExtent);
+            return finishType(std::move(arrayType));
         }
 
         if (match(TokenType::kwFn))
@@ -961,11 +976,11 @@ namespace wio
 
         if (match(TokenType::opLess, true))
         {
-            generics.push_back(parseType());
+            generics.push_back(parseGenericArgument());
             while (match(TokenType::comma, true))
             {
                 expectElementAfterComma(TokenType::opGreater, "generic type argument");
-                generics.push_back(parseType());
+                generics.push_back(parseGenericArgument());
             }
 
             consume(TokenType::opGreater);
@@ -1089,7 +1104,7 @@ namespace wio
                     if (canStartAttributeTypeArgument(peek()))
                     {
                         const size_t typeStartIndex = currentTokenIndex_;
-                        auto parsedType = parseType();
+                        auto parsedType = parseGenericArgument();
                         const size_t typeEndIndex = currentTokenIndex_;
 
                         std::string rawArgument;
@@ -1186,17 +1201,26 @@ namespace wio
         bool sawDefault = false;
         while (true)
         {
+            const bool isConstParameter = match(TokenType::kwConst, true);
             auto parameter = makeNodePtr<Identifier>(consume(TokenType::identifier));
+            parameter->isConstGenericParameter = isConstParameter;
+            if (isConstParameter)
+            {
+                consume(TokenType::opColon);
+                parameter->genericValueType = parseType();
+            }
             const bool isPack = match(TokenType::opRangeInclusive, true);
             if (isPack)
             {
+                if (isConstParameter)
+                    utError("Const generic parameter packs are not supported.", parameter->location());
                 result.hasParameterPack = true;
                 if (match(TokenType::opAssign, false))
                     utError("Generic parameter packs cannot have default arguments.", peek().loc);
             }
             else if (match(TokenType::opAssign, true))
             {
-                parameter->genericDefaultType = parseType();
+                parameter->genericDefaultType = isConstParameter ? parseGenericArgument() : parseType();
                 sawDefault = true;
             }
             else if (sawDefault)

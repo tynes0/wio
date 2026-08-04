@@ -50,7 +50,7 @@ namespace wio::sema
         Ref<Type> getOrCreateNullableType(Ref<Type> valueType);
         
         Ref<Type> getOrCreateReferenceType(Ref<Type> referredType, bool isMutable);
-        Ref<Type> getOrCreateArrayType(Ref<Type> elementType, ArrayType::ArrayKind arrayKind, size_t size = 0);
+        Ref<Type> getOrCreateArrayType(Ref<Type> elementType, ArrayType::ArrayKind arrayKind, size_t size = 0, Ref<Type> extentType = nullptr);
         Ref<Type> getOrCreateFunctionType(Ref<Type> returnType, std::vector<Ref<Type>> paramTypes, bool hasParameterPack = false);
         Ref<Type> getOrCreateDictionaryType(Ref<Type> keyType, Ref<Type> valueType, bool isOrdered = false);
         Ref<Type> getOrCreateTreeType(Ref<Type> keyType, Ref<Type> valueType);
@@ -60,6 +60,8 @@ namespace wio::sema
                                         bool isInterface = false);
         Ref<Type> getOrCreateAliasType(const std::string& name, Ref<Type> aliasedType);
         Ref<Type> getOrCreateGenericParameterType(const std::string& name);
+        Ref<Type> getOrCreateConstGenericParameterType(const std::string& name, Ref<Type> valueType);
+        Ref<Type> getOrCreateConstValueType(std::string value, Ref<Type> valueType);
         Ref<Type> getOrCreateGenericParameterPackType(const std::string& name);
         Ref<Type> getOrCreateValuePackViewType(const std::string& packName, std::vector<Ref<Type>> elementTypes = {});
         Ref<Type> getOrCreateTypePackViewType(const std::string& packName, std::vector<Ref<Type>> elementTypes = {});

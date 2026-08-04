@@ -5,7 +5,10 @@ for Wio 0.8 are normative in
 [`spec/WIO_LANGUAGE_SPEC_0_8.md`](./spec/WIO_LANGUAGE_SPEC_0_8.md). Generic
 defaults, specialization, constraints, and compatibility are normative for
 Wio 0.9 in
-[`spec/WIO_LANGUAGE_SPEC_0_9.md`](./spec/WIO_LANGUAGE_SPEC_0_9.md). Where this
+[`spec/WIO_LANGUAGE_SPEC_0_9.md`](./spec/WIO_LANGUAGE_SPEC_0_9.md). Ordinary
+integer const generics and declaration-level native components are normative
+for Wio 0.10 in
+[`spec/WIO_LANGUAGE_SPEC_0_10.md`](./spec/WIO_LANGUAGE_SPEC_0_10.md). Where this
 broad reference conflicts with a versioned slice, the newest applicable
 versioned specification wins.
 
@@ -1936,6 +1939,8 @@ Current rules:
   holes,
 - the same default-type rules apply to generic aliases, interfaces,
   components, and objects,
+- integer const parameters use `const N: IntegerType`, may have trailing
+  defaults, and share the same left-to-right completion order,
 - explicit call syntax such as `Identity<i32>(42)` is supported for non-pack
   generic functions,
 - generic overload resolution uses parameter-driven deduction first and explicit
@@ -2007,14 +2012,38 @@ Current rules:
   primary must already be visible in the merged scope when its specialization
   is declared,
 - `@Apply(...)` constraints belong on the generic primary declaration,
-- declaration-level native components are not currently specialization targets.
+- declaration-level native component specializations inherit the primary
+  native mapping and refine only Wio's semantic field surface; the primary
+  C++ alias covers every concrete specialization and no alias-template
+  specialization is emitted.
 
 Wio does not currently have static object/component methods. A C++ pattern such
 as `ArgumentConverter<T>::Convert(...)` therefore uses an instance method or a
 free function in current Wio code; explicit type specialization itself is
 supported independently of that static-member surface.
 
-### 13.7 Generic Packs and Pack Storage
+### 13.7 Const Generics
+
+Ordinary integer const parameters are supported on functions, aliases,
+interfaces, components, and objects:
+
+```wio
+component Buffer<T, const N: usize = 4> {
+    values: [T; N];
+}
+
+fn Capacity<const N: usize>() -> usize {
+    return N;
+}
+```
+
+Const arguments may be non-negative integer literals, earlier const
+parameters, or top-level compile-time integer const declarations. They
+participate in identity, substitution, defaults, static-array extents,
+deduction, specialization, and native C++ template mapping. The precise
+contract and exclusions are defined by the 0.10 normative specification.
+
+### 13.8 Generic Packs and Pack Storage
 
 Wio now supports the first broad variadic-generic slice across functions,
 generic aliases, `object`, `component`, and `interface` declarations.
@@ -2136,7 +2165,7 @@ Current v1 limitations:
 - richer pack meta transforms such as `Take`, `Drop`, `Zip`, `MapTypes`, and
   future const-generic indexing remain future work.
 
-### 13.8 `when` Guards
+### 13.9 `when` Guards
 
 Wio supports function-level guards via `when`.
 
@@ -2173,7 +2202,7 @@ fn LogIfPositive(x: i32) when (x > 0) {
 - The fallback expression must be compatible with the function return type.
 - The guard condition must be a boolean, numeric, or reference-like condition.
 
-### 13.8 Lifecycle Functions
+### 13.10 Lifecycle Functions
 
 Wio recognizes special lifecycle names:
 
@@ -2201,7 +2230,7 @@ component Vector3 {
 `OnConstruct(...)` may currently use trailing default parameters and lowers them
 through generated delegating constructors.
 
-### 13.9 `Entry`
+### 13.11 `Entry`
 
 The executable entry point must be named `Entry`.
 

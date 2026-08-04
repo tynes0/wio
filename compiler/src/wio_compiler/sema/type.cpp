@@ -280,6 +280,18 @@ namespace wio::sema
             auto* g2 = static_cast<const GenericParameterType*>(t2);
             return g1->name == g2->name;
         }
+        case TypeKind::ConstGenericParameter:
+        {
+            auto* g1 = static_cast<const ConstGenericParameterType*>(t1);
+            auto* g2 = static_cast<const ConstGenericParameterType*>(t2);
+            return g1->name == g2->name && g1->valueType->isCompatibleWith(g2->valueType);
+        }
+        case TypeKind::ConstValue:
+        {
+            auto* v1 = static_cast<const ConstValueType*>(t1);
+            auto* v2 = static_cast<const ConstValueType*>(t2);
+            return v1->value == v2->value && v1->valueType->isCompatibleWith(v2->valueType);
+        }
         case TypeKind::GenericParameterPack:
         {
             auto* g1 = static_cast<const GenericParameterPackType*>(t1);
@@ -396,7 +408,13 @@ namespace wio::sema
             if (a2->arrayKind == ArrayType::ArrayKind::Dynamic)
                 return false;
 
-            if (a2->size > a1->size) return false; // lhs should be bigger
+            if (a1->extentType || a2->extentType)
+            {
+                if (!a1->extentType || !a2->extentType ||
+                    !a1->extentType->isCompatibleWith(a2->extentType))
+                    return false;
+            }
+            else if (a2->size > a1->size) return false; // lhs should be bigger
             return a1->elementType->isCompatibleWith(a2->elementType);
         }
 
@@ -497,7 +515,11 @@ namespace wio::sema
             case TypeKind::Reference:
                 return containsUnknown(static_cast<const ReferenceType*>(type)->referredType.Get());
             case TypeKind::Array:
-                return containsUnknown(static_cast<const ArrayType*>(type)->elementType.Get());
+            {
+                const auto* arrayType = static_cast<const ArrayType*>(type);
+                return containsUnknown(arrayType->elementType.Get()) ||
+                       (arrayType->extentType && containsUnknown(arrayType->extentType.Get()));
+            }
             case TypeKind::Dictionary:
             {
                 const auto* dictionaryType = static_cast<const DictionaryType*>(type);
@@ -521,6 +543,8 @@ namespace wio::sema
                 return anyPoisoned(static_cast<const PackStorageType*>(type)->elementTypes);
             case TypeKind::Primitive:
             case TypeKind::GenericParameter:
+            case TypeKind::ConstGenericParameter:
+            case TypeKind::ConstValue:
             case TypeKind::GenericParameterPack:
                 return false;
             }
@@ -631,6 +655,46 @@ namespace wio::sema
     std::string GenericParameterType::toCppString() const
     {
         return name;
+    }
+
+    ConstGenericParameterType::ConstGenericParameterType(std::string name, Ref<Type> valueType)
+        : name(std::move(name)), valueType(std::move(valueType))
+    {
+    }
+
+    TypeKind ConstGenericParameterType::kind() const
+    {
+        return TypeKind::ConstGenericParameter;
+    }
+
+    std::string ConstGenericParameterType::toString() const
+    {
+        return "const " + name + ": " + (valueType ? valueType->toString() : "<unknown>");
+    }
+
+    std::string ConstGenericParameterType::toCppString() const
+    {
+        return name;
+    }
+
+    ConstValueType::ConstValueType(std::string value, Ref<Type> valueType)
+        : value(std::move(value)), valueType(std::move(valueType))
+    {
+    }
+
+    TypeKind ConstValueType::kind() const
+    {
+        return TypeKind::ConstValue;
+    }
+
+    std::string ConstValueType::toString() const
+    {
+        return value;
+    }
+
+    std::string ConstValueType::toCppString() const
+    {
+        return value;
     }
 
     GenericParameterPackType::GenericParameterPackType(std::string name)
@@ -896,8 +960,8 @@ namespace wio::sema
         else return "const " + baseTypeStr + "*";
     }
 
-    ArrayType::ArrayType(Ref<Type> elementType, ArrayKind arrayKind, size_t size)
-        : elementType(std::move(elementType)), arrayKind(arrayKind), size(size)
+    ArrayType::ArrayType(Ref<Type> elementType, ArrayKind arrayKind, size_t size, Ref<Type> extentType)
+        : elementType(std::move(elementType)), arrayKind(arrayKind), size(size), extentType(std::move(extentType))
     {
     }
 
@@ -909,7 +973,8 @@ namespace wio::sema
     std::string ArrayType::toString() const
     {
         if (arrayKind == ArrayKind::Static || arrayKind == ArrayKind::Literal)
-            return "[" + elementType->toString() + "; " + std::to_string(size) + "]";
+            return "[" + elementType->toString() + "; " +
+                   (extentType ? extentType->toString() : std::to_string(size)) + "]";
         return elementType->toString() + "[]";
     
     }
@@ -917,7 +982,8 @@ namespace wio::sema
     std::string ArrayType::toCppString() const
     {
         if (arrayKind == ArrayKind::Static)
-            return "wio::SArray<" + elementType->toCppString() + ", " + std::to_string(size) + ">";
+            return "wio::SArray<" + elementType->toCppString() + ", " +
+                   (extentType ? extentType->toCppString() : std::to_string(size)) + ">";
         return "wio::DArray<" + elementType->toCppString() + ">";
     }
 

@@ -38,6 +38,30 @@ Notes:
       `docs/spec/WIO_LANGUAGE_SPEC_0_8.md`; completing the full lexical/syntax/
       resolution specification remains active work.
 
+## P1-D const generics and native component sprint
+
+- [x] Functions, aliases, interfaces, components, and objects accept ordinary
+      integer const parameters such as `<T, const N: usize = 4>`, including
+      trailing defaults and use as read-only values in declaration bodies.
+- [x] Const arguments accept non-negative integer literals, earlier const
+      parameters, and top-level compile-time integer const declarations.
+      Type/value slot mismatches and non-integer const declarations are
+      diagnosed before backend generation.
+- [x] Static arrays support symbolic extents such as `[T; N]`; substitution,
+      constructor matching, literal-size checks, deduction, C++ emission, and
+      generic aliases preserve the concrete extent.
+- [x] Const values participate in generic identity, invariance, exact/partial
+      specialization matching, specificity, ambiguity, and C++ template
+      argument generation.
+- [x] Declaration-level native components now have a single POD-alias contract
+      for both type-only and type/value C++ templates. Native generic component
+      specializations inherit the primary ABI mapping and no longer generate
+      illegal C++ alias-template specializations.
+- [x] The 0.10 normative contract freezes const-generic and native-component
+      rules in `docs/spec/WIO_LANGUAGE_SPEC_0_10.md`.
+- [x] P1-D qualification passed all six focused const-generic/native-component
+      runtime and diagnostic tests, including generated C++ compilation.
+
 ## P1-C generics and type-system sprint
 
 - [x] Generic functions, aliases, interfaces, components, and objects accept

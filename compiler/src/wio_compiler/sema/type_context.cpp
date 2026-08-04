@@ -50,9 +50,9 @@ namespace wio::sema
         return makeType<NullableType>(std::move(valueType));
     }
 
-    Ref<Type> TypeContext::getOrCreateArrayType(Ref<Type> elementType, ArrayType::ArrayKind arrayKind, size_t size)
+    Ref<Type> TypeContext::getOrCreateArrayType(Ref<Type> elementType, ArrayType::ArrayKind arrayKind, size_t size, Ref<Type> extentType)
     {
-        return makeType<ArrayType>(std::move(elementType), arrayKind, size);
+        return makeType<ArrayType>(std::move(elementType), arrayKind, size, std::move(extentType));
     }
     
     Ref<Type> TypeContext::getOrCreateDictionaryType(Ref<Type> keyType, Ref<Type> valueType, bool isOrdered)
@@ -86,6 +86,16 @@ namespace wio::sema
     Ref<Type> TypeContext::getOrCreateGenericParameterType(const std::string& name)
     {
         return makeType<GenericParameterType>(name);
+    }
+
+    Ref<Type> TypeContext::getOrCreateConstGenericParameterType(const std::string& name, Ref<Type> valueType)
+    {
+        return makeType<ConstGenericParameterType>(name, std::move(valueType));
+    }
+
+    Ref<Type> TypeContext::getOrCreateConstValueType(std::string value, Ref<Type> valueType)
+    {
+        return makeType<ConstValueType>(std::move(value), std::move(valueType));
     }
 
     Ref<Type> TypeContext::getOrCreateGenericParameterPackType(const std::string& name)

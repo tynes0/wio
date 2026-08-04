@@ -31,6 +31,7 @@ namespace wio::sema
 
         std::vector<Ref<Symbol>> overloads;
         std::vector<std::string> genericParameterNames;
+        std::vector<Ref<Type>> genericParameterTypes;
         // Aligned with genericParameterNames. Null entries have no default.
         std::vector<Ref<Type>> genericParameterDefaults;
         bool hasGenericParameterPack = false;

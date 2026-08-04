@@ -1,0 +1,68 @@
+use std::assert as assert;
+use std::console as console;
+
+const BaseExtent: usize = 2usize;
+const DerivedExtent: usize = BaseExtent + 3usize;
+
+component Buffer<T, const N: usize = 4> {
+    values: [T; N];
+}
+
+component Tagged<T, const N: usize> {
+    value: T;
+}
+
+@Specialize(T, 4)
+component Tagged<T> {
+    value: T;
+    quartet: bool;
+}
+
+interface Sized<const N: usize> {
+    fn Capacity() -> usize;
+}
+
+@From(Sized<N>)
+object SizedBox<T, const N: usize> {
+    value: T;
+
+    OnConstruct(value: T) {
+        self.value = value;
+    }
+
+    public fn Capacity() -> usize {
+        return N;
+    }
+}
+
+type Fixed<T, const N: usize = 2> = [T; N];
+
+fn Capacity<const N: usize>() -> usize {
+    return N;
+}
+
+fn ReadCapacity<const N: usize>(value: view Sized<N>) -> usize {
+    return value.Capacity();
+}
+
+fn Entry() -> i32 {
+    let three: Buffer<i32, 3> = Buffer<i32, 3>([1, 2, 3]);
+    let defaults: Buffer<i32> = Buffer<i32>([4, 5, 6, 7]);
+    let pair: Fixed<string> = ["left", "right"];
+    let tagged = Tagged<string, 4>("specialized", true);
+    let box = SizedBox<string, 9>("value");
+    let evaluated: Buffer<i32, DerivedExtent> = Buffer<i32, DerivedExtent>([1, 2, 3, 4, 5]);
+
+    assert::ExpectEqual(three.values.Count(), 3usize, "const generic component extent should substitute");
+    assert::ExpectEqual(defaults.values.Count(), 4usize, "const generic defaults should substitute");
+    assert::ExpectEqual(pair.Count(), 2usize, "const generic aliases should substitute");
+    assert::Expect(tagged.quartet, "const-value partial specialization should be selected");
+    assert::ExpectEqual(box.Capacity(), 9usize, "object methods should see their const generic values");
+    assert::ExpectEqual(ReadCapacity<9>(box), 9usize, "interfaces should preserve const generic identity");
+    assert::ExpectEqual(evaluated.values.Count(), 5usize, "const declarations should evaluate in generic argument positions");
+    if Capacity<7>() != 7usize {
+        return 1;
+    }
+    console::Print("Const generics: ok");
+    return 0;
+}

@@ -1,0 +1,8 @@
+component Buffer<T, const N: usize> {
+    values: [T; N];
+}
+
+fn Entry() -> i32 {
+    let invalid: Buffer<i32, string>;
+    return 0;
+}

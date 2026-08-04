@@ -364,6 +364,9 @@ namespace wio
         Token name; // Type name (Ex: Result)
         std::vector<NodePtrUnchecked<TypeSpecifier>> generics; // Generic parameters (Ex: <Texture>)
         NodePtr<Expression> packIndex;
+        // Static-array extents may be ordinary integer literals or const
+        // generic parameters. A null entry keeps the legacy numeric `size`.
+        NodePtrUnchecked<TypeSpecifier> arrayExtent;
         size_t size = 0;
 
         bool isMut = false;
@@ -553,6 +556,11 @@ namespace wio
         // Keeping the default beside the parameter preserves source order and
         // avoids parallel AST vectors drifting out of sync.
         NodePtr<TypeSpecifier> genericDefaultType;
+        // `const N: usize` is represented beside ordinary type parameters so
+        // declaration ordering and defaults continue to share one pipeline.
+        bool isConstGenericParameter = false;
+        bool genericParameterTypeValidated = false;
+        NodePtr<TypeSpecifier> genericValueType;
 
         explicit Identifier(Token _token, common::Location _loc = common::Location::invalid());
         ~Identifier() override;

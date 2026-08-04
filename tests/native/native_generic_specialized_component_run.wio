@@ -1,0 +1,43 @@
+use std::assert as assert;
+use std::console as console;
+
+@Native
+@CppHeader("native_generic_specialized_components.h")
+@CppName(native_specialized::record)
+component Record<T> {
+    value: T;
+}
+
+@Specialize(i32)
+component Record {
+    value: i32;
+    bonus: i32;
+}
+
+@Native
+@CppHeader("native_generic_specialized_components.h")
+@CppName(native_specialized::block)
+component NativeBuffer<T, const N: usize> {
+    values: [T; N];
+}
+
+realm ffi {
+    @Native
+    @CppHeader("native_generic_specialized_components.h")
+    @CppName(native_specialized::Sum)
+    fn Sum(value: Record<i32>) -> i32;
+
+    @Native
+    @CppHeader("native_generic_specialized_components.h")
+    @CppName(native_specialized::SumBlock4)
+    fn SumBlock4(value: NativeBuffer<i32, 4>) -> i32;
+}
+
+fn Entry() -> i32 {
+    let value = Record<i32>(20, 22);
+    assert::ExpectEqual(ffi::Sum(value), 42, "native generic component specialization should preserve the C++ template ABI");
+    let buffer = NativeBuffer<i32, 4>([1, 2, 3, 4]);
+    assert::ExpectEqual(ffi::SumBlock4(buffer), 10, "native components should carry const generic template arguments");
+    console::Print("Native generic component specialization: ok");
+    return 0;
+}

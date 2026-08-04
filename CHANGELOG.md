@@ -4,6 +4,22 @@ All notable user-facing changes to Wio are recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- Added ordinary integer const generics across functions, aliases, interfaces,
+  components, and objects, including defaults, top-level const evaluation,
+  static-array extents, value substitution, specialization, and C++ template
+  argument emission.
+- Published the normative Wio 0.10 const-generic and declaration-level native
+  component specification.
+
+### Changed
+
+- Declaration-level native generic components now support Wio exact/partial
+  specialization while retaining one inherited C++ POD-template ABI mapping.
+- Generic diagnostics now distinguish type arguments from compile-time integer
+  arguments before backend generation.
+
 ## [0.9.0] - 2026-08-04
 
 ### Added

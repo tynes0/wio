@@ -53,6 +53,24 @@ namespace wio::codegen
             return std::string(identifier);
         }
 
+        std::string formatCppTemplateParameter(const NodePtr<Identifier>& parameter, const bool isPack)
+        {
+            if (!parameter)
+                return "typename _wio_missing";
+
+            if (parameter->isConstGenericParameter)
+            {
+                Ref<sema::Type> valueType = parameter->genericValueType
+                    ? parameter->genericValueType->refType.Lock()
+                    : nullptr;
+                return (valueType ? valueType->toCppString() : "std::size_t") +
+                       " " + sanitizeCppIdentifier(parameter->token.value);
+            }
+
+            return std::string(isPack ? "typename... " : "typename ") +
+                   sanitizeCppIdentifier(parameter->token.value);
+        }
+
         Ref<sema::Type> unwrapAliasTypeForCodegen(Ref<sema::Type> type)
         {
             while (type && type->kind() == sema::TypeKind::Alias)
@@ -953,6 +971,7 @@ namespace wio::codegen
             switch (resolvedType->kind())
             {
             case sema::TypeKind::GenericParameter:
+            case sema::TypeKind::ConstGenericParameter:
             case sema::TypeKind::GenericParameterPack:
             case sema::TypeKind::ValuePackView:
             case sema::TypeKind::TypePackView:
@@ -963,7 +982,11 @@ namespace wio::codegen
             case sema::TypeKind::Nullable:
                 return containsGenericParameterTypeForCodegen(resolvedType.AsFast<sema::NullableType>()->valueType);
             case sema::TypeKind::Array:
-                return containsGenericParameterTypeForCodegen(resolvedType.AsFast<sema::ArrayType>()->elementType);
+            {
+                auto arrayType = resolvedType.AsFast<sema::ArrayType>();
+                return containsGenericParameterTypeForCodegen(arrayType->elementType) ||
+                       (arrayType->extentType && containsGenericParameterTypeForCodegen(arrayType->extentType));
+            }
             case sema::TypeKind::Dictionary:
             {
                 auto dictionaryType = resolvedType.AsFast<sema::DictionaryType>();
@@ -1030,6 +1053,7 @@ namespace wio::codegen
 
             instantiatedType->scopePath = structType->scopePath;
             instantiatedType->genericParameterNames = structType->genericParameterNames;
+            instantiatedType->genericParameterTypes = structType->genericParameterTypes;
             instantiatedType->genericArguments = explicitTypeArguments;
             instantiatedType->hasGenericParameterPack = structType->hasGenericParameterPack;
             instantiatedType->fieldNames = structType->fieldNames;
@@ -1096,6 +1120,15 @@ namespace wio::codegen
                 }
                 return current;
             }
+            case sema::TypeKind::ConstGenericParameter:
+            {
+                auto genericParam = current.AsFast<sema::ConstGenericParameterType>();
+                if (auto it = bindings.directBindings.find(genericParam->name); it != bindings.directBindings.end())
+                    return it->second;
+                return current;
+            }
+            case sema::TypeKind::ConstValue:
+                return current;
             case sema::TypeKind::GenericParameterPack:
             {
                 auto genericPack = current.AsFast<sema::GenericParameterPackType>();
@@ -1174,10 +1207,21 @@ namespace wio::codegen
             case sema::TypeKind::Array:
             {
                 auto arrayType = current.AsFast<sema::ArrayType>();
+                Ref<sema::Type> instantiatedExtent = arrayType->extentType
+                    ? instantiateGenericType(arrayType->extentType, bindings)
+                    : nullptr;
+                size_t concreteSize = arrayType->size;
+                if (instantiatedExtent && instantiatedExtent->kind() == sema::TypeKind::ConstValue)
+                {
+                    const std::string rawValue = common::stripIntegerLiteralTypeSuffix(
+                        instantiatedExtent.AsFast<sema::ConstValueType>()->value);
+                    concreteSize = static_cast<size_t>(std::stoull(rawValue));
+                }
                 return ctx.getOrCreateArrayType(
                     instantiateGenericType(arrayType->elementType, bindings),
                     arrayType->arrayKind,
-                    arrayType->size
+                    concreteSize,
+                    instantiatedExtent
                 );
             }
             case sema::TypeKind::Dictionary:
@@ -4355,9 +4399,7 @@ namespace wio::codegen
                     genericParameters[i] &&
                     genericParameters[i]->refType.Lock() &&
                     genericParameters[i]->refType.Lock()->kind() == sema::TypeKind::GenericParameterPack;
-                templateLine += isGenericParameterPack
-                    ? "typename... " + genericParameters[i]->token.value
-                    : "typename " + genericParameters[i]->token.value;
+                templateLine += formatCppTemplateParameter(genericParameters[i], isGenericParameterPack);
                 if (i + 1 < genericParameters.size())
                     templateLine += ", ";
             }
@@ -4760,8 +4802,7 @@ namespace wio::codegen
                         emit(", ");
                     const bool isPack = declaration.hasGenericParameterPack &&
                                         i + 1 == declaration.genericParameters.size();
-                    emit(isPack ? "typename... " : "typename ");
-                    emit(declaration.genericParameters[i]->token.value);
+                    emit(formatCppTemplateParameter(declaration.genericParameters[i], isPack));
                 }
                 emitLine(">");
             }
@@ -4861,7 +4902,15 @@ namespace wio::codegen
                 auto declaration = stmt->template as<ComponentDeclaration>();
                 auto sym = declaration->name->referencedSymbol.Lock();
                 auto componentType = getStructTypeFromSymbol(sym);
-                if (componentType && componentType->isExplicitSpecialization)
+                if (componentType && componentType->isExplicitSpecialization &&
+                    usesNativePodAliasModelForCodegen(componentType))
+                {
+                    // The primary alias already maps every concrete argument
+                    // to the native C++ template. Wio specializations refine
+                    // semantic layout only and must not emit an illegal alias
+                    // template specialization.
+                }
+                else if (componentType && componentType->isExplicitSpecialization)
                 {
                     if (componentType->isPartialSpecialization)
                         emitTemplateForwardDeclarationPrefix(declaration->genericParameters);
@@ -7378,9 +7427,7 @@ namespace wio::codegen
             for (size_t i = 0; i < node.genericParameters.size(); ++i)
             {
                 const bool isGenericParameterPack = node.hasGenericParameterPack && i + 1 == node.genericParameters.size();
-                emit(isGenericParameterPack
-                    ? "typename... " + node.genericParameters[i]->token.value
-                    : "typename " + node.genericParameters[i]->token.value);
+                emit(formatCppTemplateParameter(node.genericParameters[i], isGenericParameterPack));
                 if (i + 1 < node.genericParameters.size())
                     emit(", ");
             }
@@ -7577,9 +7624,7 @@ namespace wio::codegen
                     for (size_t i = 0; i < node.genericParameters.size(); ++i)
                     {
                         const bool isGenericParameterPack = node.hasGenericParameterPack && i + 1 == node.genericParameters.size();
-                        emit(isGenericParameterPack
-                            ? "typename... " + node.genericParameters[i]->token.value
-                            : "typename " + node.genericParameters[i]->token.value);
+                        emit(formatCppTemplateParameter(node.genericParameters[i], isGenericParameterPack));
                         if (i + 1 < node.genericParameters.size())
                             emit(", ");
                     }
@@ -7622,9 +7667,7 @@ namespace wio::codegen
             for (size_t i = 0; i < node.genericParameters.size(); ++i)
             {
                 const bool isGenericParameterPack = node.hasGenericParameterPack && i + 1 == node.genericParameters.size();
-                emit(isGenericParameterPack
-                    ? "typename... " + node.genericParameters[i]->token.value
-                    : "typename " + node.genericParameters[i]->token.value);
+                emit(formatCppTemplateParameter(node.genericParameters[i], isGenericParameterPack));
                 if (i < node.genericParameters.size() - 1)
                     emit(", ");
             }
@@ -8475,9 +8518,7 @@ namespace wio::codegen
             for (size_t i = 0; i < node.genericParameters.size(); ++i)
             {
                 const bool isGenericParameterPack = node.hasGenericParameterPack && i + 1 == node.genericParameters.size();
-                emit(isGenericParameterPack
-                    ? "typename... " + node.genericParameters[i]->token.value
-                    : "typename " + node.genericParameters[i]->token.value);
+                emit(formatCppTemplateParameter(node.genericParameters[i], isGenericParameterPack));
                 if (i + 1 < node.genericParameters.size())
                     emit(", ");
             }
@@ -8534,6 +8575,12 @@ namespace wio::codegen
         auto componentType = getStructTypeFromSymbol(componentSym);
         auto enclosingScope = componentSym && componentSym->innerScope ? componentSym->innerScope->getParent().Lock() : nullptr;
 
+        if (componentType && componentType->isExplicitSpecialization &&
+            usesNativePodAliasModelForCodegen(componentType))
+        {
+            return;
+        }
+
         if (componentType && componentType->isExplicitSpecialization && !componentType->isPartialSpecialization)
         {
             EMIT_TABS();
@@ -8546,9 +8593,7 @@ namespace wio::codegen
             for (size_t i = 0; i < node.genericParameters.size(); ++i)
             {
                 const bool isGenericParameterPack = node.hasGenericParameterPack && i + 1 == node.genericParameters.size();
-                emit(isGenericParameterPack
-                    ? "typename... " + node.genericParameters[i]->token.value
-                    : "typename " + node.genericParameters[i]->token.value);
+                emit(formatCppTemplateParameter(node.genericParameters[i], isGenericParameterPack));
                 if (i + 1 < node.genericParameters.size())
                     emit(", ");
             }
@@ -8770,9 +8815,7 @@ namespace wio::codegen
             for (size_t i = 0; i < node.genericParameters.size(); ++i)
             {
                 const bool isGenericParameterPack = node.hasGenericParameterPack && i + 1 == node.genericParameters.size();
-                emit(isGenericParameterPack
-                    ? "typename... " + node.genericParameters[i]->token.value
-                    : "typename " + node.genericParameters[i]->token.value);
+                emit(formatCppTemplateParameter(node.genericParameters[i], isGenericParameterPack));
                 if (i + 1 < node.genericParameters.size())
                     emit(", ");
             }

@@ -1449,6 +1449,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_generic_const_parameters_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_const_parameters_run.wio"
+        "Const generics: ok"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_generic_where_constraints_run
         "${CMAKE_SOURCE_DIR}/tests/generic_where_constraints_run.wio"
         "Generic where constraints: ok"
@@ -1510,6 +1517,30 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_generic_default_forward_reference
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_default_forward_reference.wio"
+        "defaults may only use earlier parameters"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_const_argument_kind_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_const_argument_kind_mismatch.wio"
+        "expects a compile-time integer value"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_const_function_argument_kind_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_const_function_argument_kind_mismatch.wio"
+        "expects a compile-time integer value"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_const_parameter_requires_integer
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_const_parameter_requires_integer.wio"
+        "must use an integer type"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_const_default_forward_reference
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_const_default_forward_reference.wio"
         "defaults may only use earlier parameters"
     )
 
@@ -1620,6 +1651,15 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/native"
         --backend-arg
         "${CMAKE_SOURCE_DIR}/tests/native/native_generic_pod_array_components.cpp"
+    )
+
+    add_wio_output_test(
+        wio_test_native_generic_specialized_component_run
+        "${CMAKE_SOURCE_DIR}/tests/native/native_generic_specialized_component_run.wio"
+        "Native generic component specialization: ok"
+        --run
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
     )
 
     add_wio_output_test(
@@ -4146,7 +4186,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_generic_specialization_native_component
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_specialization_native_component.wio"
-        "@Specialize cannot be combined with declaration-level @Native component interop\."
+        "A declaration-level @Native specialization requires an @Native generic component primary"
     )
 
     add_wio_failure_test(

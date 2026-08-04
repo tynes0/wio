@@ -52,6 +52,7 @@ namespace wio
         Token parseAttributeArgumentToken();
         
         NodePtr<TypeSpecifier> parseType();
+        NodePtr<TypeSpecifier> parseGenericArgument();
         GenericParameterList parseGenericParameterList();
         NodePtr<AttributeStatement> parseWhereClause(const std::vector<NodePtr<Identifier>>& genericParameters,
                                                      bool hasGenericParameterPack);
