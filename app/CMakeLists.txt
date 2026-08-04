@@ -1457,6 +1457,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/native"
     )
 
+    add_wio_output_test(
+        wio_test_std_meta_pack_algorithms_run
+        "${CMAKE_SOURCE_DIR}/tests/std_meta_pack_algorithms_run.wio"
+        "Std meta pack algorithms: ok"
+        --run
+    )
+
     add_wio_failure_test(
         wio_invalid_generic_where_constraint_reject
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_where_constraint_reject.wio"

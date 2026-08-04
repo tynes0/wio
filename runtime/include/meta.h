@@ -269,6 +269,51 @@ namespace wio::meta
         return (std::is_same_v<T, Ts> || ...);
     }
 
+    template <typename... Ts>
+    constexpr bool AllSameTypeValue() noexcept
+    {
+        if constexpr (sizeof...(Ts) < 2)
+            return true;
+        else
+        {
+            using First = std::tuple_element_t<0, std::tuple<Ts...>>;
+            return (std::is_same_v<First, Ts> && ...);
+        }
+    }
+
+    template <typename T, typename... Ts>
+    constexpr std::ptrdiff_t IndexOfTypeValue() noexcept
+    {
+        std::ptrdiff_t index = 0;
+        std::ptrdiff_t result = -1;
+        ((result < 0 && std::is_same_v<T, Ts> ? result = index : result, ++index), ...);
+        return result;
+    }
+
+    namespace detail
+    {
+        template <typename... Ts>
+        struct UniqueTypeCount;
+
+        template <>
+        struct UniqueTypeCount<> : std::integral_constant<std::size_t, 0>
+        {
+        };
+
+        template <typename Head, typename... Tail>
+        struct UniqueTypeCount<Head, Tail...>
+            : std::integral_constant<std::size_t,
+                UniqueTypeCount<Tail...>::value + (Contains<Head, Tail...> ? 0u : 1u)>
+        {
+        };
+    }
+
+    template <typename... Ts>
+    constexpr std::size_t UniqueTypeCountValue() noexcept
+    {
+        return detail::UniqueTypeCount<Ts...>::value;
+    }
+
     template <template <typename> typename Trait, typename... Ts>
     inline constexpr bool All = (Trait<Ts>::value && ...);
 

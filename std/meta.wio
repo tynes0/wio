@@ -19,6 +19,18 @@ realm std {
         @CppName(wio::meta::ContainsTypeValue)
         fn ContainsType<T, Ts...>() -> bool;
 
+        @Native
+        @CppName(wio::meta::AllSameTypeValue)
+        fn AllSame<Ts...>() -> bool;
+
+        @Native
+        @CppName(wio::meta::IndexOfTypeValue)
+        fn IndexOf<T, Ts...>() -> isize;
+
+        @Native
+        @CppName(wio::meta::UniqueTypeCountValue)
+        fn UniqueCount<Ts...>() -> usize;
+
         fn CountValues<Args...>(args: Args...) -> usize {
             return args.size;
         }
@@ -50,6 +62,18 @@ realm std {
 
             public fn Contains<T>() -> bool {
                 return ContainsType<T, Ts...>();
+            }
+
+            public fn AllSame() -> bool {
+                return std::meta::AllSame<Ts...>();
+            }
+
+            public fn IndexOf<T>() -> isize {
+                return std::meta::IndexOf<T, Ts...>();
+            }
+
+            public fn UniqueCount() -> usize {
+                return std::meta::UniqueCount<Ts...>();
             }
         }
 

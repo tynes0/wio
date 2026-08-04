@@ -1,0 +1,20 @@
+use std::assert as assert;
+use std::console as console;
+use std::meta as meta;
+
+fn Entry() -> i32 {
+    let homogeneous: meta::Types<i32, i32, i32> = meta::Types();
+    let mixed: meta::Types<i32, bool, i32, string, bool> = meta::Types();
+
+    assert::ExpectTrue(meta::AllSame<i32, i32, i32>(), "AllSame positive failed");
+    assert::ExpectFalse(meta::AllSame<i32, i16>(), "AllSame negative failed");
+    assert::ExpectEqual(meta::IndexOf<bool, i32, string, bool>() fit i32, 2, "IndexOf hit failed");
+    assert::ExpectEqual(meta::IndexOf<f32, i32, string, bool>() fit i32, -1, "IndexOf miss failed");
+    assert::ExpectEqual(meta::UniqueCount<i32, bool, i32, string, bool>() fit i32, 3, "UniqueCount failed");
+    assert::ExpectTrue(homogeneous.AllSame(), "Types.AllSame failed");
+    assert::ExpectEqual(mixed.IndexOf<string>() fit i32, 3, "Types.IndexOf failed");
+    assert::ExpectEqual(mixed.UniqueCount() fit i32, 3, "Types.UniqueCount failed");
+
+    console::Print("Std meta pack algorithms: ok");
+    return 0;
+}
