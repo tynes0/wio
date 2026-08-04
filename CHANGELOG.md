@@ -7,7 +7,8 @@ All notable user-facing changes to Wio are recorded here.
 ### Added
 
 - Added explicit nullable types (`T?`), grouped nullable function/borrow types,
-  flow-sensitive null narrowing, and SDK nullable type descriptors.
+  nullable array/generic elements, flow-sensitive null narrowing, and SDK
+  nullable type descriptors.
 - Added deterministic object/component `OnDestruct` coverage and
   `std::resource::Owned<T>` / `Borrowed<T>` with idempotent disposal, release,
   final-owner cleanup, and live-resource diagnostics.
@@ -24,6 +25,8 @@ All notable user-facing changes to Wio are recorded here.
 
 - Inline object/component lifecycle hooks can reference module globals because
   mutable globals receive generated forward declarations.
+- Backend errors in generated native wrappers now map to the Wio native
+  declaration instead of synthetic wrapper line numbers.
 
 ## [0.7.0] - 2026-08-03
 

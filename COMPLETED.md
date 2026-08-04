@@ -14,7 +14,8 @@ Notes:
 
 - [x] Explicit nullable types now use `T?`; object/interface, opaque,
       function, `ref`, and `view` values are non-null by default. Grouped type
-      syntax distinguishes `ref T?` from `(ref T)?`.
+      syntax distinguishes `ref T?` from `(ref T)?`; postfix ordering supports
+      nullable elements in dynamic arrays and generic containers.
 - [x] Null-flow analysis narrows direct variables through if/else comparisons,
       short-circuit boolean expressions, while conditions, and early-return
       guards. Assignment invalidates the proof, and nullable member use without
@@ -28,7 +29,8 @@ Notes:
       standard/unknown C++ exceptions into stable Wio runtime failures.
 - [x] `std::resource` ships `Owned<T>`, `Borrowed<T>`, idempotent `Dispose`,
       `Release`, automatic final-owner close, use-after-dispose protection, and
-      live-resource diagnostics, including a real native opaque-handle test.
+      live-resource diagnostics, including real non-null and nullable native
+      opaque-handle tests.
 - [x] SDK module descriptors preserve nullable types through the appended
       `WIO_MODULE_TYPE_DESC_NULLABLE` kind and
       `TypeDescriptorView::is_nullable()`.

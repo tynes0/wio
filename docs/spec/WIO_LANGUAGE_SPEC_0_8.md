@@ -20,11 +20,12 @@ represents optional domain data and is not interchangeable with `T?`.
 
 ## 2. Nullable types
 
-The grammar adds a postfix nullable type constructor:
+The grammar adds postfix nullable and dynamic-array type constructors. They
+bind from left to right:
 
 ```text
-nullable-type := primary-type [ "?" ]
-grouped-type  := "(" type ")"
+postfix-type := primary-type { "?" | "[]" }
+grouped-type := "(" type ")"
 ```
 
 Examples:
@@ -34,11 +35,19 @@ mut service: Service? = null;
 let handle: opaque? = null;
 let callback: (fn(i32) -> i32)? = null;
 let observer: (view Service)? = null;
+let slots: Service?[] = [Service(), null];
+let index: Dict<string, Service?> = {"current": null};
 ```
 
 `T?` is valid only when `T` is an object/interface handle, `opaque`, a function
 type, or a `ref`/`view` type. It is invalid for primitives, components, strings,
 arrays, dictionaries, and an already-nullable type.
+
+Postfix ordering defines the nullable layer. `Service?[]` and `(Service?)[]`
+are arrays whose elements are nullable handles. `Service[]?` attempts to make
+the array itself nullable and is invalid. Nullable types remain valid as
+generic arguments, so containers and `Option<T>` preserve a nullable element
+type without conflating a stored null with container absence.
 
 Parentheses are semantically important around prefix borrow types:
 
@@ -111,7 +120,8 @@ also contains otherwise-untranslated native exceptions.
 
 Native functions may use nullable pointer/handle declarations explicitly.
 `ref T?` borrows nullable storage; `(ref T)?` is a nullable borrow. Native code
-must honor non-null declarations. Native `ref`/`view` returns remain rejected
+must honor non-null declarations, and an `opaque?` result preserves a native
+null pointer until it is narrowed. Native `ref`/`view` returns remain rejected
 because their lifetime cannot be proven.
 
 `std::resource::Owned<T>` provides idempotent deterministic close, final-owner
