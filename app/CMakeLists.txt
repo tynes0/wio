@@ -1441,6 +1441,25 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         --run
     )
 
+    add_wio_output_test(
+        wio_test_generic_where_constraints_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_where_constraints_run.wio"
+        "Generic where constraints: ok"
+        --run
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_where_constraint_reject
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_where_constraint_reject.wio"
+        "rejects type arguments <string> because of @Apply constraints"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_where_unknown_parameter
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_where_unknown_parameter.wio"
+        "Where clause references an unknown generic parameter 'U'"
+    )
+
     add_wio_failure_test(
         wio_invalid_generic_partial_specialization_ambiguous
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_partial_specialization_ambiguous.wio"

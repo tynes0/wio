@@ -96,6 +96,7 @@ namespace wio
       kwReturn,
       kwIs,
       kwWhen,
+      kwWhere,
       kwAssumed,
    
       /* ===============================
@@ -311,6 +312,7 @@ namespace wio
       { "return",    TokenType::kwReturn },
       { "is",        TokenType::kwIs },
       { "when",      TokenType::kwWhen },
+      { "where",     TokenType::kwWhere },
       { "assumed",   TokenType::kwAssumed },
       
       { "and",       TokenType::kwAnd },

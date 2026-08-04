@@ -1,0 +1,10 @@
+use std::traits as traits;
+
+fn Twice<T>(value: T) -> T where T: traits::IsInteger {
+    return value + value;
+}
+
+fn Entry() -> i32 {
+    let invalid = Twice("no");
+    return 0;
+}

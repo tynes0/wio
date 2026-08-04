@@ -53,6 +53,8 @@ namespace wio
         
         NodePtr<TypeSpecifier> parseType();
         GenericParameterList parseGenericParameterList();
+        NodePtr<AttributeStatement> parseWhereClause(const std::vector<NodePtr<Identifier>>& genericParameters,
+                                                     bool hasGenericParameterPack);
         
         NodePtr<Statement> parseStatement();
         NodePtr<Statement> parseBlockStatement();

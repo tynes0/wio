@@ -95,6 +95,7 @@ namespace wio
        case TokenType::kwReturn: return "kwReturn";
        case TokenType::kwIs: return "kwIs";
        case TokenType::kwWhen: return "kwWhen";
+       case TokenType::kwWhere: return "kwWhere";
        case TokenType::kwAssumed: return "kwAssumed";
    
        /* ===============================

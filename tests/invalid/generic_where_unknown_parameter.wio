@@ -1,0 +1,9 @@
+use std::traits as traits;
+
+fn Invalid<T>(value: T) -> T where U: traits::IsInteger {
+    return value;
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

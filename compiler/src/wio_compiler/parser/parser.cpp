@@ -1217,6 +1217,67 @@ namespace wio
         return result;
     }
 
+    NodePtr<AttributeStatement> Parser::parseWhereClause(
+        const std::vector<NodePtr<Identifier>>& genericParameters,
+        const bool hasGenericParameterPack)
+    {
+        if (!match(TokenType::kwWhere, true))
+            return nullptr;
+
+        const Location whereLocation = previous().loc;
+        if (genericParameters.empty())
+            utError("A where clause requires a generic declaration.", whereLocation);
+
+        std::vector<Token> arguments;
+        std::vector<NodePtr<TypeSpecifier>> typeArguments(genericParameters.size());
+        arguments.reserve(genericParameters.size());
+        for (const auto& parameter : genericParameters)
+            arguments.push_back(Token{TokenType::kwTrue, "true", parameter ? parameter->location() : whereLocation});
+
+        while (true)
+        {
+            Token parameterToken = consume(TokenType::identifier);
+            auto parameterIt = std::ranges::find_if(genericParameters, [&](const NodePtr<Identifier>& parameter)
+            {
+                return parameter && parameter->token.value == parameterToken.value;
+            });
+            if (parameterIt == genericParameters.end())
+                utError("Where clause references an unknown generic parameter '" + parameterToken.value + "'.", parameterToken.loc);
+
+            const size_t parameterIndex = static_cast<size_t>(std::distance(genericParameters.begin(), parameterIt));
+            if (typeArguments[parameterIndex])
+                utError("Where clause repeats generic parameter '" + parameterToken.value + "'.", parameterToken.loc);
+
+            consume(TokenType::opColon);
+            NodePtr<TypeSpecifier> constraint = parseType();
+            if (!constraint->generics.empty())
+                utError("Where-clause constraint names must omit operands; write 'T: Trait' rather than 'T: Trait<T>'.", constraint->location());
+
+            const bool isPack = hasGenericParameterPack && parameterIndex + 1 == genericParameters.size();
+            auto operand = makeNodePtr<TypeSpecifier>(
+                parameterToken,
+                std::vector<NodePtr<TypeSpecifier>>{},
+                nullptr,
+                0,
+                false,
+                false,
+                isPack,
+                parameterToken.loc);
+            constraint->generics.push_back(std::move(operand));
+
+            Token rawConstraint = constraint->name;
+            rawConstraint.value += "<" + parameterToken.value + (isPack ? "...>" : ">");
+            arguments[parameterIndex] = std::move(rawConstraint);
+            typeArguments[parameterIndex] = std::move(constraint);
+
+            if (!match(TokenType::comma, true))
+                break;
+        }
+
+        return makeNodePtr<AttributeStatement>(
+            Attribute::Apply, std::move(arguments), std::move(typeArguments), whereLocation);
+    }
+
     NodePtr<TypeAliasDeclaration> Parser::parseTypeAliasDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
     {
         for (const auto& attribute : attributes)
@@ -1231,6 +1292,9 @@ namespace wio
         NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
 
         auto genericParameterList = parseGenericParameterList();
+
+        if (auto whereClause = parseWhereClause(genericParameterList.parameters, genericParameterList.hasParameterPack))
+            attributes.push_back(std::move(whereClause));
 
         consume(TokenType::opAssign);
         NodePtr<TypeSpecifier> aliasedType = parseType();
@@ -1368,6 +1432,9 @@ namespace wio
         {
             returnType = parseType();
         }
+
+        if (auto whereClause = parseWhereClause(genericParameterList.parameters, genericParameterList.hasParameterPack))
+            attributes.push_back(std::move(whereClause));
         
         NodePtr<Expression> whenCond = nullptr;
         NodePtr<Expression> whenFallback = nullptr;
@@ -1402,6 +1469,9 @@ namespace wio
         NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
         auto genericParameterList = parseGenericParameterList();
 
+        if (auto whereClause = parseWhereClause(genericParameterList.parameters, genericParameterList.hasParameterPack))
+            attributes.push_back(std::move(whereClause));
+
         consume(TokenType::leftBrace);
         std::vector<NodePtr<FunctionDeclaration>> methods;
 
@@ -1429,6 +1499,9 @@ namespace wio
         Token startTok = consume(TokenType::kwComponent);
         NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
         auto genericParameterList = parseGenericParameterList();
+
+        if (auto whereClause = parseWhereClause(genericParameterList.parameters, genericParameterList.hasParameterPack))
+            attributes.push_back(std::move(whereClause));
 
         consume(TokenType::leftBrace);
         std::vector<ComponentMember> members;
@@ -1581,6 +1654,9 @@ namespace wio
         Token startTok = consume(TokenType::kwObject);
         NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
         auto genericParameterList = parseGenericParameterList();
+
+        if (auto whereClause = parseWhereClause(genericParameterList.parameters, genericParameterList.hasParameterPack))
+            attributes.push_back(std::move(whereClause));
 
         consume(TokenType::leftBrace);
         std::vector<ObjectMember> members;

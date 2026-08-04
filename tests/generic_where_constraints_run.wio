@@ -1,0 +1,45 @@
+use std::assert as assert;
+use std::console as console;
+use std::traits as traits;
+
+fn Twice<T>(value: T) -> T where T: traits::IsInteger {
+    return value + value;
+}
+
+type IntegerList<T> where T: traits::IsInteger = T[];
+
+component NumericPair<T, U> where T: traits::IsNumeric {
+    public first: T;
+    public second: U;
+}
+
+interface NumericReader<T> where T: traits::IsNumeric {
+    fn Read() -> T;
+}
+
+@From(NumericReader<T>)
+object NumericBox<T> where T: traits::IsNumeric {
+    public value: T;
+
+    OnConstruct(value: T) {
+        self.value = value;
+    }
+
+    public fn Read() -> T {
+        return self.value;
+    }
+}
+
+fn Entry() -> i32 {
+    let values: IntegerList<i32> = [1, 2, 3];
+    let pair = NumericPair<f32, string>(2.5f, "ok");
+    let box = NumericBox<i32>(21);
+
+    assert::ExpectEqual(Twice(9), 18, "function where constraint failed");
+    assert::ExpectEqual(values[2], 3, "alias where constraint failed");
+    assert::ExpectEqual(pair.second, "ok", "unconstrained where slot failed");
+    assert::ExpectEqual(box.Read(), 21, "object/interface where constraint failed");
+
+    console::Print("Generic where constraints: ok");
+    return 0;
+}
