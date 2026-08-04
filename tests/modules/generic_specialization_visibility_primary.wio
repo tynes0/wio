@@ -1,0 +1,6 @@
+realm modulespec {
+    component Pair<A, B> {
+        public first: A;
+        public second: B;
+    }
+}

@@ -1428,6 +1428,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_generic_specialization_visibility_modules_run
+        "${CMAKE_SOURCE_DIR}/tests/modules/generic_specialization_visibility_root.wio"
+        "Generic specialization modules: ok"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_generic_default_type_arguments_run
         "${CMAKE_SOURCE_DIR}/tests/generic_default_type_arguments_run.wio"
         "Generic defaults: ok"

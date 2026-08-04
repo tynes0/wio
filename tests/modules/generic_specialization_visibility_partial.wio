@@ -1,0 +1,8 @@
+realm modulespec {
+    @Specialize(T, string)
+    component Pair<T> {
+        public first: T;
+        public second: string;
+        public partial: bool;
+    }
+}

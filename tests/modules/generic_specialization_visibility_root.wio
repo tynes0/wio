@@ -1,0 +1,11 @@
+use std::assert as assert;
+use std::console as console;
+use generic_specialization_visibility_primary;
+use generic_specialization_visibility_partial;
+
+fn Entry() -> i32 {
+    let selected = modulespec::Pair<i32, string>(7, "module", true);
+    assert::Expect(selected.partial, "imported partial specialization should be visible after its primary");
+    console::Print("Generic specialization modules: ok");
+    return 0;
+}
