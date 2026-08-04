@@ -807,12 +807,6 @@ namespace wio
             generics.push_back(std::move(innerType));
             
             auto result = makeNodePtr<TypeSpecifier>(std::move(token), std::move(generics), nullptr, 0, true, true, false, refToken.loc);
-            if (result->generics[0]->isNullable)
-            {
-                result->generics[0]->isNullable = false;
-                result->isNullable = true;
-                return result;
-            }
             return finishType(std::move(result));
         }
         if (match(TokenType::kwView))
@@ -825,12 +819,6 @@ namespace wio
             generics.push_back(std::move(innerType));
             
             auto result = makeNodePtr<TypeSpecifier>(std::move(token), std::move(generics), nullptr, 0, true, false, false, viewToken.loc);
-            if (result->generics[0]->isNullable)
-            {
-                result->generics[0]->isNullable = false;
-                result->isNullable = true;
-                return result;
-            }
             return finishType(std::move(result));
         }
 

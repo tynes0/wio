@@ -179,6 +179,11 @@ namespace wio::sdk
             return kind() == WIO_MODULE_TYPE_DESC_COMPONENT;
         }
 
+        [[nodiscard]] bool is_nullable() const noexcept
+        {
+            return kind() == WIO_MODULE_TYPE_DESC_NULLABLE;
+        }
+
         [[nodiscard]] bool is_dynamic_array() const noexcept
         {
             return kind() == WIO_MODULE_TYPE_DESC_DYNAMIC_ARRAY;

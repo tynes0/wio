@@ -29,11 +29,11 @@ realm ffi {
     @Native
     @CppHeader("native_opaque_bridge.h")
     @CppName(native_opaque::Replace)
-    fn Replace(target: ref opaque, value: opaque);
+    fn Replace(target: ref opaque?, value: opaque);
 }
 
 fn Entry() -> i32 {
-    mut handle: opaque = null;
+    mut handle: opaque? = null;
     let first = ffi::MakeTagged(6);
     let second = ffi::MakeTagged(12);
 
@@ -42,12 +42,16 @@ fn Entry() -> i32 {
 
     ffi::Replace(ref handle, first);
 
-    let sameFirst = ffi::Same(handle, first);
-    let sameSecond = ffi::Same(handle, second);
-    let tag = ffi::ReadTag(handle);
-    let tagView = ffi::ReadTagView(ref handle);
-    let notNull = null != handle;
+    if (handle != null) {
+        let sameFirst = ffi::Same(handle, first);
+        let sameSecond = ffi::Same(handle, second);
+        let tag = ffi::ReadTag(handle);
+        let tagView = ffi::ReadTagView(ref handle);
+        let notNull = true;
 
-    console::Print($"Opaque bridge: ${wasNull}, ${stillNull}, ${sameFirst}, ${sameSecond}, ${tag}, ${tagView}, ${notNull}");
-    return 0;
+        console::Print($"Opaque bridge: ${wasNull}, ${stillNull}, ${sameFirst}, ${sameSecond}, ${tag}, ${tagView}, ${notNull}");
+        return 0;
+    }
+
+    return 1;
 }

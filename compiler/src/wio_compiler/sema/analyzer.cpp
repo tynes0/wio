@@ -4916,6 +4916,8 @@ namespace wio::sema
 
             switch (current->kind())
             {
+            case TypeKind::Nullable:
+                return isSdkExportableFieldType(current.AsFast<NullableType>()->valueType);
             case TypeKind::Primitive:
             {
                 const std::string typeName = current->toString();

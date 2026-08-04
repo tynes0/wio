@@ -1,0 +1,17 @@
+@Export
+object Profile {
+    public value: i32;
+
+    public OnConstruct(value: i32) {
+        self.value = value;
+    }
+}
+
+@Export
+object MaybeProfile {
+    public profile: Profile?;
+
+    public OnConstruct() {
+        self.profile = null;
+    }
+}

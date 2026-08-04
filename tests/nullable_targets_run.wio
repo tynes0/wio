@@ -26,7 +26,7 @@ fn GuardedValue(value: Boxed?) -> i32 {
 
 fn Entry() -> i32 {
     mut objectValue: Boxed? = null;
-    let numberView: view i32? = null;
+    let numberView: (view i32)? = null;
     let payload: any = null;
     let handle: opaque? = null;
     mut callback: (fn(i32) -> i32)? = null;

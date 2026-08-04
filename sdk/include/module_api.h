@@ -177,7 +177,8 @@ enum WioModuleTypeDescriptorKind : std::uint32_t
     WIO_MODULE_TYPE_DESC_FUNCTION = 9u,
     WIO_MODULE_TYPE_DESC_OPAQUE = 10u,
     WIO_MODULE_TYPE_DESC_ENUM = 11u,
-    WIO_MODULE_TYPE_DESC_FLAGSET = 12u
+    WIO_MODULE_TYPE_DESC_FLAGSET = 12u,
+    WIO_MODULE_TYPE_DESC_NULLABLE = 13u
 };
 
 struct WioModuleEnumMemberDescriptor

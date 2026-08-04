@@ -1874,6 +1874,9 @@ namespace wio::codegen
             if (!resolvedType)
                 return "WIO_ABI_UNKNOWN";
 
+            if (resolvedType->kind() == sema::TypeKind::Nullable)
+                return getAbiTypeEnumName(resolvedType.AsFast<sema::NullableType>()->valueType);
+
             if (resolvedType->isVoid())
                 return "WIO_ABI_VOID";
 
@@ -2188,14 +2191,21 @@ namespace wio::codegen
                         return;
 
                     auto resolvedFieldType = unwrapAliasType(fieldType);
+                    auto bridgeResolvedFieldType = resolvedFieldType;
+                    if (bridgeResolvedFieldType && bridgeResolvedFieldType->kind() == sema::TypeKind::Nullable)
+                    {
+                        bridgeResolvedFieldType = unwrapAliasType(
+                            bridgeResolvedFieldType.AsFast<sema::NullableType>()->valueType
+                        );
+                    }
                     ExportedFunctionInfo::FieldAccessorKind accessorKind = ExportedFunctionInfo::FieldAccessorKind::Value;
                     Ref<sema::Type> accessorBridgeType = fieldType;
                     std::string fieldBridgeCppTypeName = toCppType(fieldType);
                     bool valueRequiresBridgeCast = false;
 
-                    if (resolvedFieldType && resolvedFieldType->kind() == sema::TypeKind::Struct)
+                    if (bridgeResolvedFieldType && bridgeResolvedFieldType->kind() == sema::TypeKind::Struct)
                     {
-                        if (auto structType = resolvedFieldType.AsFast<sema::StructType>(); structType)
+                        if (auto structType = bridgeResolvedFieldType.AsFast<sema::StructType>(); structType)
                         {
                             if ((structType->isEnum || structType->isFlagset) && structType->enumUnderlyingType)
                             {
@@ -3762,6 +3772,14 @@ namespace wio::codegen
 
             switch (resolvedType->kind())
             {
+            case sema::TypeKind::Nullable:
+            {
+                auto nullableType = resolvedType.AsFast<sema::NullableType>();
+                info.kindExpr = "WIO_MODULE_TYPE_DESC_NULLABLE";
+                info.abiExpr = getAbiTypeEnumName(nullableType->valueType);
+                info.elementIndex = ensureTypeDescriptor(nullableType->valueType);
+                break;
+            }
             case sema::TypeKind::Primitive:
             {
                 const std::string primitiveName = resolvedType.AsFast<sema::PrimitiveType>()->name;

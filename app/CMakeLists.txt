@@ -2127,6 +2127,14 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         --run
     )
 
+    add_wio_emit_cpp_file_test(
+        wio_test_exported_nullable_descriptor
+        "${CMAKE_SOURCE_DIR}/tests/native/exported_nullable_descriptor_library.wio"
+        "WIO_MODULE_TYPE_DESC_NULLABLE"
+        --target
+        shared
+    )
+
     add_wio_non_dry_failure_test_clean(
         wio_runtime_native_exception_boundary
         "${CMAKE_SOURCE_DIR}/tests/native/native_exception_boundary.wio"

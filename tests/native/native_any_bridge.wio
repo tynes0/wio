@@ -89,7 +89,7 @@ fn Entry() -> i32 {
     assert::ExpectTrue(ffi::IsOpaquePayload(ref opaquePayload), "native any ref should preserve dedicated opaque payloads");
     assert::ExpectEqual(ffi::ReadOpaqueTag(ref opaquePayload), 33, "native any view should recover opaque payload tags");
     if (opaquePayload is opaque fit handle) {
-        assert::ExpectTrue(handle != null, "opaque payloads recovered from native any should stay non-null");
+        assert::ExpectEqual(ffi::ReadOpaqueTag(ref opaquePayload), 33, "opaque fits preserve the native payload");
     } else {
         return 3;
     }
