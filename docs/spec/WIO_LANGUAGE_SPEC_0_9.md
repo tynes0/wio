@@ -94,6 +94,7 @@ trait interface, `true`, or `false`.
 ```text
 where-clause := "where" where-entry { "," where-entry }
 where-entry  := generic-parameter-name ":" trait-type-name
+                { "+" trait-type-name }
 ```
 
 ```wio
@@ -103,9 +104,10 @@ fn Twice<T>(value: T) -> T where T: std::traits::IsInteger {
 ```
 
 The compiler supplies the named generic operand, so `T: Trait` is equivalent
-to the `T` slot containing `Trait<T>`. Unmentioned fixed slots are `true`.
-Unknown or repeated parameter names are errors. A pack parameter supplies its
-entire pack operand to a pack-capable predicate.
+to the `T` slot containing `Trait<T>`. Predicates joined by `+` are
+conjunctive; the concrete binding must satisfy all of them. Unmentioned fixed
+slots are `true`. Unknown or repeated parameter names are errors. A pack
+parameter supplies its entire pack operand to a pack-capable predicate.
 
 Constraints are checked after explicit arguments, deduction, and defaults have
 formed a candidate binding. A rejected candidate does not participate in

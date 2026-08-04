@@ -23,6 +23,11 @@ object Box<T = string> {
     public fn Read() -> T {
         return self.value;
     }
+
+    public fn DefaultValue<U = i32>() -> U {
+        let value: U;
+        return value;
+    }
 }
 
 fn Zero<T = i32>() -> T {
@@ -46,6 +51,7 @@ fn Entry() -> i32 {
     assert::ExpectEqual(pair.first + pair.second, 16, "component defaults should fill omitted type arguments");
     assert::ExpectEqual(aliasPair.first + aliasPair.second, 5i16, "alias defaults may reference earlier parameters");
     assert::ExpectEqual(Consume(box), "wio", "interface and object defaults should form the same type");
+    assert::ExpectEqual(box.DefaultValue(), 0, "generic object methods should use trailing type defaults");
     assert::ExpectEqual(Zero(), 0, "function defaults should fill non-deduced parameters");
     assert::ExpectEqual(Keep<i32>(11), 11, "partial explicit function arguments should use trailing defaults");
 

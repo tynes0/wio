@@ -4095,7 +4095,18 @@ namespace wio::sema
         bool usesSingleGenericApplyConstraintList(const AttributeStatement& attribute,
                                                   const std::vector<std::string>& genericParameterNames)
         {
-            return genericParameterNames.size() == 1 && !attribute.args.empty();
+            return attribute.constraintGroupOffsets.empty() &&
+                   genericParameterNames.size() == 1 &&
+                   !attribute.args.empty();
+        }
+
+        bool hasValidGroupedApplyConstraintShape(const AttributeStatement& attribute,
+                                                 const std::vector<std::string>& genericParameterNames)
+        {
+            return !attribute.constraintGroupOffsets.empty() &&
+                   attribute.constraintGroupOffsets.size() == genericParameterNames.size() + 1 &&
+                   attribute.constraintGroupOffsets.front() == 0 &&
+                   attribute.constraintGroupOffsets.back() == attribute.args.size();
         }
 
         std::vector<AttributeTypeArgument> getApplyConstraintArguments(
@@ -4103,6 +4114,20 @@ namespace wio::sema
             const std::vector<std::string>& genericParameterNames,
             const size_t genericParameterIndex)
         {
+            if (hasValidGroupedApplyConstraintShape(attribute, genericParameterNames))
+            {
+                if (genericParameterIndex >= genericParameterNames.size())
+                    return {};
+
+                const size_t begin = attribute.constraintGroupOffsets[genericParameterIndex];
+                const size_t end = attribute.constraintGroupOffsets[genericParameterIndex + 1];
+                std::vector<AttributeTypeArgument> constraintArguments;
+                constraintArguments.reserve(end - begin);
+                for (size_t argumentIndex = begin; argumentIndex < end; ++argumentIndex)
+                    constraintArguments.push_back(getAttributeTypeArgument(attribute, argumentIndex));
+                return constraintArguments;
+            }
+
             if (usesSingleGenericApplyConstraintList(attribute, genericParameterNames))
             {
                 std::vector<AttributeTypeArgument> constraintArguments;
@@ -4729,7 +4754,8 @@ namespace wio::sema
                         continue;
                     }
                 }
-                else if (applyAttribute->args.size() != genericParameterNames.size())
+                else if (!hasValidGroupedApplyConstraintShape(*applyAttribute, genericParameterNames) &&
+                         applyAttribute->args.size() != genericParameterNames.size())
                 {
                     WIO_LOG_ADD_ERROR(
                         applyAttribute->location(),
@@ -4783,7 +4809,9 @@ namespace wio::sema
                 if (!applyAttribute)
                     continue;
 
-                if (genericParameterNames.size() != 1 && applyAttribute->args.size() != genericParameterNames.size())
+                if (!hasValidGroupedApplyConstraintShape(*applyAttribute, genericParameterNames) &&
+                    genericParameterNames.size() != 1 &&
+                    applyAttribute->args.size() != genericParameterNames.size())
                     continue;
 
                 bool matches = true;
@@ -4837,6 +4865,14 @@ namespace wio::sema
 
                     auto evaluateConstraintSetAgainstSingleType = [&](const Ref<Type>& bindingType) -> bool
                     {
+                        if (applyAttribute->conjunctiveConstraintGroups)
+                        {
+                            return std::ranges::all_of(constraintArguments, [&](const AttributeTypeArgument& argument)
+                            {
+                                return evaluateConstraintAgainstSingleType(argument, bindingType);
+                            });
+                        }
+
                         return std::ranges::any_of(constraintArguments, [&](const AttributeTypeArgument& argument)
                         {
                             return evaluateConstraintAgainstSingleType(argument, bindingType);
@@ -5907,7 +5943,8 @@ namespace wio::sema
                 if (!applyAttribute)
                     continue;
 
-                if (activeSymbol->genericParameterNames.size() != 1 &&
+                if (!hasValidGroupedApplyConstraintShape(*applyAttribute, activeSymbol->genericParameterNames) &&
+                    activeSymbol->genericParameterNames.size() != 1 &&
                     applyAttribute->args.size() != activeSymbol->genericParameterNames.size())
                 {
                     continue;
@@ -11941,7 +11978,8 @@ namespace wio::sema
                     if (!applyAttribute)
                         continue;
 
-                    if (activeSymbol->genericParameterNames.size() != 1 &&
+                    if (!hasValidGroupedApplyConstraintShape(*applyAttribute, activeSymbol->genericParameterNames) &&
+                        activeSymbol->genericParameterNames.size() != 1 &&
                         applyAttribute->args.size() != activeSymbol->genericParameterNames.size())
                         continue;
 

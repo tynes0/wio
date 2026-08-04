@@ -1,0 +1,10 @@
+use std::traits as traits;
+
+fn SignedOnly<T>(value: T) -> T where T: traits::IsInteger + traits::IsSigned {
+    return value;
+}
+
+fn Entry() -> i32 {
+    let value = SignedOnly(7u32);
+    return value fit i32;
+}

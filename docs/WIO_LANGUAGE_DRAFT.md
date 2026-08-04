@@ -3054,6 +3054,8 @@ Current rules:
   Unmentioned parameters are unconstrained. Repeated and unknown parameter
   names are errors. Trait operands are written without their generic operand;
   the compiler supplies the named parameter.
+- Multiple predicates for one parameter are joined with `+` and are
+  conjunctive, as in `where T: traits::IsInteger + traits::IsSigned`.
 - On generic pack declarations, the trailing pack slot should be written in pack
   position, for example `@Apply(traits::IsInteger<Args...>)`.
 

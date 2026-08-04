@@ -43,7 +43,8 @@ and later work.
 6. [~] Add modern generic constraint syntax and associated types.
    Readable `where` clauses now lower to the existing predicate model, generic
    defaults participate in inference, and the 0.9 specification freezes
-   generic compatibility as invariant. Add same-slot constraint composition,
+   generic compatibility as invariant. Same-slot predicate conjunction uses
+   `where T: TraitA + TraitB`. Add richer boolean constraint composition,
    associated types, default implementations, explicit variance features, and
    further generic failure diagnostics.
 

@@ -51,7 +51,8 @@ Notes:
       specialization visibility works across merged modules.
 - [x] Readable `where Parameter: Trait` clauses are supported on generic
       functions, aliases, interfaces, components, and objects and share the
-      established `@Apply` predicate and user-trait machinery.
+      established `@Apply` predicate and user-trait machinery. `+` composes
+      multiple predicates conjunctively within one parameter slot.
 - [x] Defaulted generic parameters participate in `@Instantiate(...)` for
       native functions, including dependent-default substitution before
       concrete backend instantiation.

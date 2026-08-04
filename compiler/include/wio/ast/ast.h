@@ -750,6 +750,12 @@ namespace wio
         Attribute attribute;
         std::vector<Token> args;
         std::vector<NodePtr<TypeSpecifier>> typeArgs;
+        // Where clauses may place more than one conjunctive constraint in a
+        // generic-parameter slot. Offsets has parameter-count + 1 entries and
+        // indexes the flattened args/typeArgs vectors. Plain @Apply keeps this
+        // empty and retains its legacy alternative-list behavior.
+        std::vector<size_t> constraintGroupOffsets;
+        bool conjunctiveConstraintGroups = false;
 
         AttributeStatement(Attribute _attribute, std::vector<Token> _args, std::vector<NodePtr<TypeSpecifier>> _typeArgs = {}, common::Location _loc = common::Location::invalid());
         ~AttributeStatement() override;

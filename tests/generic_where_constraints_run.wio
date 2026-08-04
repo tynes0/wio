@@ -6,9 +6,18 @@ fn Twice<T>(value: T) -> T where T: traits::IsInteger {
     return value + value;
 }
 
+fn TwiceSigned<T>(value: T) -> T where T: traits::IsInteger + traits::IsSigned {
+    return value + value;
+}
+
 type IntegerList<T> where T: traits::IsInteger = T[];
 
 component NumericPair<T, U> where T: traits::IsNumeric {
+    public first: T;
+    public second: U;
+}
+
+component SignedIntegerPair<T, U> where T: traits::IsInteger + traits::IsSigned, U: traits::IsInteger {
     public first: T;
     public second: U;
 }
@@ -33,11 +42,14 @@ object NumericBox<T> where T: traits::IsNumeric {
 fn Entry() -> i32 {
     let values: IntegerList<i32> = [1, 2, 3];
     let pair = NumericPair<f32, string>(2.5f, "ok");
+    let constrainedPair = SignedIntegerPair<i32, u16>(4, 5u16);
     let box = NumericBox<i32>(21);
 
     assert::ExpectEqual(Twice(9), 18, "function where constraint failed");
+    assert::ExpectEqual(TwiceSigned(-4), -8, "same-slot where conjunction failed");
     assert::ExpectEqual(values[2], 3, "alias where constraint failed");
     assert::ExpectEqual(pair.second, "ok", "unconstrained where slot failed");
+    assert::ExpectEqual(constrainedPair.first + (constrainedPair.second fit i32), 9, "grouped multi-parameter where constraints failed");
     assert::ExpectEqual(box.Read(), 21, "object/interface where constraint failed");
 
     console::Print("Generic where constraints: ok");

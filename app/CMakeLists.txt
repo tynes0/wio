@@ -1484,6 +1484,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_failure_test(
+        wio_invalid_generic_where_conjunction_reject
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_where_conjunction_reject.wio"
+        "rejects type arguments <u32> because of @Apply constraints"
+    )
+
+    add_wio_failure_test(
         wio_invalid_generic_partial_specialization_ambiguous
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_partial_specialization_ambiguous.wio"
         "Ambiguous partial specialization for 'Choice\\(i32, string\\)'"
