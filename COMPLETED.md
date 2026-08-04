@@ -62,6 +62,9 @@ Notes:
       specialization ordering and ambiguity, cross-module visibility,
       constraints, invariant compatibility, and native/export boundaries in
       `docs/spec/WIO_LANGUAGE_SPEC_0_9.md`.
+- [x] P1-C qualification passed the 109-test generic/pack matrix, the complete
+      508-test repository matrix, and 259 deterministic frontend/backend fuzz
+      candidates generated from 250 seeded mutations.
 
 ## P0 release-blocking correctness sprint
 
