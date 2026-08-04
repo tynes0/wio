@@ -4,6 +4,30 @@ All notable user-facing changes to Wio are recorded here.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-04
+
+### Added
+
+- Added trailing default type parameters across generic functions, aliases,
+  interfaces, components, objects, and object methods, including dependent
+  defaults such as `<T = i32, U = T>`.
+- Added partial object/component specialization with deterministic exact,
+  partial-specificity, and primary-declaration ordering plus ambiguity
+  diagnostics and cross-module visibility.
+- Added readable generic constraints through `where T: Trait`, including
+  conjunctive same-slot predicates with `where T: TraitA + TraitB`.
+- Added `std::meta::AllSame`, `IndexOf`, and `UniqueCount` as free functions
+  and `Types<Ts...>` helpers.
+- Published the normative Wio 0.9 generics and constraints specification.
+
+### Changed
+
+- Generic inference now binds observable parameters first and fills only the
+  remaining holes from defaults.
+- Defaulted generic parameters now participate in native `@Instantiate(...)`,
+  including dependent-default substitution before backend instantiation.
+- Generic compatibility is explicitly invariant in every type argument.
+
 ## [0.8.0] - 2026-08-04
 
 ### Added
