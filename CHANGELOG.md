@@ -4,6 +4,8 @@ All notable user-facing changes to Wio are recorded here.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-04
+
 ### Added
 
 - Added explicit nullable types (`T?`), grouped nullable function/borrow types,
@@ -27,6 +29,8 @@ All notable user-facing changes to Wio are recorded here.
   mutable globals receive generated forward declarations.
 - Backend errors in generated native wrappers now map to the Wio native
   declaration instead of synthetic wrapper line numbers.
+- Fixed LP64 integer literal lowering so `i64`, `u64`, `isize`, and `usize`
+  retain their Wio types during C++ generic deduction on Linux.
 
 ## [0.7.0] - 2026-08-03
 
