@@ -5691,20 +5691,33 @@ namespace wio::codegen
         auto type = node.refType.Lock();
         std::string tName = type ? type->toString() : "i32";
 
-        if (tName == "u32")
-            emit(valStr + "u");
-        else if (tName == "i64" && valStr == "-9223372036854775808")
+        if (tName == "i64" && valStr == "-9223372036854775808")
             emit("(std::numeric_limits<int64_t>::min)()");
         else if (tName == "isize" && valStr == "-9223372036854775808")
             emit("(std::numeric_limits<ptrdiff_t>::min)()");
-        else if (tName == "i64")
-            emit(valStr + "ll");
-        else if (tName == "u64" || tName == "usize")
-            emit(valStr + "ull");
-        else if (tName == "i8" || tName == "u8" || tName == "i16" || tName == "u16")
-            emit("static_cast<" + type->toCppString() + ">(" + valStr + ")");
         else
-            emit(valStr);
+        {
+            std::string literalExpression = valStr;
+            if (tName == "u32")
+                literalExpression += "u";
+            else if (tName == "i64" || tName == "isize")
+                literalExpression += "ll";
+            else if (tName == "u64" || tName == "usize")
+                literalExpression += "ull";
+
+            // C++ fixed-width aliases differ across ABIs: int64_t/size_t are
+            // long on LP64 Linux but long long literals remain long long.
+            // Preserve the Wio type at the expression boundary so generic
+            // deduction and overload resolution are platform-independent.
+            const bool isIntegerType =
+                tName == "i8" || tName == "i16" || tName == "i32" || tName == "i64" || tName == "isize" ||
+                tName == "u8" || tName == "u16" || tName == "u32" || tName == "u64" || tName == "usize" ||
+                tName == "byte";
+            if (type && isIntegerType)
+                emit("static_cast<" + type->toCppString() + ">(" + literalExpression + ")");
+            else
+                emit(literalExpression);
+        }
     }
 
     void CppGenerator::visit(FloatLiteral& node)

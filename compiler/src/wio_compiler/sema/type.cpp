@@ -233,6 +233,9 @@ namespace wio::sema
 
         switch (kind1)
         {
+        case TypeKind::Nullable:
+            // Nullable compatibility is handled before the common-kind switch.
+            return false;
         case TypeKind::Primitive:
             {
                 auto* p1 = static_cast<const PrimitiveType*>(t1);

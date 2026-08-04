@@ -1307,6 +1307,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_integer_literal_abi_run
+        "${CMAKE_SOURCE_DIR}/tests/integer_literal_abi_run.wio"
+        "integer-literal-abi-ok"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_nullable_targets_run
         "${CMAKE_SOURCE_DIR}/tests/nullable_targets_run.wio"
         "nullable-targets-ok"

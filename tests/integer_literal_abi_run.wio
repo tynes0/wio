@@ -1,0 +1,21 @@
+use std::assert as assert;
+use std::console as console;
+
+fn Equal<T>(left: T, right: T) -> bool {
+    return left == right;
+}
+
+fn Entry() -> i32 {
+    let signed64: i64 = 10i64;
+    let unsigned64: u64 = 11u64;
+    let signedSize: isize = 12isz;
+    let unsignedSize: usize = 13usz;
+
+    assert::Expect(Equal(signed64, 10i64), "i64 literal keeps the Wio ABI type");
+    assert::Expect(Equal(unsigned64, 11u64), "u64 literal keeps the Wio ABI type");
+    assert::Expect(Equal(signedSize, 12isz), "isize literal keeps the Wio ABI type");
+    assert::Expect(Equal(unsignedSize, 13usz), "usize literal keeps the Wio ABI type");
+
+    console::PrintLine("integer-literal-abi-ok");
+    return 0;
+}
