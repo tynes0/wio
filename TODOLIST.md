@@ -21,24 +21,31 @@ and later work.
    order, initialization, destruction, generics, diagnostics, and feature
    status. Version the specification alongside releases.
 
-3. [ ] Complete generic defaults, partial specialization, and specialization
-   ordering. Define ambiguity rules, constraint ordering, default type/value
-   parameters, specialization visibility across modules, and native/export
-   interactions.
+3. [~] Complete generic defaults, partial specialization, and specialization
+   ordering. Default type parameters, dependent trailing defaults, exact and
+   partial specialization ordering, ambiguity diagnostics, cross-module
+   visibility, and defaulted native instantiation are implemented. Default
+   value parameters depend on the ordinary const-generic work below; generic
+   component/object export and native component specialization remain under
+   the native/export item.
 
 4. [ ] Expand const generics beyond pack indexing.
    Support ordinary non-type parameters such as `Vector<T, N>`, value
    substitution, constraints, constant evaluation, generic static arrays,
    diagnostics, and ABI/mangling rules.
 
-5. [ ] Expand variadic and compile-time metaprogramming.
-   Add `Take`, `Drop`, `Zip`, `MapTypes`, filtering/folding, value transforms,
-   pack concatenation, pack constraints, and usable compile-time iteration.
+5. [~] Expand variadic and compile-time metaprogramming.
+   `AllSame`, `IndexOf`, and `UniqueCount` now complement the existing pack
+   count/index/storage helpers. Add `Take`, `Drop`, `Zip`, `MapTypes`,
+   filtering/folding, value transforms, pack concatenation, richer pack
+   constraints, and usable compile-time iteration.
 
-6. [ ] Add modern generic constraint syntax and associated types.
-   Provide readable `where` clauses, constraint composition, associated types,
-   default implementations, better inference, variance rules, and precise
-   generic failure diagnostics.
+6. [~] Add modern generic constraint syntax and associated types.
+   Readable `where` clauses now lower to the existing predicate model, generic
+   defaults participate in inference, and the 0.9 specification freezes
+   generic compatibility as invariant. Add same-slot constraint composition,
+   associated types, default implementations, explicit variance features, and
+   further generic failure diagnostics.
 
 7. [ ] Strengthen pattern matching.
    Add Option/Result destructuring, enum payloads, component/array patterns,

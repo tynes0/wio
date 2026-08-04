@@ -2,9 +2,12 @@
 
 The nullability, initialization, lifecycle, panic, and native exception rules
 for Wio 0.8 are normative in
-[`spec/WIO_LANGUAGE_SPEC_0_8.md`](./spec/WIO_LANGUAGE_SPEC_0_8.md). Where this
-broad reference conflicts with that versioned slice, the 0.8 specification
-wins.
+[`spec/WIO_LANGUAGE_SPEC_0_8.md`](./spec/WIO_LANGUAGE_SPEC_0_8.md). Generic
+defaults, specialization, constraints, and compatibility are normative for
+Wio 0.9 in
+[`spec/WIO_LANGUAGE_SPEC_0_9.md`](./spec/WIO_LANGUAGE_SPEC_0_9.md). Where this
+broad reference conflicts with a versioned slice, the newest applicable
+versioned specification wins.
 
 This document reorganizes the current Wio design into a real language-reference
 style document rather than a raw feature list. It is written in English and is
@@ -1923,6 +1926,16 @@ fn PairText<T, U>(left: T, right: U) -> string {
 Current rules:
 
 - top-level free functions support generic parameter lists,
+- trailing type parameters may declare defaults with `T = Type`,
+- a default may reference an earlier generic parameter, as in
+  `<T = i32, U = T>`, but cannot reference a later parameter,
+- after the first defaulted parameter, every following fixed parameter must
+  also have a default; a trailing pack cannot have a default,
+- explicit type arguments bind from the left, deduction fills parameters
+  mentioned by the callable signature, and defaults fill only the remaining
+  holes,
+- the same default-type rules apply to generic aliases, interfaces,
+  components, and objects,
 - explicit call syntax such as `Identity<i32>(42)` is supported for non-pack
   generic functions,
 - generic overload resolution uses parameter-driven deduction first and explicit
@@ -1931,10 +1944,10 @@ Current rules:
 - generic methods on `component` declarations stay out of the current v1 slice,
 - generic `interface` methods remain unsupported in v1.
 
-### 13.6 Explicit Generic Specialization
+### 13.6 Generic Specialization
 
-Generic `object` and `component` declarations may provide a different complete
-definition for an exact list of concrete type arguments with `@Specialize(...)`.
+Generic `object` and `component` declarations may provide a different
+definition for an exact or partial type pattern with `@Specialize(...)`.
 
 ```wio
 object ArgumentConverter<T> {
@@ -1961,6 +1974,12 @@ object ArgumentConverter {
         return "i32";
     }
 }
+
+@Specialize(T, string)
+component Pair<T> {
+    public first: T;
+    public second: string;
+}
 ```
 
 `ArgumentConverter<i32>` selects the specialized declaration automatically.
@@ -1972,15 +1991,23 @@ Current rules:
 - the generic primary declaration must appear earlier in the same scope,
 - the primary and specialization must have the same name and both be either
   `object` or `component`,
-- a specialization omits the generic parameter list and supplies one fully
+- a full specialization omits the generic parameter list and supplies one
   concrete type per primary generic parameter through `@Specialize(...)`,
+- a partial specialization declares only the pattern variables it uses and
+  places those variables in `@Specialize(...)`,
 - the specialized declaration may define its own fields and constructors;
   `object` specializations may also define their own method implementations,
 - duplicate specializations of the same concrete type list are rejected,
+- selection is deterministic: an exact specialization outranks every partial
+  specialization, a more specific partial pattern outranks a less specific
+  pattern, and the primary declaration is the fallback,
+- two matching partial patterns with equal specificity are ambiguous and are
+  rejected at the use site,
+- specialization declarations are visible through normal module merging; the
+  primary must already be visible in the merged scope when its specialization
+  is declared,
 - `@Apply(...)` constraints belong on the generic primary declaration,
-- declaration-level native components are not currently specialization targets,
-- only full specialization is supported; partial or pattern-based
-  specialization remains outside the current v1 surface.
+- declaration-level native components are not currently specialization targets.
 
 Wio does not currently have static object/component methods. A C++ pattern such
 as `ArgumentConverter<T>::Convert(...)` therefore uses an instance method or a
@@ -2068,12 +2095,16 @@ The source-level `std::meta` bootstrap layer currently includes:
 - `type Penultimate<Ts...> = Ts[Ts.size - PenultimateDistance];`
 - `fn TypeCount<Ts...>() -> usize`
 - `fn ContainsType<T, Ts...>() -> bool`
+- `fn AllSame<Ts...>() -> bool`
+- `fn IndexOf<T, Ts...>() -> isize`
+- `fn UniqueCount<Ts...>() -> usize`
 - `fn CountValues<Args...>(args: Args...) -> usize`
 - `fn FirstValue<Args...>(args: Args...) -> Args[0usize]`
 - `fn SecondValue<Args...>(args: Args...) -> Args[SecondIndex]`
 - `fn LastValue<Args...>(args: Args...) -> Args[Args.size - 1usize]`
 - `fn PenultimateValue<Args...>(args: Args...) -> Args[Args.size - PenultimateDistance]`
-- `object Types<Ts...>` with `Count()` / `Empty()` / `Contains<T>()`
+- `object Types<Ts...>` with `Count()` / `Empty()` / `Contains<T>()` /
+  `AllSame()` / `IndexOf<T>()` / `UniqueCount()`
 - `object Values<Args...>` with a public `pack data: Args...;` field and
   `First()` / `Second()` / `Last()` / `Penultimate()` / `Set(...)` /
   `ReplaceFirst(...)` / `ReplaceSecond(...)` / `ReplaceLast(...)` /
@@ -2105,7 +2136,7 @@ Current v1 limitations:
 - richer pack meta transforms such as `Take`, `Drop`, `Zip`, `MapTypes`, and
   future const-generic indexing remain future work.
 
-### 13.7 `when` Guards
+### 13.8 `when` Guards
 
 Wio supports function-level guards via `when`.
 
@@ -2922,7 +2953,9 @@ Current rules:
 
 - `@Instantiate(...)` is valid only on generic functions.
 - Today it is supported only together with `@Native` or `@Export`.
-- Each attribute must provide exactly one argument per fixed generic parameter.
+- Each attribute must provide one argument per non-defaulted fixed generic
+  parameter. Omitted trailing fixed parameters are filled from their declared
+  defaults before the concrete instantiation list is materialized.
 - On generic pack functions, extra trailing `@Instantiate(...)` arguments map to
   concrete pack element types.
 - Each argument may be:
@@ -2966,6 +2999,19 @@ fn CountExport<Args...>(args: Args...) -> i32;
 
 `@Apply(...)` is the current generic-constraint attribute surface.
 
+The readable `where` syntax lowers to the same constraint model:
+
+```wio
+fn Twice<T>(value: T) -> T where T: traits::IsInteger {
+    return value + value;
+}
+
+component Pair<T, U> where T: traits::IsNumeric {
+    public first: T;
+    public second: U;
+}
+```
+
 It is supported on generic:
 
 - functions,
@@ -3004,6 +3050,10 @@ Current rules:
   - or a boolean constant (`true` / `false`).
 - Arguments are positional. The predicate operand must target the matching
   generic parameter for that slot.
+- A `where` clause lists `Parameter: Trait` entries separated by commas.
+  Unmentioned parameters are unconstrained. Repeated and unknown parameter
+  names are errors. Trait operands are written without their generic operand;
+  the compiler supplies the named parameter.
 - On generic pack declarations, the trailing pack slot should be written in pack
   position, for example `@Apply(traits::IsInteger<Args...>)`.
 

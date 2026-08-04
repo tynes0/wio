@@ -38,6 +38,30 @@ Notes:
       `docs/spec/WIO_LANGUAGE_SPEC_0_8.md`; completing the full lexical/syntax/
       resolution specification remains active work.
 
+## P1-C generics and type-system sprint
+
+- [x] Generic functions, aliases, interfaces, components, and objects accept
+      trailing default type parameters, including dependent defaults such as
+      `<T = i32, U = T>`. Deduction wins and defaults fill only unresolved
+      parameters; invalid ordering, pack defaults, and forward references have
+      focused diagnostics.
+- [x] Object and component specialization now supports exact and partial
+      patterns. Exact matches outrank partial matches, specificity orders
+      partial candidates, equal best matches are diagnosed as ambiguous, and
+      specialization visibility works across merged modules.
+- [x] Readable `where Parameter: Trait` clauses are supported on generic
+      functions, aliases, interfaces, components, and objects and share the
+      established `@Apply` predicate and user-trait machinery.
+- [x] Defaulted generic parameters participate in `@Instantiate(...)` for
+      native functions, including dependent-default substitution before
+      concrete backend instantiation.
+- [x] `std::meta` gained `AllSame`, `IndexOf`, and `UniqueCount` as free
+      functions and `Types<Ts...>` methods.
+- [x] The versioned 0.9 generics contract defines completion order,
+      specialization ordering and ambiguity, cross-module visibility,
+      constraints, invariant compatibility, and native/export boundaries in
+      `docs/spec/WIO_LANGUAGE_SPEC_0_9.md`.
+
 ## P0 release-blocking correctness sprint
 
 - [x] Cascading diagnostics are stopped at their source. Imported modules with

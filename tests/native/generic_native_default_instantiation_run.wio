@@ -7,11 +7,19 @@ realm ffi {
     @CppName(native_generic::DoubleValue)
     @Instantiate()
     fn DoubleDefault<T = i32>(value: T) -> T;
+
+    @Native
+    @CppHeader("native_generic_pair.h")
+    @CppName(native_generic::PickLeft)
+    @Instantiate()
+    fn PickDefault<T = i32, U = T>(left: T, right: U) -> T;
 }
 
 fn Entry() -> i32 {
     let result = ffi::DoubleDefault(21);
+    let dependent = ffi::PickDefault(34, 55);
     assert::ExpectEqual(result, 42, "defaulted @Instantiate should materialize i32");
+    assert::ExpectEqual(dependent, 34, "dependent defaults should materialize before native instantiation");
     console::Print("Generic native defaults: ok");
     return 0;
 }
