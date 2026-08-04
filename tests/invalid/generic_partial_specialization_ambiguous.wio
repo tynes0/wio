@@ -1,0 +1,18 @@
+component Choice<A, B> {
+    value: i32;
+}
+
+@Specialize(T, string)
+component Choice<T> {
+    value: i32;
+}
+
+@Specialize(i32, U)
+component Choice<U> {
+    value: i32;
+}
+
+fn Entry() -> i32 {
+    let value = Choice<i32, string>(1);
+    return value.value;
+}

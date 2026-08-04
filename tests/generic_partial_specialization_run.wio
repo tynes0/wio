@@ -1,0 +1,63 @@
+use std::assert as assert;
+use std::console as console;
+
+component Pair<A, B> {
+    public first: A;
+    public second: B;
+    public rank: i32;
+}
+
+@Specialize(T, string)
+component Pair<T> {
+    public first: T;
+    public second: string;
+    public rank: i32;
+    public partialOnly: bool;
+}
+
+@Specialize(i32, string)
+component Pair {
+    public first: i32;
+    public second: string;
+    public rank: i32;
+    public exactOnly: bool;
+}
+
+object Converter<A, B> {
+    public fn Kind() -> string {
+        return "primary";
+    }
+}
+
+@Specialize(T, string)
+object Converter<T> {
+    public fn Kind() -> string {
+        return "partial";
+    }
+}
+
+@Specialize(i32, string)
+object Converter {
+    public fn Kind() -> string {
+        return "exact";
+    }
+}
+
+fn Entry() -> i32 {
+    let primary = Pair<i32, bool>(1, true, 0);
+    let partial = Pair<f32, string>(2.0f, "partial", 1, true);
+    let exact = Pair<i32, string>(3, "exact", 2, true);
+    let primaryObject = Converter<i32, bool>();
+    let partialObject = Converter<f32, string>();
+    let exactObject = Converter<i32, string>();
+
+    assert::ExpectEqual(primary.rank, 0, "primary generic should remain available");
+    assert::Expect(partial.partialOnly, "partial specialization should match its pattern");
+    assert::Expect(exact.exactOnly, "full specialization must outrank partial specialization");
+    assert::ExpectEqual(primaryObject.Kind(), "primary", "primary object selection failed");
+    assert::ExpectEqual(partialObject.Kind(), "partial", "partial object selection failed");
+    assert::ExpectEqual(exactObject.Kind(), "exact", "exact object selection failed");
+
+    console::Print("Generic partial specialization: ok");
+    return 0;
+}

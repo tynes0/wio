@@ -206,8 +206,10 @@ namespace wio
             std::vector<Ref<Type>> genericParameterDefaults;
             std::vector<Ref<Type>> genericArguments;
             std::unordered_map<std::string, WeakRef<StructType>> explicitSpecializations;
+            std::vector<WeakRef<StructType>> partialSpecializations;
             WeakRef<StructType> genericPrimaryType;
             bool isExplicitSpecialization = false;
+            bool isPartialSpecialization = false;
             bool hasGenericParameterPack = false;
             std::vector<Ref<Type>> baseTypes;
             std::vector<std::string> fieldNames;

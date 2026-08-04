@@ -1434,6 +1434,19 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         --run
     )
 
+    add_wio_output_test(
+        wio_test_generic_partial_specialization_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_partial_specialization_run.wio"
+        "Generic partial specialization: ok"
+        --run
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_partial_specialization_ambiguous
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_partial_specialization_ambiguous.wio"
+        "Ambiguous partial specialization for 'Choice\\(i32, string\\)'"
+    )
+
     add_wio_failure_test(
         wio_invalid_generic_default_non_trailing
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_default_non_trailing.wio"

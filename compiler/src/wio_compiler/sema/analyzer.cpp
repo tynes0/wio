@@ -3002,6 +3002,118 @@ namespace wio::sema
         Ref<Type> instantiateGenericType(const Ref<Type>& type, const std::unordered_map<std::string, Ref<Type>>& bindings);
         Ref<Type> instantiateGenericType(const Ref<Type>& type, const GenericBindingSet& bindings);
 
+        bool matchSpecializationPattern(const Ref<Type>& pattern,
+                                        const Ref<Type>& actual,
+                                        std::unordered_map<std::string, Ref<Type>>& bindings)
+        {
+            Ref<Type> expected = unwrapAliasType(pattern);
+            Ref<Type> candidate = unwrapAliasType(actual);
+            if (!expected || !candidate)
+                return false;
+            if (expected->kind() == TypeKind::GenericParameter)
+            {
+                const std::string& name = expected.AsFast<GenericParameterType>()->name;
+                if (auto found = bindings.find(name); found != bindings.end())
+                    return getGenericSpecializationKey({found->second}) == getGenericSpecializationKey({candidate});
+                bindings.emplace(name, candidate);
+                return true;
+            }
+            if (expected->kind() != candidate->kind())
+                return false;
+
+            switch (expected->kind())
+            {
+            case TypeKind::Primitive:
+                return expected.AsFast<PrimitiveType>()->name == candidate.AsFast<PrimitiveType>()->name;
+            case TypeKind::Reference:
+            {
+                auto expectedRef = expected.AsFast<ReferenceType>();
+                auto candidateRef = candidate.AsFast<ReferenceType>();
+                return expectedRef->isMutable == candidateRef->isMutable &&
+                       matchSpecializationPattern(expectedRef->referredType, candidateRef->referredType, bindings);
+            }
+            case TypeKind::Nullable:
+                return matchSpecializationPattern(expected.AsFast<NullableType>()->valueType,
+                                                  candidate.AsFast<NullableType>()->valueType,
+                                                  bindings);
+            case TypeKind::Array:
+            {
+                auto expectedArray = expected.AsFast<ArrayType>();
+                auto candidateArray = candidate.AsFast<ArrayType>();
+                return expectedArray->arrayKind == candidateArray->arrayKind &&
+                       expectedArray->size == candidateArray->size &&
+                       matchSpecializationPattern(expectedArray->elementType, candidateArray->elementType, bindings);
+            }
+            case TypeKind::Dictionary:
+            {
+                auto expectedDict = expected.AsFast<DictionaryType>();
+                auto candidateDict = candidate.AsFast<DictionaryType>();
+                return expectedDict->isOrdered == candidateDict->isOrdered &&
+                       matchSpecializationPattern(expectedDict->keyType, candidateDict->keyType, bindings) &&
+                       matchSpecializationPattern(expectedDict->valueType, candidateDict->valueType, bindings);
+            }
+            case TypeKind::Function:
+            {
+                auto expectedFunction = expected.AsFast<FunctionType>();
+                auto candidateFunction = candidate.AsFast<FunctionType>();
+                if (expectedFunction->hasParameterPack != candidateFunction->hasParameterPack ||
+                    expectedFunction->paramTypes.size() != candidateFunction->paramTypes.size() ||
+                    !matchSpecializationPattern(expectedFunction->returnType, candidateFunction->returnType, bindings))
+                    return false;
+                for (size_t index = 0; index < expectedFunction->paramTypes.size(); ++index)
+                {
+                    if (!matchSpecializationPattern(expectedFunction->paramTypes[index], candidateFunction->paramTypes[index], bindings))
+                        return false;
+                }
+                return true;
+            }
+            case TypeKind::Struct:
+            {
+                auto expectedStruct = expected.AsFast<StructType>();
+                auto candidateStruct = candidate.AsFast<StructType>();
+                if (expectedStruct->name != candidateStruct->name ||
+                    expectedStruct->scopePath != candidateStruct->scopePath ||
+                    expectedStruct->genericArguments.size() != candidateStruct->genericArguments.size())
+                    return false;
+                for (size_t index = 0; index < expectedStruct->genericArguments.size(); ++index)
+                {
+                    if (!matchSpecializationPattern(expectedStruct->genericArguments[index], candidateStruct->genericArguments[index], bindings))
+                        return false;
+                }
+                return true;
+            }
+            default:
+                return getGenericSpecializationKey({expected}) == getGenericSpecializationKey({candidate});
+            }
+        }
+
+        size_t getSpecializationPatternSpecificity(const Ref<Type>& pattern)
+        {
+            Ref<Type> type = unwrapAliasType(pattern);
+            if (!type || type->kind() == TypeKind::GenericParameter || type->kind() == TypeKind::GenericParameterPack)
+                return 0;
+
+            size_t score = 1;
+            switch (type->kind())
+            {
+            case TypeKind::Reference:
+                return score + getSpecializationPatternSpecificity(type.AsFast<ReferenceType>()->referredType);
+            case TypeKind::Nullable:
+                return score + getSpecializationPatternSpecificity(type.AsFast<NullableType>()->valueType);
+            case TypeKind::Array:
+                return score + getSpecializationPatternSpecificity(type.AsFast<ArrayType>()->elementType);
+            case TypeKind::Dictionary:
+                return score + getSpecializationPatternSpecificity(type.AsFast<DictionaryType>()->keyType) +
+                               getSpecializationPatternSpecificity(type.AsFast<DictionaryType>()->valueType);
+            case TypeKind::Struct:
+                for (const auto& argument : type.AsFast<StructType>()->genericArguments)
+                    score += getSpecializationPatternSpecificity(argument);
+                return score;
+            default:
+                return score;
+            }
+        }
+
         Ref<Type> instantiateGenericStructType(const Ref<StructType>& structType,
                                                const std::vector<Ref<Type>>& explicitTypeArguments,
                                                const common::Location& errorLocation = common::Location::invalid())
@@ -3018,6 +3130,77 @@ namespace wio::sema
             {
                 if (auto specialization = specializationIt->second.Lock(); specialization)
                     return specialization;
+            }
+
+            Ref<StructType> selectedPartialSpecialization = nullptr;
+            std::unordered_map<std::string, Ref<Type>> selectedBindings;
+            size_t selectedSpecificity = 0;
+            bool ambiguousPartialSpecialization = false;
+            for (const auto& weakSpecialization : structType->partialSpecializations)
+            {
+                auto specialization = weakSpecialization.Lock();
+                if (!specialization || specialization->genericArguments.size() != explicitTypeArguments.size())
+                    continue;
+
+                std::unordered_map<std::string, Ref<Type>> bindings;
+                bool matches = true;
+                size_t specificity = 0;
+                for (size_t index = 0; index < explicitTypeArguments.size(); ++index)
+                {
+                    specificity += getSpecializationPatternSpecificity(specialization->genericArguments[index]);
+                    if (!matchSpecializationPattern(specialization->genericArguments[index], explicitTypeArguments[index], bindings))
+                    {
+                        matches = false;
+                        break;
+                    }
+                }
+                if (!matches)
+                    continue;
+                if (!selectedPartialSpecialization || specificity > selectedSpecificity)
+                {
+                    selectedPartialSpecialization = specialization;
+                    selectedBindings = std::move(bindings);
+                    selectedSpecificity = specificity;
+                    ambiguousPartialSpecialization = false;
+                }
+                else if (specificity == selectedSpecificity)
+                {
+                    ambiguousPartialSpecialization = true;
+                }
+            }
+
+            if (ambiguousPartialSpecialization)
+            {
+                WIO_LOG_ADD_ERROR(errorLocation,
+                    "Ambiguous partial specialization for '{}{}'.",
+                    structType->name,
+                    formatDiagnosticTypeList(explicitTypeArguments));
+                return Compiler::get().getTypeContext().getUnknown();
+            }
+
+            if (selectedPartialSpecialization)
+            {
+                auto instantiatedType = Compiler::get().getTypeContext().getOrCreateStructType(
+                    selectedPartialSpecialization->name,
+                    selectedPartialSpecialization->structScope.Lock(),
+                    selectedPartialSpecialization->isObject,
+                    selectedPartialSpecialization->isInterface
+                ).AsFast<StructType>();
+                instantiatedType->scopePath = selectedPartialSpecialization->scopePath;
+                instantiatedType->genericParameterNames = selectedPartialSpecialization->genericParameterNames;
+                instantiatedType->genericParameterDefaults = selectedPartialSpecialization->genericParameterDefaults;
+                instantiatedType->genericArguments = explicitTypeArguments;
+                instantiatedType->genericPrimaryType = structType;
+                instantiatedType->isExplicitSpecialization = true;
+                instantiatedType->isPartialSpecialization = true;
+                instantiatedType->fieldNames = selectedPartialSpecialization->fieldNames;
+                instantiatedType->trustedTypeKeys = selectedPartialSpecialization->trustedTypeKeys;
+                instantiatedType->isFinal = selectedPartialSpecialization->isFinal;
+                for (const auto& fieldType : selectedPartialSpecialization->fieldTypes)
+                    instantiatedType->fieldTypes.push_back(instantiateGenericType(fieldType, selectedBindings));
+                for (const auto& baseType : selectedPartialSpecialization->baseTypes)
+                    instantiatedType->baseTypes.push_back(instantiateGenericType(baseType, selectedBindings));
+                return instantiatedType;
             }
 
             const auto bindings = buildExtendedGenericBindings(
@@ -3839,7 +4022,8 @@ namespace wio::sema
         std::vector<Ref<Type>> resolveExplicitSpecializationArguments(
             SemanticAnalyzer& analyzer,
             const std::vector<NodePtr<AttributeStatement>>& attributes,
-            const common::Location& declarationLocation)
+            const common::Location& declarationLocation,
+            const bool allowGenericPatterns = false)
         {
             const auto specializationAttributes = getAttributeStatements(attributes, Attribute::Specialize);
             if (specializationAttributes.empty())
@@ -3881,7 +4065,8 @@ namespace wio::sema
 
                 typeSpecifier->accept(analyzer);
                 Ref<Type> argumentType = typeSpecifier->refType.Lock();
-                if (!argumentType || argumentType->isUnknown() || containsGenericParameterType(argumentType))
+                if (!argumentType || argumentType->isUnknown() ||
+                    (!allowGenericPatterns && containsGenericParameterType(argumentType)))
                 {
                     WIO_LOG_ADD_ERROR(
                         typeSpecifier->location(),
@@ -6130,10 +6315,13 @@ namespace wio::sema
                             {
                                 WIO_LOG_ADD_ERROR(
                                     node.location(),
-                                    "Generic type '{}' expects {} to {} generic arguments, but got {}.",
+                                    "Generic type '{}' expects {} generic arguments, but got {}.",
                                     node.name.value,
-                                    requiredArgumentCount,
-                                    structType->hasGenericParameterPack ? std::string("unbounded") : std::to_string(fixedArgumentCount),
+                                    structType->hasGenericParameterPack
+                                        ? common::formatString("at least {}", requiredArgumentCount)
+                                        : requiredArgumentCount == fixedArgumentCount
+                                            ? std::to_string(fixedArgumentCount)
+                                            : common::formatString("{} to {}", requiredArgumentCount, fixedArgumentCount),
                                     explicitTypeArguments.size()
                                 );
                                 type = Compiler::get().getTypeContext().getUnknown();
@@ -6187,10 +6375,13 @@ namespace wio::sema
                             {
                                 WIO_LOG_ADD_ERROR(
                                     node.location(),
-                                    "Type alias '{}' expects {} to {} generic arguments, but got {}.",
+                                    "Type alias '{}' expects {} generic arguments, but got {}.",
                                     node.name.value,
-                                    requiredArgumentCount,
-                                    sym->hasGenericParameterPack ? std::string("unbounded") : std::to_string(fixedArgumentCount),
+                                    sym->hasGenericParameterPack
+                                        ? common::formatString("at least {}", requiredArgumentCount)
+                                        : requiredArgumentCount == fixedArgumentCount
+                                            ? std::to_string(fixedArgumentCount)
+                                            : common::formatString("{} to {}", requiredArgumentCount, fixedArgumentCount),
                                     explicitTypeArguments.size()
                                 );
                                 type = Compiler::get().getTypeContext().getUnknown();
@@ -9327,10 +9518,13 @@ namespace wio::sema
                 {
                     WIO_LOG_ADD_ERROR(
                         node.location(),
-                        "Type alias '{}' expects {} to {} generic arguments, but got {}.",
+                        "Type alias '{}' expects {} generic arguments, but got {}.",
                         calleeSym->name,
-                        requiredArgumentCount,
-                        calleeSym->hasGenericParameterPack ? std::string("unbounded") : std::to_string(fixedArgumentCount),
+                        calleeSym->hasGenericParameterPack
+                            ? common::formatString("at least {}", requiredArgumentCount)
+                            : requiredArgumentCount == fixedArgumentCount
+                                ? std::to_string(fixedArgumentCount)
+                                : common::formatString("{} to {}", requiredArgumentCount, fixedArgumentCount),
                         explicitTypeArguments.size()
                     );
                     node.refType = Compiler::get().getTypeContext().getUnknown();
@@ -9438,10 +9632,13 @@ namespace wio::sema
                       {
                           WIO_LOG_ADD_ERROR(
                               node.location(),
-                              "Generic type '{}' expects {} to {} generic arguments, but got {}.",
+                              "Generic type '{}' expects {} generic arguments, but got {}.",
                               structType->name,
-                              requiredArgumentCount,
-                              structType->hasGenericParameterPack ? std::string("unbounded") : std::to_string(fixedArgumentCount),
+                              structType->hasGenericParameterPack
+                                  ? common::formatString("at least {}", requiredArgumentCount)
+                                  : requiredArgumentCount == fixedArgumentCount
+                                      ? std::to_string(fixedArgumentCount)
+                                      : common::formatString("{} to {}", requiredArgumentCount, fixedArgumentCount),
                               explicitTypeArguments.size()
                           );
                           node.refType = Compiler::get().getTypeContext().getUnknown();
@@ -13913,14 +14110,11 @@ namespace wio::sema
                     );
                 }
 
-                specializationArguments = resolveExplicitSpecializationArguments(*this, node.attributes, node.location());
-                if (!node.genericParameters.empty())
-                {
-                    WIO_LOG_ADD_ERROR(
-                        node.location(),
-                        "An explicit component specialization must not declare generic parameters. Put concrete types in @Specialize(...)."
-                    );
-                }
+                auto specializationScope = buildGenericTypeParameterScope();
+                genericTypeParameterScopes_.push_back(specializationScope);
+                specializationArguments = resolveExplicitSpecializationArguments(
+                    *this, node.attributes, node.location(), !node.genericParameters.empty());
+                genericTypeParameterScopes_.pop_back();
 
                 genericPrimarySymbol = currentScope_->resolveLocally(node.name->token.value);
                 if (!genericPrimarySymbol || genericPrimarySymbol->kind != SymbolKind::Struct ||
@@ -13980,7 +14174,7 @@ namespace wio::sema
                                 specializationArguments,
                                 [](const Ref<Type>& type)
                                 {
-                                    return type && !type->isUnknown() && !containsGenericParameterType(type);
+                                    return type && !type->isUnknown();
                                 }
                             );
                         }
@@ -13998,6 +14192,13 @@ namespace wio::sema
                 structType.AsFast<StructType>()->genericArguments = specializationArguments;
                 structType.AsFast<StructType>()->genericPrimaryType = genericPrimaryType;
                 structType.AsFast<StructType>()->isExplicitSpecialization = true;
+                structType.AsFast<StructType>()->isPartialSpecialization = !node.genericParameters.empty();
+                for (const auto& genericParameter : node.genericParameters)
+                {
+                    if (genericParameter)
+                        structType.AsFast<StructType>()->genericParameterNames.push_back(genericParameter->token.value);
+                }
+                structType.AsFast<StructType>()->hasGenericParameterPack = node.hasGenericParameterPack;
             }
             else
             {
@@ -14082,7 +14283,15 @@ namespace wio::sema
                 if (specializationCanRegister && genericPrimaryType)
                 {
                     const std::string specializationKey = getGenericSpecializationKey(specializationArguments);
-                    if (genericPrimaryType->explicitSpecializations.contains(specializationKey))
+                    const bool isPartialSpecialization = structType.AsFast<StructType>()->isPartialSpecialization;
+                    const bool duplicatePartial = isPartialSpecialization && std::ranges::any_of(
+                        genericPrimaryType->partialSpecializations,
+                        [&](const WeakRef<StructType>& candidate)
+                        {
+                            auto partial = candidate.Lock();
+                            return partial && getGenericSpecializationKey(partial->genericArguments) == specializationKey;
+                        });
+                    if ((!isPartialSpecialization && genericPrimaryType->explicitSpecializations.contains(specializationKey)) || duplicatePartial)
                     {
                         WIO_LOG_ADD_ERROR(
                             node.location(),
@@ -14093,7 +14302,10 @@ namespace wio::sema
                     }
                     else
                     {
-                        genericPrimaryType->explicitSpecializations.emplace(specializationKey, structType.AsFast<StructType>());
+                        if (isPartialSpecialization)
+                            genericPrimaryType->partialSpecializations.emplace_back(structType.AsFast<StructType>());
+                        else
+                            genericPrimaryType->explicitSpecializations.emplace(specializationKey, structType.AsFast<StructType>());
                     }
                 }
             }
@@ -14490,14 +14702,11 @@ namespace wio::sema
 
             if (isExplicitSpecialization)
             {
-                specializationArguments = resolveExplicitSpecializationArguments(*this, node.attributes, node.location());
-                if (!node.genericParameters.empty())
-                {
-                    WIO_LOG_ADD_ERROR(
-                        node.location(),
-                        "An explicit object specialization must not declare generic parameters. Put concrete types in @Specialize(...)."
-                    );
-                }
+                auto specializationScope = buildGenericTypeParameterScope();
+                genericTypeParameterScopes_.push_back(specializationScope);
+                specializationArguments = resolveExplicitSpecializationArguments(
+                    *this, node.attributes, node.location(), !node.genericParameters.empty());
+                genericTypeParameterScopes_.pop_back();
 
                 genericPrimarySymbol = currentScope_->resolveLocally(node.name->token.value);
                 if (!genericPrimarySymbol || genericPrimarySymbol->kind != SymbolKind::Struct ||
@@ -14553,7 +14762,7 @@ namespace wio::sema
                                 specializationArguments,
                                 [](const Ref<Type>& type)
                                 {
-                                    return type && !type->isUnknown() && !containsGenericParameterType(type);
+                                    return type && !type->isUnknown();
                                 }
                             );
                         }
@@ -14571,6 +14780,13 @@ namespace wio::sema
                 structType.AsFast<StructType>()->genericArguments = specializationArguments;
                 structType.AsFast<StructType>()->genericPrimaryType = genericPrimaryType;
                 structType.AsFast<StructType>()->isExplicitSpecialization = true;
+                structType.AsFast<StructType>()->isPartialSpecialization = !node.genericParameters.empty();
+                for (const auto& genericParameter : node.genericParameters)
+                {
+                    if (genericParameter)
+                        structType.AsFast<StructType>()->genericParameterNames.push_back(genericParameter->token.value);
+                }
+                structType.AsFast<StructType>()->hasGenericParameterPack = node.hasGenericParameterPack;
             }
             else
             {
@@ -14617,7 +14833,15 @@ namespace wio::sema
                 if (specializationCanRegister && genericPrimaryType)
                 {
                     const std::string specializationKey = getGenericSpecializationKey(specializationArguments);
-                    if (genericPrimaryType->explicitSpecializations.contains(specializationKey))
+                    const bool isPartialSpecialization = structType.AsFast<StructType>()->isPartialSpecialization;
+                    const bool duplicatePartial = isPartialSpecialization && std::ranges::any_of(
+                        genericPrimaryType->partialSpecializations,
+                        [&](const WeakRef<StructType>& candidate)
+                        {
+                            auto partial = candidate.Lock();
+                            return partial && getGenericSpecializationKey(partial->genericArguments) == specializationKey;
+                        });
+                    if ((!isPartialSpecialization && genericPrimaryType->explicitSpecializations.contains(specializationKey)) || duplicatePartial)
                     {
                         WIO_LOG_ADD_ERROR(
                             node.location(),
@@ -14628,7 +14852,10 @@ namespace wio::sema
                     }
                     else
                     {
-                        genericPrimaryType->explicitSpecializations.emplace(specializationKey, structType.AsFast<StructType>());
+                        if (isPartialSpecialization)
+                            genericPrimaryType->partialSpecializations.emplace_back(structType.AsFast<StructType>());
+                        else
+                            genericPrimaryType->explicitSpecializations.emplace(specializationKey, structType.AsFast<StructType>());
                     }
                 }
             }

@@ -4723,7 +4723,11 @@ namespace wio::codegen
             std::string cppTypeName = reflectedKind == "interface_type"
                 ? Mangler::mangleInterface(structType->name, structType->scopePath)
                 : mangleStructTypeName(structType);
-            if (!declaration.genericParameters.empty())
+            if (structType->isExplicitSpecialization)
+            {
+                cppTypeName = mangleStructTypeName(structType);
+            }
+            else if (!declaration.genericParameters.empty())
             {
                 cppTypeName =
                     (reflectedKind == "interface_type"
@@ -4859,7 +4863,10 @@ namespace wio::codegen
                 auto componentType = getStructTypeFromSymbol(sym);
                 if (componentType && componentType->isExplicitSpecialization)
                 {
-                    emitLine("template <>");
+                    if (componentType->isPartialSpecialization)
+                        emitTemplateForwardDeclarationPrefix(declaration->genericParameters);
+                    else
+                        emitLine("template <>");
                     emitLine(common::formatString("struct {};", mangleStructTypeName(componentType)));
                 }
                 else if (componentType && usesNativePodAliasModelForCodegen(componentType))
@@ -4903,7 +4910,10 @@ namespace wio::codegen
                 auto objectType = getStructTypeFromSymbol(sym);
                 if (objectType && objectType->isExplicitSpecialization)
                 {
-                    emitLine("template <>");
+                    if (objectType->isPartialSpecialization)
+                        emitTemplateForwardDeclarationPrefix(declaration->genericParameters);
+                    else
+                        emitLine("template <>");
                     emitLine(common::formatString("struct {};", mangleStructTypeName(objectType)));
                 }
                 else
@@ -8524,7 +8534,7 @@ namespace wio::codegen
         auto componentType = getStructTypeFromSymbol(componentSym);
         auto enclosingScope = componentSym && componentSym->innerScope ? componentSym->innerScope->getParent().Lock() : nullptr;
 
-        if (componentType && componentType->isExplicitSpecialization)
+        if (componentType && componentType->isExplicitSpecialization && !componentType->isPartialSpecialization)
         {
             EMIT_TABS();
             emitLine("template <>");
@@ -8748,7 +8758,7 @@ namespace wio::codegen
         emitSourceDirective(node.location());
         auto symb = node.name->referencedSymbol.Lock();
         auto objectType = getStructTypeFromSymbol(symb);
-        if (objectType && objectType->isExplicitSpecialization)
+        if (objectType && objectType->isExplicitSpecialization && !objectType->isPartialSpecialization)
         {
             EMIT_TABS();
             emitLine("template <>");
@@ -8866,7 +8876,7 @@ namespace wio::codegen
         emitLine("}\n");
     
         std::string objectRefFriend = structName;
-        if (!node.genericParameters.empty())
+        if (!node.genericParameters.empty() && !(objectType && objectType->isExplicitSpecialization))
         {
             objectRefFriend += "<";
             for (size_t i = 0; i < node.genericParameters.size(); ++i)
