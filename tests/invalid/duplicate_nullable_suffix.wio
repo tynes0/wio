@@ -1,0 +1,7 @@
+object Service {
+}
+
+fn Entry() -> i32 {
+    let service: Service?? = null;
+    return 0;
+}

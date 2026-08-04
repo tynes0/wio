@@ -3440,6 +3440,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_failure_test_clean(
+        wio_invalid_duplicate_nullable_suffix
+        "${CMAKE_SOURCE_DIR}/tests/invalid/duplicate_nullable_suffix.wio"
+        "A type can only have one nullable suffix '\\?'"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
+        wio_invalid_nullable_dynamic_array_handle
+        "${CMAKE_SOURCE_DIR}/tests/invalid/nullable_dynamic_array_handle.wio"
+        "Type 'i32\\[\\]' cannot be nullable"
+        "Compiling failed:"
+    )
+
+    add_wio_failure_test_clean(
         wio_invalid_destructor_parameters_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/destructor_parameters_not_supported.wio"
         "OnDestruct must not declare parameters"
