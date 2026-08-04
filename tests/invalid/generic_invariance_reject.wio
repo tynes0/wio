@@ -1,0 +1,19 @@
+interface Animal {
+}
+
+@From(Animal)
+object Dog {
+}
+
+component Holder<T> {
+    public value: T;
+}
+
+fn AcceptAnimals(values: Holder<Animal>) {
+}
+
+fn Entry() -> i32 {
+    let dogs = Holder<Dog>(Dog());
+    AcceptAnimals(dogs);
+    return 0;
+}

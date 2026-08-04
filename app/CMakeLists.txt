@@ -1490,6 +1490,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_failure_test(
+        wio_invalid_generic_invariance_reject
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_invariance_reject.wio"
+        "Argument mismatch at index 0: Expected 'Holder<Animal>', but got 'Holder<Dog>'"
+    )
+
+    add_wio_failure_test(
         wio_invalid_generic_partial_specialization_ambiguous
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_partial_specialization_ambiguous.wio"
         "Ambiguous partial specialization for 'Choice\\(i32, string\\)'"
