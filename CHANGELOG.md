@@ -4,6 +4,13 @@ All notable user-facing changes to Wio are recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- Added the multi-module Wio Observatory example, combining const generics,
+  Option/Result flows, JSON reporting, reflection, modern standard-library
+  containers/utilities, and direct native POD component extensions in one
+  practical workspace-audit application.
+
 ## [0.10.0] - 2026-08-05
 
 ### Added

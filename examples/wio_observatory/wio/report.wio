@@ -1,0 +1,76 @@
+use domain;
+use native_metrics;
+use audit;
+use std::fs as fs;
+use std::json as json;
+
+realm observatory {
+    fn JsonStrings(values: string[]) -> string {
+        mut encoded: string[] = [];
+        for value in values { encoded.Push(json::String(value)); }
+        return json::Array(encoded);
+    }
+
+    fn JsonIntegers(values: i64[]) -> string {
+        mut encoded: string[] = [];
+        for value in values { encoded.Push(json::Number(value)); }
+        return json::Array(encoded);
+    }
+
+    fn JsonFile(file: FileAudit) -> string {
+        return json::Object([
+            json::Field("path", json::String(file.path)),
+            json::Field("extension", json::String(file.extension)),
+            json::Field("size", json::Number(file.size)),
+            json::Field("sha256", json::String(file.sha256)),
+            json::Field("warnings", JsonStrings(file.warnings))
+        ]);
+    }
+
+    fn JsonFiles(files: FileAudit[]) -> string {
+        mut encoded: string[] = [];
+        for file in files { encoded.Push(JsonFile(file)); }
+        return json::Array(encoded);
+    }
+
+    fn BuildReport(policy: Policy, auditResult: AuditResult) -> string {
+        let status = auditResult.metrics.MeetsThreshold(policy.minimumScore) ? "healthy" : "attention";
+        return json::Object([
+            json::Field("schema", json::Number(1)),
+            json::Field("runId", json::String(auditResult.runId)),
+            json::Field("generatedAt", json::String(auditResult.generatedAt)),
+            json::Field("project", json::String(policy.project)),
+            json::Field("version", json::String(policy.version.ToString())),
+            json::Field("workspace", json::String(auditResult.workspace)),
+            json::Field("status", json::String(status)),
+            json::Field("score", json::Number(auditResult.metrics.score)),
+            json::Field("risk", json::Number(auditResult.metrics.Risk())),
+            json::Field("fileCount", json::Number(auditResult.metrics.files fit i64)),
+            json::Field("totalBytes", json::Number(auditResult.metrics.bytes fit i64)),
+            json::Field("warningCount", json::Number(auditResult.metrics.warnings fit i64)),
+            json::Field("medianSize", json::Number(auditResult.medianSize)),
+            json::Field("baselineAverage", json::Number(auditResult.baselineAverage)),
+            json::Field("elapsedMilliseconds", json::Number(auditResult.elapsedMilliseconds)),
+            json::Field("signalMagnitude", json::Number(auditResult.signalMagnitude)),
+            json::Field("reflectedFields", json::Number(auditResult.reflectedFields fit i64)),
+            json::Field("reflectedFindingKinds", json::Number(auditResult.reflectedFindingKinds fit i64)),
+            json::Field("sampledPath", json::String(auditResult.sampledPath)),
+            json::Field("contentDigest", json::String(auditResult.contentDigest)),
+            json::Field("binarySignature", json::String(auditResult.binarySignature)),
+            json::Field("tags", JsonStrings(auditResult.tags)),
+            json::Field("smallestFiles", JsonIntegers(auditResult.smallestFiles)),
+            json::Field("findings", JsonStrings(auditResult.findings)),
+            json::Field("files", JsonFiles(auditResult.files))
+        ]);
+    }
+
+    fn WriteReport(path: string, policy: Policy, auditResult: AuditResult) -> std::Result<std::ResultUnit> {
+        let report = BuildReport(policy, auditResult);
+        let parsed = json::Parse(report);
+        if (parsed.IsError()) {
+            return std::Err<std::ResultUnit>(
+                std::MakeResultError(std::ResultDomain::custom, 300, "Generated report failed JSON validation."));
+        }
+        return fs::WriteTextEnsured(path, json::WritePretty(parsed.Value(), 2usize));
+    }
+}

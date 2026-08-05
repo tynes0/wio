@@ -1,0 +1,28 @@
+realm observatory {
+    @Native
+    @CppHeader("audit_metrics.h")
+    @CppName(observatory_native::AuditMetrics)
+    component AuditMetrics {
+        files: u64;
+        bytes: u64;
+        warnings: u64;
+        score: f64;
+    }
+
+    extension AuditMetricsNative for AuditMetrics {
+        @Native
+        @CppHeader("audit_metrics.h")
+        @CppName(observatory_native::AddFile)
+        public ref fn AddFile(bytes: u64, warnings: u64);
+
+        @Native
+        @CppHeader("audit_metrics.h")
+        @CppName(observatory_native::MeetsThreshold)
+        public view fn MeetsThreshold(minimum: f64) -> bool;
+
+        @Native
+        @CppHeader("audit_metrics.h")
+        @CppName(observatory_native::Risk)
+        public view fn Risk() -> f64;
+    }
+}

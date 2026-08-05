@@ -1,0 +1,35 @@
+schemaVersion = 1
+name = "WioObservatory"
+template = "wio-native-app"
+
+[toolchain]
+buildDir = "build"
+config = "Debug"
+
+[wio]
+entry = "wio/main.wio"
+target = "exe"
+sourceRoots = ["wio"]
+includeDirs = ["native/include"]
+linkDirs = []
+linkLibraries = []
+nativeSources = ["native/src/audit_metrics.cpp"]
+backendArgs = []
+
+[host]
+enabled = false
+
+[build]
+buildDir = ".wio-build"
+config = "Debug"
+
+[outputs]
+directory = ".wio-build/interop"
+baseName = "wio_observatory"
+wioName = "wio_observatory"
+hostName = "wio_observatory.host"
+
+[run]
+passLibraryPath = false
+args = ["data/policy.json", "data/sample-workspace"]
+workingDirectory = "."

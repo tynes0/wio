@@ -1,0 +1,50 @@
+use std::semver as semver;
+
+realm observatory {
+    @Type(u8)
+    enum FindingKind {
+        todo = 0u8,
+        fixme = 1u8,
+        hack = 2u8
+    };
+
+    component Policy {
+        public project: string;
+        public version: semver::Version;
+        public minimumScore: f64;
+        public requiredTags: string[];
+    }
+
+    component FileAudit {
+        public path: string;
+        public extension: string;
+        public size: i64;
+        public sha256: string;
+        public warnings: string[];
+    }
+
+    extension FileAuditMethods for FileAudit {
+        public view fn Clean() -> bool {
+            return self.warnings.Empty();
+        }
+
+        public view fn Summary() -> string {
+            let state = self.Clean() ? "clean" : $"${self.warnings.Count()} finding(s)";
+            return $"${self.path} [${self.extension}] ${self.size} bytes, ${state}";
+        }
+    }
+
+    component FixedWindow<T, const N: usize = 5> {
+        public values: [T; N];
+    }
+
+    fn AverageWindow<const N: usize>(window: FixedWindow<i64, N>) -> i64 {
+        mut total = 0i64;
+        mut index = 0usize;
+        while (index < N) {
+            total += window.values[index];
+            index += 1usize;
+        }
+        return total / (N fit i64);
+    }
+}

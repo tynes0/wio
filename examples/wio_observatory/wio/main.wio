@@ -1,0 +1,51 @@
+use domain;
+use native_metrics;
+use policy;
+use audit;
+use report;
+use std::console as console;
+use std::json as json;
+
+fn Entry(args: string[]) -> i32 {
+    let policyPath = args.Count() > 1usize ? args[1usize] : "data/policy.json";
+    let workspace = args.Count() > 2usize ? args[2usize] : "data/sample-workspace";
+    let outputPath = args.Count() > 3usize ? args[3usize] : ".wio-build/reports/audit-report.json";
+
+    let loadedPolicy = observatory::LoadPolicy(policyPath);
+    if (loadedPolicy.IsError()) {
+        console::PrintLine!($"Policy error: ${loadedPolicy.ErrorValue().message}");
+        return 2;
+    }
+
+    let policyValue = loadedPolicy.Value();
+    let audited = observatory::AuditWorkspace(workspace, policyValue);
+    if (audited.IsError()) {
+        console::PrintLine!($"Audit error: ${audited.ErrorValue().message}");
+        return 3;
+    }
+
+    let result = audited.Value();
+    let written = observatory::WriteReport(outputPath, policyValue, result);
+    if (written.IsError()) {
+        console::PrintLine!($"Report error: ${written.ErrorValue().message}");
+        return 4;
+    }
+
+    let reportDocument = observatory::BuildReport(policyValue, result);
+    let roundTrip = json::Parse(reportDocument);
+    if (roundTrip.IsError()) {
+        console::PrintLine!("Report round-trip validation failed.");
+        return 5;
+    }
+
+    let healthy = result.metrics.MeetsThreshold(policyValue.minimumScore);
+    let status = healthy ? "HEALTHY" : "ATTENTION";
+    console::PrintLine!("Wio Observatory");
+    console::PrintLine!($"Project ${policyValue.project} v${policyValue.version.ToString()}");
+    console::PrintLine!($"${result.metrics.files} files, ${result.metrics.bytes} bytes, ${result.metrics.warnings} warnings");
+    console::PrintLine!($"Score ${result.metrics.score}, risk ${result.metrics.Risk()}, status ${status}");
+    console::PrintLine!($"Digest ${result.contentDigest}");
+    console::PrintLine!($"Report ${outputPath}");
+    console::PrintLine!("OBSERVATORY AUDIT COMPLETE");
+    return healthy ? 0 : 6;
+}

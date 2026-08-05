@@ -1,0 +1,8 @@
+component Cache<T, const N: usize = 4> {
+    values: [T; N];
+}
+
+// TODO: connect this sample cache to a persistent store.
+fn Capacity<const N: usize>() -> usize {
+    return N;
+}

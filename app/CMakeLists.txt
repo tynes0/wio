@@ -864,6 +864,21 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_test(
+        NAME wio_test_example_observatory_run
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DEXAMPLE_ROOT=${CMAKE_SOURCE_DIR}/examples/wio_observatory
+            -DWIO_EXPECT=OBSERVATORY\ AUDIT\ COMPLETE
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExampleProject.cmake"
+    )
+    set_tests_properties(
+        wio_test_example_observatory_run
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
         NAME wio_test_example_hybrid_module_run
         COMMAND
             ${CMAKE_COMMAND}

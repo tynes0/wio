@@ -1,0 +1,6 @@
+{
+  "project": "Wio Observatory Demo",
+  "version": "0.10.0",
+  "minimumScore": 70,
+  "requiredTags": ["wio", "native", "docs", "generic"]
+}

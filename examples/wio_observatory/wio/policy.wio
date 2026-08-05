@@ -1,0 +1,73 @@
+use domain;
+use std::fs as fs;
+use std::json as json;
+use std::semver as semver;
+
+realm observatory {
+    fn PolicyFailure<T>(message: string) -> std::Result<T> {
+        return std::Err<T>(std::MakeResultError(std::ResultDomain::custom, 100, message));
+    }
+
+    fn RequiredField(root: json::Value, name: string) -> std::Result<json::Value> {
+        let value = root.Get(name);
+        if (value.IsNone()) {
+            return PolicyFailure<json::Value>($"Policy field '${name}' is required.");
+        }
+        return std::Ok<json::Value>(value.Value());
+    }
+
+    fn LoadPolicy(path: string) -> std::Result<Policy> {
+        let text = fs::ReadText(path);
+        if (text.IsError()) {
+            return PolicyFailure<Policy>($"Could not read policy '${path}': ${text.ErrorValue().message}");
+        }
+
+        let parsed = json::Parse(text.Value());
+        if (parsed.IsError()) {
+            return PolicyFailure<Policy>($"Could not parse policy '${path}': ${parsed.ErrorValue().message}");
+        }
+
+        let root = parsed.Value();
+        if (not root.IsObject()) {
+            return PolicyFailure<Policy>("Policy root must be a JSON object.");
+        }
+
+        let projectValue = RequiredField(root, "project");
+        let versionValue = RequiredField(root, "version");
+        let scoreValue = RequiredField(root, "minimumScore");
+        let tagsValue = RequiredField(root, "requiredTags");
+        if (projectValue.IsError()) { return PolicyFailure<Policy>(projectValue.ErrorValue().message); }
+        if (versionValue.IsError()) { return PolicyFailure<Policy>(versionValue.ErrorValue().message); }
+        if (scoreValue.IsError()) { return PolicyFailure<Policy>(scoreValue.ErrorValue().message); }
+        if (tagsValue.IsError()) { return PolicyFailure<Policy>(tagsValue.ErrorValue().message); }
+
+        let versionText = versionValue.Value().StringOr("");
+        let parsedVersion = semver::Parse(versionText);
+        if (parsedVersion.IsNone()) {
+            return PolicyFailure<Policy>($"Policy version '${versionText}' is not a supported packed semantic version.");
+        }
+
+        let tagsJson = tagsValue.Value();
+        if (not tagsJson.IsArray()) {
+            return PolicyFailure<Policy>("Policy requiredTags must be an array.");
+        }
+
+        mut tags: string[] = [];
+        mut index = 0usize;
+        while (index < tagsJson.Count()) {
+            let tag = tagsJson.At(index);
+            if (tag.IsNone() or not tag.Value().IsString()) {
+                return PolicyFailure<Policy>("Every requiredTags item must be a string.");
+            }
+            tags.Push(tag.Value().StringOr(""));
+            index += 1usize;
+        }
+
+        mut policy: Policy;
+        policy.project = projectValue.Value().StringOr("Unnamed");
+        policy.version = parsedVersion.Value();
+        policy.minimumScore = scoreValue.Value().NumberOr(70.0f64);
+        policy.requiredTags = tags;
+        return std::Ok<Policy>(policy);
+    }
+}

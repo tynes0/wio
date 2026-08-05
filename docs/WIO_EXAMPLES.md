@@ -24,6 +24,7 @@ These examples are the intended first-stop references:
 4. [`examples/binding_import`](../examples/binding_import/README.md)
 5. [`examples/packaged_quickstart`](../examples/packaged_quickstart/README.md)
 6. [`examples/static_cmake_consumer`](../examples/static_cmake_consumer/README.md)
+7. [`examples/wio_observatory`](../examples/wio_observatory/README.md)
 
 They are complemented by:
 
@@ -126,6 +127,21 @@ Use it for:
 - richer module/host choreography
 - reload-oriented integration reading
 
+### 2.8 I Want A Full Modern Wio Application
+
+Open:
+
+- [`examples/wio_observatory`](../examples/wio_observatory/README.md)
+
+Use it for:
+
+- a multi-module application rather than a focused feature snippet
+- const generics, Option/Result, reflection, and modern std APIs together
+- JSON policy input and generated JSON report output
+- native POD components exposed through direct extension method syntax
+- filesystem, regex, hash, random, time, collections, span, tuple, and buffer
+  composition
+
 ---
 
 ## 3. Source-Based Tooling Examples
@@ -176,6 +192,7 @@ For `v0.10.0`, the intended reading order is:
 5. `examples/packaged_quickstart`
 6. `examples/static_cmake_consumer`
 7. `examples/hybrid_arena`
+8. `examples/wio_observatory`
 
 That sequence moves from:
 
@@ -186,6 +203,7 @@ That sequence moves from:
 - to packaged toolchain usage
 - to CMake embedding
 - to a heavier integration sample
+- to a complete modern Wio application
 
 ---
 

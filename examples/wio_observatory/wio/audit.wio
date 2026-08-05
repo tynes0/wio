@@ -1,0 +1,166 @@
+use domain;
+use native_metrics;
+use std::buffer as buffer;
+use std::fs as fs;
+use std::hash as hash;
+use std::path as path;
+use std::queue as queue;
+use std::random as random;
+use std::reflect as reflect;
+use std::regex as regex;
+use std::sets as sets;
+use std::sort as sort;
+use std::span as span;
+use std::time as time;
+use std::tuple as tuple;
+use std::uuid as uuid;
+use std::vector;
+
+realm observatory {
+    component AuditResult {
+        public runId: string;
+        public generatedAt: string;
+        public workspace: string;
+        public files: FileAudit[];
+        public findings: string[];
+        public tags: string[];
+        public smallestFiles: i64[];
+        public contentDigest: string;
+        public binarySignature: string;
+        public sampledPath: string;
+        public medianSize: i64;
+        public baselineAverage: i64;
+        public elapsedMilliseconds: i64;
+        public signalMagnitude: f64;
+        public reflectedFields: usize;
+        public reflectedFindingKinds: usize;
+        public metrics: AuditMetrics;
+    }
+
+    fn AuditFailure<T>(message: string) -> std::Result<T> {
+        return std::Err<T>(std::MakeResultError(std::ResultDomain::custom, 200, message));
+    }
+
+    fn DetectTag(filePath: string) -> string {
+        let extension = path::Extension(filePath).ToLower();
+        if (extension == ".wio") { return "wio"; }
+        if (extension == ".cpp" or extension == ".h") { return "native"; }
+        if (extension == ".md") { return "docs"; }
+        return extension.Replace(".", "");
+    }
+
+    fn AuditWorkspace(workspace: string, policy: Policy) -> std::Result<AuditResult> {
+        let started = time::Now();
+        let listed = fs::ListFilesRecursive(workspace);
+        if (listed.IsError()) {
+            return AuditFailure<AuditResult>($"Could not enumerate '${workspace}': ${listed.ErrorValue().message}");
+        }
+
+        let warningPattern = regex::Regex("(TODO|FIXME|HACK)");
+        mut metrics = AuditMetrics(0u64, 0u64, 0u64, 100.0f64);
+        mut files: FileAudit[] = [];
+        mut sizes: i64[] = [];
+        mut digestMaterial = "";
+        let tags = sets::OrderedSet<string>();
+        let pending = queue::Queue<string>();
+
+        for filePath in listed.Value() {
+            let text = fs::ReadText(filePath);
+            if (text.IsError()) {
+                pending.Enqueue($"unreadable: ${filePath}");
+                continue;
+            }
+
+            let metadata = fs::Metadata(filePath);
+            if (metadata.IsError()) {
+                pending.Enqueue($"metadata unavailable: ${filePath}");
+                continue;
+            }
+
+            let matches = warningPattern.FindAll(text.Value());
+            if (matches.IsError()) {
+                return AuditFailure<AuditResult>($"Regex scan failed: ${matches.ErrorValue().message}");
+            }
+
+            let digest = hash::Sha256(text.Value());
+            let relativePath = path::RelativeToRaw(filePath, workspace);
+            mut record: FileAudit;
+            record.path = relativePath;
+            record.extension = path::Extension(filePath).ToLower();
+            record.size = metadata.Value().size;
+            record.sha256 = digest;
+            record.warnings = matches.Value();
+            files.Push(record);
+            sizes.Push(record.size);
+            digestMaterial += digest;
+            metrics.AddFile(record.size fit u64, record.warnings.Count() fit u64);
+
+            let detectedTag = DetectTag(filePath);
+            if (detectedTag != "") { tags.Add(detectedTag); }
+            if (record.Clean()) { tags.Add("safe"); }
+            if (text.Value().Contains("<") and text.Value().Contains(">")) { tags.Add("generic"); }
+            if (not record.Clean()) { pending.Enqueue(record.Summary()); }
+        }
+
+        for requiredTag in policy.requiredTags {
+            if (not tags.Contains(requiredTag)) {
+                pending.Enqueue($"missing required tag: ${requiredTag}");
+            }
+        }
+
+        mut findings: string[] = [];
+        while (not pending.Empty()) {
+            findings.Push(pending.Dequeue());
+        }
+
+        sort::Sort(ref sizes);
+        let medianSize = sizes.Empty() ? 0i64 : sizes[sizes.Count() / 2usize];
+        let smallestCount = sizes.Count() < 2usize ? sizes.Count() : 2usize;
+        let smallestRange = span::Make(ref sizes, 0usize, smallestCount);
+        let smallestFiles = span::ToArray(ref sizes, smallestRange);
+        let largestSize = sizes.Empty() ? 0i64 : sizes.Last();
+        let extremes = tuple::Tuple<i64, i64>(sizes.Get(0usize).ValueOr(0i64), largestSize);
+
+        let baseline: FixedWindow<i64> = FixedWindow<i64>([100i64, 92i64, 84i64, 76i64, 68i64]);
+        let baselineAverage = AverageWindow<5>(baseline);
+
+        let generator = random::Mt19937(policy.version.Packed());
+        let sampledPath = files.Empty()
+            ? "none"
+            : files[generator.NextU32(files.Count() fit u32) fit usize].path;
+
+        let signal = std::Vector2(metrics.files fit f64, metrics.warnings fit f64);
+        let reflected = reflect::Describe<FileAudit>();
+
+        let signatureBytes = buffer::ByteBuffer(32usize);
+        signatureBytes.WriteU64LE(metrics.files);
+        signatureBytes.WriteU64LE(metrics.bytes);
+        signatureBytes.WriteU64LE(metrics.warnings);
+        signatureBytes.WriteU64LE(extremes.First() fit u64);
+        signatureBytes.WriteU64LE(extremes.Second() fit u64);
+
+        mut result: AuditResult;
+        result.runId = uuid::NewV4();
+        result.generatedAt = time::UtcNow().ToIso8601();
+        result.workspace = workspace;
+        result.files = files;
+        result.findings = findings;
+        result.tags = tags.Values();
+        result.smallestFiles = smallestFiles;
+        result.contentDigest = hash::Sha256(digestMaterial);
+        result.binarySignature = hash::Sha256(signatureBytes.ToArray());
+        result.sampledPath = sampledPath;
+        result.medianSize = medianSize;
+        result.baselineAverage = baselineAverage;
+        result.signalMagnitude = signal.Length();
+        result.reflectedFields = reflected.fields.Count();
+        result.reflectedFindingKinds = reflect::Count<FindingKind>();
+        result.metrics = metrics;
+        let elapsed = started.Elapsed();
+        if (elapsed.Nanoseconds() < 0i64) {
+            return AuditFailure<AuditResult>("Monotonic audit clock moved backwards.");
+        }
+        result.elapsedMilliseconds = elapsed.Milliseconds();
+        return std::Ok<AuditResult>(result);
+    }
+}
