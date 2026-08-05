@@ -1,0 +1,55 @@
+use std::assert as assert;
+use std::console as console;
+
+@Native
+@CppHeader("native_pod_components.h")
+@CppName(vec2)
+component Vector2 {
+    x: f32;
+    y: f32;
+}
+
+extension Vector2Native for Vector2 {
+    @Native
+    @CppHeader("native_pod_components.h")
+    @CppName(native_pod::SumView)
+    public view fn Sum() -> f32;
+
+    @Native
+    @CppHeader("native_pod_components.h")
+    @CppName(native_pod::Translate)
+    public ref fn Translate(dx: f32, dy: f32);
+
+    @Native
+    public view fn NativeIdentity() -> f32;
+
+    @Native
+    @CppHeader("native_pod_components.h")
+    @CppName(native_pod::SumPointer)
+    public view fn PointerSum() -> f32;
+
+    @Native
+    @CppHeader("native_pod_components.h")
+    @CppName(native_pod::DotPointerSelf)
+    public view fn DotPointerSelf(other: view Vector2) -> f32;
+
+    @Native
+    @CppHeader("native_pod_components.h")
+    @CppName(native_pod::ScalePointer)
+    public ref fn ScalePointer(amount: f32);
+}
+
+fn Entry() -> i32 {
+    mut value = Vector2(3.0f, 4.0f);
+    assert::ExpectEqual(value.Sum(), 7.0f, "view native extension should bind self as const T&");
+    value.Translate(1.0f, 2.0f);
+    assert::ExpectEqual(value.NativeIdentity(), 4.0f, "native extension should default to its public method name");
+    assert::ExpectEqual(value.PointerSum(), 10.0f, "view native extension should fall back to const T*");
+    let other = Vector2(2.0f, 3.0f);
+    assert::ExpectEqual(value.DotPointerSelf(ref other), 26.0f, "receiver fallback should not change explicit ref arguments");
+    value.ScalePointer(2.0f);
+    assert::ExpectEqual(value.x, 8.0f, "ref native extension pointer fallback should mutate x");
+    assert::ExpectEqual(value.y, 12.0f, "ref native extension pointer fallback should mutate y");
+    console::Print("Native component extension: ok");
+    return 0;
+}

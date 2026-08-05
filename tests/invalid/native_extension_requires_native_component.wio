@@ -1,0 +1,14 @@
+component Vector2 {
+    public x: f32;
+    public y: f32;
+}
+
+extension Vector2Native for Vector2 {
+    @Native
+    @CppName(native_pod::Length)
+    public view fn Length() -> f32;
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

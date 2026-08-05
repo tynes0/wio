@@ -13557,6 +13557,21 @@ namespace wio::sema
                 WIO_LOG_ADD_ERROR(node.location(), "@Native functions cannot define a Wio body. Declare them with ';' only.");
             }
 
+            if (node.isExtensionMethod)
+            {
+                auto extensionTarget = unwrapAliasType(currentExtensionTargetType_);
+                auto extensionComponent = extensionTarget && extensionTarget->kind() == TypeKind::Struct
+                    ? extensionTarget.AsFast<StructType>()
+                    : nullptr;
+                if (!extensionComponent || !extensionComponent->isNativePodComponent)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "@Native extension methods require a declaration-level @Native component target. Use a Wio-bodied extension wrapper for ordinary components."
+                    );
+                }
+            }
+
             if (isStructMethod)
             {
                 if (!currentStruct || currentStruct->isInterface)

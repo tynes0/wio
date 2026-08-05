@@ -2526,6 +2526,27 @@ position.Scale(2.0f);
   component are diagnosed as ambiguous.
 - Generic extension targets are not supported yet.
 
+An extension over a declaration-level `@Native` component may bind a C++ free
+function directly:
+
+```wio
+extension VectorNative for Vector {
+    @Native
+    @CppName(native_math::Length)
+    public view fn Length() -> f32;
+
+    @Native
+    @CppName(native_math::Normalize)
+    public ref fn Normalize();
+}
+```
+
+The receiver becomes the first native argument. `view` prefers `const T&` and
+falls back to `const T*`; `ref` prefers `T&` and falls back to `T*`. No value
+copy is used. If `@CppName` is omitted, the public extension method name is the
+native symbol. Direct `@Native` extension declarations are rejected for
+ordinary Wio components, which can instead use a Wio-bodied wrapper.
+
 ## 18. `object`
 
 ### 18.1 Purpose

@@ -1789,6 +1789,9 @@ namespace wio::codegen
             if (auto cppNameArg = getSingleAttributeArg(node.attributes, Attribute::CppName); cppNameArg.has_value())
                 return cppNameArg->value;
 
+            if (node.isExtensionMethod && !node.extensionMemberName.empty())
+                return node.extensionMemberName;
+
             return node.name ? node.name->token.value : "";
         }
 
@@ -7988,22 +7991,31 @@ namespace wio::codegen
                         resolvedParameterType && resolvedParameterType->kind() == sema::TypeKind::Reference;
                     const bool isMutableReference =
                         isReferenceParameter && resolvedParameterType.AsFast<sema::ReferenceType>()->isMutable;
-                    const std::string directCallExpr = isReferenceParameter ? "*" + parameterName : parameterName;
+                    const bool usesExtensionReceiverDispatch =
+                        isReferenceParameter && node.isExtensionMethod && i == 0;
                     const std::string nativeSignatureType = getNativePodCppName(nativeStruct);
 
                     NativePreparedArgument preparedArgument;
-                    preparedArgument.callExpr = directCallExpr;
-                    preparedArgument.preferredCallExpr = directCallExpr;
-                    preparedArgument.fallbackCallExpr = directCallExpr;
+                    preparedArgument.callExpr = isReferenceParameter && !usesExtensionReceiverDispatch
+                        ? "*" + parameterName
+                        : parameterName;
+                    preparedArgument.preferredCallExpr = isReferenceParameter ? "*" + parameterName : parameterName;
+                    preparedArgument.fallbackCallExpr = usesExtensionReceiverDispatch
+                        ? parameterName
+                        : preparedArgument.preferredCallExpr;
                     preparedArgument.mutableTargetName = "";
                     preparedArgument.mutableTargetType = nullptr;
                     preparedArgument.mutableTargetIsPointer = false;
+                    preparedArgument.usesReferenceDispatch = usesExtensionReceiverDispatch;
                     preparedArgument.signatureType = isReferenceParameter
                         ? (isMutableReference ? nativeSignatureType + "&" : "const " + nativeSignatureType + "&")
                         : nativeSignatureType;
                     preparedArgument.preferredSignatureType = preparedArgument.signatureType;
-                    preparedArgument.fallbackSignatureType = preparedArgument.signatureType;
+                    preparedArgument.fallbackSignatureType = usesExtensionReceiverDispatch
+                        ? (isMutableReference ? nativeSignatureType + "*" : "const " + nativeSignatureType + "*")
+                        : preparedArgument.signatureType;
                     preparedArguments.push_back(std::move(preparedArgument));
+                    usesNativeReferenceWrappers = usesNativeReferenceWrappers || usesExtensionReceiverDispatch;
                     continue;
                 }
 

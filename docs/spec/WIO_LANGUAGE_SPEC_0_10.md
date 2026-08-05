@@ -162,7 +162,43 @@ specialization. The corresponding C++ template specialization must exist and
 must have the layout declared by Wio. A non-native primary cannot acquire a
 new ABI identity by marking only a specialization `@Native`.
 
-## 8. Native boundaries and exclusions
+## 8. Native component extensions
+
+A declaration-level native component may expose C++ free functions through
+ordinary extension method syntax. The extension method itself is marked
+`@Native` and has no Wio body.
+
+```wio
+extension RecordNative for Record {
+    @Native
+    @CppName(native::Inspect)
+    public view fn Inspect() -> i32;
+
+    @Native
+    @CppName(native::Reset)
+    public ref fn Reset();
+}
+```
+
+The extension receiver is the implicit first native argument. A `view fn`
+first attempts a `const T&` call and then a `const T*` call. A `ref fn` first
+attempts a `T&` call and then a `T*` call. Reference form has deterministic
+precedence when both native overloads are viable. The receiver is never passed
+by value and no component copy or layout bridge is inserted.
+
+`@CppName` selects a namespaced or differently named C++ free function. When it
+is absent, the public extension method name is the native symbol name.
+`@CppHeader` may be supplied on the method when the function is declared in a
+different header; otherwise the native component's declaration-level header is
+already part of generated C++.
+
+Direct native extensions require a declaration-level `@Native` component
+target. Ordinary components use Wio-bodied extensions that call native free
+functions explicitly. Native extension return values obey the ordinary native
+boundary: `ref`/`view` returns remain rejected because native borrow lifetimes
+cannot currently be proven.
+
+## 9. Native boundaries and exclusions
 
 Native free functions may pass concrete native component instantiations by
 value or supported reference forms. Open generic native functions still use

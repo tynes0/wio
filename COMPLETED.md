@@ -57,10 +57,15 @@ Notes:
       for both type-only and type/value C++ templates. Native generic component
       specializations inherit the primary ABI mapping and no longer generate
       illegal C++ alias-template specializations.
+- [x] Native component extensions bind C++ free functions directly. `view`
+      receivers dispatch to `const T&` or `const T*`; `ref` receivers dispatch
+      to `T&` or `T*`, with reference overloads taking precedence and no POD
+      copy.
 - [x] The 0.10 normative contract freezes const-generic and native-component
       rules in `docs/spec/WIO_LANGUAGE_SPEC_0_10.md`.
-- [x] P1-D qualification passed all six focused const-generic/native-component
-      runtime and diagnostic tests, including generated C++ compilation.
+- [x] P1-D qualification passed the focused const-generic/native-component
+      runtime and diagnostic tests, including generated C++ compilation and
+      direct native extension receiver dispatch.
 
 ## P1-C generics and type-system sprint
 

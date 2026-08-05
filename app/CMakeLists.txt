@@ -1632,6 +1632,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_native_component_extension_run
+        "${CMAKE_SOURCE_DIR}/tests/native/native_component_extension_run.wio"
+        "Native component extension: ok"
+        --run
+        --include-dir
+        "${CMAKE_SOURCE_DIR}/tests/native"
+        --backend-arg
+        "${CMAKE_SOURCE_DIR}/tests/native/native_pod_components.cpp"
+    )
+
+    add_wio_output_test(
         wio_test_native_generic_pod_component_bridge_run
         "${CMAKE_SOURCE_DIR}/tests/native/native_generic_pod_component_bridge.wio"
         "Generic native POD component: 7, 3, 5, 5, 4, 5"
@@ -4187,6 +4198,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_generic_specialization_native_component
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_specialization_native_component.wio"
         "A declaration-level @Native specialization requires an @Native generic component primary"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_native_extension_requires_native_component
+        "${CMAKE_SOURCE_DIR}/tests/invalid/native_extension_requires_native_component.wio"
+        "@Native extension methods require a declaration-level @Native component target"
     )
 
     add_wio_failure_test(

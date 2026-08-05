@@ -47,10 +47,12 @@ and later work.
    guards, exhaustiveness checks, unreachable-case diagnostics, and binding
    ownership/reference rules.
 
-8. [ ] Complete component extension ergonomics.
-   Add constrained generic extensions, extension properties, static extension
-   functions, explicit conflict resolution, import-scoped visibility,
-   documentation generation, reflection metadata, and editor completion.
+8. [~] Complete component extension ergonomics.
+   Direct native component extensions now map free C++ functions through
+   `view`/`ref` receiver reference-or-pointer dispatch. Add constrained generic
+   extensions, extension properties, static extension functions, explicit
+   conflict resolution, import-scoped visibility, documentation generation,
+   reflection metadata, and editor completion.
 
 11. [ ] Evaluate pipeline/data-flow operators only after semantics are stable.
     Measure `|>` and `<|` against ordinary calls, method chaining, error

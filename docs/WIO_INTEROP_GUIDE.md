@@ -131,6 +131,37 @@ Use native imports when:
 - you are bridging an existing library
 - Wio should remain a thin front-end over a native subsystem
 
+### 2.5 Native Component Extensions
+
+C++ free functions that receive a declaration-level native component can be
+presented as extension methods without adding methods to the POD type:
+
+```wio
+@Native
+@CppHeader("vector.h")
+@CppName(native::Vector)
+component Vector {
+    x: f32;
+    y: f32;
+}
+
+extension VectorNative for Vector {
+    @Native
+    @CppName(native::Length)
+    public view fn Length() -> f32;
+
+    @Native
+    @CppName(native::Translate)
+    public ref fn Translate(x: f32, y: f32);
+}
+```
+
+`value.Length()` passes `value` as the first `const Vector&` argument, with a
+`const Vector*` fallback for C-style APIs. `value.Translate(...)` uses
+`Vector&`, with a `Vector*` fallback. Reference overloads take precedence and
+the receiver is never copied. Native borrow returns are still rejected; return
+an owning value or opaque handle instead.
+
 ---
 
 ## 3. Exporting Wio Back To A Host
