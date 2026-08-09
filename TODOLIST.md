@@ -8,10 +8,11 @@ Status markers:
 - `[ ]` not started
 - `[~]` partially implemented or implemented but not sufficiently hardened
 
-The priorities below reflect the state of Wio after `v0.5.1`, the P0
-correctness sprint, and the P1-A language/std correctness sprint. Completed
-work is recorded in `COMPLETED.md`; this file contains only the remaining P1
-and later work.
+The priorities below reflect the state of Wio after `v0.10.0`, including the
+P0 and P1 language/std/native-interoperability sprints. Completed work is
+recorded in `COMPLETED.md`; this file contains only the remaining work. The
+candidate application/system and language-coherence direction is expanded in
+`docs/WIO_LANGUAGE_EVOLUTION_PLAN.md`.
 
 ## P1 - Language Semantics and Type System
 
@@ -58,9 +59,28 @@ and later work.
     Measure `|>` and `<|` against ordinary calls, method chaining, error
     propagation, inference, and debugging before reserving syntax.
 
-12. [ ] Clarify whether `system`, `program`, `every`, `after`, `during`, and
-    `wait` belong to the core language, a standard DSL, or should be removed
-    from the planned surface.
+12. [ ] Implement the accepted application/system lifecycle model in staged
+    slices. The current proposal uses one stack-resident `application` root,
+    component-like `system` state, inline or function-bound `on` handlers,
+    explicit resources, deterministic schedules, fixed stages, reverse
+    shutdown, main-thread affinity, and headless testing. Keep `after` as a
+    schedule dependency; keep `every`, `during`, and `wait` in runtime/async
+    experiments until their semantics are proven. Add parallel execution only
+    after `view`/`ref` resource-conflict analysis is stable.
+
+13. [ ] Modernize attribute syntax and formalize attribute semantics. Evaluate
+    the proposed `[Native, CppHeader("...")]` and
+    `use [CppHeader("...")];` spelling against `#[...]`, `[[...]]`, and
+    keyword-led alternatives. Preserve one attribute AST and existing meaning;
+    specify targets, repetition, arguments, conflicts, scope inheritance,
+    reflection/custom attributes, formatting, generated bindings, diagnostics,
+    editions, and automated migration from legacy `@Attribute(...)` syntax.
+
+14. [ ] Complete a language-coherence pass before broad surface expansion.
+    Reconcile the draft, versioned specifications, freeze snapshot, compiler,
+    tests, and documentation; normalize constraints, specialization,
+    conversion, extension, native mapping, and metadata syntax; remove stale
+    or contradictory feature-status claims.
 
 ## P1 - Standard Library Correctness and Consistency
 
@@ -317,10 +337,11 @@ and later work.
 
 ## P3 - Product Direction
 
-1. [ ] Define Wio's primary product profile.
-   Decide the supported priority among systems programming, native application
-   development, games, scripting/tooling, embeddable modules, and services.
-   Use that decision to control language and std scope.
+1. [~] Define and validate Wio's primary product profile. The current proposal
+   is a native application, tooling, and game language with a C++ ecosystem
+   bridge and data-oriented component model, followed by embeddable modules
+   and services where the same model fits. Freeze this direction through the
+   application/system decision and validate it with release-gate projects.
 
 2. [ ] Define long-term compatibility and deprecation mechanics in tooling.
    The written compatibility policy exists; add compiler deprecation

@@ -61,6 +61,7 @@ These documents answer practical workflow questions such as:
 - [Wio 0.9 generics and constraints specification](./spec/WIO_LANGUAGE_SPEC_0_9.md)
 - [Wio 0.10 const generics and native components specification](./spec/WIO_LANGUAGE_SPEC_0_10.md)
 - [Language reference](./WIO_LANGUAGE_DRAFT.md)
+- [Language evolution plan](./WIO_LANGUAGE_EVOLUTION_PLAN.md)
 - [Reference and view lifetimes](./REFERENCE_LIFETIMES.md)
 - [Runtime type model](./WIO_RUNTIME_TYPE_MODEL.md)
 
@@ -72,6 +73,7 @@ Use these when the question is about:
 - generics and packs
 - object/component/interface meaning
 - runtime type boundaries such as `any`, `Box`, and `opaque`
+- proposed application/system semantics and future syntax decisions
 
 ### 3.2 Tooling And Project System
 
