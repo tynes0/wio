@@ -21,7 +21,7 @@ realm SelfHostedBind {
     }
 
     fn AddRequired(parser: ref Argonaut::Parser, id: string, alias: string, description: string)
-        -> std::Result<std::ResultUnit> {
+        -> std::UnitResult {
         mut argument = Argonaut::Argument(id);
         argument.AddAlias(alias).SetDescription(description);
         parser.Add?(argument.Required?());
@@ -29,7 +29,7 @@ realm SelfHostedBind {
     }
 
     fn AddOption(parser: ref Argonaut::Parser, id: string, alias: string, description: string)
-        -> std::Result<std::ResultUnit> {
+        -> std::UnitResult {
         mut argument = Argonaut::Argument(id);
         argument.AddAlias(alias).SetDefaultValue("").SetDescription(description);
         parser.Add?(argument);
@@ -37,7 +37,7 @@ realm SelfHostedBind {
     }
 
     fn AddFlag(parser: ref Argonaut::Parser, id: string, alias: string, description: string)
-        -> std::Result<std::ResultUnit> {
+        -> std::UnitResult {
         mut argument = Argonaut::Argument(id);
         argument.AddAlias(alias).SetDescription(description);
         parser.Add?(argument.Flag?());

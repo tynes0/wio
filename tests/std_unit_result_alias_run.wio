@@ -1,0 +1,49 @@
+use std::assert as assert;
+use std::console as console;
+
+fn RootSuccess() -> std::UnitResult {
+    return std::OkUnit();
+}
+
+fn RootFailure() -> std::UnitResult {
+    return std::ErrUnit(std::MakeResultError(
+        std::ResultDomain::custom,
+        77,
+        "unit failure"
+    ));
+}
+
+fn RealmSuccess() -> std::result::UnitResult {
+    return std::result::OkUnit();
+}
+
+fn RealmFailure() -> std::result::UnitResult {
+    return std::result::ErrUnit(std::result::MakeError(
+        std::ResultDomain::custom,
+        78,
+        "realm unit failure"
+    ));
+}
+
+fn PropagateSuccess() -> std::UnitResult {
+    RootSuccess?();
+    RealmSuccess?();
+    return std::OkUnit();
+}
+
+fn Entry() -> i32 {
+    assert::Expect(RootSuccess().IsOk(), "root UnitResult should preserve success");
+    assert::Expect(RealmSuccess().IsOk(), "realm UnitResult should preserve success");
+    assert::Expect(PropagateSuccess().IsOk(), "UnitResult should support propagation sugar");
+
+    let rootError = RootFailure();
+    assert::Expect(rootError.IsError(), "root ErrUnit should preserve failure");
+    assert::ExpectEqual(rootError.ErrorValue().code, 77, "root ErrUnit should preserve the error code");
+
+    let realmError = RealmFailure();
+    assert::Expect(realmError.IsError(), "realm ErrUnit should preserve failure");
+    assert::ExpectEqual(realmError.ErrorValue().code, 78, "realm ErrUnit should preserve the error code");
+
+    console::PrintLine!("std-unit-result-alias-ok");
+    return 0;
+}

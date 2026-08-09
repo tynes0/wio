@@ -142,6 +142,7 @@ realm std {
     }
 
     type ResultValue<T> = Result<T>;
+    type UnitResult = Result<ResultUnit>;
 
     fn MakeResultError(domain: ResultDomain, code: i32, message: string) -> ResultError {
         mut error = ResultError();
@@ -165,19 +166,23 @@ realm std {
         return Result<T>(value);
     }
 
-    fn OkUnit() -> Result<ResultUnit> {
-        return Result<ResultUnit>(ResultUnit());
+    fn OkUnit() -> UnitResult {
+        return UnitResult(ResultUnit());
     }
 
     fn Err<T>(error: ResultError) -> Result<T> {
         return Result<T>(error);
     }
 
+    fn ErrUnit(error: ResultError) -> UnitResult {
+        return UnitResult(error);
+    }
+
     fn OkResultValue<T>(value: T) -> Result<T> {
         return Ok<T>(value);
     }
 
-    fn OkUnitResult() -> Result<ResultUnit> {
+    fn OkUnitResult() -> UnitResult {
         return OkUnit();
     }
 
@@ -218,6 +223,7 @@ realm std {
         type Unit = ResultUnit;
         type Error = ResultError;
         type Result<T> = std::Result<T>;
+        type UnitResult = std::UnitResult;
 
         fn MakeError(domain: Domain, code: i32, message: string) -> Error {
             return MakeResultError(domain, code, message);
@@ -231,8 +237,12 @@ realm std {
             return std::Ok<T>(value);
         }
 
-        fn OkUnit() -> Result<Unit> {
+        fn OkUnit() -> UnitResult {
             return std::OkUnit();
+        }
+
+        fn ErrUnit(error: Error) -> UnitResult {
+            return std::ErrUnit(error);
         }
 
         fn Err<T>(error: Error) -> Result<T> {

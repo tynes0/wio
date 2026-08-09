@@ -428,12 +428,12 @@ realm std {
             );
         }
 
-        fn ResultFromStatus(status: StatusCode) -> Result<ResultUnit> {
+        fn ResultFromStatus(status: StatusCode) -> UnitResult {
             if (Ok(status)) {
-                return Result<ResultUnit>(ResultUnit());
+                return UnitResult(ResultUnit());
             }
 
-            return Result<ResultUnit>(LastResultError());
+            return UnitResult(LastResultError());
         }
 
         @Native
@@ -514,19 +514,19 @@ realm std {
         @CppName(wio::runtime::std_console::WriteErrorLineText)
         fn WriteErrorLineRaw(value: string) -> i32;
 
-        fn PrintSpace() -> Result<ResultUnit> {
+        fn PrintSpace() -> UnitResult {
             return Print(" ");
         }
 
-        fn Write<T>(value: T) -> Result<ResultUnit> {
+        fn Write<T>(value: T) -> UnitResult {
             return Print(value);
         }
 
-        fn WriteLine<T>(value: T) -> Result<ResultUnit> {
+        fn WriteLine<T>(value: T) -> UnitResult {
             return PrintLine(value);
         }
 
-        fn WriteRepeat<T>(value: T, count: usize) -> Result<ResultUnit> {
+        fn WriteRepeat<T>(value: T, count: usize) -> UnitResult {
             mut index: usize = 0usize;
             while (index < count) {
                 let result = Print(value);
@@ -538,7 +538,7 @@ realm std {
             return OkUnit();
         }
 
-        fn WriteJoined<T>(values: T[], separator: string) -> Result<ResultUnit> {
+        fn WriteJoined<T>(values: T[], separator: string) -> UnitResult {
             mut index: usize = 0usize;
             while (index < values.Count()) {
                 if (index > 0usize) {
@@ -559,7 +559,7 @@ realm std {
             return OkUnit();
         }
 
-        fn WriteEachLine<T>(values: T[]) -> Result<ResultUnit> {
+        fn WriteEachLine<T>(values: T[]) -> UnitResult {
             for value in values {
                 let result = WriteLine(value);
                 if (result.IsError()) {
@@ -601,78 +601,78 @@ realm std {
         @CppName(wio::runtime::std_console::InputUntil)
         fn InputUntilRaw(delimiter: char) -> string;
 
-        fn Print<T>(value: T) -> Result<ResultUnit> {
+        fn Print<T>(value: T) -> UnitResult {
             let status = PrintRaw(value);
             if (status == 0) {
-                return Result<ResultUnit>(ResultUnit());
+                return UnitResult(ResultUnit());
             }
 
-            return Result<ResultUnit>(LastResultError());
+            return UnitResult(LastResultError());
         }
 
-        fn PrintResult<T>(value: T) -> Result<ResultUnit> {
+        fn PrintResult<T>(value: T) -> UnitResult {
             return Print(value);
         }
 
-        fn PrintLine() -> Result<ResultUnit> {
+        fn PrintLine() -> UnitResult {
             let status = PrintLineRaw();
             if (status == 0) {
-                return Result<ResultUnit>(ResultUnit());
+                return UnitResult(ResultUnit());
             }
 
-            return Result<ResultUnit>(LastResultError());
+            return UnitResult(LastResultError());
         }
 
-        fn PrintLineResult() -> Result<ResultUnit> {
+        fn PrintLineResult() -> UnitResult {
             return PrintLine();
         }
 
-        fn PrintLine<T>(value: T) -> Result<ResultUnit> {
+        fn PrintLine<T>(value: T) -> UnitResult {
             let status = PrintLineRaw(value);
             if (status == 0) {
-                return Result<ResultUnit>(ResultUnit());
+                return UnitResult(ResultUnit());
             }
 
-            return Result<ResultUnit>(LastResultError());
+            return UnitResult(LastResultError());
         }
 
-        fn PrintLineResult<T>(value: T) -> Result<ResultUnit> {
+        fn PrintLineResult<T>(value: T) -> UnitResult {
             return PrintLine(value);
         }
 
-        fn PrintFormat<Args...>(format: string, args: Args...) -> Result<ResultUnit> {
+        fn PrintFormat<Args...>(format: string, args: Args...) -> UnitResult {
             return ResultFromStatus(PrintFormatRaw(format, args...));
         }
 
-        fn PrintLineFormat<Args...>(format: string, args: Args...) -> Result<ResultUnit> {
+        fn PrintLineFormat<Args...>(format: string, args: Args...) -> UnitResult {
             return ResultFromStatus(PrintLineFormatRaw(format, args...));
         }
 
-        fn WriteSlice(value: string, index: usize, count: usize) -> Result<ResultUnit> {
+        fn WriteSlice(value: string, index: usize, count: usize) -> UnitResult {
             return ResultFromStatus(WriteSliceRaw(value, index, count) fit u8);
         }
 
-        fn WriteBuffer(buffer: string, index: i32, count: i32) -> Result<ResultUnit> {
+        fn WriteBuffer(buffer: string, index: i32, count: i32) -> UnitResult {
             return ResultFromStatus(WriteBufferRaw(buffer, index, count) fit u8);
         }
 
-        fn WriteDecimal(value: string) -> Result<ResultUnit> {
+        fn WriteDecimal(value: string) -> UnitResult {
             return ResultFromStatus(WriteDecimalRaw(value) fit u8);
         }
 
-        fn WriteDecimalLine(value: string) -> Result<ResultUnit> {
+        fn WriteDecimalLine(value: string) -> UnitResult {
             return ResultFromStatus(WriteDecimalLineRaw(value) fit u8);
         }
 
-        fn WriteError(value: string) -> Result<ResultUnit> {
+        fn WriteError(value: string) -> UnitResult {
             return ResultFromStatus(WriteErrorRaw(value) fit u8);
         }
 
-        fn WriteErrorLine() -> Result<ResultUnit> {
+        fn WriteErrorLine() -> UnitResult {
             return ResultFromStatus(WriteErrorLineRaw() fit u8);
         }
 
-        fn WriteErrorLine(value: string) -> Result<ResultUnit> {
+        fn WriteErrorLine(value: string) -> UnitResult {
             return ResultFromStatus(WriteErrorLineRaw(value) fit u8);
         }
 

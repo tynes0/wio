@@ -17,7 +17,7 @@ realm SelfHostedPackage {
         alias: string,
         fallback: string,
         description: string
-    ) -> std::Result<std::ResultUnit> {
+    ) -> std::UnitResult {
         mut argument = Argonaut::Argument(id);
         argument.AddAlias(alias).SetDefaultValue(fallback).SetDescription(description);
         parser.Add?(argument);
@@ -25,7 +25,7 @@ realm SelfHostedPackage {
     }
 
     fn AddFlag(parser: ref Argonaut::Parser, id: string, alias: string, description: string)
-        -> std::Result<std::ResultUnit> {
+        -> std::UnitResult {
         mut argument = Argonaut::Argument(id);
         argument.AddAlias(alias).SetDescription(description);
         parser.Add?(argument.Flag?());
@@ -209,7 +209,7 @@ realm SelfHostedPackage {
         config: string,
         buildDirectory: string,
         backendRoot: string
-    ) -> std::Result<std::ResultUnit> {
+    ) -> std::UnitResult {
         for pair in [
             "LICENSE|LICENSE",
             "README.md|README.md",

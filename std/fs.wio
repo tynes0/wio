@@ -88,7 +88,7 @@ realm std {
             return std::Err<T>(std::MakeResultError(std::ResultDomain::fs, code, nativeCode, message));
         }
 
-        fn CreateDirectories(path: string) -> std::Result<std::ResultUnit> {
+        fn CreateDirectories(path: string) -> std::UnitResult {
             mut code = 0; mut nativeCode = 0i64; mut message = "";
             if (CreateDirectoriesNative(path, ref code, ref nativeCode, ref message)) { return std::OkUnit(); }
             return Failure<std::ResultUnit>(code, nativeCode, message);
@@ -100,31 +100,31 @@ realm std {
             return Failure<bool>(code, nativeCode, message);
         }
 
-        fn RemoveAll(path: string) -> std::Result<std::ResultUnit> {
+        fn RemoveAll(path: string) -> std::UnitResult {
             mut code = 0; mut nativeCode = 0i64; mut message = "";
             if (RemoveAllNative(path, ref code, ref nativeCode, ref message)) { return std::OkUnit(); }
             return Failure<std::ResultUnit>(code, nativeCode, message);
         }
 
-        fn CopyFile(source: string, target: string) -> std::Result<std::ResultUnit> {
+        fn CopyFile(source: string, target: string) -> std::UnitResult {
             mut code = 0; mut nativeCode = 0i64; mut message = "";
             if (CopyFileNative(source, target, ref code, ref nativeCode, ref message)) { return std::OkUnit(); }
             return Failure<std::ResultUnit>(code, nativeCode, message);
         }
 
-        fn CopyRecursive(source: string, target: string) -> std::Result<std::ResultUnit> {
+        fn CopyRecursive(source: string, target: string) -> std::UnitResult {
             mut code = 0; mut nativeCode = 0i64; mut message = "";
             if (CopyRecursiveNative(source, target, ref code, ref nativeCode, ref message)) { return std::OkUnit(); }
             return Failure<std::ResultUnit>(code, nativeCode, message);
         }
 
-        fn MoveFile(source: string, target: string) -> std::Result<std::ResultUnit> {
+        fn MoveFile(source: string, target: string) -> std::UnitResult {
             mut code = 0; mut nativeCode = 0i64; mut message = "";
             if (MoveFileNative(source, target, ref code, ref nativeCode, ref message)) { return std::OkUnit(); }
             return Failure<std::ResultUnit>(code, nativeCode, message);
         }
 
-        fn ReplaceFileAtomic(source: string, target: string) -> std::Result<std::ResultUnit> {
+        fn ReplaceFileAtomic(source: string, target: string) -> std::UnitResult {
             mut code = 0; mut nativeCode = 0i64; mut message = "";
             if (ReplaceFileAtomicNative(source, target, ref code, ref nativeCode, ref message)) { return std::OkUnit(); }
             return Failure<std::ResultUnit>(code, nativeCode, message);
@@ -148,19 +148,19 @@ realm std {
             return Failure<string>(code, nativeCode, message);
         }
 
-        fn WriteText(path: string, text: string) -> std::Result<std::ResultUnit> {
+        fn WriteText(path: string, text: string) -> std::UnitResult {
             mut code = 0; mut nativeCode = 0i64; mut message = "";
             if (WriteTextNative(path, text, ref code, ref nativeCode, ref message)) { return std::OkUnit(); }
             return Failure<std::ResultUnit>(code, nativeCode, message);
         }
 
-        fn AppendText(path: string, text: string) -> std::Result<std::ResultUnit> {
+        fn AppendText(path: string, text: string) -> std::UnitResult {
             mut code = 0; mut nativeCode = 0i64; mut message = "";
             if (AppendTextNative(path, text, ref code, ref nativeCode, ref message)) { return std::OkUnit(); }
             return Failure<std::ResultUnit>(code, nativeCode, message);
         }
 
-        fn SetExecutable(path: string, executable: bool) -> std::Result<std::ResultUnit> {
+        fn SetExecutable(path: string, executable: bool) -> std::UnitResult {
             mut code = 0; mut nativeCode = 0i64; mut message = "";
             if (SetExecutableNative(path, executable, ref code, ref nativeCode, ref message)) { return std::OkUnit(); }
             return Failure<std::ResultUnit>(code, nativeCode, message);
@@ -194,7 +194,7 @@ realm std {
 
         fn CurrentDirectory() -> std::Result<string> { return CurrentPath(); }
 
-        fn EnsureDirectory(pathValue: string) -> std::Result<std::ResultUnit> {
+        fn EnsureDirectory(pathValue: string) -> std::UnitResult {
             if (Exists(pathValue)) {
                 if (IsDirectory(pathValue)) { return std::OkUnit(); }
                 return Failure<std::ResultUnit>(4, 0i64, "Path exists but is not a directory: " + pathValue);
@@ -217,46 +217,46 @@ realm std {
             return std::Ok<string>(value.Value().Trim());
         }
 
-        fn EnsureParentDirectory(filePath: string) -> std::Result<std::ResultUnit> {
+        fn EnsureParentDirectory(filePath: string) -> std::UnitResult {
             let parent = path::ParentPath(filePath);
             if (parent == "") { return std::OkUnit(); }
             return EnsureDirectory(parent);
         }
 
-        fn DeleteIfExists(pathValue: string) -> std::Result<std::ResultUnit> {
+        fn DeleteIfExists(pathValue: string) -> std::UnitResult {
             if (not Exists(pathValue)) { return std::OkUnit(); }
             let removed = Remove(pathValue);
-            if (removed.IsError()) { return std::Err<std::ResultUnit>(removed.ErrorValue()); }
+            if (removed.IsError()) { return std::ErrUnit(removed.ErrorValue()); }
             return std::OkUnit();
         }
 
-        fn WriteTextEnsured(filePath: string, text: string) -> std::Result<std::ResultUnit> {
+        fn WriteTextEnsured(filePath: string, text: string) -> std::UnitResult {
             let ensured = EnsureParentDirectory(filePath);
             if (ensured.IsError()) { return ensured; }
             return WriteText(filePath, text);
         }
 
-        fn AppendTextEnsured(filePath: string, text: string) -> std::Result<std::ResultUnit> {
+        fn AppendTextEnsured(filePath: string, text: string) -> std::UnitResult {
             let ensured = EnsureParentDirectory(filePath);
             if (ensured.IsError()) { return ensured; }
             return AppendText(filePath, text);
         }
 
-        fn MakeExecutable(filePath: string) -> std::Result<std::ResultUnit> { return SetExecutable(filePath, true); }
+        fn MakeExecutable(filePath: string) -> std::UnitResult { return SetExecutable(filePath, true); }
 
-        fn AppendLine(filePath: string, line: string) -> std::Result<std::ResultUnit> {
+        fn AppendLine(filePath: string, line: string) -> std::UnitResult {
             let ensured = EnsureParentDirectory(filePath);
             if (ensured.IsError()) { return ensured; }
             mut prefix = "";
             if (Exists(filePath)) {
                 let current = ReadText(filePath);
-                if (current.IsError()) { return std::Err<std::ResultUnit>(current.ErrorValue()); }
+                if (current.IsError()) { return std::ErrUnit(current.ErrorValue()); }
                 if (not current.Value().EndsWith("\n") and not current.Value().EndsWith("\r")) { prefix = "\n"; }
             }
             return AppendText(filePath, prefix + line + "\n");
         }
 
-        fn Touch(filePath: string) -> std::Result<std::ResultUnit> {
+        fn Touch(filePath: string) -> std::UnitResult {
             if (Exists(filePath)) { return std::OkUnit(); }
             return WriteTextEnsured(filePath, "");
         }
@@ -271,21 +271,21 @@ realm std {
             return std::Ok(lines);
         }
 
-        fn WriteLines(pathValue: string, lines: string[]) -> std::Result<std::ResultUnit> { return WriteText(pathValue, lines.Join("\n")); }
+        fn WriteLines(pathValue: string, lines: string[]) -> std::UnitResult { return WriteText(pathValue, lines.Join("\n")); }
 
-        fn WriteLinesEnsured(pathValue: string, lines: string[]) -> std::Result<std::ResultUnit> {
+        fn WriteLinesEnsured(pathValue: string, lines: string[]) -> std::UnitResult {
             let ensured = EnsureParentDirectory(pathValue);
             if (ensured.IsError()) { return ensured; }
             return WriteLines(pathValue, lines);
         }
 
-        fn CopyFileEnsured(source: string, target: string) -> std::Result<std::ResultUnit> {
+        fn CopyFileEnsured(source: string, target: string) -> std::UnitResult {
             let ensured = EnsureParentDirectory(target);
             if (ensured.IsError()) { return ensured; }
             return CopyFile(source, target);
         }
 
-        fn MoveFileEnsured(source: string, target: string) -> std::Result<std::ResultUnit> {
+        fn MoveFileEnsured(source: string, target: string) -> std::UnitResult {
             let ensured = EnsureParentDirectory(target);
             if (ensured.IsError()) { return ensured; }
             return MoveFile(source, target);

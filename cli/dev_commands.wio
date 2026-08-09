@@ -19,7 +19,7 @@ realm SelfHostedDev {
     }
 
     fn AddOption(parser: ref Argonaut::Parser, id: string, alias: string, fallback: string, description: string)
-        -> std::Result<std::ResultUnit> {
+        -> std::UnitResult {
         mut argument = Argonaut::Argument(id);
         argument.AddAlias(alias).SetDefaultValue(fallback).SetDescription(description);
         parser.Add?(argument);
@@ -27,7 +27,7 @@ realm SelfHostedDev {
     }
 
     fn AddFlag(parser: ref Argonaut::Parser, id: string, alias: string, description: string)
-        -> std::Result<std::ResultUnit> {
+        -> std::UnitResult {
         mut argument = Argonaut::Argument(id);
         argument.AddAlias(alias).SetDescription(description);
         parser.Add?(argument.Flag?());

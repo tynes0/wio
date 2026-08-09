@@ -13,7 +13,7 @@ use perf_commands;
 use std::console as console;
 use std::result as result;
 
-fn AddFlag(parser: ref Argonaut::Parser, id: string, aliases: string[], description: string) -> std::Result<std::ResultUnit> {
+fn AddFlag(parser: ref Argonaut::Parser, id: string, aliases: string[], description: string) -> std::UnitResult {
     mut argument = Argonaut::Argument(id);
     argument.SetDescription(description);
     for alias in aliases {
@@ -24,7 +24,7 @@ fn AddFlag(parser: ref Argonaut::Parser, id: string, aliases: string[], descript
     return std::OkUnit();
 }
 
-fn AddOption(parser: ref Argonaut::Parser, id: string, aliases: string[], description: string) -> std::Result<std::ResultUnit> {
+fn AddOption(parser: ref Argonaut::Parser, id: string, aliases: string[], description: string) -> std::UnitResult {
     mut argument = Argonaut::Argument(id);
     argument.SetDescription(description);
     for alias in aliases {
@@ -34,7 +34,7 @@ fn AddOption(parser: ref Argonaut::Parser, id: string, aliases: string[], descri
     return std::OkUnit();
 }
 
-fn AddMultiOption(parser: ref Argonaut::Parser, id: string, aliases: string[], description: string) -> std::Result<std::ResultUnit> {
+fn AddMultiOption(parser: ref Argonaut::Parser, id: string, aliases: string[], description: string) -> std::UnitResult {
     mut argument = Argonaut::Argument(id);
     argument.SetDescription(description);
     for alias in aliases {
@@ -45,7 +45,7 @@ fn AddMultiOption(parser: ref Argonaut::Parser, id: string, aliases: string[], d
     return std::OkUnit();
 }
 
-fn AddProjectBase(parser: ref Argonaut::Parser, rebuild: bool) -> std::Result<std::ResultUnit> {
+fn AddProjectBase(parser: ref Argonaut::Parser, rebuild: bool) -> std::UnitResult {
     mut projectPath = Argonaut::Argument("PROJECT-PATH");
     projectPath.SetDescription("Optional project directory or makewio manifest path.");
     parser.Add?(projectPath);
@@ -101,7 +101,7 @@ fn Contains(args: string[], value: string) -> bool {
     return false;
 }
 
-fn ValidateProjectCommand(args: string[]) -> std::Result<std::ResultUnit> {
+fn ValidateProjectCommand(args: string[]) -> std::UnitResult {
     let command = args[2usize];
     mut parser = ProjectParser?(command);
     mut commandArgs: string[] = [$"wio project ${command}"];
@@ -116,7 +116,7 @@ fn ValidateProjectCommand(args: string[]) -> std::Result<std::ResultUnit> {
 
     let parsed = parser.Parse(commandArgs);
     if (parsed.IsError()) {
-        return std::Err<std::ResultUnit>(parsed.ErrorValue());
+        return std::ErrUnit(parsed.ErrorValue());
     }
     if (Contains(commandArgs, "--help") or Contains(commandArgs, "-h")) {
         console::Print(parser.Help());

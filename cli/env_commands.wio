@@ -24,7 +24,7 @@ realm SelfHostedEnv {
     }
 
     fn AddOption(parser: ref Argonaut::Parser, id: string, alias: string, fallback: string, description: string)
-        -> std::Result<std::ResultUnit> {
+        -> std::UnitResult {
         mut argument = Argonaut::Argument(id);
         argument.AddAlias(alias).SetDefaultValue(fallback).SetDescription(description);
         parser.Add?(argument);
@@ -32,7 +32,7 @@ realm SelfHostedEnv {
     }
 
     fn AddFlag(parser: ref Argonaut::Parser, id: string, alias: string, description: string)
-        -> std::Result<std::ResultUnit> {
+        -> std::UnitResult {
         mut argument = Argonaut::Argument(id);
         argument.AddAlias(alias).SetDescription(description);
         parser.Add?(argument.Flag?());
@@ -283,7 +283,7 @@ realm SelfHostedEnv {
     }
 
     fn ResolveRootAndBin(args: string[], parser: ref Argonaut::Parser, root: ref string, bin: ref string)
-        -> std::Result<std::ResultUnit> {
+        -> std::UnitResult {
         let rootArgument = parser.GetStringOr("WIO-ROOT", "");
         root = ResolveRoot(args[0usize], rootArgument);
         if (root == "") {

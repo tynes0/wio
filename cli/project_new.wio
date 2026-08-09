@@ -326,7 +326,7 @@ realm SelfHostedProject {
         ]);
     }
 
-    fn WriteRequired(filePath: string, content: string) -> std::Result<std::ResultUnit> {
+    fn WriteRequired(filePath: string, content: string) -> std::UnitResult {
         if (not fs::TryWriteTextEnsured(filePath, content)) {
             return Failure<std::ResultUnit>($"Could not write generated project file: ${filePath}");
         }

@@ -398,16 +398,16 @@ realm std {
             return Result<File>(FileResultError(error, nativeError, message));
         }
 
-        fn Close(file: ref File) -> Result<ResultUnit> {
+        fn Close(file: ref File) -> UnitResult {
             mut error = FileError::none;
             mut nativeError = 0u64;
             mut message = "";
 
             if (TryCloseResultNative(file, ref error, ref nativeError, ref message)) {
-                return Result<ResultUnit>(ResultUnit());
+                return UnitResult(ResultUnit());
             }
 
-            return Result<ResultUnit>(FileResultError(error, nativeError, message));
+            return UnitResult(FileResultError(error, nativeError, message));
         }
 
         fn Size(file: File) -> Result<u64> {
@@ -509,7 +509,7 @@ realm std {
             return Open(path, mode);
         }
 
-        fn CloseResult(file: ref File) -> Result<ResultUnit> {
+        fn CloseResult(file: ref File) -> UnitResult {
             return Close(file);
         }
 

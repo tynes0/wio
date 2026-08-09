@@ -313,7 +313,7 @@ realm SelfHostedProject {
         return std::Ok<i32>(0);
     }
 
-    fn CopyRequired(source: string, target: string) -> std::Result<std::ResultUnit> {
+    fn CopyRequired(source: string, target: string) -> std::UnitResult {
         if (not fs::Exists(source)) {
             return Failure<std::ResultUnit>($"Package input does not exist: ${source}");
         }

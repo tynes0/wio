@@ -9,6 +9,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <optional>
 #include <regex>
 #include <sstream>
@@ -2630,6 +2631,7 @@ namespace wio
             WIO_LOG_PROCESS_ERRORS(CompilationError);
 
             std::vector<NodePtr<Statement>> finalStatements;
+            std::vector<NodePtr<Statement>> sourceStatements;
 
             for (auto& stmt : program->statements)
             {
@@ -2714,20 +2716,35 @@ namespace wio
                 }
                 else
                 {
-                    finalStatements.push_back(std::move(stmt));
+                    sourceStatements.push_back(std::move(stmt));
                 }
             }
 
             // Option is part of the intrinsic container contract: Dict.Get
             // returns Option<V> even when user code does not explicitly import
-            // std::option. Load it after ordinary imports so explicit aliases
-            // retain their normal module-merge behavior.
+            // std::option. Resolve it after ordinary imports so explicit aliases
+            // retain their normal module-merge behavior. Imported modules are
+            // hoisted ahead of the builtin declarations, and both are analyzed
+            // before user code. Unlike object/component symbols, type aliases
+            // are resolved in declaration order; appending builtin declarations
+            // after user code made aliases such as std::UnitResult invisible,
+            // while prepending them ahead of their own imports left Option's
+            // Result references unresolved.
             if (!gAppData.flags.get_NoBuiltin())
             {
                 auto optionProgram = parseAndMerge("option", true, sourcePath.parent_path());
-                for (auto& optionStatement : optionProgram->statements)
-                    finalStatements.push_back(std::move(optionStatement));
+                finalStatements.insert(
+                    finalStatements.end(),
+                    std::make_move_iterator(optionProgram->statements.begin()),
+                    std::make_move_iterator(optionProgram->statements.end())
+                );
             }
+
+            finalStatements.insert(
+                finalStatements.end(),
+                std::make_move_iterator(sourceStatements.begin()),
+                std::make_move_iterator(sourceStatements.end())
+            );
             
             program->statements = std::move(finalStatements);
 

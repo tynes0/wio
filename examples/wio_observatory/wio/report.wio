@@ -64,11 +64,11 @@ realm observatory {
         ]);
     }
 
-    fn WriteReport(path: string, policy: Policy, auditResult: AuditResult) -> std::Result<std::ResultUnit> {
+    fn WriteReport(path: string, policy: Policy, auditResult: AuditResult) -> std::UnitResult {
         let report = BuildReport(policy, auditResult);
         let parsed = json::Parse(report);
         if (parsed.IsError()) {
-            return std::Err<std::ResultUnit>(
+            return std::ErrUnit(
                 std::MakeResultError(std::ResultDomain::custom, 300, "Generated report failed JSON validation."));
         }
         return fs::WriteTextEnsured(path, json::WritePretty(parsed.Value(), 2usize));
