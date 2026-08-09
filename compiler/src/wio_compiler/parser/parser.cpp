@@ -1121,6 +1121,12 @@ namespace wio
                     utError("Application attributes must use the postfix 'with' clause.", attributes.front()->location());
                 return parseApplicationDeclaration();
             }
+            if (match(TokenType::kwSystem))
+            {
+                if (!attributes.empty())
+                    utError("System attributes must use the postfix 'with' clause.", attributes.front()->location());
+                return parseSystemDeclaration();
+            }
             if (match(TokenType::kwFn))
                 return parseFunctionDeclaration(std::move(attributes));
             if (match(TokenType::kwInterface))
@@ -1399,6 +1405,7 @@ namespace wio
 
         std::vector<ComponentMember> fields;
         std::unordered_map<std::string, NodePtr<FunctionDeclaration>> handlers;
+        std::vector<std::string> ownedSystems;
         while (peek().isValid() && !match(TokenType::rightBrace))
         {
             if (peek().type == TokenType::identifier && peek().value == "on")
@@ -1428,6 +1435,7 @@ namespace wio
 
             Mutability mutability = Mutability::Mutable;
             bool applicationOwned = false;
+            const bool systemOwned = peek().type == TokenType::kwSystem;
             if ((peek().type == TokenType::identifier && peek().value == "resource") ||
                 peek().type == TokenType::kwSystem)
             {
@@ -1444,6 +1452,7 @@ namespace wio
             }
 
             auto name = makeNodePtr<Identifier>(consumeIdentifier());
+            if (systemOwned) ownedSystems.push_back(name->token.value);
             consume(TokenType::opColon);
             auto type = parseType();
             NodePtr<Expression> initializer = nullptr;
@@ -1531,6 +1540,45 @@ namespace wio
                     std::vector<NodePtr<Identifier>>{}, false, std::vector<Parameter>{}, nullptr,
                     nullptr, nullptr, makeNodePtr<BlockStatement>(std::vector<NodePtr<Statement>>{}, startToken.loc), startToken.loc);
             }
+
+            auto makeSystemCallStatement = [&](const std::string& systemName, const std::string& methodName)
+            {
+                auto systemAccess = makeNodePtr<MemberAccessExpression>(
+                    makeNodePtr<SelfExpression>(startToken.loc), makeIdentifier(systemName),
+                    TokenType::opDot, startToken.loc);
+                auto methodAccess = makeNodePtr<MemberAccessExpression>(
+                    std::move(systemAccess), makeIdentifier(methodName), TokenType::opDot, startToken.loc);
+                auto call = makeNodePtr<FunctionCallExpression>(
+                    std::move(methodAccess), std::vector<NodePtr<TypeSpecifier>>{},
+                    std::vector<NodePtr<Expression>>{}, false, false, startToken.loc);
+                return makeNodePtr<ExpressionStatement>(std::move(call), startToken.loc);
+            };
+            if (auto block = method->body.As<BlockStatement>(); block && !ownedSystems.empty())
+            {
+                const std::string methodName = lifecycle == "start" ? "Start" :
+                    (lifecycle == "update" ? "Update" : "Close");
+                if (lifecycle == "start")
+                {
+                    for (const auto& systemName : ownedSystems)
+                        block->statements.push_back(makeSystemCallStatement(systemName, methodName));
+                }
+                else
+                {
+                    std::vector<NodePtr<Statement>> calls;
+                    if (lifecycle == "close")
+                    {
+                        for (auto iterator = ownedSystems.rbegin(); iterator != ownedSystems.rend(); ++iterator)
+                            calls.push_back(makeSystemCallStatement(*iterator, methodName));
+                    }
+                    else
+                    {
+                        for (const auto& systemName : ownedSystems)
+                            calls.push_back(makeSystemCallStatement(systemName, methodName));
+                    }
+                    calls.insert(calls.end(), block->statements.begin(), block->statements.end());
+                    block->statements = std::move(calls);
+                }
+            }
             addReceiver(method);
             extensionMembers.push_back(ExtensionMember{ .access = AccessModifier::Public, .mutableReceiver = true, .method = std::move(method) });
         }
@@ -1570,6 +1618,118 @@ namespace wio
         declarations.push_back(std::move(component));
         declarations.push_back(std::move(extension));
         declarations.push_back(std::move(entry));
+        return makeNodePtr<DeclarationGroup>(std::move(declarations), startToken.loc);
+    }
+
+    NodePtr<Statement> Parser::parseSystemDeclaration()
+    {
+        const Token startToken = consume(TokenType::kwSystem);
+        auto systemName = makeNodePtr<Identifier>(consumeIdentifier());
+        const Token systemNameToken = systemName->token;
+        std::vector<NodePtr<AttributeStatement>> attributes;
+        parseWithAttributeClause(attributes);
+        consume(TokenType::leftBrace);
+
+        auto makeIdentifier = [&](std::string value)
+        {
+            return makeNodePtr<Identifier>(Token{
+                .type = TokenType::identifier, .value = std::move(value), .loc = startToken.loc });
+        };
+        std::vector<ComponentMember> fields;
+        std::unordered_map<std::string, NodePtr<FunctionDeclaration>> handlers;
+        while (peek().isValid() && !match(TokenType::rightBrace))
+        {
+            if (peek().type == TokenType::identifier && peek().value == "on")
+            {
+                advance();
+                const Token lifecycle = consumeIdentifier();
+                if (lifecycle.value != "start" && lifecycle.value != "update" && lifecycle.value != "close")
+                    utError("System handlers must be 'on start', 'on update', or 'on close'.", lifecycle.loc);
+                if (handlers.contains(lifecycle.value))
+                    utError("System handler '" + lifecycle.value + "' is declared more than once.", lifecycle.loc);
+                if (match(TokenType::leftParen, true))
+                {
+                    if (!match(TokenType::rightParen))
+                        utError("The first system scheduler supports parameterless lifecycle handlers.", peek().loc);
+                    consume(TokenType::rightParen);
+                }
+                auto body = parseBlockStatement();
+                const std::string methodName = lifecycle.value == "start" ? "Start" :
+                    (lifecycle.value == "update" ? "Update" : "Close");
+                handlers.emplace(lifecycle.value, makeNodePtr<FunctionDeclaration>(
+                    std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier(methodName),
+                    std::vector<NodePtr<Identifier>>{}, false, std::vector<Parameter>{}, nullptr,
+                    nullptr, nullptr, std::move(body), lifecycle.loc));
+                continue;
+            }
+
+            const Token qualifier = advance();
+            Mutability mutability = Mutability::Mutable;
+            if (qualifier.type == TokenType::kwLet) mutability = Mutability::Immutable;
+            else if (qualifier.type == TokenType::kwConst) mutability = Mutability::Const;
+            else if (qualifier.type != TokenType::kwMut)
+                utError("System fields require 'mut', 'let', or 'const'.", qualifier.loc);
+            auto name = makeNodePtr<Identifier>(consumeIdentifier());
+            consume(TokenType::opColon);
+            auto type = parseType();
+            NodePtr<Expression> initializer = nullptr;
+            if (match(TokenType::opAssign, true)) initializer = parseExpression();
+            consume(TokenType::semicolon);
+            fields.push_back(ComponentMember{
+                .attributes = {}, .access = AccessModifier::Public,
+                .declaration = makeNodePtr<VariableDeclaration>(
+                    std::vector<NodePtr<AttributeStatement>>{}, mutability, std::move(name),
+                    std::move(type), std::move(initializer), false, startToken.loc)
+            });
+        }
+        consume(TokenType::rightBrace);
+
+        auto component = makeNodePtr<ComponentDeclaration>(
+            std::move(attributes), std::move(systemName),
+            std::vector<NodePtr<Identifier>>{}, false, std::move(fields), startToken.loc);
+
+        auto addReceiver = [&](NodePtr<FunctionDeclaration>& method)
+        {
+            auto receiverInner = makeNodePtr<TypeSpecifier>(systemNameToken,
+                std::vector<NodePtr<TypeSpecifier>>{}, nullptr, 0, false, false, false, startToken.loc);
+            Token refToken{ .type = TokenType::kwRef, .value = "ref", .loc = startToken.loc };
+            std::vector<NodePtr<TypeSpecifier>> generics;
+            generics.push_back(std::move(receiverInner));
+            auto receiverType = makeNodePtr<TypeSpecifier>(std::move(refToken), std::move(generics),
+                nullptr, 0, true, true, false, startToken.loc);
+            method->parameters.insert(method->parameters.begin(),
+                Parameter(makeIdentifier("_wio_self"), std::move(receiverType), nullptr, false));
+            method->isExtensionMethod = true;
+            method->extensionMutableReceiver = true;
+            method->extensionMemberName = method->name->token.value;
+        };
+
+        std::vector<ExtensionMember> members;
+        for (const std::string lifecycle : { "start", "update", "close" })
+        {
+            NodePtr<FunctionDeclaration> method;
+            if (auto iterator = handlers.find(lifecycle); iterator != handlers.end())
+                method = std::move(iterator->second);
+            else
+            {
+                const std::string methodName = lifecycle == "start" ? "Start" :
+                    (lifecycle == "update" ? "Update" : "Close");
+                method = makeNodePtr<FunctionDeclaration>(
+                    std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier(methodName),
+                    std::vector<NodePtr<Identifier>>{}, false, std::vector<Parameter>{}, nullptr,
+                    nullptr, nullptr, makeNodePtr<BlockStatement>(std::vector<NodePtr<Statement>>{}, startToken.loc), startToken.loc);
+            }
+            addReceiver(method);
+            members.push_back(ExtensionMember{ .access = AccessModifier::Public, .mutableReceiver = true, .method = std::move(method) });
+        }
+        auto targetType = makeNodePtr<TypeSpecifier>(systemNameToken,
+            std::vector<NodePtr<TypeSpecifier>>{}, nullptr, 0, false, false, false, startToken.loc);
+        auto extension = makeNodePtr<ExtensionDeclaration>(
+            std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier(systemNameToken.value + "Lifecycle"),
+            std::move(targetType), std::move(members), startToken.loc);
+        std::vector<NodePtr<Statement>> declarations;
+        declarations.push_back(std::move(component));
+        declarations.push_back(std::move(extension));
         return makeNodePtr<DeclarationGroup>(std::move(declarations), startToken.loc);
     }
 
