@@ -12658,12 +12658,16 @@ namespace wio::sema
                 const std::string patternIdentity = isArrayPattern
                     ? variant + std::to_string(matchCase.bindings.size())
                     : variant;
-                if (!matchCase.guard && !seenUnguardedVariants.insert(patternIdentity).second)
+                if (seenUnguardedVariants.contains(patternIdentity))
                 {
                     WIO_LOG_ADD_ERROR(
                         matchCase.body ? matchCase.body->location() : node.location(),
-                        "Unreachable duplicate '{}' match pattern.",
+                        "Unreachable '{}' match pattern because an earlier unguarded case already covers it.",
                         isArrayPattern ? "array-length" : variant);
+                }
+                else if (!matchCase.guard)
+                {
+                    seenUnguardedVariants.insert(patternIdentity);
                 }
 
                 const size_t expectedBindings =
@@ -12751,8 +12755,16 @@ namespace wio::sema
             if (isVariantPattern)
             {
                 enterScope(ScopeKind::Block);
+                std::unordered_set<std::string> bindingNames;
                 for (auto& binding : matchCase.bindings)
                 {
+                    if (!bindingNames.insert(binding->token.value).second)
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            binding->location(),
+                            "Pattern binding '{}' is duplicated in the same pattern.",
+                            binding->token.value);
+                    }
                     Ref<Symbol> bindingSymbol = createSymbol(
                         binding->token.value,
                         bindingType ? bindingType : Compiler::get().getTypeContext().getUnknown(),

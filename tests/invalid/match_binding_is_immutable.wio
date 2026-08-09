@@ -1,0 +1,12 @@
+component Value { public number: i32; }
+
+fn Entry() -> i32 {
+    let original = Value();
+    match (std::Some(original)) {
+        Some(bound): {
+            bound = Value();
+        }
+        None(): { }
+    };
+    return 0;
+}

@@ -1,0 +1,7 @@
+fn Entry() -> i32 {
+    let values: i32[] = [1, 2];
+    return match (values) {
+        [value, value]: value;
+        assumed: 0;
+    };
+}

@@ -1,0 +1,7 @@
+fn Entry() -> i32 {
+    return match (std::Some(4)) {
+        Some(value): value;
+        Some(value) if value > 0: value + 1;
+        None(): 0;
+    };
+}

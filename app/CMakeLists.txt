@@ -3030,6 +3030,34 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "match-array-patterns-ok"
         --run
     )
+
+    add_wio_output_test(
+        wio_test_match_stabilization_run
+        "${CMAKE_SOURCE_DIR}/tests/match_stabilization_run.wio"
+        "match-stabilization-ok"
+        --run
+    )
+    set_tests_properties(wio_test_match_stabilization_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
+    add_wio_failure_test(wio_invalid_match_guard_after_unguarded
+        "${CMAKE_SOURCE_DIR}/tests/invalid/match_guard_after_unguarded.wio"
+        "earlier unguarded case already covers it")
+    add_wio_failure_test(wio_invalid_match_array_guard_after_unguarded
+        "${CMAKE_SOURCE_DIR}/tests/invalid/match_array_guard_after_unguarded.wio"
+        "Unreachable 'array-length' match pattern")
+    add_wio_failure_test(wio_invalid_match_duplicate_binding
+        "${CMAKE_SOURCE_DIR}/tests/invalid/match_duplicate_binding.wio"
+        "Pattern binding 'value' is duplicated")
+    add_wio_failure_test(wio_invalid_match_binding_is_immutable
+        "${CMAKE_SOURCE_DIR}/tests/invalid/match_binding_is_immutable.wio"
+        "immutable")
+    set_tests_properties(
+        wio_invalid_match_guard_after_unguarded
+        wio_invalid_match_array_guard_after_unguarded
+        wio_invalid_match_duplicate_binding
+        wio_invalid_match_binding_is_immutable
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
     set_tests_properties(
         wio_test_match_array_patterns_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"

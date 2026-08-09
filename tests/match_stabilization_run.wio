@@ -1,0 +1,52 @@
+use std::assert as assert;
+use std::console as console;
+
+mut evaluations: i32 = 0;
+
+fn MakeOption(value: i32) -> std::Option<i32> {
+    evaluations += 1;
+    return std::Some(value);
+}
+
+object Counter {
+    private value: i32;
+    public fn OnConstruct() { self.value = 0; }
+    public fn Increment() { self.value += 1; }
+    public fn Value() -> i32 { return self.value; }
+}
+
+component Value { public number: i32; }
+
+fn Classify(value: std::Option<i32>) -> string {
+    return match (value) {
+        Some(number) if number < 0: "negative";
+        Some(number) if number == 0: "zero";
+        Some(number): $"positive=${number}";
+        None(): "none";
+    };
+}
+
+fn Entry() -> i32 {
+    evaluations = 0;
+    assert::ExpectEqual(Classify(MakeOption(7)), "positive=7", "guards fall through in order");
+    assert::ExpectEqual(evaluations, 1, "match input evaluates once");
+    assert::ExpectEqual(Classify(std::Some(0)), "zero", "second guarded case");
+
+    let counter = Counter();
+    let wrapped = std::Some(counter);
+    match (wrapped) {
+        Some(bound): bound.Increment();
+        None(): { }
+    };
+    assert::ExpectEqual(counter.Value(), 1, "object pattern binding preserves shared identity");
+
+    mut original = Value();
+    original.number = 3;
+    match (std::Some(original)) {
+        Some(bound): bound.number = 11;
+        None(): { }
+    };
+    assert::ExpectEqual(original.number, 3, "component pattern binding owns a value copy");
+    console::PrintLine("match-stabilization-ok");
+    return 0;
+}
