@@ -2985,6 +2985,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "std-binary-serialization-ok"
         --run
     )
+
+    add_wio_output_test(
+        wio_test_std_net_udp_loopback_run
+        "${CMAKE_SOURCE_DIR}/tests/std_net_udp_loopback_run.wio"
+        "std-net-udp-loopback-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_std_net_udp_loopback_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
     set_tests_properties(
         wio_test_std_binary_serialization_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"

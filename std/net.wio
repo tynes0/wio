@@ -101,6 +101,14 @@ realm std {
         fn ReceiveNative(handle: opaque, maximumBytes: usize, bytes: ref string, error: ref string) -> bool
             with native, cpp::name(wio::runtime::std_net::Receive);
         fn CloseNative(handle: opaque) with native, cpp::name(wio::runtime::std_net::Close);
+        fn UdpBindNative(address: string, port: u16, handle: ref opaque?, error: ref string) -> bool
+            with native, cpp::name(wio::runtime::std_net::UdpBind);
+        fn UdpSendToNative(handle: opaque, host: string, port: u16, bytes: string,
+            sent: ref usize, error: ref string) -> bool
+            with native, cpp::name(wio::runtime::std_net::UdpSendTo);
+        fn UdpReceiveFromNative(handle: opaque, maximumBytes: usize, bytes: ref string,
+            remoteAddress: ref string, remotePort: ref u16, error: ref string) -> bool
+            with native, cpp::name(wio::runtime::std_net::UdpReceiveFrom);
 
         fn NetError(message: string) -> std::ResultError {
             return std::MakeResultError(std::ResultDomain::runtime, 1, message);
@@ -172,6 +180,59 @@ realm std {
                 if (handle != null) { return std::Ok(Listener(handle)); }
             }
             return std::Err<Listener>(NetError(error));
+        }
+
+        component Datagram {
+            public bytes: string;
+            public remoteAddress: string;
+            public remotePort: u16;
+
+            OnConstruct(bytes: string, remoteAddress: string, remotePort: u16) {
+                self.bytes = bytes;
+                self.remoteAddress = remoteAddress;
+                self.remotePort = remotePort;
+            }
+        }
+
+        object UdpSocket {
+            private handle: opaque;
+            private closed: bool;
+            public fn OnConstruct(handle: opaque) { self.handle = handle; self.closed = false; }
+            public fn OnDestruct() { self.Close(); }
+            public fn Close() { if (not self.closed) { CloseNative(self.handle); self.closed = true; } }
+            public fn LocalPort() -> u16 { return LocalPortNative(self.handle); }
+            public fn SetTimeout(milliseconds: u64) -> std::UnitResult {
+                mut error = "";
+                if (SetTimeoutNative(self.handle, milliseconds, ref error)) { return std::OkUnit(); }
+                return std::ErrUnit(NetError(error));
+            }
+            public fn SendTo(host: string, port: u16, bytes: string) -> std::Result<usize> {
+                mut sent = 0usize;
+                mut error = "";
+                if (UdpSendToNative(self.handle, host, port, bytes, ref sent, ref error)) {
+                    return std::Ok(sent);
+                }
+                return std::Err<usize>(NetError(error));
+            }
+            public fn ReceiveFrom(maximumBytes: usize) -> std::Result<Datagram> {
+                mut bytes = "";
+                mut address = "";
+                mut port = 0u16;
+                mut error = "";
+                if (UdpReceiveFromNative(self.handle, maximumBytes, ref bytes, ref address, ref port, ref error)) {
+                    return std::Ok(Datagram(bytes, address, port));
+                }
+                return std::Err<Datagram>(NetError(error));
+            }
+        }
+
+        fn BindUdp(address: string, port: u16) -> std::Result<UdpSocket> {
+            mut handle: opaque? = null;
+            mut error = "";
+            if (UdpBindNative(address, port, ref handle, ref error)) {
+                if (handle != null) { return std::Ok(UdpSocket(handle)); }
+            }
+            return std::Err<UdpSocket>(NetError(error));
         }
     }
 }

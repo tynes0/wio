@@ -30,5 +30,24 @@ namespace wio::runtime::std_net
     [[nodiscard]] std::uint16_t LocalPort(void* handle) noexcept;
     [[nodiscard]] bool Send(void* handle, std::string_view bytes, std::size_t& sent, std::string& error) noexcept;
     [[nodiscard]] bool Receive(void* handle, std::size_t maximumBytes, std::string& bytes, std::string& error) noexcept;
+    [[nodiscard]] bool UdpBind(
+        std::string_view bindAddress,
+        std::uint16_t port,
+        void*& handle,
+        std::string& error) noexcept;
+    [[nodiscard]] bool UdpSendTo(
+        void* handle,
+        std::string_view host,
+        std::uint16_t port,
+        std::string_view bytes,
+        std::size_t& sent,
+        std::string& error) noexcept;
+    [[nodiscard]] bool UdpReceiveFrom(
+        void* handle,
+        std::size_t maximumBytes,
+        std::string& bytes,
+        std::string& remoteAddress,
+        std::uint16_t& remotePort,
+        std::string& error) noexcept;
     void Close(void* handle) noexcept;
 }

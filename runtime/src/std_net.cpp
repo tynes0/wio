@@ -199,6 +199,77 @@ namespace wio::runtime::std_net
         bytes.assign(buffer.data(), static_cast<std::size_t>(result)); return true;
     }
 
+    bool UdpBind(const std::string_view bindAddress, const std::uint16_t port,
+                 void*& handle, std::string& error) noexcept
+    {
+        handle = nullptr; error.clear();
+        if (!ensureRuntime(error)) return false;
+        addrinfo hints{}; hints.ai_family = AF_UNSPEC; hints.ai_socktype = SOCK_DGRAM; hints.ai_flags = AI_PASSIVE;
+        addrinfo* raw = nullptr;
+        const std::string hostText(bindAddress); const std::string service = std::to_string(port);
+        const char* hostPointer = hostText.empty() ? nullptr : hostText.c_str();
+        const int lookup = getaddrinfo(hostPointer, service.c_str(), &hints, &raw);
+        if (lookup != 0) { error = "UDP bind address resolution failed: " + std::string(gai_strerror(lookup)); return false; }
+        std::unique_ptr<addrinfo, decltype(&freeaddrinfo)> entries(raw, freeaddrinfo);
+        for (addrinfo* entry = raw; entry; entry = entry->ai_next)
+        {
+            NativeSocket socketValue = socket(entry->ai_family, entry->ai_socktype, entry->ai_protocol);
+            if (socketValue == invalidSocket) continue;
+            if (bind(socketValue, entry->ai_addr, static_cast<int>(entry->ai_addrlen)) == 0)
+            {
+                auto resultHandle = std::make_unique<SocketHandle>(); resultHandle->value = socketValue;
+                handle = resultHandle.release(); return true;
+            }
+            closeNative(socketValue);
+        }
+        error = errorMessage("UDP bind"); return false;
+    }
+
+    bool UdpSendTo(void* handle, const std::string_view host, const std::uint16_t port,
+                   const std::string_view bytes, std::size_t& sent, std::string& error) noexcept
+    {
+        sent = 0; error.clear();
+        addrinfo hints{}; hints.ai_family = AF_UNSPEC; hints.ai_socktype = SOCK_DGRAM;
+        addrinfo* raw = nullptr;
+        const std::string hostText(host); const std::string service = std::to_string(port);
+        const int lookup = getaddrinfo(hostText.c_str(), service.c_str(), &hints, &raw);
+        if (lookup != 0) { error = "UDP destination resolution failed: " + std::string(gai_strerror(lookup)); return false; }
+        std::unique_ptr<addrinfo, decltype(&freeaddrinfo)> entries(raw, freeaddrinfo);
+        for (addrinfo* entry = raw; entry; entry = entry->ai_next)
+        {
+            const auto result = sendto(asHandle(handle)->value, bytes.data(), static_cast<int>(bytes.size()), 0,
+                entry->ai_addr, static_cast<int>(entry->ai_addrlen));
+            if (result >= 0) { sent = static_cast<std::size_t>(result); return true; }
+        }
+        error = errorMessage("UDP sendto"); return false;
+    }
+
+    bool UdpReceiveFrom(void* handle, const std::size_t maximumBytes, std::string& bytes,
+                        std::string& remoteAddress, std::uint16_t& remotePort, std::string& error) noexcept
+    {
+        bytes.clear(); remoteAddress.clear(); remotePort = 0; error.clear();
+        std::vector<char> buffer(std::max<std::size_t>(1, maximumBytes));
+        sockaddr_storage address{};
+#if defined(_WIN32)
+        int addressSize = sizeof(address);
+#else
+        socklen_t addressSize = sizeof(address);
+#endif
+        const auto result = recvfrom(asHandle(handle)->value, buffer.data(), static_cast<int>(buffer.size()), 0,
+            reinterpret_cast<sockaddr*>(&address), &addressSize);
+        if (result < 0) { error = errorMessage("UDP recvfrom"); return false; }
+        bytes.assign(buffer.data(), static_cast<std::size_t>(result));
+        char hostBuffer[NI_MAXHOST]{};
+        if (getnameinfo(reinterpret_cast<const sockaddr*>(&address), addressSize,
+                        hostBuffer, sizeof(hostBuffer), nullptr, 0, NI_NUMERICHOST) == 0)
+            remoteAddress = hostBuffer;
+        if (address.ss_family == AF_INET)
+            remotePort = ntohs(reinterpret_cast<const sockaddr_in*>(&address)->sin_port);
+        else if (address.ss_family == AF_INET6)
+            remotePort = ntohs(reinterpret_cast<const sockaddr_in6*>(&address)->sin6_port);
+        return true;
+    }
+
     void Close(void* handle) noexcept
     {
         if (!handle) return;
