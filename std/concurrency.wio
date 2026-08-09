@@ -1,0 +1,128 @@
+use std::option as option;
+use std::result as result;
+
+realm std {
+    realm concurrency {
+        using cpp::header("std_concurrency.h");
+
+        fn MutexCreate() -> opaque with native, cpp::name(wio::runtime::std_concurrency::MutexCreate);
+        fn MutexDestroy(handle: opaque) with native, cpp::name(wio::runtime::std_concurrency::MutexDestroy);
+        fn MutexLock(handle: opaque) with native, cpp::name(wio::runtime::std_concurrency::MutexLock);
+        fn MutexTryLock(handle: opaque) -> bool with native, cpp::name(wio::runtime::std_concurrency::MutexTryLock);
+        fn MutexUnlock(handle: opaque) with native, cpp::name(wio::runtime::std_concurrency::MutexUnlock);
+
+        object Mutex {
+            private handle: opaque;
+            private disposed: bool;
+            public fn OnConstruct() { self.handle = MutexCreate(); self.disposed = false; }
+            public fn OnDestruct() { if (not self.disposed) { MutexDestroy(self.handle); self.disposed = true; } }
+            public fn Lock() { MutexLock(self.handle); }
+            public fn TryLock() -> bool { return MutexTryLock(self.handle); }
+            public fn Unlock() { MutexUnlock(self.handle); }
+        }
+
+        fn AtomicCreate(initial: i64) -> opaque with native, cpp::name(wio::runtime::std_concurrency::AtomicI64Create);
+        fn AtomicDestroy(handle: opaque) with native, cpp::name(wio::runtime::std_concurrency::AtomicI64Destroy);
+        fn AtomicLoad(handle: opaque) -> i64 with native, cpp::name(wio::runtime::std_concurrency::AtomicI64Load);
+        fn AtomicStore(handle: opaque, value: i64) with native, cpp::name(wio::runtime::std_concurrency::AtomicI64Store);
+        fn AtomicExchange(handle: opaque, value: i64) -> i64 with native, cpp::name(wio::runtime::std_concurrency::AtomicI64Exchange);
+        fn AtomicAdd(handle: opaque, value: i64) -> i64 with native, cpp::name(wio::runtime::std_concurrency::AtomicI64Add);
+        fn AtomicCompareExchange(handle: opaque, expected: ref i64, desired: i64) -> bool
+            with native, cpp::name(wio::runtime::std_concurrency::AtomicI64CompareExchange);
+
+        object AtomicI64 {
+            private handle: opaque;
+            private disposed: bool;
+            public fn OnConstruct() { self.handle = AtomicCreate(0i64); self.disposed = false; }
+            public fn OnConstruct(initial: i64) { self.handle = AtomicCreate(initial); self.disposed = false; }
+            public fn OnDestruct() { if (not self.disposed) { AtomicDestroy(self.handle); self.disposed = true; } }
+            public fn Load() -> i64 { return AtomicLoad(self.handle); }
+            public fn Store(value: i64) { AtomicStore(self.handle, value); }
+            public fn Exchange(value: i64) -> i64 { return AtomicExchange(self.handle, value); }
+            public fn Add(value: i64) -> i64 { return AtomicAdd(self.handle, value); }
+            public fn CompareExchange(expected: ref i64, desired: i64) -> bool {
+                return AtomicCompareExchange(self.handle, expected, desired);
+            }
+        }
+
+        fn ThreadStart(action: fn()) -> opaque with native, cpp::name(wio::runtime::std_concurrency::ThreadStart);
+        fn ThreadJoinable(handle: opaque) -> bool with native, cpp::name(wio::runtime::std_concurrency::ThreadJoinable);
+        fn ThreadJoin(handle: opaque) with native, cpp::name(wio::runtime::std_concurrency::ThreadJoin);
+        fn ThreadDetach(handle: opaque) with native, cpp::name(wio::runtime::std_concurrency::ThreadDetach);
+        fn ThreadDestroy(handle: opaque) with native, cpp::name(wio::runtime::std_concurrency::ThreadDestroy);
+
+        object Thread {
+            private handle: opaque;
+            private disposed: bool;
+            public fn OnConstruct(action: fn()) { self.handle = ThreadStart(action); self.disposed = false; }
+            public fn OnDestruct() { if (not self.disposed) { ThreadDestroy(self.handle); self.disposed = true; } }
+            public fn Joinable() -> bool { return not self.disposed and ThreadJoinable(self.handle); }
+            public fn Join() { if (not self.disposed) { ThreadJoin(self.handle); } }
+            public fn Detach() { if (not self.disposed) { ThreadDetach(self.handle); } }
+        }
+
+        object CancellationToken {
+            private state: AtomicI64;
+            public fn OnConstruct() { self.state = AtomicI64(0i64); }
+            public fn Cancel() { self.state.Store(1i64); }
+            public fn IsCancelled() -> bool { return self.state.Load() != 0i64; }
+        }
+
+        object Channel<T> {
+            private mutex: Mutex;
+            private values: T[];
+            private closed: bool;
+
+            public fn OnConstruct() {
+                self.mutex = Mutex();
+                self.values = [];
+                self.closed = false;
+            }
+
+            public fn Send(value: T) -> bool {
+                self.mutex.Lock();
+                if (self.closed) { self.mutex.Unlock(); return false; }
+                self.values.Push(value);
+                self.mutex.Unlock();
+                return true;
+            }
+
+            public fn TryReceive() -> std::Option<T> {
+                self.mutex.Lock();
+                if (self.values.Empty()) { self.mutex.Unlock(); return std::None<T>(); }
+                let value = self.values[0usize];
+                self.values.RemoveAt(0usize);
+                self.mutex.Unlock();
+                return std::Some(value);
+            }
+
+            public fn Close() { self.mutex.Lock(); self.closed = true; self.mutex.Unlock(); }
+            public fn IsClosed() -> bool {
+                self.mutex.Lock();
+                let value = self.closed;
+                self.mutex.Unlock();
+                return value;
+            }
+            public fn Count() -> usize {
+                self.mutex.Lock();
+                let value = self.values.Count();
+                self.mutex.Unlock();
+                return value;
+            }
+        }
+
+        object TaskGroup {
+            private threads: Thread[];
+            public fn OnConstruct() { self.threads = []; }
+            public fn Spawn(action: fn()) { self.threads.Push(Thread(action)); }
+            public fn JoinAll() {
+                for (task in self.threads) { task.Join(); }
+                self.threads.Clear();
+            }
+            public fn OnDestruct() { self.JoinAll(); }
+        }
+
+        fn Sleep(milliseconds: u64) with native, cpp::name(wio::runtime::std_concurrency::SleepMilliseconds);
+        fn Yield() with native, cpp::name(wio::runtime::std_concurrency::Yield);
+    }
+}

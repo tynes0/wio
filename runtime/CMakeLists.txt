@@ -9,6 +9,7 @@ set(WIO_RUNTIME_HEADERS
     "${WIO_RUNTIME_INCLUDE_DIR}/io_errors.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_assert.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_console.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/std_concurrency.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_convert.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_encoding.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_fs.h"

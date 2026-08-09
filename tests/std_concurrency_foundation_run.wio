@@ -1,0 +1,33 @@
+use std::assert as assert;
+use std::concurrency as concurrency;
+use std::console as console;
+
+fn Entry() -> i32 {
+    let counter = concurrency::AtomicI64(0i64);
+    let first = concurrency::Thread(() => {
+        mut index = 0;
+        while (index < 1000) { counter.Add(1i64); index += 1; }
+    });
+    let second = concurrency::Thread(() => {
+        mut index = 0;
+        while (index < 1000) { counter.Add(1i64); index += 1; }
+    });
+    first.Join();
+    second.Join();
+    assert::ExpectEqual(counter.Load(), 2000i64, "atomic updates across threads");
+    mut expected = 2000i64;
+    assert::Expect(counter.CompareExchange(ref expected, 7i64), "compare exchange");
+    assert::ExpectEqual(counter.Load(), 7i64, "atomic exchange result");
+
+    let channel = concurrency::Channel<i32>();
+    let group = concurrency::TaskGroup();
+    group.Spawn(() => { channel.Send(21); });
+    group.Spawn(() => { channel.Send(34); });
+    group.JoinAll();
+    assert::ExpectEqual(channel.Count(), 2usize, "thread-safe channel queue");
+    assert::Expect(channel.TryReceive().IsSome(), "channel receive");
+    channel.Close();
+    assert::Expect(not channel.Send(55), "closed channel rejects sends");
+    console::PrintLine!("std-concurrency-foundation-ok");
+    return 0;
+}
