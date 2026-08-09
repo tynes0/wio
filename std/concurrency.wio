@@ -19,6 +19,30 @@ realm std {
             public fn Lock() { MutexLock(self.handle); }
             public fn TryLock() -> bool { return MutexTryLock(self.handle); }
             public fn Unlock() { MutexUnlock(self.handle); }
+            public fn NativeHandle() -> opaque { return self.handle; }
+        }
+
+        fn ConditionCreate() -> opaque with native, cpp::name(wio::runtime::std_concurrency::ConditionCreate);
+        fn ConditionDestroy(handle: opaque) with native, cpp::name(wio::runtime::std_concurrency::ConditionDestroy);
+        fn ConditionWait(handle: opaque, mutex: opaque) with native, cpp::name(wio::runtime::std_concurrency::ConditionWait);
+        fn ConditionWaitFor(handle: opaque, mutex: opaque, milliseconds: u64) -> bool
+            with native, cpp::name(wio::runtime::std_concurrency::ConditionWaitFor);
+        fn ConditionNotifyOne(handle: opaque) with native, cpp::name(wio::runtime::std_concurrency::ConditionNotifyOne);
+        fn ConditionNotifyAll(handle: opaque) with native, cpp::name(wio::runtime::std_concurrency::ConditionNotifyAll);
+
+        object ConditionVariable {
+            private handle: opaque;
+            private disposed: bool;
+            public fn OnConstruct() { self.handle = ConditionCreate(); self.disposed = false; }
+            public fn OnDestruct() {
+                if (not self.disposed) { ConditionDestroy(self.handle); self.disposed = true; }
+            }
+            public fn Wait(mutex: ref Mutex) { ConditionWait(self.handle, mutex.NativeHandle()); }
+            public fn WaitFor(mutex: ref Mutex, milliseconds: u64) -> bool {
+                return ConditionWaitFor(self.handle, mutex.NativeHandle(), milliseconds);
+            }
+            public fn NotifyOne() { ConditionNotifyOne(self.handle); }
+            public fn NotifyAll() { ConditionNotifyAll(self.handle); }
         }
 
         fn AtomicCreate(initial: i64) -> opaque with native, cpp::name(wio::runtime::std_concurrency::AtomicI64Create);
@@ -120,6 +144,87 @@ realm std {
                 self.threads.Clear();
             }
             public fn OnDestruct() { self.JoinAll(); }
+        }
+
+        object BlockingChannel<T> {
+            private mutex: Mutex;
+            private changed: ConditionVariable;
+            private values: T[];
+            private closed: bool;
+
+            public fn OnConstruct() {
+                self.mutex = Mutex();
+                self.changed = ConditionVariable();
+                self.values = [];
+                self.closed = false;
+            }
+
+            public fn Send(value: T) -> bool {
+                self.mutex.Lock();
+                if (self.closed) { self.mutex.Unlock(); return false; }
+                self.values.Push(value);
+                self.changed.NotifyOne();
+                self.mutex.Unlock();
+                return true;
+            }
+
+            public fn Receive() -> std::Option<T> {
+                self.mutex.Lock();
+                while (self.values.Empty() and not self.closed) {
+                    self.changed.Wait(ref self.mutex);
+                }
+                if (self.values.Empty()) { self.mutex.Unlock(); return std::None<T>(); }
+                let value = self.values[0usize];
+                self.values.RemoveAt(0usize);
+                self.mutex.Unlock();
+                return std::Some(value);
+            }
+
+            public fn ReceiveFor(milliseconds: u64) -> std::Option<T> {
+                self.mutex.Lock();
+                while (self.values.Empty() and not self.closed) {
+                    if (not self.changed.WaitFor(ref self.mutex, milliseconds)) {
+                        self.mutex.Unlock();
+                        return std::None<T>();
+                    }
+                }
+                if (self.values.Empty()) { self.mutex.Unlock(); return std::None<T>(); }
+                let value = self.values[0usize];
+                self.values.RemoveAt(0usize);
+                self.mutex.Unlock();
+                return std::Some(value);
+            }
+
+            public fn Close() {
+                self.mutex.Lock();
+                self.closed = true;
+                self.changed.NotifyAll();
+                self.mutex.Unlock();
+            }
+        }
+
+        object Future<T> {
+            private state: BlockingChannel<T>;
+            public fn OnConstruct(state: BlockingChannel<T>) { self.state = state; }
+            public fn Await() -> std::Option<T> { return self.state.Receive(); }
+            public fn AwaitFor(milliseconds: u64) -> std::Option<T> {
+                return self.state.ReceiveFor(milliseconds);
+            }
+        }
+
+        object Promise<T> {
+            private state: BlockingChannel<T>;
+            private completed: bool;
+            public fn OnConstruct() { self.state = BlockingChannel<T>(); self.completed = false; }
+            public fn GetFuture() -> Future<T> { return Future<T>(self.state); }
+            public fn Complete(value: T) -> bool {
+                if (self.completed) { return false; }
+                self.completed = true;
+                let sent = self.state.Send(value);
+                self.state.Close();
+                return sent;
+            }
+            public fn Cancel() { if (not self.completed) { self.completed = true; self.state.Close(); } }
         }
 
         fn Sleep(milliseconds: u64) with native, cpp::name(wio::runtime::std_concurrency::SleepMilliseconds);

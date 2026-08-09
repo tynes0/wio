@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <functional>
 #include <mutex>
@@ -15,6 +16,34 @@ namespace wio::runtime::std_concurrency
     inline void MutexLock(void* handle) { static_cast<MutexHandle*>(handle)->value.lock(); }
     inline bool MutexTryLock(void* handle) { return static_cast<MutexHandle*>(handle)->value.try_lock(); }
     inline void MutexUnlock(void* handle) { static_cast<MutexHandle*>(handle)->value.unlock(); }
+
+    struct ConditionHandle final { std::condition_variable_any value; };
+    inline void* ConditionCreate() { return new ConditionHandle(); }
+    inline void ConditionDestroy(void* handle) noexcept { delete static_cast<ConditionHandle*>(handle); }
+    inline void ConditionWait(void* handle, void* mutexHandle)
+    {
+        auto lock = std::unique_lock<std::recursive_mutex>(
+            static_cast<MutexHandle*>(mutexHandle)->value, std::adopt_lock);
+        static_cast<ConditionHandle*>(handle)->value.wait(lock);
+        static_cast<void>(lock.release());
+    }
+    inline bool ConditionWaitFor(void* handle, void* mutexHandle, const std::uint64_t milliseconds)
+    {
+        auto lock = std::unique_lock<std::recursive_mutex>(
+            static_cast<MutexHandle*>(mutexHandle)->value, std::adopt_lock);
+        const bool signaled = static_cast<ConditionHandle*>(handle)->value.wait_for(
+            lock, std::chrono::milliseconds(milliseconds)) != std::cv_status::timeout;
+        static_cast<void>(lock.release());
+        return signaled;
+    }
+    inline void ConditionNotifyOne(void* handle) noexcept
+    {
+        static_cast<ConditionHandle*>(handle)->value.notify_one();
+    }
+    inline void ConditionNotifyAll(void* handle) noexcept
+    {
+        static_cast<ConditionHandle*>(handle)->value.notify_all();
+    }
 
     struct AtomicI64Handle final { explicit AtomicI64Handle(std::int64_t initial) : value(initial) {} std::atomic<std::int64_t> value; };
     inline void* AtomicI64Create(const std::int64_t initial) { return new AtomicI64Handle(initial); }

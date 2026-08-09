@@ -3027,6 +3027,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "std-unicode-grapheme-ok"
         --run
     )
+
+    add_wio_output_test(
+        wio_test_std_concurrency_future_run
+        "${CMAKE_SOURCE_DIR}/tests/std_concurrency_future_run.wio"
+        "std-concurrency-future-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_std_concurrency_future_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
     set_tests_properties(
         wio_test_std_unicode_grapheme_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"

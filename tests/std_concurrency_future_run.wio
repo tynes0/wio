@@ -1,0 +1,25 @@
+use std::assert as assert;
+use std::concurrency as concurrency;
+use std::console as console;
+
+fn Entry() -> i32 {
+    let promise = concurrency::Promise<i32>();
+    let future = promise.GetFuture();
+    let worker = concurrency::Thread(() => {
+        concurrency::Sleep(10u64);
+        promise.Complete(42);
+    });
+    let value = future.AwaitFor(2000u64);
+    worker.Join();
+    assert::Expect(value.IsSome(), "future completed before timeout");
+    assert::ExpectEqual(value.Value(), 42, "future result");
+    assert::Expect(not promise.Complete(9), "promise completes once");
+
+    let channel = concurrency::BlockingChannel<string>();
+    let sender = concurrency::Thread(() => { channel.Send("ready"); channel.Close(); });
+    assert::ExpectEqual(channel.Receive().Value(), "ready", "blocking channel receive");
+    sender.Join();
+    assert::Expect(channel.Receive().IsNone(), "closed drained channel");
+    console::PrintLine("std-concurrency-future-ok");
+    return 0;
+}
