@@ -1,9 +1,23 @@
 use std::console as console;
+use std::fs as fs;
 use std::json as json;
 use std::time as time;
 
 realm std {
     realm log {
+        component Field {
+            public name: string;
+            public value: string;
+
+            OnConstruct(name: string, value: string) {
+                self.name = name;
+                self.value = value;
+            }
+        }
+
+        fn TextField(name: string, value: string) -> Field { return Field(name, json::String(value)); }
+        fn NumberField(name: string, value: i64) -> Field { return Field(name, json::Number(value)); }
+        fn BoolField(name: string, value: bool) -> Field { return Field(name, json::Bool(value)); }
         @Type(i32)
         enum Level {
             trace = 0,
@@ -43,17 +57,27 @@ realm std {
             private name: string;
             private minimum: Level;
             private structured: bool;
+            private filePath: string;
 
             OnConstruct(name: string, minimum: Level, structured: bool) {
                 self.name = name;
                 self.minimum = minimum;
                 self.structured = structured;
+                self.filePath = "";
+            }
+
+            OnConstruct(name: string, minimum: Level, structured: bool, filePath: string) {
+                self.name = name;
+                self.minimum = minimum;
+                self.structured = structured;
+                self.filePath = filePath;
             }
 
             OnConstruct(name: string) {
                 self.name = name;
                 self.minimum = Level::info;
                 self.structured = false;
+                self.filePath = "";
             }
 
             public fn Enabled(level: Level) -> bool {
@@ -61,26 +85,51 @@ realm std {
             }
 
             public fn Format(level: Level, message: string) -> string {
+                return self.Format(level, message, []);
+            }
+
+            public fn Format(level: Level, message: string, values: Field[]) -> string {
                 if (self.structured) {
-                    let fields: string[] = [
+                    mut fields: string[] = [
                         json::Field("timestamp", std::ToString<i64>(time::UnixMilliseconds())),
                         json::Field("level", json::String(LevelName(level))),
                         json::Field("logger", json::String(self.name)),
                         json::Field("message", json::String(message))
                     ];
+                    for (field in values) {
+                        fields.Push(json::Field(field.name, field.value));
+                    }
                     return json::Object(fields);
                 }
-                return $"[${LevelName(level)}] [${self.name}] ${message}";
+                mut output = $"[${LevelName(level)}] [${self.name}] ${message}";
+                for (field in values) { output += $" ${field.name}=${field.value}"; }
+                return output;
             }
 
-            public fn Write(level: Level, message: string) {
-                if (not self.Enabled(level)) { return; }
-                let formatted = self.Format(level, message);
+            public fn WriteResult(level: Level, message: string, values: Field[]) -> std::UnitResult {
+                if (not self.Enabled(level)) { return std::OkUnit(); }
+                let formatted = self.Format(level, message, values);
+                if (not self.filePath.Empty()) {
+                    return fs::AppendText(self.filePath, formatted + "\n");
+                }
                 if (LevelRank(level) >= LevelRank(Level::error)) {
                     console::WriteErrorLine(formatted);
                 } else {
                     console::Print(formatted);
                 }
+                return std::OkUnit();
+            }
+
+            public fn WriteResult(level: Level, message: string) -> std::UnitResult {
+                return self.WriteResult(level, message, []);
+            }
+
+            public fn Write(level: Level, message: string) {
+                self.WriteResult(level, message);
+            }
+
+            public fn Write(level: Level, message: string, values: Field[]) {
+                self.WriteResult(level, message, values);
             }
 
             public fn Trace(message: string) { self.Write(Level::trace, message); }

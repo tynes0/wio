@@ -1,0 +1,24 @@
+use std::assert as assert;
+use std::fs as fs;
+use std::log as log;
+use std::path as path;
+use std::console as console;
+
+fn Entry() -> i32 {
+    let filePath = path::Join(fs::CurrentPath().Value(), "wio-structured-log-test.jsonl");
+    fs::WriteText(filePath, "");
+    let logger = log::Logger("audit", log::Level::debug, true, filePath);
+    let fields: log::Field[] = [
+        log::TextField("operation", "compile"),
+        log::NumberField("files", 12i64),
+        log::BoolField("cached", true)
+    ];
+    assert::Expect(logger.WriteResult(log::Level::info, "finished", fields).IsOk(), "file sink write");
+    let contents = fs::ReadText(filePath).Value();
+    assert::Expect(contents.Contains("\"operation\":\"compile\""), "structured text field");
+    assert::Expect(contents.Contains("\"files\":12"), "structured numeric field");
+    assert::Expect(contents.Contains("\"cached\":true"), "structured bool field");
+    fs::Remove(filePath);
+    console::PrintLine("std-structured-log-ok");
+    return 0;
+}
