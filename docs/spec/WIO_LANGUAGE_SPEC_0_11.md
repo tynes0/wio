@@ -16,9 +16,11 @@ without a success payload use `UnitResult`; they do not special-case `void`.
 
 ## 2. Typed attributes
 
-Postfix `with` attaches metadata. `using` activates a `scoped` attribute in a
-lexical scope. Legacy `@Name(...)` remains accepted during its compatibility
-window, but new source and generators should emit `with`/`using`.
+Postfix `with` attaches metadata. A declaration has exactly one non-empty
+`with` clause; the clause does not accept a trailing comma. `using` activates
+an attribute declared `scoped`. Legacy `@Name(...)` remains accepted during
+its compatibility window, but new source and generators should emit
+`with`/`using`.
 
 ```wio
 using cpp::header("widget.h");
@@ -28,6 +30,12 @@ attribute route(method: string, path: string = "/")
 
 fn Health() -> string with route("GET", "/health") { return "ok"; }
 ```
+
+`using marker(...);` applies from that statement through the remainder of the
+current lexical realm or block. `using marker(...) { ... }` applies only to
+the bounded declaration block and does not leak. An active scoped attribute is
+inherited only by declarations included in its target set. Explicit and scoped
+attributes participate in the same repetition and conflict checks.
 
 Attribute declarations have typed positional parameters, an explicit target
 set, retention, and optional policies. Supported targets are `fn`, `method`,
@@ -47,10 +55,14 @@ through `std::reflect`.
 
 ## 3. Pipeline operators
 
-`value |> F` and `F <| value` lower to the ordinary call `F(value)`. Overload
-resolution, inference, conversion, evaluation, and diagnostics are therefore
-identical to calls. The piped value is evaluated once. `|>` associates
-left-to-right and `<|` right-to-left.
+`value |> F` and `F <| value` lower to the ordinary call `F(value)`. When the
+target already supplies arguments, `value |> F(a, b)` inserts the value as the
+first argument and `F(a, b) <| value` appends it as the final argument.
+Overload resolution, inference, conversion, evaluation, and diagnostics are
+therefore identical to calls. A pipeline target must be callable and the piped
+value is evaluated exactly once. `|>` associates left-to-right and `<|`
+right-to-left. Arithmetic and logical expressions bind more tightly than a
+pipeline; assignment binds less tightly.
 
 ## 4. Match destructuring
 
@@ -61,16 +73,25 @@ left-to-right and `<|` right-to-left.
 - `[first, second]` exact-length array patterns.
 
 Bindings are immutable case-local values with the payload/element type and
-are visible in an optional `if` guard and the body. Guards are `bool`.
+are visible in an optional `if` guard and the body. A pattern cannot bind the
+same name twice. Guards are `bool` and are tested in source order. The match
+input is evaluated exactly once. Object payload bindings preserve shared
+object identity; component payload bindings own a value copy.
+
 Duplicate unguarded variants and duplicate unguarded array lengths are
-unreachable errors. Option/Result value matches are exhaustive when both
-unguarded variants exist. Arrays and ordinary values require final `assumed`
-when producing a value.
+unreachable errors. A guarded case is also unreachable after an earlier
+unguarded case that covers the same variant or exact array length.
+Option/Result value matches are exhaustive when both unguarded variants exist.
+Arrays and ordinary values require final `assumed` when producing a value.
 
 ## 5. Applications and systems
 
-An executable may declare one `application` root instead of `Entry`.
-Application and `system` state is stack-resident component-like state.
+An executable may declare one module-top-level `application` root instead of
+`Entry`. An application and an ordinary `Entry` cannot coexist, and an
+executable cannot contain multiple application roots. Application and
+`system` state is stack-resident component-like state. Lifecycle handlers are
+parameterless; an application declares exactly one `on update`, and a
+lifecycle handler name cannot be repeated in one application or system.
 
 ```wio
 system Clock { mut ticks: u64; on update { self.ticks += 1u64; } }
@@ -82,9 +103,9 @@ application Tool {
 
 The 0.11 runner is sequential and deterministic: application start runs once;
 systems start in declaration order; system updates precede application update;
-the first `self.Exit(code)` ends scheduling after the current handler; started
-systems close in reverse order; application close runs exactly once; the host
-receives the exit code.
+the first `self.Exit(code)` wins and ends scheduling after the current handler;
+later exit requests do not replace its code; started systems close in reverse
+order; application close runs exactly once; the host receives the exit code.
 
 Parallel schedules, injected resources, fixed stages, handler parameters, and
 native event-loop hosts are experimental and outside this edition.
@@ -95,4 +116,3 @@ Violations in this document fail during parsing or semantic analysis. A
 conforming implementation does not rely on generated-C++ failure for target,
 argument, conflict, pattern, or lifecycle validation. Backend representation
 is not source ABI.
-

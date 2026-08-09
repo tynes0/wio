@@ -48,8 +48,10 @@ candidate application/system and language-coherence direction is expanded in
 7. [~] Strengthen pattern matching.
    Option/Result and exact-length array destructuring, guards, algebraic
    exhaustiveness, duplicate/unreachable diagnostics, and typed local bindings
-   are implemented. Add payload enums, component/rest/nested patterns and
-   freeze binding ownership/reference rules.
+   are implemented. Object bindings preserve shared identity, component
+   bindings copy values, duplicate names are rejected, and guarded cases after
+   an equivalent unguarded case are unreachable. Add payload enums and
+   component/rest/nested patterns.
 
 8. [~] Complete component extension ergonomics.
    Direct native component extensions now map free C++ functions through
@@ -69,11 +71,13 @@ candidate application/system and language-coherence direction is expanded in
     edition-aware migration from `@Attribute(...)`.
     Do not expose unrestricted token/AST mutation in the first version.
 
-13. [ ] Complete a language-coherence pass before broad surface expansion.
-    Reconcile the draft, versioned specifications, freeze snapshot, compiler,
-    tests, and documentation; normalize constraints, specialization,
-    conversion, extension, native mapping, and metadata syntax; remove stale
-    or contradictory feature-status claims.
+13. [~] Complete a language-coherence pass before broad surface expansion.
+    The first 0.11 stabilization slice aligned scoped attributes, pipelines,
+    pattern bindings/reachability, and application lifecycle invariants across
+    compiler, tests, and specification. Continue reconciling constraints,
+    specialization, conversion, extension, native mapping, initialization,
+    destruction, and diagnostics; remove stale or contradictory feature-status
+    claims.
 
 14. [~] Implement the accepted application/system lifecycle model after the
     attribute foundation. The current proposal uses one stack-resident
@@ -89,9 +93,9 @@ candidate application/system and language-coherence direction is expanded in
 ## P1 - Standard Library Correctness and Consistency
 
 1. [~] Build a real Unicode text model.
-   Define UTF-8 validation, codepoints/runes, grapheme clusters, safe slicing,
-   Grapheme clustering, display width, basic case folding, codepoint/byte
-   conversion, safe slicing, and builders now exist. Complete normalization,
+   UTF-8 validation, codepoints/runes, grapheme clustering, display width,
+   basic case folding, codepoint/byte conversion, safe slicing, and builders
+   now exist. Complete normalization,
    full Unicode category/case data, locale-sensitive behavior, and conformance
    vectors. GUI input must not require a native `AppendCharacter` workaround.
 
@@ -109,15 +113,15 @@ candidate application/system and language-coherence direction is expanded in
 
 5. [~] Harden time, random, hash, log, numeric, encoding, stream, UUID, and
     SemVer. These modules exist; add cross-platform vectors, deterministic
-    contracts, cryptographic/non-cryptographic distinctions, secure random,
-   secure random, UUID variants, full SemVer metadata/precedence, host time
-   formatting/offsets, and structured console/file log sinks are implemented.
+   contracts and cryptographic/non-cryptographic distinctions. Secure random,
+   UUID variants, full SemVer metadata/precedence, host time formatting/offsets,
+   and structured console/file log sinks are implemented.
    Add time-zone database/calendar types, floating-point edge matrices,
    streaming encoders, and broader cross-platform vectors.
 
 6. [~] Add regular-expression safety and completeness.
-    Document the engine, escaping, Unicode behavior, capture APIs, replacement,
-   iteration, and error model exist with conservative pattern/input safety
+   Engine behavior, escaping, captures, replacement, iteration, and the error
+   model are documented and implemented with conservative pattern/input safety
    limits. Add Unicode mode documentation, full match iteration records, and a
    backend capable of enforceable execution timeouts.
 

@@ -23,6 +23,10 @@ Notes:
       they preserve call inference/diagnostics and single evaluation.
 - [x] The sequential stack-resident application/system lifecycle landed with
       deterministic start/update/reverse-close and orderly `self.Exit`.
+- [x] The 0.11 semantic stabilization pass froze scoped-attribute boundaries,
+      `with` clause diagnostics, pipeline precedence and single evaluation,
+      match binding ownership/reachability, and application-root/lifecycle
+      invariants. Its 22 newly added runtime and expected-diagnostic tests pass.
 - [x] Unicode UTF-8/codepoint/grapheme foundations, text/byte builders,
       hardened JSON, versioned binary frames, CSV/INI, MIME, geometry/color,
       localization, bigint, and compression utilities landed.
