@@ -1,0 +1,52 @@
+realm std {
+    realm geometry {
+        component Point {
+            x: f64;
+            y: f64;
+            OnConstruct(x: f64, y: f64) { self.x = x; self.y = y; }
+        }
+
+        component Size {
+            width: f64;
+            height: f64;
+            OnConstruct(width: f64, height: f64) { self.width = width; self.height = height; }
+        }
+
+        component Rect {
+            x: f64;
+            y: f64;
+            width: f64;
+            height: f64;
+            OnConstruct(x: f64, y: f64, width: f64, height: f64) {
+                self.x = x; self.y = y; self.width = width; self.height = height;
+            }
+        }
+
+        fn Contains(rect: Rect, point: Point) -> bool {
+            return point.x >= rect.x and point.y >= rect.y and
+                point.x <= rect.x + rect.width and point.y <= rect.y + rect.height;
+        }
+
+        fn Intersects(left: Rect, right: Rect) -> bool {
+            return left.x < right.x + right.width and left.x + left.width > right.x and
+                left.y < right.y + right.height and left.y + left.height > right.y;
+        }
+
+        component Color {
+            r: u8;
+            g: u8;
+            b: u8;
+            a: u8;
+            OnConstruct(r: u8, g: u8, b: u8, a: u8) {
+                self.r = r; self.g = g; self.b = b; self.a = a;
+            }
+        }
+
+        fn Rgba(r: u8, g: u8, b: u8, a: u8) -> Color { return Color(r, g, b, a); }
+        fn Rgb(r: u8, g: u8, b: u8) -> Color { return Color(r, g, b, 255u8); }
+        fn PackRgba(value: Color) -> u32 {
+            return (value.r fit u32) | ((value.g fit u32) << 8u32) |
+                ((value.b fit u32) << 16u32) | ((value.a fit u32) << 24u32);
+        }
+    }
+}

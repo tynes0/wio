@@ -3007,6 +3007,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_std_data_utilities_run
+        "${CMAKE_SOURCE_DIR}/tests/std_data_utilities_run.wio"
+        "std-data-utilities-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_std_data_utilities_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
         wio_test_any_value_reference_semantics_run
         "${CMAKE_SOURCE_DIR}/tests/any_value_reference_semantics_run.wio"
         "any-value-reference-semantics-ok"

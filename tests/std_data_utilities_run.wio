@@ -1,0 +1,28 @@
+use std::assert as assert;
+use std::config as config;
+use std::console as console;
+use std::csv as csv;
+use std::geometry as geometry;
+use std::localization as localization;
+use std::mime as mime;
+
+fn Entry() -> i32 {
+    let rows = csv::Parse!("name,note\nWio,\"native, fast\"\n");
+    assert::ExpectEqual(rows.Count(), 2usize, "CSV row count");
+    assert::ExpectEqual(rows[1usize][1usize], "native, fast", "CSV quoted field");
+    assert::ExpectEqual(csv::Write(rows), "name,note\nWio,\"native, fast\"", "CSV roundtrip");
+
+    let ini = config::ParseIni!("[app]\nname = Wio\nthreads=4\n");
+    assert::ExpectEqual(ini.Get("app.name", ""), "Wio", "INI section key");
+    assert::ExpectEqual(mime::FromExtension(".json"), "application/json", "MIME lookup");
+
+    let rect = geometry::Rect(0.0f64, 0.0f64, 10.0f64, 10.0f64);
+    assert::Expect(geometry::Contains(rect, geometry::Point(5.0f64, 3.0f64)), "rect contains point");
+    assert::ExpectEqual(geometry::PackRgba(geometry::Rgb(255u8, 0u8, 0u8)), 0xff0000ffu32, "RGBA pack");
+
+    let catalog = localization::Catalog("missing");
+    catalog.Set("hello", "Merhaba");
+    assert::ExpectEqual(catalog.Translate("hello"), "Merhaba", "translation catalog");
+    console::PrintLine!("std-data-utilities-ok");
+    return 0;
+}

@@ -1,0 +1,14 @@
+realm std {
+    realm localization {
+        object Catalog {
+            private values: Dict<string, string>;
+            private fallback: string;
+            public fn OnConstruct(fallback: string) { self.values = {}; self.fallback = fallback; }
+            public fn Set(key: string, value: string) { self.values.Set(key, value); }
+            public fn Translate(key: string) -> string { return self.values.GetOr(key, self.fallback); }
+            public fn TranslateOr(key: string, fallback: string) -> string {
+                return self.values.GetOr(key, fallback);
+            }
+        }
+    }
+}

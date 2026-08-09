@@ -1,0 +1,68 @@
+use std::builders as builders;
+use std::result as result;
+
+realm std {
+    realm csv {
+        fn Parse(value: string) -> std::Result<string[][]> {
+            mut rows: string[][] = [];
+            mut row: string[] = [];
+            let field = builders::StringBuilder();
+            mut quoted = false;
+            mut index = 0usize;
+            while (index < value.Count()) {
+                let current = value[index];
+                if (quoted) {
+                    if (current == '"') {
+                        if (index + 1usize < value.Count() and value[index + 1usize] == '"') {
+                            field.AppendChar('"');
+                            index += 1usize;
+                        } else {
+                            quoted = false;
+                        }
+                    } else {
+                        field.AppendChar(current);
+                    }
+                } else if (current == '"' and field.Empty()) {
+                    quoted = true;
+                } else if (current == ',') {
+                    row.Push(field.ToString());
+                    field.Clear();
+                } else if (current == '\n') {
+                    row.Push(field.ToString());
+                    field.Clear();
+                    rows.Push(row);
+                    row = [];
+                } else if (current != '\r') {
+                    field.AppendChar(current);
+                }
+                index += 1usize;
+            }
+            if (quoted) {
+                return std::Err<string[][]>(std::MakeResultError(
+                    std::ResultDomain::custom, 1, "CSV contains an unterminated quoted field."));
+            }
+            if (not field.Empty() or not row.Empty() or value.EndsWith(",")) {
+                row.Push(field.ToString());
+                rows.Push(row);
+            }
+            return std::Ok(rows);
+        }
+
+        fn EncodeField(value: string) -> string {
+            if (value.Contains(",") or value.Contains("\"") or value.Contains("\n") or value.Contains("\r")) {
+                return "\"" + value.Replace("\"", "\"\"") + "\"";
+            }
+            return value;
+        }
+
+        fn Write(rows: string[][]) -> string {
+            mut encodedRows: string[] = [];
+            for (row in rows) {
+                mut fields: string[] = [];
+                for (field in row) { fields.Push(EncodeField(field)); }
+                encodedRows.Push(fields.Join(","));
+            }
+            return encodedRows.Join("\n");
+        }
+    }
+}

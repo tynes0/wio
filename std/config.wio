@@ -1,0 +1,57 @@
+use std::result as result;
+
+realm std {
+    realm config {
+        object Ini {
+            public values: Dict<string, string>;
+
+            public fn OnConstruct() { self.values = {}; }
+            public fn Get(key: string, fallback: string) -> string {
+                return self.values.GetOr(key, fallback);
+            }
+            public fn Has(key: string) -> bool { return self.values.ContainsKey(key); }
+            public fn Set(key: string, value: string) { self.values.Set(key, value); }
+            public fn Remove(key: string) -> bool { return self.values.Remove(key); }
+        }
+
+        fn ParseIni(source: string) -> std::Result<Ini> {
+            let result = Ini();
+            let lines = source.Replace("\r\n", "\n").Split("\n");
+            mut section = "";
+            mut lineNumber = 0usize;
+            for (rawLine in lines) {
+                lineNumber += 1usize;
+                let line = rawLine.Trim();
+                if (line.Empty() or line.StartsWith(";") or line.StartsWith("#")) { continue; }
+                if (line.StartsWith("[") and line.EndsWith("]")) {
+                    section = line.Slice(1usize, line.Count() - 2usize).Trim();
+                    continue;
+                }
+                let separator = line.IndexOf("=");
+                if (separator < 0isize) {
+                    return std::Err<Ini>(std::MakeResultError(
+                        std::ResultDomain::custom, 1,
+                        $"Invalid INI assignment at line ${lineNumber}."));
+                }
+                let key = line.Take(separator fit usize).Trim();
+                let value = line.Skip((separator fit usize) + 1usize).Trim();
+                if (key.Empty()) {
+                    return std::Err<Ini>(std::MakeResultError(
+                        std::ResultDomain::custom, 1,
+                        $"Empty INI key at line ${lineNumber}."));
+                }
+                let qualified = section.Empty() ? key : section + "." + key;
+                result.Set(qualified, value);
+            }
+            return std::Ok(result);
+        }
+
+        fn WriteIni(value: Ini) -> string {
+            mut keys = value.values.Keys();
+            keys.Sort();
+            mut lines: string[] = [];
+            for (key in keys) { lines.Push(key + "=" + value.values.GetOr(key, "")); }
+            return lines.Join("\n");
+        }
+    }
+}
