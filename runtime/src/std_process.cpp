@@ -19,6 +19,9 @@
 
 #if defined(_WIN32)
     #include <windows.h>
+    #ifdef SetCurrentDirectory
+        #undef SetCurrentDirectory
+    #endif
 #elif defined(__APPLE__)
     #include <mach-o/dyld.h>
     #include <sys/wait.h>
@@ -318,6 +321,46 @@ namespace wio::runtime::std_process
             exitCode = rawExitCode;
 #endif
 
+        return true;
+    }
+
+    bool TryRunCapture(
+        const std::string_view program,
+        const std::vector<std::string>& args,
+        const std::string_view workingDirectory,
+        int& exitCode,
+        std::string& output,
+        ProcessError& error,
+        int& nativeError,
+        std::string& message) noexcept
+    {
+        exitCode = -1; output.clear(); error = ProcessError::none; nativeError = 0; message.clear();
+        if (program.empty()) { error = ProcessError::empty_program; message = "process program cannot be empty"; return false; }
+        std::error_code pathError;
+        std::optional<ScopedCurrentPath> pathGuard;
+        if (!workingDirectory.empty())
+        {
+            const std::filesystem::path directoryPath{ std::string(workingDirectory) };
+            if (!std::filesystem::is_directory(directoryPath, pathError))
+            { error = ProcessError::invalid_working_directory; nativeError = pathError.value(); message = "working directory does not exist"; return false; }
+            pathGuard.emplace(directoryPath, pathError);
+            if (pathError) { error = ProcessError::invalid_working_directory; nativeError = pathError.value(); message = "could not switch working directory"; return false; }
+        }
+        const std::string command = joinCommand(program, args) + " 2>&1";
+#if defined(_WIN32)
+        FILE* pipe = _popen(command.c_str(), "r");
+#else
+        FILE* pipe = popen(command.c_str(), "r");
+#endif
+        if (!pipe) { error = ProcessError::launch_failed; nativeError = errno; message = "process capture launch failed"; return false; }
+        char buffer[4096];
+        while (std::fgets(buffer, static_cast<int>(sizeof(buffer)), pipe) != nullptr) output += buffer;
+#if defined(_WIN32)
+        exitCode = _pclose(pipe);
+#else
+        const int rawExitCode = pclose(pipe);
+        exitCode = WIFEXITED(rawExitCode) ? WEXITSTATUS(rawExitCode) : rawExitCode;
+#endif
         return true;
     }
 }
@@ -1029,5 +1072,54 @@ namespace wio::runtime::std_environment
             return (std::filesystem::path(home) / ".cache").lexically_normal().generic_string();
 #endif
         return TemporaryDirectory();
+    }
+
+    std::string ConfigDirectory()
+    {
+        std::string value;
+#if defined(_WIN32)
+        if (TryGet("APPDATA", value)) return std::filesystem::path(value).lexically_normal().generic_string();
+#else
+        if (TryGet("XDG_CONFIG_HOME", value)) return std::filesystem::path(value).lexically_normal().generic_string();
+        const std::string home = HomeDirectory();
+        if (!home.empty()) return (std::filesystem::path(home) / ".config").generic_string();
+#endif
+        return HomeDirectory();
+    }
+
+    std::string DataDirectory()
+    {
+        std::string value;
+#if defined(_WIN32)
+        if (TryGet("LOCALAPPDATA", value)) return std::filesystem::path(value).lexically_normal().generic_string();
+#else
+        if (TryGet("XDG_DATA_HOME", value)) return std::filesystem::path(value).lexically_normal().generic_string();
+        const std::string home = HomeDirectory();
+        if (!home.empty()) return (std::filesystem::path(home) / ".local" / "share").generic_string();
+#endif
+        return HomeDirectory();
+    }
+
+    std::string RuntimeDirectory()
+    {
+        std::string value;
+#if !defined(_WIN32)
+        if (TryGet("XDG_RUNTIME_DIR", value)) return std::filesystem::path(value).lexically_normal().generic_string();
+#endif
+        return TemporaryDirectory();
+    }
+
+    std::string CurrentDirectory()
+    {
+        std::error_code error;
+        const auto path = std::filesystem::current_path(error);
+        return error ? std::string{} : path.lexically_normal().generic_string();
+    }
+
+    bool SetCurrentDirectory(const std::string_view path) noexcept
+    {
+        std::error_code error;
+        std::filesystem::current_path(std::filesystem::path(std::string(path)), error);
+        return !error;
     }
 }

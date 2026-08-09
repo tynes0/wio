@@ -54,6 +54,17 @@ realm std {
         @CppName(wio::runtime::std_environment::CacheDirectory)
         fn CacheDirectory() -> string;
 
+        fn ConfigDirectory() -> string
+            with native, cpp::name(wio::runtime::std_environment::ConfigDirectory);
+        fn DataDirectory() -> string
+            with native, cpp::name(wio::runtime::std_environment::DataDirectory);
+        fn RuntimeDirectory() -> string
+            with native, cpp::name(wio::runtime::std_environment::RuntimeDirectory);
+        fn CurrentDirectory() -> string
+            with native, cpp::name(wio::runtime::std_environment::CurrentDirectory);
+        fn SetCurrentDirectory(path: string) -> bool
+            with native, cpp::name(wio::runtime::std_environment::SetCurrentDirectory);
+
         fn Get(name: string, fallback: string) -> string {
             mut value = "";
             if (TryGet(name, ref value)) {

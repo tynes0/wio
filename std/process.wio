@@ -58,6 +58,22 @@ realm std {
             nativeError: ref i32,
             message: ref string) -> bool;
 
+        component Output {
+            exitCode: i32;
+            text: string;
+        }
+
+        fn TryRunCaptureNative(
+            command: string,
+            args: string[],
+            workingDirectory: string,
+            exitCode: ref i32,
+            output: ref string,
+            error: ref Error,
+            nativeError: ref i32,
+            message: ref string) -> bool
+            with native, cpp::name(wio::runtime::std_process::TryRunCapture);
+
         fn MakeProcessResultError(error: Error, nativeError: i32, message: string) -> std::ResultError {
             mut finalMessage = message;
             if (finalMessage == "") {
@@ -82,6 +98,24 @@ realm std {
 
         fn Run(command: string, args: string[]) -> std::Result<i32> {
             return Run(command, args, "");
+        }
+
+        fn Capture(command: string, args: string[], workingDirectory: string) -> std::Result<Output> {
+            mut output = Output();
+            mut error = Error::none;
+            mut nativeError = 0;
+            mut message = "";
+            if (TryRunCaptureNative(
+                    command, args, workingDirectory,
+                    ref output.exitCode, ref output.text,
+                    ref error, ref nativeError, ref message)) {
+                return std::Ok(output);
+            }
+            return std::Err<Output>(MakeProcessResultError(error, nativeError, message));
+        }
+
+        fn Capture(command: string, args: string[]) -> std::Result<Output> {
+            return Capture(command, args, "");
         }
     }
 }

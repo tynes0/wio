@@ -1,0 +1,26 @@
+use std::assert as assert;
+use std::console as console;
+use std::environment as environment;
+use std::fs as fs;
+use std::os as os;
+use std::path as path;
+use std::process as process;
+
+fn Entry() -> i32 {
+    assert::Expect(not environment::ConfigDirectory().Empty(), "config directory");
+    assert::Expect(not environment::DataDirectory().Empty(), "data directory");
+    assert::Expect(not environment::CurrentDirectory().Empty(), "current directory");
+
+    let filePath = path::Join(environment::TemporaryDirectory(), "wio-os-watcher.txt");
+    fs::WriteText!(filePath, "first");
+    let watcher = os::FileWatcher(filePath);
+    let initialChange = watcher.Poll!();
+    assert::Expect(not initialChange, "first watcher poll initializes");
+    fs::WriteText!(filePath, "second-value");
+    assert::Expect(watcher.Poll!(), "watcher detects modification");
+
+    let executable = process::ExecutablePath();
+    assert::Expect(not executable.Empty(), "current executable path");
+    console::PrintLine!("std-os-facilities-ok");
+    return 0;
+}

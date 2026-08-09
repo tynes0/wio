@@ -35,6 +35,15 @@ namespace wio::runtime::std_process
         ProcessError& error,
         int& nativeError,
         std::string& message) noexcept;
+    [[nodiscard]] bool TryRunCapture(
+        std::string_view program,
+        const std::vector<std::string>& args,
+        std::string_view workingDirectory,
+        int& exitCode,
+        std::string& output,
+        ProcessError& error,
+        int& nativeError,
+        std::string& message) noexcept;
 }
 
 namespace wio::runtime::std_environment
@@ -52,6 +61,11 @@ namespace wio::runtime::std_environment
     [[nodiscard]] std::string TemporaryDirectory();
     [[nodiscard]] std::string HomeDirectory();
     [[nodiscard]] std::string CacheDirectory();
+    [[nodiscard]] std::string ConfigDirectory();
+    [[nodiscard]] std::string DataDirectory();
+    [[nodiscard]] std::string RuntimeDirectory();
+    [[nodiscard]] std::string CurrentDirectory();
+    [[nodiscard]] bool SetCurrentDirectory(std::string_view path) noexcept;
 }
 
 namespace wio::runtime::std_platform

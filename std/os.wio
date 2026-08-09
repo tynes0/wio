@@ -1,0 +1,36 @@
+use std::fs as fs;
+use std::result as result;
+
+realm std {
+    realm os {
+        object FileWatcher {
+            private path: string;
+            private previousWriteTime: i64;
+            private previousSize: i64;
+            private initialized: bool;
+
+            public fn OnConstruct(path: string) {
+                self.path = path;
+                self.previousWriteTime = 0i64;
+                self.previousSize = -1i64;
+                self.initialized = false;
+            }
+
+            public fn Poll() -> std::Result<bool> {
+                let current = fs::Metadata(self.path);
+                if (current.IsError()) { return std::Err<bool>(current.ErrorValue()); }
+                if (not self.initialized) {
+                    self.previousWriteTime = current.Value().lastWriteTime;
+                    self.previousSize = current.Value().size;
+                    self.initialized = true;
+                    return std::Ok(false);
+                }
+                let changed = current.Value().lastWriteTime != self.previousWriteTime or
+                    current.Value().size != self.previousSize;
+                self.previousWriteTime = current.Value().lastWriteTime;
+                self.previousSize = current.Value().size;
+                return std::Ok(changed);
+            }
+        }
+    }
+}
