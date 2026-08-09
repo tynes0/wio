@@ -1,0 +1,20 @@
+use std::assert as assert;
+use std::console as console;
+
+fn Double(value: i32) -> i32 {
+    return value * 2;
+}
+
+fn Add(left: i32, right: i32) -> i32 {
+    return left + right;
+}
+
+fn Entry() -> i32 {
+    assert::ExpectEqual(5 |> Double, 10, "right flow calls a function");
+    assert::ExpectEqual(5 |> Add(7), 12, "right flow inserts the first argument");
+    assert::ExpectEqual(Double <| 6, 12, "left flow calls a function");
+    assert::ExpectEqual(Double <| Double <| 3, 12, "left flow is right associative");
+    assert::ExpectEqual(2 |> Double |> Add(3) |> Double, 14, "right flow chains left to right");
+    console::PrintLine!("pipeline-operator-ok");
+    return 0;
+}

@@ -475,12 +475,49 @@ namespace wio
             }
             
             Token op = advance();
-            NodePtr<Expression> right = parseExpression(precedence + 1, stopAtFit);
+            // Right-flow is left associative (`x |> f |> g`), while left-flow
+            // follows ordinary functional application and is right
+            // associative (`f <| g <| x` == `f(g(x))`).
+            const int rightMinPrecedence = op.type == TokenType::opFlowLeft
+                ? precedence
+                : precedence + 1;
+            NodePtr<Expression> right = parseExpression(rightMinPrecedence, stopAtFit);
 
             if (op.type == TokenType::opRangeInclusive || op.type == TokenType::opRangeExclusive)
             {
                 bool isInclusive = (op.type == TokenType::opRangeInclusive);
                 left = makeNodePtr<RangeExpression>(std::move(left), std::move(right), isInclusive, op.loc);
+            }
+            else if (op.type == TokenType::opFlowRight)
+            {
+                if (auto call = right.As<FunctionCallExpression>())
+                {
+                    call->arguments.insert(call->arguments.begin(), std::move(left));
+                    left = std::move(right);
+                }
+                else
+                {
+                    std::vector<NodePtr<Expression>> arguments;
+                    arguments.push_back(std::move(left));
+                    left = makeNodePtr<FunctionCallExpression>(
+                        std::move(right), std::vector<NodePtr<TypeSpecifier>>{},
+                        std::move(arguments), false, false, op.loc);
+                }
+            }
+            else if (op.type == TokenType::opFlowLeft)
+            {
+                if (auto call = left.As<FunctionCallExpression>())
+                {
+                    call->arguments.push_back(std::move(right));
+                }
+                else
+                {
+                    std::vector<NodePtr<Expression>> arguments;
+                    arguments.push_back(std::move(right));
+                    left = makeNodePtr<FunctionCallExpression>(
+                        std::move(left), std::vector<NodePtr<TypeSpecifier>>{},
+                        std::move(arguments), false, false, op.loc);
+                }
             }
             else
             {
