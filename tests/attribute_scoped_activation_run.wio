@@ -1,0 +1,27 @@
+use std::assert as assert;
+use std::console as console;
+use std::reflect as reflect;
+
+attribute entity(name: string) for component retain runtime scoped;
+
+realm Persistent {
+    using entity("persistent");
+    component First { value: i32; }
+    component Second { value: i32; }
+}
+
+realm Bounded {
+    using entity("bounded") {
+        component Inside { value: i32; }
+    }
+    component Outside { value: i32; }
+}
+
+fn Entry() -> i32 {
+    assert::ExpectEqual(reflect::TypeAttributes<Persistent::First>()[0usize], "entity(persistent)", "persistent scoped attribute");
+    assert::ExpectEqual(reflect::TypeAttributes<Persistent::Second>()[0usize], "entity(persistent)", "persistent scope remainder");
+    assert::ExpectEqual(reflect::TypeAttributes<Bounded::Inside>()[0usize], "entity(bounded)", "bounded scoped attribute");
+    assert::Expect(reflect::TypeAttributes<Bounded::Outside>().Empty(), "bounded attribute does not leak");
+    console::PrintLine("attribute-scoped-activation-ok");
+    return 0;
+}

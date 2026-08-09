@@ -2912,6 +2912,46 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "attribute-runtime-reflection-ok"
         --run
     )
+
+    add_wio_output_test(
+        wio_test_attribute_scoped_activation_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_scoped_activation_run.wio"
+        "attribute-scoped-activation-ok"
+        --run
+    )
+    set_tests_properties(wio_test_attribute_scoped_activation_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
+    add_wio_output_test(
+        wio_test_attribute_legacy_equivalence_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_legacy_equivalence_run.wio"
+        "attribute-legacy-equivalence-ok"
+        --run
+    )
+    set_tests_properties(wio_test_attribute_legacy_equivalence_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
+    add_wio_failure_test(wio_invalid_attribute_using_requires_scoped
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_using_requires_scoped.wio"
+        "cannot be activated with 'using'")
+    add_wio_failure_test(wio_invalid_attribute_scoped_conflict
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_scoped_conflict.wio"
+        "through conflict group 'serialization'")
+    add_wio_failure_test(wio_invalid_attribute_with_empty
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_with_empty.wio"
+        "Expected an attribute name after 'with'")
+    add_wio_failure_test(wio_invalid_attribute_with_trailing_comma
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_with_trailing_comma.wio"
+        "Expected an attribute name after ',' in a 'with' clause")
+    add_wio_failure_test(wio_invalid_attribute_with_duplicate_clause
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_with_duplicate_clause.wio"
+        "only one postfix 'with' clause")
+    set_tests_properties(
+        wio_invalid_attribute_using_requires_scoped
+        wio_invalid_attribute_scoped_conflict
+        wio_invalid_attribute_with_empty
+        wio_invalid_attribute_with_trailing_comma
+        wio_invalid_attribute_with_duplicate_clause
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
     set_tests_properties(
         wio_test_attribute_runtime_reflection_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"

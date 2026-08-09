@@ -470,6 +470,16 @@ namespace wio
 
     UseStatement::~UseStatement() = default;
 
+    UsingAttributeStatement::UsingAttributeStatement(
+        NodePtr<AttributeStatement> _attribute,
+        NodePtr<DeclarationGroup> _body,
+        common::Location _loc)
+        : Statement(_loc), attribute(std::move(_attribute)), body(std::move(_body))
+    {
+    }
+
+    UsingAttributeStatement::~UsingAttributeStatement() = default;
+
     RealmDeclaration::RealmDeclaration(NodePtr<Identifier> _name, std::vector<NodePtr<Statement>> _statements, common::Location _loc)
         : Statement(_loc.isValid() ? _loc : _name->location()), name(std::move(_name)), statements(std::move(_statements))
     {

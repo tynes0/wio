@@ -1111,6 +1111,19 @@ namespace wio
         ~UseStatement() override;
     };
 
+    struct UsingAttributeStatement : Statement
+    {
+        WIO_STMT_NODE_BODY(UsingAttributeStatement)
+
+        NodePtr<AttributeStatement> attribute;
+        NodePtr<DeclarationGroup> body;
+
+        UsingAttributeStatement(NodePtr<AttributeStatement> _attribute,
+            NodePtr<DeclarationGroup> _body,
+            common::Location _loc = common::Location::invalid());
+        ~UsingAttributeStatement() override;
+    };
+
     struct RealmDeclaration : Statement
     {
         WIO_STMT_NODE_BODY(RealmDeclaration)

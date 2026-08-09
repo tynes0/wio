@@ -1280,9 +1280,19 @@ namespace wio
         if (!match(TokenType::kwWith, true))
             return;
 
+        if (peek().type != TokenType::identifier)
+            utError("Expected an attribute name after 'with'.", peek().loc);
+
         attributes.push_back(parseAttributeStatement(false));
         while (match(TokenType::comma, true))
+        {
+            if (peek().type != TokenType::identifier)
+                utError("Expected an attribute name after ',' in a 'with' clause.", peek().loc);
             attributes.push_back(parseAttributeStatement(false));
+        }
+
+        if (match(TokenType::kwWith))
+            utError("A declaration may contain only one postfix 'with' clause.", peek().loc);
     }
 
     NodePtr<AttributeDeclaration> Parser::parseAttributeDeclaration()
@@ -2826,14 +2836,34 @@ namespace wio
     {
         Token startTok = consume(TokenType::kwUsing);
         NodePtr<AttributeStatement> attribute = parseAttributeStatement(false);
-        if (attribute->attribute != Attribute::CppHeader)
-            utError("Scoped 'using' currently accepts cpp::header while user-defined scoped attributes are being introduced.", startTok.loc);
+        if (attribute->attribute == Attribute::CppHeader)
+        {
+            if (attribute->args.size() != 1 || attribute->args.front().type != TokenType::stringLiteral)
+                utError("cpp::header expects exactly one string literal path.", startTok.loc);
+            if (match(TokenType::leftBrace))
+                utError("Bounded cpp::header scopes are not supported; place 'using cpp::header(...)' in the containing realm.", startTok.loc);
+            consume(TokenType::semicolon);
+            return makeNodePtr<UseStatement>("", attribute->args.front().value, "", false, true, false, startTok.loc);
+        }
 
-        if (attribute->args.size() != 1 || attribute->args.front().type != TokenType::stringLiteral)
-            utError("cpp::header expects exactly one string literal path.", startTok.loc);
-
-        consume(TokenType::semicolon);
-        return makeNodePtr<UseStatement>("", attribute->args.front().value, "", false, true, false, startTok.loc);
+        NodePtr<DeclarationGroup> body = nullptr;
+        if (match(TokenType::leftBrace))
+        {
+            consume(TokenType::leftBrace);
+            std::vector<NodePtr<Statement>> declarations;
+            while (peek().isValid() && !match(TokenType::rightBrace))
+            {
+                if (auto declaration = parseStatement(); declaration)
+                    declarations.push_back(std::move(declaration));
+            }
+            consume(TokenType::rightBrace);
+            body = makeNodePtr<DeclarationGroup>(std::move(declarations), startTok.loc);
+        }
+        else
+        {
+            consume(TokenType::semicolon);
+        }
+        return makeNodePtr<UsingAttributeStatement>(std::move(attribute), std::move(body), startTok.loc);
     }
 
     NodePtr<Statement> Parser::parseRealmDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)

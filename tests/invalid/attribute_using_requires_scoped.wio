@@ -1,0 +1,4 @@
+attribute marker() for component retain compile;
+using marker;
+component Value { number: i32; }
+fn Entry() -> i32 { return 0; }

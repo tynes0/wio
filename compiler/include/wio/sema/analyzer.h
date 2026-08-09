@@ -56,6 +56,7 @@ namespace wio::sema
         bool allowTypePackIdentifierReference_ = false;
         std::vector<std::string> currentNamespacePath_;
         std::vector<std::unordered_map<std::string, Ref<Type>>> genericTypeParameterScopes_;
+        std::vector<NodePtr<AttributeStatement>> activeScopedAttributes_;
         uint32_t loopDepth_ = 0;
         bool isDeclarationPass_ = true;
         bool isStructResolutionPass_ = false;
@@ -84,7 +85,10 @@ namespace wio::sema
         [[nodiscard]] bool allowsNumericSemantics(const Ref<Type>& type) const;
         [[nodiscard]] bool allowsIntegerSemantics(const Ref<Type>& type) const;
         void validateAttributeApplications(const std::vector<NodePtr<AttributeStatement>>& attributes,
-                                           std::string_view target);
+                                           std::string_view target,
+                                           bool validateTarget = true);
+        void applyActiveScopedAttributes(std::vector<NodePtr<AttributeStatement>>& attributes,
+                                         std::string_view target);
 
         std::unordered_set<std::string> validatedGenericFunctionBodyKeys_;
         std::unordered_set<std::string> validatingGenericFunctionBodyKeys_;

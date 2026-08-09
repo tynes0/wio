@@ -1,0 +1,5 @@
+attribute json() for component retain compile scoped conflicts serialization;
+attribute binary() for component retain compile conflicts serialization;
+using json;
+component Value with binary { number: i32; }
+fn Entry() -> i32 { return 0; }

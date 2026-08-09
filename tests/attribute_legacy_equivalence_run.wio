@@ -1,0 +1,15 @@
+use std::assert as assert;
+use std::console as console;
+use @CppHeader("std_math.h");
+
+@Native @CppName(wio::runtime::std_math::AbsI32)
+fn LegacyAbs(value: i32) -> i32;
+
+fn ModernAbs(value: i32) -> i32
+    with native, cpp::name(wio::runtime::std_math::AbsI32);
+
+fn Entry() -> i32 {
+    assert::ExpectEqual(LegacyAbs(-31), ModernAbs(-31), "legacy and modern native attributes");
+    console::PrintLine("attribute-legacy-equivalence-ok");
+    return 0;
+}

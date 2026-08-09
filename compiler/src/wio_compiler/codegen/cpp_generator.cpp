@@ -4390,6 +4390,14 @@ namespace wio::codegen
                     continue;
                 }
 
+                if (stmt->is<UsingAttributeStatement>())
+                {
+                    auto usingAttribute = stmt->as<UsingAttributeStatement>();
+                    if (usingAttribute->body)
+                        self(self, usingAttribute->body->declarations, emitter);
+                    continue;
+                }
+
                 emitter(stmt);
             }
         };
@@ -9834,5 +9842,11 @@ namespace wio::codegen
     void CppGenerator::visit(UseStatement& node)
     {
         WIO_UNUSED(node);
+    }
+
+    void CppGenerator::visit(UsingAttributeStatement& node)
+    {
+        if (node.body)
+            node.body->accept(*this);
     }
 }

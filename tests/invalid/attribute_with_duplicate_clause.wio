@@ -1,0 +1,4 @@
+attribute first() for component;
+attribute second() for component;
+component Value with first with second { number: i32; }
+fn Entry() -> i32 { return 0; }

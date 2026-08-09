@@ -6401,11 +6401,13 @@ namespace wio::sema
         enterScope(ScopeKind::Global);
 
         isDeclarationPass_ = true;
+        activeScopedAttributes_.clear();
         for (auto& stmt : node.statements)
             stmt->accept(*this);
 
         isDeclarationPass_ = false;
         isStructResolutionPass_ = true;
+        activeScopedAttributes_.clear();
         for (auto& stmt : node.statements)
         {
             if (stmt->is<ComponentDeclaration>() ||
@@ -6415,6 +6417,7 @@ namespace wio::sema
                 stmt->is<FlagsetDeclaration>() ||
                 stmt->is<FlagDeclaration>() ||
                 stmt->is<DeclarationGroup>() ||
+                stmt->is<UsingAttributeStatement>() ||
                 stmt->is<RealmDeclaration>())
             {
                 stmt->accept(*this);
@@ -6422,6 +6425,7 @@ namespace wio::sema
         }
         
         isStructResolutionPass_ = false;
+        activeScopedAttributes_.clear();
         for (auto& stmt : node.statements)
             stmt->accept(*this);
 
@@ -6438,12 +6442,14 @@ namespace wio::sema
     {
         if (isDeclarationPass_) return;
         enterScope(ScopeKind::Block);
+        const size_t scopedAttributeCount = activeScopedAttributes_.size();
 
         for (auto& stmt : node.statements)
         {
             stmt->accept(*this);
         }
 
+        activeScopedAttributes_.resize(scopedAttributeCount);
         exitScope();
     }
 
@@ -12848,7 +12854,8 @@ namespace wio::sema
 
     void SemanticAnalyzer::validateAttributeApplications(
         const std::vector<NodePtr<AttributeStatement>>& attributes,
-        std::string_view target)
+        std::string_view target,
+        bool validateTarget)
     {
         std::unordered_map<const Symbol*, size_t> applicationCounts;
         std::unordered_map<std::string, const Symbol*> conflictOwners;
@@ -12872,9 +12879,9 @@ namespace wio::sema
             attribute->runtimeRetained = std::ranges::find(
                 symbol->attributeRetention, std::string("runtime")) != symbol->attributeRetention.end();
 
-            const bool targetAllowed = std::ranges::find(
+            const bool targetAllowed = !validateTarget || std::ranges::find(
                 symbol->attributeTargets, std::string(target)) != symbol->attributeTargets.end();
-            if (!targetAllowed)
+            if (validateTarget && !targetAllowed)
             {
                 std::string allowedTargets;
                 for (size_t index = 0; index < symbol->attributeTargets.size(); ++index)
@@ -12970,6 +12977,56 @@ namespace wio::sema
                     );
                 }
             }
+        }
+    }
+
+    void SemanticAnalyzer::applyActiveScopedAttributes(
+        std::vector<NodePtr<AttributeStatement>>& attributes,
+        std::string_view target)
+    {
+        for (const auto& active : activeScopedAttributes_)
+        {
+            if (!active) continue;
+            Ref<Symbol> symbol = resolveQualifiedSymbol(currentScope_, active->qualifiedName);
+            if (!symbol || symbol->kind != SymbolKind::Attribute || !symbol->attributeScoped)
+                continue;
+            if (std::ranges::find(symbol->attributeTargets, std::string(target)) == symbol->attributeTargets.end())
+                continue;
+            const bool alreadyApplied = std::ranges::any_of(attributes, [&](const auto& existing)
+            {
+                return existing.Get() == active.Get();
+            });
+            if (!alreadyApplied)
+                attributes.push_back(active);
+        }
+    }
+
+    void SemanticAnalyzer::visit(UsingAttributeStatement& node)
+    {
+        if (!node.attribute) return;
+
+        Ref<Symbol> symbol = resolveQualifiedSymbol(currentScope_, node.attribute->qualifiedName);
+        bool canActivate = symbol && symbol->kind == SymbolKind::Attribute && symbol->attributeScoped;
+        if (isDeclarationPass_)
+        {
+            std::vector<NodePtr<AttributeStatement>> single{node.attribute};
+            validateAttributeApplications(single, "", false);
+            if (symbol && symbol->kind == SymbolKind::Attribute && !symbol->attributeScoped)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Attribute '{}' cannot be activated with 'using' because it is not declared scoped.",
+                    node.attribute->qualifiedName);
+            }
+        }
+
+        if (!canActivate) return;
+        const size_t previousCount = activeScopedAttributes_.size();
+        activeScopedAttributes_.push_back(node.attribute);
+        if (node.body)
+        {
+            node.body->accept(*this);
+            activeScopedAttributes_.resize(previousCount);
         }
     }
 
@@ -13076,6 +13133,9 @@ namespace wio::sema
     
     void SemanticAnalyzer::visit(VariableDeclaration& node)
     {
+        applyActiveScopedAttributes(
+            node.attributes,
+            currentScope_->getKind() == ScopeKind::Struct ? "field" : "variable");
         if (!isDeclarationPass_ && !isStructResolutionPass_)
             validateAttributeApplications(
                 node.attributes,
@@ -13323,6 +13383,7 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(TypeAliasDeclaration& node)
     {
+        applyActiveScopedAttributes(node.attributes, "type");
         if (!isDeclarationPass_ && !isStructResolutionPass_)
             validateAttributeApplications(node.attributes, "type");
         if (hasAttribute(node.attributes, Attribute::Specialize) &&
@@ -13406,6 +13467,9 @@ namespace wio::sema
     
     void SemanticAnalyzer::visit(FunctionDeclaration& node)
     {
+        applyActiveScopedAttributes(
+            node.attributes,
+            currentScope_->getKind() == ScopeKind::Struct ? "method" : "fn");
         if (!isDeclarationPass_ && !isStructResolutionPass_)
             validateAttributeApplications(
                 node.attributes,
@@ -14624,6 +14688,7 @@ namespace wio::sema
             return;
 
         auto prevScope = currentScope_;
+        const size_t scopedAttributeCount = activeScopedAttributes_.size();
         currentScope_ = realmSym->innerScope;
         currentNamespacePath_.push_back(node.name->token.value);
 
@@ -14649,11 +14714,13 @@ namespace wio::sema
         }
 
         currentNamespacePath_.pop_back();
+        activeScopedAttributes_.resize(scopedAttributeCount);
         currentScope_ = prevScope;
     }
 
     void SemanticAnalyzer::visit(InterfaceDeclaration& node)
     {
+        applyActiveScopedAttributes(node.attributes, "interface");
         if (!isDeclarationPass_ && !isStructResolutionPass_)
             validateAttributeApplications(node.attributes, "interface");
         auto buildGenericTypeParameterScope = [&]() -> std::unordered_map<std::string, Ref<Type>>
@@ -14752,6 +14819,7 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(ExtensionDeclaration& node)
     {
+        applyActiveScopedAttributes(node.attributes, "extension");
         if (!isDeclarationPass_ && !isStructResolutionPass_)
             validateAttributeApplications(node.attributes, "extension");
         if (isDeclarationPass_)
@@ -14870,6 +14938,7 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(ComponentDeclaration& node)
     {
+        applyActiveScopedAttributes(node.attributes, "component");
         if (!isDeclarationPass_ && !isStructResolutionPass_)
             validateAttributeApplications(node.attributes, "component");
         const bool isExplicitSpecialization = hasAttribute(node.attributes, Attribute::Specialize);
@@ -15491,6 +15560,7 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(ObjectDeclaration& node)
     {
+        applyActiveScopedAttributes(node.attributes, "object");
         if (!isDeclarationPass_ && !isStructResolutionPass_)
             validateAttributeApplications(node.attributes, "object");
         const bool isExplicitSpecialization = hasAttribute(node.attributes, Attribute::Specialize);
@@ -16208,6 +16278,7 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(FlagDeclaration& node)
     {
+        applyActiveScopedAttributes(node.attributes, "flag");
         if (!isDeclarationPass_ && !isStructResolutionPass_)
             validateAttributeApplications(node.attributes, "flag");
         if (isDeclarationPass_)
@@ -16246,6 +16317,7 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(EnumDeclaration& node)
     {
+        applyActiveScopedAttributes(node.attributes, "enum");
         if (!isDeclarationPass_ && !isStructResolutionPass_)
             validateAttributeApplications(node.attributes, "enum");
         if (isDeclarationPass_)
@@ -16366,6 +16438,7 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(FlagsetDeclaration& node)
     {
+        applyActiveScopedAttributes(node.attributes, "flagset");
         if (!isDeclarationPass_ && !isStructResolutionPass_)
             validateAttributeApplications(node.attributes, "flagset");
         if (isDeclarationPass_) {

@@ -1,0 +1,3 @@
+attribute marker() for component;
+component Value with marker, { number: i32; }
+fn Entry() -> i32 { return 0; }
