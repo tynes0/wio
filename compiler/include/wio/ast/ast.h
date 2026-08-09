@@ -626,6 +626,7 @@ namespace wio
         WeakRef<sema::Type> overloadFunctionType = nullptr;
         bool unwrapResult = false;
         bool propagateResult = false;
+        bool isPipelineCall = false;
 
         FunctionCallExpression(NodePtr<Expression> _callee,
             std::vector<NodePtr<TypeSpecifier>> _explicitTypeArguments,

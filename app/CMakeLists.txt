@@ -2997,6 +2997,21 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "pipeline-operator-ok"
         --run
     )
+
+    add_wio_output_test(
+        wio_test_pipeline_stabilization_run
+        "${CMAKE_SOURCE_DIR}/tests/pipeline_stabilization_run.wio"
+        "pipeline-stabilization-ok"
+        --run
+    )
+    set_tests_properties(wio_test_pipeline_stabilization_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
+    add_wio_failure_test(
+        wio_invalid_pipeline_requires_callable
+        "${CMAKE_SOURCE_DIR}/tests/invalid/pipeline_requires_callable.wio"
+        "Pipeline target is not callable"
+    )
+    set_tests_properties(wio_invalid_pipeline_requires_callable PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
     set_tests_properties(
         wio_test_pipeline_operator_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"

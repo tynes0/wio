@@ -11707,7 +11707,9 @@ namespace wio::sema
 
             if (!calleeType || calleeType->kind() != TypeKind::Function)
             {
-                WIO_LOG_ADD_ERROR(node.location(), "Called expression is undefined.");
+                WIO_LOG_ADD_ERROR(node.location(), node.isPipelineCall
+                    ? "Pipeline target is not callable."
+                    : "Called expression is undefined.");
                 node.refType = Compiler::get().getTypeContext().getUnknown();
                 return;
             }
@@ -11725,7 +11727,9 @@ namespace wio::sema
                 return;
             }
 
-            WIO_LOG_ADD_ERROR(node.location(), "Called expression is undefined.");
+            WIO_LOG_ADD_ERROR(node.location(), node.isPipelineCall
+                ? "Pipeline target is not callable."
+                : "Called expression is undefined.");
             node.refType = Compiler::get().getTypeContext().getUnknown();
             return;
         }
@@ -11737,7 +11741,9 @@ namespace wio::sema
 
         if (!calleeType || calleeType->kind() != TypeKind::Function)
         {
-            WIO_LOG_ADD_ERROR(node.location(), "Called expression is not a function or struct.");
+            WIO_LOG_ADD_ERROR(node.location(), node.isPipelineCall
+                ? "Pipeline target is not callable."
+                : "Called expression is not a function or struct.");
             node.refType = Compiler::get().getTypeContext().getUnknown();
             return;
         }

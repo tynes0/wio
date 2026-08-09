@@ -493,6 +493,7 @@ namespace wio
                 if (auto call = right.As<FunctionCallExpression>())
                 {
                     call->arguments.insert(call->arguments.begin(), std::move(left));
+                    call->isPipelineCall = true;
                     left = std::move(right);
                 }
                 else
@@ -502,6 +503,7 @@ namespace wio
                     left = makeNodePtr<FunctionCallExpression>(
                         std::move(right), std::vector<NodePtr<TypeSpecifier>>{},
                         std::move(arguments), false, false, op.loc);
+                    left.AsFast<FunctionCallExpression>()->isPipelineCall = true;
                 }
             }
             else if (op.type == TokenType::opFlowLeft)
@@ -509,6 +511,7 @@ namespace wio
                 if (auto call = left.As<FunctionCallExpression>())
                 {
                     call->arguments.push_back(std::move(right));
+                    call->isPipelineCall = true;
                 }
                 else
                 {
@@ -517,6 +520,7 @@ namespace wio
                     left = makeNodePtr<FunctionCallExpression>(
                         std::move(left), std::vector<NodePtr<TypeSpecifier>>{},
                         std::move(arguments), false, false, op.loc);
+                    left.AsFast<FunctionCallExpression>()->isPipelineCall = true;
                 }
             }
             else

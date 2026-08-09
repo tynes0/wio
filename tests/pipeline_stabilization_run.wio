@@ -1,0 +1,36 @@
+use std::assert as assert;
+use std::console as console;
+
+mut evaluations: i32 = 0;
+
+fn Next() -> i32 {
+    evaluations += 1;
+    return 5;
+}
+
+fn Double(value: i32) -> i32 { return value * 2; }
+fn Add(left: i32, right: i32) -> i32 { return left + right; }
+fn Blend(value: i32, increment: i32, multiplier: i32) -> i32 {
+    return (value + increment) * multiplier;
+}
+fn BoolCode(value: bool) -> i32 { return value ? 1 : 0; }
+fn Identity<T>(value: T) -> T { return value; }
+
+fn Entry() -> i32 {
+    evaluations = 0;
+    assert::ExpectEqual(Next() |> Blend(2, 3), 21, "pipeline inserts the first argument");
+    assert::ExpectEqual(evaluations, 1, "right pipeline evaluates its input once");
+
+    evaluations = 0;
+    assert::ExpectEqual(Add(10) <| Next(), 15, "left pipeline appends the final argument");
+    assert::ExpectEqual(evaluations, 1, "left pipeline evaluates its input once");
+
+    assert::ExpectEqual(1 + 2 |> Double, 6, "arithmetic binds before pipeline");
+    assert::ExpectEqual(true or false |> BoolCode, 1, "logical expressions bind before pipeline");
+    mut assigned = 0;
+    assigned = 4 |> Double;
+    assert::ExpectEqual(assigned, 8, "pipeline binds before assignment");
+    assert::ExpectEqual(9 |> Identity, 9, "pipeline participates in generic inference");
+    console::PrintLine("pipeline-stabilization-ok");
+    return 0;
+}
