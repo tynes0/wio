@@ -105,6 +105,11 @@ realm std {
         @CppName(wio::runtime::std_time::FormatIso8601)
         fn FormatIso8601(unixMilliseconds: i64, local: bool) -> string;
 
+        fn Format(unixMilliseconds: i64, local: bool, pattern: string) -> string
+            with native, cpp::name(wio::runtime::std_time::Format);
+        fn LocalUtcOffsetMinutes(unixMilliseconds: i64) -> i32
+            with native, cpp::name(wio::runtime::std_time::LocalUtcOffsetMinutes);
+
         fn Nanoseconds(value: i64) -> Duration {
             mut result = Duration();
             result.nanoseconds = value;

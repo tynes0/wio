@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <sstream>
 #include <thread>
+#include <vector>
 
 namespace wio::runtime::std_time
 {
@@ -198,5 +199,31 @@ namespace wio::runtime::std_time
         if (!local)
             stream << 'Z';
         return stream.str();
+    }
+
+    std::string Format(const std::int64_t unixMilliseconds, const bool local, const std::string_view pattern)
+    {
+        const std::time_t seconds = static_cast<std::time_t>(unixMilliseconds / 1000);
+        std::tm broken{};
+        if (!(local ? safeLocalTime(seconds, broken) : safeGmTime(seconds, broken))) return {};
+        std::string patternText(pattern);
+        std::vector<char> buffer(128);
+        for (;;)
+        {
+            const std::size_t written = std::strftime(buffer.data(), buffer.size(), patternText.c_str(), &broken);
+            if (written != 0) return std::string(buffer.data(), written);
+            if (buffer.size() >= 65536u) return {};
+            buffer.resize(buffer.size() * 2u);
+        }
+    }
+
+    std::int32_t LocalUtcOffsetMinutes(const std::int64_t unixMilliseconds) noexcept
+    {
+        const std::time_t seconds = static_cast<std::time_t>(unixMilliseconds / 1000);
+        std::tm local{}, utc{};
+        if (!safeLocalTime(seconds, local) || !safeGmTime(seconds, utc)) return 0;
+        const std::time_t localValue = std::mktime(&local);
+        const std::time_t utcAsLocal = std::mktime(&utc);
+        return static_cast<std::int32_t>(std::difftime(localValue, utcAsLocal) / 60.0);
     }
 }

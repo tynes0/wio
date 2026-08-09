@@ -1,0 +1,16 @@
+use std::assert as assert;
+use std::console as console;
+use std::regex as regex;
+use std::time as time;
+
+fn Entry() -> i32 {
+    let limits = regex::DefaultLimits();
+    assert::Expect(regex::IsMatchSafe!("wio-123", "^[a-z]+-[0-9]+$", limits), "safe regex");
+    assert::Expect(regex::IsMatchSafe("aaaaaaaa", "(a+)+", limits).IsError(), "nested quantifier rejected");
+    assert::ExpectEqual(time::Format(0i64, false, "%Y-%m-%d"), "1970-01-01", "UTC date formatting");
+    let now = time::UnixMilliseconds();
+    let offset = time::LocalUtcOffsetMinutes(now);
+    assert::Expect(offset >= -1440 and offset <= 1440, "UTC offset range");
+    console::PrintLine!("std-regex-time-hardening-ok");
+    return 0;
+}

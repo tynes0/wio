@@ -41,4 +41,6 @@ namespace wio::runtime::std_time
         std::int64_t& value) noexcept;
 
     [[nodiscard]] std::string FormatIso8601(std::int64_t unixMilliseconds, bool local);
+    [[nodiscard]] std::string Format(std::int64_t unixMilliseconds, bool local, std::string_view pattern);
+    [[nodiscard]] std::int32_t LocalUtcOffsetMinutes(std::int64_t unixMilliseconds) noexcept;
 }

@@ -4,6 +4,37 @@
 
 namespace wio::runtime::std_regex
 {
+    bool PatternLooksSafe(const std::string_view pattern) noexcept
+    {
+        if (pattern.size() > 4096u) return false;
+        bool escaped = false;
+        bool previousQuantifier = false;
+        int groupDepth = 0;
+        std::vector<bool> groupHasQuantifier;
+        for (const char ch : pattern)
+        {
+            if (escaped) { escaped = false; previousQuantifier = false; continue; }
+            if (ch == '\\') { escaped = true; continue; }
+            if (ch == '(') { ++groupDepth; groupHasQuantifier.push_back(false); previousQuantifier = false; continue; }
+            if (ch == ')') { if (groupDepth > 0) --groupDepth; previousQuantifier = false; continue; }
+            const bool quantifier = ch == '*' || ch == '+' || ch == '?';
+            if (quantifier)
+            {
+                if (previousQuantifier) return false;
+                if (!groupHasQuantifier.empty()) groupHasQuantifier.back() = true;
+            }
+            if (quantifier && !groupHasQuantifier.empty() && groupHasQuantifier.back() && ch == '+')
+            {
+                // Conservative rejection of common nested/repeated forms.
+                const auto close = pattern.find(')');
+                if (close != std::string_view::npos && close + 1 < pattern.size() &&
+                    (pattern[close + 1] == '+' || pattern[close + 1] == '*')) return false;
+            }
+            previousQuantifier = quantifier;
+        }
+        return !escaped && groupDepth == 0;
+    }
+
     namespace
     {
         std::regex compile(const std::string_view pattern, const bool ignoreCase)

@@ -88,6 +88,33 @@ realm std {
         @CppName(wio::runtime::std_regex::Escape)
         fn Escape(value: string) -> string;
 
+        fn PatternLooksSafe(pattern: string) -> bool
+            with native, cpp::name(wio::runtime::std_regex::PatternLooksSafe);
+
+        component Limits {
+            maxInputBytes: usize;
+            maxPatternBytes: usize;
+        }
+
+        fn DefaultLimits() -> Limits {
+            mut limits = Limits();
+            limits.maxInputBytes = 1048576usize;
+            limits.maxPatternBytes = 4096usize;
+            return limits;
+        }
+
+        fn IsMatchSafe(input: string, pattern: string, limits: Limits) -> std::Result<bool> {
+            if (input.Count() > limits.maxInputBytes or pattern.Count() > limits.maxPatternBytes) {
+                return std::Err<bool>(std::MakeResultError(
+                    std::ResultDomain::runtime, 3, "Regular-expression input limit exceeded."));
+            }
+            if (not PatternLooksSafe(pattern)) {
+                return std::Err<bool>(std::MakeResultError(
+                    std::ResultDomain::runtime, 4, "Potentially unsafe regular-expression pattern rejected."));
+            }
+            return IsMatch(input, pattern);
+        }
+
         fn MakeError(error: Error, message: string) -> std::ResultError {
             mut finalMessage = message;
             if (finalMessage == "") {

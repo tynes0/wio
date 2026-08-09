@@ -63,4 +63,5 @@ namespace wio::runtime::std_regex
         std::string& message) noexcept;
 
     [[nodiscard]] std::string Escape(std::string_view value);
+    [[nodiscard]] bool PatternLooksSafe(std::string_view pattern) noexcept;
 }
