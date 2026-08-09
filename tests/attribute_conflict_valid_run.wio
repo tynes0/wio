@@ -1,0 +1,13 @@
+use std::console as console;
+
+attribute json() for component conflicts serialization;
+attribute secret() for field conflicts visibility;
+
+component Record with json {
+    value: string with secret;
+}
+
+fn Entry() -> i32 {
+    console::PrintLine("attribute-conflict-ok");
+    return 0;
+}

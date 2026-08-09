@@ -1,0 +1,10 @@
+attribute json() for component conflicts serialization;
+attribute binary() for component conflicts serialization;
+
+component Record with json, binary {
+    value: string;
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

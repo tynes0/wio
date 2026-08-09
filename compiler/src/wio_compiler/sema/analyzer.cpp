@@ -12821,6 +12821,7 @@ namespace wio::sema
         std::string_view target)
     {
         std::unordered_map<const Symbol*, size_t> applicationCounts;
+        std::unordered_map<std::string, const Symbol*> conflictOwners;
 
         for (const auto& attribute : attributes)
         {
@@ -12866,6 +12867,21 @@ namespace wio::sema
                     "Attribute '{}' is not repeatable on the same declaration.",
                     attribute->qualifiedName
                 );
+            }
+
+            for (const auto& group : symbol->attributeConflictGroups)
+            {
+                auto [owner, inserted] = conflictOwners.emplace(group, symbol.Get());
+                if (!inserted && owner->second != symbol.Get())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        attribute->location(),
+                        "Attribute '{}' conflicts with attribute '{}' through conflict group '{}'.",
+                        attribute->qualifiedName,
+                        owner->second->name,
+                        group
+                    );
+                }
             }
 
             size_t requiredArgumentCount = symbol->attributeParameterTypes.size();
@@ -12988,6 +13004,7 @@ namespace wio::sema
             );
             symbol->attributeTargets = node.targets;
             symbol->attributeRetention = node.retention;
+            symbol->attributeConflictGroups = node.conflictGroups;
             symbol->attributeParameterNames = std::move(names);
             symbol->attributeParameterTypes = std::move(parameterTypes);
             symbol->attributeParameterHasDefault = std::move(hasDefaults);

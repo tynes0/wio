@@ -1313,6 +1313,7 @@ namespace wio
 
         std::vector<std::string> targets;
         std::vector<std::string> retention;
+        std::vector<std::string> conflictGroups;
         bool repeatable = false;
         bool inherited = false;
         bool scoped = false;
@@ -1342,6 +1343,13 @@ namespace wio
                 repeatable = true;
                 continue;
             }
+            if (match(TokenType::identifier, "conflicts", true))
+            {
+                conflictGroups.push_back(consumePolicyWord().value);
+                while (match(TokenType::opBitOr, true))
+                    conflictGroups.push_back(consumePolicyWord().value);
+                continue;
+            }
             if (match(TokenType::identifier, "inherited", true))
             {
                 inherited = true;
@@ -1362,7 +1370,8 @@ namespace wio
 
         return makeNodePtr<AttributeDeclaration>(
             std::move(name), std::move(parameters), std::move(targets),
-            std::move(retention), repeatable, inherited, scoped, startTok.loc);
+            std::move(retention), std::move(conflictGroups),
+            repeatable, inherited, scoped, startTok.loc);
     }
 
     NodePtr<Statement> Parser::parseApplicationDeclaration()

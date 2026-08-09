@@ -2899,6 +2899,27 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 
+    add_wio_output_test(
+        wio_test_attribute_conflict_valid_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_conflict_valid_run.wio"
+        "attribute-conflict-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_attribute_conflict_valid_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_attribute_conflict
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_conflict.wio"
+        "through conflict group 'serialization'"
+    )
+    set_tests_properties(
+        wio_invalid_attribute_conflict
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
     add_wio_failure_test(
         wio_invalid_attribute_wrong_target
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_wrong_target.wio"

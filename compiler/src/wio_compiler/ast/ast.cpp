@@ -269,6 +269,7 @@ namespace wio
         std::vector<Parameter> _parameters,
         std::vector<std::string> _targets,
         std::vector<std::string> _retention,
+        std::vector<std::string> _conflictGroups,
         bool _repeatable,
         bool _inherited,
         bool _scoped,
@@ -276,6 +277,7 @@ namespace wio
         : Statement(_loc.isValid() ? _loc : _name->location()),
           name(std::move(_name)), parameters(std::move(_parameters)),
           targets(std::move(_targets)), retention(std::move(_retention)),
+          conflictGroups(std::move(_conflictGroups)),
           repeatable(_repeatable), inherited(_inherited), scoped(_scoped)
     {
     }

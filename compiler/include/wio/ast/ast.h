@@ -787,6 +787,7 @@ namespace wio
         std::vector<Parameter> parameters;
         std::vector<std::string> targets;
         std::vector<std::string> retention;
+        std::vector<std::string> conflictGroups;
         bool repeatable = false;
         bool inherited = false;
         bool scoped = false;
@@ -795,6 +796,7 @@ namespace wio
             std::vector<Parameter> _parameters,
             std::vector<std::string> _targets,
             std::vector<std::string> _retention,
+            std::vector<std::string> _conflictGroups,
             bool _repeatable,
             bool _inherited,
             bool _scoped,
