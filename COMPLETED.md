@@ -36,6 +36,9 @@ Notes:
       secure random, full SemVer precedence, and UUID validation landed.
 - [x] The normative 0.11 language delta and standard-library contract are
       published in `docs/spec/` with explicit boundaries for unfinished work.
+- [x] Sprint qualification passed all 36 newly added runtime and expected-
+      diagnostic tests, including generated C++ and native loopback/threading
+      execution; unrelated legacy tests were intentionally not run.
 
 ## P1-B nullability, lifetime, and failure safety sprint
 
