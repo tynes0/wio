@@ -3003,6 +3003,12 @@ namespace wio
                     appendLinkDirectories(cmd, linkDirs);
                     appendLinkLibraries(cmd, linkLibraries);
                     cmd << " " << quotePath(runtimeLibraryPath);
+#if defined(_WIN32)
+                    if (backendCompilerLooksGnuLike(backendCompiler))
+                        cmd << " -lws2_32";
+#else
+                    cmd << " -pthread";
+#endif
                     cmd << " -o " << quotePath(outputPath);
 
                     const CommandResult backendResult = runCommandCaptureOutput(cmd.str(), { backendCompilerPath.parent_path() });

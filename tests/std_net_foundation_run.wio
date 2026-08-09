@@ -1,0 +1,32 @@
+use std::assert as assert;
+use std::console as console;
+use std::concurrency as concurrency;
+use std::net as net;
+
+fn Entry() -> i32 {
+    let uri = net::ParseUri!("https://example.com:8443/api/items?q=wio#top");
+    assert::ExpectEqual(uri.scheme, "https", "URI scheme");
+    assert::ExpectEqual(uri.host, "example.com", "URI host");
+    assert::ExpectEqual(uri.port, 8443u16, "URI port");
+    assert::ExpectEqual(uri.path, "/api/items", "URI path");
+    assert::ExpectEqual(uri.query, "q=wio", "URI query");
+    assert::ExpectEqual(uri.fragment, "top", "URI fragment");
+    let addresses = net::Resolve!("localhost", 80u16);
+    assert::Expect(not addresses.Empty(), "localhost DNS resolution");
+
+    let listener = net::Listen!("127.0.0.1", 0u16, 4);
+    let server = concurrency::Thread(() => {
+        let peer = listener.Accept!();
+        let request = peer.Receive!(16usize);
+        if (request == "ping") { peer.Send!("pong"); }
+        peer.Close();
+    });
+    let client = net::Connect!("127.0.0.1", listener.LocalPort(), 2000u64);
+    client.Send!("ping");
+    assert::ExpectEqual(client.Receive!(16usize), "pong", "TCP loopback roundtrip");
+    client.Close();
+    server.Join();
+    listener.Close();
+    console::PrintLine!("std-net-foundation-ok");
+    return 0;
+}

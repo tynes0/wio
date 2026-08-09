@@ -1,0 +1,177 @@
+use std::convert as convert;
+use std::option as option;
+use std::result as result;
+
+realm std {
+    realm net {
+        using cpp::header("std_net.h");
+
+        component Uri {
+            valid: bool;
+            scheme: string;
+            host: string;
+            port: u16;
+            path: string;
+            query: string;
+            fragment: string;
+            secure: bool;
+        }
+
+        fn ParseUri(value: string) -> std::Result<Uri> {
+            mut result = Uri();
+            let schemeEnd = value.IndexOf("://");
+            if (schemeEnd < 0isize) {
+                return std::Err<Uri>(std::MakeResultError(
+                    std::ResultDomain::runtime, 1, "URI requires a scheme and authority."));
+            }
+            result.scheme = value.Take(schemeEnd fit usize).ToLower();
+            result.secure = result.scheme == "https" or result.scheme == "wss";
+            let remainder = value.Skip((schemeEnd fit usize) + 3usize);
+            let slash = remainder.IndexOf("/");
+            mut authority = remainder;
+            mut tail = "";
+            if (slash >= 0isize) {
+                authority = remainder.Take(slash fit usize);
+                tail = remainder.Skip(slash fit usize);
+            }
+            if (authority.Empty()) {
+                return std::Err<Uri>(std::MakeResultError(
+                    std::ResultDomain::runtime, 1, "URI host cannot be empty."));
+            }
+
+            if (authority.StartsWith("[")) {
+                let close = authority.IndexOf("]");
+                if (close < 0isize) {
+                    return std::Err<Uri>(std::MakeResultError(
+                        std::ResultDomain::runtime, 1, "Invalid bracketed IPv6 authority."));
+                }
+                result.host = authority.Slice(1usize, (close fit usize) - 1usize);
+                if ((close fit usize) + 1usize < authority.Count()) {
+                    let portText = authority.Skip((close fit usize) + 2usize);
+                    let parsedPort = convert::ParseU16(portText);
+                    if (parsedPort.IsError()) { return std::Err<Uri>(parsedPort.ErrorValue()); }
+                    result.port = parsedPort.Value();
+                }
+            } else {
+                let colon = authority.LastIndexOf(":");
+                if (colon >= 0isize) {
+                    result.host = authority.Take(colon fit usize);
+                    let parsedPort = convert::ParseU16(authority.Skip((colon fit usize) + 1usize));
+                    if (parsedPort.IsError()) { return std::Err<Uri>(parsedPort.ErrorValue()); }
+                    result.port = parsedPort.Value();
+                } else {
+                    result.host = authority;
+                }
+            }
+            if (result.port == 0u16) {
+                result.port = result.secure ? 443u16 : 80u16;
+            }
+
+            let fragmentIndex = tail.IndexOf("#");
+            if (fragmentIndex >= 0isize) {
+                result.fragment = tail.Skip((fragmentIndex fit usize) + 1usize);
+                tail = tail.Take(fragmentIndex fit usize);
+            }
+            let queryIndex = tail.IndexOf("?");
+            if (queryIndex >= 0isize) {
+                result.query = tail.Skip((queryIndex fit usize) + 1usize);
+                result.path = tail.Take(queryIndex fit usize);
+            } else {
+                result.path = tail;
+            }
+            if (result.path.Empty()) { result.path = "/"; }
+            result.valid = true;
+            return std::Ok(result);
+        }
+
+        fn ResolveNative(host: string, port: u16, addresses: ref string[], error: ref string) -> bool
+            with native, cpp::name(wio::runtime::std_net::Resolve);
+        fn ConnectNative(host: string, port: u16, timeout: u64, handle: ref opaque?, error: ref string) -> bool
+            with native, cpp::name(wio::runtime::std_net::TcpConnect);
+        fn ListenNative(address: string, port: u16, backlog: i32, handle: ref opaque?, error: ref string) -> bool
+            with native, cpp::name(wio::runtime::std_net::TcpListen);
+        fn AcceptNative(listener: opaque, handle: ref opaque?, error: ref string) -> bool
+            with native, cpp::name(wio::runtime::std_net::TcpAccept);
+        fn SetTimeoutNative(handle: opaque, milliseconds: u64, error: ref string) -> bool
+            with native, cpp::name(wio::runtime::std_net::SetTimeout);
+        fn LocalPortNative(handle: opaque) -> u16
+            with native, cpp::name(wio::runtime::std_net::LocalPort);
+        fn SendNative(handle: opaque, bytes: string, sent: ref usize, error: ref string) -> bool
+            with native, cpp::name(wio::runtime::std_net::Send);
+        fn ReceiveNative(handle: opaque, maximumBytes: usize, bytes: ref string, error: ref string) -> bool
+            with native, cpp::name(wio::runtime::std_net::Receive);
+        fn CloseNative(handle: opaque) with native, cpp::name(wio::runtime::std_net::Close);
+
+        fn NetError(message: string) -> std::ResultError {
+            return std::MakeResultError(std::ResultDomain::runtime, 1, message);
+        }
+
+        fn Resolve(host: string, port: u16) -> std::Result<string[]> {
+            mut addresses: string[] = [];
+            mut error = "";
+            if (ResolveNative(host, port, ref addresses, ref error)) { return std::Ok(addresses); }
+            return std::Err<string[]>(NetError(error));
+        }
+
+        object Socket {
+            private handle: opaque;
+            private closed: bool;
+            public fn OnConstruct(handle: opaque) { self.handle = handle; self.closed = false; }
+            public fn OnDestruct() { self.Close(); }
+            public fn Close() { if (not self.closed) { CloseNative(self.handle); self.closed = true; } }
+            public fn IsClosed() -> bool { return self.closed; }
+            public fn SetTimeout(milliseconds: u64) -> std::UnitResult {
+                mut error = "";
+                if (SetTimeoutNative(self.handle, milliseconds, ref error)) { return std::OkUnit(); }
+                return std::ErrUnit(NetError(error));
+            }
+            public fn Send(bytes: string) -> std::Result<usize> {
+                mut sent: usize = 0usize;
+                mut error = "";
+                if (SendNative(self.handle, bytes, ref sent, ref error)) { return std::Ok(sent); }
+                return std::Err<usize>(NetError(error));
+            }
+            public fn Receive(maximumBytes: usize) -> std::Result<string> {
+                mut bytes = "";
+                mut error = "";
+                if (ReceiveNative(self.handle, maximumBytes, ref bytes, ref error)) { return std::Ok(bytes); }
+                return std::Err<string>(NetError(error));
+            }
+        }
+
+        fn Connect(host: string, port: u16, timeoutMilliseconds: u64) -> std::Result<Socket> {
+            mut handle: opaque? = null;
+            mut error = "";
+            if (ConnectNative(host, port, timeoutMilliseconds, ref handle, ref error)) {
+                if (handle != null) { return std::Ok(Socket(handle)); }
+            }
+            return std::Err<Socket>(NetError(error));
+        }
+
+        object Listener {
+            private handle: opaque;
+            private closed: bool;
+            public fn OnConstruct(handle: opaque) { self.handle = handle; self.closed = false; }
+            public fn OnDestruct() { self.Close(); }
+            public fn Close() { if (not self.closed) { CloseNative(self.handle); self.closed = true; } }
+            public fn LocalPort() -> u16 { return LocalPortNative(self.handle); }
+            public fn Accept() -> std::Result<Socket> {
+                mut accepted: opaque? = null;
+                mut error = "";
+                if (AcceptNative(self.handle, ref accepted, ref error)) {
+                    if (accepted != null) { return std::Ok(Socket(accepted)); }
+                }
+                return std::Err<Socket>(NetError(error));
+            }
+        }
+
+        fn Listen(address: string, port: u16, backlog: i32) -> std::Result<Listener> {
+            mut handle: opaque? = null;
+            mut error = "";
+            if (ListenNative(address, port, backlog, ref handle, ref error)) {
+                if (handle != null) { return std::Ok(Listener(handle)); }
+            }
+            return std::Err<Listener>(NetError(error));
+        }
+    }
+}
