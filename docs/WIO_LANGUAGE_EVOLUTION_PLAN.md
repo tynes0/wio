@@ -13,6 +13,13 @@ The plan has two purposes:
 
 The active implementation order remains in [`../TODOLIST.md`](../TODOLIST.md).
 
+Implementation status after the P1 foundation sprint: typed attributes,
+conflict groups, runtime attribute reflection, ordinary-call pipelines,
+Option/Result/array matching, sequential applications, and stack-resident
+systems are implemented and frozen by the 0.11 delta specification. Resource
+injection, explicit/fixed schedules, parallel conflict analysis, controlled
+derives, and attribute migration tooling remain proposals in this document.
+
 ---
 
 ## 1. Product Direction
@@ -281,7 +288,7 @@ The proposed shutdown contract is:
 
 Startup failure closes only the systems that successfully started. Lifecycle
 handlers may return no value or the accepted unit-success Result alias
-(`UnitResult` is the current naming candidate); an unhandled lifecycle error
+(`UnitResult` is the accepted spelling); an unhandled lifecycle error
 follows the same orderly shutdown path with a failure reason.
 
 ### 2.8 Runtime boundary

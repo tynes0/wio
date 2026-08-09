@@ -10,6 +10,33 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## P1 language semantics and standard-library foundation sprint
+
+- [x] `std::UnitResult`, `OkUnit`, and `ErrUnit` are the canonical unit-success
+      API and public console/filesystem/I/O/tooling surfaces use it.
+- [x] Typed postfix `with`, scoped `using`, user attribute declarations,
+      target/argument/repetition validation, conflict groups, and runtime
+      type/field reflection landed with legacy spelling compatibility.
+- [x] Pipeline calls and Option/Result/array destructuring have defined
+      evaluation, binding, guard, reachability, and exhaustiveness behavior.
+- [x] `|>` and `<|` were evaluated and reserved as ordinary-call pipelines;
+      they preserve call inference/diagnostics and single evaluation.
+- [x] The sequential stack-resident application/system lifecycle landed with
+      deterministic start/update/reverse-close and orderly `self.Exit`.
+- [x] Unicode UTF-8/codepoint/grapheme foundations, text/byte builders,
+      hardened JSON, versioned binary frames, CSV/INI, MIME, geometry/color,
+      localization, bigint, and compression utilities landed.
+- [x] Allocation-conscious `StringBuilder`, endian/varint `ByteWriter` and
+      rollback-safe `ByteReader` provide the canonical builder surface.
+- [x] Threads, recursive mutexes, condition variables, atomics, channels,
+      blocking channels, TaskGroup, Promise/Future, and cancellation
+      foundations now share one runtime surface.
+- [x] DNS, URI, TCP, and UDP loopback foundations, expanded OS/process
+      facilities, structured log sinks, regex safety limits, time formatting,
+      secure random, full SemVer precedence, and UUID validation landed.
+- [x] The normative 0.11 language delta and standard-library contract are
+      published in `docs/spec/` with explicit boundaries for unfinished work.
+
 ## P1-B nullability, lifetime, and failure safety sprint
 
 - [x] Explicit nullable types now use `T?`; object/interface, opaque,

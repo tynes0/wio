@@ -17,7 +17,9 @@ candidate application/system and language-coherence direction is expanded in
 ## P1 - Language Semantics and Type System
 
 1. [~] Turn the draft into a versioned normative language specification.
-   Publish formal lexical grammar, syntax grammar, name resolution, overload
+   Versioned 0.8–0.11 delta specifications now freeze lifetime, generics,
+   native components, attributes, matching, and applications. Publish formal
+   lexical grammar, syntax grammar, name resolution, overload
    resolution, type compatibility, ownership/reference rules, evaluation
    order, initialization, destruction, generics, diagnostics, and feature
    status. Version the specification alongside releases.
@@ -43,10 +45,11 @@ candidate application/system and language-coherence direction is expanded in
    associated types, default implementations, explicit variance features, and
    further generic failure diagnostics.
 
-7. [ ] Strengthen pattern matching.
-   Add Option/Result destructuring, enum payloads, component/array patterns,
-   guards, exhaustiveness checks, unreachable-case diagnostics, and binding
-   ownership/reference rules.
+7. [~] Strengthen pattern matching.
+   Option/Result and exact-length array destructuring, guards, algebraic
+   exhaustiveness, duplicate/unreachable diagnostics, and typed local bindings
+   are implemented. Add payload enums, component/rest/nested patterns and
+   freeze binding ownership/reference rules.
 
 8. [~] Complete component extension ergonomics.
    Direct native component extensions now map free C++ functions through
@@ -55,18 +58,15 @@ candidate application/system and language-coherence direction is expanded in
    conflict resolution, import-scoped visibility, documentation generation,
    reflection metadata, and editor completion.
 
-11. [ ] Evaluate pipeline/data-flow operators only after semantics are stable.
-    Measure `|>` and `<|` against ordinary calls, method chaining, error
-    propagation, inference, and debugging before reserving syntax.
-
-12. [ ] Replace the legacy annotation surface with typed, user-extensible
+12. [~] Replace the legacy annotation surface with typed, user-extensible
     attributes before implementing application/system syntax. The accepted
     direction uses postfix `with` for target attachment and `using` for scoped
     activation, for example `fn Foo() with native, cpp::name("Foo");` and
     `using cpp::header("foo.h");`. Add lowercase realm-scoped names, typed
     arguments/defaults, target policies, retention, repetition, inheritance,
-    conflicts, reflection, validation, controlled derives, formatter/LSP/docs
-    support, and automated edition-aware migration from `@Attribute(...)`.
+    conflicts, and runtime type/field reflection are implemented. Add named
+    arguments, controlled derives, formatter/LSP/docs support, and automated
+    edition-aware migration from `@Attribute(...)`.
     Do not expose unrestricted token/AST mutation in the first version.
 
 13. [ ] Complete a language-coherence pass before broad surface expansion.
@@ -75,59 +75,63 @@ candidate application/system and language-coherence direction is expanded in
     conversion, extension, native mapping, and metadata syntax; remove stale
     or contradictory feature-status claims.
 
-14. [ ] Implement the accepted application/system lifecycle model after the
+14. [~] Implement the accepted application/system lifecycle model after the
     attribute foundation. The current proposal uses one stack-resident
     `application` root, component-like `system` state, inline or function-bound
     `on` handlers, explicit resources, deterministic schedules, fixed stages,
     reverse shutdown, main-thread affinity, and headless testing. Keep `after`
     as a schedule dependency; keep `every`, `during`, and `wait` in runtime/
-    async experiments until their semantics are proven. Add parallel execution
-    only after `view`/`ref` resource-conflict analysis is stable.
+    async experiments until their semantics are proven. Sequential application
+    lifecycle, stack-resident systems, orderly exit, and reverse shutdown are
+    implemented. Add resources, explicit/fixed schedules, headless contexts,
+    then parallel execution after `view`/`ref` conflict analysis is stable.
 
 ## P1 - Standard Library Correctness and Consistency
 
-1. [ ] Build a real Unicode text model.
+1. [~] Build a real Unicode text model.
    Define UTF-8 validation, codepoints/runes, grapheme clusters, safe slicing,
-   Unicode case folding, normalization, categories, width, iteration, and
-   conversion. GUI text input must not require a native
-   `AppendCharacter` workaround.
-
-2. [ ] Add byte/codepoint/string builders.
-   Provide allocation-conscious `StringBuilder`, byte writer/reader,
-   codepoint append, formatting sinks, reusable buffers, and clear ownership
-   rules.
+   Grapheme clustering, display width, basic case folding, codepoint/byte
+   conversion, safe slicing, and builders now exist. Complete normalization,
+   full Unicode category/case data, locale-sensitive behavior, and conformance
+   vectors. GUI input must not require a native `AppendCharacter` workaround.
 
 3. [~] Harden JSON into a production-grade module.
    Parsing/writing, nested values, errors, and pretty output exist. Add exact
    integer preservation, configurable duplicate-key policy, deterministic key
-   ordering, streaming parser/writer, depth/size limits, UTF validation,
-   JSON Pointer/Patch, schema hooks, and generic encode/decode traits.
+   ordering, depth/size limits, UTF validation, JSON Pointer, and Merge Patch
+   are implemented. Add streaming parser/writer, RFC 6902 Patch, schema hooks,
+   and generic encode/decode traits.
 
-4. [ ] Add serialization beyond JSON.
-   Provide stable generic serialization traits and at least binary,
-   Base64/hex integration, CSV, and configuration-friendly formats. Define
-   versioning, unknown fields, migration, and enum policy.
+4. [~] Add serialization beyond JSON.
+   Versioned bounded binary frames, endian/varint readers and writers,
+   Base64/hex, CSV, and INI exist. Add stable generic serialization traits,
+   streaming codecs, unknown-field/migration policy, TOML, and enum policy.
 
 5. [~] Harden time, random, hash, log, numeric, encoding, stream, UUID, and
     SemVer. These modules exist; add cross-platform vectors, deterministic
     contracts, cryptographic/non-cryptographic distinctions, secure random,
-    time zones/calendars, structured log sinks, floating-point edge matrices,
-    streaming encoders, UUID parsing/variants, and full SemVer
-    prerelease/build metadata.
+   secure random, UUID variants, full SemVer metadata/precedence, host time
+   formatting/offsets, and structured console/file log sinks are implemented.
+   Add time-zone database/calendar types, floating-point edge matrices,
+   streaming encoders, and broader cross-platform vectors.
 
-6. [ ] Add regular-expression safety and completeness.
+6. [~] Add regular-expression safety and completeness.
     Document the engine, escaping, Unicode behavior, capture APIs, replacement,
-    iteration, catastrophic-backtracking limits/timeouts, and error model.
+   iteration, and error model exist with conservative pattern/input safety
+   limits. Add Unicode mode documentation, full match iteration records, and a
+   backend capable of enforceable execution timeouts.
 
-7. [ ] Add networking foundations.
-    DNS, sockets, TCP/UDP, TLS, HTTP client/server primitives, URI, headers,
+7. [~] Add networking foundations.
+   DNS, URI, owned sockets, TCP/UDP, timeout, endpoint, and loopback behavior
+   exist. Add TLS, HTTP client/server primitives, headers,
     multipart, WebSocket, cancellation, timeouts, proxies, and certificate
     validation are required before `std::http` can be considered.
 
-8. [ ] Add concurrency foundations.
-    Threads, mutexes, atomics, channels, task scheduling, futures, async I/O,
-    cancellation, structured concurrency, thread-local storage, and runtime/
-    host integration need one coherent model.
+8. [~] Add concurrency foundations.
+   Threads, recursive mutexes, condition variables, atomics, channels,
+   blocking channels, Promise/Future, TaskGroup, cancellation, sleep, and yield
+   share one host model. Add task scheduling, async I/O, thread-local storage,
+   cancellation propagation, and deeper runtime/host integration.
 
 9. [ ] Add OS/application facilities.
     Environment variables, process pipes, signals, filesystem watching,
@@ -136,17 +140,10 @@ candidate application/system and language-coherence direction is expanded in
     pointer-width, endian, hardware-thread, path-list separator, and native
     newline queries now exist in `std::platform`.
 
-10. [ ] Add data and utility modules.
-    Date/time formatting, decimal/big integer, compression/archive, MIME,
-    TOML/INI, database primitives, statistics, geometry/color, localization,
-    and command-line parsing should be evaluated and prioritized by real
-    projects.
-
-11. [ ] Normalize unit-success Result ergonomics. Add and consistently use a
-    public alias for `Result<ResultUnit>` (leading candidate: `UnitResult`),
-    pair it with unsurprising success/error helpers, and evaluate whether a
-    default generic argument can later provide an equally clear `Result<>`
-    spelling without special-casing `void` in the type system.
+10. [~] Add data and utility modules.
+    Host date/time formatting, bigint, RLE compression, MIME, INI, statistics,
+    geometry/color, localization, and CLI parsing exist. Add decimal, archive,
+    TOML, database primitives, and real-project qualification.
 
 ## P1 - Native Interop, SDK, and Ecosystem
 

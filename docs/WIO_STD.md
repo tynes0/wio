@@ -40,7 +40,9 @@ The current Wio standard library is source-based:
 
 - `std` modules are written as `.wio` files under [`std/`](../std)
 - some modules are pure Wio wrappers over language intrinsics
-- some modules call public runtime helpers through `@Native` and `@CppHeader(...)`
+- some modules call public runtime helpers through typed `with native` and
+  `using cpp::header(...)`; legacy `@Native`/`@CppHeader(...)` remains accepted
+  as compatibility input during migration
 
 The v1 boundary is:
 
@@ -56,6 +58,16 @@ That keeps repository builds and packaged toolchains aligned.
 ---
 
 ## 2. Stable Module Families
+
+The 0.11 foundation additionally ships `std::unicode`, `std::builders`,
+`std::binary`, `std::json`, `std::encoding`, `std::concurrency`, `std::net`,
+`std::log`, `std::regex`, `std::time`, `std::uuid`, `std::semver`,
+`std::bigint`, `std::compression`, `std::csv`, `std::config`, `std::mime`,
+`std::geometry`, and `std::localization`. Their frozen guarantees and explicit
+incomplete boundaries are defined by
+[`spec/WIO_STD_SPEC_0_11.md`](./spec/WIO_STD_SPEC_0_11.md); a module appearing
+here does not imply that TLS/HTTP, full Unicode normalization, generic
+serialization derives, or async I/O are complete.
 
 ### 2.1 Runtime-Backed Stable Modules
 
