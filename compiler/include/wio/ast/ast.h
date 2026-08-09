@@ -802,6 +802,15 @@ namespace wio
         ~AttributeDeclaration() override;
     };
 
+    struct DeclarationGroup : Statement
+    {
+        WIO_STMT_NODE_BODY(DeclarationGroup)
+        std::vector<NodePtr<Statement>> declarations;
+        explicit DeclarationGroup(std::vector<NodePtr<Statement>> _declarations,
+            common::Location _loc = common::Location::invalid());
+        ~DeclarationGroup() override;
+    };
+
     struct VariableDeclaration : Statement
     {
         WIO_STMT_NODE_BODY(VariableDeclaration)

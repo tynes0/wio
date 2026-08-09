@@ -6411,6 +6411,7 @@ namespace wio::sema
                 stmt->is<EnumDeclaration>() ||
                 stmt->is<FlagsetDeclaration>() ||
                 stmt->is<FlagDeclaration>() ||
+                stmt->is<DeclarationGroup>() ||
                 stmt->is<RealmDeclaration>())
             {
                 stmt->accept(*this);
@@ -12807,6 +12808,12 @@ namespace wio::sema
     void SemanticAnalyzer::visit(AttributeStatement& node)
     {
         WIO_UNUSED(node);
+    }
+
+    void SemanticAnalyzer::visit(DeclarationGroup& node)
+    {
+        for (auto& declaration : node.declarations)
+            if (declaration) declaration->accept(*this);
     }
 
     void SemanticAnalyzer::validateAttributeApplications(

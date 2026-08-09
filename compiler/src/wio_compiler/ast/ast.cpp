@@ -282,6 +282,13 @@ namespace wio
 
     AttributeDeclaration::~AttributeDeclaration() = default;
 
+    DeclarationGroup::DeclarationGroup(std::vector<NodePtr<Statement>> _declarations, common::Location _loc)
+        : Statement(_loc), declarations(std::move(_declarations))
+    {
+    }
+
+    DeclarationGroup::~DeclarationGroup() = default;
+
     VariableDeclaration::VariableDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, Mutability _mutability,
         NodePtr<Identifier> _name, NodePtr<TypeSpecifier> _type, NodePtr<Expression> _init, bool _isPackField, common::Location _loc)
         : Statement(_loc), attributes(std::move(_attributes)), mutability(_mutability), name(std::move(_name)),

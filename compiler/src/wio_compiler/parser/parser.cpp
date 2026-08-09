@@ -1115,6 +1115,12 @@ namespace wio
                     utError("Attribute declarations cannot currently carry attributes.", attributes.front()->location());
                 return parseAttributeDeclaration();
             }
+            if (match(TokenType::kwApplication))
+            {
+                if (!attributes.empty())
+                    utError("Application attributes must use the postfix 'with' clause.", attributes.front()->location());
+                return parseApplicationDeclaration();
+            }
             if (match(TokenType::kwFn))
                 return parseFunctionDeclaration(std::move(attributes));
             if (match(TokenType::kwInterface))
@@ -1351,6 +1357,220 @@ namespace wio
         return makeNodePtr<AttributeDeclaration>(
             std::move(name), std::move(parameters), std::move(targets),
             std::move(retention), repeatable, inherited, scoped, startTok.loc);
+    }
+
+    NodePtr<Statement> Parser::parseApplicationDeclaration()
+    {
+        const Token startToken = consume(TokenType::kwApplication);
+        auto applicationName = makeNodePtr<Identifier>(consumeIdentifier());
+        const Token applicationNameToken = applicationName->token;
+
+        std::vector<NodePtr<AttributeStatement>> applicationAttributes;
+        parseWithAttributeClause(applicationAttributes);
+        consume(TokenType::leftBrace);
+
+        auto makeType = [&](TokenType type, std::string value)
+        {
+            Token token{ .type = type, .value = std::move(value), .loc = startToken.loc };
+            return makeNodePtr<TypeSpecifier>(std::move(token), std::vector<NodePtr<TypeSpecifier>>{},
+                nullptr, 0, false, false, false, startToken.loc);
+        };
+        auto makeIdentifier = [&](std::string value)
+        {
+            return makeNodePtr<Identifier>(Token{
+                .type = TokenType::identifier, .value = std::move(value), .loc = startToken.loc });
+        };
+        auto makeMember = [&](NodePtr<Expression> object, std::string name)
+        {
+            return makeNodePtr<MemberAccessExpression>(
+                std::move(object), makeIdentifier(std::move(name)), TokenType::opDot, startToken.loc);
+        };
+        auto makeAppIdentifier = [&]() -> NodePtr<Expression>
+        {
+            return makeIdentifier("__application");
+        };
+        auto makeAppCall = [&](std::string method)
+        {
+            return makeNodePtr<FunctionCallExpression>(
+                makeMember(makeAppIdentifier(), std::move(method)),
+                std::vector<NodePtr<TypeSpecifier>>{}, std::vector<NodePtr<Expression>>{},
+                false, false, startToken.loc);
+        };
+
+        std::vector<ComponentMember> fields;
+        std::unordered_map<std::string, NodePtr<FunctionDeclaration>> handlers;
+        while (peek().isValid() && !match(TokenType::rightBrace))
+        {
+            if (peek().type == TokenType::identifier && peek().value == "on")
+            {
+                advance();
+                const Token lifecycle = consumeIdentifier();
+                if (lifecycle.value != "start" && lifecycle.value != "update" && lifecycle.value != "close")
+                    utError("Application handlers must be 'on start', 'on update', or 'on close'.", lifecycle.loc);
+                if (handlers.contains(lifecycle.value))
+                    utError("Application handler '" + lifecycle.value + "' is declared more than once.", lifecycle.loc);
+
+                if (match(TokenType::leftParen, true))
+                {
+                    if (!match(TokenType::rightParen))
+                        utError("The first application runner supports parameterless lifecycle handlers.", peek().loc);
+                    consume(TokenType::rightParen);
+                }
+                auto body = parseBlockStatement();
+                std::string methodName = lifecycle.value == "start" ? "Start" :
+                    (lifecycle.value == "update" ? "Update" : "Close");
+                handlers.emplace(lifecycle.value, makeNodePtr<FunctionDeclaration>(
+                    std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier(methodName),
+                    std::vector<NodePtr<Identifier>>{}, false, std::vector<Parameter>{}, nullptr,
+                    nullptr, nullptr, std::move(body), lifecycle.loc));
+                continue;
+            }
+
+            Mutability mutability = Mutability::Mutable;
+            bool applicationOwned = false;
+            if ((peek().type == TokenType::identifier && peek().value == "resource") ||
+                peek().type == TokenType::kwSystem)
+            {
+                advance();
+                applicationOwned = true;
+            }
+            else
+            {
+                const Token qualifier = advance();
+                if (qualifier.type == TokenType::kwLet) mutability = Mutability::Immutable;
+                else if (qualifier.type == TokenType::kwConst) mutability = Mutability::Const;
+                else if (qualifier.type != TokenType::kwMut)
+                    utError("Application fields require 'mut', 'let', 'const', 'resource', or 'system'.", qualifier.loc);
+            }
+
+            auto name = makeNodePtr<Identifier>(consumeIdentifier());
+            consume(TokenType::opColon);
+            auto type = parseType();
+            NodePtr<Expression> initializer = nullptr;
+            if (match(TokenType::opAssign, true)) initializer = parseExpression();
+            consume(TokenType::semicolon);
+            fields.push_back(ComponentMember{
+                .attributes = {}, .access = AccessModifier::Public,
+                .declaration = makeNodePtr<VariableDeclaration>(
+                    std::vector<NodePtr<AttributeStatement>>{}, mutability, std::move(name),
+                    std::move(type), std::move(initializer), false, startToken.loc)
+            });
+            WIO_UNUSED(applicationOwned);
+        }
+        consume(TokenType::rightBrace);
+
+        if (!handlers.contains("update"))
+            utError("An application must declare exactly one 'on update' handler.", startToken.loc);
+
+        auto addControlField = [&](std::string name, NodePtr<TypeSpecifier> type, NodePtr<Expression> initializer)
+        {
+            fields.push_back(ComponentMember{
+                .attributes = {}, .access = AccessModifier::Public,
+                .declaration = makeNodePtr<VariableDeclaration>(
+                    std::vector<NodePtr<AttributeStatement>>{}, Mutability::Mutable,
+                    makeIdentifier(std::move(name)), std::move(type), std::move(initializer), false, startToken.loc)
+            });
+        };
+        addControlField("__exitRequested", makeType(TokenType::kwBool, "bool"),
+            makeNodePtr<BoolLiteral>(Token{ .type = TokenType::kwFalse, .value = "false", .loc = startToken.loc }));
+        addControlField("__exitCode", makeType(TokenType::kwI32, "i32"),
+            makeNodePtr<IntegerLiteral>(Token{ .type = TokenType::integerLiteral, .value = "0", .loc = startToken.loc }));
+
+        auto component = makeNodePtr<ComponentDeclaration>(
+            std::move(applicationAttributes), std::move(applicationName),
+            std::vector<NodePtr<Identifier>>{}, false, std::move(fields), startToken.loc);
+
+        auto addReceiver = [&](NodePtr<FunctionDeclaration>& method)
+        {
+            auto receiverInner = makeNodePtr<TypeSpecifier>(applicationNameToken,
+                std::vector<NodePtr<TypeSpecifier>>{}, nullptr, 0, false, false, false, startToken.loc);
+            Token refToken{ .type = TokenType::kwRef, .value = "ref", .loc = startToken.loc };
+            std::vector<NodePtr<TypeSpecifier>> generics;
+            generics.push_back(std::move(receiverInner));
+            auto receiverType = makeNodePtr<TypeSpecifier>(std::move(refToken), std::move(generics),
+                nullptr, 0, true, true, false, startToken.loc);
+            method->parameters.insert(method->parameters.begin(),
+                Parameter(makeIdentifier("_wio_self"), std::move(receiverType), nullptr, false));
+            method->isExtensionMethod = true;
+            method->extensionMutableReceiver = true;
+            method->extensionMemberName = method->name->token.value;
+        };
+
+        std::vector<ExtensionMember> extensionMembers;
+        std::vector<NodePtr<Statement>> exitStatements;
+        exitStatements.push_back(makeNodePtr<ExpressionStatement>(
+            makeNodePtr<AssignmentExpression>(
+                makeMember(makeNodePtr<SelfExpression>(startToken.loc), "__exitRequested"),
+                Token{ .type = TokenType::opAssign, .value = "=", .loc = startToken.loc },
+                makeNodePtr<BoolLiteral>(Token{ .type = TokenType::kwTrue, .value = "true", .loc = startToken.loc })),
+            startToken.loc));
+        exitStatements.push_back(makeNodePtr<ExpressionStatement>(
+            makeNodePtr<AssignmentExpression>(
+                makeMember(makeNodePtr<SelfExpression>(startToken.loc), "__exitCode"),
+                Token{ .type = TokenType::opAssign, .value = "=", .loc = startToken.loc },
+                makeIdentifier("code")), startToken.loc));
+        std::vector<Parameter> exitParameters;
+        exitParameters.emplace_back(makeIdentifier("code"), makeType(TokenType::kwI32, "i32"), nullptr, false);
+        auto exitMethod = makeNodePtr<FunctionDeclaration>(
+            std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier("Exit"),
+            std::vector<NodePtr<Identifier>>{}, false, std::move(exitParameters), nullptr,
+            nullptr, nullptr, makeNodePtr<BlockStatement>(std::move(exitStatements), startToken.loc), startToken.loc);
+        addReceiver(exitMethod);
+        extensionMembers.push_back(ExtensionMember{ .access = AccessModifier::Public, .mutableReceiver = true, .method = std::move(exitMethod) });
+
+        for (const std::string lifecycle : { "start", "update", "close" })
+        {
+            NodePtr<FunctionDeclaration> method;
+            if (auto iterator = handlers.find(lifecycle); iterator != handlers.end())
+                method = std::move(iterator->second);
+            else
+            {
+                const std::string methodName = lifecycle == "start" ? "Start" : "Close";
+                method = makeNodePtr<FunctionDeclaration>(
+                    std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier(methodName),
+                    std::vector<NodePtr<Identifier>>{}, false, std::vector<Parameter>{}, nullptr,
+                    nullptr, nullptr, makeNodePtr<BlockStatement>(std::vector<NodePtr<Statement>>{}, startToken.loc), startToken.loc);
+            }
+            addReceiver(method);
+            extensionMembers.push_back(ExtensionMember{ .access = AccessModifier::Public, .mutableReceiver = true, .method = std::move(method) });
+        }
+
+        auto targetType = makeNodePtr<TypeSpecifier>(applicationNameToken,
+            std::vector<NodePtr<TypeSpecifier>>{}, nullptr, 0, false, false, false, startToken.loc);
+        auto extension = makeNodePtr<ExtensionDeclaration>(
+            std::vector<NodePtr<AttributeStatement>>{},
+            makeIdentifier(applicationNameToken.value + "Lifecycle"),
+            std::move(targetType), std::move(extensionMembers), startToken.loc);
+
+        std::vector<NodePtr<Statement>> entryStatements;
+        std::vector<NodePtr<Expression>> noArguments;
+        auto constructorCall = makeNodePtr<FunctionCallExpression>(
+            makeIdentifier(applicationNameToken.value), std::vector<NodePtr<TypeSpecifier>>{},
+            std::move(noArguments), false, false, startToken.loc);
+        entryStatements.push_back(makeNodePtr<VariableDeclaration>(
+            std::vector<NodePtr<AttributeStatement>>{}, Mutability::Mutable,
+            makeIdentifier("__application"), nullptr, std::move(constructorCall), false, startToken.loc));
+        entryStatements.push_back(makeNodePtr<ExpressionStatement>(makeAppCall("Start"), startToken.loc));
+        auto condition = makeNodePtr<UnaryExpression>(
+            Token{ .type = TokenType::opLogicalNot, .value = "!", .loc = startToken.loc },
+            makeMember(makeAppIdentifier(), "__exitRequested"), UnaryExpression::UnaryOperatorType::Prefix, startToken.loc);
+        auto updateBody = makeNodePtr<BlockStatement>(
+            std::vector<NodePtr<Statement>>{ makeNodePtr<ExpressionStatement>(makeAppCall("Update"), startToken.loc) }, startToken.loc);
+        entryStatements.push_back(makeNodePtr<WhileStatement>(std::move(condition), std::move(updateBody), startToken.loc));
+        entryStatements.push_back(makeNodePtr<ExpressionStatement>(makeAppCall("Close"), startToken.loc));
+        entryStatements.push_back(makeNodePtr<ReturnStatement>(
+            makeMember(makeAppIdentifier(), "__exitCode"), startToken.loc));
+        auto entry = makeNodePtr<FunctionDeclaration>(
+            std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier("Entry"),
+            std::vector<NodePtr<Identifier>>{}, false, std::vector<Parameter>{},
+            makeType(TokenType::kwI32, "i32"), nullptr, nullptr,
+            makeNodePtr<BlockStatement>(std::move(entryStatements), startToken.loc), startToken.loc);
+
+        std::vector<NodePtr<Statement>> declarations;
+        declarations.push_back(std::move(component));
+        declarations.push_back(std::move(extension));
+        declarations.push_back(std::move(entry));
+        return makeNodePtr<DeclarationGroup>(std::move(declarations), startToken.loc);
     }
 
     NodePtr<VariableDeclaration> Parser::parseVariableDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)

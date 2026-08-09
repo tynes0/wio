@@ -3040,6 +3040,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_application_lifecycle_run
+        "${CMAKE_SOURCE_DIR}/tests/application_lifecycle_run.wio"
+        "application-lifecycle-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_application_lifecycle_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
         wio_test_any_value_reference_semantics_run
         "${CMAKE_SOURCE_DIR}/tests/any_value_reference_semantics_run.wio"
         "any-value-reference-semantics-ok"

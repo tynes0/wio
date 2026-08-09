@@ -4384,6 +4384,12 @@ namespace wio::codegen
                     continue;
                 }
 
+                if (stmt->is<DeclarationGroup>())
+                {
+                    self(self, stmt->as<DeclarationGroup>()->declarations, emitter);
+                    continue;
+                }
+
                 emitter(stmt);
             }
         };
@@ -7382,6 +7388,12 @@ namespace wio::codegen
     void CppGenerator::visit(AttributeDeclaration& node)
     {
         WIO_UNUSED(node);
+    }
+
+    void CppGenerator::visit(DeclarationGroup& node)
+    {
+        for (auto& declaration : node.declarations)
+            if (declaration) declaration->accept(*this);
     }
 
     void CppGenerator::visit(VariableDeclaration& node)

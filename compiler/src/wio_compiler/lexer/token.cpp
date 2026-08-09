@@ -147,6 +147,7 @@ namespace wio
           =============================== */
        case TokenType::kwSystem: return "kwSystem";
        case TokenType::kwProgram: return "kwProgram";
+       case TokenType::kwApplication: return "kwApplication";
    
        /* ===============================
           Arrays

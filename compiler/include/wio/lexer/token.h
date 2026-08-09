@@ -148,6 +148,7 @@ namespace wio
          =============================== */
       kwSystem,
       kwProgram,
+      kwApplication,
 
       /* ===============================
          Arrays
@@ -349,6 +350,7 @@ namespace wio
       
       { "system",    TokenType::kwSystem },
       { "program",   TokenType::kwProgram },
+      { "application", TokenType::kwApplication },
    };
 
    /* ===============================

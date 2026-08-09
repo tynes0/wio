@@ -1,0 +1,20 @@
+use std::assert as assert;
+use std::console as console;
+
+application CounterApp {
+    mut count: i32 = 0;
+
+    on start {
+        console::Print("application-start ");
+    }
+
+    on update {
+        self.count += 1;
+        if (self.count == 3) { self.Exit(0); }
+    }
+
+    on close {
+        assert::ExpectEqual(self.count, 3, "application update count");
+        console::PrintLine!("application-lifecycle-ok");
+    }
+}
