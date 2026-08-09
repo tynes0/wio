@@ -1,0 +1,42 @@
+use std::convert as convert;
+use std::option as option;
+
+realm std {
+    realm bigint {
+        using cpp::header("std_bigint.h");
+
+        fn NormalizeNative(value: string) -> string with native, cpp::name(wio::runtime::std_bigint::Normalize);
+        fn AddNative(left: string, right: string) -> string with native, cpp::name(wio::runtime::std_bigint::Add);
+        fn SubtractNative(left: string, right: string) -> string with native, cpp::name(wio::runtime::std_bigint::Subtract);
+        fn MultiplyNative(left: string, right: string) -> string with native, cpp::name(wio::runtime::std_bigint::Multiply);
+        fn DivideNative(left: string, right: string) -> string with native, cpp::name(wio::runtime::std_bigint::Divide);
+        fn CompareNative(left: string, right: string) -> i32 with native, cpp::name(wio::runtime::std_bigint::Compare);
+
+        component BigInteger {
+            text: string;
+        }
+
+        fn Parse(value: string) -> std::Option<BigInteger> {
+            let normalized = NormalizeNative(value);
+            if (normalized.Empty()) { return std::None<BigInteger>(); }
+            mut result = BigInteger(); result.text = normalized; return std::Some(result);
+        }
+        fn FromI64(value: i64) -> BigInteger { return Parse(std::ToString<i64>(value)).Value(); }
+        fn Add(left: BigInteger, right: BigInteger) -> BigInteger {
+            mut result = BigInteger(); result.text = AddNative(left.text, right.text); return result;
+        }
+        fn Subtract(left: BigInteger, right: BigInteger) -> BigInteger {
+            mut result = BigInteger(); result.text = SubtractNative(left.text, right.text); return result;
+        }
+        fn Multiply(left: BigInteger, right: BigInteger) -> BigInteger {
+            mut result = BigInteger(); result.text = MultiplyNative(left.text, right.text); return result;
+        }
+        fn Divide(left: BigInteger, right: BigInteger) -> std::Option<BigInteger> {
+            let text = DivideNative(left.text, right.text);
+            if (text.Empty()) { return std::None<BigInteger>(); }
+            mut result = BigInteger(); result.text = text; return std::Some(result);
+        }
+        fn Compare(left: BigInteger, right: BigInteger) -> i32 { return CompareNative(left.text, right.text); }
+        fn ToString(value: BigInteger) -> string { return value.text; }
+    }
+}

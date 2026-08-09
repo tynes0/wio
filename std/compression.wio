@@ -1,0 +1,43 @@
+use std::result as result;
+
+realm std {
+    realm compression {
+        // Deterministic byte-oriented run-length encoding. This is intended
+        // for small repetitive payloads, not as a replacement for DEFLATE.
+        fn RleEncode(value: byte[]) -> byte[] {
+            mut output: byte[] = [];
+            mut index = 0usize;
+            while (index < value.Count()) {
+                let current = value[index];
+                mut count = 1usize;
+                while (index + count < value.Count() and value[index + count] == current and count < 255usize) {
+                    count += 1usize;
+                }
+                output.Push(count fit byte);
+                output.Push(current);
+                index += count;
+            }
+            return output;
+        }
+
+        fn RleDecode(value: byte[], maximumOutput: usize) -> std::Result<byte[]> {
+            if ((value.Count() % 2usize) != 0usize) {
+                return std::Err<byte[]>(std::MakeResultError(
+                    std::ResultDomain::custom, 1, "Malformed RLE payload."));
+            }
+            mut output: byte[] = [];
+            mut index = 0usize;
+            while (index < value.Count()) {
+                let count = value[index] fit usize;
+                if (count == 0usize or output.Count() + count > maximumOutput) {
+                    return std::Err<byte[]>(std::MakeResultError(
+                        std::ResultDomain::custom, 2, "RLE output limit exceeded."));
+                }
+                mut written = 0usize;
+                while (written < count) { output.Push(value[index + 1usize]); written += 1usize; }
+                index += 2usize;
+            }
+            return std::Ok(output);
+        }
+    }
+}

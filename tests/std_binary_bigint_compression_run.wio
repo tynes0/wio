@@ -1,0 +1,21 @@
+use std::assert as assert;
+use std::bigint as bigint;
+use std::compression as compression;
+use std::console as console;
+
+fn Entry() -> i32 {
+    let large = bigint::Parse("123456789012345678901234567890").Value();
+    let product = bigint::Multiply(large, bigint::FromI64(9i64));
+    assert::ExpectEqual(
+        bigint::ToString(product),
+        "1111111101111111110111111111010",
+        "arbitrary precision multiplication"
+    );
+    let bytes: byte[] = [1u8, 1u8, 1u8, 2u8, 2u8, 3u8];
+    let encoded = compression::RleEncode(bytes);
+    let decoded = compression::RleDecode!(encoded, 64usize);
+    assert::ExpectEqual(decoded.Count(), bytes.Count(), "RLE decoded size");
+    assert::ExpectEqual(decoded[5usize], 3u8, "RLE decoded content");
+    console::PrintLine!("std-binary-bigint-compression-ok");
+    return 0;
+}
