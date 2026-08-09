@@ -1,0 +1,2 @@
+async fn Work() -> i32 { return 1; }
+fn Entry() -> i32 { return await Work(); }

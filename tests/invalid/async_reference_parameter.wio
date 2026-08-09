@@ -1,0 +1,2 @@
+async fn Read(value: view i32) -> i32 { return deref value; }
+fn Entry() -> i32 { return 0; }

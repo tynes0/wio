@@ -1,0 +1,5 @@
+async fn Borrow() -> view i32 {
+    let value = 1;
+    return ref value;
+}
+fn Entry() -> i32 { return 0; }

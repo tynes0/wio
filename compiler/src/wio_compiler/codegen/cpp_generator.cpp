@@ -502,6 +502,12 @@ namespace wio::codegen
                 result += ")>";
                 return result;
             }
+
+            if (current->kind() == sema::TypeKind::AsyncTask)
+            {
+                auto taskType = current.AsFast<sema::AsyncTaskType>();
+                return "wio::runtime::AsyncTask<" + toCppType(taskType->valueType) + ">";
+            }
             
             if (current->kind() == sema::TypeKind::Reference)
             {
@@ -3232,6 +3238,7 @@ namespace wio::codegen
         emitHeaderLine("#include <meta.h>");
         emitHeaderLine("#include <module_api.h>");
         emitHeaderLine("#include <ref.h>");
+        emitHeaderLine("#include <std_async.h>");
         emitHeaderLine();
         emitHeaderLine("#if defined(_WIN32)");
         emitHeaderLine("#define WIO_EXPORT __declspec(dllexport)");
@@ -4272,6 +4279,13 @@ namespace wio::codegen
 
         if (!lockedRefType)
             lockedRefType = Compiler::get().getTypeContext().getVoid();
+
+        if (node.isAsync)
+        {
+            Ref<sema::Type> resolvedTaskType = unwrapAliasTypeForCodegen(lockedRefType);
+            if (resolvedTaskType && resolvedTaskType->kind() == sema::TypeKind::AsyncTask)
+                lockedRefType = resolvedTaskType.AsFast<sema::AsyncTaskType>()->valueType;
+        }
         
         if (lockedRefType->toString() != "i32" && lockedRefType->toString() != "void")
         {
@@ -4326,7 +4340,26 @@ namespace wio::codegen
         emitLine("try {");
         indent();
         
-        if (node.body->is<BlockStatement>())
+        if (node.isAsync)
+        {
+            auto funcSym = node.name ? node.name->referencedSymbol.Lock() : nullptr;
+            auto funcType = funcSym ? funcSym->type.AsFast<sema::FunctionType>() : nullptr;
+            const std::string entrySymbol = Mangler::mangleFunction(
+                node.name->token.value,
+                funcType ? funcType->paramTypes : std::vector<Ref<sema::Type>>{},
+                funcSym ? funcSym->scopePath : ""
+            );
+            EMIT_TABS();
+            if (!lockedRefType->isVoid())
+                emit("return ");
+            emit("wio::runtime::BlockOn(" + entrySymbol + "(");
+            if (hasArgs)
+                emit(paramName);
+            emitLine("));");
+            if (lockedRefType->isVoid())
+                emitLine("return 0;");
+        }
+        else if (node.body->is<BlockStatement>())
         {
             auto block = node.body->as<BlockStatement>();
             for (auto& stmt : block->statements)
@@ -5530,6 +5563,13 @@ namespace wio::codegen
 
             emit(accessOperator);
         };
+
+        if (node.op.type == TokenType::kwAwait)
+        {
+            emit("co_await ");
+            node.operand->accept(*this);
+            return;
+        }
 
         if (node.op.type == TokenType::kwDeref)
         {
@@ -7570,7 +7610,16 @@ namespace wio::codegen
         auto sym = node.name->referencedSymbol.Lock();
         auto funcType = sym->type.AsFast<sema::FunctionType>();
         Ref<sema::Type> previousFunctionReturnType = currentFunctionReturnType_;
+        bool previousFunctionIsAsync = currentFunctionIsAsync_;
         currentFunctionReturnType_ = funcType ? funcType->returnType : nullptr;
+        currentFunctionIsAsync_ = node.isAsync;
+        if (node.isAsync)
+        {
+            Ref<sema::Type> resolvedTaskType = unwrapAliasTypeForCodegen(currentFunctionReturnType_);
+            currentFunctionReturnType_ = resolvedTaskType && resolvedTaskType->kind() == sema::TypeKind::AsyncTask
+                ? resolvedTaskType.AsFast<sema::AsyncTaskType>()->valueType
+                : nullptr;
+        }
         auto instantiationTypeLists = getInstantiateTypeLists(node);
 
         std::string returnType = funcType->returnType ? toCppType(funcType->returnType) : "void";
@@ -7580,7 +7629,7 @@ namespace wio::codegen
         bool hasModuleLifecycleExport = getModuleLifecycleAttribute(node).has_value();
         bool emitsExportWrapper = isExported || hasModuleLifecycleExport;
 
-        if (funcName == "Entry" &&
+        if (funcName == "Entry" && !node.isAsync &&
             node.genericParameters.empty() &&
             Compiler::get().getBuildTarget() == BuildTarget::Executable &&
             (!sym || sym->scopePath.empty()))
@@ -8437,6 +8486,24 @@ namespace wio::codegen
         }
         else if (node.body)
         {
+            auto emitFunctionBody = [&]()
+            {
+                if (!(node.isAsync && currentClassIsObject_ && node.body->is<BlockStatement>()))
+                {
+                    node.body->accept(*this);
+                    return;
+                }
+
+                auto block = node.body->as<BlockStatement>();
+                emitLine("{");
+                indent();
+                emitLine("auto _wio_async_self_guard = wio::runtime::Ref<" + currentClassName_ + ">(this);");
+                for (auto& statement : block->statements)
+                    statement->accept(*this);
+                dedent();
+                emitLine("}");
+            };
+
             const bool catchesResultPropagation = [&]()
             {
                 auto resolvedReturnType = unwrapAliasTypeForCodegen(currentFunctionReturnType_);
@@ -8469,7 +8536,7 @@ namespace wio::codegen
                 EMIT_TABS();
                 emit("if (!(");
                 node.whenCondition->accept(*this);
-                emit(")) return");
+                emit(node.isAsync ? ")) co_return" : ")) return");
                 if (node.whenFallback)
                 {
                     emit(" ");
@@ -8480,27 +8547,30 @@ namespace wio::codegen
                 if (node.body->is<BlockStatement>())
                 {
                     auto block = node.body->as<BlockStatement>();
+                    if (node.isAsync && currentClassIsObject_)
+                        emitLine("auto _wio_async_self_guard = wio::runtime::Ref<" + currentClassName_ + ">(this);");
                     for (auto& stmt : block->statements)
                         stmt->accept(*this);
                 }
                 else
                 {
-                    node.body->accept(*this);
+                    emitFunctionBody();
                 }
             }
             else
             {
-                node.body->accept(*this);
+                emitFunctionBody();
             }
 
             if (catchesResultPropagation)
             {
                 dedent();
                 emitLine("}");
-                emitLine("catch (const decltype(std::declval<" + returnType + ">()->_WF_ErrorValue())& _wio_result_error)");
+                const std::string propagationReturnType = toCppType(currentFunctionReturnType_);
+                emitLine("catch (const decltype(std::declval<" + propagationReturnType + ">()->_WF_ErrorValue())& _wio_result_error)");
                 emitLine("{");
                 indent();
-                emitLine("return " + returnType + "::Create(_wio_result_error);");
+                emitLine(std::string(node.isAsync ? "co_return " : "return ") + propagationReturnType + "::Create(_wio_result_error);");
                 dedent();
                 emitLine("}");
             }
@@ -8630,7 +8700,15 @@ namespace wio::codegen
             }
         }
 
+        if (node.isAsync && funcName == "Entry" && !isEmittingPrototypes_ &&
+            node.genericParameters.empty() && Compiler::get().getBuildTarget() == BuildTarget::Executable &&
+            (!sym || sym->scopePath.empty()))
+        {
+            emitMain(node);
+        }
+
         currentFunctionReturnType_ = previousFunctionReturnType;
+        currentFunctionIsAsync_ = previousFunctionIsAsync;
     }
 
     void CppGenerator::visit(RealmDeclaration& node)
@@ -8795,6 +8873,8 @@ namespace wio::codegen
             }
         }
     
+        const bool previousClassIsObject = currentClassIsObject_;
+        currentClassIsObject_ = false;
         currentClassName_ = declaredClassName;
         AccessModifier currentAccess = AccessModifier::Public;
     
@@ -8925,6 +9005,7 @@ namespace wio::codegen
         }
     
         currentClassName_ = "";
+        currentClassIsObject_ = previousClassIsObject;
         dedent();
         emitLine("};\n");
     }
@@ -9078,6 +9159,8 @@ namespace wio::codegen
             }
         }
     
+        const bool previousClassIsObject = currentClassIsObject_;
+        currentClassIsObject_ = true;
         currentClassName_ = declaredClassName;
         AccessModifier currentAccess = AccessModifier::Public;
     
@@ -9182,6 +9265,7 @@ namespace wio::codegen
         }
     
         currentClassName_ = "";
+        currentClassIsObject_ = previousClassIsObject;
         dedent();
         emitLine("};\n");
     }
@@ -9830,7 +9914,7 @@ namespace wio::codegen
         emitSourceDirective(node.location());
         EMIT_TABS();
         
-        buffer_ << "return";
+        buffer_ << (currentFunctionIsAsync_ ? "co_return" : "return");
         if (node.value)
         {
             buffer_ << " ";

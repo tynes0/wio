@@ -428,6 +428,13 @@ namespace wio::sema
                    d1->valueType->isCompatibleWith(d2->valueType);
         }
 
+        case TypeKind::AsyncTask:
+        {
+            auto* a1 = static_cast<const AsyncTaskType*>(t1);
+            auto* a2 = static_cast<const AsyncTaskType*>(t2);
+            return a1->valueType->isCompatibleWith(a2->valueType);
+        }
+
         case TypeKind::Function:
         {
             auto* f1 = static_cast<const FunctionType*>(t1);
@@ -526,6 +533,8 @@ namespace wio::sema
                 return containsUnknown(dictionaryType->keyType.Get()) ||
                        containsUnknown(dictionaryType->valueType.Get());
             }
+            case TypeKind::AsyncTask:
+                return containsUnknown(static_cast<const AsyncTaskType*>(type)->valueType.Get());
             case TypeKind::Function:
             {
                 const auto* functionType = static_cast<const FunctionType*>(type);
@@ -900,6 +909,26 @@ namespace wio::sema
         }
         ss << ")>";
         return ss.str();
+    }
+
+    AsyncTaskType::AsyncTaskType(Ref<Type> valueType)
+        : valueType(std::move(valueType))
+    {
+    }
+
+    TypeKind AsyncTaskType::kind() const
+    {
+        return TypeKind::AsyncTask;
+    }
+
+    std::string AsyncTaskType::toString() const
+    {
+        return "coroutine<" + (valueType ? valueType->toString() : std::string("<unknown>")) + ">";
+    }
+
+    std::string AsyncTaskType::toCppString() const
+    {
+        return "wio::runtime::AsyncTask<" + (valueType ? valueType->toCppString() : std::string("void")) + ">";
     }
 
     ReferenceType::ReferenceType(Ref<Type> referredType, bool isMutable)

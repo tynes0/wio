@@ -27,6 +27,7 @@ namespace wio
             Reference,  // ref
             Array,      // [T]
             Dictionary, // Dict<T,T> or Tree<T,T>
+            AsyncTask,  // coroutine<T>
             Function,   // fn(int) -> string
             Struct,     // struct A {}
             Alias       // type ID = u32;
@@ -175,6 +176,17 @@ namespace wio
             bool hasParameterPack = false;
 
             FunctionType(std::vector<Ref<Type>> paramTypes, Ref<Type> returnType, bool hasParameterPack = false);
+
+            TypeKind kind() const override;
+            std::string toString() const override;
+            std::string toCppString() const override;
+        };
+
+        struct AsyncTaskType : Type
+        {
+            Ref<Type> valueType;
+
+            explicit AsyncTaskType(Ref<Type> valueType);
 
             TypeKind kind() const override;
             std::string toString() const override;

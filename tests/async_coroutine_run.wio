@@ -1,0 +1,53 @@
+use std::assert as assert;
+use std::async as futures;
+use std::console as console;
+
+async fn Identity<T>(value: T) -> T {
+    await futures::Yield();
+    return value;
+}
+
+async fn Delayed(value: i32, milliseconds: u64) -> i32 {
+    await futures::Sleep(milliseconds);
+    return value;
+}
+
+async fn CompleteVoid() {
+    await futures::Yield();
+}
+
+object Worker {
+    private base: i32;
+
+    public fn OnConstruct(base: i32) {
+        self.base = base;
+    }
+
+    public async fn Add(value: i32) -> i32 {
+        await futures::Yield();
+        return self.base + value;
+    }
+}
+
+async fn Entry() -> i32 {
+    assert::ExpectEqual(await Identity<i32>(7), 7, "generic async result");
+    assert::ExpectEqual(await Identity<string>("ready"), "ready", "generic async string");
+
+    let worker = Worker(10);
+    assert::ExpectEqual(await worker.Add(5), 15, "object async method");
+
+    let tasks: coroutine<i32>[] = [Delayed(1, 20u64), Delayed(2, 1u64), Delayed(3, 5u64)];
+    let values = await futures::All<i32>(tasks);
+    assert::ExpectEqual(values.Count(), 3usize, "all result count");
+    assert::ExpectEqual(values[0usize], 1, "all preserves input order 0");
+    assert::ExpectEqual(values[1usize], 2, "all preserves input order 1");
+    assert::ExpectEqual(values[2usize], 3, "all preserves input order 2");
+
+    let started = futures::Start<i32>(Delayed(9, 1u64));
+    assert::ExpectEqual(await started, 9, "started task result");
+    assert::Expect(futures::IsReady<i32>(started), "completed task is ready");
+
+    await CompleteVoid();
+    console::PrintLine("async-coroutine-ok");
+    return 0;
+}

@@ -300,6 +300,7 @@ namespace wio
    bool Token::isUnary() const
    {
        return (type == TokenType::kwRef ||
+          type == TokenType::kwAwait ||
           type == TokenType::kwDeref ||
           type == TokenType::kwNot ||
           type == TokenType::opBitNot ||
@@ -344,9 +345,10 @@ namespace wio
        case TokenType::kwAny:
        case TokenType::kwOpaque:
        case TokenType::kwVoid:
-       case TokenType::kwObject:
-       case TokenType::kwType:
-           return true;
+      case TokenType::kwObject:
+      case TokenType::kwType:
+      case TokenType::kwCoroutine:
+          return true;
        default:
            return false;
        }

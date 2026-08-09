@@ -1144,6 +1144,12 @@ namespace wio
             }
             if (match(TokenType::kwFn))
                 return parseFunctionDeclaration(std::move(attributes));
+            if (match(TokenType::kwAsync))
+            {
+                if (peek(1).type != TokenType::kwFn)
+                    utError("Expected 'fn' after 'async'.", peek().loc);
+                return parseFunctionDeclaration(std::move(attributes), false, false, true);
+            }
             if (match(TokenType::kwInterface))
                 return parseInterfaceDeclaration(std::move(attributes));
             if (match(TokenType::kwComponent))
@@ -2004,9 +2010,15 @@ namespace wio
         );
     }
 
-    NodePtr<FunctionDeclaration> Parser::parseFunctionDeclaration(std::vector<NodePtr<AttributeStatement>> attributes, bool isLifecycle, bool isStructMethod)
+    NodePtr<FunctionDeclaration> Parser::parseFunctionDeclaration(std::vector<NodePtr<AttributeStatement>> attributes, bool isLifecycle, bool isStructMethod, bool isAsync)
     {
-        Token startTok = !isLifecycle ? consume(TokenType::kwFn) : peek();
+        Token startTok = peek();
+        if (!isLifecycle)
+        {
+            if (isAsync)
+                consume(TokenType::kwAsync);
+            consume(TokenType::kwFn);
+        }
 
         auto consumeOperatorToken = [&]() -> Token
         {
@@ -2145,7 +2157,7 @@ namespace wio
 
         NodePtr<Statement> body = match(TokenType::semicolon, true) ? nullptr : parseBlockStatement();
 
-        return makeNodePtr<FunctionDeclaration>(
+        auto declaration = makeNodePtr<FunctionDeclaration>(
             std::move(attributes),
             std::move(name),
             std::move(genericParameterList.parameters),
@@ -2157,6 +2169,8 @@ namespace wio
             std::move(body),
             startTok.loc
         );
+        declaration->isAsync = isAsync;
+        return declaration;
     }
 
     NodePtr<Statement> Parser::parseInterfaceDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
@@ -2179,7 +2193,8 @@ namespace wio
             while (peek().type == TokenType::atSign)
                 methodAttrs.push_back(parseAttributeStatement());
 
-            auto method = parseFunctionDeclaration(std::move(methodAttrs), false, true);
+            const bool isAsync = match(TokenType::kwAsync);
+            auto method = parseFunctionDeclaration(std::move(methodAttrs), false, true, isAsync);
             
             if (method->body != nullptr) {
                 utError("Interface methods cannot have a body. Use ';' instead of '{...}'.", method->location());
@@ -2217,12 +2232,13 @@ namespace wio
             else if (match(TokenType::kwPrivate, true)) access = AccessModifier::Private;
             else if (match(TokenType::kwProtected, true)) access = AccessModifier::Protected;
 
-            if (match(TokenType::kwFn) ||
+            if (match(TokenType::kwAsync) || match(TokenType::kwFn) ||
                 match(TokenType::identifier, "OnConstruct", false) ||
                 match(TokenType::identifier, "OnDestruct", false))
             {
-                bool isLifecycle = !match(TokenType::kwFn);
-                auto method = parseFunctionDeclaration(std::move(memberAttrs), isLifecycle, true);
+                const bool isAsync = match(TokenType::kwAsync);
+                bool isLifecycle = !isAsync && !match(TokenType::kwFn);
+                auto method = parseFunctionDeclaration(std::move(memberAttrs), isLifecycle, true, isAsync);
                 
                 members.push_back(ComponentMember{
                     .attributes = std::vector<NodePtr<AttributeStatement>>{},
@@ -2310,7 +2326,8 @@ namespace wio
             else
                 consume(TokenType::kwView);
 
-            auto method = parseFunctionDeclaration(std::move(methodAttrs), false, false);
+            const bool isAsync = match(TokenType::kwAsync);
+            auto method = parseFunctionDeclaration(std::move(methodAttrs), false, false, isAsync);
             if (!targetType->generics.empty())
                 utError("Generic extension targets are not supported yet.", targetType->location());
 
@@ -2375,12 +2392,13 @@ namespace wio
             else if (match(TokenType::kwPrivate, true)) access = AccessModifier::Private;
             else if (match(TokenType::kwProtected, true)) access = AccessModifier::Protected;
 
-            if (match(TokenType::kwFn) ||
+            if (match(TokenType::kwAsync) || match(TokenType::kwFn) ||
                 match(TokenType::identifier, "OnConstruct", false) ||
                 match(TokenType::identifier, "OnDestruct", false))
             {
-                bool isLifecycle = !match(TokenType::kwFn);
-                auto method = parseFunctionDeclaration(std::move(memberAttrs), isLifecycle, true);
+                const bool isAsync = match(TokenType::kwAsync);
+                bool isLifecycle = !isAsync && !match(TokenType::kwFn);
+                auto method = parseFunctionDeclaration(std::move(memberAttrs), isLifecycle, true, isAsync);
                 
                 members.push_back(ObjectMember{
                     .attributes = std::vector<NodePtr<AttributeStatement>>{},

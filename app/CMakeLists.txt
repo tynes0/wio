@@ -4686,4 +4686,48 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/invalid/exported_object_private_ctor.wio"
         "@Export object 'HiddenFactory' constructor must be public to be host-callable\\."
     )
+
+    add_wio_output_test(
+        wio_test_async_coroutine_run
+        "${CMAKE_SOURCE_DIR}/tests/async_coroutine_run.wio"
+        "async-coroutine-ok"
+        --run
+    )
+    set_tests_properties(wio_test_async_coroutine_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
+    add_wio_failure_test(wio_invalid_async_await_outside_async
+        "${CMAKE_SOURCE_DIR}/tests/invalid/async_await_outside_async.wio"
+        "'await' can only be used inside an async function or method")
+    add_wio_failure_test(wio_invalid_async_await_requires_coroutine
+        "${CMAKE_SOURCE_DIR}/tests/invalid/async_await_requires_coroutine.wio"
+        "await.*operand must be a coroutine")
+    add_wio_failure_test(wio_invalid_async_reference_parameter
+        "${CMAKE_SOURCE_DIR}/tests/invalid/async_reference_parameter.wio"
+        "Async parameter 'value' cannot be ref/view")
+    add_wio_failure_test(wio_invalid_async_reference_return
+        "${CMAKE_SOURCE_DIR}/tests/invalid/async_reference_return.wio"
+        "Async functions cannot return ref/view")
+    add_wio_failure_test(wio_invalid_async_component_method
+        "${CMAKE_SOURCE_DIR}/tests/invalid/async_component_method.wio"
+        "Stack-resident component methods cannot be async")
+    add_wio_failure_test(wio_invalid_async_extension_receiver
+        "${CMAKE_SOURCE_DIR}/tests/invalid/async_extension_receiver.wio"
+        "Async extension methods are not yet lifetime-safe")
+    add_wio_failure_test(wio_invalid_async_lifecycle_method
+        "${CMAKE_SOURCE_DIR}/tests/invalid/async_lifecycle_method.wio"
+        "OnConstruct cannot be async")
+    add_wio_failure_test(wio_invalid_async_coroutine_arity
+        "${CMAKE_SOURCE_DIR}/tests/invalid/async_coroutine_arity.wio"
+        "coroutine.*requires exactly one result type")
+    set_tests_properties(
+        wio_invalid_async_await_outside_async
+        wio_invalid_async_await_requires_coroutine
+        wio_invalid_async_reference_parameter
+        wio_invalid_async_reference_return
+        wio_invalid_async_component_method
+        wio_invalid_async_extension_receiver
+        wio_invalid_async_lifecycle_method
+        wio_invalid_async_coroutine_arity
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
 endif()

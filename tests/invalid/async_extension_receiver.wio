@@ -1,0 +1,5 @@
+component Value { public number: i32; }
+extension AsyncValue for Value {
+    view async fn Read() -> i32 { return self.number; }
+}
+fn Entry() -> i32 { return 0; }

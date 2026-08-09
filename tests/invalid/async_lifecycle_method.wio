@@ -1,0 +1,4 @@
+object Worker {
+    public async fn OnConstruct() { return; }
+}
+fn Entry() -> i32 { return 0; }

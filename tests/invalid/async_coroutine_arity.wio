@@ -1,0 +1,4 @@
+fn Entry() -> i32 {
+    mut task: coroutine;
+    return 0;
+}

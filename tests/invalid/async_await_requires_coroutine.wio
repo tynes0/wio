@@ -1,0 +1,1 @@
+async fn Entry() -> i32 { return await 1; }

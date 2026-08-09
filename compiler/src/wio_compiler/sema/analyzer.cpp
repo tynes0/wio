@@ -2596,6 +2596,8 @@ namespace wio::sema
                 return containsGenericParameterType(dictType->keyType) ||
                        containsGenericParameterType(dictType->valueType);
             }
+            case TypeKind::AsyncTask:
+                return containsGenericParameterType(current.AsFast<AsyncTaskType>()->valueType);
             case TypeKind::Function:
             {
                 auto funcType = current.AsFast<FunctionType>();
@@ -2702,6 +2704,9 @@ namespace wio::sema
                 return containsNamedGenericParameterType(dictType->keyType, genericParameterNames) ||
                        containsNamedGenericParameterType(dictType->valueType, genericParameterNames);
             }
+            case TypeKind::AsyncTask:
+                return containsNamedGenericParameterType(
+                    current.AsFast<AsyncTaskType>()->valueType, genericParameterNames);
             case TypeKind::Function:
             {
                 auto funcType = current.AsFast<FunctionType>();
@@ -2805,6 +2810,10 @@ namespace wio::sema
                 collectGenericParameterInstances(dictType->valueType, genericParameterNames, instances);
                 return;
             }
+            case TypeKind::AsyncTask:
+                collectGenericParameterInstances(
+                    current.AsFast<AsyncTaskType>()->valueType, genericParameterNames, instances);
+                return;
             case TypeKind::Function:
             {
                 auto funcType = current.AsFast<FunctionType>();
@@ -3455,6 +3464,13 @@ namespace wio::sema
                     dictType->isOrdered
                 );
             }
+            case TypeKind::AsyncTask:
+            {
+                auto taskType = current.AsFast<AsyncTaskType>();
+                return ctx.getOrCreateAsyncTaskType(
+                    instantiateGenericType(taskType->valueType, bindings)
+                );
+            }
             case TypeKind::Function:
             {
                 auto funcType = current.AsFast<FunctionType>();
@@ -3977,6 +3993,16 @@ namespace wio::sema
 
                 return deduceGenericBindings(expectedDict->keyType, actualDict->keyType, bindings) &&
                        deduceGenericBindings(expectedDict->valueType, actualDict->valueType, bindings);
+            }
+
+            if (resolvedExpected->kind() == TypeKind::AsyncTask &&
+                resolvedActual->kind() == TypeKind::AsyncTask)
+            {
+                return deduceGenericBindings(
+                    resolvedExpected.AsFast<AsyncTaskType>()->valueType,
+                    resolvedActual.AsFast<AsyncTaskType>()->valueType,
+                    bindings
+                );
             }
 
             if (resolvedExpected->kind() == TypeKind::Function &&
@@ -4856,7 +4882,12 @@ namespace wio::sema
                    cppNameArg->value == "wio::runtime::traits::IsInterfaceValue" ||
                    cppNameArg->value == "wio::runtime::traits::IsSameValue" ||
                    cppNameArg->value == "wio::runtime::traits::IsDefaultConstructibleValue" ||
-                   cppNameArg->value == "wio::runtime::traits::IsCopyConstructibleValue";
+                   cppNameArg->value == "wio::runtime::traits::IsCopyConstructibleValue" ||
+                   cppNameArg->value == "wio::runtime::BlockOn" ||
+                   cppNameArg->value == "wio::runtime::StartAsync" ||
+                   cppNameArg->value == "wio::runtime::AsyncReady" ||
+                   cppNameArg->value == "wio::runtime::CancelAsync" ||
+                   cppNameArg->value == "wio::runtime::WhenAll";
         }
 
         bool matchesOpenNativeTemplateIntrinsicConstraints(const std::vector<NodePtr<AttributeStatement>>& attributes,
@@ -5967,6 +5998,7 @@ namespace wio::sema
 
         Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
         Ref<Type> previousFunctionReturnType = currentFunctionReturnType_;
+        bool previousFunctionIsAsync = currentFunctionIsAsync_;
         Ref<Type> previousCurrentStructType = currentStructType_;
         Ref<Type> previousCurrentBaseStructType = currentBaseStructType_;
         Ref<Symbol> previousFunctionParameterPackSymbol = currentFunctionParameterPackSymbol_;
@@ -5976,6 +6008,14 @@ namespace wio::sema
 
         currentExpectedExpressionType_ = nullptr;
         currentFunctionReturnType_ = instantiateGenericType(declaredFunctionType->returnType, bindingSet);
+        if (node.isAsync)
+        {
+            Ref<Type> resolvedTaskType = unwrapAliasType(currentFunctionReturnType_);
+            currentFunctionReturnType_ = resolvedTaskType && resolvedTaskType->kind() == TypeKind::AsyncTask
+                ? resolvedTaskType.AsFast<AsyncTaskType>()->valueType
+                : Compiler::get().getTypeContext().getUnknown();
+        }
+        currentFunctionIsAsync_ = node.isAsync;
         currentStructType_ = concreteOwnerType;
         currentBaseStructType_ = nullptr;
         if (concreteOwnerType)
@@ -6146,6 +6186,7 @@ namespace wio::sema
             genericTypeParameterScopes_.pop_back();
         currentExpectedExpressionType_ = previousExpectedExpressionType;
         currentFunctionReturnType_ = previousFunctionReturnType;
+        currentFunctionIsAsync_ = previousFunctionIsAsync;
         currentStructType_ = previousCurrentStructType;
         currentBaseStructType_ = previousCurrentBaseStructType;
         currentFunctionParameterPackSymbol_ = previousFunctionParameterPackSymbol;
@@ -6639,6 +6680,24 @@ namespace wio::sema
 
             node.refType = applyNullableSuffix(
                 Compiler::get().getTypeContext().getOrCreateFunctionType(retType, paramTypes, hasParameterPack)
+            );
+            return;
+        }
+
+        if (node.name.type == TokenType::kwCoroutine)
+        {
+            if (node.generics.size() != 1)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "'coroutine' requires exactly one result type argument.");
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+
+            node.generics[0]->accept(*this);
+            node.refType = applyNullableSuffix(
+                Compiler::get().getTypeContext().getOrCreateAsyncTaskType(
+                    node.generics[0]->refType.Lock()
+                )
             );
             return;
         }
@@ -7687,6 +7746,31 @@ namespace wio::sema
         if (!opType)
         {
             node.refType = Compiler::get().getTypeContext().getUnknown();
+            return;
+        }
+
+        if (node.op.type == TokenType::kwAwait)
+        {
+            if (!currentFunctionIsAsync_)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "'await' can only be used inside an async function or method.");
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+
+            Ref<Type> resolvedTaskType = unwrapAliasType(opType);
+            if (!resolvedTaskType || resolvedTaskType->kind() != TypeKind::AsyncTask)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "The 'await' operand must be a coroutine<T>, but got '{}'.",
+                    opType->toString()
+                );
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+
+            node.refType = resolvedTaskType.AsFast<AsyncTaskType>()->valueType;
             return;
         }
 
@@ -11937,6 +12021,8 @@ namespace wio::sema
 
         enterScope(ScopeKind::Function);
         Ref<Type> previousFunctionReturnType = currentFunctionReturnType_;
+        bool previousFunctionIsAsync = currentFunctionIsAsync_;
+        currentFunctionIsAsync_ = false;
 
         std::vector<Ref<Type>> paramTypes;
         for (size_t i = 0; i < node.parameters.size(); ++i)
@@ -12030,6 +12116,7 @@ namespace wio::sema
 
         exitScope();
         currentFunctionReturnType_ = previousFunctionReturnType;
+        currentFunctionIsAsync_ = previousFunctionIsAsync;
 
         node.refType = Compiler::get().getTypeContext().getOrCreateFunctionType(retType, paramTypes);
     }
@@ -13639,7 +13726,10 @@ namespace wio::sema
                 paramTypes.push_back(pType);
             }
 
-            auto funcType = Compiler::get().getTypeContext().getOrCreateFunctionType(returnType, paramTypes, hasParameterPack);
+            Ref<Type> callableReturnType = node.isAsync
+                ? Compiler::get().getTypeContext().getOrCreateAsyncTaskType(returnType)
+                : returnType;
+            auto funcType = Compiler::get().getTypeContext().getOrCreateFunctionType(callableReturnType, paramTypes, hasParameterPack);
             
             Ref<Symbol> funcSym = createSymbol(node.name->token.value, funcType, SymbolKind::Function, node.location());
             if (node.isExtensionMethod)
@@ -13707,8 +13797,51 @@ namespace wio::sema
             return parameter.isParameterPack;
         });
         const bool isPackFunction = node.hasGenericParameterPack || hasFunctionParameterPack;
+        Ref<Type> declaredResultType = funcType->returnType;
+        if (node.isAsync)
+        {
+            Ref<Type> resolvedTaskType = unwrapAliasType(funcType->returnType);
+            declaredResultType = resolvedTaskType && resolvedTaskType->kind() == TypeKind::AsyncTask
+                ? resolvedTaskType.AsFast<AsyncTaskType>()->valueType
+                : Compiler::get().getTypeContext().getUnknown();
+        }
 
-        if (isLifecycleMethod && funcType->returnType && !funcType->returnType->isVoid())
+        if (node.isAsync && isLifecycleMethod)
+            WIO_LOG_ADD_ERROR(node.location(), "{} cannot be async.", node.name->token.value);
+        if (node.isAsync && isOperatorMethod)
+            WIO_LOG_ADD_ERROR(node.location(), "Operator overloads cannot be async.");
+        if (node.isAsync && (isCommand || isEvent || hasModuleLifecycle || isExported))
+            WIO_LOG_ADD_ERROR(node.location(), "Async functions cannot use command, event, module-lifecycle, or export ABI attributes.");
+        if (node.isAsync && isComponentMethodContext)
+            WIO_LOG_ADD_ERROR(node.location(), "Stack-resident component methods cannot be async; use an async method on an owning object or pass a component value to an async function.");
+        if (node.isAsync && node.isExtensionMethod)
+            WIO_LOG_ADD_ERROR(node.location(), "Async extension methods are not yet lifetime-safe because extension receivers are borrowed.");
+        if (node.isAsync)
+        {
+            Ref<Type> resolvedResultType = unwrapAliasType(declaredResultType);
+            if (resolvedResultType && resolvedResultType->kind() == TypeKind::Reference)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Async functions cannot return ref/view values across suspension points.");
+            }
+
+            for (size_t parameterIndex = 0; parameterIndex < funcType->paramTypes.size(); ++parameterIndex)
+            {
+                Ref<Type> resolvedParameterType = unwrapAliasType(funcType->paramTypes[parameterIndex]);
+                if (!resolvedParameterType || resolvedParameterType->kind() != TypeKind::Reference)
+                    continue;
+
+                const std::string parameterName = parameterIndex < node.parameters.size() && node.parameters[parameterIndex].name
+                    ? node.parameters[parameterIndex].name->token.value
+                    : common::formatString("param{}", parameterIndex);
+                WIO_LOG_ADD_ERROR(
+                    node.parameters[parameterIndex].name ? node.parameters[parameterIndex].name->location() : node.location(),
+                    "Async parameter '{}' cannot be ref/view because the borrow may outlive its caller.",
+                    parameterName
+                );
+            }
+        }
+
+        if (isLifecycleMethod && declaredResultType && !declaredResultType->isVoid())
         {
             WIO_LOG_ADD_ERROR(node.location(), "{} must return void.", node.name->token.value);
         }
@@ -14027,8 +14160,8 @@ namespace wio::sema
                 WIO_LOG_ADD_ERROR(node.location(), "Entry functions must define a Wio body.");
             }
 
-            if (!isExactType(funcType->returnType, typeContext.getI32()) &&
-                !isExactType(funcType->returnType, typeContext.getVoid()))
+            if (!isExactType(declaredResultType, typeContext.getI32()) &&
+                !isExactType(declaredResultType, typeContext.getVoid()))
             {
                 WIO_LOG_ADD_ERROR(node.location(), "Entry must return i32 or void.");
             }
@@ -14420,9 +14553,11 @@ namespace wio::sema
         }
 
         Ref<Type> prevRetType = currentFunctionReturnType_;
+        bool previousFunctionIsAsync = currentFunctionIsAsync_;
         Ref<Symbol> prevFunctionParameterPackSymbol = currentFunctionParameterPackSymbol_;
         Ref<Type> prevFunctionParameterPackType = currentFunctionParameterPackType_;
-        currentFunctionReturnType_ = funcType->returnType;
+        currentFunctionReturnType_ = declaredResultType;
+        currentFunctionIsAsync_ = false;
         currentFunctionParameterPackSymbol_ = nullptr;
         currentFunctionParameterPackType_ = nullptr;
 
@@ -14673,6 +14808,8 @@ namespace wio::sema
             }
         }
 
+        currentFunctionIsAsync_ = node.isAsync;
+
         if (node.whenCondition)
         {
             node.whenCondition->accept(*this);
@@ -14693,28 +14830,28 @@ namespace wio::sema
             {
                 Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
                 bool previousAllowContextualNumericLiteralTyping = allowContextualNumericLiteralTyping_;
-                currentExpectedExpressionType_ = funcType->returnType;
+                currentExpectedExpressionType_ = currentFunctionReturnType_;
                 allowContextualNumericLiteralTyping_ = true;
                 node.whenFallback->accept(*this);
                 currentExpectedExpressionType_ = previousExpectedExpressionType;
                 allowContextualNumericLiteralTyping_ = previousAllowContextualNumericLiteralTyping;
 
                 Ref<Type> fallbackType = node.whenFallback->refType.Lock();
-                if (funcType->returnType &&
-                    !funcType->returnType->isUnknown() &&
+                if (currentFunctionReturnType_ &&
+                    !currentFunctionReturnType_->isUnknown() &&
                     fallbackType &&
                     !fallbackType->isUnknown() &&
-                    !isAssignmentLikeCompatible(funcType->returnType, fallbackType))
+                    !isAssignmentLikeCompatible(currentFunctionReturnType_, fallbackType))
                 {
                     WIO_LOG_ADD_ERROR(
                         node.whenFallback->location(),
                         "When guard fallback type mismatch! Expected '{}', but got '{}'.",
-                        funcType->returnType->toString(),
+                        currentFunctionReturnType_->toString(),
                         fallbackType->toString()
                     );
                 }
             }
-            else if (funcType->returnType != Compiler::get().getTypeContext().getVoid())
+            else if (currentFunctionReturnType_ != Compiler::get().getTypeContext().getVoid())
             {
                 WIO_LOG_ADD_ERROR(node.location(), "Functions with a return value must provide an 'else' fallback for 'when' guards.");
             }
@@ -14723,9 +14860,9 @@ namespace wio::sema
         if (node.body)
             node.body->accept(*this);
 
-        const bool requiresReturnValue = funcType->returnType &&
-                                         !funcType->returnType->isUnknown() &&
-                                         !funcType->returnType->isVoid();
+        const bool requiresReturnValue = currentFunctionReturnType_ &&
+                                         !currentFunctionReturnType_->isUnknown() &&
+                                         !currentFunctionReturnType_->isVoid();
         const bool allPathsReturn = statementDefinitelyReturns(node.body);
 
         if (node.body && !isNative && requiresReturnValue && !allPathsReturn)
@@ -14742,6 +14879,7 @@ namespace wio::sema
         if (!funcSym->genericParameterNames.empty())
             activeGenericConstraintSymbols_.pop_back();
         currentFunctionReturnType_ = prevRetType;
+        currentFunctionIsAsync_ = previousFunctionIsAsync;
         currentFunctionParameterPackSymbol_ = prevFunctionParameterPackSymbol;
         currentFunctionParameterPackType_ = prevFunctionParameterPackType;
     }

@@ -54,6 +54,7 @@ namespace wio::sema
         Ref<Type> getOrCreateFunctionType(Ref<Type> returnType, std::vector<Ref<Type>> paramTypes, bool hasParameterPack = false);
         Ref<Type> getOrCreateDictionaryType(Ref<Type> keyType, Ref<Type> valueType, bool isOrdered = false);
         Ref<Type> getOrCreateTreeType(Ref<Type> keyType, Ref<Type> valueType);
+        Ref<Type> getOrCreateAsyncTaskType(Ref<Type> valueType);
         Ref<Type> getOrCreateStructType(const std::string& name,
                                         const Ref<Scope>& structScope,
                                         bool isObject = false,

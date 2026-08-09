@@ -1,0 +1,4 @@
+component Value {
+    public async fn Read() -> i32 { return 1; }
+}
+fn Entry() -> i32 { return 0; }

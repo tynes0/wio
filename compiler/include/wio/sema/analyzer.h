@@ -44,6 +44,7 @@ namespace wio::sema
         Ref<Type> currentExpectedExpressionType_ = nullptr;
         bool allowContextualNumericLiteralTyping_ = false;
         Ref<Type> currentFunctionReturnType_ = nullptr;
+        bool currentFunctionIsAsync_ = false;
         Ref<Type> currentStructType_ = nullptr;
         Ref<Type> currentBaseStructType_ = nullptr;
         Ref<Type> currentExtensionTargetType_ = nullptr;

@@ -871,6 +871,7 @@ namespace wio
         bool extensionMutableReceiver = false;
         std::string extensionMemberName;
         WeakRef<sema::Type> extensionTargetType;
+        bool isAsync = false;
         bool isApplicationEntry = false;
         std::string applicationName;
 

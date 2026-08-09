@@ -1,0 +1,32 @@
+realm std {
+    realm async {
+        using cpp::header("std_async.h");
+
+        fn Sleep(milliseconds: u64) -> coroutine<void>
+            with native, cpp::name(wio::runtime::AsyncSleep);
+
+        fn Yield() -> coroutine<void>
+            with native, cpp::name(wio::runtime::AsyncYield);
+
+        fn BlockOn<T>(task: coroutine<T>) -> T
+            with native, cpp::name(wio::runtime::BlockOn);
+
+        fn BlockOn(task: coroutine<void>)
+            with native, cpp::name(wio::runtime::BlockOn);
+
+        fn Start<T>(task: coroutine<T>) -> coroutine<T>
+            with native, cpp::name(wio::runtime::StartAsync);
+
+        fn IsReady<T>(task: coroutine<T>) -> bool
+            with native, cpp::name(wio::runtime::AsyncReady);
+
+        fn Cancel<T>(task: coroutine<T>)
+            with native, cpp::name(wio::runtime::CancelAsync);
+
+        fn All<T>(tasks: coroutine<T>[]) -> coroutine<T[]>
+            with native, cpp::name(wio::runtime::WhenAll);
+
+        fn All(tasks: coroutine<void>[]) -> coroutine<void>
+            with native, cpp::name(wio::runtime::WhenAll);
+    }
+}

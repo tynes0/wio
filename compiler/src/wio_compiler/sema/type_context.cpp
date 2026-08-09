@@ -65,6 +65,11 @@ namespace wio::sema
         return makeType<DictionaryType>(std::move(keyType), std::move(valueType), true);
     }
 
+    Ref<Type> TypeContext::getOrCreateAsyncTaskType(Ref<Type> valueType)
+    {
+        return makeType<AsyncTaskType>(std::move(valueType));
+    }
+
     Ref<Type> TypeContext::getOrCreateFunctionType(Ref<Type> returnType, std::vector<Ref<Type>> paramTypes, bool hasParameterPack)
     {
         return makeType<FunctionType>(std::move(paramTypes), std::move(returnType), hasParameterPack);

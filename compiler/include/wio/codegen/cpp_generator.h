@@ -28,8 +28,10 @@ namespace wio::codegen
 
         bool isEmittingPrototypes_ = false;
         std::string currentClassName_;
+        bool currentClassIsObject_ = false;
         bool currentExtensionMethod_ = false;
         Ref<sema::Type> currentFunctionReturnType_;
+        bool currentFunctionIsAsync_ = false;
         std::unordered_map<const sema::Symbol*, const VariableDeclaration*> variableDeclarationsBySymbol_;
 
         void emitStatements(const std::vector<NodePtr<Statement>>& statements);
