@@ -12573,12 +12573,27 @@ namespace wio::sema
         bool allBodiesAreExpressionStatements = true;
         bool hasAssumedCase = false;
         size_t assumedCaseCount = 0;
+        std::unordered_set<std::string> seenUnguardedVariants;
+
+        Ref<Type> algebraicType = unwrapAliasType(matchValueType);
+        while (algebraicType && algebraicType->kind() == TypeKind::Reference)
+            algebraicType = unwrapAliasType(algebraicType.AsFast<ReferenceType>()->referredType);
+        Ref<StructType> algebraicStruct = algebraicType && algebraicType->kind() == TypeKind::Struct
+            ? algebraicType.AsFast<StructType>()
+            : nullptr;
+        const bool isOptionMatch = algebraicStruct && algebraicStruct->name == "Option";
+        const bool isResultMatch = algebraicStruct && algebraicStruct->name == "Result";
+        bool sawSome = false;
+        bool sawNone = false;
+        bool sawOk = false;
+        bool sawErr = false;
 
         for (size_t caseIndex = 0; caseIndex < node.cases.size(); ++caseIndex)
         {
             auto& matchCase = node.cases[caseIndex];
+            const bool isVariantPattern = !matchCase.variantName.empty();
 
-            if (matchCase.matchValues.empty())
+            if (matchCase.matchValues.empty() && !isVariantPattern)
             {
                 hasAssumedCase = true;
                 assumedCaseCount++;
@@ -12598,6 +12613,54 @@ namespace wio::sema
                         "The 'assumed' match case must be the last case."
                     );
                 }
+            }
+
+            Ref<Type> bindingType = nullptr;
+            if (isVariantPattern)
+            {
+                const std::string& variant = matchCase.variantName;
+                const bool validOptionVariant = isOptionMatch && (variant == "Some" || variant == "None");
+                const bool validResultVariant = isResultMatch && (variant == "Ok" || variant == "Err");
+                if (!validOptionVariant && !validResultVariant)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        matchCase.body ? matchCase.body->location() : node.location(),
+                        "Pattern '{}(...)' requires a matching std::Option or std::Result value.",
+                        variant);
+                }
+
+                if (!matchCase.guard && !seenUnguardedVariants.insert(variant).second)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        matchCase.body ? matchCase.body->location() : node.location(),
+                        "Unreachable duplicate '{}' match pattern.", variant);
+                }
+
+                const size_t expectedBindings =
+                    (variant == "Some" || variant == "Ok" || variant == "Err") ? 1 : 0;
+                if (matchCase.bindings.size() != expectedBindings)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        matchCase.body ? matchCase.body->location() : node.location(),
+                        "Pattern '{}' expects {} binding(s), but got {}.",
+                        variant, expectedBindings, matchCase.bindings.size());
+                }
+
+                if ((variant == "Some" || variant == "Ok") &&
+                    algebraicStruct && !algebraicStruct->genericArguments.empty())
+                {
+                    bindingType = algebraicStruct->genericArguments.front();
+                }
+                else if (variant == "Err")
+                {
+                    if (auto errorSymbol = resolveQualifiedSymbol(currentScope_, "std::ResultError"))
+                        bindingType = errorSymbol->type;
+                }
+
+                sawSome = sawSome || (variant == "Some" && !matchCase.guard);
+                sawNone = sawNone || (variant == "None" && !matchCase.guard);
+                sawOk = sawOk || (variant == "Ok" && !matchCase.guard);
+                sawErr = sawErr || (variant == "Err" && !matchCase.guard);
             }
 
             for (auto& val : matchCase.matchValues)
@@ -12642,7 +12705,42 @@ namespace wio::sema
                 }
             }
 
-            matchCase.body->accept(*this);
+            if (isVariantPattern)
+            {
+                enterScope(ScopeKind::Block);
+                for (auto& binding : matchCase.bindings)
+                {
+                    Ref<Symbol> bindingSymbol = createSymbol(
+                        binding->token.value,
+                        bindingType ? bindingType : Compiler::get().getTypeContext().getUnknown(),
+                        SymbolKind::Variable,
+                        binding->location());
+                    currentScope_->define(binding->token.value, bindingSymbol);
+                    binding->referencedSymbol = bindingSymbol;
+                    binding->refType = bindingSymbol->type;
+                }
+
+                if (matchCase.guard)
+                {
+                    matchCase.guard->accept(*this);
+                    Ref<Type> guardType = unwrapAliasType(matchCase.guard->refType.Lock());
+                    Ref<Type> boolType = Compiler::get().getTypeContext().getBool();
+                    if (guardType && !guardType->isUnknown() &&
+                        (!guardType->isCompatibleWith(boolType) || !boolType->isCompatibleWith(guardType)))
+                    {
+                        WIO_LOG_ADD_ERROR(matchCase.guard->location(), "Match guards must have type 'bool'.");
+                    }
+                }
+
+                matchCase.body->accept(*this);
+                exitScope();
+            }
+            else
+            {
+                if (matchCase.guard)
+                    WIO_LOG_ADD_ERROR(matchCase.guard->location(), "Guards currently require a destructuring pattern.");
+                matchCase.body->accept(*this);
+            }
 
             if (!matchCase.body->is<ExpressionStatement>())
             {
@@ -12681,7 +12779,9 @@ namespace wio::sema
 
         if (allBodiesAreExpressionStatements)
         {
-            if (!hasAssumedCase)
+            const bool algebraicExhaustive = (isOptionMatch && sawSome && sawNone) ||
+                                             (isResultMatch && sawOk && sawErr);
+            if (!hasAssumedCase && !algebraicExhaustive)
             {
                 WIO_LOG_ADD_ERROR(
                     node.location(),

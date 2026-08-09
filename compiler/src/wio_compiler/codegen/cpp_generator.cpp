@@ -7275,9 +7275,35 @@ namespace wio::codegen
         for (auto& matchCase : node.cases)
         {
             EMIT_TABS();
-            if (matchCase.matchValues.empty()) // assumed
+            if (matchCase.matchValues.empty() && matchCase.variantName.empty()) // assumed
             {
                 emit("else {\n");
+            }
+            else if (!matchCase.variantName.empty())
+            {
+                if (!first) emit("else ");
+                emit("if (");
+                if (matchCase.variantName == "Some")
+                    emit("_match_val->_WF_IsSome()");
+                else if (matchCase.variantName == "None")
+                    emit("_match_val->_WF_IsNone()");
+                else if (matchCase.variantName == "Ok")
+                    emit("_match_val->_WF_IsOk()");
+                else
+                    emit("_match_val->_WF_IsError()");
+                if (matchCase.guard)
+                {
+                    emit(" && [&]() { ");
+                    for (auto& binding : matchCase.bindings)
+                    {
+                        emit("auto " + sanitizeCppIdentifier(binding->token.value) + " = _match_val->");
+                        emit(matchCase.variantName == "Err" ? "_WF_ErrorValue(); " : "_WF_Value(); ");
+                    }
+                    emit("return ");
+                    matchCase.guard->accept(*this);
+                    emit("; }()");
+                }
+                emit(") {\n");
             }
             else
             {
@@ -7310,6 +7336,13 @@ namespace wio::codegen
             first = false;
             
             indent();
+
+            for (auto& binding : matchCase.bindings)
+            {
+                EMIT_TABS();
+                emit("auto " + sanitizeCppIdentifier(binding->token.value) + " = _match_val->");
+                emit(matchCase.variantName == "Err" ? "_WF_ErrorValue();\n" : "_WF_Value();\n");
+            }
             
             if (producesValue && matchCase.body->is<ExpressionStatement>())
             {

@@ -2931,6 +2931,27 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_match_option_result_patterns_run
+        "${CMAKE_SOURCE_DIR}/tests/match_option_result_patterns_run.wio"
+        "match-option-result-patterns-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_match_option_result_patterns_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_match_pattern_wrong_type
+        "${CMAKE_SOURCE_DIR}/tests/invalid/match_pattern_wrong_type.wio"
+        "requires a matching std::Option or std::Result"
+    )
+    set_tests_properties(
+        wio_invalid_match_pattern_wrong_type
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
         wio_test_any_value_reference_semantics_run
         "${CMAKE_SOURCE_DIR}/tests/any_value_reference_semantics_run.wio"
         "any-value-reference-semantics-ok"

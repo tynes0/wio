@@ -728,6 +728,9 @@ namespace wio
     {
         std::vector<NodePtr<Expression>> matchValues;
         NodePtr<Statement> body;
+        std::string variantName;
+        std::vector<NodePtr<Identifier>> bindings;
+        NodePtr<Expression> guard;
     };
 
     struct MatchExpression : Expression

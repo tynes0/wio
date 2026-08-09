@@ -1,0 +1,8 @@
+fn Entry() -> i32 {
+    let value = 42;
+    match (value) {
+        Some(item): item;
+        assumed: 0;
+    };
+    return 0;
+}

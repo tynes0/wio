@@ -816,9 +816,26 @@ namespace wio
         while (peek().isValid() && !match(TokenType::rightBrace))
         {
             std::vector<NodePtr<Expression>> matchValues;
+            std::string variantName;
+            std::vector<NodePtr<Identifier>> bindings;
 
             if (match(TokenType::kwAssumed, true))
             {
+            }
+            else if (peek().type == TokenType::identifier &&
+                     peek(1).type == TokenType::leftParen &&
+                     (peek().value == "Some" || peek().value == "None" ||
+                      peek().value == "Ok" || peek().value == "Err"))
+            {
+                variantName = advance().value;
+                consume(TokenType::leftParen);
+                if (!match(TokenType::rightParen))
+                {
+                    bindings.push_back(makeNodePtr<Identifier>(consumeIdentifier()));
+                    while (match(TokenType::comma, true))
+                        bindings.push_back(makeNodePtr<Identifier>(consumeIdentifier()));
+                }
+                consume(TokenType::rightParen);
             }
             else
             {
@@ -829,11 +846,21 @@ namespace wio
                 while (match(TokenType::comma, true) || match(TokenType::kwOr, true));
             }
 
+            NodePtr<Expression> guard = nullptr;
+            if (match(TokenType::kwIf, true))
+                guard = parseExpression();
+
             consume(TokenType::opColon);
             
             NodePtr<Statement> body = parseStatement(); 
             
-            cases.emplace_back(std::move(matchValues), std::move(body));
+            cases.push_back(MatchCase{
+                .matchValues = std::move(matchValues),
+                .body = std::move(body),
+                .variantName = std::move(variantName),
+                .bindings = std::move(bindings),
+                .guard = std::move(guard)
+            });
         }
         consume(TokenType::rightBrace);
 

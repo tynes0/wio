@@ -1,0 +1,33 @@
+use std::assert as assert;
+use std::console as console;
+use std::option as option;
+use std::result as result;
+
+fn DescribeOption(value: std::Option<i32>) -> string {
+    return match (value) {
+        Some(number) if number > 10: "large";
+        Some(number): $"value=${number}";
+        None(): "none";
+    };
+}
+
+fn DescribeResult(value: std::Result<i32>) -> string {
+    return match (value) {
+        Ok(number): $"ok=${number}";
+        Err(error): $"error=${error.code}";
+    };
+}
+
+fn Entry() -> i32 {
+    assert::ExpectEqual(DescribeOption(option::Some(14)), "large", "guarded Some pattern");
+    assert::ExpectEqual(DescribeOption(option::Some(4)), "value=4", "Some binding");
+    assert::ExpectEqual(DescribeOption(option::None<i32>()), "none", "None pattern");
+    assert::ExpectEqual(DescribeResult(std::Ok(7)), "ok=7", "Ok binding");
+    assert::ExpectEqual(
+        DescribeResult(std::Err<i32>(std::MakeResultError(std::ResultDomain::custom, 9, "bad"))),
+        "error=9",
+        "Err binding"
+    );
+    console::PrintLine!("match-option-result-patterns-ok");
+    return 0;
+}
