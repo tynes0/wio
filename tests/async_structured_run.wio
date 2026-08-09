@@ -1,0 +1,65 @@
+use std::assert as assert;
+use std::async as futures;
+use std::console as console;
+
+async fn Delayed(value: i32, milliseconds: u64) -> i32 {
+    await futures::Sleep(milliseconds);
+    return value;
+}
+
+async fn NoValue(milliseconds: u64) {
+    await futures::Sleep(milliseconds);
+}
+
+async fn Entry() -> i32 {
+    assert::Expect(futures::WorkerCount() >= 2u64, "scheduler has a worker pool");
+
+    let group = futures::TaskGroup<i32>();
+    assert::Expect(group.Spawn(Delayed(4, 8u64)), "group accepts first task");
+    assert::Expect(group.Spawn(Delayed(7, 2u64)), "group accepts second task");
+    assert::ExpectEqual(group.Count(), 2usize, "group count");
+    let grouped = await group.JoinAll();
+    assert::ExpectEqual(grouped[0usize], 4, "group keeps spawn order");
+    assert::ExpectEqual(grouped[1usize], 7, "group second result");
+    assert::Expect(not group.Spawn(Delayed(9, 1u64)), "joined group is closed");
+
+    let anyTasks: coroutine<i32>[] = [Delayed(10, 20u64), Delayed(20, 1u64), Delayed(30, 10u64)];
+    assert::ExpectEqual(await futures::Any<i32>(anyTasks), 1usize, "any returns first completion index");
+
+    let raceTasks: coroutine<i32>[] = [Delayed(11, 20u64), Delayed(22, 1u64)];
+    assert::ExpectEqual(await futures::Race<i32>(raceTasks), 22, "race returns first completion value");
+    assert::ExpectEqual(await futures::Timeout<i32>(Delayed(33, 1u64), 50u64), 33, "timeout success path");
+
+    let observed = Delayed(34, 2u64);
+    assert::Expect(futures::WaitFor<i32>(observed, 50u64), "timed synchronous wait observes completion");
+    assert::Expect(futures::IsReady<i32>(observed), "completed task reports ready");
+    assert::Expect(not (futures::IsCancelled<i32>(observed)), "completed task is not cancelled");
+    assert::Expect(not (futures::IsFaulted<i32>(observed)), "completed task is not faulted");
+
+    let cancelled = Delayed(35, 30u64);
+    futures::Detach<void>(futures::CancelAfter<i32>(cancelled, 1u64));
+    await futures::Sleep(5u64);
+    assert::Expect(futures::IsCancelled<i32>(cancelled), "cancel-after marks an unfinished task");
+
+    let faulted = futures::Timeout<i32>(Delayed(36, 30u64), 1u64);
+    await futures::Sleep(5u64);
+    assert::Expect(futures::IsReady<i32>(faulted), "failed task reports ready");
+    assert::Expect(futures::IsFaulted<i32>(faulted), "timeout task reports faulted");
+
+    let voidGroup = futures::VoidTaskGroup();
+    assert::Expect(voidGroup.Spawn(NoValue(2u64)), "void group accepts task");
+    assert::ExpectEqual(voidGroup.Count(), 1usize, "void group count");
+    await voidGroup.JoinAll();
+
+    let action: fn() -> i32 = () => 42;
+    assert::ExpectEqual(await futures::Run<i32>(action), 42, "run schedules blocking work");
+
+    let source = futures::CancellationSource();
+    let token = source.Token();
+    assert::Expect(not token.IsCancelled(), "fresh token is active");
+    source.Cancel();
+    assert::Expect(token.IsCancelled(), "token shares cancellation state");
+
+    console::PrintLine("async-structured-ok");
+    return 0;
+}

@@ -987,6 +987,8 @@ namespace wio::codegen
                 return containsGenericParameterTypeForCodegen(resolvedType.AsFast<sema::ReferenceType>()->referredType);
             case sema::TypeKind::Nullable:
                 return containsGenericParameterTypeForCodegen(resolvedType.AsFast<sema::NullableType>()->valueType);
+            case sema::TypeKind::AsyncTask:
+                return containsGenericParameterTypeForCodegen(resolvedType.AsFast<sema::AsyncTaskType>()->valueType);
             case sema::TypeKind::Array:
             {
                 auto arrayType = resolvedType.AsFast<sema::ArrayType>();

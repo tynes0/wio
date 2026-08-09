@@ -1,0 +1,12 @@
+use std::async as futures;
+
+async fn SlowValue() -> i32 {
+    await futures::Sleep(20u64);
+    return 1;
+}
+
+async fn Entry() -> i32 {
+    let task = SlowValue();
+    futures::Cancel<i32>(task);
+    return await task;
+}

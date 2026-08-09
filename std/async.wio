@@ -1,3 +1,5 @@
+use std::concurrency as concurrency;
+
 realm std {
     realm async {
         using cpp::header("std_async.h");
@@ -20,13 +22,128 @@ realm std {
         fn IsReady<T>(task: coroutine<T>) -> bool
             with native, cpp::name(wio::runtime::AsyncReady);
 
+        fn IsCancelled<T>(task: coroutine<T>) -> bool
+            with native, cpp::name(wio::runtime::AsyncCancelledStatus);
+
+        fn IsFaulted<T>(task: coroutine<T>) -> bool
+            with native, cpp::name(wio::runtime::AsyncFaulted);
+
+        fn WaitFor<T>(task: coroutine<T>, milliseconds: u64) -> bool
+            with native, cpp::name(wio::runtime::AsyncWaitFor);
+
         fn Cancel<T>(task: coroutine<T>)
             with native, cpp::name(wio::runtime::CancelAsync);
+
+        fn CancelAfter<T>(task: coroutine<T>, milliseconds: u64) -> coroutine<void>
+            with native, cpp::name(wio::runtime::CancelAfter);
+
+        fn Detach<T>(task: coroutine<T>)
+            with native, cpp::name(wio::runtime::DetachAsync);
+
+        fn Run<T>(action: fn() -> T) -> coroutine<T>
+            with native, cpp::name(wio::runtime::RunAsync);
+
+        fn Run(action: fn()) -> coroutine<void>
+            with native, cpp::name(wio::runtime::RunAsync);
 
         fn All<T>(tasks: coroutine<T>[]) -> coroutine<T[]>
             with native, cpp::name(wio::runtime::WhenAll);
 
         fn All(tasks: coroutine<void>[]) -> coroutine<void>
             with native, cpp::name(wio::runtime::WhenAll);
+
+        fn Any<T>(tasks: coroutine<T>[]) -> coroutine<usize>
+            with native, cpp::name(wio::runtime::WhenAny);
+
+        fn Race<T>(tasks: coroutine<T>[]) -> coroutine<T>
+            with native, cpp::name(wio::runtime::Race);
+
+        fn Timeout<T>(task: coroutine<T>, milliseconds: u64) -> coroutine<T>
+            with native, cpp::name(wio::runtime::WithTimeout);
+
+        fn Timeout(task: coroutine<void>, milliseconds: u64) -> coroutine<void>
+            with native, cpp::name(wio::runtime::WithTimeout);
+
+        fn WorkerCount() -> u64
+            with native, cpp::name(wio::runtime::AsyncWorkerCount);
+
+        type CancellationToken = concurrency::CancellationToken;
+
+        object CancellationSource {
+            private token: CancellationToken;
+
+            public fn OnConstruct() {
+                self.token = CancellationToken();
+            }
+
+            public fn Token() -> CancellationToken { return self.token; }
+            public fn Cancel() { self.token.Cancel(); }
+            public fn IsCancelled() -> bool { return self.token.IsCancelled(); }
+        }
+
+        object TaskGroup<T> {
+            private tasks: coroutine<T>[];
+            private joined: bool;
+
+            public fn OnConstruct() {
+                self.tasks = [];
+                self.joined = false;
+            }
+
+            public fn Spawn(task: coroutine<T>) -> bool {
+                if (self.joined) { return false; }
+                self.tasks.Push(Start<T>(task));
+                return true;
+            }
+
+            public fn Count() -> usize { return self.tasks.Count(); }
+
+            public async fn JoinAll() -> T[] {
+                self.joined = true;
+                let values = await All<T>(self.tasks);
+                self.tasks.Clear();
+                return values;
+            }
+
+            public fn CancelAll() {
+                for (task in self.tasks) { Cancel<T>(task); }
+                self.tasks.Clear();
+                self.joined = true;
+            }
+
+            public fn OnDestruct() { self.CancelAll(); }
+        }
+
+        object VoidTaskGroup {
+            private tasks: coroutine<void>[];
+            private joined: bool;
+
+            public fn OnConstruct() {
+                self.tasks = [];
+                self.joined = false;
+            }
+
+            public fn Spawn(task: coroutine<void>) -> bool {
+                if (self.joined) { return false; }
+                self.tasks.Push(Start<void>(task));
+                return true;
+            }
+
+            public fn Count() -> usize { return self.tasks.Count(); }
+
+            public async fn JoinAll() {
+                self.joined = true;
+                await All(self.tasks);
+                self.tasks.Clear();
+            }
+
+            public fn CancelAll() {
+                for (task in self.tasks) { Cancel<void>(task); }
+                self.tasks.Clear();
+                self.joined = true;
+            }
+
+            public fn OnDestruct() { self.CancelAll(); }
+        }
     }
 }

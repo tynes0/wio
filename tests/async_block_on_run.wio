@@ -1,0 +1,16 @@
+use std::assert as assert;
+use std::async as futures;
+use std::console as console;
+
+async fn Compute() -> i32 {
+    await futures::Sleep(10u64);
+    return 64;
+}
+
+fn Entry() -> i32 {
+    let task = Compute();
+    assert::Expect(not (futures::WaitFor<i32>(task, 1u64)), "timed wait can expire without consuming task");
+    assert::ExpectEqual(futures::BlockOn<i32>(task), 64, "sync entry can block on coroutine");
+    console::PrintLine("async-block-on-ok");
+    return 0;
+}

@@ -4886,8 +4886,17 @@ namespace wio::sema
                    cppNameArg->value == "wio::runtime::BlockOn" ||
                    cppNameArg->value == "wio::runtime::StartAsync" ||
                    cppNameArg->value == "wio::runtime::AsyncReady" ||
+                   cppNameArg->value == "wio::runtime::AsyncCancelledStatus" ||
+                   cppNameArg->value == "wio::runtime::AsyncFaulted" ||
+                   cppNameArg->value == "wio::runtime::AsyncWaitFor" ||
                    cppNameArg->value == "wio::runtime::CancelAsync" ||
-                   cppNameArg->value == "wio::runtime::WhenAll";
+                   cppNameArg->value == "wio::runtime::CancelAfter" ||
+                   cppNameArg->value == "wio::runtime::DetachAsync" ||
+                   cppNameArg->value == "wio::runtime::RunAsync" ||
+                   cppNameArg->value == "wio::runtime::WhenAll" ||
+                   cppNameArg->value == "wio::runtime::WhenAny" ||
+                   cppNameArg->value == "wio::runtime::Race" ||
+                   cppNameArg->value == "wio::runtime::WithTimeout";
         }
 
         bool matchesOpenNativeTemplateIntrinsicConstraints(const std::vector<NodePtr<AttributeStatement>>& attributes,

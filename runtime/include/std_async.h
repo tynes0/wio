@@ -25,6 +25,12 @@ namespace wio::runtime
         AsyncCancelled() : std::runtime_error("asynchronous operation was cancelled") {}
     };
 
+    class AsyncTimeout final : public std::runtime_error
+    {
+    public:
+        AsyncTimeout() : std::runtime_error("asynchronous operation timed out") {}
+    };
+
     class AsyncScheduler final
     {
     public:
@@ -70,6 +76,11 @@ namespace wio::runtime
             PostAt(Clock::now() + delay, std::move(action));
         }
 
+        std::size_t WorkerCount() const noexcept
+        {
+            return workers_.size();
+        }
+
     private:
         struct Work final
         {
@@ -92,8 +103,6 @@ namespace wio::runtime
         {
             {
                 std::lock_guard lock(mutex_);
-                if (stopping_)
-                    throw std::runtime_error("async scheduler is stopping");
                 work_.push(Work{readyAt, nextSequence_++, std::move(action)});
             }
             changed_.notify_one();
@@ -155,6 +164,11 @@ namespace wio::runtime
     {
         static AsyncScheduler scheduler;
         return scheduler;
+    }
+
+    inline std::uint64_t AsyncWorkerCount() noexcept
+    {
+        return static_cast<std::uint64_t>(DefaultAsyncScheduler().WorkerCount());
     }
 
     namespace detail
@@ -224,6 +238,17 @@ namespace wio::runtime
                 return completed;
             }
 
+            bool Cancelled() const noexcept
+            {
+                return cancelled.load(std::memory_order_acquire);
+            }
+
+            bool Faulted() const
+            {
+                std::lock_guard lock(mutex);
+                return completed && failure != nullptr;
+            }
+
             bool AddContinuation(std::coroutine_handle<> continuation)
             {
                 std::lock_guard lock(mutex);
@@ -238,6 +263,13 @@ namespace wio::runtime
                 Start();
                 std::unique_lock lock(mutex);
                 changed.wait(lock, [this] { return completed; });
+            }
+
+            bool WaitFor(const std::chrono::milliseconds timeout)
+            {
+                Start();
+                std::unique_lock lock(mutex);
+                return changed.wait_for(lock, timeout, [this] { return completed; });
             }
 
             void RethrowFailure() const
@@ -340,6 +372,21 @@ namespace wio::runtime
             return state_ && state_->Ready();
         }
 
+        bool IsCancelled() const
+        {
+            return state_ && state_->Cancelled();
+        }
+
+        bool IsFaulted() const
+        {
+            return state_ && state_->Faulted();
+        }
+
+        bool WaitFor(const std::uint64_t milliseconds) const
+        {
+            return RequireState()->WaitFor(std::chrono::milliseconds(milliseconds));
+        }
+
         T Get() const
         {
             auto state = RequireState();
@@ -429,6 +476,12 @@ namespace wio::runtime
         void Start() const { RequireState()->Start(); }
         void Cancel() const { RequireState()->Cancel(); }
         bool IsReady() const { return state_ && state_->Ready(); }
+        bool IsCancelled() const { return state_ && state_->Cancelled(); }
+        bool IsFaulted() const { return state_ && state_->Faulted(); }
+        bool WaitFor(const std::uint64_t milliseconds) const
+        {
+            return RequireState()->WaitFor(std::chrono::milliseconds(milliseconds));
+        }
 
         void Get() const
         {
@@ -535,9 +588,46 @@ namespace wio::runtime
     }
 
     template<typename T>
+    bool AsyncCancelledStatus(const AsyncTask<T>& task)
+    {
+        return task.IsCancelled();
+    }
+
+    template<typename T>
+    bool AsyncFaulted(const AsyncTask<T>& task)
+    {
+        return task.IsFaulted();
+    }
+
+    template<typename T>
+    bool AsyncWaitFor(const AsyncTask<T>& task, const std::uint64_t milliseconds)
+    {
+        return task.WaitFor(milliseconds);
+    }
+
+    template<typename T>
     void CancelAsync(const AsyncTask<T>& task)
     {
         task.Cancel();
+    }
+
+    template<typename T>
+    void DetachAsync(const AsyncTask<T>& task)
+    {
+        task.Start();
+    }
+
+    template<typename T>
+    AsyncTask<T> RunAsync(std::function<T()> action)
+    {
+        co_await AsyncScheduleAwaiter{};
+        co_return action();
+    }
+
+    inline AsyncTask<void> RunAsync(std::function<void()> action)
+    {
+        co_await AsyncScheduleAwaiter{};
+        action();
     }
 
     template<typename T>
@@ -548,8 +638,17 @@ namespace wio::runtime
 
         std::vector<T> values;
         values.reserve(tasks.size());
-        for (const auto& task : tasks)
-            values.push_back(co_await task);
+        try
+        {
+            for (const auto& task : tasks)
+                values.push_back(co_await task);
+        }
+        catch (...)
+        {
+            for (const auto& task : tasks)
+                task.Cancel();
+            throw;
+        }
         co_return values;
     }
 
@@ -557,7 +656,98 @@ namespace wio::runtime
     {
         for (const auto& task : tasks)
             task.Start();
+        try
+        {
+            for (const auto& task : tasks)
+                co_await task;
+        }
+        catch (...)
+        {
+            for (const auto& task : tasks)
+                task.Cancel();
+            throw;
+        }
+    }
+
+    template<typename T>
+    AsyncTask<std::size_t> WhenAny(std::vector<AsyncTask<T>> tasks)
+    {
+        if (tasks.empty())
+            throw std::invalid_argument("WhenAny requires at least one coroutine");
         for (const auto& task : tasks)
-            co_await task;
+            task.Start();
+
+        for (;;)
+        {
+            for (std::size_t index = 0; index < tasks.size(); ++index)
+            {
+                if (tasks[index].IsReady())
+                    co_return index;
+            }
+            co_await AsyncDelayAwaiter{std::chrono::milliseconds(1)};
+        }
+    }
+
+    template<typename T>
+    AsyncTask<T> Race(std::vector<AsyncTask<T>> tasks)
+    {
+        const std::size_t index = co_await WhenAny(tasks);
+        try
+        {
+            T value = co_await tasks[index];
+            for (std::size_t loser = 0; loser < tasks.size(); ++loser)
+            {
+                if (loser != index)
+                    tasks[loser].Cancel();
+            }
+            co_return value;
+        }
+        catch (...)
+        {
+            for (const auto& task : tasks)
+                task.Cancel();
+            throw;
+        }
+    }
+
+    template<typename T>
+    AsyncTask<void> CancelAfter(AsyncTask<T> task, const std::uint64_t milliseconds)
+    {
+        co_await AsyncDelayAwaiter{std::chrono::milliseconds(milliseconds)};
+        if (!task.IsReady())
+            task.Cancel();
+    }
+
+    template<typename T>
+    AsyncTask<T> WithTimeout(AsyncTask<T> task, const std::uint64_t milliseconds)
+    {
+        task.Start();
+        const auto deadline = AsyncScheduler::Clock::now() + std::chrono::milliseconds(milliseconds);
+        while (!task.IsReady())
+        {
+            if (AsyncScheduler::Clock::now() >= deadline)
+            {
+                task.Cancel();
+                throw AsyncTimeout();
+            }
+            co_await AsyncDelayAwaiter{std::chrono::milliseconds(1)};
+        }
+        co_return co_await task;
+    }
+
+    inline AsyncTask<void> WithTimeout(AsyncTask<void> task, const std::uint64_t milliseconds)
+    {
+        task.Start();
+        const auto deadline = AsyncScheduler::Clock::now() + std::chrono::milliseconds(milliseconds);
+        while (!task.IsReady())
+        {
+            if (AsyncScheduler::Clock::now() >= deadline)
+            {
+                task.Cancel();
+                throw AsyncTimeout();
+            }
+            co_await AsyncDelayAwaiter{std::chrono::milliseconds(1)};
+        }
+        co_await task;
     }
 }

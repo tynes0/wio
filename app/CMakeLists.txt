@@ -4695,6 +4695,44 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
     set_tests_properties(wio_test_async_coroutine_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
 
+    add_wio_output_test(
+        wio_test_async_structured_run
+        "${CMAKE_SOURCE_DIR}/tests/async_structured_run.wio"
+        "async-structured-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_async_block_on_run
+        "${CMAKE_SOURCE_DIR}/tests/async_block_on_run.wio"
+        "async-block-on-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_async_structured_run
+        wio_test_async_block_on_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_non_dry_failure_test_clean(
+        wio_runtime_async_timeout
+        "${CMAKE_SOURCE_DIR}/tests/async_timeout_runtime_failure.wio"
+        "Runtime Error: Unhandled native exception: asynchronous operation timed out"
+        "terminate called|segmentation fault|Assertion"
+        --run
+    )
+    add_wio_non_dry_failure_test_clean(
+        wio_runtime_async_cancel
+        "${CMAKE_SOURCE_DIR}/tests/async_cancel_runtime_failure.wio"
+        "Runtime Error: Unhandled native exception: asynchronous operation was cancelled"
+        "terminate called|segmentation fault|Assertion"
+        --run
+    )
+    set_tests_properties(
+        wio_runtime_async_timeout
+        wio_runtime_async_cancel
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
     add_wio_failure_test(wio_invalid_async_await_outside_async
         "${CMAKE_SOURCE_DIR}/tests/invalid/async_await_outside_async.wio"
         "'await' can only be used inside an async function or method")
