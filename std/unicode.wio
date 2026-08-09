@@ -1,0 +1,73 @@
+use std::result as result;
+
+realm std {
+    realm unicode {
+        using cpp::header("std_unicode.h");
+
+        component DecodeError {
+            byteOffset: usize;
+        }
+
+        fn TryDecodeNative(value: string, output: ref u32[], errorOffset: ref usize) -> bool
+            with native, cpp::name(wio::runtime::std_unicode::TryDecode);
+        fn TryEncodeNative(value: u32[], output: ref string, errorIndex: ref usize) -> bool
+            with native, cpp::name(wio::runtime::std_unicode::TryEncode);
+        fn IsValidUtf8(value: string) -> bool
+            with native, cpp::name(wio::runtime::std_unicode::IsValidUtf8);
+        fn CodePointCount(value: string) -> usize
+            with native, cpp::name(wio::runtime::std_unicode::CodePointCount);
+        fn Slice(value: string, start: usize, count: usize) -> string
+            with native, cpp::name(wio::runtime::std_unicode::SliceCodePoints);
+        fn TryAppendCodePoint(value: ref string, codePoint: u32) -> bool
+            with native, cpp::name(wio::runtime::std_unicode::TryAppendCodePoint);
+        fn AppendByteCharacter(value: ref string, character: char)
+            with native, cpp::name(wio::runtime::std_unicode::AppendByteCharacter);
+        fn IsWhitespace(codePoint: u32) -> bool
+            with native, cpp::name(wio::runtime::std_unicode::IsWhitespace);
+        fn IsAscii(codePoint: u32) -> bool
+            with native, cpp::name(wio::runtime::std_unicode::IsAscii);
+        fn IsDigit(codePoint: u32) -> bool
+            with native, cpp::name(wio::runtime::std_unicode::IsDigit);
+        fn IsLetter(codePoint: u32) -> bool
+            with native, cpp::name(wio::runtime::std_unicode::IsLetter);
+        fn ToLower(codePoint: u32) -> u32
+            with native, cpp::name(wio::runtime::std_unicode::ToLower);
+        fn ToUpper(codePoint: u32) -> u32
+            with native, cpp::name(wio::runtime::std_unicode::ToUpper);
+
+        fn Decode(value: string) -> std::Result<u32[]> {
+            mut output: u32[] = [];
+            mut errorOffset: usize = 0usize;
+            if (TryDecodeNative(value, ref output, ref errorOffset)) {
+                return std::Ok(output);
+            }
+            return std::Err<u32[]>(std::MakeResultError(
+                std::ResultDomain::runtime,
+                1,
+                $"Invalid UTF-8 at byte ${errorOffset}."
+            ));
+        }
+
+        fn Encode(value: u32[]) -> std::Result<string> {
+            mut output = "";
+            mut errorIndex: usize = 0usize;
+            if (TryEncodeNative(value, ref output, ref errorIndex)) {
+                return std::Ok(output);
+            }
+            return std::Err<string>(std::MakeResultError(
+                std::ResultDomain::runtime,
+                2,
+                $"Invalid Unicode scalar at index ${errorIndex}."
+            ));
+        }
+
+        fn AppendCodePoint(value: ref string, codePoint: u32) -> std::UnitResult {
+            if (TryAppendCodePoint(value, codePoint)) {
+                return std::OkUnit();
+            }
+            return std::ErrUnit(std::MakeResultError(
+                std::ResultDomain::runtime, 2, "Invalid Unicode scalar value."
+            ));
+        }
+    }
+}

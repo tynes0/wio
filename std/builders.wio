@@ -1,0 +1,78 @@
+use std::option as option;
+use std::result as result;
+use std::unicode as unicode;
+
+realm std {
+    realm builders {
+        object StringBuilder {
+            private value: string;
+
+            public fn OnConstruct() { self.value = ""; }
+            public fn OnConstruct(initial: string) { self.value = initial; }
+
+            public fn Length() -> usize { return self.value.Count(); }
+            public fn Empty() -> bool { return self.value.Empty(); }
+            public fn Clear() { self.value = ""; }
+            public fn Append(value: string) { self.value += value; }
+            public fn AppendChar(value: char) { unicode::AppendByteCharacter(ref self.value, value); }
+            public fn AppendLine(value: string) { self.value += value + "\n"; }
+            public fn AppendCodePoint(value: u32) -> std::UnitResult {
+                return unicode::AppendCodePoint(ref self.value, value);
+            }
+            public fn ToString() -> string { return self.value; }
+        }
+
+        object ByteWriter {
+            private bytes: u8[];
+
+            public fn OnConstruct() { self.bytes = []; }
+            public fn OnConstruct(capacity: usize) {
+                self.bytes = [];
+                self.bytes.Reserve(capacity);
+            }
+            public fn Length() -> usize { return self.bytes.Count(); }
+            public fn Clear() { self.bytes.Clear(); }
+            public fn WriteU8(value: u8) { self.bytes.Push(value); }
+            public fn WriteU16LE(value: u16) {
+                self.bytes.Push((value & 0xffu16) fit u8);
+                self.bytes.Push(((value >> 8u16) & 0xffu16) fit u8);
+            }
+            public fn WriteU32LE(value: u32) {
+                self.bytes.Push((value & 0xffu32) fit u8);
+                self.bytes.Push(((value >> 8u32) & 0xffu32) fit u8);
+                self.bytes.Push(((value >> 16u32) & 0xffu32) fit u8);
+                self.bytes.Push(((value >> 24u32) & 0xffu32) fit u8);
+            }
+            public fn WriteBytes(value: u8[]) {
+                for (item in value) { self.bytes.Push(item); }
+            }
+            public fn ToArray() -> u8[] { return self.bytes; }
+        }
+
+        object ByteReader {
+            private bytes: u8[];
+            private position: usize;
+
+            public fn OnConstruct(value: u8[]) {
+                self.bytes = value;
+                self.position = 0usize;
+            }
+            public fn Position() -> usize { return self.position; }
+            public fn Remaining() -> usize { return self.bytes.Count() - self.position; }
+            public fn ReadU8() -> std::Option<u8> {
+                if (self.position >= self.bytes.Count()) { return std::None<u8>(); }
+                let value = self.bytes[self.position];
+                self.position += 1usize;
+                return std::Some(value);
+            }
+            public fn ReadU16LE() -> std::Option<u16> {
+                if (self.Remaining() < 2usize) { return std::None<u16>(); }
+                let first = self.bytes[self.position] fit u16;
+                let second = self.bytes[self.position + 1usize] fit u16;
+                self.position += 2usize;
+                return std::Some<u16>((first | (second << 8u16)) fit u16);
+            }
+            public fn Reset() { self.position = 0usize; }
+        }
+    }
+}

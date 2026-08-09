@@ -23,6 +23,7 @@ set(WIO_RUNTIME_HEADERS
     "${WIO_RUNTIME_INCLUDE_DIR}/std_time.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_utility.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_type_traits.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/std_unicode.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/type_reflection.h"
 )
 

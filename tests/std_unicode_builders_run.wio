@@ -1,0 +1,27 @@
+use std::assert as assert;
+use std::builders as builders;
+use std::console as console;
+use std::unicode as unicode;
+
+fn Entry() -> i32 {
+    let text = "Ağ🙂";
+    assert::Expect(unicode::IsValidUtf8(text), "valid UTF-8");
+    assert::ExpectEqual(unicode::CodePointCount(text), 3usize, "code point count");
+    assert::ExpectEqual(unicode::Slice(text, 1usize, 2usize), "ğ🙂", "safe code point slice");
+    let decoded = unicode::Decode!(text);
+    assert::ExpectEqual(decoded.Count(), 3usize, "decode count");
+    assert::ExpectEqual(unicode::Encode!(decoded), text, "UTF-8 roundtrip");
+
+    let builder = builders::StringBuilder("Wio ");
+    builder.AppendCodePoint!(0x1f680u32);
+    assert::ExpectEqual(builder.ToString(), "Wio 🚀", "code point builder");
+
+    let writer = builders::ByteWriter();
+    writer.WriteU16LE(0x1234u16);
+    writer.WriteU8(0x56u8);
+    let reader = builders::ByteReader(writer.ToArray());
+    assert::ExpectEqual(reader.ReadU16LE().Value(), 0x1234u16, "little-endian u16");
+    assert::ExpectEqual(reader.ReadU8().Value(), 0x56u8, "byte reader");
+    console::PrintLine!("std-unicode-builders-ok");
+    return 0;
+}
