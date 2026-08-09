@@ -2999,6 +2999,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "std-structured-log-ok"
         --run
     )
+
+    add_wio_output_test(
+        wio_test_std_unicode_grapheme_run
+        "${CMAKE_SOURCE_DIR}/tests/std_unicode_grapheme_run.wio"
+        "std-unicode-grapheme-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_std_unicode_grapheme_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
     set_tests_properties(
         wio_test_std_structured_log_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"

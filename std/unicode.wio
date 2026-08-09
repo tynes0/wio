@@ -38,6 +38,16 @@ realm std {
             with native, cpp::name(wio::runtime::std_unicode::ToLower);
         fn ToUpper(codePoint: u32) -> u32
             with native, cpp::name(wio::runtime::std_unicode::ToUpper);
+        fn IsCombiningMark(codePoint: u32) -> bool
+            with native, cpp::name(wio::runtime::std_unicode::IsCombiningMark);
+        fn GraphemeCount(value: string) -> usize
+            with native, cpp::name(wio::runtime::std_unicode::GraphemeCount);
+        fn SliceGraphemes(value: string, start: usize, count: usize) -> string
+            with native, cpp::name(wio::runtime::std_unicode::SliceGraphemes);
+        fn DisplayWidth(value: string) -> usize
+            with native, cpp::name(wio::runtime::std_unicode::DisplayWidth);
+        fn CaseFold(value: string) -> string
+            with native, cpp::name(wio::runtime::std_unicode::CaseFold);
 
         fn Decode(value: string) -> std::Result<u32[]> {
             mut output: u32[] = [];

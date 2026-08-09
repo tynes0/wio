@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -192,5 +193,107 @@ namespace wio::runtime::std_unicode
         if (cp >= 'a' && cp <= 'z') return cp - 0x20u;
         if ((cp >= 0xe0u && cp <= 0xf6u) || (cp >= 0xf8u && cp <= 0xfeu)) return cp - 0x20u;
         return cp;
+    }
+
+    inline bool IsCombiningMark(const std::uint32_t cp) noexcept
+    {
+        return (cp >= 0x0300u && cp <= 0x036fu) || (cp >= 0x1ab0u && cp <= 0x1affu) ||
+               (cp >= 0x1dc0u && cp <= 0x1dffu) || (cp >= 0x20d0u && cp <= 0x20ffu) ||
+               (cp >= 0xfe20u && cp <= 0xfe2fu);
+    }
+
+    inline bool IsVariationSelector(const std::uint32_t cp) noexcept
+    {
+        return (cp >= 0xfe00u && cp <= 0xfe0fu) || (cp >= 0xe0100u && cp <= 0xe01efu);
+    }
+
+    inline bool IsEmojiModifier(const std::uint32_t cp) noexcept
+    {
+        return cp >= 0x1f3fbu && cp <= 0x1f3ffu;
+    }
+
+    inline bool IsRegionalIndicator(const std::uint32_t cp) noexcept
+    {
+        return cp >= 0x1f1e6u && cp <= 0x1f1ffu;
+    }
+
+    inline std::vector<std::size_t> GraphemeBoundaries(const std::string_view input) noexcept
+    {
+        std::vector<std::size_t> boundaries{0};
+        std::size_t offset = 0;
+        std::uint32_t previous = 0;
+        std::size_t regionalRun = 0;
+        bool first = true;
+        while (offset < input.size())
+        {
+            const std::size_t start = offset;
+            std::uint32_t current = 0;
+            if (!detail::decodeOne(input, offset, current)) return {};
+            bool breaks = !first;
+            if (IsCombiningMark(current) || IsVariationSelector(current) || IsEmojiModifier(current) ||
+                current == 0x200du || previous == 0x200du)
+                breaks = false;
+            if (IsRegionalIndicator(current))
+            {
+                if (IsRegionalIndicator(previous) && (regionalRun % 2u) == 1u) breaks = false;
+                ++regionalRun;
+            }
+            else regionalRun = 0;
+            if (breaks) boundaries.push_back(start);
+            previous = current;
+            first = false;
+        }
+        boundaries.push_back(input.size());
+        return boundaries;
+    }
+
+    inline std::size_t GraphemeCount(const std::string_view input) noexcept
+    {
+        const auto boundaries = GraphemeBoundaries(input);
+        return boundaries.empty() ? 0 : boundaries.size() - 1;
+    }
+
+    inline std::string SliceGraphemes(const std::string_view input,
+                                      const std::size_t start, const std::size_t count) noexcept
+    {
+        const auto boundaries = GraphemeBoundaries(input);
+        if (boundaries.empty() || start >= boundaries.size() - 1) return {};
+        const std::size_t end = std::min(start + count, boundaries.size() - 1);
+        return std::string(input.substr(boundaries[start], boundaries[end] - boundaries[start]));
+    }
+
+    inline std::size_t DisplayWidth(const std::string_view input) noexcept
+    {
+        std::size_t offset = 0;
+        std::size_t width = 0;
+        while (offset < input.size())
+        {
+            std::uint32_t cp = 0;
+            if (!detail::decodeOne(input, offset, cp)) return 0;
+            if (IsCombiningMark(cp) || IsVariationSelector(cp) || cp == 0x200du || cp < 0x20u ||
+                (cp >= 0x7fu && cp < 0xa0u)) continue;
+            const bool wide = (cp >= 0x1100u && cp <= 0x115fu) || cp == 0x2329u || cp == 0x232au ||
+                (cp >= 0x2e80u && cp <= 0xa4cfu) || (cp >= 0xac00u && cp <= 0xd7a3u) ||
+                (cp >= 0xf900u && cp <= 0xfaffu) || (cp >= 0xfe10u && cp <= 0xfe6fu) ||
+                (cp >= 0xff00u && cp <= 0xff60u) || (cp >= 0x1f300u && cp <= 0x1faffu) ||
+                (cp >= 0x20000u && cp <= 0x3ffffu);
+            width += wide ? 2u : 1u;
+        }
+        return width;
+    }
+
+    inline std::string CaseFold(const std::string_view input) noexcept
+    {
+        std::string output;
+        std::size_t offset = 0;
+        while (offset < input.size())
+        {
+            std::uint32_t cp = 0;
+            if (!detail::decodeOne(input, offset, cp)) return {};
+            if (cp == 0x00dfu || cp == 0x1e9eu) { output += "ss"; continue; }
+            if (cp == 0x03c2u) cp = 0x03c3u;
+            if (!detail::appendOne(output, ToLower(cp))) return {};
+        }
+        return output;
     }
 }

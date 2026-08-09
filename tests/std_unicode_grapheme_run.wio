@@ -1,0 +1,14 @@
+use std::assert as assert;
+use std::console as console;
+use std::unicode as unicode;
+
+fn Entry() -> i32 {
+    assert::ExpectEqual(unicode::GraphemeCount("é"), 1usize, "combining grapheme");
+    assert::ExpectEqual(unicode::GraphemeCount("👩‍💻"), 1usize, "ZWJ grapheme");
+    assert::ExpectEqual(unicode::GraphemeCount("🇹🇷"), 1usize, "regional indicator pair");
+    assert::ExpectEqual(unicode::SliceGraphemes("a👩‍💻b", 1usize, 1usize), "👩‍💻", "grapheme slice");
+    assert::ExpectEqual(unicode::DisplayWidth("你"), 2usize, "wide character");
+    assert::ExpectEqual(unicode::CaseFold("Straße"), "strasse", "case fold expansion");
+    console::PrintLine("std-unicode-grapheme-ok");
+    return 0;
+}
