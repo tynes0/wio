@@ -7,5 +7,12 @@ realm std {
 
         @Native @CppName(wio::runtime::std_uuid::IsValid)
         fn IsValid(value: string) -> bool;
+
+        fn Version(value: string) -> i32
+            with native, cpp::name(wio::runtime::std_uuid::Version);
+        fn Variant(value: string) -> string
+            with native, cpp::name(wio::runtime::std_uuid::Variant);
+        fn Normalize(value: string) -> string
+            with native, cpp::name(wio::runtime::std_uuid::Normalize);
     }
 }

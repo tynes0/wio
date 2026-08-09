@@ -58,6 +58,22 @@ namespace wio::runtime::std_random
         return splitMix64(seed);
     }
 
+    std::vector<std::uint8_t> SecureBytes(const std::size_t count)
+    {
+        std::random_device device;
+        std::vector<std::uint8_t> output(count);
+        std::uint32_t word = 0;
+        unsigned remaining = 0;
+        for (auto& byte : output)
+        {
+            if (remaining == 0) { word = device(); remaining = 4; }
+            byte = static_cast<std::uint8_t>(word & 0xffu);
+            word >>= 8u;
+            --remaining;
+        }
+        return output;
+    }
+
     void Mt19937Seed(
         const std::uint64_t seed,
         std::vector<std::uint32_t>& state,

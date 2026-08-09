@@ -13,6 +13,12 @@ realm std {
             fn operator!=(right: Version) -> bool { return self.packed != right.packed; }
         }
 
+        component SemanticVersion {
+            core: Version;
+            prerelease: string;
+            build: string;
+        }
+
         fn Make(major: u64, minor: u64, patch: u64) -> Version {
             mut result = Version();
             result.packed =
@@ -32,12 +38,54 @@ realm std {
         @Native @CppName(wio::runtime::std_semver::ParsePacked)
         fn ParsePacked(value: string, packed: ref u64) -> bool;
 
+        fn ParseDetailedNative(
+            value: string,
+            major: ref u64,
+            minor: ref u64,
+            patch: ref u64,
+            prerelease: ref string,
+            build: ref string) -> bool
+            with native, cpp::name(wio::runtime::std_semver::ParseDetailed);
+
+        fn CompareText(left: string, right: string) -> i32
+            with native, cpp::name(wio::runtime::std_semver::Compare);
+
         fn Parse(value: string) -> std::Option<Version> {
             mut packed = 0u64;
             if (not ParsePacked(value, ref packed)) { return std::None<Version>(); }
             mut result = Version();
             result.packed = packed;
             return std::Some<Version>(result);
+        }
+
+        fn ParseSemantic(value: string) -> std::Option<SemanticVersion> {
+            mut major = 0u64;
+            mut minor = 0u64;
+            mut patch = 0u64;
+            mut prerelease = "";
+            mut build = "";
+            if (not ParseDetailedNative(
+                    value, ref major, ref minor, ref patch, ref prerelease, ref build)) {
+                return std::None<SemanticVersion>();
+            }
+            let core = TryMake(major, minor, patch);
+            if (core.IsNone()) { return std::None<SemanticVersion>(); }
+            mut result = SemanticVersion();
+            result.core = core.Value();
+            result.prerelease = prerelease;
+            result.build = build;
+            return std::Some(result);
+        }
+
+        fn ToString(value: SemanticVersion) -> string {
+            mut output = value.core.ToString();
+            if (not value.prerelease.Empty()) { output += "-" + value.prerelease; }
+            if (not value.build.Empty()) { output += "+" + value.build; }
+            return output;
+        }
+
+        fn Compare(left: SemanticVersion, right: SemanticVersion) -> i32 {
+            return CompareText(ToString(left), ToString(right));
         }
 
         extension VersionMethods for Version {

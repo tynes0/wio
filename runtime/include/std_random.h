@@ -7,6 +7,7 @@
 namespace wio::runtime::std_random
 {
     [[nodiscard]] std::uint64_t SystemSeed() noexcept;
+    [[nodiscard]] std::vector<std::uint8_t> SecureBytes(std::size_t count);
 
     void Mt19937Seed(std::uint64_t seed, std::vector<std::uint32_t>& state, std::size_t& index);
     [[nodiscard]] std::uint32_t Mt19937Next(std::vector<std::uint32_t>& state, std::size_t& index);

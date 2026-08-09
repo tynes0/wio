@@ -1,0 +1,25 @@
+use std::assert as assert;
+use std::console as console;
+use std::random as random;
+use std::semver as semver;
+use std::uuid as uuid;
+
+fn Entry() -> i32 {
+    let preview = semver::ParseSemantic("1.2.3-alpha.1+build.9");
+    assert::Expect(preview.IsSome(), "full SemVer parse");
+    assert::ExpectEqual(semver::ToString(preview.Value()), "1.2.3-alpha.1+build.9", "SemVer roundtrip");
+    let stable = semver::ParseSemantic("1.2.3").Value();
+    assert::Expect(semver::Compare(preview.Value(), stable) < 0, "prerelease precedence");
+    assert::Expect(semver::ParseSemantic("1.02.3").IsNone(), "leading zero rejected");
+
+    let id = uuid::NewV4();
+    assert::Expect(uuid::IsValid(id), "UUID validity");
+    assert::ExpectEqual(uuid::Version(id), 4, "UUID version");
+    assert::ExpectEqual(uuid::Variant(id), "rfc4122", "UUID variant");
+    assert::ExpectEqual(uuid::Normalize("{" + id + "}"), id, "UUID normalization");
+
+    let secure = random::SecureBytes(32usize);
+    assert::ExpectEqual(secure.Count(), 32usize, "secure random byte count");
+    console::PrintLine!("std-identity-random-hardening-ok");
+    return 0;
+}

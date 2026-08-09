@@ -3018,6 +3018,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_std_identity_random_hardening_run
+        "${CMAKE_SOURCE_DIR}/tests/std_identity_random_hardening_run.wio"
+        "std-identity-random-hardening-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_std_identity_random_hardening_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
         wio_test_any_value_reference_semantics_run
         "${CMAKE_SOURCE_DIR}/tests/any_value_reference_semantics_run.wio"
         "any-value-reference-semantics-ok"

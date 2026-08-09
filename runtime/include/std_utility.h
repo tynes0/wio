@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <charconv>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -273,23 +274,79 @@ namespace wio::runtime::std_uuid
         }
         return true;
     }
+
+    inline std::int32_t Version(const std::string_view value) noexcept
+    {
+        if (!IsValid(value)) return 0;
+        const char ch = value[14];
+        return ch <= '9' ? ch - '0' : (std::tolower(static_cast<unsigned char>(ch)) - 'a' + 10);
+    }
+
+    inline std::string Variant(const std::string_view value)
+    {
+        if (!IsValid(value)) return "invalid";
+        const int nibble = value[19] <= '9' ? value[19] - '0' :
+            (std::tolower(static_cast<unsigned char>(value[19])) - 'a' + 10);
+        if ((nibble & 0x8) == 0) return "ncs";
+        if ((nibble & 0xc) == 0x8) return "rfc4122";
+        if ((nibble & 0xe) == 0xc) return "microsoft";
+        return "future";
+    }
+
+    inline std::string Normalize(std::string_view value)
+    {
+        if (value.starts_with("urn:uuid:")) value.remove_prefix(9);
+        if (value.size() == 38 && value.front() == '{' && value.back() == '}')
+            value = value.substr(1, 36);
+        if (!IsValid(value)) return {};
+        std::string output(value);
+        std::transform(output.begin(), output.end(), output.begin(), [](const unsigned char ch)
+        { return static_cast<char>(std::tolower(ch)); });
+        return output;
+    }
 }
 
 namespace wio::runtime::std_semver
 {
+    inline bool ValidIdentifiers(const std::string_view text, const bool prerelease) noexcept
+    {
+        if (text.empty()) return false;
+        std::size_t start = 0;
+        while (start <= text.size())
+        {
+            const std::size_t end = text.find('.', start);
+            const std::string_view identifier = text.substr(start,
+                end == std::string_view::npos ? text.size() - start : end - start);
+            if (identifier.empty()) return false;
+            bool numeric = true;
+            for (const unsigned char ch : identifier)
+            {
+                if (!(std::isalnum(ch) || ch == '-')) return false;
+                numeric = numeric && std::isdigit(ch);
+            }
+            if (prerelease && numeric && identifier.size() > 1 && identifier.front() == '0') return false;
+            if (end == std::string_view::npos) break;
+            start = end + 1;
+        }
+        return true;
+    }
+
     inline bool Parse(std::string_view text, std::int32_t& major, std::int32_t& minor,
                       std::int32_t& patch, std::string& prerelease, std::string& build) noexcept
     {
+        prerelease.clear(); build.clear();
         const auto plus = text.find('+');
         if (plus != std::string_view::npos)
         {
             build = std::string(text.substr(plus + 1));
+            if (!ValidIdentifiers(build, false) || text.find('+', plus + 1) != std::string_view::npos) return false;
             text = text.substr(0, plus);
         }
         const auto dash = text.find('-');
         if (dash != std::string_view::npos)
         {
             prerelease = std::string(text.substr(dash + 1));
+            if (!ValidIdentifiers(prerelease, true)) return false;
             text = text.substr(0, dash);
         }
         const auto first = text.find('.');
@@ -297,13 +354,62 @@ namespace wio::runtime::std_semver
         if (first == std::string_view::npos || second == std::string_view::npos) return false;
         auto parsePart = [](std::string_view part, std::int32_t& value)
         {
-            if (part.empty()) return false;
+            if (part.empty() || (part.size() > 1 && part.front() == '0')) return false;
             const auto [end, error] = std::from_chars(part.data(), part.data() + part.size(), value);
             return error == std::errc{} && end == part.data() + part.size() && value >= 0;
         };
         return parsePart(text.substr(0, first), major) &&
                parsePart(text.substr(first + 1, second - first - 1), minor) &&
                parsePart(text.substr(second + 1), patch);
+    }
+
+    inline bool ParseDetailed(std::string_view text, std::uint64_t& major, std::uint64_t& minor,
+                              std::uint64_t& patch, std::string& prerelease, std::string& build) noexcept
+    {
+        std::int32_t majorValue = 0, minorValue = 0, patchValue = 0;
+        if (!Parse(text, majorValue, minorValue, patchValue, prerelease, build)) return false;
+        major = static_cast<std::uint64_t>(majorValue);
+        minor = static_cast<std::uint64_t>(minorValue);
+        patch = static_cast<std::uint64_t>(patchValue);
+        return true;
+    }
+
+    inline int CompareIdentifiers(const std::string_view left, const std::string_view right) noexcept
+    {
+        std::size_t leftStart = 0, rightStart = 0;
+        while (leftStart <= left.size() || rightStart <= right.size())
+        {
+            if (leftStart > left.size()) return -1;
+            if (rightStart > right.size()) return 1;
+            const auto leftEnd = left.find('.', leftStart); const auto rightEnd = right.find('.', rightStart);
+            const auto leftPart = left.substr(leftStart, leftEnd == std::string_view::npos ? left.size() - leftStart : leftEnd - leftStart);
+            const auto rightPart = right.substr(rightStart, rightEnd == std::string_view::npos ? right.size() - rightStart : rightEnd - rightStart);
+            const bool leftNumeric = std::ranges::all_of(leftPart, [](const unsigned char ch){ return std::isdigit(ch); });
+            const bool rightNumeric = std::ranges::all_of(rightPart, [](const unsigned char ch){ return std::isdigit(ch); });
+            if (leftNumeric && rightNumeric)
+            {
+                if (leftPart.size() != rightPart.size()) return leftPart.size() < rightPart.size() ? -1 : 1;
+                if (leftPart != rightPart) return leftPart < rightPart ? -1 : 1;
+            }
+            else if (leftNumeric != rightNumeric) return leftNumeric ? -1 : 1;
+            else if (leftPart != rightPart) return leftPart < rightPart ? -1 : 1;
+            if (leftEnd == std::string_view::npos && rightEnd == std::string_view::npos) return 0;
+            if (leftEnd == std::string_view::npos) return -1;
+            if (rightEnd == std::string_view::npos) return 1;
+            leftStart = leftEnd + 1; rightStart = rightEnd + 1;
+        }
+        return 0;
+    }
+
+    inline int Compare(std::string_view left, std::string_view right) noexcept
+    {
+        std::int32_t lma=0,lmi=0,lpa=0,rma=0,rmi=0,rpa=0; std::string lpre,lbuild,rpre,rbuild;
+        if (!Parse(left,lma,lmi,lpa,lpre,lbuild) || !Parse(right,rma,rmi,rpa,rpre,rbuild)) return 0;
+        if (lma != rma) return lma < rma ? -1 : 1;
+        if (lmi != rmi) return lmi < rmi ? -1 : 1;
+        if (lpa != rpa) return lpa < rpa ? -1 : 1;
+        if (lpre.empty() != rpre.empty()) return lpre.empty() ? 1 : -1;
+        return CompareIdentifiers(lpre, rpre);
     }
 
     inline bool ParsePacked(std::string_view text, std::uint64_t& packed) noexcept

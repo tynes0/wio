@@ -6,6 +6,9 @@ realm std {
         @CppName(wio::runtime::std_random::SystemSeed)
         fn SystemSeed() -> u64;
 
+        fn SecureBytes(count: usize) -> byte[]
+            with native, cpp::name(wio::runtime::std_random::SecureBytes);
+
         @Native
         @CppName(wio::runtime::std_random::Mt19937Seed)
         fn MtSeed(seed: u64, state: ref u32[], index: ref usize);
