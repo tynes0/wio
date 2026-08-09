@@ -1,0 +1,5 @@
+realm Nested {
+    application Tool {
+        on update { self.Exit(0); }
+    }
+}

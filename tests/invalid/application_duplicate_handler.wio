@@ -1,0 +1,4 @@
+application Tool {
+    on update { self.Exit(0); }
+    on update { self.Exit(0); }
+}

@@ -1,0 +1,3 @@
+application Tool {
+    on update(frame: i32) { self.Exit(frame); }
+}

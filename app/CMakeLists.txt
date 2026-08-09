@@ -3236,6 +3236,46 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "application-lifecycle-ok"
         --run
     )
+
+    add_wio_output_test(
+        wio_test_application_stabilization_run
+        "${CMAKE_SOURCE_DIR}/tests/application_stabilization_run.wio"
+        "application-stabilization-ok"
+        --run
+    )
+    set_tests_properties(wio_test_application_stabilization_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
+    add_wio_failure_test(wio_invalid_application_with_entry
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_with_entry.wio"
+        "cannot define both application 'Tool' and an ordinary Entry")
+    add_wio_failure_test(wio_invalid_application_multiple_roots
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_multiple_roots.wio"
+        "may declare only one application root")
+    add_wio_failure_test(wio_invalid_application_nested_realm
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_nested_realm.wio"
+        "application root must be declared at module top level")
+    add_wio_failure_test(wio_invalid_application_missing_update
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_missing_update.wio"
+        "must declare exactly one 'on update' handler")
+    add_wio_failure_test(wio_invalid_application_duplicate_handler
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_duplicate_handler.wio"
+        "handler 'update' is declared more than once")
+    add_wio_failure_test(wio_invalid_application_handler_parameters
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_handler_parameters.wio"
+        "supports parameterless lifecycle handlers")
+    add_wio_failure_test(wio_invalid_system_duplicate_handler
+        "${CMAKE_SOURCE_DIR}/tests/invalid/system_duplicate_handler.wio"
+        "System handler 'update' is declared more than once")
+    set_tests_properties(
+        wio_invalid_application_with_entry
+        wio_invalid_application_multiple_roots
+        wio_invalid_application_nested_realm
+        wio_invalid_application_missing_update
+        wio_invalid_application_duplicate_handler
+        wio_invalid_application_handler_parameters
+        wio_invalid_system_duplicate_handler
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
     set_tests_properties(
         wio_test_application_lifecycle_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"

@@ -871,6 +871,8 @@ namespace wio
         bool extensionMutableReceiver = false;
         std::string extensionMemberName;
         WeakRef<sema::Type> extensionTargetType;
+        bool isApplicationEntry = false;
+        std::string applicationName;
 
         FunctionDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
             std::vector<NodePtr<Identifier>> _genericParameters, bool _hasGenericParameterPack, std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType, NodePtr<Expression> _whenCondition,

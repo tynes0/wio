@@ -1,0 +1,9 @@
+system Worker {
+    on update { }
+    on update { }
+}
+
+application Tool {
+    system worker: Worker;
+    on update { self.Exit(0); }
+}

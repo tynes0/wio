@@ -1,0 +1,4 @@
+application Tool {
+    on start { }
+    on close { }
+}

@@ -1540,20 +1540,29 @@ namespace wio
         };
 
         std::vector<ExtensionMember> extensionMembers;
-        std::vector<NodePtr<Statement>> exitStatements;
-        exitStatements.push_back(makeNodePtr<ExpressionStatement>(
+        std::vector<NodePtr<Statement>> firstExitStatements;
+        firstExitStatements.push_back(makeNodePtr<ExpressionStatement>(
             makeNodePtr<AssignmentExpression>(
                 makeMember(makeNodePtr<SelfExpression>(startToken.loc), "__exitRequested"),
                 Token{ .type = TokenType::opAssign, .value = "=", .loc = startToken.loc },
                 makeNodePtr<BoolLiteral>(Token{ .type = TokenType::kwTrue, .value = "true", .loc = startToken.loc })),
             startToken.loc));
-        exitStatements.push_back(makeNodePtr<ExpressionStatement>(
+        firstExitStatements.push_back(makeNodePtr<ExpressionStatement>(
             makeNodePtr<AssignmentExpression>(
                 makeMember(makeNodePtr<SelfExpression>(startToken.loc), "__exitCode"),
                 Token{ .type = TokenType::opAssign, .value = "=", .loc = startToken.loc },
                 makeIdentifier("code")), startToken.loc));
         std::vector<Parameter> exitParameters;
         exitParameters.emplace_back(makeIdentifier("code"), makeType(TokenType::kwI32, "i32"), nullptr, false);
+        auto firstExitCondition = makeNodePtr<UnaryExpression>(
+            Token{ .type = TokenType::opLogicalNot, .value = "!", .loc = startToken.loc },
+            makeMember(makeNodePtr<SelfExpression>(startToken.loc), "__exitRequested"),
+            UnaryExpression::UnaryOperatorType::Prefix, startToken.loc);
+        std::vector<NodePtr<Statement>> exitStatements;
+        exitStatements.push_back(makeNodePtr<IfStatement>(
+            std::move(firstExitCondition),
+            makeNodePtr<BlockStatement>(std::move(firstExitStatements), startToken.loc),
+            nullptr, Token::invalid(), startToken.loc));
         auto exitMethod = makeNodePtr<FunctionDeclaration>(
             std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier("Exit"),
             std::vector<NodePtr<Identifier>>{}, false, std::move(exitParameters), nullptr,
@@ -1647,6 +1656,8 @@ namespace wio
             std::vector<NodePtr<Identifier>>{}, false, std::vector<Parameter>{},
             makeType(TokenType::kwI32, "i32"), nullptr, nullptr,
             makeNodePtr<BlockStatement>(std::move(entryStatements), startToken.loc), startToken.loc);
+        entry->isApplicationEntry = true;
+        entry->applicationName = applicationNameToken.value;
 
         std::vector<NodePtr<Statement>> declarations;
         declarations.push_back(std::move(component));

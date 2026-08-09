@@ -1,0 +1,38 @@
+use std::assert as assert;
+use std::console as console;
+
+mut trace: string = "";
+
+system FirstSystem {
+    on start { trace += "app.start>first.start>"; }
+    on update { trace += "first.update>"; }
+    on close { trace += "first.close>"; }
+}
+
+system SecondSystem {
+    on start { trace += "second.start>"; }
+    on update { trace += "second.update>"; }
+    on close { trace += "second.close>"; }
+}
+
+application StableApp {
+    system first: FirstSystem;
+    system second: SecondSystem;
+
+    on start { trace = ""; }
+
+    on update {
+        trace += "app.update>";
+        self.Exit(0);
+        self.Exit(9);
+    }
+
+    on close {
+        assert::ExpectEqual(
+            trace,
+            "app.start>first.start>second.start>first.update>second.update>app.update>second.close>first.close>",
+            "deterministic application lifecycle order");
+        assert::ExpectEqual(self.__exitCode, 0, "first exit request wins");
+        console::PrintLine("application-stabilization-ok");
+    }
+}

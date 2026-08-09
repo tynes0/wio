@@ -1,0 +1,5 @@
+application Tool {
+    on update { self.Exit(0); }
+}
+
+fn Entry() -> i32 { return 0; }

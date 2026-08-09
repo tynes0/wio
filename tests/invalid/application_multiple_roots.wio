@@ -1,0 +1,7 @@
+application FirstApp {
+    on update { self.Exit(0); }
+}
+
+application SecondApp {
+    on update { self.Exit(0); }
+}

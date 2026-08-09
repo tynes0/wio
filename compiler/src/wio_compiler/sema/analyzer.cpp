@@ -6400,6 +6400,85 @@ namespace wio::sema
     {
         enterScope(ScopeKind::Global);
 
+        struct ExecutableEntrySurface
+        {
+            size_t applicationCount = 0;
+            size_t ordinaryEntryCount = 0;
+            common::Location firstApplicationLocation = common::Location::invalid();
+            common::Location secondApplicationLocation = common::Location::invalid();
+            common::Location ordinaryEntryLocation = common::Location::invalid();
+            common::Location nestedApplicationLocation = common::Location::invalid();
+            std::string firstApplicationName;
+        } entrySurface;
+        auto collectEntrySurface = [&](auto&& self, const NodePtr<Statement>& statement, bool insideRealm) -> void
+        {
+            if (!statement) return;
+            if (auto group = statement.As<DeclarationGroup>())
+            {
+                for (const auto& declaration : group->declarations)
+                    self(self, declaration, insideRealm);
+                return;
+            }
+            if (auto usingAttribute = statement.As<UsingAttributeStatement>())
+            {
+                if (usingAttribute->body)
+                    for (const auto& declaration : usingAttribute->body->declarations)
+                        self(self, declaration, insideRealm);
+                return;
+            }
+            if (auto realm = statement.As<RealmDeclaration>())
+            {
+                for (const auto& declaration : realm->statements)
+                    self(self, declaration, true);
+                return;
+            }
+            auto function = statement.As<FunctionDeclaration>();
+            if (!function || !function->name || function->name->token.value != "Entry") return;
+            if (function->isApplicationEntry)
+            {
+                ++entrySurface.applicationCount;
+                if (entrySurface.applicationCount == 1)
+                {
+                    entrySurface.firstApplicationLocation = function->location();
+                    entrySurface.firstApplicationName = function->applicationName;
+                }
+                else if (entrySurface.applicationCount == 2)
+                    entrySurface.secondApplicationLocation = function->location();
+                if (insideRealm && !entrySurface.nestedApplicationLocation.isValid())
+                    entrySurface.nestedApplicationLocation = function->location();
+            }
+            else
+            {
+                ++entrySurface.ordinaryEntryCount;
+                if (!entrySurface.ordinaryEntryLocation.isValid())
+                    entrySurface.ordinaryEntryLocation = function->location();
+            }
+        };
+        for (const auto& statement : node.statements)
+            collectEntrySurface(collectEntrySurface, statement, false);
+
+        if (entrySurface.applicationCount > 1)
+        {
+            WIO_LOG_ADD_ERROR(entrySurface.secondApplicationLocation,
+                "An executable may declare only one application root.");
+        }
+        if (entrySurface.applicationCount > 0 && entrySurface.ordinaryEntryCount > 0)
+        {
+            WIO_LOG_ADD_ERROR(entrySurface.ordinaryEntryLocation,
+                "An executable cannot define both application '{}' and an ordinary Entry function.",
+                entrySurface.firstApplicationName);
+        }
+        if (entrySurface.nestedApplicationLocation.isValid())
+        {
+            WIO_LOG_ADD_ERROR(entrySurface.nestedApplicationLocation,
+                "An application root must be declared at module top level, not inside a realm.");
+        }
+        if (entrySurface.applicationCount > 0 && Compiler::get().getBuildTarget() != BuildTarget::Executable)
+        {
+            WIO_LOG_ADD_ERROR(entrySurface.firstApplicationLocation,
+                "Application roots are supported only for executable build targets.");
+        }
+
         isDeclarationPass_ = true;
         activeScopedAttributes_.clear();
         for (auto& stmt : node.statements)
