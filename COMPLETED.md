@@ -10,6 +10,27 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## Async and coroutine foundation sprint
+
+- [x] `async fn`, async object/interface methods, generic async declarations,
+      async `Entry`, `await`, and the `coroutine<T>` type are implemented across
+      lexer, parser, semantic analysis, and C++20 code generation.
+- [x] Suspension-unsafe borrowed parameters/returns, component and extension
+      receivers, lifecycle methods, operators, and native/export ABI surfaces
+      fail during semantic analysis.
+- [x] The shared task runtime provides eager execution, multiple awaiters,
+      exception propagation, strong object-receiver lifetime, a worker pool,
+      priority-queue timers, cooperative cancellation, and shutdown draining.
+- [x] `std::async` provides Sleep/Yield, BlockOn/Run, task state and timed wait,
+      cancellation/deadlines, All/Any/Race/Timeout, cancellation sources, and
+      generic/void structured task groups.
+- [x] Async generic object-method mangling now recursively recognizes generic
+      parameters nested inside `coroutine<T>`.
+- [x] The first-sprint focused matrix covers execution, async Entry, generics,
+      object lifetime, structured groups, timeout/cancellation failure paths,
+      and semantic rejection cases. Freeze work remains active in
+      `TODOLIST.md`.
+
 ## P1 language semantics and standard-library foundation sprint
 
 - [x] `std::UnitResult`, `OkUnit`, and `ErrUnit` are the canonical unit-success

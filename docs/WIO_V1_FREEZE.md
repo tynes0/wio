@@ -282,7 +282,8 @@ decision changes that on purpose.
 - partial or pattern-based specialization
 - generalized implicit user-defined conversions
 - user-defined `operator->`
-- broader async/task/concurrency language features
+- async generators/streams and suspension across borrowed component/extension
+  lifetimes
 - a larger algebraic-data-type / pattern-matching redesign
 
 These items are not “forgotten”; they are intentionally not part of the current
@@ -298,6 +299,8 @@ These are the main language-adjacent items still expected to move before the
 - generic diagnostics and edge-case validation
 - doc/spec tightening
 - cross-platform tooling validation
+- async/coroutine stress, recoverable failure design, scheduler shutdown, and
+  main-thread dispatch qualification described in `WIO_ASYNC_MODEL.md`
 
 ---
 

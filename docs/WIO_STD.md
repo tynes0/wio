@@ -69,6 +69,12 @@ incomplete boundaries are defined by
 here does not imply that TLS/HTTP, full Unicode normalization, generic
 serialization derives, or async I/O are complete.
 
+`std::async` is an implemented release candidate rather than a frozen 0.11
+module. It provides coroutine scheduling, timers, task state/cancellation,
+worker-pool offload, combinators, and structured task groups. Its exact
+pre-freeze contract and remaining hardening work are documented in
+[`WIO_ASYNC_MODEL.md`](./WIO_ASYNC_MODEL.md).
+
 ### 2.1 Runtime-Backed Stable Modules
 
 - `std::console`

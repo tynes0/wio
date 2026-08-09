@@ -134,8 +134,13 @@ candidate application/system and language-coherence direction is expanded in
 8. [~] Add concurrency foundations.
    Threads, recursive mutexes, condition variables, atomics, channels,
    blocking channels, Promise/Future, TaskGroup, cancellation, sleep, and yield
-   share one host model. Add task scheduling, async I/O, thread-local storage,
-   cancellation propagation, and deeper runtime/host integration.
+   share one host model. Language-level async functions/methods, `await`,
+   `coroutine<T>`, async `Entry`, a C++20 worker/timer runtime, task status,
+   timeout/cancellation, worker offload, All/Any/Race, and structured async task
+   groups are implemented as a release candidate. Complete the second async
+   hardening/freeze sprint in `docs/WIO_ASYNC_MODEL.md`: cross-platform stress,
+   typed recoverable failure, cancellation propagation, main-thread dispatch,
+   async I/O, thread-local storage, and deeper runtime/host integration.
 
 9. [ ] Add OS/application facilities.
     Environment variables, process pipes, signals, filesystem watching,

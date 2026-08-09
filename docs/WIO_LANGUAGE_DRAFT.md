@@ -8,7 +8,11 @@ Wio 0.9 in
 [`spec/WIO_LANGUAGE_SPEC_0_9.md`](./spec/WIO_LANGUAGE_SPEC_0_9.md). Ordinary
 integer const generics and declaration-level native components are normative
 for Wio 0.10 in
-[`spec/WIO_LANGUAGE_SPEC_0_10.md`](./spec/WIO_LANGUAGE_SPEC_0_10.md). Where this
+[`spec/WIO_LANGUAGE_SPEC_0_10.md`](./spec/WIO_LANGUAGE_SPEC_0_10.md). Typed
+attributes, matching, and sequential applications are normative for Wio
+0.11 in [`spec/WIO_LANGUAGE_SPEC_0_11.md`](./spec/WIO_LANGUAGE_SPEC_0_11.md).
+The implemented async release candidate and its pre-freeze boundaries are
+described in [`WIO_ASYNC_MODEL.md`](./WIO_ASYNC_MODEL.md). Where this
 broad reference conflicts with a versioned slice, the newest applicable
 versioned specification wins.
 
@@ -259,17 +263,14 @@ The current token set already reserves names for future directions:
 - `after`
 - `during`
 - `wait`
-- `async`
-- `await`
-- `coroutine`
 - `yield`
 - `thread`
 - `loop`
-- `system`
 - `program`
-- `type`
 
-Most of these are not yet fully parsed as source-level features.
+`async`, `await`, and `coroutine` are active language features and are described
+in section 13.12. `system` and `type` are also active declarations. Most names
+remaining in this list are not yet fully parsed as source-level features.
 
 ## 4. Literals
 
@@ -2261,6 +2262,35 @@ fn Entry(args: string[]) {
 
 If a parameter is present, it must be exactly `string[]`.
 
+`Entry` may also be declared `async`. Its source return contract remains `i32`
+or `void`; the native entry point blocks on the produced coroutine and reports
+uncaught task failures through the runtime boundary.
+
+### 13.12 Async functions and coroutines
+
+An `async fn` returns a shared `coroutine<T>` task to its caller while `return`
+inside the body is checked against `T`. `await expression` is legal only in an
+async function/method, requires `coroutine<T>`, and evaluates to `T`.
+
+```wio
+async fn Fetch() -> string {
+    await std::async::Sleep(5u64);
+    return "ready";
+}
+
+async fn Entry() -> i32 {
+    let value = await Fetch();
+    return value == "ready" ? 0 : 1;
+}
+```
+
+Top-level functions, interface declarations, and object methods support
+`async`. Generic async declarations are supported. Component methods,
+extension methods, lifecycle methods, operator overloads, borrowed `ref`/`view`
+parameters or returns, and native/export coroutine ABI surfaces are rejected
+until their suspension lifetime rules are proven. See `WIO_ASYNC_MODEL.md` for
+the scheduler, cancellation, failure, and freeze contract.
+
 ## 14. `match`
 
 ### 14.1 Overview
@@ -3447,12 +3477,13 @@ spec wording.
 
 ### 23.3 Flow Operators
 
-The token set already contains:
+The ordinary-call pipeline operators are implemented:
 
 - `|>`
 - `<|`
 
-but they are not yet working language features.
+They preserve ordinary call inference and evaluate the piped operand once. The
+normative precedence and insertion rules are in the 0.11 specification.
 
 ### 23.4 `use as`
 
@@ -3472,14 +3503,16 @@ The following are reserved or planned:
 - `after`
 - `during`
 - `wait`
-- `async`
-- `await`
-- `coroutine`
 - `yield`
 - `thread`
 - `loop`
 - `system`
 - `program`
+
+`async`, `await`, and `coroutine<T>` have graduated from this reserved list to
+the implemented task model in section 13.12. `yield` remains reserved for a
+future generator/stream design and is not interchangeable with
+`std::async::Yield()`.
 
 ### 23.6 Type Aliases
 

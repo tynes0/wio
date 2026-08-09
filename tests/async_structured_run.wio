@@ -11,6 +11,10 @@ async fn NoValue(milliseconds: u64) {
     await futures::Sleep(milliseconds);
 }
 
+async fn Immediate(value: i32) -> i32 {
+    return value;
+}
+
 async fn Entry() -> i32 {
     assert::Expect(futures::WorkerCount() >= 2u64, "scheduler has a worker pool");
 
@@ -23,10 +27,10 @@ async fn Entry() -> i32 {
     assert::ExpectEqual(grouped[1usize], 7, "group second result");
     assert::Expect(not group.Spawn(Delayed(9, 1u64)), "joined group is closed");
 
-    let anyTasks: coroutine<i32>[] = [Delayed(10, 20u64), Delayed(20, 1u64), Delayed(30, 10u64)];
+    let anyTasks: coroutine<i32>[] = [Delayed(10, 20u64), Immediate(20), Delayed(30, 10u64)];
     assert::ExpectEqual(await futures::Any<i32>(anyTasks), 1usize, "any returns first completion index");
 
-    let raceTasks: coroutine<i32>[] = [Delayed(11, 20u64), Delayed(22, 1u64)];
+    let raceTasks: coroutine<i32>[] = [Delayed(11, 20u64), Immediate(22)];
     assert::ExpectEqual(await futures::Race<i32>(raceTasks), 22, "race returns first completion value");
     assert::ExpectEqual(await futures::Timeout<i32>(Delayed(33, 1u64), 50u64), 33, "timeout success path");
 
@@ -37,12 +41,11 @@ async fn Entry() -> i32 {
     assert::Expect(not (futures::IsFaulted<i32>(observed)), "completed task is not faulted");
 
     let cancelled = Delayed(35, 30u64);
-    futures::Detach<void>(futures::CancelAfter<i32>(cancelled, 1u64));
-    await futures::Sleep(5u64);
+    await futures::CancelAfter<i32>(cancelled, 1u64);
     assert::Expect(futures::IsCancelled<i32>(cancelled), "cancel-after marks an unfinished task");
 
     let faulted = futures::Timeout<i32>(Delayed(36, 30u64), 1u64);
-    await futures::Sleep(5u64);
+    assert::Expect(futures::WaitFor<i32>(faulted, 100u64), "timeout task completes within test deadline");
     assert::Expect(futures::IsReady<i32>(faulted), "failed task reports ready");
     assert::Expect(futures::IsFaulted<i32>(faulted), "timeout task reports faulted");
 
