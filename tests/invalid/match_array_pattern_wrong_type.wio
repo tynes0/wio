@@ -1,0 +1,6 @@
+fn Entry() -> i32 {
+    return match (42) {
+        [value]: value;
+        assumed: 0;
+    };
+}

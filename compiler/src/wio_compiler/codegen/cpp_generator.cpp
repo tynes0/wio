@@ -7289,7 +7289,9 @@ namespace wio::codegen
             {
                 if (!first) emit("else ");
                 emit("if (");
-                if (matchCase.variantName == "Some")
+                if (matchCase.variantName == "__array")
+                    emit("_match_val.size() == " + std::to_string(matchCase.bindings.size()));
+                else if (matchCase.variantName == "Some")
                     emit("_match_val->_WF_IsSome()");
                 else if (matchCase.variantName == "None")
                     emit("_match_val->_WF_IsNone()");
@@ -7300,10 +7302,19 @@ namespace wio::codegen
                 if (matchCase.guard)
                 {
                     emit(" && [&]() { ");
-                    for (auto& binding : matchCase.bindings)
+                    for (size_t bindingIndex = 0; bindingIndex < matchCase.bindings.size(); ++bindingIndex)
                     {
-                        emit("auto " + sanitizeCppIdentifier(binding->token.value) + " = _match_val->");
-                        emit(matchCase.variantName == "Err" ? "_WF_ErrorValue(); " : "_WF_Value(); ");
+                        auto& binding = matchCase.bindings[bindingIndex];
+                        emit("auto " + sanitizeCppIdentifier(binding->token.value) + " = ");
+                        if (matchCase.variantName == "__array")
+                        {
+                            emit("wio::intrinsics::Index(_match_val, " + std::to_string(bindingIndex) + "); ");
+                        }
+                        else
+                        {
+                            emit("_match_val->");
+                            emit(matchCase.variantName == "Err" ? "_WF_ErrorValue(); " : "_WF_Value(); ");
+                        }
                     }
                     emit("return ");
                     matchCase.guard->accept(*this);
@@ -7343,11 +7354,18 @@ namespace wio::codegen
             
             indent();
 
-            for (auto& binding : matchCase.bindings)
+            for (size_t bindingIndex = 0; bindingIndex < matchCase.bindings.size(); ++bindingIndex)
             {
+                auto& binding = matchCase.bindings[bindingIndex];
                 EMIT_TABS();
-                emit("auto " + sanitizeCppIdentifier(binding->token.value) + " = _match_val->");
-                emit(matchCase.variantName == "Err" ? "_WF_ErrorValue();\n" : "_WF_Value();\n");
+                emit("auto " + sanitizeCppIdentifier(binding->token.value) + " = ");
+                if (matchCase.variantName == "__array")
+                    emit("wio::intrinsics::Index(_match_val, " + std::to_string(bindingIndex) + ");\n");
+                else
+                {
+                    emit("_match_val->");
+                    emit(matchCase.variantName == "Err" ? "_WF_ErrorValue();\n" : "_WF_Value();\n");
+                }
             }
             
             if (producesValue && matchCase.body->is<ExpressionStatement>())

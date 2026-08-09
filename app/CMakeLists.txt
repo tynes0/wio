@@ -2957,6 +2957,27 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "match-option-result-patterns-ok"
         --run
     )
+
+    add_wio_output_test(
+        wio_test_match_array_patterns_run
+        "${CMAKE_SOURCE_DIR}/tests/match_array_patterns_run.wio"
+        "match-array-patterns-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_match_array_patterns_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_match_array_pattern_wrong_type
+        "${CMAKE_SOURCE_DIR}/tests/invalid/match_array_pattern_wrong_type.wio"
+        "Array destructuring patterns require an array value"
+    )
+    set_tests_properties(
+        wio_invalid_match_array_pattern_wrong_type
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
     set_tests_properties(
         wio_test_match_option_result_patterns_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"

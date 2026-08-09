@@ -837,6 +837,17 @@ namespace wio
                 }
                 consume(TokenType::rightParen);
             }
+            else if (match(TokenType::leftBracket, true))
+            {
+                variantName = "__array";
+                if (!match(TokenType::rightBracket))
+                {
+                    bindings.push_back(makeNodePtr<Identifier>(consumeIdentifier()));
+                    while (match(TokenType::comma, true))
+                        bindings.push_back(makeNodePtr<Identifier>(consumeIdentifier()));
+                }
+                consume(TokenType::rightBracket);
+            }
             else
             {
                 do

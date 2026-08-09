@@ -1,0 +1,18 @@
+use std::assert as assert;
+use std::console as console;
+
+fn SumPair(values: i32[]) -> i32 {
+    return match (values) {
+        [left, right] if left > 0: left + right;
+        [only]: only;
+        assumed: 0;
+    };
+}
+
+fn Entry() -> i32 {
+    assert::ExpectEqual(SumPair([4, 7]), 11, "array destructuring and guard");
+    assert::ExpectEqual(SumPair([9]), 9, "single array destructuring");
+    assert::ExpectEqual(SumPair([]), 0, "array fallback");
+    console::PrintLine("match-array-patterns-ok");
+    return 0;
+}

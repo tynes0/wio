@@ -12584,6 +12584,9 @@ namespace wio::sema
             : nullptr;
         const bool isOptionMatch = algebraicStruct && algebraicStruct->name == "Option";
         const bool isResultMatch = algebraicStruct && algebraicStruct->name == "Result";
+        Ref<ArrayType> matchedArray = algebraicType && algebraicType->kind() == TypeKind::Array
+            ? algebraicType.AsFast<ArrayType>()
+            : nullptr;
         bool sawSome = false;
         bool sawNone = false;
         bool sawOk = false;
@@ -12620,9 +12623,16 @@ namespace wio::sema
             if (isVariantPattern)
             {
                 const std::string& variant = matchCase.variantName;
+                const bool isArrayPattern = variant == "__array";
                 const bool validOptionVariant = isOptionMatch && (variant == "Some" || variant == "None");
                 const bool validResultVariant = isResultMatch && (variant == "Ok" || variant == "Err");
-                if (!validOptionVariant && !validResultVariant)
+                if (isArrayPattern && !matchedArray)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        matchCase.body ? matchCase.body->location() : node.location(),
+                        "Array destructuring patterns require an array value.");
+                }
+                else if (!isArrayPattern && !validOptionVariant && !validResultVariant)
                 {
                     WIO_LOG_ADD_ERROR(
                         matchCase.body ? matchCase.body->location() : node.location(),
@@ -12630,16 +12640,20 @@ namespace wio::sema
                         variant);
                 }
 
-                if (!matchCase.guard && !seenUnguardedVariants.insert(variant).second)
+                const std::string patternIdentity = isArrayPattern
+                    ? variant + std::to_string(matchCase.bindings.size())
+                    : variant;
+                if (!matchCase.guard && !seenUnguardedVariants.insert(patternIdentity).second)
                 {
                     WIO_LOG_ADD_ERROR(
                         matchCase.body ? matchCase.body->location() : node.location(),
-                        "Unreachable duplicate '{}' match pattern.", variant);
+                        "Unreachable duplicate '{}' match pattern.",
+                        isArrayPattern ? "array-length" : variant);
                 }
 
                 const size_t expectedBindings =
                     (variant == "Some" || variant == "Ok" || variant == "Err") ? 1 : 0;
-                if (matchCase.bindings.size() != expectedBindings)
+                if (!isArrayPattern && matchCase.bindings.size() != expectedBindings)
                 {
                     WIO_LOG_ADD_ERROR(
                         matchCase.body ? matchCase.body->location() : node.location(),
@@ -12656,6 +12670,19 @@ namespace wio::sema
                 {
                     if (auto errorSymbol = resolveQualifiedSymbol(currentScope_, "std::ResultError"))
                         bindingType = errorSymbol->type;
+                }
+                else if (isArrayPattern && matchedArray)
+                {
+                    bindingType = matchedArray->elementType;
+                    if (matchedArray->arrayKind == ArrayType::ArrayKind::Static &&
+                        matchedArray->size != matchCase.bindings.size())
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            matchCase.body ? matchCase.body->location() : node.location(),
+                            "Static array pattern expects {} binding(s), but got {}.",
+                            matchedArray->size,
+                            matchCase.bindings.size());
+                    }
                 }
 
                 sawSome = sawSome || (variant == "Some" && !matchCase.guard);
