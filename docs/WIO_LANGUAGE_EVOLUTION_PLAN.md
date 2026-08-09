@@ -33,6 +33,17 @@ systems work. It does establish an order of priority:
 Language features should strengthen this profile without turning Wio into a
 collection of unrelated DSLs.
 
+The implementation dependency order is:
+
+1. typed, user-extensible attributes and their source migration;
+2. the language-coherence/specification pass that uses the new attribute
+   classification;
+3. the application/system model, built on the finalized metadata, reflection,
+   native-callback, and threading contracts.
+
+Application/system design may continue in parallel on paper, but its language
+surface is not implemented before the attribute foundation is stable.
+
 ---
 
 ## 2. Application and System Model
@@ -269,8 +280,9 @@ The proposed shutdown contract is:
 7. return the exit code to the host.
 
 Startup failure closes only the systems that successfully started. Lifecycle
-handlers may return `void` or `Result<void, AppError>`; an unhandled lifecycle
-error follows the same orderly shutdown path with a failure reason.
+handlers may return no value or the accepted unit-success Result alias
+(`UnitResult` is the current naming candidate); an unhandled lifecycle error
+follows the same orderly shutdown path with a failure reason.
 
 ### 2.8 Runtime boundary
 
@@ -308,96 +320,204 @@ schedule grammar because it defines a static dependency edge.
 
 ## 3. Attribute Syntax Modernization
 
-The current `@Attribute(...)` spelling is functional but does not fit the
-preferred long-term Wio surface. This is a syntax design problem; attribute
-semantics, targets, and lowering should not change merely because the spelling
-changes.
+The attribute overhaul is a prerequisite for the application/system runtime,
+not merely a spelling cleanup. Wio should have typed user-defined attributes
+that are actively consumed by reflection, tooling, serialization, native
+interop, validation, derives, and later scheduler/host integrations.
 
-The leading candidate is a single-bracket attribute list:
+The accepted design direction removes annotation sigils and bracket wrappers.
+A declaration uses a postfix `with` clause:
 
 ```wio
-[Native, CppHeader("audit_metrics.h"), CppName("audit_score")]
-fn AuditScore(metrics: view AuditMetrics) -> f64;
+fn AuditScore(metrics: view AuditMetrics) -> f64
+    with native,
+         cpp::header("audit_metrics.h"),
+         cpp::name("audit_score");
 ```
 
-Attributes may also be stacked when that reads better:
+The clause always appears after the declaration signature and before its body
+or terminating semicolon:
 
 ```wio
-[Native]
-[CppHeader("audit_metrics.h")]
-[CppName("audit_score")]
-fn AuditScore(metrics: view AuditMetrics) -> f64;
-```
-
-The existing scope/module application form becomes:
-
-```wio
-use [CppHeader("audit_metrics.h")];
-```
-
-This preserves the existing meaning: the header metadata applies at the use
-scope, while declaration-level attributes continue to attach metadata to one
-mapping.
-
-Other existing forms translate mechanically:
-
-```wio
-[Apply(T: Hashable)]
-fn HashValue<T>(value: view T) -> u64;
-
-[Specialize(i32)]
-component NativeValue<T> {
-    value: T;
-}
-
-enum ErrorKind {
-    [From]
-    Io,
-
-    [Deprecated("Use Network instead")]
-    Socket
+fn LoadConfiguration(path: string) -> Result<Configuration>
+    with telemetry::trace("configuration.load")
+{
+    // Ordinary checked Wio body.
 }
 ```
 
-Why this is the leading candidate:
+The same attachment grammar applies to types, fields, parameters, generic
+parameters, enum cases, methods, extension members, and later application
+handlers:
 
-- it removes the decorator-like `@` visual style;
-- it supports one or many attributes without repeated sigils;
-- it remains visually distinct from modifiers and ordinary calls;
-- declaration position makes it distinguishable from array expressions;
-- `use [Attribute(...)]` remains compact and mechanically consistent;
-- it leaves room for user-defined and tooling-only metadata.
+```wio
+component User with derive::json, derive::hash {
+    id: u64;
+    display_name: string with json::name("displayName");
+    password_hash: string with json::skip, inspect::secret;
+}
 
-The grammar must reserve attribute lists only in unambiguous attribute
-positions: immediately before supported declarations/members or after `use`.
-An arbitrary expression statement beginning with `[` must remain an array or
-index-related expression rather than being guessed as metadata.
+fn Connect(
+    host: string,
+    port: i32 with validate::range(1, 65535)
+) -> Result<Connection>;
 
-Before stabilization, specify:
+enum NetworkMode {
+    Offline,
+    Legacy with deprecated("Use Online instead"),
+    Online
+}
+```
 
-- valid targets for every built-in attribute;
-- whether an attribute is repeatable;
-- positional and named argument rules;
-- constant-expression requirements for arguments;
-- duplicate/conflicting attribute diagnostics;
-- scope inheritance and declaration override behavior;
-- reflection visibility and custom attribute declarations;
-- formatter ordering and grouping;
-- generated binding/importer output;
-- deprecation and automated migration from `@...` syntax.
+### 3.1 Scoped attributes
 
-Suggested migration:
+Attaching metadata to one declaration and activating inheritable metadata in a
+lexical scope are distinct operations:
 
-1. parse both forms behind one unchanged attribute AST;
-2. make the formatter and binding generator emit bracket syntax;
-3. add `wio migrate attributes` or a general source migration command;
-4. warn on the legacy spelling for one compatibility window;
-5. remove `@` spelling only at an edition/spec boundary.
+- postfix `with` attaches attributes to a target;
+- `using` activates attributes in the current lexical scope.
 
-Alternatives still available for review are Rust-like `#[Attribute]`, C++-like
-`[[Attribute]]`, and keyword-led `meta[Attribute]`. The single-bracket form is
-currently preferred because it is the least noisy while retaining a clear
-metadata boundary.
+The existing `use @CppHeader(...)` behavior becomes:
+
+```wio
+using cpp::header("audit_metrics.h");
+
+component AuditMetrics with native, abi::pod {
+    file_count: u64;
+    warning_count: u64;
+}
+
+fn CalculateAuditScore(metrics: view AuditMetrics) -> f64
+    with native, cpp::name("audit_calculate_score");
+```
+
+A bounded scope is also allowed:
+
+```wio
+using cpp::header("raylib.h") {
+    component Vector2 with native, abi::pod {
+        x: f32;
+        y: f32;
+    }
+
+    fn DrawText(...) with native;
+}
+```
+
+Only an attribute declared as `scoped` may be used through `using`. Import
+`use` and attribute `using` remain grammatically and semantically separate.
+
+### 3.2 Naming and namespaces
+
+Built-in and library attributes use lowercase names and ordinary realm paths
+instead of adding many PascalCase identifiers to one global attribute space:
+
+```wio
+with native;
+with cpp::name("DrawText");
+with abi::pod;
+with json::skip;
+with thread::main;
+with test::ignore("requires a GPU");
+```
+
+The initial migration map includes:
+
+- `@Native` -> `with native`;
+- `@CppHeader("x.h")` -> `with cpp::header("x.h")`;
+- `use @CppHeader("x.h")` -> `using cpp::header("x.h");`;
+- `@CppName("Foo")` -> `with cpp::name("Foo")`;
+- `@Export` -> an explicit export-family attribute such as `with export::c`;
+- `@Deprecated(...)` -> `with deprecated(...)`;
+- `@From` -> a conversion-family attribute or dedicated conversion syntax;
+- `@MainThread` -> `with thread::main`.
+
+Not every existing compiler annotation must survive as an attribute. Generic
+constraints should prefer `where`; specialization and other core semantic
+operations should be evaluated for dedicated syntax during the coherence pass.
+
+### 3.3 User-defined attributes
+
+An attribute is a typed compile-time declaration:
+
+```wio
+realm http;
+
+attribute route(
+    method: HttpMethod,
+    path: string
+)
+    for fn
+    retain runtime
+    repeatable;
+```
+
+It is used through its ordinary realm path:
+
+```wio
+fn GetUser(id: u64) -> Result<User>
+    with http::route(Get, "/users/{id}");
+```
+
+Attribute declarations must be able to specify:
+
+- allowed targets;
+- typed positional and named parameters with optional defaults;
+- compile-time constant requirements;
+- source/compile/runtime retention;
+- repeatability;
+- inheritance;
+- scoped activation eligibility;
+- exclusivity/conflict groups;
+- reflection visibility.
+
+The exact declaration grammar remains to be frozen, but these capabilities are
+part of the required model rather than optional follow-up polish.
+
+### 3.4 Active behavior without unrestricted macros
+
+The attribute system grows in controlled layers:
+
+1. Typed metadata available to compiler services, reflection, documentation,
+   serializers, binders, tests, and application libraries.
+2. Compile-time validation through a deterministic metadata API that can emit
+   structured diagnostics.
+3. Controlled derive/code-generation processors that produce declarations
+   through a checked compiler API.
+
+The first version does not permit unrestricted token or AST mutation. Such a
+macro system would make compilation order-sensitive, weaken diagnostics,
+complicate the LSP, and create build/security problems before the compile-time
+execution model is ready.
+
+Ordinary attribute list order is non-semantic. If ordered behavior is needed,
+it must be represented explicitly by a typed pipeline attribute rather than by
+silently executing `with A, B` differently from `with B, A`.
+
+### 3.5 Compiler and tooling integration
+
+Before stabilization, implement and specify:
+
+- one typed attribute AST shared by built-ins and user declarations;
+- target checking, constant argument evaluation, duplication, conflicts, and
+  scope inheritance diagnostics;
+- compile-time and runtime reflection queries;
+- formatter layout for short and multiline `with` clauses;
+- LSP completion, hover, target filtering, rename, and navigation;
+- generated binding/importer output using the new spelling;
+- documentation rendering and attribute search;
+- deterministic validation/derive processor discovery and execution;
+- edition-aware deprecation and automated source migration.
+
+Migration order:
+
+1. introduce the typed attribute model and parse both legacy and new forms;
+2. migrate built-in attributes to namespaced definitions without changing ABI;
+3. make formatter, docs, and generators emit `with`/`using` syntax;
+4. add `wio migrate attributes` with a check/diff mode;
+5. warn on `@Attribute(...)` for one compatibility window;
+6. remove the legacy spelling only at an edition/spec boundary;
+7. begin application/system implementation on the stabilized attribute API.
 
 ---
 
@@ -468,9 +588,12 @@ Language maturity also requires:
 
 ## 7. Decisions Still To Freeze
 
-The following choices should be explicitly accepted before implementation:
+The following choices should be frozen before their implementation slice:
 
-1. Attribute spelling: prefer `[Attribute(...)]` over the listed alternatives.
+1. Attribute application direction is accepted: postfix `with`, scoped
+   `using`, lowercase realm paths, and no annotation sigil/bracket wrapper.
+   Exact custom declaration, retention, validation, and derive APIs remain to
+   be frozen before coding begins.
 2. Lifecycle spelling: prefer `on start {}` plus `on start: Function;`.
 3. Exit access: prefer `self.Exit()` in application bodies and explicit
    `ApplicationControl` injection in systems.
@@ -480,7 +603,8 @@ The following choices should be explicitly accepted before implementation:
 7. Resource model: injection and conflict analysis through `view`/`ref`.
 8. Default loop: generated when no explicit schedule is supplied.
 9. Events: typed std event queues first, dedicated syntax only after evidence.
-10. Lifecycle errors: `void` or common `Result<void, AppError>`.
+10. Lifecycle errors: no return value or the standard unit-success Result
+    alias, using the existing structured `ResultError` model.
 
 Once accepted, each decision should move into the appropriate versioned
 specification before its implementation is called stable.

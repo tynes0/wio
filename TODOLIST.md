@@ -59,28 +59,30 @@ candidate application/system and language-coherence direction is expanded in
     Measure `|>` and `<|` against ordinary calls, method chaining, error
     propagation, inference, and debugging before reserving syntax.
 
-12. [ ] Implement the accepted application/system lifecycle model in staged
-    slices. The current proposal uses one stack-resident `application` root,
-    component-like `system` state, inline or function-bound `on` handlers,
-    explicit resources, deterministic schedules, fixed stages, reverse
-    shutdown, main-thread affinity, and headless testing. Keep `after` as a
-    schedule dependency; keep `every`, `during`, and `wait` in runtime/async
-    experiments until their semantics are proven. Add parallel execution only
-    after `view`/`ref` resource-conflict analysis is stable.
+12. [ ] Replace the legacy annotation surface with typed, user-extensible
+    attributes before implementing application/system syntax. The accepted
+    direction uses postfix `with` for target attachment and `using` for scoped
+    activation, for example `fn Foo() with native, cpp::name("Foo");` and
+    `using cpp::header("foo.h");`. Add lowercase realm-scoped names, typed
+    arguments/defaults, target policies, retention, repetition, inheritance,
+    conflicts, reflection, validation, controlled derives, formatter/LSP/docs
+    support, and automated edition-aware migration from `@Attribute(...)`.
+    Do not expose unrestricted token/AST mutation in the first version.
 
-13. [ ] Modernize attribute syntax and formalize attribute semantics. Evaluate
-    the proposed `[Native, CppHeader("...")]` and
-    `use [CppHeader("...")];` spelling against `#[...]`, `[[...]]`, and
-    keyword-led alternatives. Preserve one attribute AST and existing meaning;
-    specify targets, repetition, arguments, conflicts, scope inheritance,
-    reflection/custom attributes, formatting, generated bindings, diagnostics,
-    editions, and automated migration from legacy `@Attribute(...)` syntax.
-
-14. [ ] Complete a language-coherence pass before broad surface expansion.
+13. [ ] Complete a language-coherence pass before broad surface expansion.
     Reconcile the draft, versioned specifications, freeze snapshot, compiler,
     tests, and documentation; normalize constraints, specialization,
     conversion, extension, native mapping, and metadata syntax; remove stale
     or contradictory feature-status claims.
+
+14. [ ] Implement the accepted application/system lifecycle model after the
+    attribute foundation. The current proposal uses one stack-resident
+    `application` root, component-like `system` state, inline or function-bound
+    `on` handlers, explicit resources, deterministic schedules, fixed stages,
+    reverse shutdown, main-thread affinity, and headless testing. Keep `after`
+    as a schedule dependency; keep `every`, `during`, and `wait` in runtime/
+    async experiments until their semantics are proven. Add parallel execution
+    only after `view`/`ref` resource-conflict analysis is stable.
 
 ## P1 - Standard Library Correctness and Consistency
 
@@ -139,6 +141,12 @@ candidate application/system and language-coherence direction is expanded in
     TOML/INI, database primitives, statistics, geometry/color, localization,
     and command-line parsing should be evaluated and prioritized by real
     projects.
+
+11. [ ] Normalize unit-success Result ergonomics. Add and consistently use a
+    public alias for `Result<ResultUnit>` (leading candidate: `UnitResult`),
+    pair it with unsurprising success/error helpers, and evaluate whether a
+    default generic argument can later provide an equally clear `Result<>`
+    spelling without special-casing `void` in the type system.
 
 ## P1 - Native Interop, SDK, and Ecosystem
 
