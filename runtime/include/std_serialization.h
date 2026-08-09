@@ -6,6 +6,44 @@
 
 namespace wio::runtime::std_serialization
 {
+    [[nodiscard]] inline bool JsonNumberIsValid(const std::string_view value) noexcept
+    {
+        if (value.empty()) return false;
+        std::size_t index = 0;
+        if (value[index] == '-' && ++index == value.size()) return false;
+        if (value[index] == '0')
+        {
+            ++index;
+            if (index < value.size() && value[index] >= '0' && value[index] <= '9') return false;
+        }
+        else
+        {
+            if (value[index] < '1' || value[index] > '9') return false;
+            while (index < value.size() && value[index] >= '0' && value[index] <= '9') ++index;
+        }
+        if (index < value.size() && value[index] == '.')
+        {
+            ++index;
+            const std::size_t fractionStart = index;
+            while (index < value.size() && value[index] >= '0' && value[index] <= '9') ++index;
+            if (index == fractionStart) return false;
+        }
+        if (index < value.size() && (value[index] == 'e' || value[index] == 'E'))
+        {
+            ++index;
+            if (index < value.size() && (value[index] == '+' || value[index] == '-')) ++index;
+            const std::size_t exponentStart = index;
+            while (index < value.size() && value[index] >= '0' && value[index] <= '9') ++index;
+            if (index == exponentStart) return false;
+        }
+        return index == value.size();
+    }
+
+    [[nodiscard]] inline bool JsonNumberIsInteger(const std::string_view value) noexcept
+    {
+        return JsonNumberIsValid(value) && value.find_first_of(".eE") == std::string_view::npos;
+    }
+
     [[nodiscard]] inline std::string JsonEscape(std::string_view value)
     {
         static constexpr char hex[] = "0123456789abcdef";

@@ -13,6 +13,12 @@ realm std {
         @Native @CppName(wio::runtime::std_serialization::JsonUnquote)
         fn UnquoteJson(value: string) -> string;
 
+        fn IsValidJsonNumber(value: string) -> bool
+            with native, cpp::name(wio::runtime::std_serialization::JsonNumberIsValid);
+
+        fn IsJsonInteger(value: string) -> bool
+            with native, cpp::name(wio::runtime::std_serialization::JsonNumberIsInteger);
+
         fn ToJson(value: string) -> string { return QuoteJson(value); }
         fn ToJson(value: bool) -> string {
             if (value) { return "true"; }

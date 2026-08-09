@@ -1,0 +1,34 @@
+use std::assert as assert;
+use std::console as console;
+use std::json as json;
+
+fn Entry() -> i32 {
+    let exact = json::Parse!("{\"n\":900719925474099312345,\"a\":1}");
+    let integer = json::Pointer(exact, "/n");
+    assert::Expect(integer.IsSome(), "JSON pointer should resolve");
+    assert::Expect(integer.Value().IsInteger(), "large integer remains integer");
+    assert::ExpectEqual(
+        integer.Value().IntegerTextOr(""),
+        "900719925474099312345",
+        "integer text is exact"
+    );
+    assert::ExpectEqual(
+        json::Write(exact),
+        "{\"a\":1,\"n\":900719925474099312345}",
+        "object output is deterministic"
+    );
+
+    assert::Expect(json::Parse("{\"x\":1,\"x\":2}").IsError(), "duplicates reject by default");
+    mut options = json::DefaultParseOptions();
+    options.duplicateKeys = json::DuplicateKeyPolicy::keep_last;
+    let duplicate = json::Parse!("{\"x\":1,\"x\":2}", options);
+    assert::ExpectEqual(json::Pointer(duplicate, "/x").Value().IntegerTextOr(""), "2", "keep-last policy");
+
+    let target = json::Parse!("{\"name\":\"Wio\",\"nested\":{\"a\":1,\"b\":2}}");
+    let patch = json::Parse!("{\"nested\":{\"a\":null,\"c\":3}}");
+    let merged = json::MergePatch(target, patch);
+    assert::Expect(json::Pointer(merged, "/nested/a").IsNone(), "merge patch removes null key");
+    assert::ExpectEqual(json::Pointer(merged, "/nested/c").Value().IntegerTextOr(""), "3", "merge patch adds key");
+    console::PrintLine!("std-json-hardening-ok");
+    return 0;
+}

@@ -2,6 +2,7 @@ use std::convert as convert;
 use std::option as option;
 use std::result as result;
 use std::serialization as serialization;
+use std::unicode as unicode;
 
 realm std {
     realm json {
@@ -9,15 +10,30 @@ realm std {
         enum Kind {
             null_value = 0u8,
             boolean = 1u8,
-            number = 2u8,
-            string_value = 3u8,
-            array_value = 4u8,
-            object_value = 5u8
+            integer = 2u8,
+            number = 3u8,
+            string_value = 4u8,
+            array_value = 5u8,
+            object_value = 6u8
+        };
+
+        @Type(u8)
+        enum DuplicateKeyPolicy {
+            reject = 0u8,
+            keep_first = 1u8,
+            keep_last = 2u8
+        };
+
+        component ParseOptions {
+            maxDepth: usize;
+            maxBytes: usize;
+            duplicateKeys: DuplicateKeyPolicy;
         };
 
         object Value {
             public kind: Kind;
             public booleanValue: bool;
+            public integerText: string;
             public numberValue: f64;
             public stringValue: string;
             public arrayValue: Value[];
@@ -25,6 +41,7 @@ realm std {
 
             public fn IsNull() -> bool { return self.kind == Kind::null_value; }
             public fn IsBool() -> bool { return self.kind == Kind::boolean; }
+            public fn IsInteger() -> bool { return self.kind == Kind::integer; }
             public fn IsNumber() -> bool { return self.kind == Kind::number; }
             public fn IsString() -> bool { return self.kind == Kind::string_value; }
             public fn IsArray() -> bool { return self.kind == Kind::array_value; }
@@ -41,6 +58,17 @@ realm std {
             public fn NumberOr(fallback: f64) -> f64 {
                 if (self.IsNumber()) { return self.numberValue; }
                 return fallback;
+            }
+            public fn IntegerTextOr(fallback: string) -> string {
+                if (self.IsInteger()) { return self.integerText; }
+                return fallback;
+            }
+            public fn I64() -> std::Result<i64> {
+                if (not self.IsInteger()) {
+                    return std::Err<i64>(std::MakeResultError(
+                        std::ResultDomain::custom, 3, "JSON value is not an integer."));
+                }
+                return convert::ParseI64(self.integerText);
             }
             public fn StringOr(fallback: string) -> string {
                 if (self.IsString()) { return self.stringValue; }
@@ -79,6 +107,21 @@ realm std {
             return result;
         }
 
+        fn IntegerValue(value: string) -> Value {
+            mut result = Value();
+            result.kind = Kind::integer;
+            result.integerText = value;
+            return result;
+        }
+
+        fn DefaultParseOptions() -> ParseOptions {
+            mut options = ParseOptions();
+            options.maxDepth = 128usize;
+            options.maxBytes = 16usize * 1024usize * 1024usize;
+            options.duplicateKeys = DuplicateKeyPolicy::reject;
+            return options;
+        }
+
         fn StringValue(value: string) -> Value {
             mut result = Value();
             result.kind = Kind::string_value;
@@ -104,11 +147,20 @@ realm std {
             private source: string;
             private position: usize;
             private failure: string;
+            private options: ParseOptions;
 
             OnConstruct(source: string) {
                 self.source = source;
                 self.position = 0usize;
                 self.failure = "";
+                self.options = DefaultParseOptions();
+            }
+
+            OnConstruct(source: string, options: ParseOptions) {
+                self.source = source;
+                self.position = 0usize;
+                self.failure = "";
+                self.options = options;
             }
 
             private fn Fail(message: string) {
@@ -168,6 +220,13 @@ realm std {
                     self.position += 1usize;
                 }
                 let token = self.source.Slice(start, self.position - start);
+                if (not serialization::IsValidJsonNumber(token)) {
+                    self.Fail("Invalid number grammar.");
+                    return NullValue();
+                }
+                if (serialization::IsJsonInteger(token)) {
+                    return IntegerValue(token);
+                }
                 let parsed = convert::ParseF64(token);
                 if (parsed.IsError()) {
                     self.Fail("Invalid number.");
@@ -176,7 +235,11 @@ realm std {
                 return NumberValue(parsed.Value());
             }
 
-            private fn ParseArrayValue() -> Value {
+            private fn ParseArrayValue(depth: usize) -> Value {
+                if (depth > self.options.maxDepth) {
+                    self.Fail("Maximum nesting depth exceeded.");
+                    return NullValue();
+                }
                 self.position += 1usize;
                 mut values: Value[] = [];
                 self.SkipWhitespace();
@@ -185,7 +248,7 @@ realm std {
                     return ArrayValue(values);
                 }
                 while (self.position < self.source.Count() and self.failure == "") {
-                    values.Push(self.ParseAny());
+                    values.Push(self.ParseAny(depth));
                     self.SkipWhitespace();
                     if (self.position < self.source.Count() and self.source[self.position] == ']') {
                         self.position += 1usize;
@@ -202,7 +265,11 @@ realm std {
                 return NullValue();
             }
 
-            private fn ParseObjectValue() -> Value {
+            private fn ParseObjectValue(depth: usize) -> Value {
+                if (depth > self.options.maxDepth) {
+                    self.Fail("Maximum nesting depth exceeded.");
+                    return NullValue();
+                }
                 self.position += 1usize;
                 mut values: Dict<string, Value> = {};
                 self.SkipWhitespace();
@@ -219,7 +286,18 @@ realm std {
                     }
                     self.position += 1usize;
                     self.SkipWhitespace();
-                    values.Set(key, self.ParseAny());
+                    let parsedValue = self.ParseAny(depth);
+                    if (values.ContainsKey(key)) {
+                        if (self.options.duplicateKeys == DuplicateKeyPolicy::reject) {
+                            self.Fail($"Duplicate object key '${key}'.");
+                            return NullValue();
+                        }
+                        if (self.options.duplicateKeys == DuplicateKeyPolicy::keep_last) {
+                            values.Set(key, parsedValue);
+                        }
+                    } else {
+                        values.Set(key, parsedValue);
+                    }
                     self.SkipWhitespace();
                     if (self.position < self.source.Count() and self.source[self.position] == '}') {
                         self.position += 1usize;
@@ -236,7 +314,7 @@ realm std {
                 return NullValue();
             }
 
-            private fn ParseAny() -> Value {
+            private fn ParseAny(depth: usize) -> Value {
                 self.SkipWhitespace();
                 if (self.position >= self.source.Count()) {
                     self.Fail("Expected a value.");
@@ -244,8 +322,8 @@ realm std {
                 }
                 let current = self.source[self.position];
                 if (current == '"') { return StringValue(self.ParseStringToken()); }
-                if (current == '[') { return self.ParseArrayValue(); }
-                if (current == '{') { return self.ParseObjectValue(); }
+                if (current == '[') { return self.ParseArrayValue(depth + 1usize); }
+                if (current == '{') { return self.ParseObjectValue(depth + 1usize); }
                 if (self.Consume("true")) { return BoolValue(true); }
                 if (self.Consume("false")) { return BoolValue(false); }
                 if (self.Consume("null")) { return NullValue(); }
@@ -255,7 +333,15 @@ realm std {
             }
 
             public fn Run() -> std::Result<Value> {
-                let value = self.ParseAny();
+                if (self.source.Count() > self.options.maxBytes) {
+                    return std::Err<Value>(std::MakeResultError(
+                        std::ResultDomain::custom, 2, "JSON input exceeds the configured byte limit."));
+                }
+                if (not unicode::IsValidUtf8(self.source)) {
+                    return std::Err<Value>(std::MakeResultError(
+                        std::ResultDomain::custom, 2, "JSON input is not valid UTF-8."));
+                }
+                let value = self.ParseAny(0usize);
                 self.SkipWhitespace();
                 if (self.failure == "" and self.position != self.source.Count()) {
                     self.Fail("Trailing characters.");
@@ -270,6 +356,10 @@ realm std {
 
         fn Parse(value: string) -> std::Result<Value> {
             return Parser(value).Run();
+        }
+
+        fn Parse(value: string, options: ParseOptions) -> std::Result<Value> {
+            return Parser(value, options).Run();
         }
 
         fn IsValid(value: string) -> bool { return Parse(value).IsOk(); }
@@ -287,6 +377,7 @@ realm std {
         fn WriteValue(value: Value, pretty: bool, depth: usize, width: usize) -> string {
             if (value.IsNull()) { return "null"; }
             if (value.IsBool()) { return match (value.booleanValue) { true: "true"; assumed: "false"; }; }
+            if (value.IsInteger()) { return value.integerText; }
             if (value.IsNumber()) { return std::ToString<f64>(value.numberValue); }
             if (value.IsString()) { return serialization::QuoteJson(value.stringValue); }
             if (value.IsArray()) {
@@ -306,7 +397,8 @@ realm std {
                 }
                 return "[" + parts.Join(",") + "]";
             }
-            let keys = value.objectValue.Keys();
+            mut keys = value.objectValue.Keys();
+            keys.Sort();
             if (keys.Empty()) { return "{}"; }
             mut fields: string[] = [];
             mut index = 0usize;
@@ -331,6 +423,58 @@ realm std {
         fn WritePretty(value: Value) -> string { return WriteValue(value, true, 0usize, 2usize); }
         fn WritePretty(value: Value, indentWidth: usize) -> string {
             return WriteValue(value, true, 0usize, indentWidth);
+        }
+
+        fn DecodePointerToken(value: string) -> string {
+            return value.Replace("~1", "/").Replace("~0", "~");
+        }
+
+        fn Pointer(value: Value, pointer: string) -> std::Option<Value> {
+            if (pointer == "") { return std::Some(value); }
+            if (not pointer.StartsWith("/")) { return std::None<Value>(); }
+            let segments = pointer.Split("/");
+            mut current = value;
+            mut index = 1usize;
+            while (index < segments.Count()) {
+                let segment = DecodePointerToken(segments[index]);
+                if (current.IsObject()) {
+                    let next = current.Get(segment);
+                    if (next.IsNone()) { return std::None<Value>(); }
+                    current = next.Value();
+                } else if (current.IsArray()) {
+                    let parsedIndex = convert::ParseU64(segment);
+                    if (parsedIndex.IsError()) { return std::None<Value>(); }
+                    let next = current.At(parsedIndex.Value() fit usize);
+                    if (next.IsNone()) { return std::None<Value>(); }
+                    current = next.Value();
+                } else {
+                    return std::None<Value>();
+                }
+                index += 1usize;
+            }
+            return std::Some(current);
+        }
+
+        // RFC 7396 merge-patch semantics. Objects are merged recursively;
+        // null fields remove keys and all other values replace the target.
+        fn MergePatch(target: Value, patch: Value) -> Value {
+            if (not patch.IsObject()) { return patch; }
+            mut result = target;
+            if (not result.IsObject()) {
+                mut empty: Dict<string, Value> = {};
+                result = ObjectValue(empty);
+            }
+            let keys = patch.objectValue.Keys();
+            for (key in keys) {
+                let patchValue = patch.objectValue.GetOr(key, NullValue());
+                if (patchValue.IsNull()) {
+                    result.objectValue.Remove(key);
+                } else {
+                    let currentValue = result.objectValue.GetOr(key, NullValue());
+                    result.objectValue.Set(key, MergePatch(currentValue, patchValue));
+                }
+            }
+            return result;
         }
 
         // Scalar/composition compatibility facade.
