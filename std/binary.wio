@@ -1,0 +1,65 @@
+use std::builders as builders;
+use std::result as result;
+
+realm std {
+    realm binary {
+        const Magic: u32 = 0x314f4957u32;
+
+        component Frame {
+            public version: u16;
+            public flags: u16;
+            public payload: u8[];
+
+            OnConstruct(version: u16, flags: u16, payload: u8[]) {
+                self.version = version;
+                self.flags = flags;
+                self.payload = payload;
+            }
+        }
+
+        fn EncodeFrame(payload: u8[], version: u16, flags: u16) -> u8[] {
+            let writer = builders::ByteWriter(16usize + payload.Count());
+            writer.WriteU32LE(Magic);
+            writer.WriteU16LE(version);
+            writer.WriteU16LE(flags);
+            writer.WriteU64LE(payload.Count() fit u64);
+            writer.WriteBytes(payload);
+            return writer.ToArray();
+        }
+
+        fn EncodeFrame(payload: u8[], version: u16) -> u8[] {
+            return EncodeFrame(payload, version, 0u16);
+        }
+
+        fn DecodeFrame(bytes: u8[], maximumPayload: usize) -> std::Result<Frame> {
+            let reader = builders::ByteReader(bytes);
+            let magic = reader.ReadU32LE();
+            let version = reader.ReadU16LE();
+            let flags = reader.ReadU16LE();
+            let length = reader.ReadU64LE();
+            if (magic.IsNone() or version.IsNone() or flags.IsNone() or length.IsNone()) {
+                return std::Err<Frame>(std::MakeResultError(
+                    std::ResultDomain::custom, 1, "Binary frame header is truncated."));
+            }
+            if (magic.Value() != Magic) {
+                return std::Err<Frame>(std::MakeResultError(
+                    std::ResultDomain::custom, 2, "Binary frame magic is invalid."));
+            }
+            if (length.Value() > (maximumPayload fit u64) or
+                length.Value() > (reader.Remaining() fit u64)) {
+                return std::Err<Frame>(std::MakeResultError(
+                    std::ResultDomain::custom, 3, "Binary frame payload length is invalid."));
+            }
+            let payload = reader.ReadBytes((length.Value() fit usize));
+            if (payload.IsNone() or reader.Remaining() != 0usize) {
+                return std::Err<Frame>(std::MakeResultError(
+                    std::ResultDomain::custom, 4, "Binary frame contains malformed trailing data."));
+            }
+            return std::Ok(Frame(version.Value(), flags.Value(), payload.Value()));
+        }
+
+        fn DecodeFrame(bytes: u8[]) -> std::Result<Frame> {
+            return DecodeFrame(bytes, 64usize * 1024usize * 1024usize);
+        }
+    }
+}

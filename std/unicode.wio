@@ -22,6 +22,10 @@ realm std {
             with native, cpp::name(wio::runtime::std_unicode::TryAppendCodePoint);
         fn AppendByteCharacter(value: ref string, character: char)
             with native, cpp::name(wio::runtime::std_unicode::AppendByteCharacter);
+        fn ByteAt(value: string, index: usize) -> u8
+            with native, cpp::name(wio::runtime::std_unicode::ByteAt);
+        fn AppendByte(value: ref string, byte: u8)
+            with native, cpp::name(wio::runtime::std_unicode::AppendByte);
         fn IsWhitespace(codePoint: u32) -> bool
             with native, cpp::name(wio::runtime::std_unicode::IsWhitespace);
         fn IsAscii(codePoint: u32) -> bool

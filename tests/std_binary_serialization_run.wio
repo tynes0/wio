@@ -1,0 +1,28 @@
+use std::assert as assert;
+use std::binary as binary;
+use std::builders as builders;
+use std::console as console;
+
+fn Entry() -> i32 {
+    let writer = builders::ByteWriter();
+    writer.WriteU32LE(0x89abcdefu32);
+    writer.WriteU32BE(0x12345678u32);
+    writer.WriteU64LE(0x0123456789abcdefu64);
+    writer.WriteVarUInt(300u64);
+    writer.WriteString("Wio ✓");
+
+    let reader = builders::ByteReader(writer.ToArray());
+    assert::ExpectEqual(reader.ReadU32LE().Value(), 0x89abcdefu32, "u32 little endian");
+    assert::ExpectEqual(reader.ReadU32BE().Value(), 0x12345678u32, "u32 big endian");
+    assert::ExpectEqual(reader.ReadU64LE().Value(), 0x0123456789abcdefu64, "u64 little endian");
+    assert::ExpectEqual(reader.ReadVarUInt().Value(), 300u64, "varuint");
+    assert::ExpectEqual(reader.ReadString().Value(), "Wio ✓", "utf8 string");
+
+    let frame = binary::DecodeFrame(binary::EncodeFrame(writer.ToArray(), 7u16, 3u16));
+    assert::Expect(frame.IsOk(), "binary frame roundtrip");
+    assert::ExpectEqual(frame.Value().version, 7u16, "binary frame version");
+    assert::ExpectEqual(frame.Value().flags, 3u16, "binary frame flags");
+    assert::Expect(binary::DecodeFrame([1u8, 2u8]).IsError(), "truncated frame rejected");
+    console::PrintLine("std-binary-serialization-ok");
+    return 0;
+}

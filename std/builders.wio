@@ -43,6 +43,39 @@ realm std {
                 self.bytes.Push(((value >> 16u32) & 0xffu32) fit u8);
                 self.bytes.Push(((value >> 24u32) & 0xffu32) fit u8);
             }
+            public fn WriteU64LE(value: u64) {
+                mut shift = 0u64;
+                while (shift < 64u64) {
+                    self.bytes.Push(((value >> shift) & 0xffu64) fit u8);
+                    shift += 8u64;
+                }
+            }
+            public fn WriteU16BE(value: u16) {
+                self.bytes.Push(((value >> 8u16) & 0xffu16) fit u8);
+                self.bytes.Push((value & 0xffu16) fit u8);
+            }
+            public fn WriteU32BE(value: u32) {
+                self.bytes.Push(((value >> 24u32) & 0xffu32) fit u8);
+                self.bytes.Push(((value >> 16u32) & 0xffu32) fit u8);
+                self.bytes.Push(((value >> 8u32) & 0xffu32) fit u8);
+                self.bytes.Push((value & 0xffu32) fit u8);
+            }
+            public fn WriteVarUInt(value: u64) {
+                mut remaining = value;
+                while (remaining >= 0x80u64) {
+                    self.bytes.Push(((remaining & 0x7fu64) | 0x80u64) fit u8);
+                    remaining >>= 7u64;
+                }
+                self.bytes.Push(remaining fit u8);
+            }
+            public fn WriteString(value: string) {
+                self.WriteVarUInt(value.Count() fit u64);
+                mut index = 0usize;
+                while (index < value.Count()) {
+                    self.bytes.Push(unicode::ByteAt(value, index));
+                    index += 1usize;
+                }
+            }
             public fn WriteBytes(value: u8[]) {
                 for (item in value) { self.bytes.Push(item); }
             }
@@ -71,6 +104,95 @@ realm std {
                 let second = self.bytes[self.position + 1usize] fit u16;
                 self.position += 2usize;
                 return std::Some<u16>((first | (second << 8u16)) fit u16);
+            }
+            public fn ReadU32LE() -> std::Option<u32> {
+                if (self.Remaining() < 4usize) { return std::None<u32>(); }
+                mut value = 0u32;
+                mut index = 0usize;
+                while (index < 4usize) {
+                    value |= (self.bytes[self.position + index] fit u32) << ((index fit u32) * 8u32);
+                    index += 1usize;
+                }
+                self.position += 4usize;
+                return std::Some(value);
+            }
+            public fn ReadU64LE() -> std::Option<u64> {
+                if (self.Remaining() < 8usize) { return std::None<u64>(); }
+                mut value = 0u64;
+                mut index = 0usize;
+                while (index < 8usize) {
+                    value |= (self.bytes[self.position + index] fit u64) << ((index fit u64) * 8u64);
+                    index += 1usize;
+                }
+                self.position += 8usize;
+                return std::Some(value);
+            }
+            public fn ReadU16BE() -> std::Option<u16> {
+                if (self.Remaining() < 2usize) { return std::None<u16>(); }
+                let value = ((self.bytes[self.position] fit u16) << 8u16) |
+                    (self.bytes[self.position + 1usize] fit u16);
+                self.position += 2usize;
+                return std::Some(value);
+            }
+            public fn ReadU32BE() -> std::Option<u32> {
+                if (self.Remaining() < 4usize) { return std::None<u32>(); }
+                mut value = 0u32;
+                mut index = 0usize;
+                while (index < 4usize) {
+                    value = (value << 8u32) | (self.bytes[self.position + index] fit u32);
+                    index += 1usize;
+                }
+                self.position += 4usize;
+                return std::Some(value);
+            }
+            public fn ReadVarUInt() -> std::Option<u64> {
+                mut value = 0u64;
+                mut shift = 0u64;
+                mut cursor = self.position;
+                while (cursor < self.bytes.Count() and shift <= 63u64) {
+                    let byte = self.bytes[cursor];
+                    if (shift == 63u64 and (byte & 0xfeu8) != 0u8) { return std::None<u64>(); }
+                    value |= ((byte & 0x7fu8) fit u64) << shift;
+                    cursor += 1usize;
+                    if ((byte & 0x80u8) == 0u8) {
+                        self.position = cursor;
+                        return std::Some(value);
+                    }
+                    shift += 7u64;
+                }
+                return std::None<u64>();
+            }
+            public fn ReadBytes(count: usize) -> std::Option<u8[]> {
+                if (count > self.Remaining()) { return std::None<u8[]>(); }
+                mut value: u8[] = [];
+                value.Reserve(count);
+                mut index = 0usize;
+                while (index < count) {
+                    value.Push(self.bytes[self.position + index]);
+                    index += 1usize;
+                }
+                self.position += count;
+                return std::Some(value);
+            }
+            public fn ReadString() -> std::Option<string> {
+                let original = self.position;
+                let length = self.ReadVarUInt();
+                if (length.IsNone() or length.Value() > (self.Remaining() fit u64)) {
+                    self.position = original;
+                    return std::None<string>();
+                }
+                mut value = "";
+                mut index = 0usize;
+                while (index < length.Value() fit usize) {
+                    unicode::AppendByte(ref value, self.bytes[self.position + index]);
+                    index += 1usize;
+                }
+                self.position += index;
+                if (not unicode::IsValidUtf8(value)) {
+                    self.position = original;
+                    return std::None<string>();
+                }
+                return std::Some(value);
             }
             public fn Reset() { self.position = 0usize; }
         }

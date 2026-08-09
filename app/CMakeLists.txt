@@ -2978,6 +2978,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "std-unicode-builders-ok"
         --run
     )
+
+    add_wio_output_test(
+        wio_test_std_binary_serialization_run
+        "${CMAKE_SOURCE_DIR}/tests/std_binary_serialization_run.wio"
+        "std-binary-serialization-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_std_binary_serialization_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
     set_tests_properties(
         wio_test_std_unicode_builders_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"

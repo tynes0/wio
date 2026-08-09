@@ -134,6 +134,16 @@ namespace wio::runtime::std_unicode
         output.push_back(value);
     }
 
+    inline std::uint8_t ByteAt(const std::string_view input, const std::size_t index)
+    {
+        return static_cast<std::uint8_t>(input.at(index));
+    }
+
+    inline void AppendByte(std::string& output, const std::uint8_t value)
+    {
+        output.push_back(static_cast<char>(value));
+    }
+
     inline std::string SliceCodePoints(
         const std::string_view input,
         const std::size_t start,
