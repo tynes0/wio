@@ -756,6 +756,10 @@ namespace wio
         WIO_STMT_NODE_BODY(AttributeStatement)
 
         Attribute attribute;
+        // Canonical source name. Legacy built-ins retain their enum for the
+        // current analyzer/codegen while new and user-defined attributes keep
+        // their realm-qualified identity here.
+        std::string qualifiedName;
         std::vector<Token> args;
         std::vector<NodePtr<TypeSpecifier>> typeArgs;
         // Where clauses may place more than one conjunctive constraint in a
@@ -765,8 +769,34 @@ namespace wio
         std::vector<size_t> constraintGroupOffsets;
         bool conjunctiveConstraintGroups = false;
 
-        AttributeStatement(Attribute _attribute, std::vector<Token> _args, std::vector<NodePtr<TypeSpecifier>> _typeArgs = {}, common::Location _loc = common::Location::invalid());
+        AttributeStatement(Attribute _attribute, std::vector<Token> _args,
+            std::vector<NodePtr<TypeSpecifier>> _typeArgs = {},
+            common::Location _loc = common::Location::invalid(),
+            std::string _qualifiedName = {});
         ~AttributeStatement() override;
+    };
+
+    struct AttributeDeclaration : Statement
+    {
+        WIO_STMT_NODE_BODY(AttributeDeclaration)
+
+        NodePtr<Identifier> name;
+        std::vector<Parameter> parameters;
+        std::vector<std::string> targets;
+        std::vector<std::string> retention;
+        bool repeatable = false;
+        bool inherited = false;
+        bool scoped = false;
+
+        AttributeDeclaration(NodePtr<Identifier> _name,
+            std::vector<Parameter> _parameters,
+            std::vector<std::string> _targets,
+            std::vector<std::string> _retention,
+            bool _repeatable,
+            bool _inherited,
+            bool _scoped,
+            common::Location _loc = common::Location::invalid());
+        ~AttributeDeclaration() override;
     };
 
     struct VariableDeclaration : Statement
@@ -886,11 +916,13 @@ namespace wio
     {
         WIO_STMT_NODE_BODY(ExtensionDeclaration)
 
+        std::vector<NodePtr<AttributeStatement>> attributes;
         NodePtr<Identifier> name;
         NodePtr<TypeSpecifier> targetType;
         std::vector<ExtensionMember> members;
 
-        ExtensionDeclaration(NodePtr<Identifier> _name,
+        ExtensionDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
+            NodePtr<Identifier> _name,
             NodePtr<TypeSpecifier> _targetType,
             std::vector<ExtensionMember> _members,
             common::Location _loc);

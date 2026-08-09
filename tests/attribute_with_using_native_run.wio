@@ -1,0 +1,17 @@
+use std::assert as assert;
+use std::console as console;
+
+using cpp::header("std_math.h");
+
+fn NativeAbs(value: i32) -> i32
+    with native, cpp::name(wio::runtime::std_math::AbsI32);
+
+component Counter with final {
+    value: i32 with readonly;
+}
+
+fn Entry() -> i32 {
+    assert::ExpectEqual(NativeAbs(-42), 42, "with native/cpp::name should preserve native dispatch");
+    console::PrintLine!("attribute-with-using-native-ok");
+    return 0;
+}

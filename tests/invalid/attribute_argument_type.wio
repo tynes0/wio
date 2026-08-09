@@ -1,0 +1,8 @@
+attribute route(path: string) for fn retain compile;
+
+fn Invalid() with route(42) {
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

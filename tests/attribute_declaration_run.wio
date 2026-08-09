@@ -1,0 +1,16 @@
+use std::console as console;
+
+attribute route(method: string, path: string = "/")
+    for fn
+    retain runtime
+    repeatable;
+
+fn Health() -> string
+    with route("GET"), route("HEAD", "/health") {
+    return "ok";
+}
+
+fn Entry() -> i32 {
+    console::PrintLine($"attribute-declaration-${Health()}");
+    return 0;
+}

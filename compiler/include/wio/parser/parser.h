@@ -59,7 +59,9 @@ namespace wio
         
         NodePtr<Statement> parseStatement();
         NodePtr<Statement> parseBlockStatement();
-        NodePtr<AttributeStatement> parseAttributeStatement();
+        NodePtr<AttributeStatement> parseAttributeStatement(bool legacyAtSyntax = true);
+        void parseWithAttributeClause(std::vector<NodePtr<AttributeStatement>>& attributes);
+        NodePtr<AttributeDeclaration> parseAttributeDeclaration();
         NodePtr<VariableDeclaration> parseVariableDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
         NodePtr<TypeAliasDeclaration> parseTypeAliasDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
         NodePtr<FunctionDeclaration> parseFunctionDeclaration(std::vector<NodePtr<AttributeStatement>> attributes, bool isLifecycle = false, bool isStructMethod = false);
@@ -78,6 +80,7 @@ namespace wio
         NodePtr<Statement> parseContinueStatement();
         NodePtr<Statement> parseReturnStatement();
         NodePtr<Statement> parseUseStatement();
+        NodePtr<Statement> parseUsingStatement();
         NodePtr<Statement> parseRealmDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
 
         [[nodiscard]] static int getPrecedence(TokenType type);

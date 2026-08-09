@@ -83,6 +83,8 @@ namespace wio::sema
         [[nodiscard]] GenericConstraintCapabilities resolveGenericConstraintCapabilities(const Ref<Type>& type) const;
         [[nodiscard]] bool allowsNumericSemantics(const Ref<Type>& type) const;
         [[nodiscard]] bool allowsIntegerSemantics(const Ref<Type>& type) const;
+        void validateAttributeApplications(const std::vector<NodePtr<AttributeStatement>>& attributes,
+                                           std::string_view target);
 
         std::unordered_set<std::string> validatedGenericFunctionBodyKeys_;
         std::unordered_set<std::string> validatingGenericFunctionBodyKeys_;

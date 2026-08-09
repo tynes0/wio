@@ -12708,9 +12708,221 @@ namespace wio::sema
     {
         WIO_UNUSED(node);
     }
+
+    void SemanticAnalyzer::validateAttributeApplications(
+        const std::vector<NodePtr<AttributeStatement>>& attributes,
+        std::string_view target)
+    {
+        std::unordered_map<const Symbol*, size_t> applicationCounts;
+
+        for (const auto& attribute : attributes)
+        {
+            if (!attribute || attribute->attribute != Attribute::Unknown)
+                continue;
+
+            Ref<Symbol> symbol = resolveQualifiedSymbol(currentScope_, attribute->qualifiedName);
+            if (!symbol || symbol->kind != SymbolKind::Attribute)
+            {
+                WIO_LOG_ADD_ERROR(
+                    attribute->location(),
+                    "Unknown attribute '{}'. Declare it with 'attribute' or use a built-in attribute name.",
+                    attribute->qualifiedName.empty() ? "<unnamed>" : attribute->qualifiedName
+                );
+                continue;
+            }
+
+            const bool targetAllowed = std::ranges::find(
+                symbol->attributeTargets, std::string(target)) != symbol->attributeTargets.end();
+            if (!targetAllowed)
+            {
+                std::string allowedTargets;
+                for (size_t index = 0; index < symbol->attributeTargets.size(); ++index)
+                {
+                    if (index != 0)
+                        allowedTargets += " | ";
+                    allowedTargets += symbol->attributeTargets[index];
+                }
+                WIO_LOG_ADD_ERROR(
+                    attribute->location(),
+                    "Attribute '{}' cannot target '{}'. Allowed targets: {}.",
+                    attribute->qualifiedName,
+                    target,
+                    allowedTargets
+                );
+            }
+
+            const size_t applicationCount = ++applicationCounts[symbol.Get()];
+            if (applicationCount > 1 && !symbol->attributeRepeatable)
+            {
+                WIO_LOG_ADD_ERROR(
+                    attribute->location(),
+                    "Attribute '{}' is not repeatable on the same declaration.",
+                    attribute->qualifiedName
+                );
+            }
+
+            size_t requiredArgumentCount = symbol->attributeParameterTypes.size();
+            while (requiredArgumentCount > 0 &&
+                   symbol->attributeParameterHasDefault[requiredArgumentCount - 1])
+            {
+                --requiredArgumentCount;
+            }
+
+            if (attribute->args.size() < requiredArgumentCount ||
+                attribute->args.size() > symbol->attributeParameterTypes.size())
+            {
+                WIO_LOG_ADD_ERROR(
+                    attribute->location(),
+                    "Attribute '{}' expects {} to {} arguments, but got {}.",
+                    attribute->qualifiedName,
+                    requiredArgumentCount,
+                    symbol->attributeParameterTypes.size(),
+                    attribute->args.size()
+                );
+                continue;
+            }
+
+            for (size_t index = 0; index < attribute->args.size(); ++index)
+            {
+                Ref<Type> expectedType = unwrapAliasType(symbol->attributeParameterTypes[index]);
+                if (!expectedType || expectedType->isUnknown())
+                    continue;
+
+                const Token& argument = attribute->args[index];
+                bool compatible = true;
+                if (expectedType->kind() == TypeKind::Primitive)
+                {
+                    const std::string& primitiveName = expectedType.AsFast<PrimitiveType>()->name;
+                    if (primitiveName == "string")
+                        compatible = argument.type == TokenType::stringLiteral;
+                    else if (primitiveName == "bool")
+                        compatible = argument.type == TokenType::kwTrue || argument.type == TokenType::kwFalse;
+                    else if (primitiveName == "f32" || primitiveName == "f64")
+                        compatible = argument.type == TokenType::floatLiteral || argument.type == TokenType::integerLiteral;
+                    else if (primitiveName != "void")
+                        compatible = argument.type == TokenType::integerLiteral || argument.type == TokenType::byteLiteral;
+                }
+
+                if (!compatible)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        argument.loc,
+                        "Argument {} of attribute '{}' must be '{}'.",
+                        index + 1,
+                        attribute->qualifiedName,
+                        expectedType->toString()
+                    );
+                }
+            }
+        }
+    }
+
+    void SemanticAnalyzer::visit(AttributeDeclaration& node)
+    {
+        if (isStructResolutionPass_)
+            return;
+
+        if (isDeclarationPass_)
+        {
+            static const std::unordered_set<std::string> supportedTargets = {
+                "fn", "method", "component", "object", "interface", "type",
+                "field", "variable", "parameter", "generic_parameter",
+                "enum", "flagset", "flag", "enum_case", "extension", "realm"
+            };
+            static const std::unordered_set<std::string> supportedRetention = {
+                "source", "compile", "runtime"
+            };
+
+            std::unordered_set<std::string> parameterNames;
+            bool sawDefault = false;
+            std::vector<Ref<Type>> parameterTypes;
+            std::vector<std::string> names;
+            std::vector<bool> hasDefaults;
+            parameterTypes.reserve(node.parameters.size());
+            names.reserve(node.parameters.size());
+            hasDefaults.reserve(node.parameters.size());
+
+            for (auto& parameter : node.parameters)
+            {
+                if (!parameter.name || !parameter.type)
+                    continue;
+
+                const std::string& parameterName = parameter.name->token.value;
+                if (!parameterNames.insert(parameterName).second)
+                    WIO_LOG_ADD_ERROR(parameter.name->location(), "Attribute parameter '{}' is duplicated.", parameterName);
+
+                parameter.type->accept(*this);
+                parameterTypes.push_back(parameter.type->refType.Lock());
+                names.push_back(parameterName);
+                hasDefaults.push_back(parameter.defaultValue != nullptr);
+
+                if (parameter.defaultValue)
+                    sawDefault = true;
+                else if (sawDefault)
+                    WIO_LOG_ADD_ERROR(parameter.name->location(), "Required attribute parameters cannot follow defaulted parameters.");
+            }
+
+            for (const auto& target : node.targets)
+            {
+                if (!supportedTargets.contains(target))
+                    WIO_LOG_ADD_ERROR(node.location(), "Unknown attribute target '{}'.", target);
+            }
+            for (const auto& retention : node.retention)
+            {
+                if (!supportedRetention.contains(retention))
+                    WIO_LOG_ADD_ERROR(node.location(), "Unknown attribute retention '{}'.", retention);
+            }
+
+            Ref<Symbol> symbol = createSymbol(
+                node.name->token.value,
+                Compiler::get().getTypeContext().getUnknown(),
+                SymbolKind::Attribute,
+                node.location()
+            );
+            symbol->attributeTargets = node.targets;
+            symbol->attributeRetention = node.retention;
+            symbol->attributeParameterNames = std::move(names);
+            symbol->attributeParameterTypes = std::move(parameterTypes);
+            symbol->attributeParameterHasDefault = std::move(hasDefaults);
+            symbol->attributeRepeatable = node.repeatable;
+            symbol->attributeInherited = node.inherited;
+            symbol->attributeScoped = node.scoped;
+            currentScope_->define(node.name->token.value, symbol);
+            node.name->referencedSymbol = symbol;
+            node.name->refType = symbol->type;
+            return;
+        }
+
+        for (size_t index = 0; index < node.parameters.size(); ++index)
+        {
+            auto& parameter = node.parameters[index];
+            if (!parameter.defaultValue)
+                continue;
+
+            parameter.defaultValue->accept(*this);
+            Ref<Type> actualType = parameter.defaultValue->refType.Lock();
+            Ref<Type> expectedType = parameter.type ? parameter.type->refType.Lock() : nullptr;
+            if (expectedType && actualType &&
+                !expectedType->isUnknown() && !actualType->isUnknown() &&
+                !isAssignmentLikeCompatible(expectedType, actualType))
+            {
+                WIO_LOG_ADD_ERROR(
+                    parameter.defaultValue->location(),
+                    "Default value for attribute parameter '{}' must be '{}', got '{}'.",
+                    parameter.name ? parameter.name->token.value : std::to_string(index),
+                    expectedType->toString(),
+                    actualType->toString()
+                );
+            }
+        }
+    }
     
     void SemanticAnalyzer::visit(VariableDeclaration& node)
     {
+        if (!isDeclarationPass_ && !isStructResolutionPass_)
+            validateAttributeApplications(
+                node.attributes,
+                currentScope_->getKind() == ScopeKind::Struct ? "field" : "variable");
         if (hasAttribute(node.attributes, Attribute::Specialize) &&
             (isDeclarationPass_ || currentScope_->getKind() == ScopeKind::Function || currentScope_->getKind() == ScopeKind::Block))
         {
@@ -12954,6 +13166,8 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(TypeAliasDeclaration& node)
     {
+        if (!isDeclarationPass_ && !isStructResolutionPass_)
+            validateAttributeApplications(node.attributes, "type");
         if (hasAttribute(node.attributes, Attribute::Specialize) &&
             (isDeclarationPass_ || currentScope_->getKind() == ScopeKind::Function || currentScope_->getKind() == ScopeKind::Block))
         {
@@ -13035,6 +13249,10 @@ namespace wio::sema
     
     void SemanticAnalyzer::visit(FunctionDeclaration& node)
     {
+        if (!isDeclarationPass_ && !isStructResolutionPass_)
+            validateAttributeApplications(
+                node.attributes,
+                currentScope_->getKind() == ScopeKind::Struct ? "method" : "fn");
         auto buildGenericTypeParameterScope = [&]() -> std::unordered_map<std::string, Ref<Type>>
         {
             std::unordered_map<std::string, Ref<Type>> scope;
@@ -14279,6 +14497,8 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(InterfaceDeclaration& node)
     {
+        if (!isDeclarationPass_ && !isStructResolutionPass_)
+            validateAttributeApplications(node.attributes, "interface");
         auto buildGenericTypeParameterScope = [&]() -> std::unordered_map<std::string, Ref<Type>>
         {
             std::unordered_map<std::string, Ref<Type>> scope;
@@ -14375,6 +14595,8 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(ExtensionDeclaration& node)
     {
+        if (!isDeclarationPass_ && !isStructResolutionPass_)
+            validateAttributeApplications(node.attributes, "extension");
         if (isDeclarationPass_)
             return;
 
@@ -14491,6 +14713,8 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(ComponentDeclaration& node)
     {
+        if (!isDeclarationPass_ && !isStructResolutionPass_)
+            validateAttributeApplications(node.attributes, "component");
         const bool isExplicitSpecialization = hasAttribute(node.attributes, Attribute::Specialize);
 
         auto buildGenericTypeParameterScope = [&]() -> std::unordered_map<std::string, Ref<Type>>
@@ -15106,6 +15330,8 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(ObjectDeclaration& node)
     {
+        if (!isDeclarationPass_ && !isStructResolutionPass_)
+            validateAttributeApplications(node.attributes, "object");
         const bool isExplicitSpecialization = hasAttribute(node.attributes, Attribute::Specialize);
 
         auto buildGenericTypeParameterScope = [&]() -> std::unordered_map<std::string, Ref<Type>>
@@ -15817,6 +16043,8 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(FlagDeclaration& node)
     {
+        if (!isDeclarationPass_ && !isStructResolutionPass_)
+            validateAttributeApplications(node.attributes, "flag");
         if (isDeclarationPass_)
         {
             if (hasAttribute(node.attributes, Attribute::Specialize))
@@ -15853,6 +16081,8 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(EnumDeclaration& node)
     {
+        if (!isDeclarationPass_ && !isStructResolutionPass_)
+            validateAttributeApplications(node.attributes, "enum");
         if (isDeclarationPass_)
         {
             if (hasAttribute(node.attributes, Attribute::Specialize))
@@ -15971,6 +16201,8 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(FlagsetDeclaration& node)
     {
+        if (!isDeclarationPass_ && !isStructResolutionPass_)
+            validateAttributeApplications(node.attributes, "flagset");
         if (isDeclarationPass_) {
             if (hasAttribute(node.attributes, Attribute::Specialize))
                 WIO_LOG_ADD_ERROR(node.location(), "@Specialize is supported only on generic object and component declarations.");

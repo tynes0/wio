@@ -32,6 +32,37 @@ namespace wio
         {
             return token.type == TokenType::integerLiteral || token.type == TokenType::floatLiteral;
         }
+
+        std::optional<Attribute> resolveAttributeName(std::string_view name)
+        {
+            if (auto legacy = frenum::cast<Attribute>(name); legacy.has_value())
+                return legacy;
+
+            if (name == "readonly") return Attribute::ReadOnly;
+            if (name == "default") return Attribute::Default;
+            if (name == "no_default_ctor") return Attribute::NoDefaultCtor;
+            if (name == "generate_ctors") return Attribute::GenerateCtors;
+            if (name == "from" || name == "conversion::from") return Attribute::From;
+            if (name == "trust") return Attribute::Trust;
+            if (name == "final") return Attribute::Final;
+            if (name == "type" || name == "abi::type") return Attribute::Type;
+            if (name == "native") return Attribute::Native;
+            if (name == "cpp::header") return Attribute::CppHeader;
+            if (name == "cpp::name") return Attribute::CppName;
+            if (name == "instantiate") return Attribute::Instantiate;
+            if (name == "specialize") return Attribute::Specialize;
+            if (name == "apply") return Attribute::Apply;
+            if (name == "export" || name == "export::c") return Attribute::Export;
+            if (name == "command") return Attribute::Command;
+            if (name == "event") return Attribute::Event;
+            if (name == "module::api_version") return Attribute::ModuleApiVersion;
+            if (name == "module::load") return Attribute::ModuleLoad;
+            if (name == "module::update") return Attribute::ModuleUpdate;
+            if (name == "module::unload") return Attribute::ModuleUnload;
+            if (name == "module::save_state") return Attribute::ModuleSaveState;
+            if (name == "module::restore_state") return Attribute::ModuleRestoreState;
+            return std::nullopt;
+        }
     }
     
     NodePtr<Program> Parser::parseProgram()
@@ -1014,6 +1045,12 @@ namespace wio
                 return parseVariableDeclaration(std::move(attributes));
             if (match(TokenType::kwType))
                 return parseTypeAliasDeclaration(std::move(attributes));
+            if (match(TokenType::kwAttribute))
+            {
+                if (!attributes.empty())
+                    utError("Attribute declarations cannot currently carry attributes.", attributes.front()->location());
+                return parseAttributeDeclaration();
+            }
             if (match(TokenType::kwFn))
                 return parseFunctionDeclaration(std::move(attributes));
             if (match(TokenType::kwInterface))
@@ -1046,6 +1083,8 @@ namespace wio
                 return parseReturnStatement();
             if (match(TokenType::kwUse))
                 return parseUseStatement();
+            if (match(TokenType::kwUsing))
+                return parseUsingStatement();
         }
         else if (peek().isOperator())
         {
@@ -1086,12 +1125,18 @@ namespace wio
         return makeNodePtr<BlockStatement>(std::move(statements));
     }
 
-    NodePtr<AttributeStatement> Parser::parseAttributeStatement()
+    NodePtr<AttributeStatement> Parser::parseAttributeStatement(bool legacyAtSyntax)
     {
-        Token startTok = consume(TokenType::atSign);
+        Token startTok = legacyAtSyntax ? consume(TokenType::atSign) : peek();
         Location startLoc = startTok.loc;
 
         Token id = consumeIdentifier();
+        std::string qualifiedName = id.value;
+        while (match(TokenType::opScope, true))
+        {
+            qualifiedName += "::";
+            qualifiedName += consumeIdentifier().value;
+        }
 
         std::vector<Token> args;
         std::vector<NodePtr<TypeSpecifier>> typeArgs;
@@ -1136,11 +1181,112 @@ namespace wio
             consume(TokenType::rightParen);
         }
 
-        if (std::optional<Attribute> attribute = frenum::cast<Attribute>(id.value); attribute.has_value())
+        if (std::optional<Attribute> attribute = resolveAttributeName(qualifiedName); attribute.has_value())
         {
-            return makeNodePtr<AttributeStatement>(attribute.value(), args, typeArgs, startLoc);
+            return makeNodePtr<AttributeStatement>(attribute.value(), args, typeArgs, startLoc, qualifiedName);
         }
-        return makeNodePtr<AttributeStatement>(Attribute::Unknown, args, typeArgs, startLoc);
+        return makeNodePtr<AttributeStatement>(Attribute::Unknown, args, typeArgs, startLoc, qualifiedName);
+    }
+
+    void Parser::parseWithAttributeClause(std::vector<NodePtr<AttributeStatement>>& attributes)
+    {
+        if (!match(TokenType::kwWith, true))
+            return;
+
+        attributes.push_back(parseAttributeStatement(false));
+        while (match(TokenType::comma, true))
+            attributes.push_back(parseAttributeStatement(false));
+    }
+
+    NodePtr<AttributeDeclaration> Parser::parseAttributeDeclaration()
+    {
+        Token startTok = consume(TokenType::kwAttribute);
+        auto name = makeNodePtr<Identifier>(consumeIdentifier());
+
+        consume(TokenType::leftParen);
+        std::vector<Parameter> parameters;
+        if (!match(TokenType::rightParen))
+        {
+            while (true)
+            {
+                auto parameterName = makeNodePtr<Identifier>(consumeIdentifier());
+                consume(TokenType::opColon);
+                auto parameterType = parseType();
+                NodePtr<Expression> defaultValue = nullptr;
+                if (match(TokenType::opAssign, true))
+                    defaultValue = parseExpression();
+                parameters.emplace_back(
+                    std::move(parameterName), std::move(parameterType),
+                    std::move(defaultValue), false);
+
+                if (!match(TokenType::comma, true))
+                    break;
+                expectElementAfterComma(TokenType::rightParen, "attribute parameter");
+            }
+        }
+        consume(TokenType::rightParen);
+
+        auto consumePolicyWord = [&]() -> Token
+        {
+            Token token = peek();
+            if (!token.isIdentifier() && !token.isKeyword())
+                utError("Expected an attribute policy name.", token.loc);
+            advance();
+            return token;
+        };
+
+        std::vector<std::string> targets;
+        std::vector<std::string> retention;
+        bool repeatable = false;
+        bool inherited = false;
+        bool scoped = false;
+
+        if (match(TokenType::kwFor, true))
+        {
+            targets.push_back(consumePolicyWord().value);
+            while (match(TokenType::opBitOr, true))
+                targets.push_back(consumePolicyWord().value);
+        }
+        else
+        {
+            utError("Attribute declarations require a 'for' target clause.", startTok.loc);
+        }
+
+        while (!match(TokenType::semicolon))
+        {
+            if (match(TokenType::identifier, "retain", true))
+            {
+                retention.push_back(consumePolicyWord().value);
+                while (match(TokenType::opBitOr, true))
+                    retention.push_back(consumePolicyWord().value);
+                continue;
+            }
+            if (match(TokenType::identifier, "repeatable", true))
+            {
+                repeatable = true;
+                continue;
+            }
+            if (match(TokenType::identifier, "inherited", true))
+            {
+                inherited = true;
+                continue;
+            }
+            if (match(TokenType::identifier, "scoped", true))
+            {
+                scoped = true;
+                continue;
+            }
+
+            utError("Unknown attribute declaration policy '" + peek().value + "'.", peek().loc);
+        }
+        consume(TokenType::semicolon);
+
+        if (retention.empty())
+            retention.push_back("compile");
+
+        return makeNodePtr<AttributeDeclaration>(
+            std::move(name), std::move(parameters), std::move(targets),
+            std::move(retention), repeatable, inherited, scoped, startTok.loc);
     }
 
     NodePtr<VariableDeclaration> Parser::parseVariableDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
@@ -1164,6 +1310,8 @@ namespace wio
         NodePtr<TypeSpecifier> specifier;
         if (match(TokenType::opColon, true))
             specifier = parseType();
+
+        parseWithAttributeClause(attributes);
 
         NodePtr<Expression> initializer = nullptr;
 
@@ -1354,6 +1502,7 @@ namespace wio
 
         consume(TokenType::opAssign);
         NodePtr<TypeSpecifier> aliasedType = parseType();
+        parseWithAttributeClause(attributes);
         consume(TokenType::semicolon);
 
         return makeNodePtr<TypeAliasDeclaration>(
@@ -1491,6 +1640,8 @@ namespace wio
 
         if (auto whereClause = parseWhereClause(genericParameterList.parameters, genericParameterList.hasParameterPack))
             attributes.push_back(std::move(whereClause));
+
+        parseWithAttributeClause(attributes);
         
         NodePtr<Expression> whenCond = nullptr;
         NodePtr<Expression> whenFallback = nullptr;
@@ -1528,6 +1679,8 @@ namespace wio
         if (auto whereClause = parseWhereClause(genericParameterList.parameters, genericParameterList.hasParameterPack))
             attributes.push_back(std::move(whereClause));
 
+        parseWithAttributeClause(attributes);
+
         consume(TokenType::leftBrace);
         std::vector<NodePtr<FunctionDeclaration>> methods;
 
@@ -1558,6 +1711,8 @@ namespace wio
 
         if (auto whereClause = parseWhereClause(genericParameterList.parameters, genericParameterList.hasParameterPack))
             attributes.push_back(std::move(whereClause));
+
+        parseWithAttributeClause(attributes);
 
         consume(TokenType::leftBrace);
         std::vector<ComponentMember> members;
@@ -1603,6 +1758,8 @@ namespace wio
                 
                 NodePtr<TypeSpecifier> memberType = nullptr;
                 if (match(TokenType::opColon, true)) memberType = parseType();
+
+                parseWithAttributeClause(memberAttrs);
                 
                 NodePtr<Expression> init = nullptr;
                 if (match(TokenType::opAssign, true)) init = parseExpression();
@@ -1639,12 +1796,11 @@ namespace wio
     NodePtr<Statement> Parser::parseExtensionDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
     {
         Token startTok = consume(TokenType::kwExtension);
-        if (!attributes.empty())
-            utError("Extension declarations do not support attributes yet.", attributes.front()->location());
 
         NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
         consume(TokenType::kwFor);
         NodePtr<TypeSpecifier> targetType = parseType();
+        parseWithAttributeClause(attributes);
         consume(TokenType::leftBrace);
 
         std::vector<ExtensionMember> members;
@@ -1702,7 +1858,7 @@ namespace wio
         }
         consume(TokenType::rightBrace);
         return makeNodePtr<ExtensionDeclaration>(
-            std::move(name), std::move(targetType), std::move(members), startTok.loc);
+            std::move(attributes), std::move(name), std::move(targetType), std::move(members), startTok.loc);
     }
 
     NodePtr<Statement> Parser::parseObjectDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
@@ -1713,6 +1869,8 @@ namespace wio
 
         if (auto whereClause = parseWhereClause(genericParameterList.parameters, genericParameterList.hasParameterPack))
             attributes.push_back(std::move(whereClause));
+
+        parseWithAttributeClause(attributes);
 
         consume(TokenType::leftBrace);
         std::vector<ObjectMember> members;
@@ -1758,6 +1916,8 @@ namespace wio
                 
                 NodePtr<TypeSpecifier> memberType = nullptr;
                 if (match(TokenType::opColon, true)) memberType = parseType();
+
+                parseWithAttributeClause(memberAttrs);
                 
                 NodePtr<Expression> init = nullptr;
                 if (match(TokenType::opAssign, true)) init = parseExpression();
@@ -1795,6 +1955,7 @@ namespace wio
     {
         Token startTok = consume(TokenType::kwFlag);
         NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
+        parseWithAttributeClause(attributes);
         consume(TokenType::semicolon); // flag IsDead;
         
         return makeNodePtr<FlagDeclaration>(std::move(attributes), std::move(name), startTok.loc);
@@ -1804,6 +1965,7 @@ namespace wio
     {
         Token startTok = consume(TokenType::kwEnum);
         NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
+        parseWithAttributeClause(attributes);
         
         consume(TokenType::leftBrace);
         std::vector<EnumMember> members;
@@ -1828,6 +1990,7 @@ namespace wio
     {
         Token startTok = consume(TokenType::kwFlagset);
         NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
+        parseWithAttributeClause(attributes);
         
         consume(TokenType::leftBrace);
         std::vector<EnumMember> members;
@@ -2193,6 +2356,20 @@ namespace wio
         consume(TokenType::semicolon);
         
         return makeNodePtr<UseStatement>(std::move(moduleName), std::move(modulePath), std::move(aliasName), isStdLib, false, importAllIntoScope, startLoc);
+    }
+
+    NodePtr<Statement> Parser::parseUsingStatement()
+    {
+        Token startTok = consume(TokenType::kwUsing);
+        NodePtr<AttributeStatement> attribute = parseAttributeStatement(false);
+        if (attribute->attribute != Attribute::CppHeader)
+            utError("Scoped 'using' currently accepts cpp::header while user-defined scoped attributes are being introduced.", startTok.loc);
+
+        if (attribute->args.size() != 1 || attribute->args.front().type != TokenType::stringLiteral)
+            utError("cpp::header expects exactly one string literal path.", startTok.loc);
+
+        consume(TokenType::semicolon);
+        return makeNodePtr<UseStatement>("", attribute->args.front().value, "", false, true, false, startTok.loc);
     }
 
     NodePtr<Statement> Parser::parseRealmDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)

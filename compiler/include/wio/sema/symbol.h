@@ -14,7 +14,7 @@ namespace wio::sema
     DEFINE_FLAGS(SymbolFlags, SYMBOL_FLAGS);
 #undef SYMBOL_FLAGS
     
-    enum class SymbolKind : uint8_t { Variable, Function, Struct, TypeAlias, Parameter, Namespace, FunctionGroup };
+    enum class SymbolKind : uint8_t { Variable, Function, Struct, TypeAlias, Parameter, Namespace, FunctionGroup, Attribute };
     enum class ScopeKind : uint8_t { Global, Function, Block, Struct };
 
     class Scope;
@@ -41,6 +41,15 @@ namespace wio::sema
         std::string extensionMemberName;
         Ref<Symbol> extensionImplementation = nullptr;
 
+        std::vector<std::string> attributeTargets;
+        std::vector<std::string> attributeRetention;
+        std::vector<std::string> attributeParameterNames;
+        std::vector<Ref<Type>> attributeParameterTypes;
+        std::vector<bool> attributeParameterHasDefault;
+        bool attributeRepeatable = false;
+        bool attributeInherited = false;
+        bool attributeScoped = false;
+
         Symbol() = default;
         Symbol(std::string name, Ref<Type> type, SymbolKind kind, SymbolFlags flags, common::Location loc, Ref<Scope> innerScope = nullptr)
             : name(std::move(name)), type(std::move(type)), kind(kind), flags(flags), definitionLoc(loc), innerScope(std::move(innerScope))
@@ -49,5 +58,5 @@ namespace wio::sema
     };
 }
 
-MakeFrenumWithNamespace(wio::sema, SymbolKind, Variable, Function, Struct, TypeAlias, Parameter, Namespace, FunctionGroup)
+MakeFrenumWithNamespace(wio::sema, SymbolKind, Variable, Function, Struct, TypeAlias, Parameter, Namespace, FunctionGroup, Attribute)
 MakeFrenumWithNamespace(wio::sema, ScopeKind, Global, Function, Block, Struct)

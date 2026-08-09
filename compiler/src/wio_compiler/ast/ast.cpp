@@ -255,12 +255,32 @@ namespace wio
 
     ExpressionStatement::~ExpressionStatement() = default;
 
-    AttributeStatement::AttributeStatement(Attribute _attribute, std::vector<Token> _args, std::vector<NodePtr<TypeSpecifier>> _typeArgs, common::Location _loc)
-        : Statement(_loc), attribute(_attribute), args(std::move(_args)), typeArgs(std::move(_typeArgs))
+    AttributeStatement::AttributeStatement(Attribute _attribute, std::vector<Token> _args,
+        std::vector<NodePtr<TypeSpecifier>> _typeArgs, common::Location _loc,
+        std::string _qualifiedName)
+        : Statement(_loc), attribute(_attribute), qualifiedName(std::move(_qualifiedName)),
+          args(std::move(_args)), typeArgs(std::move(_typeArgs))
     {
     }
 
     AttributeStatement::~AttributeStatement() = default;
+
+    AttributeDeclaration::AttributeDeclaration(NodePtr<Identifier> _name,
+        std::vector<Parameter> _parameters,
+        std::vector<std::string> _targets,
+        std::vector<std::string> _retention,
+        bool _repeatable,
+        bool _inherited,
+        bool _scoped,
+        common::Location _loc)
+        : Statement(_loc.isValid() ? _loc : _name->location()),
+          name(std::move(_name)), parameters(std::move(_parameters)),
+          targets(std::move(_targets)), retention(std::move(_retention)),
+          repeatable(_repeatable), inherited(_inherited), scoped(_scoped)
+    {
+    }
+
+    AttributeDeclaration::~AttributeDeclaration() = default;
 
     VariableDeclaration::VariableDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, Mutability _mutability,
         NodePtr<Identifier> _name, NodePtr<TypeSpecifier> _type, NodePtr<Expression> _init, bool _isPackField, common::Location _loc)
@@ -325,11 +345,13 @@ namespace wio
 
     ComponentDeclaration::~ComponentDeclaration() = default;
 
-    ExtensionDeclaration::ExtensionDeclaration(NodePtr<Identifier> _name,
+    ExtensionDeclaration::ExtensionDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
+                                               NodePtr<Identifier> _name,
                                                NodePtr<TypeSpecifier> _targetType,
                                                std::vector<ExtensionMember> _members,
                                                common::Location _loc)
         : Statement(_loc),
+          attributes(std::move(_attributes)),
           name(std::move(_name)),
           targetType(std::move(_targetType)),
           members(std::move(_members))

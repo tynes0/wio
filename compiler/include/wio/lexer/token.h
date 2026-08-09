@@ -118,6 +118,9 @@ namespace wio
          Keywords – binding / modules
          =============================== */
       kwUse,
+      kwUsing,
+      kwWith,
+      kwAttribute,
       kwAs,
       kwRealm,
 
@@ -325,6 +328,9 @@ namespace wio
       { "wait",      TokenType::kwWait },
    
       { "use",       TokenType::kwUse },
+      { "using",     TokenType::kwUsing },
+      { "with",      TokenType::kwWith },
+      { "attribute", TokenType::kwAttribute },
       { "as",        TokenType::kwAs },
       { "realm",     TokenType::kwRealm },
 

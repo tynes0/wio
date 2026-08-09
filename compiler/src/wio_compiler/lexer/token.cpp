@@ -117,6 +117,9 @@ namespace wio
           Keywords – binding / modules
           =============================== */
        case TokenType::kwUse: return "kwUse";
+       case TokenType::kwUsing: return "kwUsing";
+       case TokenType::kwWith: return "kwWith";
+       case TokenType::kwAttribute: return "kwAttribute";
        case TokenType::kwAs: return "kwAs";
        case TokenType::kwRealm: return "kwRealm";
    

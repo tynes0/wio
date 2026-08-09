@@ -7346,6 +7346,11 @@ namespace wio::codegen
         WIO_UNUSED(node);
     }
 
+    void CppGenerator::visit(AttributeDeclaration& node)
+    {
+        WIO_UNUSED(node);
+    }
+
     void CppGenerator::visit(VariableDeclaration& node)
     {
         emitSourceDirective(node.location());

@@ -70,6 +70,8 @@ if(EXISTS "${WIO_SELFHOST_CLI_SOURCE}" AND EXISTS "${WIO_SELFHOST_ARGONAUT_SOURC
 
     add_custom_command(TARGET wio_app POST_BUILD
         COMMAND
+            ${CMAKE_COMMAND} -E env
+            "WIO_ROOT=${CMAKE_SOURCE_DIR}"
             $<TARGET_FILE:wio_app>
             "${WIO_SELFHOST_CLI_SOURCE}"
             --target exe
@@ -100,7 +102,9 @@ endif()
 function(add_wio_dev_target target_name source_file)
     add_custom_target(
         ${target_name}
-        COMMAND $<TARGET_FILE:wio_app> "${source_file}" ${ARGN}
+        COMMAND ${CMAKE_COMMAND} -E env
+            "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+            $<TARGET_FILE:wio_app> "${source_file}" ${ARGN}
         DEPENDS wio_app
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         USES_TERMINAL
@@ -2870,6 +2874,48 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
     set_tests_properties(
         wio_test_std_unit_result_alias_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
+        wio_test_attribute_with_using_native_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_with_using_native_run.wio"
+        "attribute-with-using-native-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_attribute_with_using_native_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
+        wio_test_attribute_declaration_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_declaration_run.wio"
+        "attribute-declaration-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_attribute_declaration_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_attribute_wrong_target
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_wrong_target.wio"
+        "cannot target 'component'"
+    )
+    set_tests_properties(
+        wio_invalid_attribute_wrong_target
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_attribute_argument_type
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_argument_type.wio"
+        "must be 'string'"
+    )
+    set_tests_properties(
+        wio_invalid_attribute_argument_type
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 
