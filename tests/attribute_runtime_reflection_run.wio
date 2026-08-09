@@ -1,0 +1,24 @@
+use std::assert as assert;
+use std::console as console;
+use std::reflect as reflect;
+
+attribute entity(name: string) for component retain runtime;
+attribute column(name: string) for field retain runtime;
+attribute compile_only() for component retain compile;
+
+component User with entity("users"), compile_only {
+    public id: u64 with column("user_id");
+    public name: string;
+}
+
+fn Entry() -> i32 {
+    let typeAttributes = reflect::TypeAttributes<User>();
+    assert::ExpectEqual(typeAttributes.Count(), 1usize, "only runtime type attributes retained");
+    assert::ExpectEqual(typeAttributes[0usize], "entity(users)", "runtime type attribute");
+    let fieldAttributes = reflect::FieldAttributes<User>("id");
+    assert::ExpectEqual(fieldAttributes.Count(), 1usize, "field attribute count");
+    assert::ExpectEqual(fieldAttributes[0usize], "column(user_id)", "runtime field attribute");
+    assert::Expect(reflect::FieldAttributes<User>("name").Empty(), "unannotated field");
+    console::PrintLine("attribute-runtime-reflection-ok");
+    return 0;
+}

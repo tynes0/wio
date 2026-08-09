@@ -170,4 +170,28 @@ namespace wio::runtime
     {
         return TypeReflection<T>::MethodNames.size();
     }
+
+    template <typename T>
+    [[nodiscard]] inline std::vector<std::string> ReflectedTypeAttributes()
+    {
+        if constexpr (requires { TypeReflection<T>::TypeAttributes; })
+            return { TypeReflection<T>::TypeAttributes.begin(), TypeReflection<T>::TypeAttributes.end() };
+        return {};
+    }
+
+    template <typename T>
+    [[nodiscard]] inline std::vector<std::string> ReflectedFieldAttributeNames()
+    {
+        if constexpr (requires { TypeReflection<T>::FieldAttributeNames; })
+            return { TypeReflection<T>::FieldAttributeNames.begin(), TypeReflection<T>::FieldAttributeNames.end() };
+        return {};
+    }
+
+    template <typename T>
+    [[nodiscard]] inline std::vector<std::size_t> ReflectedFieldAttributeOffsets()
+    {
+        if constexpr (requires { TypeReflection<T>::FieldAttributeOffsets; })
+            return { TypeReflection<T>::FieldAttributeOffsets.begin(), TypeReflection<T>::FieldAttributeOffsets.end() };
+        return {};
+    }
 }

@@ -4837,6 +4837,9 @@ namespace wio::sema
                    cppNameArg->value == "wio::runtime::ReflectedMethodSignatures" ||
                    cppNameArg->value == "wio::runtime::ReflectedMethodAccess" ||
                    cppNameArg->value == "wio::runtime::ReflectedBaseTypes" ||
+                   cppNameArg->value == "wio::runtime::ReflectedTypeAttributes" ||
+                   cppNameArg->value == "wio::runtime::ReflectedFieldAttributeNames" ||
+                   cppNameArg->value == "wio::runtime::ReflectedFieldAttributeOffsets" ||
                    cppNameArg->value == "wio::runtime::ReflectedFieldCount" ||
                    cppNameArg->value == "wio::runtime::ReflectedMethodCount" ||
                    cppNameArg->value == "wio::runtime::traits::IsIntegerValue" ||
@@ -12866,6 +12869,9 @@ namespace wio::sema
                 continue;
             }
 
+            attribute->runtimeRetained = std::ranges::find(
+                symbol->attributeRetention, std::string("runtime")) != symbol->attributeRetention.end();
+
             const bool targetAllowed = std::ranges::find(
                 symbol->attributeTargets, std::string(target)) != symbol->attributeTargets.end();
             if (!targetAllowed)
@@ -15469,8 +15475,12 @@ namespace wio::sema
             activeGenericConstraintSymbols_.push_back(sym);
         
         for (auto& member : node.members)
-            if (member.declaration->is<FunctionDeclaration>())
+        {
+            if (member.declaration->is<VariableDeclaration>())
+                validateAttributeApplications(member.declaration->as<VariableDeclaration>()->attributes, "field");
+            else if (member.declaration->is<FunctionDeclaration>())
                 member.declaration->accept(*this);
+        }
 
         genericTypeParameterScopes_.pop_back();
         if (!structType->genericParameterNames.empty())
@@ -16181,8 +16191,12 @@ namespace wio::sema
         }
         
         for (auto& member : node.members)
-            if (member.declaration->is<FunctionDeclaration>())
+        {
+            if (member.declaration->is<VariableDeclaration>())
+                validateAttributeApplications(member.declaration->as<VariableDeclaration>()->attributes, "field");
+            else if (member.declaration->is<FunctionDeclaration>())
                 member.declaration->accept(*this);
+        }
 
         genericTypeParameterScopes_.pop_back();
         if (!structType->genericParameterNames.empty())

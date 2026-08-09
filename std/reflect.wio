@@ -95,6 +95,35 @@ realm std {
         @CppName(wio::runtime::ReflectedBaseTypes)
         fn BaseTypes<T>() -> string[];
 
+        fn TypeAttributes<T>() -> string[]
+            with native, cpp::name(wio::runtime::ReflectedTypeAttributes);
+
+        fn FieldAttributeNamesNative<T>() -> string[]
+            with native, cpp::name(wio::runtime::ReflectedFieldAttributeNames);
+
+        fn FieldAttributeOffsetsNative<T>() -> usize[]
+            with native, cpp::name(wio::runtime::ReflectedFieldAttributeOffsets);
+
+        fn FieldAttributes<T>(fieldName: string) -> string[] {
+            let fields = FieldNames<T>();
+            let names = FieldAttributeNamesNative<T>();
+            let offsets = FieldAttributeOffsetsNative<T>();
+            mut index = 0usize;
+            while (index < fields.Count()) {
+                if (fields[index] == fieldName and offsets.Count() > index + 1usize) {
+                    mut result: string[] = [];
+                    mut cursor = offsets[index];
+                    while (cursor < offsets[index + 1usize]) {
+                        result.Push(names[cursor]);
+                        cursor += 1usize;
+                    }
+                    return result;
+                }
+                index += 1usize;
+            }
+            return [];
+        }
+
         fn Describe<T>() -> TypeInfo {
             mut result = TypeInfo();
             result.name = TypeName<T>();

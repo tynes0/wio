@@ -4693,6 +4693,33 @@ namespace wio::codegen
             std::vector<std::string> methodSignatures;
             std::vector<std::string> methodAccess;
             std::vector<std::string> baseTypes;
+            std::vector<std::string> typeAttributes;
+            std::vector<std::string> fieldAttributeNames;
+            std::vector<size_t> fieldAttributeOffsets{0};
+
+            auto reflectedAttributeName = [](const NodePtr<AttributeStatement>& attribute)
+            {
+                if (!attribute || !attribute->runtimeRetained || attribute->qualifiedName.empty())
+                    return std::string{};
+                std::string result = attribute->qualifiedName;
+                if (!attribute->args.empty())
+                {
+                    result += "(";
+                    for (size_t index = 0; index < attribute->args.size(); ++index)
+                    {
+                        if (index > 0) result += ",";
+                        result += attribute->args[index].value;
+                    }
+                    result += ")";
+                }
+                return result;
+            };
+
+            for (const auto& attribute : declaration.attributes)
+            {
+                auto name = reflectedAttributeName(attribute);
+                if (!name.empty()) typeAttributes.push_back(std::move(name));
+            }
 
             auto addMember = [&](const auto& member, const bool objectDefault)
             {
@@ -4705,6 +4732,12 @@ namespace wio::codegen
                     Ref<sema::Type> type = variable->type ? variable->type->refType.Lock() : variable->name->refType.Lock();
                     fieldTypes.push_back(type ? type->toString() : "<unknown>");
                     fieldAccess.push_back(accessName(member.access, objectDefault));
+                    for (const auto& attribute : variable->attributes)
+                    {
+                        auto name = reflectedAttributeName(attribute);
+                        if (!name.empty()) fieldAttributeNames.push_back(std::move(name));
+                    }
+                    fieldAttributeOffsets.push_back(fieldAttributeNames.size());
                     return;
                 }
 
@@ -4829,6 +4862,16 @@ namespace wio::codegen
             emitStringViewArray("MethodSignatures", methodSignatures);
             emitStringViewArray("MethodAccess", methodAccess);
             emitStringViewArray("BaseTypes", baseTypes);
+            emitStringViewArray("TypeAttributes", typeAttributes);
+            emitStringViewArray("FieldAttributeNames", fieldAttributeNames);
+            emit("static constexpr std::array<std::size_t, " +
+                 std::to_string(fieldAttributeOffsets.size()) + "> FieldAttributeOffsets{ ");
+            for (size_t index = 0; index < fieldAttributeOffsets.size(); ++index)
+            {
+                if (index > 0) emit(", ");
+                emit(std::to_string(fieldAttributeOffsets[index]));
+            }
+            emitLine(" };");
             dedent();
             emitLine("};");
         };

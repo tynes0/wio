@@ -771,6 +771,7 @@ namespace wio
         // empty and retains its legacy alternative-list behavior.
         std::vector<size_t> constraintGroupOffsets;
         bool conjunctiveConstraintGroups = false;
+        bool runtimeRetained = false;
 
         AttributeStatement(Attribute _attribute, std::vector<Token> _args,
             std::vector<NodePtr<TypeSpecifier>> _typeArgs = {},

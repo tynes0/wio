@@ -2905,6 +2905,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "attribute-conflict-ok"
         --run
     )
+
+    add_wio_output_test(
+        wio_test_attribute_runtime_reflection_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_runtime_reflection_run.wio"
+        "attribute-runtime-reflection-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_attribute_runtime_reflection_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
     set_tests_properties(
         wio_test_attribute_conflict_valid_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
