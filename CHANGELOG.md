@@ -4,6 +4,8 @@ All notable user-facing changes to Wio are recorded here.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-08-10
+
 ### Added
 
 - Added the multi-module Wio Observatory example, combining const generics,

@@ -63,6 +63,7 @@ set(required_files
     "${package_root}/QUICKSTART.md"
     "${package_root}/README.md"
     "${package_root}/docs/README.md"
+    "${package_root}/docs/WIO_ASYNC_EVOLUTION_PLAN.md"
     "${package_root}/docs/WIO_ASYNC_MODEL.md"
     "${package_root}/docs/WIO_LANGUAGE_DRAFT.md"
     "${package_root}/docs/WIO_STD.md"

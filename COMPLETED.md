@@ -48,6 +48,10 @@ Notes:
       pack, the 78-test focused freeze matrix, package/file-cache/installed-
       package qualification, five consecutive executable replacement probes,
       and the complete 585-test repository matrix.
+- [x] The post-0.11 async/multithreading direction is recorded as a dedicated
+      simplicity-first evolution plan: a compact task model, structured work,
+      explicit blocking and affinity, compiler-checked cross-thread safety,
+      real application qualification, and staged I/O/stream expansion.
 
 ## P1 language semantics and standard-library foundation sprint
 

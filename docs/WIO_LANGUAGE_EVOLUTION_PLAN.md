@@ -1,6 +1,6 @@
 # Wio Language Evolution Plan
 
-This document records candidate language and runtime work after Wio `v0.10.0`.
+This document records candidate language and runtime work after Wio `v0.11.0`.
 It is a design plan, not a normative specification. Syntax and semantics marked
 as proposed remain open until they are accepted and moved into a versioned
 language specification.
@@ -22,6 +22,12 @@ derives, and attribute migration tooling remain proposals in this document.
 The 0.11 freeze also includes value-capturing lambdas and the hot shared-task
 async/coroutine model; generators, true async I/O, and automatic continuation
 affinity remain future work.
+
+The post-0.11 concurrency direction is maintained separately in
+[`WIO_ASYNC_EVOLUTION_PLAN.md`](./WIO_ASYNC_EVOLUTION_PLAN.md). Its governing
+rule is a small user-facing model with strong real-world coverage: `Task<T>`,
+`await`, explicit `spawn`/structured scope, non-blocking frame polling, loud
+synchronous blocking, and compiler-checked cross-thread safety.
 
 ---
 

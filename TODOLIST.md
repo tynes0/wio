@@ -8,7 +8,7 @@ Status markers:
 - `[ ]` not started
 - `[~]` partially implemented or implemented but not sufficiently hardened
 
-The priorities below reflect the state of Wio after `v0.10.0`, including the
+The priorities below reflect the state of Wio after `v0.11.0`, including the
 P0 and P1 language/std/native-interoperability sprints. Completed work is
 recorded in `COMPLETED.md`; this file contains only the remaining work. The
 candidate application/system and language-coherence direction is expanded in
@@ -138,9 +138,13 @@ candidate application/system and language-coherence direction is expanded in
    `coroutine<T>`, async `Entry`, a C++20 worker/timer runtime, task status,
    timeout/cancellation, worker offload, All/Any/Race, recoverable timeout,
    explicit dispatch, and structured async task groups are frozen for 0.11.
-   Remaining additive work is true async I/O, structured token inheritance,
-   executor selection, thread-local storage, and deeper runtime/host
-   integration; the frozen boundary is in `docs/WIO_ASYNC_MODEL.md`.
+   The post-0.11 direction is frozen as a design plan in
+   `docs/WIO_ASYNC_EVOLUTION_PLAN.md`: first add compiler-checked cross-thread
+   safety, a separate blocking pool, cancellation-aware timers, and explicit
+   shutdown; then add the `Task<T>` facade, `Poll`/`Block`, structured
+   `spawn`/scope/deadlines, main-executor integration, true async I/O, and only
+   afterward streams. Keep the everyday vocabulary small and prove each slice
+   in console, desktop, game, server/tool, and native-host scenarios.
 
 9. [ ] Add OS/application facilities.
     Environment variables, process pipes, signals, filesystem watching,

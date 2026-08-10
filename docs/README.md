@@ -63,6 +63,7 @@ These documents answer practical workflow questions such as:
 - [Wio 0.11 language and standard-library foundation specification](./spec/WIO_LANGUAGE_SPEC_0_11.md)
 - [Wio standard library contract 0.11](./spec/WIO_STD_SPEC_0_11.md)
 - [Async and coroutine model](./WIO_ASYNC_MODEL.md)
+- [Async and multithreading evolution plan](./WIO_ASYNC_EVOLUTION_PLAN.md)
 - [Language reference](./WIO_LANGUAGE_DRAFT.md)
 - [Language evolution plan](./WIO_LANGUAGE_EVOLUTION_PLAN.md)
 - [Reference and view lifetimes](./REFERENCE_LIFETIMES.md)
@@ -77,6 +78,7 @@ Use these when the question is about:
 - object/component/interface meaning
 - runtime type boundaries such as `any`, `Box`, and `opaque`
 - proposed application/system semantics and future syntax decisions
+- post-0.11 async, task, executor, and thread-safety direction
 
 ### 3.2 Tooling And Project System
 
