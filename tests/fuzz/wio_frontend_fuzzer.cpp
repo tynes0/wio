@@ -64,11 +64,14 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
             return 0;
     }
 
+    // The analyzer owns the scopes and symbols referenced weakly by the AST.
+    // Keep it alive through code generation, matching the compiler pipeline's
+    // lifetime contract.
+    wio::sema::SemanticAnalyzer analyzer;
     {
         DiagnosticProbe probe;
         try
         {
-            wio::sema::SemanticAnalyzer analyzer;
             analyzer.analyze(program);
         }
         catch (const wio::common::Exception&)
