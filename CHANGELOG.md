@@ -48,6 +48,10 @@ All notable user-facing changes to Wio are recorded here.
   closures that use `self` now keep the object alive.
 - Fixed nondeterministic import-alias conflict diagnostics and missing static
   array extent recovery.
+- Fixed single-configuration builds placing `wio-selfhost` in a configuration
+  subdirectory where the primary CLI could not discover it.
+- Fixed the sanitizer-guided frontend harness releasing semantic symbols before
+  C++ generation, which made valid corpus inputs fail with dangling bindings.
 - Backend executables/shared libraries now link to a staging file and replace
   the destination with bounded retry, avoiding transient Windows executable
   locks without hiding persistent failures.
