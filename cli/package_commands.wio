@@ -213,9 +213,12 @@ realm SelfHostedPackage {
         for pair in [
             "LICENSE|LICENSE",
             "README.md|README.md",
+            "docs/WIO_ASYNC_MODEL.md|docs/WIO_ASYNC_MODEL.md",
             "docs/WIO_LANGUAGE_DRAFT.md|docs/WIO_LANGUAGE_DRAFT.md",
             "docs/README.md|docs/README.md",
-            "docs/WIO_PROJECT_SYSTEM.md|docs/WIO_PROJECT_SYSTEM.md"
+            "docs/WIO_PROJECT_SYSTEM.md|docs/WIO_PROJECT_SYSTEM.md",
+            "docs/WIO_STD.md|docs/WIO_STD.md",
+            "docs/WIO_V1_FREEZE.md|docs/WIO_V1_FREEZE.md"
         ] {
             let parts = pair.Split("|");
             let source = path::Join(repositoryRoot, parts[0usize]);

@@ -20,7 +20,8 @@ Notes:
       fail during semantic analysis.
 - [x] The shared task runtime provides eager execution, multiple awaiters,
       exception propagation, strong object-receiver lifetime, a worker pool,
-      priority-queue timers, cooperative cancellation, and shutdown draining.
+      priority-queue timers, cooperative cancellation, and non-blocking timer
+      drain during detached-task shutdown.
 - [x] `std::async` provides Sleep/Yield, BlockOn/Run, task state and timed wait,
       cancellation/deadlines, All/Any/Race/Timeout, cancellation sources, and
       generic/void structured task groups.
@@ -28,8 +29,25 @@ Notes:
       parameters nested inside `coroutine<T>`.
 - [x] The first-sprint focused matrix covers execution, async Entry, generics,
       object lifetime, structured groups, timeout/cancellation failure paths,
-      and semantic rejection cases. Freeze work remains active in
-      `TODOLIST.md`.
+      and semantic rejection cases.
+- [x] The second async freeze sprint repaired final-frame ownership, removed
+      detached timer shutdown hangs, added configurable workers, recoverable
+      timeout, cancellable sleep, owner-thread dispatch, async interface and
+      multiple-await qualification, and high-volume native stress coverage.
+- [x] Lambda capture is frozen as value-by-default: primitive/component values
+      snapshot, object handles retain shared identity, and explicit `ref/view`
+      captures remain borrows.
+- [x] Windows/Ubuntu freeze gates, packaged documentation checks, native
+      ASan/UBSan stress, and libFuzzer/ASan/UBSan corpus validation are part of
+      release CI.
+- [x] Escaping object-method lambdas retain `self`; scheduler destruction
+      drains frame cleanup; backend output replacement tolerates transient
+      Windows locks; import-alias and missing-array-extent diagnostics are
+      deterministic.
+- [x] The final Windows freeze qualification passed the 157-test traceability
+      pack, the 78-test focused freeze matrix, package/file-cache/installed-
+      package qualification, five consecutive executable replacement probes,
+      and the complete 585-test repository matrix.
 
 ## P1 language semantics and standard-library foundation sprint
 

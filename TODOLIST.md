@@ -136,11 +136,11 @@ candidate application/system and language-coherence direction is expanded in
    blocking channels, Promise/Future, TaskGroup, cancellation, sleep, and yield
    share one host model. Language-level async functions/methods, `await`,
    `coroutine<T>`, async `Entry`, a C++20 worker/timer runtime, task status,
-   timeout/cancellation, worker offload, All/Any/Race, and structured async task
-   groups are implemented as a release candidate. Complete the second async
-   hardening/freeze sprint in `docs/WIO_ASYNC_MODEL.md`: cross-platform stress,
-   typed recoverable failure, cancellation propagation, main-thread dispatch,
-   async I/O, thread-local storage, and deeper runtime/host integration.
+   timeout/cancellation, worker offload, All/Any/Race, recoverable timeout,
+   explicit dispatch, and structured async task groups are frozen for 0.11.
+   Remaining additive work is true async I/O, structured token inheritance,
+   executor selection, thread-local storage, and deeper runtime/host
+   integration; the frozen boundary is in `docs/WIO_ASYNC_MODEL.md`.
 
 9. [ ] Add OS/application facilities.
     Environment variables, process pipes, signals, filesystem watching,
@@ -270,8 +270,9 @@ candidate application/system and language-coherence direction is expanded in
     provenance, release notes, rollback, upgrade testing, and compatibility
     verification from previous releases.
 
-12. [ ] Add Windows, Linux, and macOS package/install matrices.
-    Include multiple compilers/architectures where practical and validate
+12. [~] Add Windows, Linux, and macOS package/install matrices.
+    Windows and Ubuntu release/package/install gates run in CI. Add macOS and
+    multiple compilers/architectures where practical; further validate
     native GUI, static/shared libraries, SDK consumers, clean uninstall, paths
     with Unicode/spaces, and non-admin installs.
 
@@ -324,10 +325,11 @@ candidate application/system and language-coherence direction is expanded in
    copies, string/container growth, bounds checks, temporary materialization,
    and native wrapper overhead without weakening semantics.
 
-4. [ ] Add sanitizers and dynamic analysis.
-   ASan, UBSan, TSan where applicable, leak checks, Windows diagnostics, native
-   boundary stress, malformed input, and long-running runtime tests should run
-   regularly.
+4. [~] Add sanitizers and dynamic analysis.
+   Ubuntu CI runs the async native runtime stress test under ASan/UBSan and the
+   compiler corpus under libFuzzer/ASan/UBSan. Add TSan where applicable, leak
+   checks, Windows diagnostics, broader native-boundary stress, and long-running
+   soak tests.
 
 5. [ ] Harden supply-chain and package security.
    Signed metadata/artifacts, checksum enforcement, dependency provenance,
@@ -339,10 +341,10 @@ candidate application/system and language-coherence direction is expanded in
    scripts, constrain package hooks, protect credentials/environment, and
    provide safe defaults for network/filesystem operations.
 
-7. [ ] Deepen backend portability.
-   Continuously test GCC, Clang, MSVC where supported; Windows/Linux/macOS;
-   x64/arm64; static/shared/PIC; endian/alignment assumptions; and alternative
-   backend feasibility.
+7. [~] Deepen backend portability.
+   Release CI covers Windows/MSVC plus MinGW backend and Ubuntu/GCC, with Clang
+   sanitizer builds on Ubuntu. Add macOS, x64/arm64 coverage, static/shared/PIC
+   qualification, endian/alignment audits, and alternative-backend evidence.
 
 8. [ ] Evaluate an independent backend/IR only with evidence.
    Keep C++ as the production backend while measuring whether a Wio IR,

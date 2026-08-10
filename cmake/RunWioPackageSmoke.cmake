@@ -63,10 +63,15 @@ set(required_files
     "${package_root}/QUICKSTART.md"
     "${package_root}/README.md"
     "${package_root}/docs/README.md"
+    "${package_root}/docs/WIO_ASYNC_MODEL.md"
     "${package_root}/docs/WIO_LANGUAGE_DRAFT.md"
+    "${package_root}/docs/WIO_STD.md"
+    "${package_root}/docs/WIO_V1_FREEZE.md"
     "${package_root}/docs/spec/WIO_LANGUAGE_SPEC_0_8.md"
     "${package_root}/docs/spec/WIO_LANGUAGE_SPEC_0_9.md"
     "${package_root}/docs/spec/WIO_LANGUAGE_SPEC_0_10.md"
+    "${package_root}/docs/spec/WIO_LANGUAGE_SPEC_0_11.md"
+    "${package_root}/docs/spec/WIO_STD_SPEC_0_11.md"
 )
 
 if(WIN32)

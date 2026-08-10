@@ -60,6 +60,8 @@ contract.
 - `interface`
 - `enum`
 - `flagset`
+- typed user-defined attributes
+- `system` and `application`
 - `type` aliases, including generic aliases
 - `let`, `mut`, and `const`
 - arrays, dictionaries, trees, and the current pack/variadic surface
@@ -68,9 +70,11 @@ contract.
 
 - ordinary free functions
 - object methods
+- lambdas with value capture
+- `async fn`, async object/interface methods, `await`, and `coroutine<T>`
 - constructors through `OnConstruct`
-- `@Native`, `@CppHeader`, `@CppName`, and the current native bridge model
-- `@Apply(...)` generic constraints
+- postfix `with`, scoped `using`, and the typed native bridge attributes
+- readable `where` constraints and compatibility `@Apply(...)`
 - explicit generic calls such as `Foo<T>(...)`
 - result sugars `Foo!()` and `Foo?()`
 
@@ -107,7 +111,9 @@ The intended `v1` reading model is:
 
 - arithmetic and logical expressions
 - assignment
+- conditional `?:` and ordinary-call pipelines `|>` / `<|`
 - `if`, `while`, `for`, `match`
+- sequential application/system lifecycle and orderly exit
 - range expressions and range-based iteration
 - `is` / `fit`
 - string interpolation
@@ -131,8 +137,10 @@ The following generic slice is intended to be in `v1`:
 - generic free functions
 - generic aliases
 - generic `object`, `component`, and `interface` declarations
+- trailing/dependent generic defaults
 - full explicit `object` and `component` specialization through
   `@Specialize(...)`
+- deterministic partial object/component specialization
 - explicit generic argument passing
 - constructor deduction for generic `object` and `component` declarations
 - `@Apply(...)`-based constraint checking
@@ -242,15 +250,17 @@ search for a different model.
 
 The intended `v1` native bridge contract is:
 
-- declaration-only `@Native` functions are the canonical import form,
-- `@CppHeader(...)` and `@CppName(...)` define the public bridge boundary,
+- declaration-only functions with `with native` are the canonical import form,
+- `using cpp::header(...)` and `with cpp::name(...)` define the public bridge
+  boundary; legacy `@Native`/`@CppHeader`/`@CppName` remain compatibility input,
 - POD-like `component` values are the structural native bridge category,
 - `object` values cross as handles / bridge wrappers rather than shared POD
   layout,
 - `opaque` is the foreign pass-through payload category,
 - `any` and `std::Box<T>` are runtime wrapper concepts rather than POD layout
   promises,
-- `@Export` remains the canonical narrow C-facing export bridge.
+- `with export::c` is the canonical narrow C-facing export bridge and legacy
+  `@Export` remains compatibility input.
 
 The remaining work here is documentation tightening and cross-platform ABI
 validation, not a search for a different interop direction.
@@ -269,6 +279,15 @@ The intended `v1` package/install model is:
 The remaining work here is polish and validation, not a search for a different
 install model.
 
+### 3.7 Async and coroutine boundary
+
+Hot shared `coroutine<T>` tasks, worker/timer scheduling, structured task
+groups, cooperative cancellation, explicit dispatcher handoff, and typed
+recoverable timeout are in the intended v1 contract. Continuations do not
+inherit main-thread affinity. Async generators, suspension through borrowed
+component/extension receivers, and true operating-system async I/O remain
+outside this freeze. The normative details are in `WIO_ASYNC_MODEL.md`.
+
 ---
 
 ## 4. Explicitly Outside v1
@@ -278,8 +297,7 @@ decision changes that on purpose.
 
 - const generics beyond the current pack/meta indexing slice
 - `std::meta` beyond the current `v1` wave 3 helper surface
-- generic defaults
-- partial or pattern-based specialization
+- pattern-based specialization beyond the current deterministic partial model
 - generalized implicit user-defined conversions
 - user-defined `operator->`
 - async generators/streams and suspension across borrowed component/extension
@@ -299,8 +317,6 @@ These are the main language-adjacent items still expected to move before the
 - generic diagnostics and edge-case validation
 - doc/spec tightening
 - cross-platform tooling validation
-- async/coroutine stress, recoverable failure design, scheduler shutdown, and
-  main-thread dispatch qualification described in `WIO_ASYNC_MODEL.md`
 
 ---
 

@@ -19,6 +19,9 @@ Option/Result/array matching, sequential applications, and stack-resident
 systems are implemented and frozen by the 0.11 delta specification. Resource
 injection, explicit/fixed schedules, parallel conflict analysis, controlled
 derives, and attribute migration tooling remain proposals in this document.
+The 0.11 freeze also includes value-capturing lambdas and the hot shared-task
+async/coroutine model; generators, true async I/O, and automatic continuation
+affinity remain future work.
 
 ---
 
@@ -48,8 +51,8 @@ The implementation dependency order is:
 3. the application/system model, built on the finalized metadata, reflection,
    native-callback, and threading contracts.
 
-Application/system design may continue in parallel on paper, but its language
-surface is not implemented before the attribute foundation is stable.
+Application/system implementation followed the stabilized attribute foundation;
+future scheduler/resource layers must continue to preserve that dependency.
 
 ---
 

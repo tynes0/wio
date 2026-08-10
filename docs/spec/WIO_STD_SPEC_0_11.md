@@ -44,6 +44,21 @@ Condition waits release and reacquire their mutex. Closing a blocking channel
 wakes waiters; closed/drained receive returns `None`. Promises complete once;
 timed future waits return `None` on timeout or closure without a value.
 
+`std::async` defines the 0.11 coroutine task surface. `Sleep` and `Yield`
+suspend without creating one thread per timer. `RunBlocking` moves bounded
+synchronous work to the process worker pool. `All` preserves input order;
+`Any` reports a ready index; `Race` cancels losers; `Timeout` is the terminal
+deadline form and `TimeoutOption` is the recoverable expected-timeout form.
+Task state, timed wait, cancellation, cancellation sources, generic/void task
+groups, and an owner-drained dispatcher are part of the frozen surface.
+
+Cancellation is cooperative and never terminates a native thread. Detached
+task timers are drained without their remaining delay during process shutdown.
+Continuations have no automatic main-thread
+affinity. `WIO_ASYNC_WORKERS` selects 2 through 256 process workers when set
+before first scheduler use. The detailed contract is in
+[`WIO_ASYNC_MODEL.md`](../WIO_ASYNC_MODEL.md).
+
 ## 6. Networking
 
 DNS, TCP, UDP, and URI operations return structured results. Socket ownership
@@ -60,4 +75,3 @@ split, escape, and conservative input/pattern safety limits. Time formatting
 and UTC offsets use the host calendar. Big integer, RLE compression, CSV, INI,
 MIME, geometry/color, localization, UUID, and SemVer reject malformed inputs
 instead of silently accepting partial data.
-

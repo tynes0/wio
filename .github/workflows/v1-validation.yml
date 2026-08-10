@@ -45,7 +45,50 @@ jobs:
       - name: Build
         run: cmake --build build
 
+      - name: Validate language and standard-library freeze
+        run: cmake --build build --target wio_tests_freeze
+
       - name: Validate core release matrix
         run: >
           ctest --test-dir build --output-on-failure
           -R "(wio_test_installed_package_qualification|wio_test_self_hosted_cli_smoke|wio_test_project_test_package_smoke|wio_test_package_cli_smoke|wio_test_project_cli_smoke|wio_test_hybrid_project_cli_smoke|wio_test_packaged_file_run_uses_user_cache|wio_test_binding_import_smoke|wio_test_binding_manifest_smoke|wio_test_std_process_run_smoke_run|wio_test_entry_default_void_run|wio_test_object_self_return_run|wio_test_generic_object_explicit_specialization_run|wio_test_generic_specialization_visibility_modules_run|wio_test_generic_default_type_arguments_run|wio_test_generic_partial_specialization_run|wio_test_generic_where_constraints_run|wio_test_generic_native_default_instantiation_run|wio_test_std_meta_pack_algorithms_run|wio_test_generic_component_constructor_deduction_run|wio_test_generic_object_constructor_deduction_run|wio_test_generic_const_parameters_run|wio_test_native_generic_specialized_component_run|wio_test_native_component_extension_run|wio_test_sdk_exported_inherited_host_interop|wio_test_fit_numeric_clamp_run|wio_test_example_plain_app_run|wio_test_example_native_app_run|wio_test_example_hybrid_module_run|wio_test_example_binding_import|wio_invalid_generic_where_conjunction_reject|wio_invalid_generic_invariance_reject|wio_invalid_generic_specialization_requires_primary|wio_invalid_generic_specialization_argument_count_mismatch|wio_invalid_generic_specialization_duplicate|wio_invalid_generic_specialization_native_component|wio_invalid_generic_const_argument_kind_mismatch|wio_invalid_generic_const_function_argument_kind_mismatch|wio_invalid_generic_const_parameter_requires_integer|wio_invalid_generic_const_default_forward_reference|wio_invalid_native_extension_requires_native_component)"
+
+  sanitizers:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure ASan and UBSan runtime tests
+        run: >
+          cmake -S . -B build-sanitize -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+          -DWIO_BUILD_APP=OFF
+
+      - name: Build sanitizer targets
+        run: cmake --build build-sanitize --target wio_async_runtime_stress wio_function_type_cpp_string_test wio_filesystem_policy_test
+
+      - name: Run sanitizer runtime matrix
+        run: >
+          ctest --test-dir build-sanitize --output-on-failure
+          -R "(wio_async_runtime_stress|wio_function_type_cpp_string|wio_filesystem_policy)"
+
+      - name: Configure frontend fuzzer
+        run: >
+          cmake -S . -B build-fuzz -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_COMPILER=clang++
+          -DWIO_BUILD_APP=OFF
+          -DWIO_BUILD_FUZZERS=ON
+
+      - name: Build frontend fuzzer
+        run: cmake --build build-fuzz --target wio_frontend_fuzzer
+
+      - name: Run sanitizer-guided corpus
+        run: >
+          ./build-fuzz/compiler/wio_frontend_fuzzer tests/fuzz/corpus
+          -runs=2000 -max_len=65536 -timeout=5

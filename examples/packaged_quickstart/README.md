@@ -7,13 +7,13 @@ This example is the release-grade reference for a normal installed Wio setup.
 Recommended on Windows:
 
 ```powershell
-.\WioSetup-0.10.0-windows-x64.exe
+.\WioSetup-0.11.0-windows-x64.exe
 ```
 
 Or with the lightweight bootstrap script:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\wio-0.10.0-windows-x64-release-installer.ps1
+powershell -ExecutionPolicy Bypass -File .\wio-0.11.0-windows-x64-release-installer.ps1
 ```
 
 After installation, open a new terminal and verify:

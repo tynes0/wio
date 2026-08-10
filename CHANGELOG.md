@@ -10,6 +10,45 @@ All notable user-facing changes to Wio are recorded here.
   Option/Result flows, JSON reporting, reflection, modern standard-library
   containers/utilities, and direct native POD component extensions in one
   practical workspace-audit application.
+- Added typed postfix attributes and scoped activation, ordinary-call pipeline
+  operators, Option/Result/array match destructuring, and the deterministic
+  stack-resident application/system lifecycle.
+- Added `async fn`, async object/interface methods, `await`, hot shared
+  `coroutine<T>` tasks, async `Entry`, and a C++20 worker/timer runtime.
+- Added `std::async` task state, blocking/worker bridges, cancellation and
+  deadlines, All/Any/Race, recoverable timeout, generic/void task groups,
+  cancellable sleep, worker configuration, and owner-thread dispatch queues.
+- Added Windows/Ubuntu 0.11 freeze gates, native async runtime stress,
+  ASan/UBSan runtime qualification, and sanitizer-guided frontend fuzzing CI.
+
+### Changed
+
+- Lambda capture is value-by-default: primitive/component values snapshot,
+  object captures preserve shared identity, and explicit `ref/view` captures
+  remain borrows.
+- Distribution packaging now installs the complete Markdown documentation and
+  validates the 0.11 language, std, async, and freeze contracts.
+- Self-hosted CLI generation is now an incremental build artifact instead of
+  an unconditional application post-build step; redundant builds no longer
+  relink or race the executable.
+- The package/compiler candidate version advances to 0.11.0.
+
+### Fixed
+
+- Fixed generic object-method mangling when a generic parameter is nested in
+  `coroutine<T>`.
+- Fixed coroutine final-frame ownership and task-state destruction races.
+- Fixed process shutdown hanging on distant detached timers; shutdown drains
+  their continuation cleanup without honoring the remaining timer delay.
+- Fixed scheduler shutdown continuation posting and removed mutation of a
+  `priority_queue::top()` element through `const_cast`.
+- Fixed escaping object-method lambdas retaining only a raw backend `this`;
+  closures that use `self` now keep the object alive.
+- Fixed nondeterministic import-alias conflict diagnostics and missing static
+  array extent recovery.
+- Backend executables/shared libraries now link to a staging file and replace
+  the destination with bounded retry, avoiding transient Windows executable
+  locks without hiding persistent failures.
 
 ## [0.10.0] - 2026-08-05
 

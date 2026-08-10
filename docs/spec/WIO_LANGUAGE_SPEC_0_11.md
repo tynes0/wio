@@ -1,4 +1,4 @@
-# Wio Language Specification 0.11 — Attributes, Matching, and Applications
+# Wio Language Specification 0.11 — Language and Standard-Library Foundation
 
 Status: normative delta specification  
 Language edition: 0.11  
@@ -110,9 +110,50 @@ order; application close runs exactly once; the host receives the exit code.
 Parallel schedules, injected resources, fixed stages, handler parameters, and
 native event-loop hosts are experimental and outside this edition.
 
-## 6. Diagnostics
+## 6. Lambda capture
+
+An ordinary lambda captures referenced outer values by value when the lambda
+is created. Primitive and component captures are snapshots. Object captures
+copy the managed handle and therefore preserve shared object identity. A
+captured `ref` or `view` copies the borrow itself, not the referred value; its
+ordinary lifetime restrictions still apply. Lambda bodies are mutable with
+respect to their owned capture copies.
+
+A lambda created by an object method and using `self` retains the object for
+the closure's lifetime. Returning or dispatching that closure therefore cannot
+leave a raw receiver pointer after the originating object handle is released.
+
+This value-capture default applies equally to synchronous algorithms, threads,
+dispatch queues, and async worker callbacks. There is no implicit by-reference
+capture mode in 0.11.
+
+## 7. Async functions and coroutines
+
+`async fn F(...) -> T` has callable result type `coroutine<T>` while `return`
+inside the body is checked against `T`. `await expression` is legal only in an
+async function or method, requires `coroutine<T>`, and yields `T`. Calls are
+hot: execution begins immediately and proceeds to the first suspension. A
+copied coroutine value is a shared task handle, not a second execution.
+
+Top-level functions, interface methods, object methods, generic declarations,
+and `Entry` support `async`. Async `Entry` retains the ordinary `i32`/`void`
+source contract; the native entry point blocks on its task. Object async
+methods retain their receiver through completion. Continuations after a
+suspension may run on a worker thread and have no implicit main-thread affinity.
+
+The compiler rejects async `ref`/`view` parameters and returns, component and
+extension methods, constructors/destructors, application/system lifecycle
+handlers, operators, and native/export ABI functions. These rejections prevent
+a borrow or stack receiver from outliving its owner. Async generators and
+source `yield` are outside 0.11.
+
+The detailed scheduler, task, failure, cancellation, and structured-concurrency
+contract is normative in [`WIO_ASYNC_MODEL.md`](../WIO_ASYNC_MODEL.md) and this
+edition's [`WIO_STD_SPEC_0_11.md`](./WIO_STD_SPEC_0_11.md).
+
+## 8. Diagnostics
 
 Violations in this document fail during parsing or semantic analysis. A
 conforming implementation does not rely on generated-C++ failure for target,
-argument, conflict, pattern, or lifecycle validation. Backend representation
-is not source ABI.
+argument, conflict, pattern, lifecycle, async typing, or async lifetime
+validation. Backend representation is not source ABI.

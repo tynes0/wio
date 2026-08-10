@@ -11,8 +11,8 @@ for Wio 0.10 in
 [`spec/WIO_LANGUAGE_SPEC_0_10.md`](./spec/WIO_LANGUAGE_SPEC_0_10.md). Typed
 attributes, matching, and sequential applications are normative for Wio
 0.11 in [`spec/WIO_LANGUAGE_SPEC_0_11.md`](./spec/WIO_LANGUAGE_SPEC_0_11.md).
-The implemented async release candidate and its pre-freeze boundaries are
-described in [`WIO_ASYNC_MODEL.md`](./WIO_ASYNC_MODEL.md). Where this
+The normative async/coroutine boundaries are described in
+[`WIO_ASYNC_MODEL.md`](./WIO_ASYNC_MODEL.md). Where this
 broad reference conflicts with a versioned slice, the newest applicable
 versioned specification wins.
 
@@ -1359,8 +1359,14 @@ let twice = (x: i32) => x * 2;
 
 #### Current Compiler Note
 
-Lambda parameters must have explicit types semantically, even though the parser
-can temporarily parse an omitted type.
+Lambda parameter types may be inferred from an expected `fn(...)` type;
+otherwise they must be written explicitly.
+
+Outer values are captured by value at lambda creation. Primitive/component
+captures are snapshots, object captures preserve shared handle identity, and
+an explicitly captured `ref`/`view` remains a borrow. Lambda-owned capture
+copies are mutable inside the body. This safe default applies to callbacks
+stored by threads, dispatchers, and async worker tasks.
 
 ### 10.6 Array Literals
 

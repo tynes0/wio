@@ -112,3 +112,9 @@ For the `v1` cycle, use this simple reading:
   stable commitment yet,
 - if a feature exists but is not documented clearly enough, documentation work
   is still part of finishing the contract.
+
+The 0.11 pre-v1 freeze additionally includes typed attributes, pipelines,
+destructuring matches, sequential applications/systems, value-capturing
+lambdas, and the async/coroutine contract in `WIO_ASYNC_MODEL.md`. In
+particular, hot shared-task behavior and value-by-default lambda capture are
+source semantics rather than generated-C++ accidents.

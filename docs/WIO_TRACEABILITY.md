@@ -30,13 +30,13 @@ ctest --test-dir build -C Debug -R "(wio_test_(use_alias_dry_run|realm_basic_run
 This suite is not the whole repository test corpus. It is the current
 "stabilized-behavior proof pack" for the language, std surface, and host SDK.
 
-The async release candidate has a separate focused first-sprint matrix:
+The 0.11 freeze has a focused attribute/match/application/async matrix:
 
 ```powershell
-ctest --test-dir build -C Debug -R "async" --output-on-failure
+cmake --build build --config Debug --target wio_tests_freeze
 ```
 
-It joins the curated freeze gate only after the second hardening sprint.
+This runs the curated traceability pack followed by all 0.11 freeze families.
 
 ---
 
@@ -77,7 +77,7 @@ It joins the curated freeze gate only after the second hardening sprint.
 | Experimental `std::meta` bootstrap surface | [`WIO_STD.md`](./WIO_STD.md) section 2.4 | [`pack_meta_and_generic_declarations_run.wio`](../tests/pack_meta_and_generic_declarations_run.wio), [`std_meta_second_wave_run.wio`](../tests/std_meta_second_wave_run.wio) | no dedicated negative-only `std::meta` corpus yet; coverage currently comes from the generic-pack invalid suite |
 | Experimental heap/event runtime helpers | [`WIO_STD.md`](./WIO_STD.md) section 2.5, [`WIO_RUNTIME_TYPE_MODEL.md`](./WIO_RUNTIME_TYPE_MODEL.md) sections 7-8 | [`std_heap_box_run.wio`](../tests/std_heap_box_run.wio), [`std_event_any_run.wio`](../tests/std_event_any_run.wio) | no dedicated negative-only corpus yet; the main coverage currently comes from `any` and object/runtime tests |
 | Binding automation helpers | [`WIO_PROJECT_SYSTEM.md`](./WIO_PROJECT_SYSTEM.md) section 9 | PowerShell smoke tests `wio_test_binding_import_smoke`, `wio_test_binding_manifest_smoke` | no negative-only corpus yet; current protection is compile-backed smoke coverage |
-| Experimental async scheduler and structured tasks | [`WIO_ASYNC_MODEL.md`](./WIO_ASYNC_MODEL.md) | [`async_structured_run.wio`](../tests/async_structured_run.wio), [`async_block_on_run.wio`](../tests/async_block_on_run.wio) | [`async_timeout_runtime_failure.wio`](../tests/async_timeout_runtime_failure.wio), [`async_cancel_runtime_failure.wio`](../tests/async_cancel_runtime_failure.wio) |
+| Async scheduler and structured tasks | [`WIO_ASYNC_MODEL.md`](./WIO_ASYNC_MODEL.md), [`spec/WIO_STD_SPEC_0_11.md`](./spec/WIO_STD_SPEC_0_11.md) | [`async_structured_run.wio`](../tests/async_structured_run.wio), [`async_block_on_run.wio`](../tests/async_block_on_run.wio), [`async_freeze_run.wio`](../tests/async_freeze_run.wio), [`async_runtime_stress.cpp`](../tests/async_runtime_stress.cpp) | [`async_timeout_runtime_failure.wio`](../tests/async_timeout_runtime_failure.wio), [`async_cancel_runtime_failure.wio`](../tests/async_cancel_runtime_failure.wio) |
 
 ---
 
