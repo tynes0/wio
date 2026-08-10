@@ -1,0 +1,83 @@
+use std::assert as assert;
+use std::async as futures;
+use std::console as console;
+
+interface IAsyncAdder {
+    async fn Add(value: i32) -> i32;
+}
+
+@From(IAsyncAdder)
+object AsyncAdder {
+    private base: i32;
+
+    public fn OnConstruct(base: i32) {
+        self.base = base;
+    }
+
+    public async fn Add(value: i32) -> i32 {
+        await futures::Yield();
+        return self.base + value;
+    }
+}
+
+async fn Delayed(value: i32, milliseconds: u64) -> i32 {
+    await futures::Sleep(milliseconds);
+    return value;
+}
+
+async fn Observe(task: coroutine<i32>) -> i32 {
+    return await task;
+}
+
+fn EscapingObjectTask() -> coroutine<i32> {
+    let worker = AsyncAdder(40);
+    return worker.Add(2);
+}
+
+async fn Hop(value: i32) -> i32 {
+    await futures::Yield();
+    return value;
+}
+
+async fn Entry() -> i32 {
+    let concrete = AsyncAdder(10);
+    let contract: IAsyncAdder = concrete fit IAsyncAdder;
+    assert::ExpectEqual(await contract.Add(5), 15, "async interface dispatch");
+
+    let shared = Delayed(7, 2u64);
+    let observers: coroutine<i32>[] = [Observe(shared), Observe(shared), Observe(shared)];
+    let observed = await futures::All<i32>(observers);
+    assert::ExpectEqual(observed[0usize] + observed[1usize] + observed[2usize], 21, "multiple awaiters share one result");
+
+    assert::ExpectEqual(await EscapingObjectTask(), 42, "async object method retains self after caller scope exits");
+
+    let immediate = await futures::TimeoutOption<i32>(Hop(9), 100u64);
+    assert::Expect(immediate.IsSome(), "recoverable timeout success");
+    assert::ExpectEqual(immediate.Value(), 9, "recoverable timeout value");
+
+    let expired = await futures::TimeoutOption<i32>(Delayed(10, 40u64), 1u64);
+    assert::Expect(expired.IsNone(), "recoverable timeout absence");
+
+    let cancelledSource = futures::CancellationSource();
+    cancelledSource.Cancel();
+    assert::Expect(not (await futures::SleepCancellable(50u64, cancelledSource.Token())), "cancellable sleep observes token");
+
+    let dispatcher = futures::Dispatcher();
+    let postAction: fn() = () => dispatcher.Post(() => {});
+    await futures::RunBlocking(postAction);
+    assert::ExpectEqual(dispatcher.Count(), 1usize, "worker can post to dispatcher");
+    assert::ExpectEqual(dispatcher.Drain(), 1usize, "owner thread drains dispatcher");
+    assert::ExpectEqual(dispatcher.Count(), 0usize, "dispatcher is empty after drain");
+
+    mut stress: coroutine<i32>[] = [];
+    for (index in 0..<64) {
+        stress.Push(Hop(index));
+    }
+    let values = await futures::All<i32>(stress);
+    assert::ExpectEqual(values.Count(), 64usize, "stress task count");
+    assert::ExpectEqual(values[0usize], 0, "stress first value");
+    assert::ExpectEqual(values[63usize], 63, "stress last value");
+
+    console::PrintLine("async-freeze-ok");
+    return 0;
+}

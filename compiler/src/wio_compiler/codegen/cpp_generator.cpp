@@ -7099,7 +7099,7 @@ namespace wio::codegen
     void CppGenerator::visit(LambdaExpression& node)
     {
         auto functionType = node.refType.Lock().AsFast<sema::FunctionType>();
-        emit("[&](");
+        emit("[=](");
         
         for (size_t i = 0; i < node.parameters.size(); ++i)
         {
@@ -7120,7 +7120,7 @@ namespace wio::codegen
             if (i < node.parameters.size() - 1)
                 emit(", ");
         }
-        emit(")");
+        emit(") mutable");
 
         if (functionType && functionType->returnType && !functionType->returnType->isUnknown())
         {

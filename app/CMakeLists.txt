@@ -4707,11 +4707,47 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "async-block-on-ok"
         --run
     )
+    add_wio_output_test(
+        wio_test_async_freeze_run
+        "${CMAKE_SOURCE_DIR}/tests/async_freeze_run.wio"
+        "async-freeze-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_async_detached_exit_run
+        "${CMAKE_SOURCE_DIR}/tests/async_detached_exit_run.wio"
+        "async-detached-exit-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_async_worker_config_run
+        "${CMAKE_SOURCE_DIR}/tests/async_worker_config_run.wio"
+        "async-worker-config-ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_lambda_capture_value_run
+        "${CMAKE_SOURCE_DIR}/tests/lambda_capture_value_run.wio"
+        "lambda-capture-value-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_lambda_capture_value_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
     set_tests_properties(
         wio_test_async_structured_run
         wio_test_async_block_on_run
+        wio_test_async_freeze_run
+        wio_test_async_detached_exit_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
+    set_tests_properties(
+        wio_test_async_worker_config_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR};WIO_ASYNC_WORKERS=3"
+    )
+    set_tests_properties(wio_test_async_detached_exit_run PROPERTIES TIMEOUT 15)
 
     add_wio_non_dry_failure_test_clean(
         wio_runtime_async_timeout

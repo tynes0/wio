@@ -325,3 +325,20 @@ install(DIRECTORY "${WIO_RUNTIME_INCLUDE_DIR}/"
 install(FILES "${WIO_BACKEND_RUNTIME_LIB}"
     DESTINATION runtime/lib
 )
+
+if(BUILD_TESTING)
+    add_executable(wio_async_runtime_stress
+        "${CMAKE_SOURCE_DIR}/tests/async_runtime_stress.cpp"
+    )
+    target_include_directories(wio_async_runtime_stress PRIVATE
+        "${WIO_RUNTIME_INCLUDE_DIR}"
+    )
+    if(NOT WIN32)
+        target_link_libraries(wio_async_runtime_stress PRIVATE pthread)
+    endif()
+    add_test(NAME wio_async_runtime_stress COMMAND wio_async_runtime_stress)
+    set_tests_properties(wio_async_runtime_stress PROPERTIES
+        TIMEOUT 30
+        LABELS "async;runtime;freeze"
+    )
+endif()

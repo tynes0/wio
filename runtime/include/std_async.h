@@ -6,6 +6,7 @@
 #include <coroutine>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <exception>
 #include <functional>
 #include <memory>
@@ -133,7 +134,7 @@ namespace wio::runtime
                             continue;
                         }
 
-                        action = std::move(const_cast<Work&>(work_.top()).action);
+                        action = work_.top().action;
                         work_.pop();
                         break;
                     }
@@ -160,10 +161,28 @@ namespace wio::runtime
         bool stopping_ = false;
     };
 
+    inline std::size_t ResolveDefaultAsyncWorkerCount() noexcept
+    {
+        const char* configured = std::getenv("WIO_ASYNC_WORKERS");
+        if (!configured || *configured == '\0')
+            return 0;
+
+        char* end = nullptr;
+        const unsigned long long parsed = std::strtoull(configured, &end, 10);
+        if (end == configured || *end != '\0' || parsed == 0 || parsed > 256)
+            return 0;
+        return static_cast<std::size_t>(parsed);
+    }
+
     inline AsyncScheduler& DefaultAsyncScheduler()
     {
-        static AsyncScheduler scheduler;
-        return scheduler;
+        // The default scheduler intentionally has process lifetime. Detached
+        // tasks must not make process shutdown wait for distant timers, and a
+        // static std::thread container cannot be safely abandoned during C++
+        // static destruction. The operating system reclaims the scheduler at
+        // process exit; structured tasks are still joined by their owners.
+        static AsyncScheduler* scheduler = new AsyncScheduler(ResolveDefaultAsyncWorkerCount());
+        return *scheduler;
     }
 
     inline std::uint64_t AsyncWorkerCount() noexcept
@@ -302,19 +321,6 @@ namespace wio::runtime
         {
         };
 
-        struct AsyncFinalAwaiter final
-        {
-            bool await_ready() const noexcept { return false; }
-
-            template<typename Promise>
-            void await_suspend(std::coroutine_handle<Promise> handle) const noexcept
-            {
-                if (auto state = handle.promise().state.lock())
-                    state->Complete();
-            }
-
-            void await_resume() const noexcept {}
-        };
     }
 
     template<typename T>
@@ -323,7 +329,7 @@ namespace wio::runtime
     public:
         struct promise_type
         {
-            std::weak_ptr<detail::AsyncTaskState<T>> state;
+            std::shared_ptr<detail::AsyncTaskState<T>> state;
 
             AsyncTask get_return_object()
             {
@@ -335,23 +341,38 @@ namespace wio::runtime
                 return AsyncTask(std::move(owner));
             }
 
+            ~promise_type()
+            {
+                if (state)
+                    state->handle = {};
+            }
+
             std::suspend_never initial_suspend() const noexcept { return {}; }
-            detail::AsyncFinalAwaiter final_suspend() const noexcept { return {}; }
+            std::suspend_never final_suspend() const noexcept { return {}; }
 
             template<typename U>
             void return_value(U&& value)
             {
-                if (auto owner = state.lock())
+                auto owner = state;
+                if (owner)
                 {
                     std::lock_guard lock(owner->mutex);
                     owner->value.emplace(std::forward<U>(value));
                 }
+                if (owner)
+                    owner->Complete();
             }
 
             void unhandled_exception() noexcept
             {
-                if (auto owner = state.lock())
+                auto owner = state;
+                if (!owner)
+                    return;
+                {
+                    std::lock_guard lock(owner->mutex);
                     owner->failure = std::current_exception();
+                }
+                owner->Complete();
             }
         };
 
@@ -448,7 +469,7 @@ namespace wio::runtime
     public:
         struct promise_type
         {
-            std::weak_ptr<detail::AsyncTaskState<void>> state;
+            std::shared_ptr<detail::AsyncTaskState<void>> state;
 
             AsyncTask get_return_object()
             {
@@ -460,14 +481,30 @@ namespace wio::runtime
                 return AsyncTask(std::move(owner));
             }
 
+            ~promise_type()
+            {
+                if (state)
+                    state->handle = {};
+            }
+
             std::suspend_never initial_suspend() const noexcept { return {}; }
-            detail::AsyncFinalAwaiter final_suspend() const noexcept { return {}; }
-            void return_void() const noexcept {}
+            std::suspend_never final_suspend() const noexcept { return {}; }
+            void return_void()
+            {
+                if (state)
+                    state->Complete();
+            }
 
             void unhandled_exception() noexcept
             {
-                if (auto owner = state.lock())
+                auto owner = state;
+                if (!owner)
+                    return;
+                {
+                    std::lock_guard lock(owner->mutex);
                     owner->failure = std::current_exception();
+                }
+                owner->Complete();
             }
         };
 

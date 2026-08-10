@@ -1,0 +1,12 @@
+use std::async as futures;
+use std::console as console;
+
+async fn DistantWork() {
+    await futures::Sleep(20000u64);
+}
+
+fn Entry() -> i32 {
+    futures::Detach<void>(DistantWork());
+    console::PrintLine("async-detached-exit-ok");
+    return 0;
+}

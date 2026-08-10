@@ -1,0 +1,38 @@
+use std::assert as assert;
+use std::console as console;
+
+component Snapshot {
+    value: i32;
+}
+
+object SharedValue {
+    public value: i32;
+    public fn OnConstruct(value: i32) { self.value = value; }
+}
+
+fn Entry() -> i32 {
+    mut number = 10;
+    mut snapshot = Snapshot();
+    snapshot.value = 20;
+    let shared = SharedValue(30);
+
+    let readNumber: fn() -> i32 = () => number;
+    let readSnapshot: fn() -> i32 = () => snapshot.value;
+    let readShared: fn() -> i32 = () => shared.value;
+    mut borrowed = 40;
+    let borrowedRef = ref borrowed;
+    let readBorrow: fn() -> i32 = () => deref borrowedRef;
+
+    number = 11;
+    snapshot.value = 21;
+    shared.value = 31;
+    borrowed = 41;
+
+    assert::ExpectEqual(readNumber(), 10, "primitive lambda capture is a snapshot");
+    assert::ExpectEqual(readSnapshot(), 20, "component lambda capture is a snapshot");
+    assert::ExpectEqual(readShared(), 31, "object lambda capture preserves shared identity");
+    assert::ExpectEqual(readBorrow(), 41, "an explicitly captured ref remains a borrow");
+
+    console::PrintLine("lambda-capture-value-ok");
+    return 0;
+}

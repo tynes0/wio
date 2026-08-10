@@ -1,0 +1,9 @@
+use std::assert as assert;
+use std::async as futures;
+use std::console as console;
+
+fn Entry() -> i32 {
+    assert::ExpectEqual(futures::WorkerCount(), 3u64, "WIO_ASYNC_WORKERS configures the process scheduler");
+    console::PrintLine("async-worker-config-ok");
+    return 0;
+}

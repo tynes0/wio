@@ -1,4 +1,5 @@
 use std::concurrency as concurrency;
+use std::option as option;
 
 realm std {
     realm async {
@@ -46,6 +47,12 @@ realm std {
         fn Run(action: fn()) -> coroutine<void>
             with native, cpp::name(wio::runtime::RunAsync);
 
+        fn RunBlocking<T>(action: fn() -> T) -> coroutine<T>
+            with native, cpp::name(wio::runtime::RunAsync);
+
+        fn RunBlocking(action: fn()) -> coroutine<void>
+            with native, cpp::name(wio::runtime::RunAsync);
+
         fn All<T>(tasks: coroutine<T>[]) -> coroutine<T[]>
             with native, cpp::name(wio::runtime::WhenAll);
 
@@ -64,6 +71,25 @@ realm std {
         fn Timeout(task: coroutine<void>, milliseconds: u64) -> coroutine<void>
             with native, cpp::name(wio::runtime::WithTimeout);
 
+        async fn PresentWhenReady<T>(task: coroutine<T>) -> std::Option<T> {
+            return std::Some<T>(await task);
+        }
+
+        async fn AbsentAfter<T>(milliseconds: u64) -> std::Option<T> {
+            await Sleep(milliseconds);
+            return std::None<T>();
+        }
+
+        async fn TimeoutOption<T>(task: coroutine<T>, milliseconds: u64) -> std::Option<T> {
+            let candidates: coroutine<std::Option<T> >[] = [
+                PresentWhenReady<T>(task),
+                AbsentAfter<T>(milliseconds)
+            ];
+            let result = await Race(candidates);
+            if (result.IsNone()) { Cancel<T>(task); }
+            return result;
+        }
+
         fn WorkerCount() -> u64
             with native, cpp::name(wio::runtime::AsyncWorkerCount);
 
@@ -79,6 +105,64 @@ realm std {
             public fn Token() -> CancellationToken { return self.token; }
             public fn Cancel() { self.token.Cancel(); }
             public fn IsCancelled() -> bool { return self.token.IsCancelled(); }
+        }
+
+        async fn SleepCancellable(
+            milliseconds: u64,
+            token: CancellationToken,
+            pollMilliseconds: u64 = 10u64
+        ) -> bool {
+            if (token.IsCancelled()) { return false; }
+            let quantum = pollMilliseconds == 0u64 ? 1u64 : pollMilliseconds;
+
+            mut remaining = milliseconds;
+            while (remaining > 0u64) {
+                if (token.IsCancelled()) { return false; }
+                let slice = remaining < quantum ? remaining : quantum;
+                await Sleep(slice);
+                remaining -= slice;
+            }
+            return not token.IsCancelled();
+        }
+
+        object Dispatcher {
+            private gate: concurrency::Mutex;
+            private actions: fn()[];
+
+            public fn OnConstruct() {
+                self.gate = concurrency::Mutex();
+                self.actions = [];
+            }
+
+            public fn Post(action: fn()) {
+                self.gate.Lock();
+                self.actions.Push(action);
+                self.gate.Unlock();
+            }
+
+            public fn Count() -> usize {
+                self.gate.Lock();
+                let count = self.actions.Count();
+                self.gate.Unlock();
+                return count;
+            }
+
+            public fn Drain() -> usize {
+                mut count = 0usize;
+                while (true) {
+                    self.gate.Lock();
+                    if (self.actions.Empty()) {
+                        self.gate.Unlock();
+                        return count;
+                    }
+                    let action = self.actions[0usize];
+                    self.actions.RemoveAt(0usize);
+                    self.gate.Unlock();
+                    action();
+                    count += 1usize;
+                }
+                return count;
+            }
         }
 
         object TaskGroup<T> {
