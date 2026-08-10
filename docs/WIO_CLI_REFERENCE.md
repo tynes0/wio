@@ -220,10 +220,17 @@ current directory and its ancestors for `wio.makewio` or `makewio`.
 wio project build --project C:\Projects\MyGame
 cd C:\Projects\MyGame
 wio project build
+wio project build --emit-cpp
 ```
 
 Wio uses up-to-date checks so repeated builds can become very cheap when the
 project is unchanged.
+
+`--emit-cpp` runs the manifest-resolved Wio compilation with its source roots,
+native include directories, native sources, link settings, target, and output
+paths intact. It keeps generated C++ in the resolved project output directory
+and stops before backend/host compilation. This is the project-aware C++
+inspection path used by editor tooling.
 
 ### 5.4 `project run`
 

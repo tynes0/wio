@@ -537,7 +537,7 @@ namespace wio
                                                           const std::optional<std::filesystem::path>& intermediateDir,
                                                           bool keepSourceAdjacent)
         {
-            if (keepSourceAdjacent)
+            if (keepSourceAdjacent && !intermediateDir.has_value())
             {
                 auto cppPath = sourcePath;
                 cppPath += ".cpp";

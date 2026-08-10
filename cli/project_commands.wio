@@ -110,7 +110,7 @@ realm SelfHostedProject {
         return inputs;
     }
 
-    fn BuildResolved(info: ProjectInfo, forceRebuild: bool) -> std::Result<i32> {
+    fn BuildResolved(info: ProjectInfo, forceRebuild: bool, emitCpp: bool) -> std::Result<i32> {
         if (not fs::IsFile(info.wioEntry)) {
             return Failure<i32>($"Wio entry file was not found: ${info.wioEntry}");
         }
@@ -121,13 +121,19 @@ realm SelfHostedProject {
             info.wioEntry, "--target", info.wioTarget, "--output", info.wioOutput
         ];
         AppendCompilerArguments(ref compileArgs, info, "");
-        if (forceRebuild or not OutputUpToDate(info.wioOutput, ProjectCompilerInputs(info, info.wioEntry))) {
+        if (emitCpp) {
+            compileArgs.Push("--intermediate-dir");
+            compileArgs.Push(info.outputDirectory);
+            compileArgs.Push("--emit-cpp");
+        }
+        if (emitCpp or forceRebuild or not OutputUpToDate(info.wioOutput, ProjectCompilerInputs(info, info.wioEntry))) {
             let compileResult = RunProcess?(info.nativeCore, compileArgs, info.projectRoot);
             if (compileResult != 0) { return std::Ok<i32>(compileResult); }
         }
         else {
             console::PrintLine!("Project Wio compile: up to date, skipping compiler invocation.");
         }
+        if (emitCpp) { return std::Ok<i32>(0); }
         if (not info.hostEnabled) { return std::Ok<i32>(0); }
 
         mut hostArgs: string[] = ["-std=c++20", "-I", info.sdkIncludeDirectory];
@@ -178,7 +184,8 @@ realm SelfHostedProject {
     fn Build(args: string[]) -> std::Result<i32> {
         return BuildResolved(
             ResolveInfo?(args),
-            HasFlag(args, "--rebuild") or HasFlag(args, "--configure")
+            HasFlag(args, "--rebuild") or HasFlag(args, "--configure"),
+            HasFlag(args, "--emit-cpp")
         );
     }
 
@@ -204,7 +211,8 @@ realm SelfHostedProject {
         if (not noBuild) {
             let buildResult = BuildResolved?(
                 info,
-                HasFlag(args, "--rebuild") or HasFlag(args, "--configure")
+                HasFlag(args, "--rebuild") or HasFlag(args, "--configure"),
+                false
             );
             if (buildResult != 0) { return std::Ok<i32>(buildResult); }
         }
@@ -332,7 +340,8 @@ realm SelfHostedProject {
         if (not noBuild) {
             let buildResult = BuildResolved?(
                 info,
-                HasFlag(args, "--rebuild") or HasFlag(args, "--configure")
+                HasFlag(args, "--rebuild") or HasFlag(args, "--configure"),
+                false
             );
             if (buildResult != 0) { return std::Ok<i32>(buildResult); }
         }

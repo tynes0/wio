@@ -834,6 +834,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_test(
+        NAME wio_test_project_emit_cpp_smoke
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DWIO_SCRATCH_DIR=${CMAKE_BINARY_DIR}/project-emit-cpp-smoke
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioProjectEmitCppSmoke.cmake"
+    )
+    set_tests_properties(
+        wio_test_project_emit_cpp_smoke
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
         NAME wio_test_project_test_package_smoke
         COMMAND
             ${CMAKE_COMMAND}
