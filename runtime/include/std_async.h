@@ -128,7 +128,7 @@ namespace wio::runtime
 
                         const auto now = Clock::now();
                         const auto readyAt = work_.top().readyAt;
-                        if (readyAt > now)
+                        if (readyAt > now && !stopping_)
                         {
                             changed_.wait_until(lock, readyAt);
                             continue;
@@ -176,13 +176,11 @@ namespace wio::runtime
 
     inline AsyncScheduler& DefaultAsyncScheduler()
     {
-        // The default scheduler intentionally has process lifetime. Detached
-        // tasks must not make process shutdown wait for distant timers, and a
-        // static std::thread container cannot be safely abandoned during C++
-        // static destruction. The operating system reclaims the scheduler at
-        // process exit; structured tasks are still joined by their owners.
-        static AsyncScheduler* scheduler = new AsyncScheduler(ResolveDefaultAsyncWorkerCount());
-        return *scheduler;
+        // Shutdown drains queued timers immediately instead of honoring their
+        // remaining wall-clock delay. This lets coroutine frames and captured
+        // values clean up without making detached work hold process exit.
+        static AsyncScheduler scheduler(ResolveDefaultAsyncWorkerCount());
+        return scheduler;
     }
 
     inline std::uint64_t AsyncWorkerCount() noexcept

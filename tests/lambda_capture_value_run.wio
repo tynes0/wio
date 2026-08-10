@@ -8,6 +8,10 @@ component Snapshot {
 object SharedValue {
     public value: i32;
     public fn OnConstruct(value: i32) { self.value = value; }
+
+    public fn Reader() -> fn() -> i32 {
+        return () => self.value;
+    }
 }
 
 fn Entry() -> i32 {
@@ -22,6 +26,7 @@ fn Entry() -> i32 {
     mut borrowed = 40;
     let borrowedRef = ref borrowed;
     let readBorrow: fn() -> i32 = () => deref borrowedRef;
+    let readTemporarySelf: fn() -> i32 = SharedValue(50).Reader();
 
     number = 11;
     snapshot.value = 21;
@@ -32,6 +37,7 @@ fn Entry() -> i32 {
     assert::ExpectEqual(readSnapshot(), 20, "component lambda capture is a snapshot");
     assert::ExpectEqual(readShared(), 31, "object lambda capture preserves shared identity");
     assert::ExpectEqual(readBorrow(), 41, "an explicitly captured ref remains a borrow");
+    assert::ExpectEqual(readTemporarySelf(), 50, "an escaping lambda retains its object self");
 
     console::PrintLine("lambda-capture-value-ok");
     return 0;

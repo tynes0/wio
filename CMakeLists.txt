@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(wio_lang
-    VERSION 0.10.0
+    VERSION 0.11.0
     LANGUAGES C CXX
 )
 
@@ -81,22 +81,19 @@ install(DIRECTORY "${CMAKE_SOURCE_DIR}/std/"
     FILES_MATCHING PATTERN "*.wio"
 )
 
-install(FILES
-    "${CMAKE_SOURCE_DIR}/docs/README.md"
-    "${CMAKE_SOURCE_DIR}/docs/WIO_LANGUAGE_DRAFT.md"
-    "${CMAKE_SOURCE_DIR}/docs/WIO_PROJECT_SYSTEM.md"
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/docs/"
     DESTINATION docs
-)
-
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/docs/spec/"
-    DESTINATION docs/spec
     FILES_MATCHING PATTERN "*.md"
 )
 
 if (WIO_BUILD_APP)
+    set(WIO_DIST_DEPENDENCIES wio_app wio_runtime_backend)
+    if (TARGET wio_selfhost_cli)
+        list(APPEND WIO_DIST_DEPENDENCIES wio_selfhost_cli)
+    endif()
     add_custom_target(wio_dist
         COMMAND ${CMAKE_COMMAND} --install "${CMAKE_BINARY_DIR}" --config $<IF:$<BOOL:$<CONFIG>>,$<CONFIG>,Debug> --prefix "${WIO_DIST_DIR}"
-        DEPENDS wio_app wio_runtime_backend
+        DEPENDS ${WIO_DIST_DEPENDENCIES}
         USES_TERMINAL
         VERBATIM
     )

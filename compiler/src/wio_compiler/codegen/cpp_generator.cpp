@@ -7099,7 +7099,15 @@ namespace wio::codegen
     void CppGenerator::visit(LambdaExpression& node)
     {
         auto functionType = node.refType.Lock().AsFast<sema::FunctionType>();
-        emit("[=](");
+        emit("[=");
+        if (currentClassIsObject_ && !currentClassName_.empty())
+        {
+            // C++ captures an implicit `this` as a raw pointer, even with a
+            // value-default capture. Keep the Wio object alive for as long as
+            // an escaping closure can evaluate `self`.
+            emit(", this, _wio_lambda_self_guard = wio::runtime::Ref<" + currentClassName_ + ">(this)");
+        }
+        emit("](");
         
         for (size_t i = 0; i < node.parameters.size(); ++i)
         {

@@ -994,7 +994,11 @@ namespace wio
             NodePtr<TypeSpecifier> arrayExtent = nullptr;
             if (match(TokenType::semicolon, true))
             {
-                if (match(TokenType::integerLiteral))
+                if (match(TokenType::rightBracket))
+                {
+                    utError("Static array types must declare a size after ';'.", currentOrPreviousLocation());
+                }
+                else if (match(TokenType::integerLiteral))
                 {
                     const Token sizeToken = advance();
                     size = traits::IntegerTraits<size_t>::IntegerResultCastedAs(getInteger(sizeToken.value));

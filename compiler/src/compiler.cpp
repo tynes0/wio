@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cerrno>
 #include <cctype>
 #include <cstdlib>
@@ -15,6 +16,7 @@
 #include <sstream>
 #include <string_view>
 #include <system_error>
+#include <thread>
 #include <unordered_set>
 #include <argonaut.h>
 
@@ -391,6 +393,47 @@ namespace wio
                     std::filesystem::path("build") / "runtime" / "libwio_runtime.a"
                 }
             );
+        }
+
+        std::filesystem::path makeBackendStagingPath(const std::filesystem::path& outputPath)
+        {
+            const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+            std::filesystem::path stagingPath = outputPath;
+            stagingPath += ".wio-link-" + std::to_string(nonce) + ".tmp";
+            return stagingPath.make_preferred();
+        }
+
+        bool replaceBackendOutputWithRetry(const std::filesystem::path& stagingPath,
+                                           const std::filesystem::path& outputPath,
+                                           std::string& errorMessage)
+        {
+            constexpr int attemptCount = 40;
+            constexpr auto retryDelay = std::chrono::milliseconds(25);
+
+            for (int attempt = 0; attempt < attemptCount; ++attempt)
+            {
+#if defined(_WIN32)
+                if (MoveFileExW(
+                        stagingPath.c_str(),
+                        outputPath.c_str(),
+                        MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+                {
+                    return true;
+                }
+                errorMessage = std::system_category().message(static_cast<int>(GetLastError()));
+#else
+                std::error_code renameError;
+                std::filesystem::rename(stagingPath, outputPath, renameError);
+                if (!renameError)
+                    return true;
+                errorMessage = renameError.message();
+#endif
+
+                if (attempt + 1 < attemptCount)
+                    std::this_thread::sleep_for(retryDelay);
+            }
+
+            return false;
         }
 
         std::vector<std::filesystem::path> getBackendSystemIncludeDirs(const std::filesystem::path& runtimeIncludeDir,
@@ -1869,6 +1912,33 @@ namespace wio
             return exportedSymbols;
         }
 
+        void validateImportAliasConflicts(const std::vector<NodePtr<Statement>>& statements)
+        {
+            std::unordered_set<std::string> sourceDeclarations;
+            for (const auto& statement : statements)
+            {
+                std::string symbolName = getTopLevelDeclarationName(statement);
+                if (!symbolName.empty())
+                    sourceDeclarations.insert(std::move(symbolName));
+            }
+
+            for (const auto& statement : statements)
+            {
+                const auto* useStatement = statement ? statement->as<UseStatement>() : nullptr;
+                if (!useStatement || useStatement->aliasName.empty())
+                    continue;
+
+                if (sourceDeclarations.contains(useStatement->aliasName))
+                {
+                    WIO_LOG_ADD_ERROR(
+                        useStatement->location(),
+                        "Symbol '{}' already exists and cannot be used as an import alias.",
+                        useStatement->aliasName
+                    );
+                }
+            }
+        }
+
         bool hasDeclaredTopLevelRealms(const std::vector<NodePtr<Statement>>& statements)
         {
             return std::ranges::any_of(statements, [](const NodePtr<Statement>& statement)
@@ -2621,6 +2691,13 @@ namespace wio
             // 2. Parser
             Parser parser(std::move(tokens));
             auto program = parser.parseProgram();
+
+            // Imported module declarations are hoisted ahead of user source.
+            // Diagnose source/alias collisions before that rewrite so the
+            // result is stable and points at the `use` declaration instead of
+            // leaking an internal Scope::define ordering error.
+            validateImportAliasConflicts(program->statements);
+            WIO_LOG_PROCESS_ERRORS(CompilationError);
             
             gAppData.loadedModules.clear();
             gAppData.requiredCppHeaders.clear();
@@ -2979,6 +3056,7 @@ namespace wio
                 }
                 else
                 {
+                    const std::filesystem::path stagingOutputPath = makeBackendStagingPath(outputPath);
                     std::stringstream cmd;
                     cmd << quoteCommand(backendCompiler);
                     cmd << " -std=c++20 ";
@@ -3009,14 +3087,29 @@ namespace wio
 #else
                     cmd << " -pthread";
 #endif
-                    cmd << " -o " << quotePath(outputPath);
+                    cmd << " -o " << quotePath(stagingOutputPath);
 
                     const CommandResult backendResult = runCommandCaptureOutput(cmd.str(), { backendCompilerPath.parent_path() });
                     exitCode = backendResult.exitCode;
 
                     if (exitCode != 0)
                     {
+                        std::error_code cleanupError;
+                        std::filesystem::remove(stagingOutputPath, cleanupError);
                         reportBackendCommandFailure("Backend compilation failed", exitCode, backendResult.output, backendResult.command);
+                        return EXIT_FAILURE;
+                    }
+
+                    std::string replaceError;
+                    if (!replaceBackendOutputWithRetry(stagingOutputPath, outputPath, replaceError))
+                    {
+                        std::error_code cleanupError;
+                        std::filesystem::remove(stagingOutputPath, cleanupError);
+                        WIO_LOG_FATAL(
+                            "Generated backend output could not replace '{}': {}",
+                            outputPath.string(),
+                            replaceError
+                        );
                         return EXIT_FAILURE;
                     }
                 }

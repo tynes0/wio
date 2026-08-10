@@ -71,19 +71,21 @@ realm std {
         fn Timeout(task: coroutine<void>, milliseconds: u64) -> coroutine<void>
             with native, cpp::name(wio::runtime::WithTimeout);
 
-        async fn PresentWhenReady<T>(task: coroutine<T>) -> std::Option<T> {
-            return std::Some<T>(await task);
-        }
+        realm detail {
+            async fn PresentWhenReady<T>(task: coroutine<T>) -> std::Option<T> {
+                return std::Some<T>(await task);
+            }
 
-        async fn AbsentAfter<T>(milliseconds: u64) -> std::Option<T> {
-            await Sleep(milliseconds);
-            return std::None<T>();
+            async fn AbsentAfter<T>(milliseconds: u64) -> std::Option<T> {
+                await std::async::Sleep(milliseconds);
+                return std::None<T>();
+            }
         }
 
         async fn TimeoutOption<T>(task: coroutine<T>, milliseconds: u64) -> std::Option<T> {
             let candidates: coroutine<std::Option<T> >[] = [
-                PresentWhenReady<T>(task),
-                AbsentAfter<T>(milliseconds)
+                detail::PresentWhenReady<T>(task),
+                detail::AbsentAfter<T>(milliseconds)
             ];
             let result = await Race(candidates);
             if (result.IsNone()) { Cancel<T>(task); }
