@@ -286,7 +286,11 @@ candidate application/system and language-coherence direction is expanded in
    Diagnostics, completion, signature help, hover, go-to-definition, find
    references, rename, symbols, semantic tokens, inlay hints, code actions,
    formatting, workspace imports, generic constraints, and extension methods
-   must share compiler logic rather than reimplement it.
+   must share compiler logic rather than reimplement it. The version-aligned
+   `wio-vscode 0.11.0` extension now provides a tested editor-side baseline
+   for diagnostics, completion, navigation, symbols, commands, grammar, and
+   snippets; replace its lightweight source index with this compiler-owned
+   language service instead of growing a second semantic implementation.
 
 2. [ ] Add debugger support.
    Source breakpoints, stepping, locals, watches, Wio stack traces, object/

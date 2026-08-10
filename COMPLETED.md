@@ -641,3 +641,18 @@ here as historical evidence rather than active work:
       `std::path::Extension` contextual-keyword regression; its fix and the
       release gate preventing recurrence remain active P0 items in
       `TODOLIST.md`.
+
+## v0.11 Desktop and Editor Validation
+
+- [x] Atlas Desk landed as a substantial native desktop workspace dashboard
+      using the `application` lifecycle, stack-resident systems, async
+      coroutine scanning and cancellation, typed attributes, modern native
+      declarations, extensions, Option/Result, JSON, and Unicode APIs.
+- [x] Atlas Desk was built and smoke-rendered with the published Wio `0.11.0`
+      portable toolchain, with its rendered dashboard retained as release
+      evidence.
+- [x] `wio-vscode` was rebuilt for `0.11.0` around modular CLI, diagnostics,
+      source-index, and provider layers with modern grammar and snippets.
+- [x] Compiler and extension releases now share their major/minor release line;
+      the matching extension check, unit-test, Windows/Ubuntu CI, and VSIX
+      package gates are part of the release policy.
