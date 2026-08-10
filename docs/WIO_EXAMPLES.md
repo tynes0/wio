@@ -25,6 +25,7 @@ These examples are the intended first-stop references:
 5. [`examples/packaged_quickstart`](../examples/packaged_quickstart/README.md)
 6. [`examples/static_cmake_consumer`](../examples/static_cmake_consumer/README.md)
 7. [`examples/wio_observatory`](../examples/wio_observatory/README.md)
+8. [`examples/atlas_desk`](../examples/atlas_desk/README.md)
 
 They are complemented by:
 
@@ -141,6 +142,21 @@ Use it for:
 - native POD components exposed through direct extension method syntax
 - filesystem, regex, hash, random, time, collections, span, tuple, and buffer
   composition
+
+### 2.9 I Want A Native Desktop Application
+
+Open:
+
+- [`examples/atlas_desk`](../examples/atlas_desk/README.md)
+
+Use it for:
+
+- the `application` lifecycle and stack-resident `system` services
+- asynchronous workspace scanning with coroutine cancellation and completion
+- typed user attributes, modern native declarations, and component extensions
+- Option/Result-driven persistence and exact-integer JSON data
+- Unicode-aware filtering and an opaque native font handle
+- a polished Raylib desktop UI built primarily in Wio
 
 ---
 

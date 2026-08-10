@@ -1,0 +1,113 @@
+use native;
+use domain;
+use indexer;
+use persistence;
+use ui;
+use std::async as futures;
+use std::environment as environment;
+use std::time as time;
+use std::console as console;
+
+application AtlasDesk {
+    system indexer: WorkspaceIndexer;
+    mut state: atlas::DeskState;
+    mut frames: u64 = 0u64;
+    mut smoke: bool = false;
+
+    on start {
+        atlas::native::Init(1480, 900, "Atlas Desk — Wio workspace intelligence");
+        self.state = atlas::DeskState();
+        self.smoke = environment::Get("WIO_ATLAS_SMOKE", "") == "1";
+
+        let loaded = atlas::LoadPreferences();
+        match (loaded) {
+            Ok(preferences): {
+                self.state.preferences = preferences;
+                self.state.pathInput = preferences.workspacePath;
+                self.state.searchInput = preferences.search;
+            }
+            Err(error): {
+                self.state.preferences = atlas::DefaultPreferences();
+                self.state.pathInput = ".";
+                self.state.error = error.message;
+            }
+        }
+
+        self.indexer.workspacePath = self.state.preferences.workspacePath;
+        self.indexer.maxFiles = self.state.preferences.scanLimit;
+        self.state.status = "Scanning workspace on a background worker";
+    }
+
+    on update {
+        self.frames += 1u64;
+        let delta = atlas::native::Delta();
+        self.state.scanSeconds += delta;
+        if (self.state.toastSeconds > 0.0f32) { self.state.toastSeconds -= delta; }
+
+        if (atlas::native::ShouldClose()) { self.Exit(0); }
+
+        if (self.indexer.failure != "") {
+            self.state.error = self.indexer.failure;
+            self.state.status = "Scan failed";
+            self.indexer.failure = "";
+        }
+
+        if (self.indexer.available) {
+            let parsed = atlas::ParseSnapshot(self.indexer.payload);
+            match (parsed) {
+                Ok(snapshot): {
+                    self.state.snapshot = snapshot;
+                    self.state.hasSnapshot = true;
+                    self.state.error = "";
+                    self.state.status = "Workspace is up to date";
+                    self.state.lastScanMilliseconds = time::UnixMilliseconds();
+                    self.state.Notify($"Indexed ${snapshot.files} files in ${self.state.scanSeconds} seconds");
+                }
+                Err(error): {
+                    self.state.error = error.message;
+                    self.state.status = "Scanner payload could not be read";
+                }
+            }
+            self.indexer.available = false;
+        }
+
+        let dropped = atlas::native::DroppedPath();
+        if (dropped != "") {
+            self.state.pathInput = dropped;
+            atlas::RequestScan(self.state, ref self.indexer);
+        }
+
+        let action = atlas::UpdateAndDraw(self.state, self.indexer.running, self.indexer.generation);
+        match (action) {
+            1: atlas::RequestScan(self.state, ref self.indexer);
+            2: {
+                self.state.pathInput = environment::CurrentDirectory();
+                atlas::RequestScan(self.state, ref self.indexer);
+            }
+            3: {
+                if (self.state.hasSnapshot) {
+                    atlas::native::Clipboard(
+                        $"${self.state.snapshot.root} — ${self.state.snapshot.files} files, health ${self.state.snapshot.health}/100");
+                    self.state.Notify("Workspace summary copied to clipboard");
+                }
+            }
+            assumed: {}
+        }
+
+        if (self.smoke and self.frames >= 24u64 and not self.indexer.running) {
+            atlas::native::Screenshot(".wio-build/atlas-desk-smoke.png");
+            self.Exit(0);
+        }
+    }
+
+    on close {
+        self.state.preferences.workspacePath = self.state.pathInput;
+        self.state.preferences.search = self.state.searchInput;
+        let saved = atlas::SavePreferences(self.state.preferences);
+        if (saved.IsError()) {
+            console::PrintLine($"Atlas preferences could not be saved: ${saved.ErrorValue().message}");
+        }
+        self.state.UnloadFonts();
+        atlas::native::Shutdown();
+    }
+}

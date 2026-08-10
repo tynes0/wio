@@ -1,0 +1,74 @@
+use native;
+use std::async as futures;
+
+realm atlas {
+    async fn ScanWorkspace(path: string, maxFiles: u64) -> string {
+        let scan: fn() -> string = () => native::ScanWorkspaceJson(path, maxFiles);
+        return await futures::RunBlocking<string>(scan);
+    }
+
+}
+
+system WorkspaceIndexer {
+    mut workspacePath: string = ".";
+    mut maxFiles: u64 = 12000u64;
+    mut task: coroutine<string>;
+    mut running: bool = false;
+    mut available: bool = false;
+    mut payload: string = "";
+    mut failure: string = "";
+    mut generation: u64 = 0u64;
+
+    on start {
+        self.task = atlas::ScanWorkspace(self.workspacePath, self.maxFiles);
+        self.running = true;
+        self.available = false;
+        self.generation += 1u64;
+    }
+
+    on update {
+        if (not self.running) { return; }
+        if (futures::IsCancelled<string>(self.task)) {
+            self.running = false;
+            self.failure = "Workspace scan was cancelled.";
+            return;
+        }
+        if (futures::IsFaulted<string>(self.task)) {
+            self.running = false;
+            self.failure = "Workspace scan failed in the background worker.";
+            return;
+        }
+        if (futures::IsReady<string>(self.task)) {
+            self.payload = futures::BlockOn<string>(self.task);
+            self.available = true;
+            self.running = false;
+        }
+    }
+
+    on close {
+        if (self.running) { futures::Cancel<string>(self.task); }
+    }
+}
+
+realm atlas {
+    fn RequestScan(state: DeskState, indexer: ref WorkspaceIndexer) {
+        let path = state.pathInput.Trim();
+        if (path == "") {
+            state.Notify("Enter a workspace path first");
+            return;
+        }
+        if (indexer.running) { futures::Cancel<string>(indexer.task); }
+        indexer.workspacePath = path;
+        indexer.maxFiles = state.preferences.scanLimit;
+        indexer.payload = "";
+        indexer.failure = "";
+        indexer.available = false;
+        indexer.running = true;
+        indexer.generation += 1u64;
+        indexer.task = atlas::ScanWorkspace(path, indexer.maxFiles);
+        state.preferences.workspacePath = path;
+        state.status = "Scanning workspace on a background worker";
+        state.error = "";
+        state.scanSeconds = 0.0f32;
+    }
+}

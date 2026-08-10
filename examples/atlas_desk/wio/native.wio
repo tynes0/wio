@@ -1,0 +1,92 @@
+realm atlas {
+    realm native {
+        using cpp::header("atlas_native.h");
+
+        component Color with native, cpp::name(Color) {
+            r: u8;
+            g: u8;
+            b: u8;
+            a: u8;
+        }
+
+        component Rectangle with native, cpp::name(Rectangle) {
+            x: f32;
+            y: f32;
+            width: f32;
+            height: f32;
+        }
+
+        fn Rgba(r: u8, g: u8, b: u8, a: u8) -> Color { return Color(r, g, b, a); }
+        fn Rgb(r: u8, g: u8, b: u8) -> Color { return Color(r, g, b, 255u8); }
+        fn Bounds(x: f32, y: f32, width: f32, height: f32) -> Rectangle {
+            return Rectangle(x, y, width, height);
+        }
+
+        fn Init(width: i32, height: i32, title: string)
+            with native, cpp::name(atlas_native::Init);
+        fn Shutdown() with native, cpp::name(atlas_native::Shutdown);
+        fn ShouldClose() -> bool with native, cpp::name(atlas_native::ShouldClose);
+        fn Width() -> i32 with native, cpp::name(atlas_native::Width);
+        fn Height() -> i32 with native, cpp::name(atlas_native::Height);
+        fn Delta() -> f32 with native, cpp::name(atlas_native::Delta);
+        fn Begin() with native, cpp::name(atlas_native::Begin);
+        fn End() with native, cpp::name(atlas_native::End);
+        fn Clear(color: Color) with native, cpp::name(atlas_native::Clear);
+        fn Rect(bounds: Rectangle, color: Color) with native, cpp::name(atlas_native::Rect);
+        fn RoundRect(bounds: Rectangle, roundness: f32, color: Color)
+            with native, cpp::name(atlas_native::RoundRect);
+        fn RoundLine(bounds: Rectangle, roundness: f32, thick: f32, color: Color)
+            with native, cpp::name(atlas_native::RoundLine);
+        fn Line(x1: f32, y1: f32, x2: f32, y2: f32, thick: f32, color: Color)
+            with native, cpp::name(atlas_native::Line);
+        fn Circle(x: f32, y: f32, radius: f32, color: Color)
+            with native, cpp::name(atlas_native::Circle);
+
+        fn LoadFontHandle(path: string, size: i32) -> opaque
+            with native, cpp::name(atlas_native::LoadFontHandle);
+        fn UnloadFontHandle(handle: opaque)
+            with native, cpp::name(atlas_native::UnloadFontHandle);
+        fn DrawFontText(handle: opaque, text: string, x: f32, y: f32, size: f32, spacing: f32, color: Color)
+            with native, cpp::name(atlas_native::DrawFontText);
+        fn MeasureFontText(handle: opaque, text: string, size: f32, spacing: f32) -> f32
+            with native, cpp::name(atlas_native::MeasureFontText);
+
+        fn MouseX() -> f32 with native, cpp::name(atlas_native::MouseX);
+        fn MouseY() -> f32 with native, cpp::name(atlas_native::MouseY);
+        fn LeftPressed() -> bool with native, cpp::name(atlas_native::LeftPressed);
+        fn KeyPressed(key: i32) -> bool with native, cpp::name(atlas_native::KeyPressed);
+        fn KeyDown(key: i32) -> bool with native, cpp::name(atlas_native::KeyDown);
+        fn Character() -> i32 with native, cpp::name(atlas_native::Character);
+        fn Cursor(cursor: i32) with native, cpp::name(atlas_native::Cursor);
+        fn Clipboard(text: string) with native, cpp::name(atlas_native::Clipboard);
+        fn Screenshot(path: string) with native, cpp::name(atlas_native::Screenshot);
+        fn DroppedPath() -> string with native, cpp::name(atlas_native::DroppedPath);
+        fn ScanWorkspaceJson(path: string, maxFiles: u64) -> string
+            with native, cpp::name(atlas_native::ScanWorkspaceJson);
+    }
+
+    object FontFace {
+        private handle: opaque;
+        private loaded: bool;
+
+        OnConstruct(path: string, size: i32) {
+            self.handle = native::LoadFontHandle(path, size);
+            self.loaded = true;
+        }
+
+        public fn Draw(text: string, x: f32, y: f32, size: f32, color: native::Color) {
+            native::DrawFontText(self.handle, text, x, y, size, 0.5f32, color);
+        }
+
+        public fn Measure(text: string, size: f32) -> f32 {
+            return native::MeasureFontText(self.handle, text, size, 0.5f32);
+        }
+
+        public fn Unload() {
+            if (self.loaded) {
+                native::UnloadFontHandle(self.handle);
+                self.loaded = false;
+            }
+        }
+    }
+}

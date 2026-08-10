@@ -1,0 +1,332 @@
+use native;
+use domain;
+use std::unicode as unicode;
+
+realm atlas {
+    fn Ink() -> native::Color { return native::Rgb(31u8, 38u8, 55u8); }
+    fn Muted() -> native::Color { return native::Rgb(112u8, 121u8, 143u8); }
+    fn Canvas() -> native::Color { return native::Rgb(244u8, 246u8, 250u8); }
+    fn Surface() -> native::Color { return native::Rgb(255u8, 255u8, 255u8); }
+    fn SurfaceSoft() -> native::Color { return native::Rgb(248u8, 249u8, 252u8); }
+    fn Border() -> native::Color { return native::Rgb(224u8, 228u8, 237u8); }
+    fn Accent() -> native::Color { return native::Rgb(79u8, 70u8, 229u8); }
+    fn AccentSoft() -> native::Color { return native::Rgb(236u8, 234u8, 255u8); }
+    fn Cyan() -> native::Color { return native::Rgb(14u8, 165u8, 233u8); }
+    fn Green() -> native::Color { return native::Rgb(16u8, 185u8, 129u8); }
+    fn GreenSoft() -> native::Color { return native::Rgb(226u8, 252u8, 242u8); }
+    fn Amber() -> native::Color { return native::Rgb(245u8, 158u8, 11u8); }
+    fn Red() -> native::Color { return native::Rgb(239u8, 68u8, 68u8); }
+    fn RedSoft() -> native::Color { return native::Rgb(254u8, 236u8, 236u8); }
+    fn Sidebar() -> native::Color { return native::Rgb(20u8, 24u8, 38u8); }
+    fn SidebarMuted() -> native::Color { return native::Rgb(145u8, 153u8, 176u8); }
+    fn White() -> native::Color { return native::Rgb(255u8, 255u8, 255u8); }
+
+    fn Inside(bounds: native::Rectangle) -> bool {
+        let x = native::MouseX();
+        let y = native::MouseY();
+        return x >= bounds.x and y >= bounds.y and
+            x <= bounds.x + bounds.width and y <= bounds.y + bounds.height;
+    }
+
+    fn Panel(bounds: native::Rectangle) {
+        native::RoundRect(bounds, 0.05f32, Surface());
+        native::RoundLine(bounds, 0.05f32, 1.0f32, Border());
+    }
+
+    fn Text(font: FontFace, value: string, x: f32, y: f32, size: f32, color: native::Color) {
+        font.Draw(value, x, y, size, color);
+    }
+
+    fn Button(font: FontFace, label: string, bounds: native::Rectangle, primary: bool = false) -> bool {
+        let hovered = Inside(bounds);
+        if (hovered) { native::Cursor(4); }
+        mut background = SurfaceSoft();
+        if (primary) {
+            background = hovered ? native::Rgb(67u8, 56u8, 202u8) : Accent();
+        } else if (hovered) {
+            background = AccentSoft();
+        }
+        native::RoundRect(bounds, 0.18f32, background);
+        if (not primary) { native::RoundLine(bounds, 0.18f32, 1.0f32, Border()); }
+        let color = primary ? White() : Ink();
+        let width = font.Measure(label, 14.0f32);
+        font.Draw(label, bounds.x + (bounds.width - width) * 0.5f32, bounds.y + 10.0f32, 14.0f32, color);
+        return hovered and native::LeftPressed();
+    }
+
+    fn EditField(
+        state: DeskState,
+        field: i32,
+        value: ref string,
+        placeholder: string,
+        bounds: native::Rectangle
+    ) -> bool {
+        let hovered = Inside(bounds);
+        if (hovered) { native::Cursor(2); }
+        if (hovered and native::LeftPressed()) { state.activeField = field; }
+
+        let active = state.activeField == field;
+        native::RoundRect(bounds, 0.08f32, active ? White() : SurfaceSoft());
+        native::RoundLine(bounds, 0.08f32, active ? 2.0f32 : 1.0f32, active ? Accent() : Border());
+
+        if (active) {
+            mut codePoint = native::Character();
+            while (codePoint > 0) {
+                if (unicode::CodePointCount(value) < 180usize) {
+                    unicode::AppendCodePoint(value, codePoint fit u32);
+                }
+                codePoint = native::Character();
+            }
+            if (native::KeyPressed(259)) {
+                let count = unicode::CodePointCount(value);
+                if (count > 0usize) { value = unicode::Slice(value, 0usize, count - 1usize); }
+            }
+        }
+
+        let visible = value == "" ? placeholder : ClipText(value, 72usize);
+        Text(state.regular, visible, bounds.x + 14.0f32, bounds.y + 11.0f32, 14.0f32,
+            value == "" ? Muted() : Ink());
+        return active and native::KeyPressed(257);
+    }
+
+    fn DrawSidebar(state: DeskState, running: bool, height: f32) {
+        native::Rect(native::Bounds(0.0f32, 0.0f32, 278.0f32, height), Sidebar());
+
+        native::RoundRect(native::Bounds(28.0f32, 28.0f32, 42.0f32, 42.0f32), 0.26f32, Accent());
+        Text(state.bold, "A", 42.0f32, 34.0f32, 22.0f32, White());
+        Text(state.bold, "ATLAS", 84.0f32, 31.0f32, 20.0f32, White());
+        Text(state.regular, "workspace intelligence", 84.0f32, 54.0f32, 11.0f32, SidebarMuted());
+
+        Text(state.medium, "OVERVIEW", 30.0f32, 116.0f32, 11.0f32, SidebarMuted());
+        native::RoundRect(native::Bounds(20.0f32, 142.0f32, 238.0f32, 46.0f32), 0.12f32,
+            native::Rgb(38u8, 43u8, 62u8));
+        native::Circle(42.0f32, 165.0f32, 5.0f32, Accent());
+        Text(state.medium, "Workspace health", 58.0f32, 155.0f32, 14.0f32, White());
+
+        Text(state.medium, "SESSION", 30.0f32, 232.0f32, 11.0f32, SidebarMuted());
+        Text(state.regular, "Background indexing", 30.0f32, 263.0f32, 13.0f32, White());
+        Text(state.regular, running ? "Worker active" : "Worker idle", 30.0f32, 286.0f32, 12.0f32,
+            running ? native::Rgb(129u8, 230u8, 217u8) : SidebarMuted());
+        native::Circle(235.0f32, 278.0f32, running ? 6.0f32 : 4.0f32, running ? Green() : SidebarMuted());
+
+        let contract = native::Bounds(20.0f32, height - 164.0f32, 238.0f32, 126.0f32);
+        native::RoundRect(contract, 0.08f32, native::Rgb(29u8, 34u8, 51u8));
+        Text(state.medium, "WIO 0.11 CONTRACT", 34.0f32, contract.y + 18.0f32, 11.0f32,
+            native::Rgb(165u8, 180u8, 252u8));
+        Text(state.regular, "application + system", 34.0f32, contract.y + 45.0f32, 12.0f32, White());
+        Text(state.regular, "async worker + shared task", 34.0f32, contract.y + 66.0f32, 12.0f32, White());
+        Text(state.regular, "typed attributes + JSON", 34.0f32, contract.y + 87.0f32, 12.0f32, White());
+    }
+
+    fn DrawMetricCard(
+        state: DeskState,
+        x: f32,
+        y: f32,
+        width: f32,
+        label: string,
+        value: string,
+        hint: string,
+        color: native::Color
+    ) {
+        let bounds = native::Bounds(x, y, width, 116.0f32);
+        Panel(bounds);
+        native::RoundRect(native::Bounds(x + 18.0f32, y + 18.0f32, 10.0f32, 10.0f32), 0.5f32, color);
+        Text(state.medium, label.ToUpper(), x + 38.0f32, y + 15.0f32, 11.0f32, Muted());
+        Text(state.bold, value, x + 18.0f32, y + 43.0f32, 27.0f32, Ink());
+        Text(state.regular, hint, x + 18.0f32, y + 83.0f32, 11.0f32, Muted());
+    }
+
+    fn KindColor(name: string) -> native::Color {
+        return match (name) {
+            "Wio": Accent();
+            "Native": Cyan();
+            "Docs": Green();
+            "Config": Amber();
+            assumed: native::Rgb(148u8, 163u8, 184u8);
+        };
+    }
+
+    fn DrawDistribution(state: DeskState, bounds: native::Rectangle) {
+        Panel(bounds);
+        Text(state.bold, "Language mix", bounds.x + 22.0f32, bounds.y + 20.0f32, 17.0f32, Ink());
+        Text(state.regular, "Files grouped by their workspace role", bounds.x + 22.0f32, bounds.y + 48.0f32, 11.0f32, Muted());
+
+        mut maxCount = 1u64;
+        for metric in state.snapshot.kinds {
+            if (metric.count > maxCount) { maxCount = metric.count; }
+        }
+
+        mut y = bounds.y + 84.0f32;
+        for metric in state.snapshot.kinds {
+            Text(state.medium, metric.name, bounds.x + 22.0f32, y, 12.0f32, Ink());
+            Text(state.regular, $"${metric.count}", bounds.x + bounds.width - 53.0f32, y, 11.0f32, Muted());
+            let track = native::Bounds(bounds.x + 92.0f32, y + 2.0f32, bounds.width - 176.0f32, 10.0f32);
+            native::RoundRect(track, 0.5f32, SurfaceSoft());
+            let ratio = (metric.count fit f32) / (maxCount fit f32);
+            native::RoundRect(native::Bounds(track.x, track.y, track.width * ratio, track.height), 0.5f32,
+                KindColor(metric.name));
+            y += 31.0f32;
+        }
+    }
+
+    fn DrawHealth(state: DeskState, bounds: native::Rectangle) {
+        Panel(bounds);
+        Text(state.bold, "Project health", bounds.x + 22.0f32, bounds.y + 20.0f32, 17.0f32, Ink());
+        let score = state.snapshot.health;
+        let scoreColor = score >= 80 ? Green() : (score >= 55 ? Amber() : Red());
+        native::Circle(bounds.x + 70.0f32, bounds.y + 104.0f32, 45.0f32, scoreColor);
+        native::Circle(bounds.x + 70.0f32, bounds.y + 104.0f32, 34.0f32, Surface());
+        let scoreText = $"${score}";
+        Text(state.bold, scoreText, bounds.x + 70.0f32 - state.bold.Measure(scoreText, 23.0f32) * 0.5f32,
+            bounds.y + 88.0f32, 23.0f32, Ink());
+        Text(state.medium, state.snapshot.HealthLabel(), bounds.x + 132.0f32, bounds.y + 76.0f32, 15.0f32, Ink());
+        Text(state.regular, state.snapshot.truncated ? "Partial scan" : "Complete scan",
+            bounds.x + 132.0f32, bounds.y + 103.0f32, 11.0f32, Muted());
+        Text(state.regular, $"${state.snapshot.directories} directories", bounds.x + 132.0f32,
+            bounds.y + 125.0f32, 11.0f32, Muted());
+    }
+
+    fn DrawRecent(state: DeskState, bounds: native::Rectangle) {
+        Panel(bounds);
+        Text(state.bold, "Recently touched", bounds.x + 22.0f32, bounds.y + 20.0f32, 17.0f32, Ink());
+        Text(state.regular, "Latest files from the background index", bounds.x + 22.0f32, bounds.y + 48.0f32,
+            11.0f32, Muted());
+
+        let files = state.snapshot.FilterRecent(state.searchInput);
+        mut y = bounds.y + 82.0f32;
+        mut shown = 0usize;
+        for file in files {
+            if (shown >= 7usize or y + 35.0f32 > bounds.y + bounds.height) { break; }
+            native::Circle(bounds.x + 30.0f32, y + 10.0f32, 5.0f32,
+                file.extension == ".wio" ? Accent() : KindColor("Other"));
+            Text(state.medium, ClipText(file.path, 52usize), bounds.x + 45.0f32, y, 12.0f32, Ink());
+            let size = FormatBytes(file.bytes);
+            Text(state.regular, size, bounds.x + bounds.width - 22.0f32 - state.regular.Measure(size, 11.0f32),
+                y + 1.0f32, 11.0f32, Muted());
+            native::Line(bounds.x + 22.0f32, y + 28.0f32, bounds.x + bounds.width - 22.0f32,
+                y + 28.0f32, 1.0f32, Border());
+            y += 39.0f32;
+            shown += 1usize;
+        }
+        if (shown == 0usize) {
+            Text(state.regular, "No recent file matches the current filter.", bounds.x + 22.0f32,
+                bounds.y + 92.0f32, 12.0f32, Muted());
+        }
+    }
+
+    fn DrawInsights(state: DeskState, bounds: native::Rectangle) {
+        Panel(bounds);
+        Text(state.bold, "Signals", bounds.x + 22.0f32, bounds.y + 20.0f32, 17.0f32, Ink());
+        Text(state.regular, "Actionable workspace observations", bounds.x + 22.0f32, bounds.y + 48.0f32,
+            11.0f32, Muted());
+
+        mut y = bounds.y + 83.0f32;
+        mut index = 0usize;
+        for insight in state.snapshot.insights {
+            if (index >= 4usize) { break; }
+            let good = insight.Contains("healthy");
+            native::RoundRect(native::Bounds(bounds.x + 22.0f32, y, bounds.width - 44.0f32, 48.0f32),
+                0.08f32, good ? GreenSoft() : SurfaceSoft());
+            native::Circle(bounds.x + 39.0f32, y + 24.0f32, 5.0f32, good ? Green() : Amber());
+            Text(state.regular, ClipText(insight, 40usize), bounds.x + 54.0f32, y + 15.0f32, 11.0f32, Ink());
+            y += 58.0f32;
+            index += 1usize;
+        }
+    }
+
+    fn DrawEmptyState(state: DeskState, bounds: native::Rectangle, running: bool) {
+        Panel(bounds);
+        native::Circle(bounds.x + bounds.width * 0.5f32, bounds.y + 125.0f32, 42.0f32, AccentSoft());
+        native::Circle(bounds.x + bounds.width * 0.5f32, bounds.y + 125.0f32, running ? 12.0f32 : 8.0f32,
+            Accent());
+        let title = running ? "Indexing your workspace" : "Choose a workspace to begin";
+        let titleWidth = state.bold.Measure(title, 22.0f32);
+        Text(state.bold, title, bounds.x + (bounds.width - titleWidth) * 0.5f32, bounds.y + 192.0f32,
+            22.0f32, Ink());
+        let copy = running
+            ? "File discovery runs on Wio's async worker pool, so this window stays responsive."
+            : "Enter a directory above or drag one into the window.";
+        let copyWidth = state.regular.Measure(copy, 12.0f32);
+        Text(state.regular, copy, bounds.x + (bounds.width - copyWidth) * 0.5f32, bounds.y + 232.0f32,
+            12.0f32, Muted());
+    }
+
+    fn UpdateAndDraw(state: DeskState, running: bool, generation: u64) -> i32 {
+        native::Cursor(0);
+        native::Begin();
+        native::Clear(Canvas());
+
+        let width = native::Width() fit f32;
+        let height = native::Height() fit f32;
+        DrawSidebar(state, running, height);
+
+        let contentX = 310.0f32;
+        let contentWidth = width - contentX - 32.0f32;
+        Text(state.bold, "Workspace overview", contentX, 30.0f32, 25.0f32, Ink());
+        Text(state.regular, state.hasSnapshot ? ClipText(state.snapshot.root, 82usize) : "Drop a project folder or enter its path",
+            contentX, 64.0f32, 12.0f32, Muted());
+
+        let pathBounds = native::Bounds(contentX, 96.0f32, contentWidth - 284.0f32, 44.0f32);
+        let submitPath = EditField(state, 1, ref state.pathInput, "Workspace directory", pathBounds);
+        let currentClicked = Button(state.medium, "Current", native::Bounds(width - 292.0f32, 96.0f32, 82.0f32, 44.0f32));
+        let copyClicked = Button(state.medium, "Copy", native::Bounds(width - 200.0f32, 96.0f32, 72.0f32, 44.0f32));
+        let scanClicked = Button(state.medium, running ? "Scanning" : "Scan",
+            native::Bounds(width - 118.0f32, 96.0f32, 86.0f32, 44.0f32), true);
+
+        let searchBounds = native::Bounds(contentX, 154.0f32, contentWidth, 42.0f32);
+        EditField(state, 2, ref state.searchInput, "Filter recent files...", searchBounds);
+
+        if (state.error != "") {
+            let errorBounds = native::Bounds(contentX, 211.0f32, contentWidth, 48.0f32);
+            native::RoundRect(errorBounds, 0.08f32, RedSoft());
+            native::Circle(errorBounds.x + 20.0f32, errorBounds.y + 24.0f32, 5.0f32, Red());
+            Text(state.regular, ClipText(state.error, 118usize), errorBounds.x + 34.0f32, errorBounds.y + 16.0f32,
+                12.0f32, Red());
+        }
+
+        let top = state.error == "" ? 220.0f32 : 276.0f32;
+        if (state.hasSnapshot) {
+            let gap = 12.0f32;
+            let cardWidth = (contentWidth - gap * 3.0f32) / 4.0f32;
+            DrawMetricCard(state, contentX, top, cardWidth, "Files", FormatCount(state.snapshot.files),
+                "indexed entries", Accent());
+            DrawMetricCard(state, contentX + cardWidth + gap, top, cardWidth, "Wio", FormatCount(state.snapshot.KindCount("Wio")),
+                "language sources", Cyan());
+            DrawMetricCard(state, contentX + (cardWidth + gap) * 2.0f32, top, cardWidth, "Text lines",
+                FormatCount(state.snapshot.lines), "measured locally", Green());
+            DrawMetricCard(state, contentX + (cardWidth + gap) * 3.0f32, top, cardWidth, "Footprint",
+                FormatBytes(state.snapshot.bytes), "excluding build caches", Amber());
+
+            let lowerTop = top + 132.0f32;
+            let leftWidth = contentWidth * 0.58f32;
+            let rightWidth = contentWidth - leftWidth - 12.0f32;
+            DrawDistribution(state, native::Bounds(contentX, lowerTop, leftWidth, 252.0f32));
+            DrawHealth(state, native::Bounds(contentX + leftWidth + 12.0f32, lowerTop, rightWidth, 180.0f32));
+            DrawRecent(state, native::Bounds(contentX, lowerTop + 264.0f32, leftWidth, height - lowerTop - 300.0f32));
+            DrawInsights(state, native::Bounds(contentX + leftWidth + 12.0f32, lowerTop + 192.0f32, rightWidth,
+                height - lowerTop - 228.0f32));
+        } else {
+            DrawEmptyState(state, native::Bounds(contentX, top, contentWidth, height - top - 44.0f32), running);
+        }
+
+        Text(state.regular, state.status, contentX, height - 27.0f32, 10.0f32, Muted());
+        let worker = running ? $"async generation ${generation}" : "worker idle";
+        Text(state.regular, worker, width - 32.0f32 - state.regular.Measure(worker, 10.0f32), height - 27.0f32,
+            10.0f32, running ? Accent() : Muted());
+
+        if (state.toastSeconds > 0.0f32 and state.toast != "") {
+            let toastWidth = state.medium.Measure(state.toast, 12.0f32) + 38.0f32;
+            let toast = native::Bounds(width - toastWidth - 32.0f32, 28.0f32, toastWidth, 42.0f32);
+            native::RoundRect(toast, 0.12f32, Ink());
+            native::Circle(toast.x + 17.0f32, toast.y + 21.0f32, 4.0f32, Green());
+            Text(state.medium, state.toast, toast.x + 29.0f32, toast.y + 12.0f32, 12.0f32, White());
+        }
+
+        native::End();
+
+        if (submitPath or scanClicked) { return 1; }
+        if (currentClicked) { return 2; }
+        if (copyClicked) { return 3; }
+        return 0;
+    }
+}
