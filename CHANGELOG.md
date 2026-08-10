@@ -4,6 +4,39 @@ All notable user-facing changes to Wio are recorded here.
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-08-11
+
+### Added
+
+- Added `wio project build --emit-cpp`, which retains generated C++ in the
+  manifest-resolved output directory while preserving source roots, native
+  includes/sources, link configuration, target, and output policy.
+- Added Atlas Desk, a substantial Raylib desktop workspace dashboard exercising
+  application/system lifecycle, async scanning and cancellation, typed
+  attributes, modern native declarations, extensions, Option/Result, JSON, and
+  Unicode APIs.
+- Added a dedicated project emit-C++ regression gate.
+
+### Changed
+
+- The compiler, package, installer, examples, and companion VS Code extension
+  advance together to `0.11.1`.
+- Explicit `--intermediate-dir` now controls retained C++ placement even when
+  `--emit-cpp` is selected; source-adjacent output remains the standalone
+  default when no intermediate directory is supplied.
+
+### Fixed
+
+- The 0.11.1 VS Code extension now routes manifest-owned files through
+  `wio project build/run/describe`, preserving C++ headers, native sources,
+  libraries, source roots, application entry, host targets, and working paths.
+- Standalone library/source files are checked as non-executable targets and no
+  longer report a misleading missing-`Entry` error; attempting to run one now
+  produces an actionable library explanation.
+- Corrected editor C++ emission, project-scoped diagnostic replacement,
+  compile diagnostics during run, multi-root settings, and native-source save
+  checks.
+
 ## [0.11.0] - 2026-08-10
 
 ### Added

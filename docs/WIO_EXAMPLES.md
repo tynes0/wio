@@ -1,7 +1,7 @@
 # Wio Examples Guide
 
 This document is the release-facing map for the example set that ships with
-Wio `v0.11.0`.
+Wio `v0.11.1`.
 
 The goal is simple:
 
@@ -199,7 +199,7 @@ host-interop microscope.
 
 ## 5. Release Reading
 
-For `v0.11.0`, the intended reading order is:
+For `v0.11.1`, the intended reading order is:
 
 1. `examples/plain_app`
 2. `examples/native_app`
@@ -209,6 +209,7 @@ For `v0.11.0`, the intended reading order is:
 6. `examples/static_cmake_consumer`
 7. `examples/hybrid_arena`
 8. `examples/wio_observatory`
+9. `examples/atlas_desk`
 
 That sequence moves from:
 
@@ -220,6 +221,7 @@ That sequence moves from:
 - to CMake embedding
 - to a heavier integration sample
 - to a complete modern Wio application
+- to a native desktop application using the 0.11 lifecycle and async model
 
 ---
 
