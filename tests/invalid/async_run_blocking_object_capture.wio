@@ -1,0 +1,12 @@
+use std::async as futures;
+
+object UnsafeCounter {
+    public value: i32;
+    public fn OnConstruct(value: i32) { self.value = value; }
+}
+
+fn Entry() -> i32 {
+    let counter = UnsafeCounter(9);
+    let action: fn() -> i32 = () => counter.value;
+    return futures::BlockOn<i32>(futures::RunBlocking<i32>(action));
+}

@@ -3,6 +3,10 @@
 Status: post-0.11 design plan; non-normative until individual slices move into
 a versioned specification.
 
+Progress: correctness slice implemented on `releases/v0.12.0`; Windows
+qualification is active. Linux, packaged-toolchain, sanitizer, and real-app
+qualification remain required before the slice is frozen.
+
 The 0.11 contract remains in [`WIO_ASYNC_MODEL.md`](./WIO_ASYNC_MODEL.md). This
 document records what comes next without reopening that frozen foundation.
 
@@ -258,8 +262,9 @@ unit tests:
 
 ## 10. Implementation order
 
-1. Correctness: `Send`/`Sync`-style traits, cross-executor capture analysis,
-   separate blocking pool, cancellation-aware timers, and explicit shutdown.
+1. Correctness (implemented candidate; freeze qualification pending):
+   `Send`/`Sync`-style traits, cross-executor capture analysis, separate
+   blocking pool, cancellation-aware timers, and explicit shutdown.
 2. Ergonomics: `Task<T>` facade, member state operations, `Poll`, and `Block`.
 3. Structure: language `spawn`, `async scope`, inherited cancellation and
    deadlines, and a small `select` surface.

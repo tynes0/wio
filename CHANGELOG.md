@@ -4,6 +4,31 @@ All notable user-facing changes to Wio are recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- Added the `std::async::Task<T>` public alias plus `Send`/`Sync` executor
+  safety markers for synchronized user-owned types.
+- Added blocking-executor capacity/runtime diagnostics and explicit,
+  idempotent async runtime shutdown.
+
+### Changed
+
+- `RunBlocking` now uses a distinct bounded blocking pool configured through
+  `WIO_ASYNC_BLOCKING_WORKERS` and `WIO_ASYNC_BLOCKING_QUEUE`; it no longer
+  consumes continuation/timer workers.
+- Async timer suspension is cancellation-aware and wakes cancelled work
+  promptly instead of retaining it until the original deadline.
+- `Run` and `RunBlocking` now reject borrowed, opaque, callable, or unsafe
+  object captures before C++ generation. Structurally safe values pass
+  automatically; synchronized objects opt in through `std::async::Send`.
+
+### Fixed
+
+- Fixed cancelled coroutines continuing past `Yield`/`Sleep` suspension and
+  executing user code after cancellation.
+- Fixed shutdown races between accepted blocking work, continuation posting,
+  delayed timers, and process/static destruction.
+
 ## [0.11.1] - 2026-08-11
 
 ### Added

@@ -5,6 +5,14 @@ realm std {
     realm async {
         using cpp::header("std_async.h");
 
+        // Marker contracts for values that may cross executor boundaries.
+        // Value components composed only from transfer-safe fields are Send
+        // automatically; owning objects opt in after providing synchronization.
+        interface Send {}
+        interface Sync {}
+
+        type Task<T> = coroutine<T>;
+
         fn Sleep(milliseconds: u64) -> coroutine<void>
             with native, cpp::name(wio::runtime::AsyncSleep);
 
@@ -48,10 +56,10 @@ realm std {
             with native, cpp::name(wio::runtime::RunAsync);
 
         fn RunBlocking<T>(action: fn() -> T) -> coroutine<T>
-            with native, cpp::name(wio::runtime::RunAsync);
+            with native, cpp::name(wio::runtime::RunBlockingAsync);
 
         fn RunBlocking(action: fn()) -> coroutine<void>
-            with native, cpp::name(wio::runtime::RunAsync);
+            with native, cpp::name(wio::runtime::RunBlockingAsync);
 
         fn All<T>(tasks: coroutine<T>[]) -> coroutine<T[]>
             with native, cpp::name(wio::runtime::WhenAll);
@@ -95,6 +103,21 @@ realm std {
         fn WorkerCount() -> u64
             with native, cpp::name(wio::runtime::AsyncWorkerCount);
 
+        fn BlockingWorkerCount() -> u64
+            with native, cpp::name(wio::runtime::AsyncBlockingWorkerCount);
+
+        fn BlockingQueueCapacity() -> u64
+            with native, cpp::name(wio::runtime::AsyncBlockingQueueCapacity);
+
+        fn BlockingPendingCount() -> u64
+            with native, cpp::name(wio::runtime::AsyncBlockingPendingCount);
+
+        fn IsRuntimeRunning() -> bool
+            with native, cpp::name(wio::runtime::AsyncRuntimeRunning);
+
+        fn ShutdownRuntime()
+            with native, cpp::name(wio::runtime::ShutdownAsyncRuntime);
+
         type CancellationToken = concurrency::CancellationToken;
 
         object CancellationSource {
@@ -127,6 +150,7 @@ realm std {
             return not token.IsCancelled();
         }
 
+        @From(Send, Sync)
         object Dispatcher {
             private gate: concurrency::Mutex;
             private actions: fn()[];

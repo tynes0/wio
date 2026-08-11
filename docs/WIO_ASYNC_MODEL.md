@@ -2,6 +2,40 @@
 
 Status: normative Wio 0.11 companion contract.
 
+The section **Post-0.11 correctness candidate** records additive behavior on
+the unreleased 0.12 branch. It does not rewrite the frozen 0.11 contract.
+
+## Post-0.11 correctness candidate
+
+`std::async::RunBlocking` now targets a distinct bounded blocking executor.
+Continuation/timer workers therefore remain available while native or legacy
+calls block. The pool is configured before first use with
+`WIO_ASYNC_BLOCKING_WORKERS` (1..64) and `WIO_ASYNC_BLOCKING_QUEUE`
+(1..1048576); invalid values use conservative defaults. Capacity is observable
+through `BlockingWorkerCount`, `BlockingQueueCapacity`, and
+`BlockingPendingCount`.
+
+Cross-executor closures are checked before backend generation. Primitive and
+structurally transfer-safe component values pass automatically. `ref`/`view`,
+opaque handles, nested callables, and unsynchronized object/interface handles
+do not. An object that owns appropriate synchronization may explicitly
+implement the empty `std::async::Send` marker; `std::async::Sync` reserves the
+corresponding shared-access contract. Claiming either marker is an unsafe
+semantic promise by the type author, not automatic locking.
+
+Cancellation now wakes `Sleep`/`Yield` suspension promptly and prevents the
+cancelled coroutine from running beyond that boundary. Awaiter cancellation
+detaches only that awaiter from a shared child; it does not implicitly cancel
+the shared child for its other observers. Blocking native work remains
+cooperative and is never forcibly killed.
+
+`ShutdownRuntime` is explicit and idempotent. It stops accepting work, drains
+accepted blocking callbacks first, then drains continuation/timer cleanup.
+New work fails with a stopped-runtime exception. The ordering guarantees that
+blocking jobs can publish their final continuation without racing a stopped
+continuation pool. `Task<T>` is the friendly alias of the frozen
+`coroutine<T>` shared-handle representation.
+
 ## 1. Source model
 
 `async fn` declares a function whose call result is `coroutine<T>`. The return
@@ -80,7 +114,8 @@ storage outlives every suspension.
 The default scheduler owns a worker pool sized from host hardware concurrency
 with a minimum of two workers. `WIO_ASYNC_WORKERS` may select 2 through 256
 workers before the scheduler is first used; invalid values fall back to the
-host default. Immediate work and timers share one synchronized priority queue.
+host default. Immediate work and timers share one synchronized priority queue
+in the frozen 0.11 runtime.
 `Sleep` does not create a detached thread per timer. Equal-time work is ordered
 by an internal monotonic sequence number.
 
@@ -90,9 +125,10 @@ without honoring their remaining wall-clock delay so coroutine frames and
 captured values are released. Structured work is still joined explicitly;
 detached work does not keep shutdown waiting for a distant timer.
 
-`std::async::RunBlocking` moves a synchronous callback onto the worker pool;
-`Run` is its short compatibility spelling. It is the bridge for bounded
-blocking/native work, not a claim that filesystem or network APIs have become
+In the unreleased correctness candidate, `RunBlocking` moves synchronous work
+to the separate bounded pool described above. `Run` remains the continuation
+pool compatibility operation and is also subject to transfer-safe capture
+analysis. Neither spelling claims that filesystem or network APIs have become
 true non-blocking operating-system I/O.
 
 ## 5. Standard-library surface

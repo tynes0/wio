@@ -1,0 +1,16 @@
+use std::async as futures;
+
+object UnsafeWorker {
+    private value: i32;
+    public fn OnConstruct(value: i32) { self.value = value; }
+
+    public fn Start() -> coroutine<i32> {
+        let action: fn() -> i32 = () => self.value;
+        return futures::RunBlocking<i32>(action);
+    }
+}
+
+fn Entry() -> i32 {
+    let worker = UnsafeWorker(3);
+    return futures::BlockOn<i32>(worker.Start());
+}

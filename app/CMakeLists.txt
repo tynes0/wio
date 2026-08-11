@@ -4763,6 +4763,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "async-worker-config-ok"
         --run
     )
+    add_wio_output_test(
+        wio_test_async_correctness_run
+        "${CMAKE_SOURCE_DIR}/tests/async_correctness_run.wio"
+        "async-correctness-ok"
+        --run
+    )
 
     add_wio_output_test(
         wio_test_lambda_capture_value_run
@@ -4779,6 +4785,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_async_block_on_run
         wio_test_async_freeze_run
         wio_test_async_detached_exit_run
+        wio_test_async_correctness_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
     set_tests_properties(
@@ -4831,6 +4838,18 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(wio_invalid_async_coroutine_arity
         "${CMAKE_SOURCE_DIR}/tests/invalid/async_coroutine_arity.wio"
         "coroutine.*requires exactly one result type")
+    add_wio_failure_test(wio_invalid_async_run_blocking_borrow_capture
+        "${CMAKE_SOURCE_DIR}/tests/invalid/async_run_blocking_borrow_capture.wio"
+        "RunBlocking cannot transfer capture 'borrowed'")
+    add_wio_failure_test(wio_invalid_async_run_borrow_capture
+        "${CMAKE_SOURCE_DIR}/tests/invalid/async_run_borrow_capture.wio"
+        "Run cannot transfer capture 'borrowed'")
+    add_wio_failure_test(wio_invalid_async_run_blocking_object_capture
+        "${CMAKE_SOURCE_DIR}/tests/invalid/async_run_blocking_object_capture.wio"
+        "RunBlocking cannot transfer capture 'counter'")
+    add_wio_failure_test(wio_invalid_async_run_blocking_self_capture
+        "${CMAKE_SOURCE_DIR}/tests/invalid/async_run_blocking_self_capture.wio"
+        "RunBlocking cannot capture 'self'")
     set_tests_properties(
         wio_invalid_async_await_outside_async
         wio_invalid_async_await_requires_coroutine
@@ -4840,6 +4859,10 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_async_extension_receiver
         wio_invalid_async_lifecycle_method
         wio_invalid_async_coroutine_arity
+        wio_invalid_async_run_blocking_borrow_capture
+        wio_invalid_async_run_borrow_capture
+        wio_invalid_async_run_blocking_object_capture
+        wio_invalid_async_run_blocking_self_capture
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 endif()

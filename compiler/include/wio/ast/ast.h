@@ -667,6 +667,10 @@ namespace wio
         std::vector<Parameter> parameters;
         NodePtr<TypeSpecifier> returnType;
         NodePtr<Statement> body;
+        // Filled by semantic analysis. Executor-crossing calls use this to
+        // reject borrowed or otherwise non-transfer-safe captures.
+        std::vector<WeakRef<sema::Symbol>> capturedSymbols;
+        bool capturesSelf = false;
 
         LambdaExpression(std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType, NodePtr<Statement> _body,
             common::Location _loc = common::Location::invalid());

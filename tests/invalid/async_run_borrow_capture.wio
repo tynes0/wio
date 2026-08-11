@@ -1,0 +1,8 @@
+use std::async as futures;
+
+fn Entry() -> i32 {
+    mut value = 7;
+    let borrowed = ref value;
+    let action: fn() -> i32 = () => deref borrowed;
+    return futures::BlockOn<i32>(futures::Run<i32>(action));
+}
