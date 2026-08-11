@@ -134,11 +134,26 @@ namespace wio
         Temporary
     };
 
-    FrenumClassInNamespace(wio, IntrinsicMember, uint8_t,
+    // This is compiler-internal state, not a user-visible reflected enum.
+    // Keep it as a regular enum so the intrinsic surface is not capped by
+    // frenum's preprocessor argument limit.
+    enum class IntrinsicMember : uint8_t
+    {
         None,
         PackSize,
         PackArray,
         PackToStaticArray,
+        TaskStart,
+        TaskCancel,
+        TaskIsReady,
+        TaskIsCancelled,
+        TaskIsFaulted,
+        TaskWaitFor,
+        TaskBlock,
+        TaskPoll,
+        TaskWithin,
+        TaskCancelAfter,
+        TaskDetach,
         ArrayCount,
         ArrayEmpty,
         ArrayCapacity,
@@ -259,7 +274,7 @@ namespace wio
         FlagsetWithout,
         FlagsetToggle,
         FlagsetClear
-    );
+    };
 
     struct ASTNode;
     struct Expression;

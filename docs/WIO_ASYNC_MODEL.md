@@ -5,7 +5,7 @@ Status: normative Wio 0.11 companion contract.
 The section **Post-0.11 correctness candidate** records additive behavior on
 the unreleased 0.12 branch. It does not rewrite the frozen 0.11 contract.
 
-## Post-0.11 correctness candidate
+## Post-0.11 correctness and structure candidate
 
 `std::async::RunBlocking` now targets a distinct bounded blocking executor.
 Continuation/timer workers therefore remain available while native or legacy
@@ -35,6 +35,24 @@ New work fails with a stopped-runtime exception. The ordering guarantees that
 blocking jobs can publish their final continuation without racing a stopped
 continuation pool. `Task<T>` is the friendly alias of the frozen
 `coroutine<T>` shared-handle representation.
+
+`Task<T>` now exposes the common operations directly: `Start`, `Cancel`,
+`IsReady`, `IsCancelled`, `IsFaulted`, `WaitFor`, `CancelAfter`, `Detach`,
+`Block`, `Poll`, and `Within`. `Block` is intentionally the only synchronous
+member boundary. `Poll` never waits and returns a stable `TaskPoll<T>` (or
+`VoidTaskPoll`) snapshot that distinguishes pending, ready, failed, and
+cancelled work. A ready value is copied into the snapshot, so inspecting it
+does not consume or restart the task. `Within(milliseconds)` returns
+`Task<Option<T>>`; its void form returns `Task<bool>`. A cancellation request
+made after completion is now a no-op and cannot erase an already-published
+value.
+
+`std::async::Scope` is the runtime-backed structured ownership foundation. A
+single scope can own heterogeneous children, closes on `Join`, cancels sibling
+work after the first failure, supports a scope deadline, and cancels plus waits
+for unfinished children during destruction. This is the explicit library form
+that the planned `spawn`/`async scope` source syntax will lower into; that
+syntax is not part of this candidate yet.
 
 ## 1. Source model
 
@@ -144,6 +162,11 @@ Core task operations:
 - `CancellationToken` and `CancellationSource`;
 - `SleepCancellable` and the owner-drained `Dispatcher`;
 - `WorkerCount` for diagnostics and capacity-aware code.
+
+On the unreleased 0.12 candidate, these operations are also discoverable as
+`Task<T>` members. `TaskPoll<T>`, `VoidTaskPoll`, and `TaskStatus` provide
+non-blocking snapshots, while `Scope` owns heterogeneous child lifetimes and
+their cancellation/deadline boundary.
 
 `All` preserves input order. If one child fails, remaining children are marked
 cancelled. `Any` returns the lowest ready index observed by the scheduler.

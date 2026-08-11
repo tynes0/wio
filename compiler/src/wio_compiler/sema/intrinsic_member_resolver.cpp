@@ -103,6 +103,48 @@ namespace wio::sema
             overloads.push_back(makeMethodResolution(member, returnType, std::move(paramTypes), typeContext, requiresMutableReceiver));
         }
 
+        std::vector<IntrinsicMemberResolution> resolveTaskIntrinsicMember(
+            TypeContext& typeContext,
+            const Ref<AsyncTaskType>& taskType,
+            const std::string_view memberName)
+        {
+            std::vector<IntrinsicMemberResolution> overloads;
+            if (!taskType)
+                return overloads;
+
+            const Ref<Type> ownerType = taskType;
+            const Ref<Type> valueType = taskType->valueType;
+            if (memberName == "Start")
+                appendMethodResolution(overloads, IntrinsicMember::TaskStart, ownerType, {}, typeContext, false);
+            else if (memberName == "Cancel")
+                appendMethodResolution(overloads, IntrinsicMember::TaskCancel, typeContext.getVoid(), {}, typeContext, false);
+            else if (memberName == "IsReady")
+                appendMethodResolution(overloads, IntrinsicMember::TaskIsReady, typeContext.getBool(), {}, typeContext, false);
+            else if (memberName == "IsCancelled")
+                appendMethodResolution(overloads, IntrinsicMember::TaskIsCancelled, typeContext.getBool(), {}, typeContext, false);
+            else if (memberName == "IsFaulted")
+                appendMethodResolution(overloads, IntrinsicMember::TaskIsFaulted, typeContext.getBool(), {}, typeContext, false);
+            else if (memberName == "WaitFor")
+                appendMethodResolution(overloads, IntrinsicMember::TaskWaitFor, typeContext.getBool(), {typeContext.getU64()}, typeContext, false);
+            else if (memberName == "Block")
+                appendMethodResolution(overloads, IntrinsicMember::TaskBlock, valueType, {}, typeContext, false);
+            else if (memberName == "Poll")
+                appendMethodResolution(overloads, IntrinsicMember::TaskPoll, typeContext.getUnknown(), {}, typeContext, false);
+            else if (memberName == "Within")
+                appendMethodResolution(overloads, IntrinsicMember::TaskWithin, typeContext.getUnknown(), {typeContext.getU64()}, typeContext, false);
+            else if (memberName == "CancelAfter")
+                appendMethodResolution(
+                    overloads,
+                    IntrinsicMember::TaskCancelAfter,
+                    typeContext.getOrCreateAsyncTaskType(typeContext.getVoid()),
+                    {typeContext.getU64()},
+                    typeContext,
+                    false);
+            else if (memberName == "Detach")
+                appendMethodResolution(overloads, IntrinsicMember::TaskDetach, typeContext.getVoid(), {}, typeContext, false);
+            return overloads;
+        }
+
         std::vector<IntrinsicMemberResolution> resolveArrayIntrinsicMember(TypeContext& typeContext,
                                                                            const Ref<ArrayType>& arrayType,
                                                                            const std::string_view memberName)
@@ -494,6 +536,9 @@ namespace wio::sema
 
         if (resolvedOwnerType->kind() == TypeKind::Dictionary)
             return resolveDictionaryIntrinsicMember(typeContext, resolvedOwnerType.AsFast<DictionaryType>(), memberName);
+
+        if (resolvedOwnerType->kind() == TypeKind::AsyncTask)
+            return resolveTaskIntrinsicMember(typeContext, resolvedOwnerType.AsFast<AsyncTaskType>(), memberName);
 
         if (resolvedOwnerType->kind() == TypeKind::Struct)
         {

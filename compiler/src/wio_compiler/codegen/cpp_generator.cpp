@@ -1460,6 +1460,24 @@ namespace wio::codegen
         {
             switch (member)
             {
+            case IntrinsicMember::TaskStart:
+                return "TaskStart";
+            case IntrinsicMember::TaskCancel:
+                return "TaskCancel";
+            case IntrinsicMember::TaskIsReady:
+                return "TaskIsReady";
+            case IntrinsicMember::TaskIsCancelled:
+                return "TaskIsCancelled";
+            case IntrinsicMember::TaskIsFaulted:
+                return "TaskIsFaulted";
+            case IntrinsicMember::TaskWaitFor:
+                return "TaskWaitFor";
+            case IntrinsicMember::TaskBlock:
+                return "TaskBlock";
+            case IntrinsicMember::TaskCancelAfter:
+                return "TaskCancelAfter";
+            case IntrinsicMember::TaskDetach:
+                return "TaskDetach";
             case IntrinsicMember::ArrayCount:
             case IntrinsicMember::DictCount:
             case IntrinsicMember::StringCount:
@@ -1695,6 +1713,8 @@ namespace wio::codegen
                 return "FlagsetToggle";
             case IntrinsicMember::FlagsetClear:
                 return "FlagsetClear";
+            case IntrinsicMember::TaskPoll:
+            case IntrinsicMember::TaskWithin:
             case IntrinsicMember::None:
                 return {};
             }
@@ -6426,6 +6446,71 @@ namespace wio::codegen
         };
 
         auto intrinsicFunctionType = functionType.AsFast<sema::FunctionType>();
+
+        if (node.intrinsicMember == IntrinsicMember::TaskPoll ||
+            node.intrinsicMember == IntrinsicMember::TaskWithin)
+        {
+            Ref<sema::Type> resolvedTaskType = unwrapAliasTypeForCodegen(receiverType);
+            if (!resolvedTaskType || resolvedTaskType->kind() != sema::TypeKind::AsyncTask)
+                return false;
+            Ref<sema::Type> valueType = resolvedTaskType.AsFast<sema::AsyncTaskType>()->valueType;
+            const bool isVoidTask = valueType && valueType->isVoid();
+
+            emit("([&](");
+            for (size_t i = 0; i < intrinsicFunctionType->paramTypes.size(); ++i)
+            {
+                emit(toCppType(intrinsicFunctionType->paramTypes[i]));
+                emit(" _wio_arg" + std::to_string(i));
+                if (i + 1 < intrinsicFunctionType->paramTypes.size())
+                    emit(", ");
+            }
+            emit(") -> ");
+            emit(toCppType(intrinsicFunctionType->returnType));
+            emit(" { return ");
+
+            auto& typeContext = Compiler::get().getTypeContext();
+            Ref<sema::Type> declarationTaskType = resolvedTaskType;
+            std::string functionName;
+            std::vector<Ref<sema::Type>> declarationParams;
+            if (node.intrinsicMember == IntrinsicMember::TaskPoll)
+            {
+                functionName = "Poll";
+                if (!isVoidTask)
+                {
+                    Ref<sema::Type> genericT = typeContext.getOrCreateGenericParameterType("T");
+                    declarationTaskType = typeContext.getOrCreateAsyncTaskType(genericT);
+                }
+                declarationParams = {declarationTaskType};
+            }
+            else
+            {
+                functionName = isVoidTask ? "TimeoutCompleted" : "TimeoutOption";
+                if (!isVoidTask)
+                {
+                    Ref<sema::Type> genericT = typeContext.getOrCreateGenericParameterType("T");
+                    declarationTaskType = typeContext.getOrCreateAsyncTaskType(genericT);
+                }
+                declarationParams = {declarationTaskType, typeContext.getU64()};
+            }
+
+            emit(Mangler::mangleFunction(functionName, declarationParams, "std_async"));
+            if (!isVoidTask)
+            {
+                emit("<");
+                emit(toCppType(valueType));
+                emit(">");
+            }
+            emit("(");
+            emitReceiver();
+            for (size_t i = 0; i < intrinsicFunctionType->paramTypes.size(); ++i)
+            {
+                emit(", ");
+                emitArgumentName(i);
+            }
+            emit("); })");
+            return true;
+        }
+
         const std::string_view helperName = getIntrinsicHelperName(node.intrinsicMember);
         if (helperName.empty())
             return false;

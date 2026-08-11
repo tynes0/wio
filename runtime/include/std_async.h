@@ -16,6 +16,7 @@
 #include <optional>
 #include <queue>
 #include <stdexcept>
+#include <string>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -488,13 +489,15 @@ namespace wio::runtime
 
             void Cancel()
             {
-                if (cancelled.exchange(true, std::memory_order_acq_rel))
-                    return;
-
                 bool completeWithoutStarting = false;
                 std::vector<std::shared_ptr<AsyncCancellationRegistration>> pendingCancellation;
                 {
                     std::lock_guard lock(mutex);
+                    // Completion wins over a late cancellation request.  A
+                    // value that was already published must stay observable.
+                    if (completed || cancelled.load(std::memory_order_acquire))
+                        return;
+                    cancelled.store(true, std::memory_order_release);
                     completeWithoutStarting = !started && !completed;
                     pendingCancellation = cancellationCallbacks;
                 }
@@ -539,6 +542,29 @@ namespace wio::runtime
             {
                 std::lock_guard lock(mutex);
                 return completed && failure != nullptr;
+            }
+
+            std::string FailureMessage() const
+            {
+                std::exception_ptr captured;
+                {
+                    std::lock_guard lock(mutex);
+                    captured = failure;
+                }
+                if (!captured)
+                    return {};
+                try
+                {
+                    std::rethrow_exception(captured);
+                }
+                catch (const std::exception& error)
+                {
+                    return error.what();
+                }
+                catch (...)
+                {
+                    return "unknown asynchronous failure";
+                }
             }
 
             std::shared_ptr<AsyncContinuationRegistration> AddContinuation(
@@ -763,6 +789,11 @@ namespace wio::runtime
 
         Awaiter operator co_await() const { return Awaiter{RequireState()}; }
 
+        std::shared_ptr<detail::AsyncTaskStateBase> SharedState() const
+        {
+            return RequireState();
+        }
+
     private:
         explicit AsyncTask(std::shared_ptr<detail::AsyncTaskState<T>> state)
             : state_(std::move(state))
@@ -888,6 +919,11 @@ namespace wio::runtime
 
         Awaiter operator co_await() const { return Awaiter{RequireState()}; }
 
+        std::shared_ptr<detail::AsyncTaskStateBase> SharedState() const
+        {
+            return RequireState();
+        }
+
     private:
         explicit AsyncTask(std::shared_ptr<detail::AsyncTaskState<void>> state)
             : state_(std::move(state))
@@ -903,6 +939,186 @@ namespace wio::runtime
 
         std::shared_ptr<detail::AsyncTaskState<void>> state_;
     };
+
+    struct AsyncStateAwaiter final
+    {
+        std::shared_ptr<detail::AsyncTaskStateBase> state;
+
+        bool await_ready() const { return state && state->Ready(); }
+
+        bool await_suspend(std::coroutine_handle<> continuation)
+        {
+            if (!state)
+                throw std::runtime_error("cannot await an empty scoped task");
+            auto registration = state->AddContinuation(continuation);
+            if (!registration)
+                return false;
+            state->Start();
+            return registration->Arm();
+        }
+
+        void await_resume() const
+        {
+            std::lock_guard lock(state->mutex);
+            state->RethrowFailure();
+        }
+    };
+
+    class AsyncScopeState final : public std::enable_shared_from_this<AsyncScopeState>
+    {
+    public:
+        bool Add(const std::shared_ptr<detail::AsyncTaskStateBase>& child)
+        {
+            std::lock_guard lock(mutex_);
+            if (closed_)
+                return false;
+            children_.push_back(child);
+            return true;
+        }
+
+        std::vector<std::shared_ptr<detail::AsyncTaskStateBase>> CloseAndSnapshot()
+        {
+            std::lock_guard lock(mutex_);
+            closed_ = true;
+            return children_;
+        }
+
+        void Clear()
+        {
+            std::lock_guard lock(mutex_);
+            children_.clear();
+        }
+
+        void Cancel()
+        {
+            auto children = CloseAndSnapshot();
+            for (const auto& child : children)
+                child->Cancel();
+        }
+
+        void CancelAndWait() noexcept
+        {
+            try
+            {
+                auto children = CloseAndSnapshot();
+                for (const auto& child : children)
+                    child->Cancel();
+                for (const auto& child : children)
+                    child->Wait();
+                Clear();
+            }
+            catch (...)
+            {
+            }
+        }
+
+        std::size_t Count() const
+        {
+            std::lock_guard lock(mutex_);
+            return children_.size();
+        }
+
+        bool IsClosed() const
+        {
+            std::lock_guard lock(mutex_);
+            return closed_;
+        }
+
+    private:
+        mutable std::mutex mutex_;
+        std::vector<std::shared_ptr<detail::AsyncTaskStateBase>> children_;
+        bool closed_ = false;
+    };
+
+    using AsyncScopeHandle = std::shared_ptr<AsyncScopeState>*;
+
+    inline void* AsyncScopeCreate()
+    {
+        return new std::shared_ptr<AsyncScopeState>(std::make_shared<AsyncScopeState>());
+    }
+
+    inline std::shared_ptr<AsyncScopeState> RequireAsyncScope(void* handle)
+    {
+        if (!handle)
+            throw std::runtime_error("async scope is disposed");
+        auto* holder = static_cast<AsyncScopeHandle>(handle);
+        if (!*holder)
+            throw std::runtime_error("async scope is disposed");
+        return *holder;
+    }
+
+    inline void AsyncScopeDestroy(void* handle)
+    {
+        if (!handle)
+            return;
+        auto* holder = static_cast<AsyncScopeHandle>(handle);
+        if (*holder)
+            (*holder)->CancelAndWait();
+        delete holder;
+    }
+
+    template<typename T>
+    AsyncTask<T> AsyncScopeSpawn(void* handle, AsyncTask<T> task)
+    {
+        auto scope = RequireAsyncScope(handle);
+        if (!scope->Add(task.SharedState()))
+            throw std::runtime_error("cannot spawn into a closed async scope");
+        task.Start();
+        return task;
+    }
+
+    inline void AsyncScopeCancel(void* handle)
+    {
+        RequireAsyncScope(handle)->Cancel();
+    }
+
+    inline std::uint64_t AsyncScopeCount(void* handle)
+    {
+        return static_cast<std::uint64_t>(RequireAsyncScope(handle)->Count());
+    }
+
+    inline bool AsyncScopeClosed(void* handle)
+    {
+        return RequireAsyncScope(handle)->IsClosed();
+    }
+
+    inline bool AsyncScopeDeadline(void* handle, const std::uint64_t milliseconds)
+    {
+        std::weak_ptr<AsyncScopeState> weakScope = RequireAsyncScope(handle);
+        return static_cast<bool>(DefaultAsyncScheduler().PostAfter(
+            std::chrono::milliseconds(milliseconds),
+            [weakScope]
+            {
+                if (auto scope = weakScope.lock())
+                    scope->Cancel();
+            }));
+    }
+
+    inline AsyncTask<void> AsyncScopeJoin(void* handle)
+    {
+        auto scope = RequireAsyncScope(handle);
+        auto children = scope->CloseAndSnapshot();
+        std::exception_ptr firstFailure;
+        for (const auto& child : children)
+        {
+            try
+            {
+                co_await AsyncStateAwaiter{child};
+            }
+            catch (...)
+            {
+                if (!firstFailure)
+                {
+                    firstFailure = std::current_exception();
+                    for (const auto& sibling : children)
+                        sibling->Cancel();
+                }
+            }
+        }
+        scope->Clear();
+        if (firstFailure)
+            std::rethrow_exception(firstFailure);
+    }
 
     struct AsyncScheduleAwaiter final
     {
@@ -1020,6 +1236,12 @@ namespace wio::runtime
     bool AsyncFaulted(const AsyncTask<T>& task)
     {
         return task.IsFaulted();
+    }
+
+    template<typename T>
+    std::string AsyncFailureMessage(const AsyncTask<T>& task)
+    {
+        return task.SharedState()->FailureMessage();
     }
 
     template<typename T>
@@ -1249,5 +1471,70 @@ namespace wio::runtime
             co_await AsyncDelayAwaiter{std::chrono::milliseconds(1)};
         }
         co_await task;
+    }
+}
+
+namespace wio::intrinsics
+{
+    template<typename T>
+    inline runtime::AsyncTask<T> TaskStart(const runtime::AsyncTask<T>& task)
+    {
+        task.Start();
+        return task;
+    }
+
+    template<typename T>
+    inline void TaskCancel(const runtime::AsyncTask<T>& task)
+    {
+        task.Cancel();
+    }
+
+    template<typename T>
+    inline bool TaskIsReady(const runtime::AsyncTask<T>& task)
+    {
+        return task.IsReady();
+    }
+
+    template<typename T>
+    inline bool TaskIsCancelled(const runtime::AsyncTask<T>& task)
+    {
+        return task.IsCancelled();
+    }
+
+    template<typename T>
+    inline bool TaskIsFaulted(const runtime::AsyncTask<T>& task)
+    {
+        return task.IsFaulted();
+    }
+
+    template<typename T>
+    inline bool TaskWaitFor(const runtime::AsyncTask<T>& task, const std::uint64_t milliseconds)
+    {
+        return task.WaitFor(milliseconds);
+    }
+
+    template<typename T>
+    inline T TaskBlock(const runtime::AsyncTask<T>& task)
+    {
+        return task.Get();
+    }
+
+    inline void TaskBlock(const runtime::AsyncTask<void>& task)
+    {
+        task.Get();
+    }
+
+    template<typename T>
+    inline runtime::AsyncTask<void> TaskCancelAfter(
+        const runtime::AsyncTask<T>& task,
+        const std::uint64_t milliseconds)
+    {
+        return runtime::CancelAfter(task, milliseconds);
+    }
+
+    template<typename T>
+    inline void TaskDetach(const runtime::AsyncTask<T>& task)
+    {
+        runtime::DetachAsync(task);
     }
 }

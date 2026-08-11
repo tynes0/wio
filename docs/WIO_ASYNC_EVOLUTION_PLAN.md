@@ -3,9 +3,11 @@
 Status: post-0.11 design plan; non-normative until individual slices move into
 a versioned specification.
 
-Progress: correctness slice implemented on `releases/v0.12.0`; Windows
-qualification is active. Linux, packaged-toolchain, sanitizer, and real-app
-qualification remain required before the slice is frozen.
+Progress: correctness and ergonomics slices are implemented candidates on
+`releases/v0.12.0`. The structured runtime `Scope` foundation is also active;
+language `spawn`/`async scope`, inherited ambient cancellation, and `select`
+remain in the structure slice. Linux, packaged-toolchain, sanitizer, and
+real-app qualification remain required before these slices are frozen.
 
 The 0.11 contract remains in [`WIO_ASYNC_MODEL.md`](./WIO_ASYNC_MODEL.md). This
 document records what comes next without reopening that frozen foundation.
@@ -265,9 +267,12 @@ unit tests:
 1. Correctness (implemented candidate; freeze qualification pending):
    `Send`/`Sync`-style traits, cross-executor capture analysis, separate
    blocking pool, cancellation-aware timers, and explicit shutdown.
-2. Ergonomics: `Task<T>` facade, member state operations, `Poll`, and `Block`.
-3. Structure: language `spawn`, `async scope`, inherited cancellation and
-   deadlines, and a small `select` surface.
+2. Ergonomics (implemented candidate): `Task<T>` facade, member state
+   operations, typed non-blocking `Poll`, explicit `Block`, and recoverable
+   `Within`.
+3. Structure (runtime foundation implemented): heterogeneous owning `Scope`,
+   sibling cancellation, join, and deadlines. Language `spawn`, `async scope`,
+   inherited ambient cancellation, and a small `select` surface remain.
 4. Application integration: owned main executor, deterministic drain stage,
    `await main`, and headless/virtual-time tests.
 5. Platform capability: true async file/socket/process/watcher adapters.

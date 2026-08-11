@@ -1124,6 +1124,7 @@ namespace wio::sema
 
             return resolvedType->kind() == TypeKind::Array ||
                    resolvedType->kind() == TypeKind::Dictionary ||
+                   resolvedType->kind() == TypeKind::AsyncTask ||
                    (resolvedType->kind() == TypeKind::Struct &&
                     (resolvedType.AsFast<StructType>()->isEnum || resolvedType.AsFast<StructType>()->isFlagset)) ||
                    isStringType(resolvedType);
@@ -5006,6 +5007,7 @@ namespace wio::sema
                    cppNameArg->value == "wio::runtime::AsyncReady" ||
                    cppNameArg->value == "wio::runtime::AsyncCancelledStatus" ||
                    cppNameArg->value == "wio::runtime::AsyncFaulted" ||
+                   cppNameArg->value == "wio::runtime::AsyncFailureMessage" ||
                    cppNameArg->value == "wio::runtime::AsyncWaitFor" ||
                    cppNameArg->value == "wio::runtime::CancelAsync" ||
                    cppNameArg->value == "wio::runtime::CancelAfter" ||
@@ -5015,7 +5017,8 @@ namespace wio::sema
                    cppNameArg->value == "wio::runtime::WhenAll" ||
                    cppNameArg->value == "wio::runtime::WhenAny" ||
                    cppNameArg->value == "wio::runtime::Race" ||
-                   cppNameArg->value == "wio::runtime::WithTimeout";
+                   cppNameArg->value == "wio::runtime::WithTimeout" ||
+                   cppNameArg->value == "wio::runtime::AsyncScopeSpawn";
         }
 
         bool matchesOpenNativeTemplateIntrinsicConstraints(const std::vector<NodePtr<AttributeStatement>>& attributes,
@@ -9787,6 +9790,72 @@ namespace wio::sema
                             optionType,
                             resolution.memberType.AsFast<FunctionType>()->paramTypes
                         );
+                    }
+                    else if (resolution.member == IntrinsicMember::TaskPoll)
+                    {
+                        Ref<Type> resolvedCandidate = unwrapAliasType(candidateType);
+                        auto taskType = resolvedCandidate && resolvedCandidate->kind() == TypeKind::AsyncTask
+                            ? resolvedCandidate.AsFast<AsyncTaskType>()
+                            : nullptr;
+                        Ref<Type> pollType = nullptr;
+                        if (taskType && taskType->valueType && taskType->valueType->isVoid())
+                        {
+                            Ref<Symbol> pollSymbol = resolveQualifiedSymbol(currentScope_, "std::async::VoidTaskPoll");
+                            if (pollSymbol)
+                                pollType = pollSymbol->type;
+                        }
+                        else if (taskType)
+                        {
+                            Ref<Symbol> pollSymbol = resolveQualifiedSymbol(currentScope_, "std::async::TaskPoll");
+                            auto pollStruct = pollSymbol && pollSymbol->type && pollSymbol->type->kind() == TypeKind::Struct
+                                ? pollSymbol->type.AsFast<StructType>()
+                                : nullptr;
+                            if (pollStruct)
+                                pollType = instantiateGenericStructType(pollStruct, {taskType->valueType}, node.location());
+                        }
+                        if (!pollType)
+                        {
+                            WIO_LOG_ADD_ERROR(node.member->location(),
+                                "Task Poll requires the built-in std::async task module.");
+                            node.refType = Compiler::get().getTypeContext().getUnknown();
+                            return true;
+                        }
+                        resolution.memberType = Compiler::get().getTypeContext().getOrCreateFunctionType(pollType, {});
+                    }
+                    else if (resolution.member == IntrinsicMember::TaskWithin)
+                    {
+                        Ref<Type> resolvedCandidate = unwrapAliasType(candidateType);
+                        auto taskType = resolvedCandidate && resolvedCandidate->kind() == TypeKind::AsyncTask
+                            ? resolvedCandidate.AsFast<AsyncTaskType>()
+                            : nullptr;
+                        Ref<Type> resultType = nullptr;
+                        if (taskType && taskType->valueType && taskType->valueType->isVoid())
+                        {
+                            resultType = Compiler::get().getTypeContext().getOrCreateAsyncTaskType(
+                                Compiler::get().getTypeContext().getBool());
+                        }
+                        else if (taskType)
+                        {
+                            Ref<Symbol> optionSymbol = resolveQualifiedSymbol(currentScope_, "std::Option");
+                            auto optionStruct = optionSymbol && optionSymbol->type && optionSymbol->type->kind() == TypeKind::Struct
+                                ? optionSymbol->type.AsFast<StructType>()
+                                : nullptr;
+                            if (optionStruct)
+                            {
+                                Ref<Type> optionType = instantiateGenericStructType(
+                                    optionStruct, {taskType->valueType}, node.location());
+                                resultType = Compiler::get().getTypeContext().getOrCreateAsyncTaskType(optionType);
+                            }
+                        }
+                        if (!resultType)
+                        {
+                            WIO_LOG_ADD_ERROR(node.member->location(),
+                                "Task Within requires the built-in std::async and std::Option modules.");
+                            node.refType = Compiler::get().getTypeContext().getUnknown();
+                            return true;
+                        }
+                        resolution.memberType = Compiler::get().getTypeContext().getOrCreateFunctionType(
+                            resultType, {Compiler::get().getTypeContext().getU64()});
                     }
                     node.intrinsicMember = resolution.member;
                     node.refType = resolution.memberType;

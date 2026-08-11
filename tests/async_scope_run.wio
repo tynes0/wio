@@ -1,0 +1,41 @@
+use std::assert as assert;
+use std::async as futures;
+use std::console as console;
+
+async fn ScopedValue(value: i32, milliseconds: u64) -> i32 {
+    await futures::Sleep(milliseconds);
+    return value;
+}
+
+async fn ScopedSideEffect(milliseconds: u64) {
+    await futures::Sleep(milliseconds);
+}
+
+async fn RunOwnedScope() -> i32 {
+    let scope = futures::Scope();
+    let left = scope.Spawn<i32>(ScopedValue(20, 15u64));
+    let right = scope.Spawn<i32>(ScopedValue(22, 5u64));
+    let side = scope.Spawn<void>(ScopedSideEffect(10u64));
+
+    assert::ExpectEqual(scope.Count(), 3u64, "one scope owns heterogeneous child tasks");
+    await scope.Join();
+    assert::Expect(scope.IsClosed(), "joining closes the scope to new children");
+    assert::ExpectEqual(scope.Count(), 0u64, "joined children are released by the scope");
+    await side;
+    return (await left) + (await right);
+}
+
+fn Entry() -> i32 {
+    assert::ExpectEqual(RunOwnedScope().Block(), 42, "structured scope joins all owned work");
+
+    let cancelledScope = futures::Scope();
+    let child = cancelledScope.Spawn<i32>(ScopedValue(9, 500u64));
+    cancelledScope.Cancel();
+    futures::Sleep(10u64).Block();
+    assert::Expect(child.IsCancelled(), "scope cancellation propagates to its children");
+    assert::Expect(child.Poll().IsCancelled(), "cancelled scoped child is observable");
+
+    console::PrintLine("async-scope-ok");
+    futures::ShutdownRuntime();
+    return 0;
+}

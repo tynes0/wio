@@ -13,6 +13,50 @@ realm std {
 
         type Task<T> = coroutine<T>;
 
+        enum TaskStatus {
+            pending,
+            ready,
+            failed,
+            cancelled
+        };
+
+        object TaskPoll<T> {
+            private status: TaskStatus;
+            private value: std::Option<T>;
+            private failure: string;
+
+            public fn OnConstruct(status: TaskStatus, value: std::Option<T>, failure: string) {
+                self.status = status;
+                self.value = value;
+                self.failure = failure;
+            }
+
+            public fn Status() -> TaskStatus { return self.status; }
+            public fn IsPending() -> bool { return self.status == TaskStatus::pending; }
+            public fn IsReady() -> bool { return self.status == TaskStatus::ready; }
+            public fn IsFailed() -> bool { return self.status == TaskStatus::failed; }
+            public fn IsCancelled() -> bool { return self.status == TaskStatus::cancelled; }
+            public fn Value() -> std::Option<T> { return self.value; }
+            public fn Failure() -> string { return self.failure; }
+        }
+
+        object VoidTaskPoll {
+            private status: TaskStatus;
+            private failure: string;
+
+            public fn OnConstruct(status: TaskStatus, failure: string) {
+                self.status = status;
+                self.failure = failure;
+            }
+
+            public fn Status() -> TaskStatus { return self.status; }
+            public fn IsPending() -> bool { return self.status == TaskStatus::pending; }
+            public fn IsReady() -> bool { return self.status == TaskStatus::ready; }
+            public fn IsFailed() -> bool { return self.status == TaskStatus::failed; }
+            public fn IsCancelled() -> bool { return self.status == TaskStatus::cancelled; }
+            public fn Failure() -> string { return self.failure; }
+        }
+
         fn Sleep(milliseconds: u64) -> coroutine<void>
             with native, cpp::name(wio::runtime::AsyncSleep);
 
@@ -37,6 +81,9 @@ realm std {
         fn IsFaulted<T>(task: coroutine<T>) -> bool
             with native, cpp::name(wio::runtime::AsyncFaulted);
 
+        fn FailureMessage<T>(task: coroutine<T>) -> string
+            with native, cpp::name(wio::runtime::AsyncFailureMessage);
+
         fn WaitFor<T>(task: coroutine<T>, milliseconds: u64) -> bool
             with native, cpp::name(wio::runtime::AsyncWaitFor);
 
@@ -48,6 +95,32 @@ realm std {
 
         fn Detach<T>(task: coroutine<T>)
             with native, cpp::name(wio::runtime::DetachAsync);
+
+        fn Poll<T>(task: coroutine<T>) -> TaskPoll<T> {
+            if (IsCancelled(task)) {
+                return TaskPoll<T>(TaskStatus::cancelled, std::None<T>(), "");
+            }
+            if (IsReady(task) == false) {
+                return TaskPoll<T>(TaskStatus::pending, std::None<T>(), "");
+            }
+            if (IsFaulted(task)) {
+                return TaskPoll<T>(TaskStatus::failed, std::None<T>(), FailureMessage(task));
+            }
+            return TaskPoll<T>(TaskStatus::ready, std::Some<T>(BlockOn<T>(task)), "");
+        }
+
+        fn Poll(task: coroutine<void>) -> VoidTaskPoll {
+            if (IsCancelled(task)) {
+                return VoidTaskPoll(TaskStatus::cancelled, "");
+            }
+            if (IsReady(task) == false) {
+                return VoidTaskPoll(TaskStatus::pending, "");
+            }
+            if (IsFaulted(task)) {
+                return VoidTaskPoll(TaskStatus::failed, FailureMessage(task));
+            }
+            return VoidTaskPoll(TaskStatus::ready, "");
+        }
 
         fn Run<T>(action: fn() -> T) -> coroutine<T>
             with native, cpp::name(wio::runtime::RunAsync);
@@ -88,6 +161,16 @@ realm std {
                 await std::async::Sleep(milliseconds);
                 return std::None<T>();
             }
+
+            async fn CompletedWhenReady(task: coroutine<void>) -> bool {
+                await task;
+                return true;
+            }
+
+            async fn IncompleteAfter(milliseconds: u64) -> bool {
+                await std::async::Sleep(milliseconds);
+                return false;
+            }
         }
 
         async fn TimeoutOption<T>(task: coroutine<T>, milliseconds: u64) -> std::Option<T> {
@@ -98,6 +181,16 @@ realm std {
             let result = await Race(candidates);
             if (result.IsNone()) { Cancel<T>(task); }
             return result;
+        }
+
+        async fn TimeoutCompleted(task: coroutine<void>, milliseconds: u64) -> bool {
+            let candidates: coroutine<bool>[] = [
+                detail::CompletedWhenReady(task),
+                detail::IncompleteAfter(milliseconds)
+            ];
+            let completed = await Race(candidates);
+            if (not completed) { Cancel<void>(task); }
+            return completed;
         }
 
         fn WorkerCount() -> u64
@@ -130,6 +223,68 @@ realm std {
             public fn Token() -> CancellationToken { return self.token; }
             public fn Cancel() { self.token.Cancel(); }
             public fn IsCancelled() -> bool { return self.token.IsCancelled(); }
+        }
+
+        fn ScopeCreate() -> opaque
+            with native, cpp::name(wio::runtime::AsyncScopeCreate);
+
+        fn ScopeDestroy(handle: opaque)
+            with native, cpp::name(wio::runtime::AsyncScopeDestroy);
+
+        fn ScopeSpawn<T>(handle: opaque, task: coroutine<T>) -> coroutine<T>
+            with native, cpp::name(wio::runtime::AsyncScopeSpawn);
+
+        fn ScopeJoin(handle: opaque) -> coroutine<void>
+            with native, cpp::name(wio::runtime::AsyncScopeJoin);
+
+        fn ScopeCancel(handle: opaque)
+            with native, cpp::name(wio::runtime::AsyncScopeCancel);
+
+        fn ScopeCount(handle: opaque) -> u64
+            with native, cpp::name(wio::runtime::AsyncScopeCount);
+
+        fn ScopeClosed(handle: opaque) -> bool
+            with native, cpp::name(wio::runtime::AsyncScopeClosed);
+
+        fn ScopeDeadline(handle: opaque, milliseconds: u64) -> bool
+            with native, cpp::name(wio::runtime::AsyncScopeDeadline);
+
+        object Scope {
+            private handle: opaque;
+            private disposed: bool;
+
+            public fn OnConstruct() {
+                self.handle = ScopeCreate();
+                self.disposed = false;
+            }
+
+            public fn OnConstruct(deadlineMilliseconds: u64) {
+                self.handle = ScopeCreate();
+                self.disposed = false;
+                ScopeDeadline(self.handle, deadlineMilliseconds);
+            }
+
+            public fn Spawn<T>(task: Task<T>) -> Task<T> {
+                return ScopeSpawn<T>(self.handle, task);
+            }
+
+            public async fn Join() {
+                await ScopeJoin(self.handle);
+            }
+
+            public fn Cancel() { ScopeCancel(self.handle); }
+            public fn Count() -> u64 { return ScopeCount(self.handle); }
+            public fn IsClosed() -> bool { return ScopeClosed(self.handle); }
+            public fn SetDeadline(milliseconds: u64) -> bool {
+                return ScopeDeadline(self.handle, milliseconds);
+            }
+
+            public fn OnDestruct() {
+                if (not self.disposed) {
+                    ScopeDestroy(self.handle);
+                    self.disposed = true;
+                }
+            }
         }
 
         async fn SleepCancellable(
