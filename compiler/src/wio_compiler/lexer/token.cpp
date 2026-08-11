@@ -137,6 +137,8 @@ namespace wio
           =============================== */
        case TokenType::kwAsync: return "kwAsync";
        case TokenType::kwAwait: return "kwAwait";
+       case TokenType::kwSpawn: return "kwSpawn";
+       case TokenType::kwDetach: return "kwDetach";
        case TokenType::kwCoroutine: return "kwCoroutine";
        case TokenType::kwYield: return "kwYield";
        case TokenType::kwThread: return "kwThread";
@@ -301,6 +303,8 @@ namespace wio
    {
        return (type == TokenType::kwRef ||
           type == TokenType::kwAwait ||
+          type == TokenType::kwSpawn ||
+          type == TokenType::kwDetach ||
           type == TokenType::kwDeref ||
           type == TokenType::kwNot ||
           type == TokenType::opBitNot ||

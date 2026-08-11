@@ -4781,6 +4781,18 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "async-scope-ok"
         --run
     )
+    add_wio_output_test(
+        wio_test_async_scope_syntax_run
+        "${CMAKE_SOURCE_DIR}/tests/async_scope_syntax_run.wio"
+        "async-scope-syntax-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_async_scope_auto_import_run
+        "${CMAKE_SOURCE_DIR}/tests/async_scope_auto_import_run.wio"
+        "async-scope-auto-import-ok"
+        --run
+    )
 
     add_wio_output_test(
         wio_test_lambda_capture_value_run
@@ -4800,7 +4812,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_async_correctness_run
         wio_test_async_task_surface_run
         wio_test_async_scope_run
+        wio_test_async_scope_syntax_run
+        wio_test_async_scope_auto_import_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_spawn_outside_async_scope
+        "${CMAKE_SOURCE_DIR}/tests/invalid/spawn_outside_async_scope.wio"
+        "'spawn' requires an enclosing 'async scope'\."
+    )
+    add_wio_failure_test(
+        wio_invalid_async_scope_outside_async
+        "${CMAKE_SOURCE_DIR}/tests/invalid/async_scope_outside_async.wio"
+        "'await' can only be used inside an async function or method"
     )
     set_tests_properties(
         wio_test_async_worker_config_run

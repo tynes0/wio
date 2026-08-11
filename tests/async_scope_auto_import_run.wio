@@ -1,0 +1,18 @@
+use std::console as console;
+
+async fn AutoImportedValue() -> i32 { return 42; }
+
+async fn AutoImportedScope() -> i32 {
+    mut value = 0;
+    async scope {
+        let child = spawn AutoImportedValue();
+        value = await child;
+    }
+    return value;
+}
+
+async fn Entry() -> i32 {
+    let value = await AutoImportedScope();
+    console::PrintLine("async-scope-auto-import-ok");
+    return value == 42 ? 0 : 1;
+}

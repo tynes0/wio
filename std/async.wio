@@ -57,6 +57,19 @@ realm std {
             public fn Failure() -> string { return self.failure; }
         }
 
+        object Selection<T> {
+            private index: usize;
+            private value: T;
+
+            public fn OnConstruct(index: usize, value: T) {
+                self.index = index;
+                self.value = value;
+            }
+
+            public fn Index() -> usize { return self.index; }
+            public fn Value() -> T { return self.value; }
+        }
+
         fn Sleep(milliseconds: u64) -> coroutine<void>
             with native, cpp::name(wio::runtime::AsyncSleep);
 
@@ -145,6 +158,17 @@ realm std {
 
         fn Race<T>(tasks: coroutine<T>[]) -> coroutine<T>
             with native, cpp::name(wio::runtime::Race);
+
+        async fn Select<T>(tasks: coroutine<T>[]) -> Selection<T> {
+            let winner = await Any<T>(tasks);
+            let value = await tasks[winner];
+            mut index = 0usize;
+            for (task in tasks) {
+                if (index != winner) { Cancel<T>(task); }
+                index += 1usize;
+            }
+            return Selection<T>(winner, value);
+        }
 
         fn Timeout<T>(task: coroutine<T>, milliseconds: u64) -> coroutine<T>
             with native, cpp::name(wio::runtime::WithTimeout);

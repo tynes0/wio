@@ -50,9 +50,32 @@ value.
 `std::async::Scope` is the runtime-backed structured ownership foundation. A
 single scope can own heterogeneous children, closes on `Join`, cancels sibling
 work after the first failure, supports a scope deadline, and cancels plus waits
-for unfinished children during destruction. This is the explicit library form
-that the planned `spawn`/`async scope` source syntax will lower into; that
-syntax is not part of this candidate yet.
+for unfinished children during destruction. The language `async scope` and
+`spawn` forms lower into this same object; there is no second hidden task kind.
+
+```wio
+async fn LoadPair() -> i32 {
+    mut total = 0;
+    async scope with deadline(500u64) {
+        let left = spawn LoadValue(20);
+        let right = spawn LoadValue(22);
+        total = (await left) + (await right);
+    }
+    return total;
+}
+```
+
+`spawn` is legal only within the nearest lexical `async scope`. Falling out of
+the block and returning from inside it both join required children without
+blocking a worker thread. Failure/cancellation and other abandoned exits use
+the scope destructor to cancel and wait for cleanup. `async scope` is legal
+only in an async function and automatically loads the built-in async module.
+The current deadline expression is an unsigned millisecond count; typed
+duration sugar remains additive future work.
+
+Work that deliberately escapes structured ownership uses the loud statement
+`detach SendTelemetry();`. Homogeneous competing tasks may use `Select<T>` to
+receive both the winner index and value; losing tasks are cancelled.
 
 ## 1. Source model
 
@@ -158,6 +181,7 @@ Core task operations:
 - `Cancel` and `CancelAfter`;
 - `RunBlocking` (`Run`) for worker-pool execution;
 - `All`, `Any`, `Race`, `Timeout`, and recoverable `TimeoutOption`;
+- `Select<T>` for a winner index/value pair;
 - `TaskGroup<T>` and `VoidTaskGroup`;
 - `CancellationToken` and `CancellationSource`;
 - `SleepCancellable` and the owner-drained `Dispatcher`;
@@ -200,7 +224,8 @@ use `coroutine<Result<T>>`).
 - true platform async filesystem, socket, and process I/O;
 - executor selection, priorities, work stealing, and automatic main-thread
   continuation dispatch;
-- structured cancellation-token inheritance across arbitrary task trees;
+- ambient cancellation-token access across arbitrary native/task trees beyond
+  lexical `async scope` ownership;
 - async component/extension borrows;
 - source exception handling;
 - application lifecycle handlers that suspend.

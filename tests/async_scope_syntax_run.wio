@@ -1,0 +1,74 @@
+use std::assert as assert;
+use std::async as futures;
+use std::console as console;
+
+async fn SyntaxValue(value: i32, milliseconds: u64) -> i32 {
+    await futures::Sleep(milliseconds);
+    return value;
+}
+
+async fn SumWithScopeSyntax() -> i32 {
+    mut total = 0;
+    async scope {
+        let left = spawn SyntaxValue(20, 15u64);
+        let right = spawn SyntaxValue(22, 5u64);
+        total = (await left) + (await right);
+    }
+    return total;
+}
+
+async fn NestedScopeSyntax() -> i32 {
+    mut total = 0;
+    async scope {
+        let outer = spawn SyntaxValue(10, 8u64);
+        async scope {
+            let inner = spawn SyntaxValue(32, 4u64);
+            total += await inner;
+        }
+        total += await outer;
+    }
+    return total;
+}
+
+async fn EarlyScopeReturn() -> i32 {
+    async scope {
+        let required = spawn SyntaxValue(99, 5u64);
+        return 7;
+    }
+    return 0;
+}
+
+async fn DeadlineScopeSyntax() -> i32 {
+    mut value = 0;
+    async scope with deadline(500u64) {
+        let child = spawn SyntaxValue(42, 5u64);
+        value = await child;
+    }
+    return value;
+}
+
+async fn DetachedWork() {
+    await futures::Sleep(2u64);
+}
+
+fn Entry() -> i32 {
+    assert::ExpectEqual(SumWithScopeSyntax().Block(), 42, "async scope joins spawned children");
+    assert::ExpectEqual(NestedScopeSyntax().Block(), 42, "nested async scopes own the nearest spawn");
+    assert::ExpectEqual(EarlyScopeReturn().Block(), 7, "early scope return joins required work before exiting");
+    assert::ExpectEqual(DeadlineScopeSyntax().Block(), 42, "async scope accepts an owned deadline");
+
+    let candidates: futures::Task<i32>[] = [
+        SyntaxValue(10, 40u64),
+        SyntaxValue(32, 3u64)
+    ];
+    let selected = futures::Select<i32>(candidates).Block();
+    assert::ExpectEqual(selected.Index(), 1usize, "Select reports the winning task index");
+    assert::ExpectEqual(selected.Value(), 32, "Select reports the winning task value");
+
+    detach DetachedWork();
+    futures::Sleep(10u64).Block();
+
+    console::PrintLine("async-scope-syntax-ok");
+    futures::ShutdownRuntime();
+    return 0;
+}

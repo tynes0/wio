@@ -3,11 +3,11 @@
 Status: post-0.11 design plan; non-normative until individual slices move into
 a versioned specification.
 
-Progress: correctness and ergonomics slices are implemented candidates on
-`releases/v0.12.0`. The structured runtime `Scope` foundation is also active;
-language `spawn`/`async scope`, inherited ambient cancellation, and `select`
-remain in the structure slice. Linux, packaged-toolchain, sanitizer, and
-real-app qualification remain required before these slices are frozen.
+Progress: correctness, ergonomics, and structured-work slices are implemented
+candidates on `releases/v0.12.0`. This includes the runtime `Scope`, language
+`spawn`/`async scope`, lexical cancellation/deadlines, explicit `detach`, and a
+small homogeneous `Select<T>` surface. Linux, packaged-toolchain, sanitizer,
+and real-app qualification remain required before these slices are frozen.
 
 The 0.11 contract remains in [`WIO_ASYNC_MODEL.md`](./WIO_ASYNC_MODEL.md). This
 document records what comes next without reopening that frozen foundation.
@@ -270,9 +270,10 @@ unit tests:
 2. Ergonomics (implemented candidate): `Task<T>` facade, member state
    operations, typed non-blocking `Poll`, explicit `Block`, and recoverable
    `Within`.
-3. Structure (runtime foundation implemented): heterogeneous owning `Scope`,
-   sibling cancellation, join, and deadlines. Language `spawn`, `async scope`,
-   inherited ambient cancellation, and a small `select` surface remain.
+3. Structure (implemented candidate): heterogeneous owning `Scope`, language
+   `spawn`/`async scope`, nested ownership, return/fallthrough join, sibling
+   cancellation, millisecond deadlines, explicit `detach`, and `Select<T>`.
+   Typed-duration sugar and ambient tokens for native adapters remain additive.
 4. Application integration: owned main executor, deterministic drain stage,
    `await main`, and headless/virtual-time tests.
 5. Platform capability: true async file/socket/process/watcher adapters.

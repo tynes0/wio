@@ -138,6 +138,8 @@ namespace wio
          =============================== */
       kwAsync,
       kwAwait,
+      kwSpawn,
+      kwDetach,
       kwCoroutine,
       kwYield,
       kwThread,
@@ -343,6 +345,8 @@ namespace wio
 
       { "async",     TokenType::kwAsync },
       { "await",     TokenType::kwAwait },
+      { "spawn",     TokenType::kwSpawn },
+      { "detach",    TokenType::kwDetach },
       { "coroutine", TokenType::kwCoroutine },
       { "yield",     TokenType::kwYield },
       { "thread",    TokenType::kwThread },

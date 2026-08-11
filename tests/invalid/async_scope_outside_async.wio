@@ -1,0 +1,5 @@
+fn Entry() -> i32 {
+    async scope {
+    }
+    return 0;
+}
