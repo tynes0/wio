@@ -12,6 +12,18 @@ Notes:
 
 ## Async and coroutine foundation sprint
 
+- [x] The post-0.11 correctness candidate separates continuation, blocking,
+      and I/O capacity; checks executor-crossing captures; makes cancellation
+      wake suspension boundaries; and provides ordered explicit shutdown.
+- [x] `Task<T>` member ergonomics, typed non-blocking polling, recoverable
+      deadlines, heterogeneous owning scopes, language `async scope`/`spawn`,
+      explicit detach, and homogeneous selection are implemented candidates.
+- [x] Applications bind and deterministically drain the owner executor;
+      `await main` directly transfers the suspended caller, and headless hosts
+      can bind/drain the same queue.
+- [x] The first platform-I/O candidate adds a dedicated bounded executor and
+      ownership-safe, Result-preserving asynchronous filesystem operations.
+
 - [x] `async fn`, async object/interface methods, generic async declarations,
       async `Entry`, `await`, and the `coroutine<T>` type are implemented across
       lexer, parser, semantic analysis, and C++20 code generation.

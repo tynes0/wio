@@ -1,0 +1,39 @@
+use std::assert as assert;
+use std::async as futures;
+use std::console as console;
+use std::fs as fs;
+
+async fn Entry() -> i32 {
+    let filePath = "tests/.wio-async-fs-io.tmp";
+    fs::DeleteIfExists(filePath);
+
+    assert::Expect(futures::IoWorkerCount() >= 1u64, "filesystem I/O owns a dedicated worker pool");
+    assert::Expect(futures::IoQueueCapacity() >= 1u64, "filesystem I/O queue capacity is observable");
+
+    let written = await fs::WriteTextAsync(filePath, "alpha");
+    assert::Expect(written.IsOk(), "async text write succeeds");
+
+    let appended = await fs::AppendTextAsync(filePath, "-beta");
+    assert::Expect(appended.IsOk(), "async text append succeeds");
+
+    let read = await fs::ReadTextAsync(filePath);
+    assert::Expect(read.IsOk(), "async text read succeeds");
+    assert::ExpectEqual(read.Value(), "alpha-beta", "async file contents round-trip");
+
+    let metadata = await fs::MetadataAsync(filePath);
+    assert::Expect(metadata.IsOk(), "async metadata succeeds");
+    assert::Expect(metadata.Value().isFile, "async metadata identifies a file");
+    assert::ExpectEqual(metadata.Value().size, 10i64, "async metadata preserves file size");
+
+    let removed = await fs::RemoveAsync(filePath);
+    assert::Expect(removed.IsOk() and removed.Value(), "async remove reports the removed file");
+
+    let missing = await fs::ReadTextAsync(filePath);
+    assert::Expect(missing.IsError(), "expected filesystem failures remain Result values");
+    assert::ExpectEqual(missing.ErrorValue().code, 2, "missing async file preserves the filesystem error code");
+
+    assert::ExpectEqual(futures::IoPendingCount(), 0u64, "I/O queue drains accepted operations");
+    console::PrintLine("async-fs-io-ok");
+    futures::ShutdownRuntime();
+    return 0;
+}

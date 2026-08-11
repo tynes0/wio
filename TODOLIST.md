@@ -143,8 +143,13 @@ candidate application/system and language-coherence direction is expanded in
    safety, a separate blocking pool, cancellation-aware timers, and explicit
    shutdown; then add the `Task<T>` facade, `Poll`/`Block`, structured
    `spawn`/scope/deadlines, main-executor integration, true async I/O, and only
-   afterward streams. Keep the everyday vocabulary small and prove each slice
-   in console, desktop, game, server/tool, and native-host scenarios.
+   afterward streams. The correctness, task ergonomics, structured scope, and
+   application main-executor slices are implemented 0.12 candidates. The
+   platform slice now has a dedicated bounded I/O executor and Result-safe
+   async filesystem operations; native completion-port backends, sockets,
+   processes, watchers, streams, and full cross-platform qualification remain.
+   Keep the everyday vocabulary small and prove each slice in console,
+   desktop, game, server/tool, and native-host scenarios.
 
 9. [ ] Add OS/application facilities.
     Environment variables, process pipes, signals, filesystem watching,

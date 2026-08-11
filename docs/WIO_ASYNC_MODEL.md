@@ -15,6 +15,19 @@ calls block. The pool is configured before first use with
 through `BlockingWorkerCount`, `BlockingQueueCapacity`, and
 `BlockingPendingCount`.
 
+Filesystem operations in the candidate use a third bounded I/O executor, so
+portable file calls consume neither continuation workers nor the general
+legacy-blocking pool. `WIO_ASYNC_IO_WORKERS` (1..64) and
+`WIO_ASYNC_IO_QUEUE` (1..1048576) configure it before first use;
+`IoWorkerCount`, `IoQueueCapacity`, and `IoPendingCount` expose its capacity.
+`ReadTextAsync`, `WriteTextAsync`, `AppendTextAsync`, directory/remove/copy/
+move operations, recursive listing, and metadata preserve ordinary
+`Result<T>` failures instead of turning expected OS errors into task faults.
+The portable backend is a bounded threaded I/O implementation; IOCP/io_uring
+may replace that backend later without changing the Wio surface. Cancellation
+does not forcibly terminate an in-flight filesystem syscall, but abandoned
+results remain ownership-safe and cannot leak a raw result handle.
+
 Cross-executor closures are checked before backend generation. Primitive and
 structurally transfer-safe component values pass automatically. `ref`/`view`,
 opaque handles, nested callables, and unsynchronized object/interface handles
@@ -193,7 +206,9 @@ In the unreleased correctness candidate, `RunBlocking` moves synchronous work
 to the separate bounded pool described above. `Run` remains the continuation
 pool compatibility operation and is also subject to transfer-safe capture
 analysis. Neither spelling claims that filesystem or network APIs have become
-true non-blocking operating-system I/O.
+true non-blocking operating-system I/O. Filesystem `*Async` operations instead
+target the dedicated bounded I/O executor; true completion-port backends and
+async socket/process adapters remain later platform work.
 
 ## 5. Standard-library surface
 
@@ -244,7 +259,7 @@ use `coroutine<Result<T>>`).
 ## 7. Outside the 0.11 contract
 
 - async generators/streams and source `yield`;
-- true platform async filesystem, socket, and process I/O;
+- completion-port filesystem backends and async socket/process I/O;
 - general executor selection, priorities, work stealing, and automatic
   origin-thread continuation capture;
 - ambient cancellation-token access across arbitrary native/task trees beyond

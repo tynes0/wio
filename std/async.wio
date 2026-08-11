@@ -241,6 +241,15 @@ realm std {
         fn BlockingPendingCount() -> u64
             with native, cpp::name(wio::runtime::AsyncBlockingPendingCount);
 
+        fn IoWorkerCount() -> u64
+            with native, cpp::name(wio::runtime::AsyncIoWorkerCount);
+
+        fn IoQueueCapacity() -> u64
+            with native, cpp::name(wio::runtime::AsyncIoQueueCapacity);
+
+        fn IoPendingCount() -> u64
+            with native, cpp::name(wio::runtime::AsyncIoPendingCount);
+
         fn IsRuntimeRunning() -> bool
             with native, cpp::name(wio::runtime::AsyncRuntimeRunning);
 

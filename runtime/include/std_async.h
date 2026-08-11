@@ -47,6 +47,12 @@ namespace wio::runtime
         AsyncQueueFull() : std::runtime_error("asynchronous blocking queue is full") {}
     };
 
+    class AsyncIoQueueFull final : public std::runtime_error
+    {
+    public:
+        AsyncIoQueueFull() : std::runtime_error("asynchronous I/O queue is full") {}
+    };
+
     class AsyncScheduler final
     {
     public:
@@ -345,6 +351,20 @@ namespace wio::runtime
         return ResolveAsyncLimit("WIO_ASYNC_BLOCKING_QUEUE", 1024, 1u << 20u);
     }
 
+    inline std::size_t ResolveDefaultIoWorkerCount() noexcept
+    {
+        const auto hardware = static_cast<std::size_t>(std::thread::hardware_concurrency());
+        const std::size_t fallback = hardware == 0
+            ? 2
+            : std::max<std::size_t>(1, std::min<std::size_t>(hardware / 2, 8));
+        return ResolveAsyncLimit("WIO_ASYNC_IO_WORKERS", fallback, 64);
+    }
+
+    inline std::size_t ResolveDefaultIoQueueCapacity() noexcept
+    {
+        return ResolveAsyncLimit("WIO_ASYNC_IO_QUEUE", 2048, 1u << 20u);
+    }
+
     class AsyncMainExecutor final
     {
     public:
@@ -426,6 +446,14 @@ namespace wio::runtime
         return scheduler;
     }
 
+    inline AsyncBlockingScheduler& DefaultAsyncIoScheduler()
+    {
+        static AsyncBlockingScheduler scheduler(
+            ResolveDefaultIoWorkerCount(),
+            ResolveDefaultIoQueueCapacity());
+        return scheduler;
+    }
+
     inline AsyncMainExecutor& DefaultAsyncMainExecutor()
     {
         static AsyncMainExecutor executor;
@@ -472,15 +500,34 @@ namespace wio::runtime
         return static_cast<std::uint64_t>(DefaultAsyncBlockingScheduler().PendingCount());
     }
 
+    inline std::uint64_t AsyncIoWorkerCount() noexcept
+    {
+        return static_cast<std::uint64_t>(DefaultAsyncIoScheduler().WorkerCount());
+    }
+
+    inline std::uint64_t AsyncIoQueueCapacity() noexcept
+    {
+        return static_cast<std::uint64_t>(DefaultAsyncIoScheduler().QueueCapacity());
+    }
+
+    inline std::uint64_t AsyncIoPendingCount() noexcept
+    {
+        return static_cast<std::uint64_t>(DefaultAsyncIoScheduler().PendingCount());
+    }
+
     inline bool AsyncRuntimeRunning() noexcept
     {
-        return DefaultAsyncScheduler().IsRunning() && DefaultAsyncBlockingScheduler().IsRunning();
+        return DefaultAsyncScheduler().IsRunning() &&
+            DefaultAsyncBlockingScheduler().IsRunning() &&
+            DefaultAsyncIoScheduler().IsRunning();
     }
 
     inline void ShutdownAsyncRuntime() noexcept
     {
-        // Blocking jobs may publish their continuation back to the async pool,
-        // so the blocking side must drain before continuation workers stop.
+        // I/O and blocking jobs may publish continuations back to the async
+        // pool, so both bounded work queues drain before continuation workers
+        // stop.
+        DefaultAsyncIoScheduler().Shutdown();
         DefaultAsyncBlockingScheduler().Shutdown();
         DefaultAsyncScheduler().Shutdown();
     }
@@ -1518,6 +1565,83 @@ namespace wio::runtime
     inline AsyncTask<void> RunBlockingAsync(std::function<void()> action)
     {
         co_await AsyncBlockingAwaiter<void>{std::move(action)};
+    }
+
+    template<typename T>
+    struct AsyncIoAwaiter final
+    {
+        std::function<T()> action;
+        std::optional<T> value;
+        std::exception_ptr failure;
+
+        bool await_ready() const noexcept { return false; }
+        bool await_suspend(std::coroutine_handle<> continuation)
+        {
+            auto& scheduler = DefaultAsyncIoScheduler();
+            auto registration = std::make_shared<detail::AsyncContinuationRegistration>(continuation);
+            if (!scheduler.Submit([this, registration]
+                {
+                    try { value.emplace(action()); }
+                    catch (...) { failure = std::current_exception(); }
+                    registration->ResumeOnce();
+                }))
+            {
+                if (!scheduler.IsRunning())
+                    throw AsyncRuntimeStopped();
+                throw AsyncIoQueueFull();
+            }
+            return registration->Arm();
+        }
+
+        T await_resume()
+        {
+            if (failure)
+                std::rethrow_exception(failure);
+            return std::move(*value);
+        }
+    };
+
+    template<>
+    struct AsyncIoAwaiter<void> final
+    {
+        std::function<void()> action;
+        std::exception_ptr failure;
+
+        bool await_ready() const noexcept { return false; }
+        bool await_suspend(std::coroutine_handle<> continuation)
+        {
+            auto& scheduler = DefaultAsyncIoScheduler();
+            auto registration = std::make_shared<detail::AsyncContinuationRegistration>(continuation);
+            if (!scheduler.Submit([this, registration]
+                {
+                    try { action(); }
+                    catch (...) { failure = std::current_exception(); }
+                    registration->ResumeOnce();
+                }))
+            {
+                if (!scheduler.IsRunning())
+                    throw AsyncRuntimeStopped();
+                throw AsyncIoQueueFull();
+            }
+            return registration->Arm();
+        }
+
+        void await_resume()
+        {
+            if (failure)
+                std::rethrow_exception(failure);
+        }
+    };
+
+    template<typename T>
+    AsyncTask<T> RunIoAsync(std::function<T()> action)
+    {
+        co_return co_await AsyncIoAwaiter<T>{std::move(action)};
+    }
+
+    inline AsyncTask<void> RunIoAsync(std::function<void()> action)
+    {
+        co_await AsyncIoAwaiter<void>{std::move(action)};
     }
 
     template<typename T>

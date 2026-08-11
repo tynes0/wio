@@ -4805,6 +4805,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "application-async-main-ok"
         --run
     )
+    add_wio_output_test(
+        wio_test_async_fs_io_run
+        "${CMAKE_SOURCE_DIR}/tests/async_fs_io_run.wio"
+        "async-fs-io-ok"
+        --run
+    )
 
     add_wio_output_test(
         wio_test_lambda_capture_value_run
@@ -4828,6 +4834,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_async_scope_auto_import_run
         wio_test_async_main_executor_run
         wio_test_application_async_main_run
+        wio_test_async_fs_io_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 
