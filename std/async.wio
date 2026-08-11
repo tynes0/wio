@@ -76,6 +76,18 @@ realm std {
         fn Yield() -> coroutine<void>
             with native, cpp::name(wio::runtime::AsyncYield);
 
+        fn BindMain()
+            with native, cpp::name(wio::runtime::BindAsyncMainExecutor);
+
+        fn DrainMain() -> u64
+            with native, cpp::name(wio::runtime::DrainAsyncMainExecutor);
+
+        fn MainPendingCount() -> u64
+            with native, cpp::name(wio::runtime::AsyncMainPendingCount);
+
+        fn IsMainThread() -> bool
+            with native, cpp::name(wio::runtime::IsAsyncMainThread);
+
         fn BlockOn<T>(task: coroutine<T>) -> T
             with native, cpp::name(wio::runtime::BlockOn);
 

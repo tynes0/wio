@@ -345,6 +345,70 @@ namespace wio::runtime
         return ResolveAsyncLimit("WIO_ASYNC_BLOCKING_QUEUE", 1024, 1u << 20u);
     }
 
+    class AsyncMainExecutor final
+    {
+    public:
+        void BindCurrentThread()
+        {
+            std::lock_guard lock(mutex_);
+            const auto current = std::this_thread::get_id();
+            if (bound_ && owner_ != current)
+                throw std::runtime_error("main executor is already bound to another thread");
+            owner_ = current;
+            bound_ = true;
+        }
+
+        bool IsCurrentThread() const
+        {
+            std::lock_guard lock(mutex_);
+            return bound_ && owner_ == std::this_thread::get_id();
+        }
+
+        bool Post(std::function<void()> action)
+        {
+            if (!action)
+                return false;
+            std::lock_guard lock(mutex_);
+            work_.push_back(std::move(action));
+            return true;
+        }
+
+        std::size_t Drain()
+        {
+            std::deque<std::function<void()>> pending;
+            {
+                std::lock_guard lock(mutex_);
+                const auto current = std::this_thread::get_id();
+                if (!bound_)
+                {
+                    owner_ = current;
+                    bound_ = true;
+                }
+                else if (owner_ != current)
+                {
+                    throw std::runtime_error("main executor can only be drained by its owner thread");
+                }
+                pending.swap(work_);
+            }
+
+            for (auto& action : pending)
+                action();
+            return pending.size();
+        }
+
+        std::size_t PendingCount() const
+        {
+            std::lock_guard lock(mutex_);
+            return work_.size();
+        }
+
+    private:
+        mutable std::mutex mutex_;
+        std::deque<std::function<void()>> work_;
+        std::thread::id owner_{};
+        bool bound_ = false;
+    };
+
     inline AsyncScheduler& DefaultAsyncScheduler()
     {
         // Shutdown drains queued timers immediately instead of honoring their
@@ -360,6 +424,32 @@ namespace wio::runtime
             ResolveDefaultBlockingWorkerCount(),
             ResolveDefaultBlockingQueueCapacity());
         return scheduler;
+    }
+
+    inline AsyncMainExecutor& DefaultAsyncMainExecutor()
+    {
+        static AsyncMainExecutor executor;
+        return executor;
+    }
+
+    inline void BindAsyncMainExecutor()
+    {
+        DefaultAsyncMainExecutor().BindCurrentThread();
+    }
+
+    inline std::uint64_t DrainAsyncMainExecutor()
+    {
+        return static_cast<std::uint64_t>(DefaultAsyncMainExecutor().Drain());
+    }
+
+    inline std::uint64_t AsyncMainPendingCount()
+    {
+        return static_cast<std::uint64_t>(DefaultAsyncMainExecutor().PendingCount());
+    }
+
+    inline bool IsAsyncMainThread()
+    {
+        return DefaultAsyncMainExecutor().IsCurrentThread();
     }
 
     inline std::uint64_t AsyncWorkerCount() noexcept
@@ -421,6 +511,31 @@ namespace wio::runtime
 
             // 0 = registration is still being assembled, 1 = suspension is
             // armed, 2 = completion/cancellation already claimed it.
+            std::atomic<int> phase{0};
+            std::coroutine_handle<> continuation;
+        };
+
+        struct AsyncInlineContinuationRegistration final
+        {
+            explicit AsyncInlineContinuationRegistration(std::coroutine_handle<> value)
+                : continuation(value)
+            {
+            }
+
+            void ResumeOnce() noexcept
+            {
+                if (phase.exchange(2, std::memory_order_acq_rel) != 1)
+                    return;
+                continuation.resume();
+            }
+
+            bool Arm() noexcept
+            {
+                int expected = 0;
+                return phase.compare_exchange_strong(
+                    expected, 1, std::memory_order_acq_rel, std::memory_order_acquire);
+            }
+
             std::atomic<int> phase{0};
             std::coroutine_handle<> continuation;
         };
@@ -1120,6 +1235,54 @@ namespace wio::runtime
             std::rethrow_exception(firstFailure);
     }
 
+    struct AsyncMainAwaiter final
+    {
+        std::weak_ptr<detail::AsyncTaskStateBase> taskState;
+
+        bool await_ready() const
+        {
+            return DefaultAsyncMainExecutor().IsCurrentThread();
+        }
+
+        template<typename Promise>
+        bool await_suspend(std::coroutine_handle<Promise> continuation)
+        {
+            if constexpr (requires(Promise& promise) { promise.state; })
+                taskState = continuation.promise().state;
+
+            auto registration = std::make_shared<detail::AsyncInlineContinuationRegistration>(continuation);
+            if constexpr (requires(Promise& promise) { promise.state; })
+            {
+                if (auto state = taskState.lock())
+                {
+                    state->AddCancellationCallback([registration]
+                    {
+                        registration->ResumeOnce();
+                    });
+                }
+            }
+
+            // Arm before publishing to the owner queue. Unlike an ordinary
+            // completion awaiter, observing the callback before Arm cannot
+            // mean "continue here": the entire purpose of this awaiter is to
+            // move the caller to the bound owner thread.
+            if (!registration->Arm())
+                return false;
+
+            DefaultAsyncMainExecutor().Post([registration]
+            {
+                registration->ResumeOnce();
+            });
+            return true;
+        }
+
+        void await_resume() const
+        {
+            if (auto state = taskState.lock(); state && state->Cancelled())
+                throw AsyncCancelled();
+        }
+    };
+
     struct AsyncScheduleAwaiter final
     {
         std::weak_ptr<detail::AsyncTaskStateBase> taskState;
@@ -1131,11 +1294,6 @@ namespace wio::runtime
                 taskState = continuation.promise().state;
 
             auto registration = std::make_shared<detail::AsyncContinuationRegistration>(continuation);
-            if (!DefaultAsyncScheduler().Post([registration] { registration->ResumeOnce(); }))
-            {
-                throw AsyncRuntimeStopped();
-            }
-
             if constexpr (requires(Promise& promise) { promise.state; })
             {
                 if (auto state = taskState.lock())
@@ -1146,7 +1304,17 @@ namespace wio::runtime
                     });
                 }
             }
-            return registration->Arm();
+
+            // Run/Yield promise a real scheduler boundary. If the worker can
+            // claim the registration before it is armed, returning false from
+            // await_suspend would continue the coroutine on its caller (often
+            // the UI thread) and execute scheduled work in the wrong place.
+            if (!registration->Arm())
+                return false;
+
+            if (!DefaultAsyncScheduler().Post([registration] { registration->ResumeOnce(); }))
+                throw AsyncRuntimeStopped();
+            return true;
         }
         void await_resume() const
         {

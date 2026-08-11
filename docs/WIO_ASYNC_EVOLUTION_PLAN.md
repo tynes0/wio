@@ -6,7 +6,10 @@ a versioned specification.
 Progress: correctness, ergonomics, and structured-work slices are implemented
 candidates on `releases/v0.12.0`. This includes the runtime `Scope`, language
 `spawn`/`async scope`, lexical cancellation/deadlines, explicit `detach`, and a
-small homogeneous `Select<T>` surface. Linux, packaged-toolchain, sanitizer,
+small homogeneous `Select<T>` surface. The owner/main executor slice is also
+implemented: application runners bind and drain it at deterministic lifecycle
+stages, `await main` performs a direct checked handoff, and headless hosts can
+bind/drain the same queue explicitly. Linux, packaged-toolchain, sanitizer,
 and real-app qualification remain required before these slices are frozen.
 
 The 0.11 contract remains in [`WIO_ASYNC_MODEL.md`](./WIO_ASYNC_MODEL.md). This
@@ -173,6 +176,19 @@ all continuation workers and starve the tasks needed to complete it. Dedicated
 `thread` remains an expert tool for long-lived OS/native loops, not the default
 way to start async work.
 
+Implemented candidate surface:
+
+```wio
+let decoded = await DecodeImage(bytes);
+await main;
+window.Upload(decoded);
+```
+
+`await main` queues the suspended caller itself, rather than awaiting a nested
+task whose completion could legally resume the caller on a worker. Application
+code gets automatic binding/draining; custom and headless hosts use
+`BindMain()` and `DrainMain()`.
+
 ## 6. Application and game-loop integration
 
 Frame/update loops must never need `Block`:
@@ -202,6 +218,11 @@ stage. Main-thread handoff should therefore become `await main` or an equally
 small checked operation instead of requiring manual dispatcher plumbing in
 ordinary application code. Headless tests must be able to drive the same
 executor deterministically.
+
+This slice is now an implemented 0.12 candidate. The generated runner drains
+after start, before and after every update, immediately before close, and after
+close. `Dispatcher` remains useful for owner-owned arbitrary callbacks, while
+coroutine continuation affinity uses `await main`.
 
 ## 7. Thread-safety contract
 

@@ -7876,6 +7876,19 @@ namespace wio::sema
     
     void SemanticAnalyzer::visit(UnaryExpression& node)
     {
+        if (node.isMainExecutorAwait)
+        {
+            if (!currentFunctionIsAsync_)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "'await main' can only be used inside an async function or method.");
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+
+            node.refType = Compiler::get().getTypeContext().getVoid();
+            return;
+        }
+
         node.operand->accept(*this);
         Ref<Type> opType = node.operand->refType.Lock();
 

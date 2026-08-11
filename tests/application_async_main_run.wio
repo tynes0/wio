@@ -1,0 +1,40 @@
+use std::assert as assert;
+use std::console as console;
+
+async fn ApplicationHandoff() -> bool {
+    let probe: fn() -> bool = () => not std::async::IsMainThread();
+    let ranOnWorker = await std::async::Run<bool>(probe);
+    assert::Expect(ranOnWorker, "worker probe executes away from the application owner");
+    await main;
+    assert::Expect(std::async::IsMainThread(), "await main resumes the application task on its owner");
+    return true;
+}
+
+application AsyncMainApp {
+    mut handoff: std::async::Task<bool>;
+    mut completed: u64;
+
+    on start {
+        self.completed = 0u64;
+        self.handoff = ApplicationHandoff();
+    }
+
+    on update {
+        if (self.handoff.IsReady()) {
+            assert::Expect(self.handoff.Block(), "application loop drains await main at a deterministic stage");
+            self.completed += 1u64;
+            if (self.completed == 128u64) {
+                self.Exit(0);
+            } else {
+                self.handoff = ApplicationHandoff();
+            }
+        }
+    }
+
+    on close {
+        assert::Expect(std::async::IsMainThread(), "application close runs on the owner thread");
+        assert::ExpectEqual(std::async::MainPendingCount(), 0u64, "application closes with an empty main queue");
+        console::PrintLine("application-async-main-ok");
+        std::async::ShutdownRuntime();
+    }
+}

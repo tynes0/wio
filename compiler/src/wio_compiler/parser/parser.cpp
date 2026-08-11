@@ -373,7 +373,19 @@ namespace wio
             {
                 int precedence = getPrecedence(op.type);
                 NodePtr<Expression> operand = parseExpression(precedence + 1, stopAtFit);
-                left = makeNodePtr<UnaryExpression>(std::move(op), std::move(operand));
+                bool isMainExecutorAwait = false;
+                if (op.type == TokenType::kwAwait)
+                {
+                    auto identifier = operand ? operand->as<Identifier>() : nullptr;
+                    if (identifier && identifier->token.value == "main")
+                    {
+                        requiresAsyncModule_ = true;
+                        isMainExecutorAwait = true;
+                    }
+                }
+                auto unary = makeNodePtr<UnaryExpression>(std::move(op), std::move(operand));
+                unary->isMainExecutorAwait = isMainExecutorAwait;
+                left = std::move(unary);
             }
         }
         else
@@ -1636,6 +1648,7 @@ namespace wio
     NodePtr<Statement> Parser::parseApplicationDeclaration()
     {
         const Token startToken = consume(TokenType::kwApplication);
+        requiresAsyncModule_ = true;
         auto applicationName = makeNodePtr<Identifier>(consumeIdentifier());
         const Token applicationNameToken = applicationName->token;
 
@@ -1668,6 +1681,18 @@ namespace wio
             return makeNodePtr<FunctionCallExpression>(
                 makeMember(makeAppIdentifier(), std::move(method)),
                 std::vector<NodePtr<TypeSpecifier>>{}, std::vector<NodePtr<Expression>>{},
+                false, false, startToken.loc);
+        };
+        auto makeAsyncRuntimeCall = [&](std::string method)
+        {
+            auto stdNamespace = makeNodePtr<MemberAccessExpression>(
+                makeIdentifier("std"), makeIdentifier("async"), TokenType::opScope, startToken.loc);
+            auto function = makeNodePtr<MemberAccessExpression>(
+                std::move(stdNamespace), makeIdentifier(std::move(method)), TokenType::opScope, startToken.loc);
+            return makeNodePtr<FunctionCallExpression>(
+                std::move(function),
+                std::vector<NodePtr<TypeSpecifier>>{},
+                std::vector<NodePtr<Expression>>{},
                 false, false, startToken.loc);
         };
 
@@ -1868,6 +1893,8 @@ namespace wio
             std::move(targetType), std::move(extensionMembers), startToken.loc);
 
         std::vector<NodePtr<Statement>> entryStatements;
+        entryStatements.push_back(makeNodePtr<ExpressionStatement>(
+            makeAsyncRuntimeCall("BindMain"), startToken.loc));
         std::vector<NodePtr<Expression>> noArguments;
         auto constructorCall = makeNodePtr<FunctionCallExpression>(
             makeIdentifier(applicationNameToken.value), std::vector<NodePtr<TypeSpecifier>>{},
@@ -1876,13 +1903,24 @@ namespace wio
             std::vector<NodePtr<AttributeStatement>>{}, Mutability::Mutable,
             makeIdentifier("__application"), nullptr, std::move(constructorCall), false, startToken.loc));
         entryStatements.push_back(makeNodePtr<ExpressionStatement>(makeAppCall("Start"), startToken.loc));
+        entryStatements.push_back(makeNodePtr<ExpressionStatement>(
+            makeAsyncRuntimeCall("DrainMain"), startToken.loc));
         auto condition = makeNodePtr<UnaryExpression>(
             Token{ .type = TokenType::opLogicalNot, .value = "!", .loc = startToken.loc },
             makeMember(makeAppIdentifier(), "__exitRequested"), UnaryExpression::UnaryOperatorType::Prefix, startToken.loc);
-        auto updateBody = makeNodePtr<BlockStatement>(
-            std::vector<NodePtr<Statement>>{ makeNodePtr<ExpressionStatement>(makeAppCall("Update"), startToken.loc) }, startToken.loc);
+        std::vector<NodePtr<Statement>> updateStatements;
+        updateStatements.push_back(makeNodePtr<ExpressionStatement>(
+            makeAsyncRuntimeCall("DrainMain"), startToken.loc));
+        updateStatements.push_back(makeNodePtr<ExpressionStatement>(makeAppCall("Update"), startToken.loc));
+        updateStatements.push_back(makeNodePtr<ExpressionStatement>(
+            makeAsyncRuntimeCall("DrainMain"), startToken.loc));
+        auto updateBody = makeNodePtr<BlockStatement>(std::move(updateStatements), startToken.loc);
         entryStatements.push_back(makeNodePtr<WhileStatement>(std::move(condition), std::move(updateBody), startToken.loc));
+        entryStatements.push_back(makeNodePtr<ExpressionStatement>(
+            makeAsyncRuntimeCall("DrainMain"), startToken.loc));
         entryStatements.push_back(makeNodePtr<ExpressionStatement>(makeAppCall("Close"), startToken.loc));
+        entryStatements.push_back(makeNodePtr<ExpressionStatement>(
+            makeAsyncRuntimeCall("DrainMain"), startToken.loc));
         entryStatements.push_back(makeNodePtr<ReturnStatement>(
             makeMember(makeAppIdentifier(), "__exitCode"), startToken.loc));
         auto entry = makeNodePtr<FunctionDeclaration>(

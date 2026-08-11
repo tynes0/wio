@@ -1,0 +1,32 @@
+use std::assert as assert;
+use std::console as console;
+
+async fn HopToOwner() -> bool {
+    let probe: fn() -> bool = () => not std::async::IsMainThread();
+    let leftOwner = await std::async::Run<bool>(probe);
+    assert::Expect(leftOwner, "worker probe executes away from the bound owner");
+    await main;
+    assert::Expect(std::async::IsMainThread(), "await main resumes the task on its bound owner");
+    return true;
+}
+
+fn Entry() -> i32 {
+    std::async::BindMain();
+    assert::Expect(std::async::IsMainThread(), "headless runner binds its owner thread");
+
+    let handoff = HopToOwner();
+    mut spins = 0u64;
+    while (not handoff.IsReady()) {
+        std::async::DrainMain();
+        spins += 1u64;
+        if (spins > 1000000u64) {
+            assert::Expect(false, "main executor handoff timed out");
+        }
+    }
+    assert::Expect(handoff.Block(), "await main resumes on the bound owner thread");
+    assert::ExpectEqual(std::async::MainPendingCount(), 0u64, "main queue is drained deterministically");
+
+    console::PrintLine("async-main-executor-ok");
+    std::async::ShutdownRuntime();
+    return 0;
+}

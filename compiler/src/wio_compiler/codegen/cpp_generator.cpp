@@ -5536,6 +5536,12 @@ namespace wio::codegen
 
     void CppGenerator::visit(UnaryExpression& node)
     {
+        if (node.isMainExecutorAwait)
+        {
+            emit("(co_await wio::runtime::AsyncMainAwaiter{})");
+            return;
+        }
+
         auto emitOperatorReceiverAndAccess = [&](const NodePtr<Expression>& receiver)
         {
             std::string accessOperator = ".";

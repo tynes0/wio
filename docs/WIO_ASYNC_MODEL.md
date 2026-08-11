@@ -77,6 +77,27 @@ Work that deliberately escapes structured ownership uses the loud statement
 `detach SendTelemetry();`. Homogeneous competing tasks may use `Select<T>` to
 receive both the winner index and value; losing tasks are cancelled.
 
+The candidate application runner also owns a process main executor. It binds
+the runner thread before `on start` and drains queued continuations before and
+after every `on update`, plus the start/close boundaries. `await main` is a
+language intrinsic: it suspends the current coroutine and resumes that same
+coroutine on the bound owner thread. It is deliberately not implemented as a
+nested `Task<void>`, because ordinary task completion is allowed to schedule
+its parent continuation on the worker pool.
+
+```wio
+async fn UploadAfterDecode(window: Window, bytes: byte[]) {
+    let image = await Decode(bytes);
+    await main;
+    window.Upload(image);
+}
+```
+
+Headless hosts and deterministic tests use `std::async::BindMain`,
+`DrainMain`, `MainPendingCount`, and `IsMainThread`. Calling `await main`
+outside an async function is rejected. Draining never occurs on a worker and
+never blocks waiting for future work.
+
 ## 1. Source model
 
 `async fn` declares a function whose call result is `coroutine<T>`. The return
@@ -128,7 +149,9 @@ Continuation execution after a suspension is scheduled on Wio's process-wide
 worker pool. Source code must not assume that code after `await` resumes on the
 originating thread. Main-thread GUI/render work uses `std::async::Dispatcher`:
 workers call `Post`, and the owning loop calls `Drain`. Automatic continuation
-affinity capture is not part of Wio 0.11.
+affinity capture is not part of Wio 0.11. On the 0.12 candidate, application
+code may explicitly request owner affinity with `await main`; this is an
+explicit handoff, not automatic capture.
 
 The runtime uses C++20 coroutine frames. A task keeps its frame and required
 object receiver alive through completion. Object async methods retain a strong
@@ -222,8 +245,8 @@ use `coroutine<Result<T>>`).
 
 - async generators/streams and source `yield`;
 - true platform async filesystem, socket, and process I/O;
-- executor selection, priorities, work stealing, and automatic main-thread
-  continuation dispatch;
+- general executor selection, priorities, work stealing, and automatic
+  origin-thread continuation capture;
 - ambient cancellation-token access across arbitrary native/task trees beyond
   lexical `async scope` ownership;
 - async component/extension borrows;

@@ -423,6 +423,7 @@ namespace wio
         Token op;
         NodePtr<Expression> operand;
         UnaryOperatorType opType;
+        bool isMainExecutorAwait = false;
         OperatorDispatchKind operatorDispatchKind = OperatorDispatchKind::None;
         WeakRef<sema::Type> overloadFunctionType = nullptr;
 

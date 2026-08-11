@@ -4793,6 +4793,18 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "async-scope-auto-import-ok"
         --run
     )
+    add_wio_output_test(
+        wio_test_async_main_executor_run
+        "${CMAKE_SOURCE_DIR}/tests/async_main_executor_run.wio"
+        "async-main-executor-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_application_async_main_run
+        "${CMAKE_SOURCE_DIR}/tests/application_async_main_run.wio"
+        "application-async-main-ok"
+        --run
+    )
 
     add_wio_output_test(
         wio_test_lambda_capture_value_run
@@ -4814,6 +4826,8 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_async_scope_run
         wio_test_async_scope_syntax_run
         wio_test_async_scope_auto_import_run
+        wio_test_async_main_executor_run
+        wio_test_application_async_main_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 
@@ -4826,6 +4840,11 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_async_scope_outside_async
         "${CMAKE_SOURCE_DIR}/tests/invalid/async_scope_outside_async.wio"
         "'await' can only be used inside an async function or method"
+    )
+    add_wio_failure_test(
+        wio_invalid_await_main_outside_async
+        "${CMAKE_SOURCE_DIR}/tests/invalid/await_main_outside_async.wio"
+        "'await main' can only be used inside an async function or method"
     )
     set_tests_properties(
         wio_test_async_worker_config_run
