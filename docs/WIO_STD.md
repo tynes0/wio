@@ -158,6 +158,12 @@ I/O executor, so process completion cannot occupy a continuation worker or an
 application owner thread. Streaming pipes, signals, and forced cancellation
 are not implied by these whole-process operations.
 
+`std::os::WatchFileAsync(path, pollMilliseconds)` is the portable 0.12 watcher
+candidate. It returns the next created/modified/removed `FileChange`, debounces
+modification metadata until one stable polling interval, and cancels at its
+timer/I/O suspension boundaries. Platform-native notification backends may
+replace polling later without changing this first-event surface.
+
 ### 2.2 Mixed Stable Module
 
 - `std::assert`

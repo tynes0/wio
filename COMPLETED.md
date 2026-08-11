@@ -23,7 +23,7 @@ Notes:
       can bind/drain the same queue.
 - [x] The first platform-I/O candidate adds a dedicated bounded executor and
       ownership-safe, Result-preserving asynchronous filesystem plus process
-      run/capture operations.
+      run/capture operations and a cancellable portable first-change watcher.
 
 - [x] `async fn`, async object/interface methods, generic async declarations,
       async `Entry`, `await`, and the `coroutine<T>` type are implemented across
