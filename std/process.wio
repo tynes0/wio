@@ -3,6 +3,7 @@ use std::result as result;
 realm std {
     realm process {
         use @CppHeader("std_process.h");
+        using cpp::header("std_async_process.h");
 
         @Native
         @Type(u8)
@@ -74,6 +75,16 @@ realm std {
             message: ref string) -> bool
             with native, cpp::name(wio::runtime::std_process::TryRunCapture);
 
+        fn RunAsyncNative(command: string, args: string[], workingDirectory: string) -> coroutine<string>
+            with native, cpp::name(wio::runtime::std_async_process::Run);
+
+        fn CaptureAsyncNative(command: string, args: string[], workingDirectory: string) -> coroutine<string>
+            with native, cpp::name(wio::runtime::std_async_process::Capture);
+
+        fn DecodeAsyncNative(payload: string, succeeded: ref bool, exitCode: ref i32,
+            output: ref string, error: ref Error, nativeError: ref i32, message: ref string)
+            with native, cpp::name(wio::runtime::std_async_process::Decode);
+
         fn MakeProcessResultError(error: Error, nativeError: i32, message: string) -> std::ResultError {
             mut finalMessage = message;
             if (finalMessage == "") {
@@ -116,6 +127,37 @@ realm std {
 
         fn Capture(command: string, args: string[]) -> std::Result<Output> {
             return Capture(command, args, "");
+        }
+
+        async fn RunAsync(command: string, args: string[], workingDirectory: string) -> std::Result<i32> {
+            let payload = await RunAsyncNative(command, args, workingDirectory);
+            mut succeeded = false; mut exitCode = 0; mut output = "";
+            mut error = Error::none; mut nativeError = 0; mut message = "";
+            DecodeAsyncNative(payload, ref succeeded, ref exitCode, ref output,
+                ref error, ref nativeError, ref message);
+            if (succeeded) { return std::Ok<i32>(exitCode); }
+            return std::Err<i32>(MakeProcessResultError(error, nativeError, message));
+        }
+
+        async fn RunAsync(command: string, args: string[]) -> std::Result<i32> {
+            return await RunAsync(command, args, "");
+        }
+
+        async fn CaptureAsync(command: string, args: string[], workingDirectory: string) -> std::Result<Output> {
+            let payload = await CaptureAsyncNative(command, args, workingDirectory);
+            mut succeeded = false; mut exitCode = 0; mut output = "";
+            mut error = Error::none; mut nativeError = 0; mut message = "";
+            DecodeAsyncNative(payload, ref succeeded, ref exitCode, ref output,
+                ref error, ref nativeError, ref message);
+            if (not succeeded) { return std::Err<Output>(MakeProcessResultError(error, nativeError, message)); }
+            mut value = Output();
+            value.exitCode = exitCode;
+            value.text = output;
+            return std::Ok<Output>(value);
+        }
+
+        async fn CaptureAsync(command: string, args: string[]) -> std::Result<Output> {
+            return await CaptureAsync(command, args, "");
         }
     }
 }

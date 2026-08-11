@@ -12,8 +12,9 @@ stages, `await main` performs a direct checked handoff, and headless hosts can
 bind/drain the same queue explicitly. Linux, packaged-toolchain, sanitizer,
 and real-app qualification remain required before these slices are frozen.
 The first platform-capability slice is implemented as a dedicated bounded I/O
-executor plus Result-preserving asynchronous filesystem operations. Native
-completion-port backends, sockets, processes, and watchers remain open.
+executor plus Result-preserving asynchronous filesystem and process run/
+capture operations. Native completion-port backends, sockets, streaming
+process pipes/signals, and watchers remain open.
 
 The 0.11 contract remains in [`WIO_ASYNC_MODEL.md`](./WIO_ASYNC_MODEL.md). This
 document records what comes next without reopening that frozen foundation.
@@ -300,9 +301,10 @@ unit tests:
    Typed-duration sugar and ambient tokens for native adapters remain additive.
 4. Application integration (implemented candidate): owned main executor,
    deterministic drain stage, `await main`, and headless stress tests.
-5. Platform capability (filesystem candidate implemented): dedicated bounded
-   I/O executor and Result-preserving async file operations. Add native
-   completion-port backends plus socket/process/watcher adapters.
+5. Platform capability (filesystem/process candidate implemented): dedicated
+   bounded I/O executor and Result-preserving async file plus process run/
+   capture operations. Add native completion-port backends plus socket,
+   streaming process-pipe/signal, and watcher adapters.
 6. Streaming: async iterators/generators only after task cancellation and
    backpressure semantics are proven.
 

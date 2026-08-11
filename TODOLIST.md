@@ -146,8 +146,9 @@ candidate application/system and language-coherence direction is expanded in
    afterward streams. The correctness, task ergonomics, structured scope, and
    application main-executor slices are implemented 0.12 candidates. The
    platform slice now has a dedicated bounded I/O executor and Result-safe
-   async filesystem operations; native completion-port backends, sockets,
-   processes, watchers, streams, and full cross-platform qualification remain.
+   async filesystem and process run/capture operations; native completion-port
+   backends, sockets, streaming process pipes/signals, watchers, streams, and
+   full cross-platform qualification remain.
    Keep the everyday vocabulary small and prove each slice in console,
    desktop, game, server/tool, and native-host scenarios.
 

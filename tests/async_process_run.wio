@@ -1,0 +1,22 @@
+use std::assert as assert;
+use std::async as futures;
+use std::console as console;
+use std::process as process;
+
+async fn Entry() -> i32 {
+    let captured = await process::CaptureAsync("g++", ["--version"]);
+    assert::Expect(captured.IsOk(), "async process capture launches a child");
+    assert::ExpectEqual(captured.Value().exitCode, 0, "async process capture preserves the exit code");
+    assert::Expect(not captured.Value().text.Empty(), "async process capture preserves stdout");
+
+    let invalidWorkingDirectory = await process::RunAsync(
+        "g++", ["--version"], "tests/path-that-does-not-exist-async-probe");
+    assert::Expect(invalidWorkingDirectory.IsError(), "async launch failures remain Result values");
+    assert::Expect(invalidWorkingDirectory.ErrorValue().code != 0,
+        "async launch failure preserves a process error code");
+
+    assert::ExpectEqual(futures::IoPendingCount(), 0u64, "process operations drain the shared I/O queue");
+    console::PrintLine("async-process-ok");
+    futures::ShutdownRuntime();
+    return 0;
+}

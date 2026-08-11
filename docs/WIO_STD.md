@@ -152,6 +152,12 @@ explicit caveat:
 - the remaining hardening work is cross-platform behavior and packaged-toolchain
   validation, not a different public API direction.
 
+The unreleased 0.12 candidate adds `RunAsync` and `CaptureAsync`. They preserve
+the synchronous Result/exit-code/output contract while waiting on the bounded
+I/O executor, so process completion cannot occupy a continuation worker or an
+application owner thread. Streaming pipes, signals, and forced cancellation
+are not implied by these whole-process operations.
+
 ### 2.2 Mixed Stable Module
 
 - `std::assert`

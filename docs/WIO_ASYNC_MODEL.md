@@ -21,8 +21,9 @@ legacy-blocking pool. `WIO_ASYNC_IO_WORKERS` (1..64) and
 `WIO_ASYNC_IO_QUEUE` (1..1048576) configure it before first use;
 `IoWorkerCount`, `IoQueueCapacity`, and `IoPendingCount` expose its capacity.
 `ReadTextAsync`, `WriteTextAsync`, `AppendTextAsync`, directory/remove/copy/
-move operations, recursive listing, and metadata preserve ordinary
-`Result<T>` failures instead of turning expected OS errors into task faults.
+move operations, recursive listing, metadata, and process run/capture preserve
+ordinary `Result<T>` failures instead of turning expected OS errors into task
+faults.
 The portable backend is a bounded threaded I/O implementation; IOCP/io_uring
 may replace that backend later without changing the Wio surface. Cancellation
 does not forcibly terminate an in-flight filesystem syscall, but abandoned
@@ -207,8 +208,9 @@ to the separate bounded pool described above. `Run` remains the continuation
 pool compatibility operation and is also subject to transfer-safe capture
 analysis. Neither spelling claims that filesystem or network APIs have become
 true non-blocking operating-system I/O. Filesystem `*Async` operations instead
-target the dedicated bounded I/O executor; true completion-port backends and
-async socket/process adapters remain later platform work.
+target the dedicated bounded I/O executor; process run/capture uses the same
+isolation. True completion-port backends, process pipes/signals, and async
+socket adapters remain later platform work.
 
 ## 5. Standard-library surface
 
@@ -259,7 +261,8 @@ use `coroutine<Result<T>>`).
 ## 7. Outside the 0.11 contract
 
 - async generators/streams and source `yield`;
-- completion-port filesystem backends and async socket/process I/O;
+- completion-port filesystem backends, async sockets, and streaming process
+  pipes/signals;
 - general executor selection, priorities, work stealing, and automatic
   origin-thread continuation capture;
 - ambient cancellation-token access across arbitrary native/task trees beyond

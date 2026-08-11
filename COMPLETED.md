@@ -22,7 +22,8 @@ Notes:
       `await main` directly transfers the suspended caller, and headless hosts
       can bind/drain the same queue.
 - [x] The first platform-I/O candidate adds a dedicated bounded executor and
-      ownership-safe, Result-preserving asynchronous filesystem operations.
+      ownership-safe, Result-preserving asynchronous filesystem plus process
+      run/capture operations.
 
 - [x] `async fn`, async object/interface methods, generic async declarations,
       async `Entry`, `await`, and the `coroutine<T>` type are implemented across
