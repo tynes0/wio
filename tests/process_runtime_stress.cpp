@@ -25,6 +25,29 @@ namespace
         return value;
     }
 
+    std::string ReadAll(void* handle, const bool standardError)
+    {
+        std::string result;
+        bool eof = false;
+        while (!eof)
+        {
+            std::string chunk;
+            process::ProcessError error = process::ProcessError::none;
+            int nativeError = 0;
+            std::string message;
+            const bool succeeded = standardError
+                ? process::ProcessReadStderr(
+                    handle, 128, chunk, eof, error, nativeError, message)
+                : process::ProcessReadStdout(
+                    handle, 128, chunk, eof, error, nativeError, message);
+            Require(succeeded, standardError
+                ? "native process stderr drain"
+                : "native process stdout drain");
+            result += chunk;
+        }
+        return result;
+    }
+
     void* SpawnSelf(const std::vector<std::string>& arguments)
     {
         void* handle = nullptr;
@@ -93,16 +116,8 @@ int main(const int argc, char* argv[])
         Require(process::ProcessCloseStdin(child, error, nativeError, message),
             "native process stdin close");
 
-        std::string standardOutput;
-        std::string standardError;
-        bool outputEof = false;
-        bool errorEof = false;
-        Require(process::ProcessReadStdout(
-            child, 128, standardOutput, outputEof, error, nativeError, message),
-            "native process stdout read");
-        Require(process::ProcessReadStderr(
-            child, 128, standardError, errorEof, error, nativeError, message),
-            "native process stderr read");
+        const std::string standardOutput = ReadAll(child, false);
+        const std::string standardError = ReadAll(child, true);
         int exitCode = -1;
         Require(process::ProcessWait(child, exitCode, error, nativeError, message),
             "native process wait");
