@@ -96,6 +96,11 @@ jobs:
               tail -n 200 process-sanitizer.log
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
+            details="$(tail -n 200 process-sanitizer.log)"
+            details="${details//'%'/'%25'}"
+            details="${details//$'\r'/'%0D'}"
+            details="${details//$'\n'/'%0A'}"
+            echo "::error title=Process sanitizer failure::$details"
             exit 1
           fi
 
