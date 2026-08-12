@@ -380,4 +380,17 @@ if(BUILD_TESTING)
         TIMEOUT 30
         LABELS "async;runtime;structure"
     )
+
+    add_executable(wio_process_runtime_stress
+        "${CMAKE_SOURCE_DIR}/tests/process_runtime_stress.cpp"
+    )
+    target_link_libraries(wio_process_runtime_stress PRIVATE wio_runtime_host)
+    if(NOT WIN32)
+        target_link_libraries(wio_process_runtime_stress PRIVATE pthread)
+    endif()
+    add_test(NAME wio_process_runtime_stress COMMAND wio_process_runtime_stress)
+    set_tests_properties(wio_process_runtime_stress PROPERTIES
+        TIMEOUT 30
+        LABELS "async;process;runtime;ownership"
+    )
 endif()
