@@ -73,10 +73,19 @@ jobs:
       - name: Build sanitizer targets
         run: cmake --build build-sanitize --target wio_async_runtime_stress wio_process_runtime_stress wio_function_type_cpp_string_test wio_filesystem_policy_test
 
-      - name: Run sanitizer runtime matrix
+      - name: Run async runtime sanitizer tests
+        if: always()
+        run: ctest --test-dir build-sanitize --output-on-failure -R "^wio_async_runtime_stress$"
+
+      - name: Run process runtime sanitizer tests
+        if: always()
+        run: ctest --test-dir build-sanitize --output-on-failure -R "^wio_process_runtime_stress$"
+
+      - name: Run compiler utility sanitizer tests
+        if: always()
         run: >
           ctest --test-dir build-sanitize --output-on-failure
-          -R "(wio_async_runtime_stress|wio_process_runtime_stress|wio_function_type_cpp_string|wio_filesystem_policy)"
+          -R "(wio_function_type_cpp_string|wio_filesystem_policy)"
 
       - name: Configure frontend fuzzer
         run: >
