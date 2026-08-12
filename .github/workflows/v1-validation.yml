@@ -85,9 +85,19 @@ jobs:
 
       - name: Run process runtime sanitizer tests
         if: always()
-        run: >
-          ctest --test-dir build-sanitize --output-on-failure
-          --repeat until-fail:10 -R "^wio_process_runtime_stress$"
+        run: |
+          set -o pipefail
+          if ! ctest --test-dir build-sanitize --output-on-failure \
+            --repeat until-fail:10 -R "^wio_process_runtime_stress$" \
+            2>&1 | tee process-sanitizer.log; then
+            {
+              echo "### Process sanitizer failure"
+              echo '```text'
+              tail -n 200 process-sanitizer.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
 
       - name: Run compiler utility sanitizer tests
         if: always()
