@@ -1,11 +1,11 @@
 # Wio Async and Coroutine Model
 
-Status: normative Wio 0.11 companion contract.
+Status: normative Wio 0.12 async contract.
 
-The section **Post-0.11 correctness candidate** records additive behavior on
-the unreleased 0.12 branch. It does not rewrite the frozen 0.11 contract.
+The section **0.12 correctness and structure contract** records the additive
+behavior frozen by 0.12. It does not rewrite the historical 0.11 baseline.
 
-## Post-0.11 correctness and structure candidate
+## 0.12 correctness and structure contract
 
 `std::async::RunBlocking` now targets a distinct bounded blocking executor.
 Continuation/timer workers therefore remain available while native or legacy
@@ -221,7 +221,7 @@ without honoring their remaining wall-clock delay so coroutine frames and
 captured values are released. Structured work is still joined explicitly;
 detached work does not keep shutdown waiting for a distant timer.
 
-In the unreleased correctness candidate, `RunBlocking` moves synchronous work
+In the 0.12 contract, `RunBlocking` moves synchronous work
 to the separate bounded pool described above. `Run` remains the continuation
 pool compatibility operation and is also subject to transfer-safe capture
 analysis. Neither spelling claims that filesystem or network APIs have become
@@ -264,7 +264,7 @@ Core task operations:
 - `SleepCancellable` and the owner-drained `Dispatcher`;
 - `WorkerCount` for diagnostics and capacity-aware code.
 
-On the unreleased 0.12 candidate, these operations are also discoverable as
+In 0.12, these operations are also discoverable as
 `Task<T>` members. `TaskPoll<T>`, `VoidTaskPoll`, and `TaskStatus` provide
 non-blocking snapshots, while `Scope` owns heterogeneous child lifetimes and
 their cancellation/deadline boundary.
@@ -297,7 +297,7 @@ use `coroutine<Result<T>>`).
 
 ## 7. Outside the 0.11 contract
 
-The unreleased 0.12 candidate includes `AsyncChannel<T>` as the backpressure
+Wio 0.12 includes `AsyncChannel<T>` as the backpressure
 foundation for later stream syntax. Bounded channels suspend producers through
 cancellable timer waits rather than blocking an executor thread; close rejects
 new sends, wakes pending operations, and lets buffered values drain before

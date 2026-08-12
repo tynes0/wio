@@ -133,7 +133,7 @@ low-level escape hatches. Public `std::path` and `std::fs` surfaces are tested
 both from the repository and through clean installed packages on Windows and
 Linux.
 
-The unreleased 0.12 candidate adds `ReadTextAsync`, `WriteTextAsync`,
+Wio 0.12 adds `ReadTextAsync`, `WriteTextAsync`,
 `AppendTextAsync`, `CreateDirectoriesAsync`, `RemoveAsync`, `RemoveAllAsync`,
 `CopyFileAsync`, `MoveFileAsync`, `ReplaceFileAtomicAsync`,
 `ListFilesRecursiveAsync`, and `MetadataAsync`. They return `Task<Result<T>>`
@@ -143,7 +143,7 @@ executor rather than the continuation or generic blocking pool.
 
 ### 2.1.3 Network Async Candidate
 
-The unreleased 0.12 `std::net` candidate adds `ResolveAsync`, `ConnectAsync`,
+Wio 0.12 `std::net` adds `ResolveAsync`, `ConnectAsync`,
 `Socket.SendAsync`, `Socket.ReceiveAsync`, `UdpSocket.SendToAsync`, and
 `UdpSocket.ReceiveFromAsync`, plus ownership-safe `Listener.AcceptAsync`.
 Expected DNS/socket failures remain
@@ -164,7 +164,7 @@ explicit caveat:
 - the remaining hardening work is cross-platform behavior and packaged-toolchain
   validation, not a different public API direction.
 
-The unreleased 0.12 candidate adds `RunAsync`, `CaptureAsync`, and an owned
+Wio 0.12 adds `RunAsync`, `CaptureAsync`, and an owned
 `Process` returned by `Spawn`. The owned form separates stdout/stderr, supports
 sync and async stdin writes, chunk/all pipe reads, independent stdin close,
 running-state observation, wait, terminate, and deterministic close. Async

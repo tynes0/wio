@@ -4,12 +4,27 @@ All notable user-facing changes to Wio are recorded here.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-08-13
+
 ### Added
 
 - Added the `std::async::Task<T>` public alias plus `Send`/`Sync` executor
   safety markers for synchronized user-owned types.
 - Added blocking-executor capacity/runtime diagnostics and explicit,
   idempotent async runtime shutdown.
+- Added owning heterogeneous async scopes, lexical `async scope`, `spawn`,
+  deadlines, cancellation propagation, explicit detach, and owner/main-thread
+  dispatch integrated with application lifecycle.
+- Added dedicated filesystem and network I/O execution, cancellable file
+  watching, asynchronous DNS/TCP/UDP operations, and ownership-safe async
+  listener accept.
+- Added Result-preserving asynchronous process helpers and owned process
+  streams with separate stdin/stdout/stderr, wait, terminate, close, and
+  live-state diagnostics.
+- Added bounded and unbounded `AsyncChannel<T>` with non-blocking try
+  operations, suspending send/receive, close, drain, and cancellation behavior.
+- Added scoped enum backend emission and module re-import alias regression
+  coverage.
 
 ### Changed
 
@@ -21,6 +36,13 @@ All notable user-facing changes to Wio are recorded here.
 - `Run` and `RunBlocking` now reject borrowed, opaque, callable, or unsafe
   object captures before C++ generation. Structurally safe values pass
   automatically; synchronized objects opt in through `std::async::Send`.
+- Network connect timeouts now govern the actual non-blocking connection
+  attempt on Windows and POSIX instead of only later socket I/O.
+- Socket handles retain native descriptors until in-flight leases drain, so
+  close interrupts blocking work without descriptor reuse or mutex deadlock.
+- Release validation now runs on release branches, supersedes stale runs,
+  stresses async/process ownership under sanitizers, and fails fast on hung
+  network regressions.
 
 ### Fixed
 
@@ -28,6 +50,15 @@ All notable user-facing changes to Wio are recorded here.
   executing user code after cancellation.
 - Fixed shutdown races between accepted blocking work, continuation posting,
   delayed timers, and process/static destruction.
+- Fixed async process leases being acquired after coroutine suspension,
+  stream-drain ordering, and UDP test scheduling that could self-starve a
+  bounded I/O executor.
+- Fixed Linux/Windows socket close races that could report a false UDP success,
+  reuse a descriptor during receive, or leave async accept blocked forever.
+- Fixed cached-module re-imports losing exported-symbol and top-level-realm
+  metadata, which broke a second alias of the same module.
+- Fixed duplicate/rejected function declarations leaving an expired weak
+  symbol for the semantic resolution pass and crashing sanitizer fuzzing.
 
 ## [0.11.1] - 2026-08-11
 

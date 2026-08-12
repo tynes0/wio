@@ -3,8 +3,8 @@
 Status: post-0.11 design plan; non-normative until individual slices move into
 a versioned specification.
 
-Progress: correctness, ergonomics, and structured-work slices are implemented
-candidates on `releases/v0.12.0`. This includes the runtime `Scope`, language
+Progress: correctness, ergonomics, and structured-work slices are frozen in
+Wio `v0.12.0`. This includes the runtime `Scope`, language
 `spawn`/`async scope`, lexical cancellation/deadlines, explicit `detach`, and a
 small homogeneous `Select<T>` surface. The owner/main executor slice is also
 implemented: application runners bind and drain it at deterministic lifecycle
@@ -300,7 +300,7 @@ unit tests:
 
 ## 10. Implementation order
 
-1. Correctness (implemented candidate; freeze qualification pending):
+1. Correctness (implemented and release-qualified in 0.12):
    `Send`/`Sync`-style traits, cross-executor capture analysis, separate
    blocking pool, cancellation-aware timers, and explicit shutdown.
 2. Ergonomics (implemented candidate): `Task<T>` facade, member state
