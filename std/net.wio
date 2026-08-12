@@ -1,10 +1,12 @@
 use std::convert as convert;
 use std::option as option;
 use std::result as result;
+use std::async as futures;
 
 realm std {
     realm net {
         using cpp::header("std_net.h");
+        using cpp::header("std_async_net.h");
 
         component Uri {
             valid: bool;
@@ -101,6 +103,7 @@ realm std {
         fn ReceiveNative(handle: opaque, maximumBytes: usize, bytes: ref string, error: ref string) -> bool
             with native, cpp::name(wio::runtime::std_net::Receive);
         fn CloseNative(handle: opaque) with native, cpp::name(wio::runtime::std_net::Close);
+        fn LiveSocketCount() -> u64 with native, cpp::name(wio::runtime::std_net::LiveSocketCount);
         fn UdpBindNative(address: string, port: u16, handle: ref opaque?, error: ref string) -> bool
             with native, cpp::name(wio::runtime::std_net::UdpBind);
         fn UdpSendToNative(handle: opaque, host: string, port: u16, bytes: string,
@@ -109,6 +112,28 @@ realm std {
         fn UdpReceiveFromNative(handle: opaque, maximumBytes: usize, bytes: ref string,
             remoteAddress: ref string, remotePort: ref u16, error: ref string) -> bool
             with native, cpp::name(wio::runtime::std_net::UdpReceiveFrom);
+        fn ResolveAsyncNative(host: string, port: u16) -> coroutine<string>
+            with native, cpp::name(wio::runtime::std_async_net::Resolve);
+        fn SendAsyncNative(handle: opaque, bytes: string) -> coroutine<string>
+            with native, cpp::name(wio::runtime::std_async_net::Send);
+        fn ReceiveAsyncNative(handle: opaque, maximumBytes: usize) -> coroutine<string>
+            with native, cpp::name(wio::runtime::std_async_net::Receive);
+        fn UdpSendToAsyncNative(handle: opaque, host: string, port: u16, bytes: string) -> coroutine<string>
+            with native, cpp::name(wio::runtime::std_async_net::UdpSendTo);
+        fn UdpReceiveFromAsyncNative(handle: opaque, maximumBytes: usize) -> coroutine<string>
+            with native, cpp::name(wio::runtime::std_async_net::UdpReceiveFrom);
+        fn DecodeAsyncAddresses(payload: string, succeeded: ref bool,
+            addresses: ref string[], error: ref string)
+            with native, cpp::name(wio::runtime::std_async_net::DecodeAddresses);
+        fn DecodeAsyncSend(payload: string, succeeded: ref bool,
+            count: ref usize, error: ref string)
+            with native, cpp::name(wio::runtime::std_async_net::DecodeSend);
+        fn DecodeAsyncReceive(payload: string, succeeded: ref bool,
+            bytes: ref string, error: ref string)
+            with native, cpp::name(wio::runtime::std_async_net::DecodeReceive);
+        fn DecodeAsyncDatagram(payload: string, succeeded: ref bool, bytes: ref string,
+            remoteAddress: ref string, remotePort: ref u16, error: ref string)
+            with native, cpp::name(wio::runtime::std_async_net::DecodeDatagram);
 
         fn NetError(message: string) -> std::ResultError {
             return std::MakeResultError(std::ResultDomain::runtime, 1, message);
@@ -118,6 +143,14 @@ realm std {
             mut addresses: string[] = [];
             mut error = "";
             if (ResolveNative(host, port, ref addresses, ref error)) { return std::Ok(addresses); }
+            return std::Err<string[]>(NetError(error));
+        }
+
+        async fn ResolveAsync(host: string, port: u16) -> std::Result<string[]> {
+            let payload = await ResolveAsyncNative(host, port);
+            mut succeeded = false; mut addresses: string[] = []; mut error = "";
+            DecodeAsyncAddresses(payload, ref succeeded, ref addresses, ref error);
+            if (succeeded) { return std::Ok<string[]>(addresses); }
             return std::Err<string[]>(NetError(error));
         }
 
@@ -145,6 +178,22 @@ realm std {
                 if (ReceiveNative(self.handle, maximumBytes, ref bytes, ref error)) { return std::Ok(bytes); }
                 return std::Err<string>(NetError(error));
             }
+            public async fn SendAsync(bytes: string) -> std::Result<usize> {
+                if (self.closed) { return std::Err<usize>(NetError("socket is closed")); }
+                let payload = await SendAsyncNative(self.handle, bytes);
+                mut succeeded = false; mut sent = 0usize; mut error = "";
+                DecodeAsyncSend(payload, ref succeeded, ref sent, ref error);
+                if (succeeded) { return std::Ok<usize>(sent); }
+                return std::Err<usize>(NetError(error));
+            }
+            public async fn ReceiveAsync(maximumBytes: usize) -> std::Result<string> {
+                if (self.closed) { return std::Err<string>(NetError("socket is closed")); }
+                let payload = await ReceiveAsyncNative(self.handle, maximumBytes);
+                mut succeeded = false; mut bytes = ""; mut error = "";
+                DecodeAsyncReceive(payload, ref succeeded, ref bytes, ref error);
+                if (succeeded) { return std::Ok<string>(bytes); }
+                return std::Err<string>(NetError(error));
+            }
         }
 
         fn Connect(host: string, port: u16, timeoutMilliseconds: u64) -> std::Result<Socket> {
@@ -154,6 +203,11 @@ realm std {
                 if (handle != null) { return std::Ok(Socket(handle)); }
             }
             return std::Err<Socket>(NetError(error));
+        }
+
+        async fn ConnectAsync(host: string, port: u16, timeoutMilliseconds: u64) -> std::Result<Socket> {
+            let action: fn() -> std::Result<Socket> = () => Connect(host, port, timeoutMilliseconds);
+            return await futures::RunBlocking<std::Result<Socket> >(action);
         }
 
         object Listener {
@@ -222,6 +276,23 @@ realm std {
                 if (UdpReceiveFromNative(self.handle, maximumBytes, ref bytes, ref address, ref port, ref error)) {
                     return std::Ok(Datagram(bytes, address, port));
                 }
+                return std::Err<Datagram>(NetError(error));
+            }
+            public async fn SendToAsync(host: string, port: u16, bytes: string) -> std::Result<usize> {
+                if (self.closed) { return std::Err<usize>(NetError("socket is closed")); }
+                let payload = await UdpSendToAsyncNative(self.handle, host, port, bytes);
+                mut succeeded = false; mut sent = 0usize; mut error = "";
+                DecodeAsyncSend(payload, ref succeeded, ref sent, ref error);
+                if (succeeded) { return std::Ok<usize>(sent); }
+                return std::Err<usize>(NetError(error));
+            }
+            public async fn ReceiveFromAsync(maximumBytes: usize) -> std::Result<Datagram> {
+                if (self.closed) { return std::Err<Datagram>(NetError("socket is closed")); }
+                let payload = await UdpReceiveFromAsyncNative(self.handle, maximumBytes);
+                mut succeeded = false; mut bytes = ""; mut address = "";
+                mut port = 0u16; mut error = "";
+                DecodeAsyncDatagram(payload, ref succeeded, ref bytes, ref address, ref port, ref error);
+                if (succeeded) { return std::Ok<Datagram>(Datagram(bytes, address, port)); }
                 return std::Err<Datagram>(NetError(error));
             }
         }

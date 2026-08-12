@@ -1502,6 +1502,8 @@ namespace wio::runtime
         {
             auto& scheduler = DefaultAsyncBlockingScheduler();
             auto registration = std::make_shared<detail::AsyncContinuationRegistration>(continuation);
+            if (!registration->Arm())
+                return false;
             if (!scheduler.Submit([this, registration]
                 {
                     try { value.emplace(action()); }
@@ -1513,7 +1515,7 @@ namespace wio::runtime
                     throw AsyncRuntimeStopped();
                 throw AsyncQueueFull();
             }
-            return registration->Arm();
+            return true;
         }
 
         T await_resume()
@@ -1535,6 +1537,8 @@ namespace wio::runtime
         {
             auto& scheduler = DefaultAsyncBlockingScheduler();
             auto registration = std::make_shared<detail::AsyncContinuationRegistration>(continuation);
+            if (!registration->Arm())
+                return false;
             if (!scheduler.Submit([this, registration]
                 {
                     try { action(); }
@@ -1546,7 +1550,7 @@ namespace wio::runtime
                     throw AsyncRuntimeStopped();
                 throw AsyncQueueFull();
             }
-            return registration->Arm();
+            return true;
         }
 
         void await_resume()
@@ -1579,6 +1583,8 @@ namespace wio::runtime
         {
             auto& scheduler = DefaultAsyncIoScheduler();
             auto registration = std::make_shared<detail::AsyncContinuationRegistration>(continuation);
+            if (!registration->Arm())
+                return false;
             if (!scheduler.Submit([this, registration]
                 {
                     try { value.emplace(action()); }
@@ -1590,7 +1596,7 @@ namespace wio::runtime
                     throw AsyncRuntimeStopped();
                 throw AsyncIoQueueFull();
             }
-            return registration->Arm();
+            return true;
         }
 
         T await_resume()
@@ -1612,6 +1618,8 @@ namespace wio::runtime
         {
             auto& scheduler = DefaultAsyncIoScheduler();
             auto registration = std::make_shared<detail::AsyncContinuationRegistration>(continuation);
+            if (!registration->Arm())
+                return false;
             if (!scheduler.Submit([this, registration]
                 {
                     try { action(); }
@@ -1623,7 +1631,7 @@ namespace wio::runtime
                     throw AsyncRuntimeStopped();
                 throw AsyncIoQueueFull();
             }
-            return registration->Arm();
+            return true;
         }
 
         void await_resume()

@@ -1,8 +1,10 @@
 #include "std_net.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstring>
 #include <memory>
+#include <mutex>
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -38,12 +40,35 @@ namespace wio::runtime::std_net
         int lastSocketError() noexcept { return errno; }
         void closeNative(NativeSocket value) noexcept { if (value != invalidSocket) ::close(value); }
 #endif
-        struct SocketHandle { NativeSocket value = invalidSocket; };
+        std::atomic<std::uint64_t> liveSocketCount{0};
+
+        struct SocketHandle
+        {
+            SocketHandle() { liveSocketCount.fetch_add(1, std::memory_order_relaxed); }
+            ~SocketHandle() { liveSocketCount.fetch_sub(1, std::memory_order_relaxed); }
+            std::atomic<std::size_t> references{1};
+            std::mutex lifecycleMutex;
+            std::mutex sendMutex;
+            std::mutex receiveMutex;
+            NativeSocket value = invalidSocket;
+            bool closed = false;
+        };
         std::string errorMessage(const char* operation)
         {
             return std::string(operation) + " failed with native socket error " + std::to_string(lastSocketError()) + ".";
         }
         SocketHandle* asHandle(void* value) noexcept { return static_cast<SocketHandle*>(value); }
+
+        class SocketLease final
+        {
+        public:
+            explicit SocketLease(void* handle) noexcept : handle_(handle) {}
+            SocketLease(const SocketLease&) = delete;
+            SocketLease& operator=(const SocketLease&) = delete;
+            ~SocketLease() { if (handle_) Release(handle_); }
+        private:
+            void* handle_ = nullptr;
+        };
 
         bool ensureRuntime(std::string& error) noexcept
         {
@@ -138,7 +163,11 @@ namespace wio::runtime::std_net
     bool TcpAccept(void* listener, void*& handle, std::string& error) noexcept
     {
         handle = nullptr; error.clear();
-        NativeSocket accepted = accept(asHandle(listener)->value, nullptr, nullptr);
+        if (!Retain(listener, error)) return false;
+        SocketLease lease(listener);
+        auto* state = asHandle(listener);
+        std::lock_guard receiveLock(state->receiveMutex);
+        NativeSocket accepted = accept(state->value, nullptr, nullptr);
         if (accepted == invalidSocket) { error = errorMessage("accept"); return false; }
         auto result = std::make_unique<SocketHandle>(); result->value = accepted; handle = result.release(); return true;
     }
@@ -146,6 +175,8 @@ namespace wio::runtime::std_net
     bool SetTimeout(void* handle, const std::uint64_t milliseconds, std::string& error) noexcept
     {
         error.clear();
+        if (!Retain(handle, error)) return false;
+        SocketLease lease(handle);
 #if defined(_WIN32)
         const DWORD timeout = static_cast<DWORD>(std::min<std::uint64_t>(milliseconds, 0xffffffffu));
         const char* data = reinterpret_cast<const char*>(&timeout); const int size = sizeof(timeout);
@@ -162,6 +193,9 @@ namespace wio::runtime::std_net
 
     std::uint16_t LocalPort(void* handle) noexcept
     {
+        std::string error;
+        if (!Retain(handle, error)) return 0;
+        SocketLease lease(handle);
         sockaddr_storage address{};
 #if defined(_WIN32)
         int size = sizeof(address);
@@ -180,9 +214,13 @@ namespace wio::runtime::std_net
     bool Send(void* handle, const std::string_view bytes, std::size_t& sent, std::string& error) noexcept
     {
         sent = 0; error.clear();
+        if (!Retain(handle, error)) return false;
+        SocketLease lease(handle);
+        auto* state = asHandle(handle);
+        std::lock_guard sendLock(state->sendMutex);
         while (sent < bytes.size())
         {
-            const auto result = send(asHandle(handle)->value, bytes.data() + sent,
+            const auto result = send(state->value, bytes.data() + sent,
                 static_cast<int>(bytes.size() - sent), 0);
             if (result <= 0) { error = errorMessage("send"); return false; }
             sent += static_cast<std::size_t>(result);
@@ -193,8 +231,12 @@ namespace wio::runtime::std_net
     bool Receive(void* handle, const std::size_t maximumBytes, std::string& bytes, std::string& error) noexcept
     {
         bytes.clear(); error.clear();
+        if (!Retain(handle, error)) return false;
+        SocketLease lease(handle);
+        auto* state = asHandle(handle);
+        std::lock_guard receiveLock(state->receiveMutex);
         std::vector<char> buffer(std::max<std::size_t>(1, maximumBytes));
-        const auto result = recv(asHandle(handle)->value, buffer.data(), static_cast<int>(buffer.size()), 0);
+        const auto result = recv(state->value, buffer.data(), static_cast<int>(buffer.size()), 0);
         if (result < 0) { error = errorMessage("receive"); return false; }
         bytes.assign(buffer.data(), static_cast<std::size_t>(result)); return true;
     }
@@ -229,6 +271,10 @@ namespace wio::runtime::std_net
                    const std::string_view bytes, std::size_t& sent, std::string& error) noexcept
     {
         sent = 0; error.clear();
+        if (!Retain(handle, error)) return false;
+        SocketLease lease(handle);
+        auto* state = asHandle(handle);
+        std::lock_guard sendLock(state->sendMutex);
         addrinfo hints{}; hints.ai_family = AF_UNSPEC; hints.ai_socktype = SOCK_DGRAM;
         addrinfo* raw = nullptr;
         const std::string hostText(host); const std::string service = std::to_string(port);
@@ -237,7 +283,7 @@ namespace wio::runtime::std_net
         std::unique_ptr<addrinfo, decltype(&freeaddrinfo)> entries(raw, freeaddrinfo);
         for (addrinfo* entry = raw; entry; entry = entry->ai_next)
         {
-            const auto result = sendto(asHandle(handle)->value, bytes.data(), static_cast<int>(bytes.size()), 0,
+            const auto result = sendto(state->value, bytes.data(), static_cast<int>(bytes.size()), 0,
                 entry->ai_addr, static_cast<int>(entry->ai_addrlen));
             if (result >= 0) { sent = static_cast<std::size_t>(result); return true; }
         }
@@ -248,6 +294,10 @@ namespace wio::runtime::std_net
                         std::string& remoteAddress, std::uint16_t& remotePort, std::string& error) noexcept
     {
         bytes.clear(); remoteAddress.clear(); remotePort = 0; error.clear();
+        if (!Retain(handle, error)) return false;
+        SocketLease lease(handle);
+        auto* state = asHandle(handle);
+        std::lock_guard receiveLock(state->receiveMutex);
         std::vector<char> buffer(std::max<std::size_t>(1, maximumBytes));
         sockaddr_storage address{};
 #if defined(_WIN32)
@@ -255,7 +305,7 @@ namespace wio::runtime::std_net
 #else
         socklen_t addressSize = sizeof(address);
 #endif
-        const auto result = recvfrom(asHandle(handle)->value, buffer.data(), static_cast<int>(buffer.size()), 0,
+        const auto result = recvfrom(state->value, buffer.data(), static_cast<int>(buffer.size()), 0,
             reinterpret_cast<sockaddr*>(&address), &addressSize);
         if (result < 0) { error = errorMessage("UDP recvfrom"); return false; }
         bytes.assign(buffer.data(), static_cast<std::size_t>(result));
@@ -270,9 +320,51 @@ namespace wio::runtime::std_net
         return true;
     }
 
+    bool Retain(void* handle, std::string& error) noexcept
+    {
+        error.clear();
+        if (!handle) { error = "socket handle is null"; return false; }
+        auto* state = asHandle(handle);
+        std::lock_guard lock(state->lifecycleMutex);
+        if (state->closed) { error = "socket is closed"; return false; }
+        state->references.fetch_add(1, std::memory_order_relaxed);
+        return true;
+    }
+
+    void Release(void* handle) noexcept
+    {
+        if (!handle) return;
+        auto* state = asHandle(handle);
+        if (state->references.fetch_sub(1, std::memory_order_acq_rel) == 1)
+            delete state;
+    }
+
+    std::uint64_t LiveSocketCount() noexcept
+    {
+        return liveSocketCount.load(std::memory_order_acquire);
+    }
+
     void Close(void* handle) noexcept
     {
         if (!handle) return;
-        auto* socketHandle = asHandle(handle); closeNative(socketHandle->value); delete socketHandle;
+        auto* state = asHandle(handle);
+        NativeSocket value = invalidSocket;
+        {
+            std::lock_guard lock(state->lifecycleMutex);
+            if (state->closed) return;
+            state->closed = true;
+            value = state->value;
+            state->value = invalidSocket;
+        }
+        if (value != invalidSocket)
+        {
+#if defined(_WIN32)
+            shutdown(value, SD_BOTH);
+#else
+            shutdown(value, SHUT_RDWR);
+#endif
+            closeNative(value);
+        }
+        Release(state);
     }
 }

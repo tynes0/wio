@@ -141,7 +141,18 @@ through ordinary `async fn` lowering, preserve the same filesystem error
 domain/codes, and execute portable filesystem calls on a dedicated bounded I/O
 executor rather than the continuation or generic blocking pool.
 
-### 2.1.3 Runtime-Backed Stable Module With Explicit Caveat
+### 2.1.3 Network Async Candidate
+
+The unreleased 0.12 `std::net` candidate adds `ResolveAsync`, `ConnectAsync`,
+`Socket.SendAsync`, `Socket.ReceiveAsync`, `UdpSocket.SendToAsync`, and
+`UdpSocket.ReceiveFromAsync`. Expected DNS/socket failures remain
+`ResultError` values. Native socket state uses operation leases: close prevents
+new leases, interrupts the native socket, and defers state reclamation until
+in-flight operations finish. `LiveSocketCount` is a diagnostic/testing surface
+for ownership qualification. Async accept, TLS/HTTP, and platform completion-
+port backends are not yet claimed.
+
+### 2.1.4 Runtime-Backed Stable Module With Explicit Caveat
 
 - `std::process`
 

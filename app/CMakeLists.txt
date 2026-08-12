@@ -4823,6 +4823,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "async-file-watcher-ok"
         --run
     )
+    add_wio_output_test(
+        wio_test_async_net_io_run
+        "${CMAKE_SOURCE_DIR}/tests/async_net_io_run.wio"
+        "async-net-io-ok"
+        --run
+    )
 
     add_wio_output_test(
         wio_test_lambda_capture_value_run
@@ -4849,6 +4855,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_async_fs_io_run
         wio_test_async_process_run
         wio_test_async_file_watcher_run
+        wio_test_async_net_io_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 

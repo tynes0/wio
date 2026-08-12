@@ -14,8 +14,10 @@ and real-app qualification remain required before these slices are frozen.
 The first platform-capability slice is implemented as a dedicated bounded I/O
 executor plus Result-preserving asynchronous filesystem and process run/
 capture operations, plus a cancellable portable first-change file watcher.
-Native completion-port/watcher backends, sockets, and streaming process
-pipes/signals remain open.
+DNS/connect and existing TCP/UDP handles now have leased asynchronous I/O;
+close interrupts work without freeing live operation state. Native completion-
+port/watcher backends, async accept, TLS, and streaming process pipes/signals
+remain open.
 
 The 0.11 contract remains in [`WIO_ASYNC_MODEL.md`](./WIO_ASYNC_MODEL.md). This
 document records what comes next without reopening that frozen foundation.
@@ -302,11 +304,11 @@ unit tests:
    Typed-duration sugar and ambient tokens for native adapters remain additive.
 4. Application integration (implemented candidate): owned main executor,
    deterministic drain stage, `await main`, and headless stress tests.
-5. Platform capability (filesystem/process candidate implemented): dedicated
+5. Platform capability (filesystem/process/network candidate implemented): dedicated
    bounded I/O executor and Result-preserving async file plus process run/
-   capture operations plus a portable cancellable watcher. Add native
-   completion-port/watcher backends plus socket and streaming
-   process-pipe/signal adapters.
+   capture operations, a portable cancellable watcher, DNS/connect, and leased
+   TCP/UDP data I/O. Add native completion-port/watcher backends, async accept,
+   TLS, and streaming process-pipe/signal adapters.
 6. Streaming: async iterators/generators only after task cancellation and
    backpressure semantics are proven.
 

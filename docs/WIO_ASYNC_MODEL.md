@@ -211,8 +211,14 @@ true non-blocking operating-system I/O. Filesystem `*Async` operations instead
 target the dedicated bounded I/O executor; process run/capture uses the same
 isolation. `std::os::WatchFileAsync` builds a cancellable, debounced
 create/modify/remove event on async metadata and timers. True completion-port
-backends, native watcher notifications, process pipes/signals, and async socket
-adapters remain later platform work.
+backends and native watcher notifications remain later platform work.
+`ResolveAsync`, `ConnectAsync`, and leased TCP/UDP send/receive operations use
+the bounded I/O/blocking executors without occupying continuation workers.
+Native socket handles are reference-counted beneath Wio ownership: scheduling
+acquires a lease, `Close` rejects new work and interrupts the OS socket, and
+state storage survives until the final in-flight operation releases it.
+`AcceptAsync`, process pipes/signals, TLS, and completion-port socket backends
+remain later platform work.
 
 ## 5. Standard-library surface
 
@@ -263,7 +269,7 @@ use `coroutine<Result<T>>`).
 ## 7. Outside the 0.11 contract
 
 - async generators/streams and source `yield`;
-- completion-port filesystem/native-watcher backends, async sockets, and
+- completion-port filesystem/socket/native-watcher backends, async accept, and
   streaming process pipes/signals;
 - general executor selection, priorities, work stealing, and automatic
   origin-thread continuation capture;
