@@ -8,6 +8,10 @@ on:
       - "releases/**"
   pull_request:
 
+concurrency:
+  group: release-validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     strategy:
