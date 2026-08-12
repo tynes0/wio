@@ -37,6 +37,23 @@ namespace
         Require(handle != nullptr, "spawn returns an owned process handle");
         return handle;
     }
+
+    template <typename StartOperation>
+    void VerifyCallTimeLease(
+        const std::uint64_t baseline, StartOperation&& startOperation)
+    {
+        void* child = SpawnSelf({"--wait-child"});
+        auto task = startOperation(child);
+        process::ProcessClose(child);
+        Require(process::LiveProcessCount() == baseline + 1,
+            "async process operation acquires ownership before returning");
+        const auto result = wio::runtime::std_async_process::detail::Decode(
+            wio::runtime::BlockOn(task));
+        Require(!result.succeeded && result.error == process::ProcessError::process_closed,
+            "pre-leased asynchronous operation observes process close");
+        Require(process::LiveProcessCount() == baseline,
+            "completed asynchronous operation releases its process lease");
+    }
 }
 
 int main(const int argc, char* argv[])
@@ -102,12 +119,23 @@ int main(const int argc, char* argv[])
             void* waitingChild = SpawnSelf({"--wait-child"});
             auto readTask = wio::runtime::std_async_process::ReadStdout(waitingChild, 32);
             process::ProcessClose(waitingChild);
+            Require(process::LiveProcessCount() == baseline + 1,
+                "async stdout read acquires ownership before returning");
             const auto result = wio::runtime::std_async_process::detail::Decode(
                 wio::runtime::BlockOn(readTask));
             Require(!result.succeeded && result.error == process::ProcessError::process_closed,
                 "close interrupts a pre-leased asynchronous pipe read");
         }
         Require(process::LiveProcessCount() == baseline, "close races release every process state");
+
+        VerifyCallTimeLease(baseline, [](void* handle)
+        {
+            return wio::runtime::std_async_process::ReadStderr(handle, 32);
+        });
+        VerifyCallTimeLease(baseline, [](void* handle)
+        {
+            return wio::runtime::std_async_process::Wait(handle);
+        });
 
         void* terminatedChild = SpawnSelf({"--wait-child"});
         Require(process::ProcessTerminate(terminatedChild, error, nativeError, message),

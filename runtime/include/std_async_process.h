@@ -114,6 +114,96 @@ namespace wio::runtime::std_async_process
             }
             return std::shared_ptr<void>(handle, [](void* value) { std_process::ProcessRelease(value); });
         }
+
+        inline AsyncTask<std::string> Ready(OperationResult result)
+        {
+            co_return Encode(result);
+        }
+
+        inline AsyncTask<std::string> ReadStdoutOwned(
+            std::shared_ptr<void> lease, const std::size_t maximumBytes)
+        {
+            while (true)
+            {
+                OperationResult result;
+                int nativeError = 0;
+                result.succeeded = std_process::ProcessTryReadStdout(
+                    lease.get(), maximumBytes, result.output, result.eof,
+                    result.error, nativeError, result.message);
+                result.nativeError = nativeError;
+                if (!result.succeeded || result.eof || !result.output.empty())
+                {
+                    lease.reset();
+                    co_return Encode(result);
+                }
+                co_await AsyncDelayAwaiter{std::chrono::milliseconds(10)};
+            }
+        }
+
+        inline AsyncTask<std::string> ReadStderrOwned(
+            std::shared_ptr<void> lease, const std::size_t maximumBytes)
+        {
+            while (true)
+            {
+                OperationResult result;
+                int nativeError = 0;
+                result.succeeded = std_process::ProcessTryReadStderr(
+                    lease.get(), maximumBytes, result.output, result.eof,
+                    result.error, nativeError, result.message);
+                result.nativeError = nativeError;
+                if (!result.succeeded || result.eof || !result.output.empty())
+                {
+                    lease.reset();
+                    co_return Encode(result);
+                }
+                co_await AsyncDelayAwaiter{std::chrono::milliseconds(10)};
+            }
+        }
+
+        inline AsyncTask<std::string> WriteStdinOwned(
+            std::shared_ptr<void> lease, std::string bytes)
+        {
+            OperationResult result = co_await RunIoAsync<OperationResult>(
+                std::function<OperationResult()>([lease = std::move(lease), bytes = std::move(bytes)]() mutable
+                {
+                    OperationResult value;
+                    int nativeError = 0;
+                    value.succeeded = std_process::ProcessWriteStdin(
+                        lease.get(), bytes, value.count, value.error, nativeError, value.message);
+                    value.nativeError = nativeError;
+                    lease.reset();
+                    return value;
+                }));
+            co_return Encode(result);
+        }
+
+        inline AsyncTask<std::string> WaitOwned(std::shared_ptr<void> lease)
+        {
+            while (true)
+            {
+                OperationResult result;
+                int nativeError = 0;
+                result.succeeded = std_process::ProcessIsRunning(
+                    lease.get(), result.running, result.error, nativeError, result.message);
+                result.nativeError = nativeError;
+                if (!result.succeeded)
+                {
+                    lease.reset();
+                    co_return Encode(result);
+                }
+                if (!result.running)
+                {
+                    int exitCode = -1;
+                    result.succeeded = std_process::ProcessWait(
+                        lease.get(), exitCode, result.error, nativeError, result.message);
+                    result.exitCode = exitCode;
+                    result.nativeError = nativeError;
+                    lease.reset();
+                    co_return Encode(result);
+                }
+                co_await AsyncDelayAwaiter{std::chrono::milliseconds(10)};
+            }
+        }
     }
 
     inline AsyncTask<std::string> Run(
@@ -162,94 +252,32 @@ namespace wio::runtime::std_async_process
     {
         OperationResult acquisition;
         auto lease = detail::Acquire(handle, acquisition);
-        if (!lease) co_return detail::Encode(acquisition);
-        while (true)
-        {
-            OperationResult result;
-            int nativeError = 0;
-            result.succeeded = std_process::ProcessTryReadStdout(
-                lease.get(), maximumBytes, result.output, result.eof,
-                result.error, nativeError, result.message);
-            result.nativeError = nativeError;
-            if (!result.succeeded || result.eof || !result.output.empty())
-            {
-                lease.reset();
-                co_return detail::Encode(result);
-            }
-            co_await AsyncDelayAwaiter{std::chrono::milliseconds(10)};
-        }
+        if (!lease) return detail::Ready(std::move(acquisition));
+        return detail::ReadStdoutOwned(std::move(lease), maximumBytes);
     }
 
     inline AsyncTask<std::string> ReadStderr(void* handle, const std::size_t maximumBytes)
     {
         OperationResult acquisition;
         auto lease = detail::Acquire(handle, acquisition);
-        if (!lease) co_return detail::Encode(acquisition);
-        while (true)
-        {
-            OperationResult result;
-            int nativeError = 0;
-            result.succeeded = std_process::ProcessTryReadStderr(
-                lease.get(), maximumBytes, result.output, result.eof,
-                result.error, nativeError, result.message);
-            result.nativeError = nativeError;
-            if (!result.succeeded || result.eof || !result.output.empty())
-            {
-                lease.reset();
-                co_return detail::Encode(result);
-            }
-            co_await AsyncDelayAwaiter{std::chrono::milliseconds(10)};
-        }
+        if (!lease) return detail::Ready(std::move(acquisition));
+        return detail::ReadStderrOwned(std::move(lease), maximumBytes);
     }
 
     inline AsyncTask<std::string> WriteStdin(void* handle, const std::string& bytes)
     {
         OperationResult acquisition;
         auto lease = detail::Acquire(handle, acquisition);
-        if (!lease) co_return detail::Encode(acquisition);
-        OperationResult result = co_await RunIoAsync<OperationResult>(
-            std::function<OperationResult()>([lease = std::move(lease), bytes]() mutable
-            {
-                OperationResult value;
-                int nativeError = 0;
-                value.succeeded = std_process::ProcessWriteStdin(
-                    lease.get(), bytes, value.count, value.error, nativeError, value.message);
-                value.nativeError = nativeError;
-                lease.reset();
-                return value;
-            }));
-        co_return detail::Encode(result);
+        if (!lease) return detail::Ready(std::move(acquisition));
+        return detail::WriteStdinOwned(std::move(lease), bytes);
     }
 
     inline AsyncTask<std::string> Wait(void* handle)
     {
         OperationResult acquisition;
         auto lease = detail::Acquire(handle, acquisition);
-        if (!lease) co_return detail::Encode(acquisition);
-        while (true)
-        {
-            OperationResult result;
-            int nativeError = 0;
-            result.succeeded = std_process::ProcessIsRunning(
-                lease.get(), result.running, result.error, nativeError, result.message);
-            result.nativeError = nativeError;
-            if (!result.succeeded)
-            {
-                lease.reset();
-                co_return detail::Encode(result);
-            }
-            if (!result.running)
-            {
-                int exitCode = -1;
-                result.succeeded = std_process::ProcessWait(
-                    lease.get(), exitCode, result.error, nativeError, result.message);
-                result.exitCode = exitCode;
-                result.nativeError = nativeError;
-                lease.reset();
-                co_return detail::Encode(result);
-            }
-            co_await AsyncDelayAwaiter{std::chrono::milliseconds(10)};
-        }
+        if (!lease) return detail::Ready(std::move(acquisition));
+        return detail::WaitOwned(std::move(lease));
     }
 
     inline void Decode(
