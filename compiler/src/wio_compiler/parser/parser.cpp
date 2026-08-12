@@ -320,11 +320,26 @@ namespace wio
                 if (asyncScopeNames_.empty())
                     utError("'spawn' requires an enclosing 'async scope'.", op.loc);
 
+                std::string executor;
+                if (peek().type == TokenType::identifier &&
+                    (peek().value == "worker" || peek().value == "blocking"))
+                {
+                    executor = advance().value;
+                }
+
                 const int precedence = getPrecedence(op.type);
                 NodePtr<Expression> operand = parseExpression(precedence + 1, stopAtFit);
+                std::string spawnMethod = "Spawn";
+                if (!executor.empty())
+                {
+                    auto lambdaBody = makeNodePtr<ExpressionStatement>(std::move(operand), op.loc);
+                    operand = makeNodePtr<LambdaExpression>(
+                        std::vector<Parameter>{}, nullptr, std::move(lambdaBody), op.loc);
+                    spawnMethod = executor == "worker" ? "SpawnWorker" : "SpawnBlocking";
+                }
                 auto scopeAccess = makeNodePtr<MemberAccessExpression>(
                     makeSyntheticIdentifier(asyncScopeNames_.back(), op.loc),
-                    makeSyntheticIdentifier("Spawn", op.loc),
+                    makeSyntheticIdentifier(std::move(spawnMethod), op.loc),
                     TokenType::opDot,
                     op.loc);
                 std::vector<NodePtr<Expression>> arguments;

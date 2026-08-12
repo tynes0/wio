@@ -147,7 +147,9 @@ candidate application/system and language-coherence direction is expanded in
    shutdown; then add the `Task<T>` facade, `Poll`/`Block`, structured
    `spawn`/scope/deadlines, main-executor integration, true async I/O, and only
    afterward streams. The correctness, task ergonomics, structured scope, and
-   application main-executor slices are implemented 0.12 candidates. The
+   application main-executor slices are implemented 0.12 candidates. Structured
+   scopes now also support compiler-checked `spawn worker` and `spawn blocking`
+   without changing task ownership or result types. The
    platform slice now has a dedicated bounded I/O executor and Result-safe
    async filesystem/process run/capture operations and leased DNS/connect plus
    TCP/UDP data I/O; native completion-port backends, async accept, streaming

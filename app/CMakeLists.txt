@@ -4874,6 +4874,16 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/invalid/await_main_outside_async.wio"
         "'await main' can only be used inside an async function or method"
     )
+    add_wio_failure_test(
+        wio_invalid_spawn_worker_borrow_capture
+        "${CMAKE_SOURCE_DIR}/tests/invalid/spawn_worker_borrow_capture.wio"
+        "spawn worker cannot transfer capture 'borrowed'"
+    )
+    add_wio_failure_test(
+        wio_invalid_spawn_blocking_borrow_capture
+        "${CMAKE_SOURCE_DIR}/tests/invalid/spawn_blocking_borrow_capture.wio"
+        "spawn blocking cannot transfer capture 'borrowed'"
+    )
     set_tests_properties(
         wio_test_async_worker_config_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR};WIO_ASYNC_WORKERS=3"
@@ -4949,6 +4959,8 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_async_run_borrow_capture
         wio_invalid_async_run_blocking_object_capture
         wio_invalid_async_run_blocking_self_capture
+        wio_invalid_spawn_worker_borrow_capture
+        wio_invalid_spawn_blocking_borrow_capture
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 endif()

@@ -51,11 +51,45 @@ async fn DetachedWork() {
     await futures::Sleep(2u64);
 }
 
+fn SynchronousValue(value: i32) -> i32 {
+    return value;
+}
+
+fn RunsAwayFromMain() -> bool {
+    return not futures::IsMainThread();
+}
+
+fn SynchronousVoid() {
+}
+
+async fn ExecutorScopeSyntax() -> i32 {
+    mut total = 0;
+    let capturedWorkerValue = 20;
+    let capturedBlockingValue = 22;
+    async scope {
+        let workerValue = spawn worker SynchronousValue(capturedWorkerValue);
+        let blockingValue = spawn blocking SynchronousValue(capturedBlockingValue);
+        let workerThread = spawn worker RunsAwayFromMain();
+        let blockingThread = spawn blocking RunsAwayFromMain();
+        let workerVoid = spawn worker SynchronousVoid();
+        let blockingVoid = spawn blocking SynchronousVoid();
+        total = (await workerValue) + (await blockingValue);
+        assert::Expect(await workerThread, "spawn worker leaves the owner thread");
+        assert::Expect(await blockingThread, "spawn blocking leaves the owner thread");
+        await workerVoid;
+        await blockingVoid;
+    }
+    return total;
+}
+
 fn Entry() -> i32 {
+    futures::BindMain();
     assert::ExpectEqual(SumWithScopeSyntax().Block(), 42, "async scope joins spawned children");
     assert::ExpectEqual(NestedScopeSyntax().Block(), 42, "nested async scopes own the nearest spawn");
     assert::ExpectEqual(EarlyScopeReturn().Block(), 7, "early scope return joins required work before exiting");
     assert::ExpectEqual(DeadlineScopeSyntax().Block(), 42, "async scope accepts an owned deadline");
+    assert::ExpectEqual(ExecutorScopeSyntax().Block(), 42,
+        "executor-qualified spawn preserves lexical ownership and values");
 
     let candidates: futures::Task<i32>[] = [
         SyntaxValue(10, 40u64),

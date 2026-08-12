@@ -18,6 +18,10 @@ DNS/connect and existing TCP/UDP handles now have leased asynchronous I/O;
 close interrupts work without freeing live operation state. Native completion-
 port/watcher backends, async accept, TLS, and streaming process pipes/signals
 remain open.
+Executor-qualified structured work is implemented as `spawn worker expression`
+and `spawn blocking expression`. It retains ordinary lexical scope ownership,
+returns the same `Task<T>`, and applies the existing `Send` capture check at the
+source boundary.
 
 The 0.11 contract remains in [`WIO_ASYNC_MODEL.md`](./WIO_ASYNC_MODEL.md). This
 document records what comes next without reopening that frozen foundation.
@@ -300,7 +304,8 @@ unit tests:
    `Within`.
 3. Structure (implemented candidate): heterogeneous owning `Scope`, language
    `spawn`/`async scope`, nested ownership, return/fallthrough join, sibling
-   cancellation, millisecond deadlines, explicit `detach`, and `Select<T>`.
+   cancellation, millisecond deadlines, executor-qualified `spawn worker` and
+   `spawn blocking`, explicit `detach`, and `Select<T>`.
    Typed-duration sugar and ambient tokens for native adapters remain additive.
 4. Application integration (implemented candidate): owned main executor,
    deterministic drain stage, `await main`, and headless stress tests.

@@ -87,6 +87,24 @@ only in an async function and automatically loads the built-in async module.
 The current deadline expression is an unsigned millisecond count; typed
 duration sugar remains additive future work.
 
+Synchronous work can select an executor without giving up lexical ownership:
+
+```wio
+async scope {
+    let parsed = spawn worker Parse(bytes);
+    let legacy = spawn blocking ReadLegacy(path);
+    Use(await parsed, await legacy);
+}
+```
+
+`spawn worker` uses the continuation/CPU pool and `spawn blocking` uses the
+separately bounded blocking pool. Both return the same `Task<T>` shape and are
+owned by the same nearest scope as ordinary `spawn`; they do not introduce a
+second task or lifetime model. Their generated closures cross an executor
+boundary, so captured `ref`/`view`, opaque, callable, and unsynchronized object
+values are rejected before C++ generation. Parentheses disambiguate a value
+named `worker` or `blocking` when it is intended as the ordinary spawn operand.
+
 Work that deliberately escapes structured ownership uses the loud statement
 `detach SendTelemetry();`. Homogeneous competing tasks may use `Select<T>` to
 receive both the winner index and value; losing tasks are cancelled.

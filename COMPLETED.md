@@ -18,6 +18,9 @@ Notes:
 - [x] `Task<T>` member ergonomics, typed non-blocking polling, recoverable
       deadlines, heterogeneous owning scopes, language `async scope`/`spawn`,
       explicit detach, and homogeneous selection are implemented candidates.
+- [x] `spawn worker` and `spawn blocking` schedule synchronous expressions on
+      the appropriate executor while retaining lexical scope ownership; unsafe
+      borrowed captures fail during semantic analysis.
 - [x] Applications bind and deterministically drain the owner executor;
       `await main` directly transfers the suspended caller, and headless hosts
       can bind/drain the same queue.

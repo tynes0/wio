@@ -279,6 +279,18 @@ realm std {
         fn ScopeSpawn<T>(handle: opaque, task: coroutine<T>) -> coroutine<T>
             with native, cpp::name(wio::runtime::AsyncScopeSpawn);
 
+        fn ScopeRun<T>(handle: opaque, action: fn() -> T) -> coroutine<T>
+            with native, cpp::name(wio::runtime::AsyncScopeRun);
+
+        fn ScopeRun(handle: opaque, action: fn()) -> coroutine<void>
+            with native, cpp::name(wio::runtime::AsyncScopeRun);
+
+        fn ScopeRunBlocking<T>(handle: opaque, action: fn() -> T) -> coroutine<T>
+            with native, cpp::name(wio::runtime::AsyncScopeRunBlocking);
+
+        fn ScopeRunBlocking(handle: opaque, action: fn()) -> coroutine<void>
+            with native, cpp::name(wio::runtime::AsyncScopeRunBlocking);
+
         fn ScopeJoin(handle: opaque) -> coroutine<void>
             with native, cpp::name(wio::runtime::AsyncScopeJoin);
 
@@ -311,6 +323,22 @@ realm std {
 
             public fn Spawn<T>(task: Task<T>) -> Task<T> {
                 return ScopeSpawn<T>(self.handle, task);
+            }
+
+            public fn SpawnWorker<T>(action: fn() -> T) -> Task<T> {
+                return ScopeRun<T>(self.handle, action);
+            }
+
+            public fn SpawnWorker(action: fn()) -> Task<void> {
+                return ScopeRun(self.handle, action);
+            }
+
+            public fn SpawnBlocking<T>(action: fn() -> T) -> Task<T> {
+                return ScopeRunBlocking<T>(self.handle, action);
+            }
+
+            public fn SpawnBlocking(action: fn()) -> Task<void> {
+                return ScopeRunBlocking(self.handle, action);
             }
 
             public async fn Join() {

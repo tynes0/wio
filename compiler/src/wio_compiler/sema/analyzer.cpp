@@ -5018,7 +5018,9 @@ namespace wio::sema
                    cppNameArg->value == "wio::runtime::WhenAny" ||
                    cppNameArg->value == "wio::runtime::Race" ||
                    cppNameArg->value == "wio::runtime::WithTimeout" ||
-                   cppNameArg->value == "wio::runtime::AsyncScopeSpawn";
+                   cppNameArg->value == "wio::runtime::AsyncScopeSpawn" ||
+                   cppNameArg->value == "wio::runtime::AsyncScopeRun" ||
+                   cppNameArg->value == "wio::runtime::AsyncScopeRunBlocking";
         }
 
         bool matchesOpenNativeTemplateIntrinsicConstraints(const std::vector<NodePtr<AttributeStatement>>& attributes,
@@ -12236,24 +12238,31 @@ namespace wio::sema
         FunctionCallExpression& node,
         const Ref<Symbol>& functionSymbol)
     {
-        if (!functionSymbol ||
-            (functionSymbol->name != "RunBlocking" && functionSymbol->name != "Run") ||
-            node.arguments.empty())
+        if (!functionSymbol || node.arguments.empty())
             return;
 
-        bool isBlockingExecutorCall = functionSymbol->scopePath == "std_async";
+        const bool isRun = functionSymbol->name == "Run";
+        const bool isRunBlocking = functionSymbol->name == "RunBlocking";
+        const bool isScopeWorker = functionSymbol->name == "SpawnWorker";
+        const bool isScopeBlocking = functionSymbol->name == "SpawnBlocking";
+        if (!isRun && !isRunBlocking && !isScopeWorker && !isScopeBlocking)
+            return;
+
+        bool isExecutorCall = functionSymbol->scopePath == "std_async";
         auto attributes = attributeListsBySymbol_.find(functionSymbol.Get());
-        if (!isBlockingExecutorCall && attributes != attributeListsBySymbol_.end() && attributes->second)
+        if (!isExecutorCall && attributes != attributeListsBySymbol_.end() && attributes->second)
         {
             if (const Token* cppName = getFirstAttributeArg(*attributes->second, Attribute::CppName))
-                isBlockingExecutorCall =
+                isExecutorCall =
                     cppName->value == "wio::runtime::RunBlockingAsync" ||
                     cppName->value == "wio::runtime::RunAsync";
         }
-        if (!isBlockingExecutorCall)
+        if (!isExecutorCall)
             return;
 
-        const std::string executorOperation = functionSymbol->name;
+        const std::string executorOperation = isScopeWorker
+            ? "spawn worker"
+            : isScopeBlocking ? "spawn blocking" : functionSymbol->name;
 
         const LambdaExpression* lambda = node.arguments.front()->as<LambdaExpression>();
         Ref<Symbol> actionSymbol = node.arguments.front()->referencedSymbol.Lock();

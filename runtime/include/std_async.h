@@ -1572,6 +1572,28 @@ namespace wio::runtime
     }
 
     template<typename T>
+    AsyncTask<T> AsyncScopeRun(void* handle, std::function<T()> action)
+    {
+        return AsyncScopeSpawn<T>(handle, RunAsync<T>(std::move(action)));
+    }
+
+    inline AsyncTask<void> AsyncScopeRun(void* handle, std::function<void()> action)
+    {
+        return AsyncScopeSpawn<void>(handle, RunAsync(std::move(action)));
+    }
+
+    template<typename T>
+    AsyncTask<T> AsyncScopeRunBlocking(void* handle, std::function<T()> action)
+    {
+        return AsyncScopeSpawn<T>(handle, RunBlockingAsync<T>(std::move(action)));
+    }
+
+    inline AsyncTask<void> AsyncScopeRunBlocking(void* handle, std::function<void()> action)
+    {
+        return AsyncScopeSpawn<void>(handle, RunBlockingAsync(std::move(action)));
+    }
+
+    template<typename T>
     struct AsyncIoAwaiter final
     {
         std::function<T()> action;
