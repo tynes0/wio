@@ -4825,6 +4825,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         --run
     )
     add_wio_output_test(
+        wio_test_async_channel_run
+        "${CMAKE_SOURCE_DIR}/tests/async_channel_run.wio"
+        "async-channel-ok"
+        --run
+    )
+    add_wio_output_test(
         wio_test_async_file_watcher_run
         "${CMAKE_SOURCE_DIR}/tests/async_file_watcher_run.wio"
         "async-file-watcher-ok"
@@ -4874,6 +4880,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_async_fs_io_run
         wio_test_async_process_run
         wio_test_async_process_stream_run
+        wio_test_async_channel_run
         wio_test_async_file_watcher_run
         wio_test_async_net_io_run
         wio_test_async_net_accept_run

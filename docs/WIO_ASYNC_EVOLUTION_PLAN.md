@@ -318,8 +318,9 @@ unit tests:
    capture operations, a portable cancellable watcher, DNS/connect, and leased
    TCP/UDP data I/O plus ownership-safe async accept. Add native completion-
    port/watcher/process-pipe backends, TLS, and process signal/event adapters.
-6. Streaming: async iterators/generators only after task cancellation and
-   backpressure semantics are proven.
+6. Streaming: the bounded `AsyncChannel<T>` backpressure primitive is an
+   implemented candidate; async iterators/generators and source `yield` follow
+   only after its cancellation, close, and fairness semantics are frozen.
 
 Each step is frozen only after Windows, Linux, packaged-toolchain, sanitizer,
 stress, and at least one real application qualification pass.

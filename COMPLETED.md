@@ -35,6 +35,9 @@ Notes:
       diagnostics.
 - [x] Windows entry-point arguments are normalized from the native UTF-16
       command line to UTF-8, including spaced and non-ASCII spawned arguments.
+- [x] `std::async::AsyncChannel<T>` provides bounded or unbounded buffering,
+      non-blocking `TrySend`/`TryReceive`, cancellable async backpressure,
+      close wake-up, and buffered drain-before-completion semantics.
 
 - [x] `async fn`, async object/interface methods, generic async declarations,
       async `Entry`, `await`, and the `coroutine<T>` type are implemented across

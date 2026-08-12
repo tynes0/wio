@@ -157,7 +157,9 @@ candidate application/system and language-coherence direction is expanded in
    separate async stdin/stdout/stderr, wait, terminate, close/reap, and native
    lease safety. Native completion-port backends, process signal/event
    subscription, native watcher backends,
-   streams, and full cross-platform qualification remain. A cancellable,
+   stream/generator syntax, and full cross-platform qualification remain. A
+   bounded `AsyncChannel<T>` candidate now supplies thread-free producer
+   backpressure and close/drain semantics. A cancellable,
    debounced portable file watcher is available as the fallback candidate.
    Keep the everyday vocabulary small and prove each slice in console,
    desktop, game, server/tool, and native-host scenarios.

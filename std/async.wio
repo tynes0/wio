@@ -270,6 +270,132 @@ realm std {
             public fn IsCancelled() -> bool { return self.token.IsCancelled(); }
         }
 
+        enum ChannelSendStatus {
+            accepted,
+            backpressured,
+            send_closed
+        };
+
+        enum ChannelReceiveStatus {
+            available,
+            receive_empty,
+            receive_closed
+        };
+
+        object ChannelReceivePoll<T> {
+            private status: ChannelReceiveStatus;
+            private value: std::Option<T>;
+
+            public fn OnConstruct(status: ChannelReceiveStatus, value: std::Option<T>) {
+                self.status = status;
+                self.value = value;
+            }
+
+            public fn Status() -> ChannelReceiveStatus { return self.status; }
+            public fn HasValue() -> bool { return self.status == ChannelReceiveStatus::available; }
+            public fn IsEmpty() -> bool { return self.status == ChannelReceiveStatus::receive_empty; }
+            public fn IsClosed() -> bool { return self.status == ChannelReceiveStatus::receive_closed; }
+            public fn Value() -> std::Option<T> { return self.value; }
+        }
+
+        object AsyncChannel<T> {
+            private gate: concurrency::Mutex;
+            private values: T[];
+            private capacity: usize;
+            private closed: bool;
+
+            // A zero capacity means unbounded. Positive capacities provide
+            // producer backpressure without occupying a blocking worker.
+            public fn OnConstruct(capacity: usize = 0usize) {
+                self.gate = concurrency::Mutex();
+                self.values = [];
+                self.capacity = capacity;
+                self.closed = false;
+            }
+
+            public fn TrySend(value: T) -> ChannelSendStatus {
+                self.gate.Lock();
+                if (self.closed) {
+                    self.gate.Unlock();
+                    return ChannelSendStatus::send_closed;
+                }
+                if (self.capacity > 0usize and self.values.Count() >= self.capacity) {
+                    self.gate.Unlock();
+                    return ChannelSendStatus::backpressured;
+                }
+                self.values.Push(value);
+                self.gate.Unlock();
+                return ChannelSendStatus::accepted;
+            }
+
+            public async fn Send(value: T) -> bool {
+                while (true) {
+                    let status = self.TrySend(value);
+                    if (status == ChannelSendStatus::accepted) { return true; }
+                    if (status == ChannelSendStatus::send_closed) { return false; }
+                    await Sleep(1u64);
+                }
+                return false;
+            }
+
+            public fn TryReceive() -> ChannelReceivePoll<T> {
+                self.gate.Lock();
+                if (not self.values.Empty()) {
+                    let value = self.values[0usize];
+                    self.values.RemoveAt(0usize);
+                    self.gate.Unlock();
+                    return ChannelReceivePoll<T>(
+                        ChannelReceiveStatus::available, std::Some<T>(value));
+                }
+                let status = self.closed
+                    ? ChannelReceiveStatus::receive_closed
+                    : ChannelReceiveStatus::receive_empty;
+                self.gate.Unlock();
+                return ChannelReceivePoll<T>(status, std::None<T>());
+            }
+
+            public async fn Receive() -> std::Option<T> {
+                while (true) {
+                    let current = self.TryReceive();
+                    if (current.HasValue()) { return current.Value(); }
+                    if (current.IsClosed()) { return std::None<T>(); }
+                    await Sleep(1u64);
+                }
+                return std::None<T>();
+            }
+
+            public fn Close() {
+                self.gate.Lock();
+                self.closed = true;
+                self.gate.Unlock();
+            }
+
+            public fn IsClosed() -> bool {
+                self.gate.Lock();
+                let result = self.closed;
+                self.gate.Unlock();
+                return result;
+            }
+
+            public fn IsDrained() -> bool {
+                self.gate.Lock();
+                let result = self.closed and self.values.Empty();
+                self.gate.Unlock();
+                return result;
+            }
+
+            public fn Count() -> usize {
+                self.gate.Lock();
+                let result = self.values.Count();
+                self.gate.Unlock();
+                return result;
+            }
+
+            public fn Capacity() -> usize { return self.capacity; }
+            public fn IsBounded() -> bool { return self.capacity > 0usize; }
+            public fn OnDestruct() { self.Close(); }
+        }
+
         fn ScopeCreate() -> opaque
             with native, cpp::name(wio::runtime::AsyncScopeCreate);
 

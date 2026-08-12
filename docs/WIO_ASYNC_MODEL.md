@@ -297,6 +297,13 @@ use `coroutine<Result<T>>`).
 
 ## 7. Outside the 0.11 contract
 
+The unreleased 0.12 candidate includes `AsyncChannel<T>` as the backpressure
+foundation for later stream syntax. Bounded channels suspend producers through
+cancellable timer waits rather than blocking an executor thread; close rejects
+new sends, wakes pending operations, and lets buffered values drain before
+receivers observe completion. This does not yet claim async iterators or
+language-level `yield`.
+
 - async generators/streams and source `yield`;
 - completion-port filesystem/socket/process/native-watcher backends and OS
   process signal/event subscription;
