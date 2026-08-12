@@ -75,11 +75,15 @@ jobs:
 
       - name: Run async runtime sanitizer tests
         if: always()
-        run: ctest --test-dir build-sanitize --output-on-failure -R "^wio_async_runtime_stress$"
+        run: >
+          ctest --test-dir build-sanitize --output-on-failure
+          --repeat until-fail:5 -R "^wio_async_runtime_stress$"
 
       - name: Run process runtime sanitizer tests
         if: always()
-        run: ctest --test-dir build-sanitize --output-on-failure -R "^wio_process_runtime_stress$"
+        run: >
+          ctest --test-dir build-sanitize --output-on-failure
+          --repeat until-fail:10 -R "^wio_process_runtime_stress$"
 
       - name: Run compiler utility sanitizer tests
         if: always()
