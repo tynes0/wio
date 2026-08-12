@@ -85,7 +85,11 @@ namespace wio::runtime::std_net
         struct SocketHandle
         {
             SocketHandle() { liveSocketCount.fetch_add(1, std::memory_order_relaxed); }
-            ~SocketHandle() { liveSocketCount.fetch_sub(1, std::memory_order_relaxed); }
+            ~SocketHandle()
+            {
+                closeNative(value);
+                liveSocketCount.fetch_sub(1, std::memory_order_relaxed);
+            }
             std::atomic<std::size_t> references{1};
             std::mutex lifecycleMutex;
             std::mutex sendMutex;
@@ -612,13 +616,10 @@ namespace wio::runtime::std_net
 #else
             shutdown(value, SHUT_RDWR);
 #endif
-            // shutdown wakes blocking send/receive/accept. Waiting for both
-            // operation lanes before close prevents the native descriptor from
-            // being recycled while an already-retained operation still uses it.
-            std::scoped_lock operationLock(state->sendMutex, state->receiveMutex);
-            closeNative(value);
-            state->value = invalidSocket;
         }
+        // The native descriptor closes with the final retained lease. This
+        // prevents descriptor reuse while an operation is unwinding without
+        // making Close wait on a send/receive mutex held by that operation.
         Release(state);
     }
 }
