@@ -133,7 +133,21 @@ namespace wio::runtime::std_net
                 const int ready = select(value + 1, &readable, nullptr, nullptr, &timeout);
 #endif
                 if (ready > 0)
+                {
+                    // Closing a socket can make select report readability even
+                    // though no user data or connection is available.  On
+                    // Linux, calling recvfrom after that wakeup may look like a
+                    // successful zero-byte datagram, while accept may block
+                    // again indefinitely.  Revalidate the lifecycle before
+                    // entering either blocking operation.
+                    std::lock_guard lifecycleLock(state->lifecycleMutex);
+                    if (state->closed || state->value != value)
+                    {
+                        error = "socket is closed";
+                        return false;
+                    }
                     return true;
+                }
                 if (ready == 0)
                     continue;
 
