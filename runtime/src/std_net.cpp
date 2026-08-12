@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cstring>
 #include <memory>
@@ -13,6 +14,7 @@
 #include <ws2tcpip.h>
 #else
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -43,6 +45,43 @@ namespace wio::runtime::std_net
 #endif
         std::atomic<std::uint64_t> liveSocketCount{0};
 
+        bool setNonBlocking(NativeSocket value, const bool enabled) noexcept
+        {
+#if defined(_WIN32)
+            u_long mode = enabled ? 1UL : 0UL;
+            return ioctlsocket(value, FIONBIO, &mode) == 0;
+#else
+            const int flags = fcntl(value, F_GETFL, 0);
+            if (flags < 0) return false;
+            const int desired = enabled ? flags | O_NONBLOCK : flags & ~O_NONBLOCK;
+            return fcntl(value, F_SETFL, desired) == 0;
+#endif
+        }
+
+        bool isWouldBlock(const int errorCode) noexcept
+        {
+#if defined(_WIN32)
+            return errorCode == WSAEWOULDBLOCK;
+#else
+            return errorCode == EAGAIN || errorCode == EWOULDBLOCK;
+#endif
+        }
+
+        bool isConnectPending(const int errorCode) noexcept
+        {
+#if defined(_WIN32)
+            return errorCode == WSAEWOULDBLOCK || errorCode == WSAEINPROGRESS;
+#else
+            return errorCode == EINPROGRESS || isWouldBlock(errorCode);
+#endif
+        }
+
+        std::string errorMessage(const char* operation, const int errorCode)
+        {
+            return std::string(operation) + " failed with native socket error " +
+                std::to_string(errorCode) + ".";
+        }
+
         struct SocketHandle
         {
             SocketHandle() { liveSocketCount.fetch_add(1, std::memory_order_relaxed); }
@@ -57,7 +96,58 @@ namespace wio::runtime::std_net
         };
         std::string errorMessage(const char* operation)
         {
-            return std::string(operation) + " failed with native socket error " + std::to_string(lastSocketError()) + ".";
+            return errorMessage(operation, lastSocketError());
+        }
+
+        bool waitConnected(
+            const NativeSocket value,
+            const std::uint64_t timeoutMilliseconds,
+            std::string& error) noexcept
+        {
+            fd_set writable;
+            fd_set exceptional;
+            FD_ZERO(&writable);
+            FD_ZERO(&exceptional);
+            FD_SET(value, &writable);
+            FD_SET(value, &exceptional);
+            timeval timeout{
+                static_cast<long>(std::min<std::uint64_t>(timeoutMilliseconds / 1'000, 2'147'483'647)),
+                static_cast<long>((timeoutMilliseconds % 1'000) * 1'000)};
+            timeval* timeoutPointer = timeoutMilliseconds == 0 ? nullptr : &timeout;
+#if defined(_WIN32)
+            const int ready = select(0, nullptr, &writable, &exceptional, timeoutPointer);
+#else
+            const int ready = select(value + 1, nullptr, &writable, &exceptional, timeoutPointer);
+#endif
+            if (ready == 0)
+            {
+                error = "connect timed out";
+                return false;
+            }
+            if (ready < 0)
+            {
+                error = errorMessage("connect wait");
+                return false;
+            }
+
+            int socketError = 0;
+#if defined(_WIN32)
+            int socketErrorSize = sizeof(socketError);
+#else
+            socklen_t socketErrorSize = sizeof(socketError);
+#endif
+            if (getsockopt(value, SOL_SOCKET, SO_ERROR,
+                    reinterpret_cast<char*>(&socketError), &socketErrorSize) != 0)
+            {
+                error = errorMessage("connect status");
+                return false;
+            }
+            if (socketError != 0)
+            {
+                error = errorMessage("connect", socketError);
+                return false;
+            }
+            return true;
         }
         SocketHandle* asHandle(void* value) noexcept { return static_cast<SocketHandle*>(value); }
 
@@ -196,20 +286,42 @@ namespace wio::runtime::std_net
         const int result = getaddrinfo(hostText.c_str(), service.c_str(), &hints, &raw);
         if (result != 0) { error = "DNS resolution failed: " + std::string(gai_strerror(result)); return false; }
         std::unique_ptr<addrinfo, decltype(&freeaddrinfo)> entries(raw, freeaddrinfo);
+        std::string lastError;
         for (addrinfo* entry = raw; entry; entry = entry->ai_next)
         {
             NativeSocket socketValue = socket(entry->ai_family, entry->ai_socktype, entry->ai_protocol);
             if (socketValue == invalidSocket) continue;
-            auto candidate = std::make_unique<SocketHandle>(); candidate->value = socketValue;
-            std::string ignored;
-            if (timeoutMilliseconds != 0) static_cast<void>(SetTimeout(candidate.get(), timeoutMilliseconds, ignored));
-            if (connect(socketValue, entry->ai_addr, static_cast<int>(entry->ai_addrlen)) == 0)
+            if (!setNonBlocking(socketValue, true))
             {
+                lastError = errorMessage("configure non-blocking connect");
+                closeNative(socketValue);
+                continue;
+            }
+
+            bool connected = connect(socketValue, entry->ai_addr,
+                static_cast<int>(entry->ai_addrlen)) == 0;
+            if (!connected)
+            {
+                const int nativeError = lastSocketError();
+                if (isConnectPending(nativeError))
+                    connected = waitConnected(socketValue, timeoutMilliseconds, lastError);
+                else
+                    lastError = errorMessage("connect", nativeError);
+            }
+            if (connected && setNonBlocking(socketValue, false))
+            {
+                auto candidate = std::make_unique<SocketHandle>(); candidate->value = socketValue;
+                std::string ignored;
+                if (timeoutMilliseconds != 0)
+                    static_cast<void>(SetTimeout(candidate.get(), timeoutMilliseconds, ignored));
                 handle = candidate.release(); return true;
             }
+            if (connected)
+                lastError = errorMessage("restore blocking connect");
             closeNative(socketValue);
         }
-        error = errorMessage("connect"); return false;
+        error = lastError.empty() ? errorMessage("connect") : std::move(lastError);
+        return false;
     }
 
     bool TcpListen(const std::string_view bindAddress, const std::uint16_t port,
@@ -231,7 +343,7 @@ namespace wio::runtime::std_net
             int enabled = 1;
             setsockopt(socketValue, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&enabled), sizeof(enabled));
             if (bind(socketValue, entry->ai_addr, static_cast<int>(entry->ai_addrlen)) == 0 &&
-                listen(socketValue, backlog) == 0)
+                listen(socketValue, backlog) == 0 && setNonBlocking(socketValue, true))
             {
                 auto resultHandle = std::make_unique<SocketHandle>(); resultHandle->value = socketValue;
                 handle = resultHandle.release(); return true;
@@ -256,8 +368,11 @@ namespace wio::runtime::std_net
             NativeSocket accepted = accept(value, nullptr, nullptr);
             if (accepted == invalidSocket)
             {
+                const int nativeError = lastSocketError();
                 std::lock_guard lifecycleLock(state->lifecycleMutex);
-                error = state->closed ? "socket is closed" : errorMessage("accept");
+                if (!state->closed && isWouldBlock(nativeError))
+                    continue;
+                error = state->closed ? "socket is closed" : errorMessage("accept", nativeError);
                 return false;
             }
             {
@@ -268,6 +383,12 @@ namespace wio::runtime::std_net
                     error = "socket is closed";
                     return false;
                 }
+            }
+            if (!setNonBlocking(accepted, false))
+            {
+                closeNative(accepted);
+                error = errorMessage("restore accepted socket blocking mode");
+                return false;
             }
             auto result = std::make_unique<SocketHandle>();
             result->value = accepted;
@@ -349,6 +470,14 @@ namespace wio::runtime::std_net
         if (!waitReadable(state, true, "receive wait", value, error)) return false;
         const auto result = recv(value, buffer.data(), static_cast<int>(buffer.size()), 0);
         if (result < 0) { error = errorMessage("receive"); return false; }
+        {
+            std::lock_guard lifecycleLock(state->lifecycleMutex);
+            if (state->closed || state->value != value)
+            {
+                error = "socket is closed";
+                return false;
+            }
+        }
         bytes.assign(buffer.data(), static_cast<std::size_t>(result)); return true;
     }
 
@@ -421,6 +550,14 @@ namespace wio::runtime::std_net
         const auto result = recvfrom(value, buffer.data(), static_cast<int>(buffer.size()), 0,
             reinterpret_cast<sockaddr*>(&address), &addressSize);
         if (result < 0) { error = errorMessage("UDP recvfrom"); return false; }
+        {
+            std::lock_guard lifecycleLock(state->lifecycleMutex);
+            if (state->closed || state->value != value)
+            {
+                error = "socket is closed";
+                return false;
+            }
+        }
         bytes.assign(buffer.data(), static_cast<std::size_t>(result));
         char hostBuffer[NI_MAXHOST]{};
         if (getnameinfo(reinterpret_cast<const sockaddr*>(&address), addressSize,

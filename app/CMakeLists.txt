@@ -4861,6 +4861,11 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "async-net-accept-ok"
         --run
     )
+    set_tests_properties(
+        wio_test_async_net_io_run
+        wio_test_async_net_accept_run
+        PROPERTIES TIMEOUT 30
+    )
     add_wio_output_test(
         wio_test_std_net_timeout_run
         "${CMAKE_SOURCE_DIR}/tests/std_net_timeout_run.wio"
