@@ -235,8 +235,14 @@ the bounded I/O/blocking executors without occupying continuation workers.
 Native socket handles are reference-counted beneath Wio ownership: scheduling
 acquires a lease, `Close` rejects new work and interrupts the OS socket, and
 state storage survives until the final in-flight operation releases it.
-`AcceptAsync`, process pipes/signals, TLS, and completion-port socket backends
-remain later platform work.
+`Listener.AcceptAsync` acquires its listener lease before scheduling bounded
+blocking work, so an immediate `Close` cannot free state before the callback
+starts. The accepted `Socket` remains an owned value inside `Result<Socket>`
+and task state; cancellation or abandonment therefore closes an unobserved
+accepted handle through ordinary Wio destruction. Native accept/receive waits
+observe close in bounded readiness slices, preventing descriptor reuse while
+an already-retained operation exits. Process pipes/signals, TLS, and native
+completion-port socket backends remain later platform work.
 
 ## 5. Standard-library surface
 
@@ -287,8 +293,8 @@ use `coroutine<Result<T>>`).
 ## 7. Outside the 0.11 contract
 
 - async generators/streams and source `yield`;
-- completion-port filesystem/socket/native-watcher backends, async accept, and
-  streaming process pipes/signals;
+- completion-port filesystem/socket/native-watcher backends and streaming
+  process pipes/signals;
 - general executor selection, priorities, work stealing, and automatic
   origin-thread continuation capture;
 - ambient cancellation-token access across arbitrary native/task trees beyond

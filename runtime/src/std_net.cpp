@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cstring>
 #include <memory>
 #include <mutex>
@@ -52,6 +53,7 @@ namespace wio::runtime::std_net
             std::mutex receiveMutex;
             NativeSocket value = invalidSocket;
             bool closed = false;
+            std::uint64_t receiveTimeoutMilliseconds = 0;
         };
         std::string errorMessage(const char* operation)
         {
@@ -76,6 +78,71 @@ namespace wio::runtime::std_net
             if (!runtime().ready) { error = "Winsock initialization failed."; return false; }
 #endif
             return true;
+        }
+
+        bool waitReadable(
+            SocketHandle* state,
+            const bool honorConfiguredTimeout,
+            const char* operation,
+            NativeSocket& value,
+            std::string& error) noexcept
+        {
+            using Clock = std::chrono::steady_clock;
+            const std::uint64_t configuredTimeout = honorConfiguredTimeout
+                ? state->receiveTimeoutMilliseconds
+                : 0;
+            const auto deadline = configuredTimeout == 0
+                ? Clock::time_point::max()
+                : Clock::now() + std::chrono::milliseconds(configuredTimeout);
+
+            while (true)
+            {
+                {
+                    std::lock_guard lifecycleLock(state->lifecycleMutex);
+                    if (state->closed)
+                    {
+                        error = "socket is closed";
+                        return false;
+                    }
+                    value = state->value;
+                }
+
+                std::uint64_t waitMicroseconds = 50'000;
+                if (deadline != Clock::time_point::max())
+                {
+                    const auto now = Clock::now();
+                    if (now >= deadline)
+                    {
+                        error = std::string(operation) + " timed out";
+                        return false;
+                    }
+                    const auto remaining = std::chrono::duration_cast<std::chrono::microseconds>(deadline - now).count();
+                    waitMicroseconds = std::min<std::uint64_t>(
+                        waitMicroseconds, static_cast<std::uint64_t>(std::max<std::int64_t>(1, remaining)));
+                }
+
+                fd_set readable;
+                FD_ZERO(&readable);
+                FD_SET(value, &readable);
+                timeval timeout{
+                    static_cast<long>(waitMicroseconds / 1'000'000),
+                    static_cast<long>(waitMicroseconds % 1'000'000)};
+#if defined(_WIN32)
+                const int ready = select(0, &readable, nullptr, nullptr, &timeout);
+#else
+                const int ready = select(value + 1, &readable, nullptr, nullptr, &timeout);
+#endif
+                if (ready > 0)
+                    return true;
+                if (ready == 0)
+                    continue;
+
+                std::lock_guard lifecycleLock(state->lifecycleMutex);
+                error = state->closed
+                    ? "socket is closed"
+                    : errorMessage(operation);
+                return false;
+            }
         }
     }
 
@@ -167,9 +234,32 @@ namespace wio::runtime::std_net
         SocketLease lease(listener);
         auto* state = asHandle(listener);
         std::lock_guard receiveLock(state->receiveMutex);
-        NativeSocket accepted = accept(state->value, nullptr, nullptr);
-        if (accepted == invalidSocket) { error = errorMessage("accept"); return false; }
-        auto result = std::make_unique<SocketHandle>(); result->value = accepted; handle = result.release(); return true;
+        while (true)
+        {
+            NativeSocket value = invalidSocket;
+            if (!waitReadable(state, false, "accept wait", value, error))
+                return false;
+            NativeSocket accepted = accept(value, nullptr, nullptr);
+            if (accepted == invalidSocket)
+            {
+                std::lock_guard lifecycleLock(state->lifecycleMutex);
+                error = state->closed ? "socket is closed" : errorMessage("accept");
+                return false;
+            }
+            {
+                std::lock_guard lifecycleLock(state->lifecycleMutex);
+                if (state->closed)
+                {
+                    closeNative(accepted);
+                    error = "socket is closed";
+                    return false;
+                }
+            }
+            auto result = std::make_unique<SocketHandle>();
+            result->value = accepted;
+            handle = result.release();
+            return true;
+        }
     }
 
     bool SetTimeout(void* handle, const std::uint64_t milliseconds, std::string& error) noexcept
@@ -177,6 +267,8 @@ namespace wio::runtime::std_net
         error.clear();
         if (!Retain(handle, error)) return false;
         SocketLease lease(handle);
+        auto* state = asHandle(handle);
+        std::scoped_lock operationLock(state->sendMutex, state->receiveMutex);
 #if defined(_WIN32)
         const DWORD timeout = static_cast<DWORD>(std::min<std::uint64_t>(milliseconds, 0xffffffffu));
         const char* data = reinterpret_cast<const char*>(&timeout); const int size = sizeof(timeout);
@@ -184,10 +276,11 @@ namespace wio::runtime::std_net
         const timeval timeout{ static_cast<time_t>(milliseconds / 1000u), static_cast<suseconds_t>((milliseconds % 1000u) * 1000u) };
         const char* data = reinterpret_cast<const char*>(&timeout); const socklen_t size = sizeof(timeout);
 #endif
-        const NativeSocket value = asHandle(handle)->value;
+        const NativeSocket value = state->value;
         if (setsockopt(value, SOL_SOCKET, SO_RCVTIMEO, data, size) != 0 ||
             setsockopt(value, SOL_SOCKET, SO_SNDTIMEO, data, size) != 0)
         { error = errorMessage("setsockopt"); return false; }
+        state->receiveTimeoutMilliseconds = milliseconds;
         return true;
     }
 
@@ -196,13 +289,15 @@ namespace wio::runtime::std_net
         std::string error;
         if (!Retain(handle, error)) return 0;
         SocketLease lease(handle);
+        auto* state = asHandle(handle);
+        std::lock_guard receiveLock(state->receiveMutex);
         sockaddr_storage address{};
 #if defined(_WIN32)
         int size = sizeof(address);
 #else
         socklen_t size = sizeof(address);
 #endif
-        if (getsockname(asHandle(handle)->value, reinterpret_cast<sockaddr*>(&address), &size) != 0)
+        if (getsockname(state->value, reinterpret_cast<sockaddr*>(&address), &size) != 0)
             return 0;
         if (address.ss_family == AF_INET)
             return ntohs(reinterpret_cast<const sockaddr_in*>(&address)->sin_port);
@@ -236,7 +331,9 @@ namespace wio::runtime::std_net
         auto* state = asHandle(handle);
         std::lock_guard receiveLock(state->receiveMutex);
         std::vector<char> buffer(std::max<std::size_t>(1, maximumBytes));
-        const auto result = recv(state->value, buffer.data(), static_cast<int>(buffer.size()), 0);
+        NativeSocket value = invalidSocket;
+        if (!waitReadable(state, true, "receive wait", value, error)) return false;
+        const auto result = recv(value, buffer.data(), static_cast<int>(buffer.size()), 0);
         if (result < 0) { error = errorMessage("receive"); return false; }
         bytes.assign(buffer.data(), static_cast<std::size_t>(result)); return true;
     }
@@ -305,7 +402,9 @@ namespace wio::runtime::std_net
 #else
         socklen_t addressSize = sizeof(address);
 #endif
-        const auto result = recvfrom(state->value, buffer.data(), static_cast<int>(buffer.size()), 0,
+        NativeSocket value = invalidSocket;
+        if (!waitReadable(state, true, "UDP receive wait", value, error)) return false;
+        const auto result = recvfrom(value, buffer.data(), static_cast<int>(buffer.size()), 0,
             reinterpret_cast<sockaddr*>(&address), &addressSize);
         if (result < 0) { error = errorMessage("UDP recvfrom"); return false; }
         bytes.assign(buffer.data(), static_cast<std::size_t>(result));
@@ -354,7 +453,6 @@ namespace wio::runtime::std_net
             if (state->closed) return;
             state->closed = true;
             value = state->value;
-            state->value = invalidSocket;
         }
         if (value != invalidSocket)
         {
@@ -363,7 +461,12 @@ namespace wio::runtime::std_net
 #else
             shutdown(value, SHUT_RDWR);
 #endif
+            // shutdown wakes blocking send/receive/accept. Waiting for both
+            // operation lanes before close prevents the native descriptor from
+            // being recycled while an already-retained operation still uses it.
+            std::scoped_lock operationLock(state->sendMutex, state->receiveMutex);
             closeNative(value);
+            state->value = invalidSocket;
         }
         Release(state);
     }

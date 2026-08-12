@@ -4829,6 +4829,18 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "async-net-io-ok"
         --run
     )
+    add_wio_output_test(
+        wio_test_async_net_accept_run
+        "${CMAKE_SOURCE_DIR}/tests/async_net_accept_run.wio"
+        "async-net-accept-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_std_net_timeout_run
+        "${CMAKE_SOURCE_DIR}/tests/std_net_timeout_run.wio"
+        "std-net-timeout-ok"
+        --run
+    )
 
     add_wio_output_test(
         wio_test_lambda_capture_value_run
@@ -4856,6 +4868,8 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_async_process_run
         wio_test_async_file_watcher_run
         wio_test_async_net_io_run
+        wio_test_async_net_accept_run
+        wio_test_std_net_timeout_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 

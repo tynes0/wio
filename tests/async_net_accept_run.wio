@@ -1,0 +1,36 @@
+use std::assert as assert;
+use std::async as futures;
+use std::console as console;
+use std::net as net;
+
+async fn Entry() -> i32 {
+    let baselineSockets = net::LiveSocketCount();
+    {
+        let listener = net::Listen!("127.0.0.1", 0u16, 4);
+        let acceptedTask = listener.AcceptAsync();
+        let client = net::Connect!("127.0.0.1", listener.LocalPort(), 2000u64);
+        let accepted = await acceptedTask;
+        assert::Expect(accepted.IsOk(), "async accept returns an owned socket");
+        let peer = accepted.Value();
+        peer.Close();
+        client.Close();
+        listener.Close();
+        assert::ExpectEqual(net::LiveSocketCount(), baselineSockets,
+            "completed accept releases its listener lease while the task handle remains alive");
+    }
+
+    mut iteration = 0u64;
+    while (iteration < 64u64) {
+        let closingListener = net::Listen!("127.0.0.1", 0u16, 4);
+        let interrupted = closingListener.AcceptAsync();
+        closingListener.Close();
+        let interruptedResult = await interrupted;
+        assert::Expect(interruptedResult.IsError(), "close interrupts async accept");
+        iteration += 1u64;
+    }
+    assert::ExpectEqual(net::LiveSocketCount(), baselineSockets,
+        "accepted socket ownership closes without leaks");
+    console::PrintLine("async-net-accept-ok");
+    futures::ShutdownRuntime();
+    return 0;
+}

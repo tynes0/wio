@@ -1,0 +1,13 @@
+use std::assert as assert;
+use std::console as console;
+use std::net as net;
+
+fn Entry() -> i32 {
+    let socket = net::BindUdp!("127.0.0.1", 0u16);
+    assert::Expect(socket.SetTimeout(40u64).IsOk(), "receive timeout is configurable");
+    let received = socket.ReceiveFrom(16usize);
+    assert::Expect(received.IsError(), "readiness polling preserves receive timeout semantics");
+    socket.Close();
+    console::PrintLine("std-net-timeout-ok");
+    return 0;
+}

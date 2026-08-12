@@ -128,8 +128,9 @@ candidate application/system and language-coherence direction is expanded in
 7. [~] Add networking foundations.
    DNS, URI, owned sockets, TCP/UDP, timeout, endpoint, and loopback behavior
    exist. The 0.12 candidate adds bounded-executor DNS/connect, leased TCP/UDP
-   async data I/O, close-vs-operation lifetime safety, and live-handle
-   diagnostics. Add async accept, native completion-port backends, TLS,
+   async data I/O, ownership-safe async accept, close-vs-operation lifetime
+   safety, and live-handle diagnostics. Add native completion-port backends,
+   TLS,
    HTTP client/server primitives, headers,
     multipart, WebSocket, cancellation, timeouts, proxies, and certificate
     validation are required before `std::http` can be considered.
@@ -152,8 +153,8 @@ candidate application/system and language-coherence direction is expanded in
    without changing task ownership or result types. The
    platform slice now has a dedicated bounded I/O executor and Result-safe
    async filesystem/process run/capture operations and leased DNS/connect plus
-   TCP/UDP data I/O; native completion-port backends, async accept, streaming
-   process pipes/signals, native watcher backends,
+   TCP/UDP data I/O plus pre-leased async accept; native completion-port
+   backends, streaming process pipes/signals, native watcher backends,
    streams, and full cross-platform qualification remain. A cancellable,
    debounced portable file watcher is available as the fallback candidate.
    Keep the everyday vocabulary small and prove each slice in console,

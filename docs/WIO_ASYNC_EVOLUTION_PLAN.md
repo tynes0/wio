@@ -16,8 +16,10 @@ executor plus Result-preserving asynchronous filesystem and process run/
 capture operations, plus a cancellable portable first-change file watcher.
 DNS/connect and existing TCP/UDP handles now have leased asynchronous I/O;
 close interrupts work without freeing live operation state. Native completion-
-port/watcher backends, async accept, TLS, and streaming process pipes/signals
-remain open.
+port/watcher backends, TLS, and streaming process pipes/signals remain open.
+`Listener.AcceptAsync` is implemented through the bounded blocking executor
+with a pre-scheduling native lease and owned `Result<Socket>` handoff; close
+interrupts the readiness wait without freeing in-flight listener state.
 Executor-qualified structured work is implemented as `spawn worker expression`
 and `spawn blocking expression`. It retains ordinary lexical scope ownership,
 returns the same `Task<T>`, and applies the existing `Send` capture check at the
@@ -312,8 +314,8 @@ unit tests:
 5. Platform capability (filesystem/process/network candidate implemented): dedicated
    bounded I/O executor and Result-preserving async file plus process run/
    capture operations, a portable cancellable watcher, DNS/connect, and leased
-   TCP/UDP data I/O. Add native completion-port/watcher backends, async accept,
-   TLS, and streaming process-pipe/signal adapters.
+   TCP/UDP data I/O plus ownership-safe async accept. Add native completion-
+   port/watcher backends, TLS, and streaming process-pipe/signal adapters.
 6. Streaming: async iterators/generators only after task cancellation and
    backpressure semantics are proven.
 

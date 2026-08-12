@@ -27,7 +27,8 @@ Notes:
 - [x] The first platform-I/O candidate adds a dedicated bounded executor and
       ownership-safe, Result-preserving asynchronous filesystem plus process
       run/capture operations, a cancellable portable first-change watcher, and
-      leased DNS/connect plus TCP/UDP data I/O with close-race safety.
+      leased DNS/connect plus TCP/UDP data I/O and ownership-safe async accept
+      with close-race safety.
 
 - [x] `async fn`, async object/interface methods, generic async declarations,
       async `Entry`, `await`, and the `coroutine<T>` type are implemented across
