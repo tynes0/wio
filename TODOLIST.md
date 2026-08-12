@@ -127,7 +127,11 @@ candidate application/system and language-coherence direction is expanded in
 
 7. [~] Add networking foundations.
    DNS, URI, owned sockets, TCP/UDP, timeout, endpoint, and loopback behavior
-   exist. Add TLS, HTTP client/server primitives, headers,
+   exist. The 0.12 candidate adds bounded-executor DNS/connect, leased TCP/UDP
+   async data I/O, ownership-safe async accept, close-vs-operation lifetime
+   safety, and live-handle diagnostics. Add native completion-port backends,
+   TLS,
+   HTTP client/server primitives, headers,
     multipart, WebSocket, cancellation, timeouts, proxies, and certificate
     validation are required before `std::http` can be considered.
 
@@ -143,11 +147,25 @@ candidate application/system and language-coherence direction is expanded in
    safety, a separate blocking pool, cancellation-aware timers, and explicit
    shutdown; then add the `Task<T>` facade, `Poll`/`Block`, structured
    `spawn`/scope/deadlines, main-executor integration, true async I/O, and only
-   afterward streams. Keep the everyday vocabulary small and prove each slice
-   in console, desktop, game, server/tool, and native-host scenarios.
+   afterward streams. The correctness, task ergonomics, structured scope, and
+   application main-executor slices are implemented 0.12 candidates. Structured
+   scopes now also support compiler-checked `spawn worker` and `spawn blocking`
+   without changing task ownership or result types. The
+   platform slice now has a dedicated bounded I/O executor and Result-safe
+   async filesystem/process run/capture operations and leased DNS/connect plus
+   TCP/UDP data I/O plus pre-leased async accept; owned processes now provide
+   separate async stdin/stdout/stderr, wait, terminate, close/reap, and native
+   lease safety. Native completion-port backends, process signal/event
+   subscription, native watcher backends,
+   stream/generator syntax, and full cross-platform qualification remain. A
+   bounded `AsyncChannel<T>` candidate now supplies thread-free producer
+   backpressure and close/drain semantics. A cancellable,
+   debounced portable file watcher is available as the fallback candidate.
+   Keep the everyday vocabulary small and prove each slice in console,
+   desktop, game, server/tool, and native-host scenarios.
 
 9. [ ] Add OS/application facilities.
-    Environment variables, process pipes, signals, filesystem watching,
+    Environment variables, process signal/event subscription, filesystem watching,
     clipboard, notifications, dialogs, user/config/cache directories, dynamic
     libraries, and platform capability queries. Basic OS/architecture,
     pointer-width, endian, hardware-thread, path-list separator, and native
@@ -286,7 +304,11 @@ candidate application/system and language-coherence direction is expanded in
    Diagnostics, completion, signature help, hover, go-to-definition, find
    references, rename, symbols, semantic tokens, inlay hints, code actions,
    formatting, workspace imports, generic constraints, and extension methods
-   must share compiler logic rather than reimplement it.
+   must share compiler logic rather than reimplement it. The version-aligned
+   `wio-vscode 0.11.0` extension now provides a tested editor-side baseline
+   for diagnostics, completion, navigation, symbols, commands, grammar, and
+   snippets; replace its lightweight source index with this compiler-owned
+   language service instead of growing a second semantic implementation.
 
 2. [ ] Add debugger support.
    Source breakpoints, stepping, locals, watches, Wio stack traces, object/

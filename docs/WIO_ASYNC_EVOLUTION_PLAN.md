@@ -3,6 +3,30 @@
 Status: post-0.11 design plan; non-normative until individual slices move into
 a versioned specification.
 
+Progress: correctness, ergonomics, and structured-work slices are frozen in
+Wio `v0.12.0`. This includes the runtime `Scope`, language
+`spawn`/`async scope`, lexical cancellation/deadlines, explicit `detach`, and a
+small homogeneous `Select<T>` surface. The owner/main executor slice is also
+implemented: application runners bind and drain it at deterministic lifecycle
+stages, `await main` performs a direct checked handoff, and headless hosts can
+bind/drain the same queue explicitly. Linux, packaged-toolchain, sanitizer,
+and real-app qualification remain required before these slices are frozen.
+The first platform-capability slice is implemented as a dedicated bounded I/O
+executor plus Result-preserving asynchronous filesystem and process run/
+capture operations, plus a cancellable portable first-change file watcher.
+DNS/connect and existing TCP/UDP handles now have leased asynchronous I/O;
+close interrupts work without freeing live operation state. Native completion-
+port/watcher/process-pipe backends, TLS, and process signal/event subscription
+remain open. Owned processes now expose separate streaming stdin/stdout/stderr,
+async wait, termination, deterministic close/reap, and live-state diagnostics.
+`Listener.AcceptAsync` is implemented through the bounded blocking executor
+with a pre-scheduling native lease and owned `Result<Socket>` handoff; close
+interrupts the readiness wait without freeing in-flight listener state.
+Executor-qualified structured work is implemented as `spawn worker expression`
+and `spawn blocking expression`. It retains ordinary lexical scope ownership,
+returns the same `Task<T>`, and applies the existing `Send` capture check at the
+source boundary.
+
 The 0.11 contract remains in [`WIO_ASYNC_MODEL.md`](./WIO_ASYNC_MODEL.md). This
 document records what comes next without reopening that frozen foundation.
 
@@ -167,6 +191,19 @@ all continuation workers and starve the tasks needed to complete it. Dedicated
 `thread` remains an expert tool for long-lived OS/native loops, not the default
 way to start async work.
 
+Implemented candidate surface:
+
+```wio
+let decoded = await DecodeImage(bytes);
+await main;
+window.Upload(decoded);
+```
+
+`await main` queues the suspended caller itself, rather than awaiting a nested
+task whose completion could legally resume the caller on a worker. Application
+code gets automatic binding/draining; custom and headless hosts use
+`BindMain()` and `DrainMain()`.
+
 ## 6. Application and game-loop integration
 
 Frame/update loops must never need `Block`:
@@ -196,6 +233,11 @@ stage. Main-thread handoff should therefore become `await main` or an equally
 small checked operation instead of requiring manual dispatcher plumbing in
 ordinary application code. Headless tests must be able to drive the same
 executor deterministically.
+
+This slice is now an implemented 0.12 candidate. The generated runner drains
+after start, before and after every update, immediately before close, and after
+close. `Dispatcher` remains useful for owner-owned arbitrary callbacks, while
+coroutine continuation affinity uses `await main`.
 
 ## 7. Thread-safety contract
 
@@ -258,16 +300,27 @@ unit tests:
 
 ## 10. Implementation order
 
-1. Correctness: `Send`/`Sync`-style traits, cross-executor capture analysis,
-   separate blocking pool, cancellation-aware timers, and explicit shutdown.
-2. Ergonomics: `Task<T>` facade, member state operations, `Poll`, and `Block`.
-3. Structure: language `spawn`, `async scope`, inherited cancellation and
-   deadlines, and a small `select` surface.
-4. Application integration: owned main executor, deterministic drain stage,
-   `await main`, and headless/virtual-time tests.
-5. Platform capability: true async file/socket/process/watcher adapters.
-6. Streaming: async iterators/generators only after task cancellation and
-   backpressure semantics are proven.
+1. Correctness (implemented and release-qualified in 0.12):
+   `Send`/`Sync`-style traits, cross-executor capture analysis, separate
+   blocking pool, cancellation-aware timers, and explicit shutdown.
+2. Ergonomics (implemented candidate): `Task<T>` facade, member state
+   operations, typed non-blocking `Poll`, explicit `Block`, and recoverable
+   `Within`.
+3. Structure (implemented candidate): heterogeneous owning `Scope`, language
+   `spawn`/`async scope`, nested ownership, return/fallthrough join, sibling
+   cancellation, millisecond deadlines, executor-qualified `spawn worker` and
+   `spawn blocking`, explicit `detach`, and `Select<T>`.
+   Typed-duration sugar and ambient tokens for native adapters remain additive.
+4. Application integration (implemented candidate): owned main executor,
+   deterministic drain stage, `await main`, and headless stress tests.
+5. Platform capability (filesystem/process/network candidate implemented): dedicated
+   bounded I/O executor and Result-preserving async file plus process run/
+   capture operations, a portable cancellable watcher, DNS/connect, and leased
+   TCP/UDP data I/O plus ownership-safe async accept. Add native completion-
+   port/watcher/process-pipe backends, TLS, and process signal/event adapters.
+6. Streaming: the bounded `AsyncChannel<T>` backpressure primitive is an
+   implemented candidate; async iterators/generators and source `yield` follow
+   only after its cancellation, close, and fairness semantics are frozen.
 
 Each step is frozen only after Windows, Linux, packaged-toolchain, sanitizer,
 stress, and at least one real application qualification pass.

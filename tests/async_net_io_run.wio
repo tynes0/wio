@@ -1,0 +1,68 @@
+use std::assert as assert;
+use std::async as futures;
+use std::console as console;
+use std::concurrency as concurrency;
+use std::net as net;
+
+async fn Entry() -> i32 {
+    let baselineSockets = net::LiveSocketCount();
+    let addresses = await net::ResolveAsync("localhost", 80u16);
+    assert::Expect(addresses.IsOk() and not addresses.Value().Empty(),
+        "DNS resolution executes through the I/O executor");
+
+    let listener = net::Listen!("127.0.0.1", 0u16, 4);
+    let server = concurrency::Thread(() => {
+        let peer = listener.Accept!();
+        let request = peer.Receive!(32usize);
+        if (request == "async-ping") { peer.Send!("async-pong"); }
+        peer.Close();
+    });
+    let connected = await net::ConnectAsync("127.0.0.1", listener.LocalPort(), 2000u64);
+    assert::Expect(connected.IsOk(), "TCP connect runs without occupying a continuation worker");
+    let client = connected.Value();
+    let tcpSent = await client.SendAsync("async-ping");
+    let tcpReceived = await client.ReceiveAsync(32usize);
+    assert::Expect(tcpSent.IsOk() and tcpSent.Value() == 10usize, "TCP async send preserves byte count");
+    assert::Expect(tcpReceived.IsOk(), "TCP async receive succeeds");
+    assert::ExpectEqual(tcpReceived.Value(), "async-pong", "TCP async payload round-trips");
+    client.Close();
+    server.Join();
+    listener.Close();
+
+    let receiverResult = net::BindUdp("127.0.0.1", 0u16);
+    let senderResult = net::BindUdp("127.0.0.1", 0u16);
+    assert::Expect(receiverResult.IsOk() and senderResult.IsOk(),
+        "UDP async fixtures bind");
+    let receiver = receiverResult.Value();
+    let sender = senderResult.Value();
+    assert::Expect(receiver.SetTimeout(2000u64).IsOk(), "UDP async receive has a finite native timeout");
+
+    let sent = await sender.SendToAsync("127.0.0.1", receiver.LocalPort(), "async-udp");
+    let datagram = await receiver.ReceiveFromAsync(64usize);
+    assert::Expect(sent.IsOk() and sent.Value() == 9usize, "UDP async send preserves byte count");
+    assert::Expect(datagram.IsOk(), "UDP async receive succeeds");
+    assert::ExpectEqual(datagram.Value().bytes, "async-udp", "UDP async payload round-trips");
+
+    mut iteration = 0u64;
+    while (iteration < 64u64) {
+        let closingResult = net::BindUdp("127.0.0.1", 0u16);
+        assert::Expect(closingResult.IsOk(), "close-race fixture binds");
+        let closing = closingResult.Value();
+        assert::Expect(closing.SetTimeout(2000u64).IsOk(), "close-race fixture has a timeout");
+        let interrupted = closing.ReceiveFromAsync(16usize);
+        closing.Close();
+        let closedResult = await interrupted;
+        assert::Expect(closedResult.IsError(),
+            "close interrupts leased async receive without invalid memory access");
+        iteration += 1u64;
+    }
+
+    receiver.Close();
+    sender.Close();
+    assert::ExpectEqual(futures::IoPendingCount(), 0u64, "network operations drain the shared I/O queue");
+    assert::ExpectEqual(net::LiveSocketCount(), baselineSockets,
+        "async leases release every native socket state after close");
+    console::PrintLine("async-net-io-ok");
+    futures::ShutdownRuntime();
+    return 0;
+}

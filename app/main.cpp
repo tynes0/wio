@@ -1,4 +1,5 @@
 #include "compiler.h"
+#include "entry_args.h"
 #include "std_process.h"
 
 #include <cstdlib>
@@ -124,6 +125,15 @@ int main(int argc, char* argv[])
 #if defined(_MSC_VER) && defined(_DEBUG)
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
+
+    std::vector<std::string> utf8Arguments =
+        wio::runtime::CollectEntryArguments(argc, argv);
+    std::vector<char*> utf8ArgumentPointers;
+    utf8ArgumentPointers.reserve(utf8Arguments.size());
+    for (std::string& argument : utf8Arguments)
+        utf8ArgumentPointers.push_back(argument.data());
+    argc = static_cast<int>(utf8ArgumentPointers.size());
+    argv = utf8ArgumentPointers.data();
 
     if (argc >= 2 && argv[1] != nullptr && std::string_view(argv[1]) == "--compiler-version")
     {

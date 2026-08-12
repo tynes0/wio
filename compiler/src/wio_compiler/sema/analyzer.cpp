@@ -23,6 +23,124 @@ namespace wio::sema
         const Token* getFirstAttributeArg(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr);
         std::vector<Attribute> getModuleLifecycleAttributes(const std::vector<NodePtr<AttributeStatement>>& attributes);
 
+        Ref<Type> unwrapTransferType(Ref<Type> type)
+        {
+            std::unordered_set<const Type*> visited;
+            while (type && type->kind() == TypeKind::Alias && visited.insert(type.Get()).second)
+                type = type.AsFast<AliasType>()->aliasedType;
+            return type;
+        }
+
+        bool hasAsyncSafetyMarker(
+            const Ref<StructType>& type,
+            std::string_view marker,
+            std::unordered_set<const Type*>& visited)
+        {
+            if (!type || !visited.insert(type.Get()).second)
+                return false;
+            if (type->isInterface && type->scopePath == "std_async" && type->name == marker)
+                return true;
+            for (const auto& base : type->baseTypes)
+            {
+                Ref<Type> resolved = unwrapTransferType(base);
+                if (resolved && resolved->kind() == TypeKind::Struct &&
+                    hasAsyncSafetyMarker(resolved.AsFast<StructType>(), marker, visited))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        bool isExecutorTransferSafe(
+            Ref<Type> type,
+            std::unordered_set<const Type*>& active)
+        {
+            type = unwrapTransferType(std::move(type));
+            if (!type)
+                return false;
+            if (!active.insert(type.Get()).second)
+                return true;
+
+            bool result = false;
+            switch (type->kind())
+            {
+            case TypeKind::Primitive:
+            {
+                const std::string& name = type.AsFast<PrimitiveType>()->name;
+                result = name != "opaque" && name != "any";
+                break;
+            }
+            case TypeKind::Null:
+                result = true;
+                break;
+            case TypeKind::Nullable:
+                result = isExecutorTransferSafe(type.AsFast<NullableType>()->valueType, active);
+                break;
+            case TypeKind::ConstGenericParameter:
+                result = isExecutorTransferSafe(type.AsFast<ConstGenericParameterType>()->valueType, active);
+                break;
+            case TypeKind::ConstValue:
+                result = isExecutorTransferSafe(type.AsFast<ConstValueType>()->valueType, active);
+                break;
+            case TypeKind::Array:
+                result = isExecutorTransferSafe(type.AsFast<ArrayType>()->elementType, active);
+                break;
+            case TypeKind::Dictionary:
+            {
+                auto dictionary = type.AsFast<DictionaryType>();
+                result = isExecutorTransferSafe(dictionary->keyType, active) &&
+                         isExecutorTransferSafe(dictionary->valueType, active);
+                break;
+            }
+            case TypeKind::AsyncTask:
+                result = isExecutorTransferSafe(type.AsFast<AsyncTaskType>()->valueType, active);
+                break;
+            case TypeKind::Struct:
+            {
+                auto structure = type.AsFast<StructType>();
+                std::unordered_set<const Type*> markerVisited;
+                if (hasAsyncSafetyMarker(structure, "Send", markerVisited))
+                {
+                    result = true;
+                    break;
+                }
+                if (structure->isEnum || structure->isFlagset)
+                {
+                    result = true;
+                    break;
+                }
+                if (structure->isObject || structure->isInterface)
+                    break;
+
+                result = std::ranges::all_of(structure->fieldTypes, [&](const Ref<Type>& fieldType)
+                {
+                    return isExecutorTransferSafe(fieldType, active);
+                });
+                break;
+            }
+            case TypeKind::Alias:
+                break;
+            case TypeKind::Reference:
+            case TypeKind::Function:
+            case TypeKind::GenericParameter:
+            case TypeKind::GenericParameterPack:
+            case TypeKind::ValuePackView:
+            case TypeKind::TypePackView:
+            case TypeKind::PackStorage:
+                break;
+            }
+
+            active.erase(type.Get());
+            return result;
+        }
+
+        bool isExecutorTransferSafe(const Ref<Type>& type)
+        {
+            std::unordered_set<const Type*> active;
+            return isExecutorTransferSafe(type, active);
+        }
+
         const std::unordered_set<std::string>& getCppReservedIdentifiers()
         {
             static const std::unordered_set<std::string> keywords = {
@@ -1006,6 +1124,7 @@ namespace wio::sema
 
             return resolvedType->kind() == TypeKind::Array ||
                    resolvedType->kind() == TypeKind::Dictionary ||
+                   resolvedType->kind() == TypeKind::AsyncTask ||
                    (resolvedType->kind() == TypeKind::Struct &&
                     (resolvedType.AsFast<StructType>()->isEnum || resolvedType.AsFast<StructType>()->isFlagset)) ||
                    isStringType(resolvedType);
@@ -4888,15 +5007,20 @@ namespace wio::sema
                    cppNameArg->value == "wio::runtime::AsyncReady" ||
                    cppNameArg->value == "wio::runtime::AsyncCancelledStatus" ||
                    cppNameArg->value == "wio::runtime::AsyncFaulted" ||
+                   cppNameArg->value == "wio::runtime::AsyncFailureMessage" ||
                    cppNameArg->value == "wio::runtime::AsyncWaitFor" ||
                    cppNameArg->value == "wio::runtime::CancelAsync" ||
                    cppNameArg->value == "wio::runtime::CancelAfter" ||
                    cppNameArg->value == "wio::runtime::DetachAsync" ||
                    cppNameArg->value == "wio::runtime::RunAsync" ||
+                   cppNameArg->value == "wio::runtime::RunBlockingAsync" ||
                    cppNameArg->value == "wio::runtime::WhenAll" ||
                    cppNameArg->value == "wio::runtime::WhenAny" ||
                    cppNameArg->value == "wio::runtime::Race" ||
-                   cppNameArg->value == "wio::runtime::WithTimeout";
+                   cppNameArg->value == "wio::runtime::WithTimeout" ||
+                   cppNameArg->value == "wio::runtime::AsyncScopeSpawn" ||
+                   cppNameArg->value == "wio::runtime::AsyncScopeRun" ||
+                   cppNameArg->value == "wio::runtime::AsyncScopeRunBlocking";
         }
 
         bool matchesOpenNativeTemplateIntrinsicConstraints(const std::vector<NodePtr<AttributeStatement>>& attributes,
@@ -5852,6 +5976,11 @@ namespace wio::sema
         auto symbol = Ref<Symbol>::Create(std::move(name), std::move(type), kind, flags, loc);
         symbol->scopePath = getCurrentNamespacePath();
         symbols_.push_back(symbol);
+        if (kind == SymbolKind::Variable || kind == SymbolKind::Parameter)
+        {
+            for (auto& context : lambdaCaptureContexts_)
+                context.localSymbols.insert(symbol.Get());
+        }
         return symbol;
     }
 
@@ -7749,6 +7878,19 @@ namespace wio::sema
     
     void SemanticAnalyzer::visit(UnaryExpression& node)
     {
+        if (node.isMainExecutorAwait)
+        {
+            if (!currentFunctionIsAsync_)
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "'await main' can only be used inside an async function or method.");
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+
+            node.refType = Compiler::get().getTypeContext().getVoid();
+            return;
+        }
+
         node.operand->accept(*this);
         Ref<Type> opType = node.operand->refType.Lock();
 
@@ -8921,6 +9063,19 @@ namespace wio::sema
         }
 
         node.referencedSymbol = sym;
+        if (!sym->flags.get_isGlobal() &&
+            (sym->kind == SymbolKind::Variable || sym->kind == SymbolKind::Parameter))
+        {
+            for (auto& context : lambdaCaptureContexts_)
+            {
+                if (context.localSymbols.contains(sym.Get()) ||
+                    !context.capturedSymbols.insert(sym.Get()).second)
+                {
+                    continue;
+                }
+                context.captures.push_back(sym);
+            }
+        }
         if (nonNullNarrowedSymbols_.contains(sym.Get()))
         {
             Ref<Type> narrowedType = unwrapAliasType(sym->type);
@@ -9650,6 +9805,72 @@ namespace wio::sema
                             optionType,
                             resolution.memberType.AsFast<FunctionType>()->paramTypes
                         );
+                    }
+                    else if (resolution.member == IntrinsicMember::TaskPoll)
+                    {
+                        Ref<Type> resolvedCandidate = unwrapAliasType(candidateType);
+                        auto taskType = resolvedCandidate && resolvedCandidate->kind() == TypeKind::AsyncTask
+                            ? resolvedCandidate.AsFast<AsyncTaskType>()
+                            : nullptr;
+                        Ref<Type> pollType = nullptr;
+                        if (taskType && taskType->valueType && taskType->valueType->isVoid())
+                        {
+                            Ref<Symbol> pollSymbol = resolveQualifiedSymbol(currentScope_, "std::async::VoidTaskPoll");
+                            if (pollSymbol)
+                                pollType = pollSymbol->type;
+                        }
+                        else if (taskType)
+                        {
+                            Ref<Symbol> pollSymbol = resolveQualifiedSymbol(currentScope_, "std::async::TaskPoll");
+                            auto pollStruct = pollSymbol && pollSymbol->type && pollSymbol->type->kind() == TypeKind::Struct
+                                ? pollSymbol->type.AsFast<StructType>()
+                                : nullptr;
+                            if (pollStruct)
+                                pollType = instantiateGenericStructType(pollStruct, {taskType->valueType}, node.location());
+                        }
+                        if (!pollType)
+                        {
+                            WIO_LOG_ADD_ERROR(node.member->location(),
+                                "Task Poll requires the built-in std::async task module.");
+                            node.refType = Compiler::get().getTypeContext().getUnknown();
+                            return true;
+                        }
+                        resolution.memberType = Compiler::get().getTypeContext().getOrCreateFunctionType(pollType, {});
+                    }
+                    else if (resolution.member == IntrinsicMember::TaskWithin)
+                    {
+                        Ref<Type> resolvedCandidate = unwrapAliasType(candidateType);
+                        auto taskType = resolvedCandidate && resolvedCandidate->kind() == TypeKind::AsyncTask
+                            ? resolvedCandidate.AsFast<AsyncTaskType>()
+                            : nullptr;
+                        Ref<Type> resultType = nullptr;
+                        if (taskType && taskType->valueType && taskType->valueType->isVoid())
+                        {
+                            resultType = Compiler::get().getTypeContext().getOrCreateAsyncTaskType(
+                                Compiler::get().getTypeContext().getBool());
+                        }
+                        else if (taskType)
+                        {
+                            Ref<Symbol> optionSymbol = resolveQualifiedSymbol(currentScope_, "std::Option");
+                            auto optionStruct = optionSymbol && optionSymbol->type && optionSymbol->type->kind() == TypeKind::Struct
+                                ? optionSymbol->type.AsFast<StructType>()
+                                : nullptr;
+                            if (optionStruct)
+                            {
+                                Ref<Type> optionType = instantiateGenericStructType(
+                                    optionStruct, {taskType->valueType}, node.location());
+                                resultType = Compiler::get().getTypeContext().getOrCreateAsyncTaskType(optionType);
+                            }
+                        }
+                        if (!resultType)
+                        {
+                            WIO_LOG_ADD_ERROR(node.member->location(),
+                                "Task Within requires the built-in std::async and std::Option modules.");
+                            node.refType = Compiler::get().getTypeContext().getUnknown();
+                            return true;
+                        }
+                        resolution.memberType = Compiler::get().getTypeContext().getOrCreateFunctionType(
+                            resultType, {Compiler::get().getTypeContext().getU64()});
                     }
                     node.intrinsicMember = resolution.member;
                     node.refType = resolution.memberType;
@@ -11782,6 +12003,8 @@ namespace wio::sema
                 return;
             }
 
+            validateExecutorTransfer(node, bestMatch->symbol);
+
             if (!finalizeCallResultType(isConstructorCall ? structReturnType : bestMatch->functionType.AsFast<FunctionType>()->returnType))
                 return;
             return; 
@@ -12006,7 +12229,88 @@ namespace wio::sema
             }
         }
 
+        validateExecutorTransfer(node, calleeSym);
+
         finalizeCallResultType(isConstructorCall ? structReturnType : funcType->returnType);
+    }
+
+    void SemanticAnalyzer::validateExecutorTransfer(
+        FunctionCallExpression& node,
+        const Ref<Symbol>& functionSymbol)
+    {
+        if (!functionSymbol || node.arguments.empty())
+            return;
+
+        const bool isRun = functionSymbol->name == "Run";
+        const bool isRunBlocking = functionSymbol->name == "RunBlocking";
+        const bool isScopeWorker = functionSymbol->name == "SpawnWorker";
+        const bool isScopeBlocking = functionSymbol->name == "SpawnBlocking";
+        if (!isRun && !isRunBlocking && !isScopeWorker && !isScopeBlocking)
+            return;
+
+        bool isExecutorCall = functionSymbol->scopePath == "std_async";
+        auto attributes = attributeListsBySymbol_.find(functionSymbol.Get());
+        if (!isExecutorCall && attributes != attributeListsBySymbol_.end() && attributes->second)
+        {
+            if (const Token* cppName = getFirstAttributeArg(*attributes->second, Attribute::CppName))
+                isExecutorCall =
+                    cppName->value == "wio::runtime::RunBlockingAsync" ||
+                    cppName->value == "wio::runtime::RunAsync";
+        }
+        if (!isExecutorCall)
+            return;
+
+        const std::string executorOperation = isScopeWorker
+            ? "spawn worker"
+            : isScopeBlocking ? "spawn blocking" : functionSymbol->name;
+
+        const LambdaExpression* lambda = node.arguments.front()->as<LambdaExpression>();
+        Ref<Symbol> actionSymbol = node.arguments.front()->referencedSymbol.Lock();
+        if (!lambda && actionSymbol &&
+            (actionSymbol->kind == SymbolKind::Variable || actionSymbol->kind == SymbolKind::Parameter))
+        {
+            auto declaration = variableDeclarationsBySymbol_.find(actionSymbol.Get());
+            if (declaration != variableDeclarationsBySymbol_.end() && declaration->second &&
+                declaration->second->initializer)
+            {
+                lambda = declaration->second->initializer->as<LambdaExpression>();
+            }
+        }
+
+        if (lambda)
+        {
+            for (const auto& weakCapture : lambda->capturedSymbols)
+            {
+                Ref<Symbol> capture = weakCapture.Lock();
+                if (!capture || isExecutorTransferSafe(capture->type))
+                    continue;
+                WIO_LOG_ADD_ERROR(
+                    node.arguments.front()->location(),
+                    "{} cannot transfer capture '{}' of type '{}' to an async executor. Use an owning transfer-safe value or implement std::async::Send after synchronizing the type.",
+                    executorOperation,
+                    capture->name,
+                    capture->type ? capture->type->toString() : "<unknown>"
+                );
+            }
+
+            if (lambda->capturesSelf && !isExecutorTransferSafe(currentStructType_))
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.arguments.front()->location(),
+                    "{} cannot capture 'self' because '{}' is not executor-transfer-safe. Implement std::async::Send only after the object owns suitable synchronization.",
+                    executorOperation,
+                    currentStructType_ ? currentStructType_->toString() : "<unknown>"
+                );
+            }
+        }
+        else if (!actionSymbol || actionSymbol->kind != SymbolKind::Function)
+        {
+            WIO_LOG_ADD_ERROR(
+                node.arguments.front()->location(),
+                "{} requires a direct function or a lambda whose captures can be proven executor-transfer-safe.",
+                executorOperation
+            );
+        }
     }
 
     void SemanticAnalyzer::visit(LambdaExpression& node)
@@ -12028,6 +12332,9 @@ namespace wio::sema
              expectedFunctionType->returnType &&
              !containsGenericParameterType(expectedFunctionType->returnType));
 
+        node.capturedSymbols.clear();
+        node.capturesSelf = false;
+        lambdaCaptureContexts_.push_back(LambdaCaptureContext{.node = &node});
         enterScope(ScopeKind::Function);
         Ref<Type> previousFunctionReturnType = currentFunctionReturnType_;
         bool previousFunctionIsAsync = currentFunctionIsAsync_;
@@ -12124,6 +12431,11 @@ namespace wio::sema
         }
 
         exitScope();
+        auto captureContext = std::move(lambdaCaptureContexts_.back());
+        lambdaCaptureContexts_.pop_back();
+        node.capturedSymbols.reserve(captureContext.captures.size());
+        for (const auto& capture : captureContext.captures)
+            node.capturedSymbols.push_back(capture);
         currentFunctionReturnType_ = previousFunctionReturnType;
         currentFunctionIsAsync_ = previousFunctionIsAsync;
 
@@ -12718,6 +13030,11 @@ namespace wio::sema
         }
         
         Ref<Type> selfType = currentExtensionTargetType_ ? currentExtensionTargetType_ : currentStructType_;
+        for (auto& context : lambdaCaptureContexts_)
+        {
+            if (context.node)
+                context.node->capturesSelf = true;
+        }
         node.refType = Compiler::get().getTypeContext().getOrCreateReferenceType(
             selfType, currentExtensionTargetType_ ? currentExtensionMutableReceiver_ : true);
         node.borrowOrigin = BorrowOrigin::Caller;
@@ -13780,6 +14097,13 @@ namespace wio::sema
         }
 
         auto funcSym = node.name->referencedSymbol.Lock();
+        // A duplicate or otherwise rejected declaration is not retained by
+        // its scope, so the AST's weak symbol reference may have expired
+        // between declaration and resolution passes. The defining pass has
+        // already emitted the diagnostic; do not dereference a missing or
+        // non-function recovery symbol while walking the malformed body.
+        if (!funcSym || !funcSym->type || funcSym->type->kind() != TypeKind::Function)
+            return;
         auto funcType = funcSym->type.AsFast<FunctionType>();
 
         bool isNative = hasAttribute(node.attributes, Attribute::Native);

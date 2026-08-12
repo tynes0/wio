@@ -1,6 +1,7 @@
 set(WIO_RUNTIME_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 set(WIO_RUNTIME_HEADERS
+    "${WIO_RUNTIME_INCLUDE_DIR}/entry_args.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/exception.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/format.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/fit.h"
@@ -9,6 +10,9 @@ set(WIO_RUNTIME_HEADERS
     "${WIO_RUNTIME_INCLUDE_DIR}/io_errors.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_assert.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_async.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/std_async_fs.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/std_async_net.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/std_async_process.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_bigint.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_console.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_concurrency.h"
@@ -32,6 +36,7 @@ set(WIO_RUNTIME_HEADERS
 )
 
 set(WIO_RUNTIME_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/entry_args.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/std_assert.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/std_console.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/std_convert.cpp"
@@ -48,6 +53,7 @@ set(WIO_RUNTIME_SOURCES
 
 set(WIO_BACKEND_RUNTIME_DIR "${CMAKE_BINARY_DIR}/runtime/backend")
 set(WIO_BACKEND_RUNTIME_LIB "${WIO_BACKEND_RUNTIME_DIR}/libwio_runtime.a")
+set(WIO_BACKEND_RUNTIME_OBJ_ENTRY_ARGS "${WIO_BACKEND_RUNTIME_DIR}/entry_args.o")
 set(WIO_BACKEND_RUNTIME_OBJ_STD_ASSERT "${WIO_BACKEND_RUNTIME_DIR}/std_assert.o")
 set(WIO_BACKEND_RUNTIME_OBJ_STD_CONSOLE "${WIO_BACKEND_RUNTIME_DIR}/std_console.o")
 set(WIO_BACKEND_RUNTIME_OBJ_STD_CONVERT "${WIO_BACKEND_RUNTIME_DIR}/std_convert.o")
@@ -75,13 +81,29 @@ target_sources(wio_runtime_headers INTERFACE ${WIO_RUNTIME_HEADERS})
 # Host-side runtime primitives used by the stage-0 executable before a Wio
 # program can run. Generated Wio binaries continue to use wio_runtime_backend.
 add_library(wio_runtime_host STATIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/entry_args.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/std_process.cpp"
 )
 target_include_directories(wio_runtime_host PUBLIC "${WIO_RUNTIME_INCLUDE_DIR}")
 if(WIN32)
-    target_link_libraries(wio_runtime_host PUBLIC advapi32)
+    target_link_libraries(wio_runtime_host PUBLIC advapi32 shell32)
 endif()
 set_target_properties(wio_runtime_host PROPERTIES FOLDER "runtime")
+
+add_custom_command(
+    OUTPUT
+        "${WIO_BACKEND_RUNTIME_OBJ_ENTRY_ARGS}"
+    COMMAND
+        ${WIO_BACKEND_CXX_COMPILER}
+        ${WIO_BACKEND_RUNTIME_COMPILE_ARGS}
+        -I "${WIO_RUNTIME_INCLUDE_DIR}"
+        -c "${CMAKE_CURRENT_SOURCE_DIR}/src/entry_args.cpp"
+        -o "${WIO_BACKEND_RUNTIME_OBJ_ENTRY_ARGS}"
+    DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/entry_args.cpp"
+        "${WIO_RUNTIME_INCLUDE_DIR}/entry_args.h"
+    VERBATIM
+)
 
 add_custom_command(
     OUTPUT
@@ -284,6 +306,7 @@ add_custom_command(
         ${WIO_BACKEND_AR}
         rcs
         "${WIO_BACKEND_RUNTIME_LIB}"
+        "${WIO_BACKEND_RUNTIME_OBJ_ENTRY_ARGS}"
         "${WIO_BACKEND_RUNTIME_OBJ_STD_ASSERT}"
         "${WIO_BACKEND_RUNTIME_OBJ_STD_CONSOLE}"
         "${WIO_BACKEND_RUNTIME_OBJ_STD_CONVERT}"
@@ -297,6 +320,7 @@ add_custom_command(
         "${WIO_BACKEND_RUNTIME_OBJ_STD_REGEX}"
         "${WIO_BACKEND_RUNTIME_OBJ_STD_TIME}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_OBJ_ENTRY_ARGS}"
         "${WIO_BACKEND_RUNTIME_OBJ_STD_ASSERT}"
         "${WIO_BACKEND_RUNTIME_OBJ_STD_CONSOLE}"
         "${WIO_BACKEND_RUNTIME_OBJ_STD_CONVERT}"
@@ -340,5 +364,33 @@ if(BUILD_TESTING)
     set_tests_properties(wio_async_runtime_stress PROPERTIES
         TIMEOUT 30
         LABELS "async;runtime;freeze"
+    )
+
+    add_executable(wio_async_scope_runtime_stress
+        "${CMAKE_SOURCE_DIR}/tests/async_scope_runtime_stress.cpp"
+    )
+    target_include_directories(wio_async_scope_runtime_stress PRIVATE
+        "${WIO_RUNTIME_INCLUDE_DIR}"
+    )
+    if(NOT WIN32)
+        target_link_libraries(wio_async_scope_runtime_stress PRIVATE pthread)
+    endif()
+    add_test(NAME wio_async_scope_runtime_stress COMMAND wio_async_scope_runtime_stress)
+    set_tests_properties(wio_async_scope_runtime_stress PROPERTIES
+        TIMEOUT 30
+        LABELS "async;runtime;structure"
+    )
+
+    add_executable(wio_process_runtime_stress
+        "${CMAKE_SOURCE_DIR}/tests/process_runtime_stress.cpp"
+    )
+    target_link_libraries(wio_process_runtime_stress PRIVATE wio_runtime_host)
+    if(NOT WIN32)
+        target_link_libraries(wio_process_runtime_stress PRIVATE pthread)
+    endif()
+    add_test(NAME wio_process_runtime_stress COMMAND wio_process_runtime_stress)
+    set_tests_properties(wio_process_runtime_stress PROPERTIES
+        TIMEOUT 30
+        LABELS "async;process;runtime;ownership"
     )
 endif()

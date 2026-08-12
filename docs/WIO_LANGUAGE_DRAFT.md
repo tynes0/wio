@@ -2297,6 +2297,24 @@ parameters or returns, and native/export coroutine ABI surfaces are rejected
 until their suspension lifetime rules are proven. See `WIO_ASYNC_MODEL.md` for
 the scheduler, cancellation, failure, and freeze contract.
 
+The post-0.11 structured-work candidate adds lexical task ownership:
+
+```wio
+async scope {
+    let remote = spawn Fetch();
+    let parsed = spawn worker Parse(bytes);
+    let legacy = spawn blocking ReadLegacy(path);
+    Consume(await remote, await parsed, await legacy);
+}
+```
+
+Ordinary `spawn` accepts an async task. `spawn worker` turns a synchronous
+expression into work on the CPU/continuation executor, while `spawn blocking`
+uses the bounded blocking executor. All three are owned by the nearest
+`async scope`; normal block exit and return join them, while abandoned cleanup
+cancels unfinished work. Executor-qualified captures must satisfy
+`std::async::Send`, structurally or through an explicit marker promise.
+
 ## 14. `match`
 
 ### 14.1 Overview
@@ -2772,6 +2790,8 @@ flag NeedsSave;
 
 ### 19.4 Value Conversion and Validity
 
+Enum members are scoped to their declaring enum, so separate enums may reuse
+the same member names without leaking those names into their containing realm.
 Every enum value exposes `Value()` using its declared underlying integer type
 and `IsValid()` to test whether the raw value names a declared member.
 `std::reflect::TryFromValue<T>(raw)` returns `Option<T>` and rejects unknown or

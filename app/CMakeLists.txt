@@ -194,7 +194,7 @@ endif()
 
 set(
     WIO_TRACEABILITY_TEST_REGEX
-    "(wio_test_(use_alias_dry_run|realm_basic_run|realm_nested_run|realm_qualified_from_run|object_component_access_semantics_run|interface_ref_upcast_run|component_embedded_member_ctor_run|for_in_dynamic_array_run|for_dict_key_value_run|for_component_binding_run|c_style_for_loop_run|match_value_basic_run|match_statement_basic_run|when_guard_fallback_value_run|fit_numeric_clamp_run|const_scalar_expressions_run|numeric_literal_suffixes_run|numeric_literal_signed_mins_run|default_parameters_run|default_parameter_native_bridge_run|function_parameter_pack_run|function_parameter_pack_explicit_type_arguments_run|function_parameter_pack_constraints_run|function_parameter_pack_defaults_run|pack_storage_write_semantics_run|pack_meta_and_generic_declarations_run|std_meta_second_wave_run|std_meta_wave3_run|generic_apply_function_constraints_run|generic_apply_type_and_object_run|generic_native_predicate_bridge_run|generic_object_explicit_specialization_run|generic_component_constructor_deduction_run|generic_object_constructor_deduction_run|generic_fit_target_constraints_dry_run|generic_parameterized_type_parameter_dry_run|ref_mut_container_members_dry_run|object_method_outer_const_dry_run|object_self_return_run|array_member_methods_run|dictionary_member_methods_run|string_member_methods_run|std_convert_surface_run|std_text_surface_run|std_algorithms_utility_wave_run|direct_indexing_run|control_flow_return_analysis_run|mutable_data_ergonomics_run|std_contract_v1_run|std_heap_box_run|std_heap_box_semantics_run|std_event_any_run|any_generic_box_fit_run|any_opaque_boundary_run|any_value_reference_semantics_run|native_opaque_bridge_run|native_box_bridge_run|direct_module_import_run|std_enum_flagset_surface_run|binding_import_smoke|binding_manifest_smoke|sdk_invalid_api_contract|sdk_module_easy_host_interop|sdk_exported_types_host_interop|sdk_exported_inherited_host_interop|sdk_exported_complex_fields_host_interop|sdk_module_hot_reload_interop|sdk_hot_reload_stale_wrappers_interop|sdk_module_stale_bindings_interop|pack_export_host_interop)|wio_runtime_(direct_index_out_of_range|string_to_i32_invalid)|wio_invalid_(entry_invalid_parameter_type|entry_invalid_return_type|entry_too_many_parameters|entry_missing_body|entry_method_not_top_level|use_missing_user_module|use_missing_std_module|use_alias_conflicts_with_symbol|use_alias_hides_unqualified_root_symbol|use_without_direct_import_keeps_namespaced_access|realm_conflicts_with_symbol|ref_requires_addressable_operand|ref_immutable_to_mutable_param|is_left_requires_object_or_interface|is_right_requires_object_or_interface|fit_requires_numeric_or_object_interface|if_fit_requires_is_condition|component_method_not_allowed|object_inherits_component|final_object_inheritance|default_attribute_invalid_access|private_base_member_access|protected_member_access_outside_hierarchy|trust_requires_struct_type|let_without_initializer|mut_without_initializer|let_without_type_or_initializer|const_without_initializer|const_string_not_supported|const_from_non_const_identifier|const_function_call_not_supported|const_array_not_supported|default_parameter_non_trailing|default_parameter_type_mismatch|default_parameter_declaration_only_not_supported|default_parameter_entry_not_allowed|default_parameter_overload_conflict|generic_fit_target_without_supported_constraint|generic_parameter_pack_non_trailing|parameter_pack_non_trailing|parameter_pack_missing_matching_generic_pack|parameter_pack_bare_use_not_allowed|parameter_pack_default_not_supported|parameter_pack_method_not_supported|parameter_pack_apply_reject_non_integer|parameter_pack_export_requires_instantiate|parameter_pack_instantiate_predicate_not_allowed|parameter_pack_view_assignment_not_allowed|generic_apply_reject_function_call|generic_apply_reject_type_alias|generic_apply_reject_constructor|generic_apply_non_generic_function|generic_native_predicate_reject_non_integer|generic_specialization_requires_primary|generic_specialization_argument_count_mismatch|generic_specialization_duplicate|generic_specialization_native_component|pack_field_requires_generic_pack|pack_index_requires_compile_time_constant|pack_index_requires_const_declaration|pack_index_from_size_requires_subtraction|type_pack_to_static_array_not_supported|match_value_requires_assumed|match_assumed_must_be_last|match_duplicate_assumed|match_case_type_mismatch|match_return_type_mismatch|non_void_when_without_else|non_void_missing_return|non_void_if_missing_return|array_index_requires_integer|static_array_index_out_of_range|opaque_arithmetic_not_supported|opaque_is_not_supported|any_non_null_equality_not_supported|when_condition_type_mismatch|when_fallback_return_type_mismatch|for_in_requires_array|for_dict_requires_two_bindings|for_component_binding_count_mismatch|for_range_step_zero|break_outside_loop|continue_outside_loop|c_style_for_invalid_condition_type|array_member_requires_mutable_receiver|dictionary_member_requires_mutable_receiver|string_member_requires_mutable_receiver))"
+    "(wio_test_(use_alias_dry_run|realm_basic_run|realm_nested_run|realm_qualified_from_run|object_component_access_semantics_run|interface_ref_upcast_run|component_embedded_member_ctor_run|for_in_dynamic_array_run|for_dict_key_value_run|for_component_binding_run|c_style_for_loop_run|match_value_basic_run|match_statement_basic_run|when_guard_fallback_value_run|fit_numeric_clamp_run|const_scalar_expressions_run|numeric_literal_suffixes_run|numeric_literal_signed_mins_run|default_parameters_run|default_parameter_native_bridge_run|function_parameter_pack_run|function_parameter_pack_explicit_type_arguments_run|function_parameter_pack_constraints_run|function_parameter_pack_defaults_run|pack_storage_write_semantics_run|pack_meta_and_generic_declarations_run|std_meta_second_wave_run|std_meta_wave3_run|generic_apply_function_constraints_run|generic_apply_type_and_object_run|generic_native_predicate_bridge_run|generic_object_explicit_specialization_run|generic_component_constructor_deduction_run|generic_object_constructor_deduction_run|generic_fit_target_constraints_dry_run|generic_parameterized_type_parameter_dry_run|ref_mut_container_members_dry_run|object_method_outer_const_dry_run|object_self_return_run|array_member_methods_run|dictionary_member_methods_run|string_member_methods_run|std_convert_surface_run|std_text_surface_run|std_algorithms_utility_wave_run|direct_indexing_run|control_flow_return_analysis_run|mutable_data_ergonomics_run|std_contract_v1_run|std_heap_box_run|std_heap_box_semantics_run|std_event_any_run|any_generic_box_fit_run|any_opaque_boundary_run|any_value_reference_semantics_run|native_opaque_bridge_run|native_box_bridge_run|direct_module_import_run|std_enum_flagset_surface_run|std_module_reimport_alias_run|enum_member_scope_run|binding_import_smoke|binding_manifest_smoke|sdk_invalid_api_contract|sdk_module_easy_host_interop|sdk_exported_types_host_interop|sdk_exported_inherited_host_interop|sdk_exported_complex_fields_host_interop|sdk_module_hot_reload_interop|sdk_hot_reload_stale_wrappers_interop|sdk_module_stale_bindings_interop|pack_export_host_interop)|wio_runtime_(direct_index_out_of_range|string_to_i32_invalid)|wio_invalid_(entry_invalid_parameter_type|entry_invalid_return_type|entry_too_many_parameters|entry_missing_body|entry_method_not_top_level|use_missing_user_module|use_missing_std_module|use_alias_conflicts_with_symbol|use_alias_hides_unqualified_root_symbol|use_without_direct_import_keeps_namespaced_access|realm_conflicts_with_symbol|ref_requires_addressable_operand|ref_immutable_to_mutable_param|is_left_requires_object_or_interface|is_right_requires_object_or_interface|fit_requires_numeric_or_object_interface|if_fit_requires_is_condition|component_method_not_allowed|object_inherits_component|final_object_inheritance|default_attribute_invalid_access|private_base_member_access|protected_member_access_outside_hierarchy|trust_requires_struct_type|let_without_initializer|mut_without_initializer|let_without_type_or_initializer|const_without_initializer|const_string_not_supported|const_from_non_const_identifier|const_function_call_not_supported|const_array_not_supported|default_parameter_non_trailing|default_parameter_type_mismatch|default_parameter_declaration_only_not_supported|default_parameter_entry_not_allowed|default_parameter_overload_conflict|generic_fit_target_without_supported_constraint|generic_parameter_pack_non_trailing|parameter_pack_non_trailing|parameter_pack_missing_matching_generic_pack|parameter_pack_bare_use_not_allowed|parameter_pack_default_not_supported|parameter_pack_method_not_supported|parameter_pack_apply_reject_non_integer|parameter_pack_export_requires_instantiate|parameter_pack_instantiate_predicate_not_allowed|parameter_pack_view_assignment_not_allowed|generic_apply_reject_function_call|generic_apply_reject_type_alias|generic_apply_reject_constructor|generic_apply_non_generic_function|generic_native_predicate_reject_non_integer|generic_specialization_requires_primary|generic_specialization_argument_count_mismatch|generic_specialization_duplicate|generic_specialization_native_component|pack_field_requires_generic_pack|pack_index_requires_compile_time_constant|pack_index_requires_const_declaration|pack_index_from_size_requires_subtraction|type_pack_to_static_array_not_supported|match_value_requires_assumed|match_assumed_must_be_last|match_duplicate_assumed|match_case_type_mismatch|match_return_type_mismatch|non_void_when_without_else|non_void_missing_return|non_void_if_missing_return|array_index_requires_integer|static_array_index_out_of_range|opaque_arithmetic_not_supported|opaque_is_not_supported|any_non_null_equality_not_supported|when_condition_type_mismatch|when_fallback_return_type_mismatch|for_in_requires_array|for_dict_requires_two_bindings|for_component_binding_count_mismatch|for_range_step_zero|break_outside_loop|continue_outside_loop|c_style_for_invalid_condition_type|array_member_requires_mutable_receiver|dictionary_member_requires_mutable_receiver|string_member_requires_mutable_receiver))"
 )
 
 set(
@@ -629,6 +629,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_file_cli_run_args_forwarding
         PROPERTIES
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 
     add_test(
@@ -829,6 +830,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
     set_tests_properties(
         wio_test_project_cli_smoke
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
+        NAME wio_test_project_emit_cpp_smoke
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DWIO_SCRATCH_DIR=${CMAKE_BINARY_DIR}/project-emit-cpp-smoke
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioProjectEmitCppSmoke.cmake"
+    )
+    set_tests_properties(
+        wio_test_project_emit_cpp_smoke
         PROPERTIES
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )
@@ -2255,6 +2270,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_std_enum_flagset_surface_run
         "${CMAKE_SOURCE_DIR}/tests/std_enum_flagset_surface_run.wio"
         "enum-flagset-surface-ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_enum_member_scope_run
+        "${CMAKE_SOURCE_DIR}/tests/enum_member_scope_run.wio"
+        "enum-member-scope-ok"
         --run
     )
 
@@ -4749,6 +4771,107 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "async-worker-config-ok"
         --run
     )
+    add_wio_output_test(
+        wio_test_async_correctness_run
+        "${CMAKE_SOURCE_DIR}/tests/async_correctness_run.wio"
+        "async-correctness-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_async_task_surface_run
+        "${CMAKE_SOURCE_DIR}/tests/async_task_surface_run.wio"
+        "async-task-surface-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_async_scope_run
+        "${CMAKE_SOURCE_DIR}/tests/async_scope_run.wio"
+        "async-scope-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_async_scope_syntax_run
+        "${CMAKE_SOURCE_DIR}/tests/async_scope_syntax_run.wio"
+        "async-scope-syntax-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_async_scope_auto_import_run
+        "${CMAKE_SOURCE_DIR}/tests/async_scope_auto_import_run.wio"
+        "async-scope-auto-import-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_async_main_executor_run
+        "${CMAKE_SOURCE_DIR}/tests/async_main_executor_run.wio"
+        "async-main-executor-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_application_async_main_run
+        "${CMAKE_SOURCE_DIR}/tests/application_async_main_run.wio"
+        "application-async-main-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_async_fs_io_run
+        "${CMAKE_SOURCE_DIR}/tests/async_fs_io_run.wio"
+        "async-fs-io-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_async_process_run
+        "${CMAKE_SOURCE_DIR}/tests/async_process_run.wio"
+        "async-process-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_async_process_stream_run
+        "${CMAKE_SOURCE_DIR}/tests/async_process_stream_run.wio"
+        "async-process-stream-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_async_channel_run
+        "${CMAKE_SOURCE_DIR}/tests/async_channel_run.wio"
+        "async-channel-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_std_module_reimport_alias_run
+        "${CMAKE_SOURCE_DIR}/tests/std_module_reimport_alias_run.wio"
+        "std-module-reimport-alias-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_async_file_watcher_run
+        "${CMAKE_SOURCE_DIR}/tests/async_file_watcher_run.wio"
+        "async-file-watcher-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_async_net_io_run
+        "${CMAKE_SOURCE_DIR}/tests/async_net_io_run.wio"
+        "async-net-io-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_async_net_accept_run
+        "${CMAKE_SOURCE_DIR}/tests/async_net_accept_run.wio"
+        "async-net-accept-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_async_net_io_run
+        wio_test_async_net_accept_run
+        PROPERTIES TIMEOUT 30
+    )
+    add_wio_output_test(
+        wio_test_std_net_timeout_run
+        "${CMAKE_SOURCE_DIR}/tests/std_net_timeout_run.wio"
+        "std-net-timeout-ok"
+        --run
+    )
 
     add_wio_output_test(
         wio_test_lambda_capture_value_run
@@ -4765,7 +4888,53 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_async_block_on_run
         wio_test_async_freeze_run
         wio_test_async_detached_exit_run
+        wio_test_async_correctness_run
+        wio_test_async_task_surface_run
+        wio_test_async_scope_run
+        wio_test_async_scope_syntax_run
+        wio_test_async_scope_auto_import_run
+        wio_test_async_main_executor_run
+        wio_test_application_async_main_run
+        wio_test_async_fs_io_run
+        wio_test_async_process_run
+        wio_test_async_process_stream_run
+        wio_test_async_channel_run
+        wio_test_std_module_reimport_alias_run
+        wio_test_async_file_watcher_run
+        wio_test_async_net_io_run
+        wio_test_async_net_accept_run
+        wio_test_std_net_timeout_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+    set_tests_properties(
+        wio_test_async_process_stream_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR};WIO_ASYNC_IO_WORKERS=1"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_spawn_outside_async_scope
+        "${CMAKE_SOURCE_DIR}/tests/invalid/spawn_outside_async_scope.wio"
+        "'spawn' requires an enclosing 'async scope'\."
+    )
+    add_wio_failure_test(
+        wio_invalid_async_scope_outside_async
+        "${CMAKE_SOURCE_DIR}/tests/invalid/async_scope_outside_async.wio"
+        "'await' can only be used inside an async function or method"
+    )
+    add_wio_failure_test(
+        wio_invalid_await_main_outside_async
+        "${CMAKE_SOURCE_DIR}/tests/invalid/await_main_outside_async.wio"
+        "'await main' can only be used inside an async function or method"
+    )
+    add_wio_failure_test(
+        wio_invalid_spawn_worker_borrow_capture
+        "${CMAKE_SOURCE_DIR}/tests/invalid/spawn_worker_borrow_capture.wio"
+        "spawn worker cannot transfer capture 'borrowed'"
+    )
+    add_wio_failure_test(
+        wio_invalid_spawn_blocking_borrow_capture
+        "${CMAKE_SOURCE_DIR}/tests/invalid/spawn_blocking_borrow_capture.wio"
+        "spawn blocking cannot transfer capture 'borrowed'"
     )
     set_tests_properties(
         wio_test_async_worker_config_run
@@ -4817,6 +4986,18 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(wio_invalid_async_coroutine_arity
         "${CMAKE_SOURCE_DIR}/tests/invalid/async_coroutine_arity.wio"
         "coroutine.*requires exactly one result type")
+    add_wio_failure_test(wio_invalid_async_run_blocking_borrow_capture
+        "${CMAKE_SOURCE_DIR}/tests/invalid/async_run_blocking_borrow_capture.wio"
+        "RunBlocking cannot transfer capture 'borrowed'")
+    add_wio_failure_test(wio_invalid_async_run_borrow_capture
+        "${CMAKE_SOURCE_DIR}/tests/invalid/async_run_borrow_capture.wio"
+        "Run cannot transfer capture 'borrowed'")
+    add_wio_failure_test(wio_invalid_async_run_blocking_object_capture
+        "${CMAKE_SOURCE_DIR}/tests/invalid/async_run_blocking_object_capture.wio"
+        "RunBlocking cannot transfer capture 'counter'")
+    add_wio_failure_test(wio_invalid_async_run_blocking_self_capture
+        "${CMAKE_SOURCE_DIR}/tests/invalid/async_run_blocking_self_capture.wio"
+        "RunBlocking cannot capture 'self'")
     set_tests_properties(
         wio_invalid_async_await_outside_async
         wio_invalid_async_await_requires_coroutine
@@ -4826,6 +5007,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_async_extension_receiver
         wio_invalid_async_lifecycle_method
         wio_invalid_async_coroutine_arity
+        wio_invalid_async_run_blocking_borrow_capture
+        wio_invalid_async_run_borrow_capture
+        wio_invalid_async_run_blocking_object_capture
+        wio_invalid_async_run_blocking_self_capture
+        wio_invalid_spawn_worker_borrow_capture
+        wio_invalid_spawn_blocking_borrow_capture
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 endif()

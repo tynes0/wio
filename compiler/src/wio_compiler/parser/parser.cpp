@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <functional>
 
 namespace wio
 {
@@ -31,6 +32,15 @@ namespace wio
         bool isSignFoldableNumericLiteral(const Token& token)
         {
             return token.type == TokenType::integerLiteral || token.type == TokenType::floatLiteral;
+        }
+
+        NodePtr<Identifier> makeSyntheticIdentifier(std::string value, const Location location)
+        {
+            return makeNodePtr<Identifier>(Token{
+                .type = TokenType::identifier,
+                .value = std::move(value),
+                .loc = location
+            });
         }
 
         std::optional<Attribute> resolveAttributeName(std::string_view name)
@@ -81,6 +91,24 @@ namespace wio
             catch (const std::exception&)
             {
                 synchronize();
+            }
+        }
+
+        if (requiresAsyncModule_)
+        {
+            const bool alreadyImported = std::ranges::any_of(
+                statements,
+                [](const NodePtr<Statement>& statement)
+                {
+                    const auto* use = statement ? statement->as<UseStatement>() : nullptr;
+                    return use && use->isStdLib && use->modulePath == "async";
+                });
+            if (!alreadyImported)
+            {
+                statements.insert(
+                    statements.begin(),
+                    makeNodePtr<UseStatement>(
+                        "async", "async", "", true, false, false, Location::invalid()));
             }
         }
 
@@ -287,7 +315,61 @@ namespace wio
         {
             Token op = advance(); 
             
-            if (op.type == TokenType::kwRef)
+            if (op.type == TokenType::kwSpawn)
+            {
+                if (asyncScopeNames_.empty())
+                    utError("'spawn' requires an enclosing 'async scope'.", op.loc);
+
+                std::string executor;
+                if (peek().type == TokenType::identifier &&
+                    (peek().value == "worker" || peek().value == "blocking"))
+                {
+                    executor = advance().value;
+                }
+
+                const int precedence = getPrecedence(op.type);
+                NodePtr<Expression> operand = parseExpression(precedence + 1, stopAtFit);
+                std::string spawnMethod = "Spawn";
+                if (!executor.empty())
+                {
+                    auto lambdaBody = makeNodePtr<ExpressionStatement>(std::move(operand), op.loc);
+                    operand = makeNodePtr<LambdaExpression>(
+                        std::vector<Parameter>{}, nullptr, std::move(lambdaBody), op.loc);
+                    spawnMethod = executor == "worker" ? "SpawnWorker" : "SpawnBlocking";
+                }
+                auto scopeAccess = makeNodePtr<MemberAccessExpression>(
+                    makeSyntheticIdentifier(asyncScopeNames_.back(), op.loc),
+                    makeSyntheticIdentifier(std::move(spawnMethod), op.loc),
+                    TokenType::opDot,
+                    op.loc);
+                std::vector<NodePtr<Expression>> arguments;
+                arguments.push_back(std::move(operand));
+                left = makeNodePtr<FunctionCallExpression>(
+                    std::move(scopeAccess),
+                    std::vector<NodePtr<TypeSpecifier>>{},
+                    std::move(arguments),
+                    false,
+                    false,
+                    op.loc);
+            }
+            else if (op.type == TokenType::kwDetach)
+            {
+                const int precedence = getPrecedence(op.type);
+                NodePtr<Expression> operand = parseExpression(precedence + 1, stopAtFit);
+                auto detachAccess = makeNodePtr<MemberAccessExpression>(
+                    std::move(operand),
+                    makeSyntheticIdentifier("Detach", op.loc),
+                    TokenType::opDot,
+                    op.loc);
+                left = makeNodePtr<FunctionCallExpression>(
+                    std::move(detachAccess),
+                    std::vector<NodePtr<TypeSpecifier>>{},
+                    std::vector<NodePtr<Expression>>{},
+                    false,
+                    false,
+                    op.loc);
+            }
+            else if (op.type == TokenType::kwRef)
             {
                 NodePtr<Expression> operand = parseExpression(getPrecedence(TokenType::kwRef) + 1, true);
                 left = makeNodePtr<RefExpression>(false, std::move(operand), op.loc);
@@ -306,7 +388,19 @@ namespace wio
             {
                 int precedence = getPrecedence(op.type);
                 NodePtr<Expression> operand = parseExpression(precedence + 1, stopAtFit);
-                left = makeNodePtr<UnaryExpression>(std::move(op), std::move(operand));
+                bool isMainExecutorAwait = false;
+                if (op.type == TokenType::kwAwait)
+                {
+                    auto identifier = operand ? operand->as<Identifier>() : nullptr;
+                    if (identifier && identifier->token.value == "main")
+                    {
+                        requiresAsyncModule_ = true;
+                        isMainExecutorAwait = true;
+                    }
+                }
+                auto unary = makeNodePtr<UnaryExpression>(std::move(op), std::move(operand));
+                unary->isMainExecutorAwait = isMainExecutorAwait;
+                left = std::move(unary);
             }
         }
         else
@@ -383,22 +477,10 @@ namespace wio
                 continue;
             }
 
-            int precedence = getPrecedence(peek().type);
-            if (precedence < minPrecedence)
-                break;
-
-            if (peek().type == TokenType::opGreater && peek(1).type == TokenType::rightBrace)
-                break;
-
-            if (match(TokenType::kwIs))
-            {
-                Token op = advance();
-                auto targetType = parseType();
-                auto right = makeNodePtr<TypeExpression>(std::move(targetType), op.loc);
-                left = makeNodePtr<BinaryExpression>(std::move(left), std::move(op), std::move(right), op.loc);
-                continue;
-            }
-
+            // An explicit generic call is postfix syntax even though it begins
+            // with '<'. Resolve it before binary precedence so prefix forms
+            // such as `await Load<T>()` and `spawn Load<T>()` keep the call
+            // attached to their operand.
             if (peek().type == TokenType::opLess &&
                 (left->is<Identifier>() || left->is<MemberAccessExpression>()) &&
                 canParseExplicitTypeArgumentCall())
@@ -414,6 +496,22 @@ namespace wio
                     unwrapResult,
                     propagateResult
                 );
+                continue;
+            }
+
+            int precedence = getPrecedence(peek().type);
+            if (precedence < minPrecedence)
+                break;
+
+            if (peek().type == TokenType::opGreater && peek(1).type == TokenType::rightBrace)
+                break;
+
+            if (match(TokenType::kwIs))
+            {
+                Token op = advance();
+                auto targetType = parseType();
+                auto right = makeNodePtr<TypeExpression>(std::move(targetType), op.loc);
+                left = makeNodePtr<BinaryExpression>(std::move(left), std::move(op), std::move(right), op.loc);
                 continue;
             }
 
@@ -1150,8 +1248,14 @@ namespace wio
                 return parseFunctionDeclaration(std::move(attributes));
             if (match(TokenType::kwAsync))
             {
+                if (peek(1).type == TokenType::identifier && peek(1).value == "scope")
+                {
+                    if (!attributes.empty())
+                        utError("Async scopes cannot currently carry attributes.", attributes.front()->location());
+                    return parseAsyncScopeStatement();
+                }
                 if (peek(1).type != TokenType::kwFn)
-                    utError("Expected 'fn' after 'async'.", peek().loc);
+                    utError("Expected 'fn' or 'scope' after 'async'.", peek().loc);
                 return parseFunctionDeclaration(std::move(attributes), false, false, true);
             }
             if (match(TokenType::kwInterface))
@@ -1224,6 +1328,153 @@ namespace wio
         consume(TokenType::rightBrace);
 
         return makeNodePtr<BlockStatement>(std::move(statements));
+    }
+
+    NodePtr<Statement> Parser::parseAsyncScopeStatement()
+    {
+        const Token asyncToken = consume(TokenType::kwAsync);
+        requiresAsyncModule_ = true;
+        const Token scopeToken = consumeIdentifier();
+        if (scopeToken.value != "scope")
+            utError("Expected 'scope' after 'async'.", scopeToken.loc);
+
+        NodePtr<Expression> deadline;
+        if (match(TokenType::kwWith, true))
+        {
+            const Token deadlineToken = consumeIdentifier();
+            if (deadlineToken.value != "deadline")
+                utError("Expected 'deadline(...)' after 'async scope with'.", deadlineToken.loc);
+            consume(TokenType::leftParen);
+            deadline = parseExpression();
+            consume(TokenType::rightParen);
+        }
+
+        const std::string scopeName = "__wio_async_scope_" + std::to_string(asyncScopeCounter_++);
+        asyncScopeNames_.push_back(scopeName);
+
+        NodePtr<Statement> bodyStatement;
+        try
+        {
+            bodyStatement = parseBlockStatement();
+        }
+        catch (...)
+        {
+            asyncScopeNames_.pop_back();
+            throw;
+        }
+        asyncScopeNames_.pop_back();
+
+        auto body = bodyStatement.As<BlockStatement>();
+        if (!body)
+            utError("Expected a block after 'async scope'.", asyncToken.loc);
+
+        auto makeAwaitJoinStatement = [&](const Location location) -> NodePtr<Statement>
+        {
+            auto joinAccess = makeNodePtr<MemberAccessExpression>(
+                makeSyntheticIdentifier(scopeName, location),
+                makeSyntheticIdentifier("Join", location),
+                TokenType::opDot,
+                location);
+            auto joinCall = makeNodePtr<FunctionCallExpression>(
+                std::move(joinAccess),
+                std::vector<NodePtr<TypeSpecifier>>{},
+                std::vector<NodePtr<Expression>>{},
+                false,
+                false,
+                location);
+            Token awaitToken{
+                .type = TokenType::kwAwait,
+                .value = "await",
+                .loc = location
+            };
+            auto awaitJoin = makeNodePtr<UnaryExpression>(
+                std::move(awaitToken), std::move(joinCall), UnaryExpression::UnaryOperatorType::Prefix, location);
+            return makeNodePtr<ExpressionStatement>(std::move(awaitJoin), location);
+        };
+
+        size_t returnCounter = 0;
+        std::function<void(NodePtr<Statement>&)> rewriteReturns = [&](NodePtr<Statement>& statement)
+        {
+            if (!statement)
+                return;
+            if (auto returnStatement = statement.As<ReturnStatement>())
+            {
+                const Location returnLocation = returnStatement->location();
+                std::vector<NodePtr<Statement>> replacement;
+                NodePtr<Expression> returnValue;
+                if (returnStatement->value)
+                {
+                    const std::string returnName = scopeName + "_return_" + std::to_string(returnCounter++);
+                    replacement.push_back(makeNodePtr<VariableDeclaration>(
+                        std::vector<NodePtr<AttributeStatement>>{},
+                        Mutability::Immutable,
+                        makeSyntheticIdentifier(returnName, returnLocation),
+                        nullptr,
+                        std::move(returnStatement->value),
+                        false,
+                        returnLocation));
+                    returnValue = makeSyntheticIdentifier(returnName, returnLocation);
+                }
+                replacement.push_back(makeAwaitJoinStatement(returnLocation));
+                replacement.push_back(makeNodePtr<ReturnStatement>(std::move(returnValue), returnLocation));
+                statement = makeNodePtr<BlockStatement>(std::move(replacement), returnLocation);
+                return;
+            }
+            if (auto block = statement.As<BlockStatement>())
+            {
+                for (auto& child : block->statements)
+                    rewriteReturns(child);
+                return;
+            }
+            if (auto conditional = statement.As<IfStatement>())
+            {
+                rewriteReturns(conditional->thenBranch);
+                rewriteReturns(conditional->elseBranch);
+                return;
+            }
+            if (auto loop = statement.As<WhileStatement>())
+            {
+                rewriteReturns(loop->body);
+                return;
+            }
+            if (auto loop = statement.As<ForInStatement>())
+            {
+                rewriteReturns(loop->body);
+                return;
+            }
+            if (auto loop = statement.As<CForStatement>())
+                rewriteReturns(loop->body);
+        };
+        for (auto& statement : body->statements)
+            rewriteReturns(statement);
+
+        auto stdNamespace = makeSyntheticIdentifier("std", asyncToken.loc);
+        auto asyncNamespace = makeNodePtr<MemberAccessExpression>(
+            std::move(stdNamespace), makeSyntheticIdentifier("async", asyncToken.loc), TokenType::opScope, asyncToken.loc);
+        auto scopeConstructor = makeNodePtr<MemberAccessExpression>(
+            std::move(asyncNamespace), makeSyntheticIdentifier("Scope", asyncToken.loc), TokenType::opScope, asyncToken.loc);
+        std::vector<NodePtr<Expression>> scopeArguments;
+        if (deadline)
+            scopeArguments.push_back(std::move(deadline));
+        auto constructScope = makeNodePtr<FunctionCallExpression>(
+            std::move(scopeConstructor),
+            std::vector<NodePtr<TypeSpecifier>>{},
+            std::move(scopeArguments),
+            false,
+            false,
+            asyncToken.loc);
+        auto scopeDeclaration = makeNodePtr<VariableDeclaration>(
+            std::vector<NodePtr<AttributeStatement>>{},
+            Mutability::Immutable,
+            makeSyntheticIdentifier(scopeName, asyncToken.loc),
+            nullptr,
+            std::move(constructScope),
+            false,
+            asyncToken.loc);
+        body->statements.insert(body->statements.begin(), std::move(scopeDeclaration));
+
+        body->statements.push_back(makeAwaitJoinStatement(asyncToken.loc));
+        return bodyStatement;
     }
 
     NodePtr<AttributeStatement> Parser::parseAttributeStatement(bool legacyAtSyntax)
@@ -1412,6 +1663,7 @@ namespace wio
     NodePtr<Statement> Parser::parseApplicationDeclaration()
     {
         const Token startToken = consume(TokenType::kwApplication);
+        requiresAsyncModule_ = true;
         auto applicationName = makeNodePtr<Identifier>(consumeIdentifier());
         const Token applicationNameToken = applicationName->token;
 
@@ -1444,6 +1696,18 @@ namespace wio
             return makeNodePtr<FunctionCallExpression>(
                 makeMember(makeAppIdentifier(), std::move(method)),
                 std::vector<NodePtr<TypeSpecifier>>{}, std::vector<NodePtr<Expression>>{},
+                false, false, startToken.loc);
+        };
+        auto makeAsyncRuntimeCall = [&](std::string method)
+        {
+            auto stdNamespace = makeNodePtr<MemberAccessExpression>(
+                makeIdentifier("std"), makeIdentifier("async"), TokenType::opScope, startToken.loc);
+            auto function = makeNodePtr<MemberAccessExpression>(
+                std::move(stdNamespace), makeIdentifier(std::move(method)), TokenType::opScope, startToken.loc);
+            return makeNodePtr<FunctionCallExpression>(
+                std::move(function),
+                std::vector<NodePtr<TypeSpecifier>>{},
+                std::vector<NodePtr<Expression>>{},
                 false, false, startToken.loc);
         };
 
@@ -1644,6 +1908,8 @@ namespace wio
             std::move(targetType), std::move(extensionMembers), startToken.loc);
 
         std::vector<NodePtr<Statement>> entryStatements;
+        entryStatements.push_back(makeNodePtr<ExpressionStatement>(
+            makeAsyncRuntimeCall("BindMain"), startToken.loc));
         std::vector<NodePtr<Expression>> noArguments;
         auto constructorCall = makeNodePtr<FunctionCallExpression>(
             makeIdentifier(applicationNameToken.value), std::vector<NodePtr<TypeSpecifier>>{},
@@ -1652,13 +1918,24 @@ namespace wio
             std::vector<NodePtr<AttributeStatement>>{}, Mutability::Mutable,
             makeIdentifier("__application"), nullptr, std::move(constructorCall), false, startToken.loc));
         entryStatements.push_back(makeNodePtr<ExpressionStatement>(makeAppCall("Start"), startToken.loc));
+        entryStatements.push_back(makeNodePtr<ExpressionStatement>(
+            makeAsyncRuntimeCall("DrainMain"), startToken.loc));
         auto condition = makeNodePtr<UnaryExpression>(
             Token{ .type = TokenType::opLogicalNot, .value = "!", .loc = startToken.loc },
             makeMember(makeAppIdentifier(), "__exitRequested"), UnaryExpression::UnaryOperatorType::Prefix, startToken.loc);
-        auto updateBody = makeNodePtr<BlockStatement>(
-            std::vector<NodePtr<Statement>>{ makeNodePtr<ExpressionStatement>(makeAppCall("Update"), startToken.loc) }, startToken.loc);
+        std::vector<NodePtr<Statement>> updateStatements;
+        updateStatements.push_back(makeNodePtr<ExpressionStatement>(
+            makeAsyncRuntimeCall("DrainMain"), startToken.loc));
+        updateStatements.push_back(makeNodePtr<ExpressionStatement>(makeAppCall("Update"), startToken.loc));
+        updateStatements.push_back(makeNodePtr<ExpressionStatement>(
+            makeAsyncRuntimeCall("DrainMain"), startToken.loc));
+        auto updateBody = makeNodePtr<BlockStatement>(std::move(updateStatements), startToken.loc);
         entryStatements.push_back(makeNodePtr<WhileStatement>(std::move(condition), std::move(updateBody), startToken.loc));
+        entryStatements.push_back(makeNodePtr<ExpressionStatement>(
+            makeAsyncRuntimeCall("DrainMain"), startToken.loc));
         entryStatements.push_back(makeNodePtr<ExpressionStatement>(makeAppCall("Close"), startToken.loc));
+        entryStatements.push_back(makeNodePtr<ExpressionStatement>(
+            makeAsyncRuntimeCall("DrainMain"), startToken.loc));
         entryStatements.push_back(makeNodePtr<ReturnStatement>(
             makeMember(makeAppIdentifier(), "__exitCode"), startToken.loc));
         auto entry = makeNodePtr<FunctionDeclaration>(
@@ -2948,6 +3225,9 @@ namespace wio
         // Prefix (unary)
         // ---------------------------------
         case TokenType::kwRef:
+        case TokenType::kwAwait:
+        case TokenType::kwSpawn:
+        case TokenType::kwDetach:
         case TokenType::kwDeref:
         case TokenType::kwNot:        // not
         case TokenType::opLogicalNot: // !

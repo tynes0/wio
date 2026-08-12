@@ -1,0 +1,8 @@
+use std::async as futures;
+
+async fn Work() -> i32 { return 1; }
+
+fn Entry() -> i32 {
+    let task = spawn Work();
+    return task.Block();
+}

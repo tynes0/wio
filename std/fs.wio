@@ -1,9 +1,11 @@
 use std::path as path;
 use std::result;
+use std::async as async;
 
 realm std {
     realm fs {
         use @CppHeader("std_fs.h");
+        using cpp::header("std_async_fs.h");
 
         @Type(i32)
         enum Error {
@@ -84,6 +86,44 @@ realm std {
         @Native @CppName(wio::runtime::std_fs::TryMetadataResult)
         fn MetadataNative(path: string, isFile: ref bool, isDirectory: ref bool, size: ref i64, lastWriteTime: ref i64, executable: ref bool, error: ref i32, nativeError: ref i64, message: ref string) -> bool;
 
+        fn ReadTextAsyncNative(path: string) -> coroutine<string>
+            with native, cpp::name(wio::runtime::std_async_fs::ReadText);
+        fn WriteTextAsyncNative(path: string, text: string) -> coroutine<string>
+            with native, cpp::name(wio::runtime::std_async_fs::WriteText);
+        fn AppendTextAsyncNative(path: string, text: string) -> coroutine<string>
+            with native, cpp::name(wio::runtime::std_async_fs::AppendText);
+        fn CreateDirectoriesAsyncNative(path: string) -> coroutine<string>
+            with native, cpp::name(wio::runtime::std_async_fs::CreateDirectories);
+        fn RemoveAsyncNative(path: string) -> coroutine<string>
+            with native, cpp::name(wio::runtime::std_async_fs::Remove);
+        fn RemoveAllAsyncNative(path: string) -> coroutine<string>
+            with native, cpp::name(wio::runtime::std_async_fs::RemoveAll);
+        fn CopyFileAsyncNative(source: string, target: string) -> coroutine<string>
+            with native, cpp::name(wio::runtime::std_async_fs::CopyFile);
+        fn MoveFileAsyncNative(source: string, target: string) -> coroutine<string>
+            with native, cpp::name(wio::runtime::std_async_fs::MoveFile);
+        fn ReplaceFileAtomicAsyncNative(source: string, target: string) -> coroutine<string>
+            with native, cpp::name(wio::runtime::std_async_fs::ReplaceFileAtomic);
+        fn ListFilesRecursiveAsyncNative(path: string) -> coroutine<string>
+            with native, cpp::name(wio::runtime::std_async_fs::ListFilesRecursive);
+        fn MetadataAsyncNative(path: string) -> coroutine<string>
+            with native, cpp::name(wio::runtime::std_async_fs::Metadata);
+        fn DecodeAsyncUnit(payload: string, succeeded: ref bool, error: ref i32,
+            nativeError: ref i64, message: ref string)
+            with native, cpp::name(wio::runtime::std_async_fs::DecodeUnit);
+        fn DecodeAsyncText(payload: string, succeeded: ref bool, value: ref string,
+            error: ref i32, nativeError: ref i64, message: ref string)
+            with native, cpp::name(wio::runtime::std_async_fs::DecodeText);
+        fn DecodeAsyncBoolean(payload: string, succeeded: ref bool, value: ref bool,
+            error: ref i32, nativeError: ref i64, message: ref string)
+            with native, cpp::name(wio::runtime::std_async_fs::DecodeBoolean);
+        fn DecodeAsyncTexts(payload: string, succeeded: ref bool, values: ref string[],
+            error: ref i32, nativeError: ref i64, message: ref string)
+            with native, cpp::name(wio::runtime::std_async_fs::DecodeTexts);
+        fn DecodeAsyncMetadata(payload: string, succeeded: ref bool, isFile: ref bool,
+            isDirectory: ref bool, size: ref i64, lastWriteTime: ref i64,
+            executable: ref bool, error: ref i32, nativeError: ref i64, message: ref string)
+            with native, cpp::name(wio::runtime::std_async_fs::DecodeMetadata);
         fn Failure<T>(code: i32, nativeCode: i64, message: string) -> std::Result<T> {
             return std::Err<T>(std::MakeResultError(std::ResultDomain::fs, code, nativeCode, message));
         }
@@ -188,6 +228,93 @@ realm std {
             value.path = pathValue; value.isFile = isFile; value.isDirectory = isDirectory;
             value.size = size; value.lastWriteTime = lastWriteTime; value.executable = executable;
             return std::Ok<MetadataValue>(value);
+        }
+
+        fn FinishAsyncUnit(payload: string) -> std::UnitResult {
+            mut succeeded = false; mut code = 0; mut nativeCode = 0i64; mut message = "";
+            DecodeAsyncUnit(payload, ref succeeded, ref code, ref nativeCode, ref message);
+            if (succeeded) { return std::OkUnit(); }
+            return std::ErrUnit(std::MakeResultError(std::ResultDomain::fs, code, nativeCode, message));
+        }
+
+        fn FinishAsyncText(payload: string) -> std::Result<string> {
+            mut succeeded = false; mut value = ""; mut code = 0; mut nativeCode = 0i64; mut message = "";
+            DecodeAsyncText(payload, ref succeeded, ref value, ref code, ref nativeCode, ref message);
+            if (succeeded) { return std::Ok<string>(value); }
+            return Failure<string>(code, nativeCode, message);
+        }
+
+        fn FinishAsyncBoolean(payload: string) -> std::Result<bool> {
+            mut succeeded = false; mut value = false; mut code = 0; mut nativeCode = 0i64; mut message = "";
+            DecodeAsyncBoolean(payload, ref succeeded, ref value, ref code, ref nativeCode, ref message);
+            if (succeeded) { return std::Ok<bool>(value); }
+            return Failure<bool>(code, nativeCode, message);
+        }
+
+        fn FinishAsyncTexts(payload: string) -> std::Result<string[]> {
+            mut succeeded = false; mut values: string[] = [];
+            mut code = 0; mut nativeCode = 0i64; mut message = "";
+            DecodeAsyncTexts(payload, ref succeeded, ref values, ref code, ref nativeCode, ref message);
+            if (succeeded) { return std::Ok<string[]>(values); }
+            return Failure<string[]>(code, nativeCode, message);
+        }
+
+        fn FinishAsyncMetadata(pathValue: string, payload: string) -> std::Result<MetadataValue> {
+            mut succeeded = false;
+            mut isFile = false; mut isDirectory = false; mut size = -1i64;
+            mut lastWriteTime = 0i64; mut executable = false;
+            mut code = 0; mut nativeCode = 0i64; mut message = "";
+            DecodeAsyncMetadata(payload, ref succeeded, ref isFile, ref isDirectory,
+                ref size, ref lastWriteTime, ref executable, ref code, ref nativeCode, ref message);
+            if (not succeeded) { return Failure<MetadataValue>(code, nativeCode, message); }
+            mut value = MetadataValue();
+            value.path = pathValue; value.isFile = isFile; value.isDirectory = isDirectory;
+            value.size = size; value.lastWriteTime = lastWriteTime; value.executable = executable;
+            return std::Ok<MetadataValue>(value);
+        }
+
+        async fn ReadTextAsync(pathValue: string) -> std::Result<string> {
+            return FinishAsyncText(await ReadTextAsyncNative(pathValue));
+        }
+
+        async fn WriteTextAsync(pathValue: string, text: string) -> std::UnitResult {
+            return FinishAsyncUnit(await WriteTextAsyncNative(pathValue, text));
+        }
+
+        async fn AppendTextAsync(pathValue: string, text: string) -> std::UnitResult {
+            return FinishAsyncUnit(await AppendTextAsyncNative(pathValue, text));
+        }
+
+        async fn CreateDirectoriesAsync(pathValue: string) -> std::UnitResult {
+            return FinishAsyncUnit(await CreateDirectoriesAsyncNative(pathValue));
+        }
+
+        async fn RemoveAsync(pathValue: string) -> std::Result<bool> {
+            return FinishAsyncBoolean(await RemoveAsyncNative(pathValue));
+        }
+
+        async fn RemoveAllAsync(pathValue: string) -> std::UnitResult {
+            return FinishAsyncUnit(await RemoveAllAsyncNative(pathValue));
+        }
+
+        async fn CopyFileAsync(source: string, target: string) -> std::UnitResult {
+            return FinishAsyncUnit(await CopyFileAsyncNative(source, target));
+        }
+
+        async fn MoveFileAsync(source: string, target: string) -> std::UnitResult {
+            return FinishAsyncUnit(await MoveFileAsyncNative(source, target));
+        }
+
+        async fn ReplaceFileAtomicAsync(source: string, target: string) -> std::UnitResult {
+            return FinishAsyncUnit(await ReplaceFileAtomicAsyncNative(source, target));
+        }
+
+        async fn ListFilesRecursiveAsync(pathValue: string) -> std::Result<string[]> {
+            return FinishAsyncTexts(await ListFilesRecursiveAsyncNative(pathValue));
+        }
+
+        async fn MetadataAsync(pathValue: string) -> std::Result<MetadataValue> {
+            return FinishAsyncMetadata(pathValue, await MetadataAsyncNative(pathValue));
         }
 
         fn IsMissing(path: string) -> bool { return not Exists(path); }

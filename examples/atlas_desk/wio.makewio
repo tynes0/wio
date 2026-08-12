@@ -1,0 +1,36 @@
+schemaVersion = 1
+name = "AtlasDesk"
+template = "wio-native-app"
+
+[toolchain]
+buildDir = "build"
+config = "Release"
+
+[wio]
+entry = "wio/main.wio"
+target = "exe"
+sourceRoots = ["wio"]
+includeDirs = ["native/include"]
+linkDirs = ["native/lib"]
+linkLibraries = ["raylib", "opengl32", "gdi32", "winmm"]
+nativeSources = []
+backendArgs = []
+
+[host]
+enabled = false
+
+[build]
+buildDir = ".wio-build"
+config = "Release"
+
+[outputs]
+directory = ".wio-build/interop"
+baseName = "atlas_desk"
+wioName = "atlas_desk"
+hostName = "atlas_desk.host"
+
+[run]
+passLibraryPath = false
+args = []
+workingDirectory = "."
+

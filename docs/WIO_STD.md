@@ -133,7 +133,27 @@ low-level escape hatches. Public `std::path` and `std::fs` surfaces are tested
 both from the repository and through clean installed packages on Windows and
 Linux.
 
-### 2.1.3 Runtime-Backed Stable Module With Explicit Caveat
+Wio 0.12 adds `ReadTextAsync`, `WriteTextAsync`,
+`AppendTextAsync`, `CreateDirectoriesAsync`, `RemoveAsync`, `RemoveAllAsync`,
+`CopyFileAsync`, `MoveFileAsync`, `ReplaceFileAtomicAsync`,
+`ListFilesRecursiveAsync`, and `MetadataAsync`. They return `Task<Result<T>>`
+through ordinary `async fn` lowering, preserve the same filesystem error
+domain/codes, and execute portable filesystem calls on a dedicated bounded I/O
+executor rather than the continuation or generic blocking pool.
+
+### 2.1.3 Network Async Candidate
+
+Wio 0.12 `std::net` adds `ResolveAsync`, `ConnectAsync`,
+`Socket.SendAsync`, `Socket.ReceiveAsync`, `UdpSocket.SendToAsync`, and
+`UdpSocket.ReceiveFromAsync`, plus ownership-safe `Listener.AcceptAsync`.
+Expected DNS/socket failures remain
+`ResultError` values. Native socket state uses operation leases: close prevents
+new leases, interrupts the native socket, and defers state reclamation until
+in-flight operations finish. `LiveSocketCount` is a diagnostic/testing surface
+for ownership qualification. TLS/HTTP and platform completion-port backends
+are not yet claimed.
+
+### 2.1.4 Runtime-Backed Stable Module With Explicit Caveat
 
 - `std::process`
 
@@ -143,6 +163,23 @@ explicit caveat:
 - the public `Result`-based orchestration surface is intended to be stable,
 - the remaining hardening work is cross-platform behavior and packaged-toolchain
   validation, not a different public API direction.
+
+Wio 0.12 adds `RunAsync`, `CaptureAsync`, and an owned
+`Process` returned by `Spawn`. The owned form separates stdout/stderr, supports
+sync and async stdin writes, chunk/all pipe reads, independent stdin close,
+running-state observation, wait, terminate, and deterministic close. Async
+operations acquire native leases before their first suspension; pipe readiness
+and process completion use timer-backed polling without occupying an I/O worker,
+while stdin writes use the bounded I/O executor. Close terminates and reaps
+unfinished children before reclaiming native state.
+`LiveProcessCount` is the ownership qualification diagnostic. OS signal/event
+subscription and native completion-port pipe backends remain future work.
+
+`std::os::WatchFileAsync(path, pollMilliseconds)` is the portable 0.12 watcher
+candidate. It returns the next created/modified/removed `FileChange`, debounces
+modification metadata until one stable polling interval, and cancels at its
+timer/I/O suspension boundaries. Platform-native notification backends may
+replace polling later without changing this first-event surface.
 
 ### 2.2 Mixed Stable Module
 

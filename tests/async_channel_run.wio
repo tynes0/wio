@@ -1,0 +1,79 @@
+use std::assert as assert;
+use std::async as futures;
+use std::console as console;
+
+async fn Entry() -> i32 {
+    let bounded = futures::AsyncChannel<i32>(1usize);
+    assert::Expect(bounded.IsBounded() and bounded.Capacity() == 1usize,
+        "positive capacity creates a bounded async channel");
+    assert::Expect(bounded.TrySend(10) == futures::ChannelSendStatus::accepted,
+        "try-send accepts available capacity");
+    assert::Expect(bounded.TrySend(20) == futures::ChannelSendStatus::backpressured,
+        "try-send exposes backpressure without blocking");
+
+    let pendingSend = bounded.Send(20);
+    await futures::Sleep(10u64);
+    assert::Expect(futures::Poll<bool>(pendingSend).IsPending(),
+        "bounded send remains pending while capacity is full");
+
+    let first = await bounded.Receive();
+    assert::Expect(first.IsSome() and first.Value() == 10,
+        "receive returns the oldest buffered value");
+    assert::Expect(await pendingSend,
+        "freeing capacity resumes a pending producer");
+    let second = await bounded.Receive();
+    assert::Expect(second.IsSome() and second.Value() == 20,
+        "resumed producer preserves its value");
+
+    let waitingReceive = bounded.Receive();
+    await futures::Sleep(10u64);
+    assert::Expect(futures::Poll<std::Option<i32> >(waitingReceive).IsPending(),
+        "receive remains pending while an open channel is empty");
+    bounded.Close();
+    let closedReceive = await waitingReceive;
+    assert::Expect(closedReceive.IsNone(),
+        "closing an empty channel resolves pending receivers");
+    assert::Expect(bounded.TrySend(30) == futures::ChannelSendStatus::closed,
+        "closed channels reject new producers");
+    let closedPoll = bounded.TryReceive();
+    assert::Expect(closedPoll.IsClosed() and bounded.IsDrained(),
+        "try-receive distinguishes closed-and-drained from temporarily empty");
+
+    let closingProducer = futures::AsyncChannel<i32>(1usize);
+    assert::Expect(closingProducer.TrySend(1) == futures::ChannelSendStatus::accepted,
+        "close-producer fixture fills its bounded capacity");
+    let rejectedSend = closingProducer.Send(2);
+    await futures::Sleep(10u64);
+    closingProducer.Close();
+    assert::Expect(not await rejectedSend,
+        "closing a full channel resolves pending producers as rejected");
+
+    let cancellingProducer = futures::AsyncChannel<i32>(1usize);
+    cancellingProducer.TrySend(1);
+    let cancelledSend = cancellingProducer.Send(2);
+    await futures::Sleep(10u64);
+    futures::Cancel<bool>(cancelledSend);
+    await futures::Sleep(2u64);
+    assert::Expect(futures::Poll<bool>(cancelledSend).IsCancelled(),
+        "channel backpressure observes ordinary task cancellation");
+    cancellingProducer.Close();
+
+    let draining = futures::AsyncChannel<string>();
+    assert::Expect(not draining.IsBounded(), "zero capacity creates an unbounded channel");
+    assert::Expect(draining.TrySend("left") == futures::ChannelSendStatus::accepted,
+        "unbounded channel accepts the first value");
+    assert::Expect(draining.TrySend("right") == futures::ChannelSendStatus::accepted,
+        "unbounded channel accepts additional values");
+    draining.Close();
+    let left = await draining.Receive();
+    let right = await draining.Receive();
+    let end = await draining.Receive();
+    assert::Expect(left.Value() == "left" and right.Value() == "right" and end.IsNone(),
+        "closed channels drain buffered values before reporting completion");
+
+    assert::ExpectEqual(futures::IoPendingCount(), 0u64,
+        "async channel backpressure does not occupy the I/O executor");
+    console::PrintLine("async-channel-ok");
+    futures::ShutdownRuntime();
+    return 0;
+}

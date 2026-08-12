@@ -1,0 +1,41 @@
+use std::assert as assert;
+use std::async as futures;
+use std::console as console;
+use std::fs as fs;
+use std::os as os;
+
+async fn ModifyLater(pathValue: string) -> std::UnitResult {
+    await futures::Sleep(25u64);
+    return await fs::WriteTextAsync(pathValue, "changed-content");
+}
+
+async fn Entry() -> i32 {
+    let filePath = "tests/.wio-async-file-watcher.tmp";
+    fs::DeleteIfExists(filePath);
+    let created = await fs::WriteTextAsync(filePath, "initial");
+    assert::Expect(created.IsOk(), "watcher fixture is created asynchronously");
+
+    let changeTask = os::WatchFileAsync(filePath, 2u64);
+    let writeTask = ModifyLater(filePath);
+    let change = await changeTask;
+    let written = await writeTask;
+
+    assert::Expect(written.IsOk(), "watcher mutation succeeds");
+    assert::Expect(change.IsOk(), "watcher observes the next filesystem change");
+    assert::Expect(change.Value().kind == os::FileChangeKind::modified,
+        "watcher distinguishes a modified file");
+    assert::ExpectEqual(change.Value().metadata.size, 15i64,
+        "watcher returns current metadata");
+
+    let removed = await fs::RemoveAsync(filePath);
+    assert::Expect(removed.IsOk(), "watcher fixture is removed asynchronously");
+
+    let waiting = os::WatchFileAsync(filePath, 2u64);
+    let timed = await waiting.Within(15u64);
+    assert::Expect(timed.IsNone(), "watcher deadline is a recoverable absence");
+    assert::Expect(waiting.IsCancelled(), "watcher cancellation reaches its timer boundary");
+
+    console::PrintLine("async-file-watcher-ok");
+    futures::ShutdownRuntime();
+    return 0;
+}

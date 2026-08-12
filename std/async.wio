@@ -5,11 +5,88 @@ realm std {
     realm async {
         using cpp::header("std_async.h");
 
+        // Marker contracts for values that may cross executor boundaries.
+        // Value components composed only from transfer-safe fields are Send
+        // automatically; owning objects opt in after providing synchronization.
+        interface Send {}
+        interface Sync {}
+
+        type Task<T> = coroutine<T>;
+
+        enum TaskStatus {
+            pending,
+            ready,
+            failed,
+            cancelled
+        };
+
+        object TaskPoll<T> {
+            private status: TaskStatus;
+            private value: std::Option<T>;
+            private failure: string;
+
+            public fn OnConstruct(status: TaskStatus, value: std::Option<T>, failure: string) {
+                self.status = status;
+                self.value = value;
+                self.failure = failure;
+            }
+
+            public fn Status() -> TaskStatus { return self.status; }
+            public fn IsPending() -> bool { return self.status == TaskStatus::pending; }
+            public fn IsReady() -> bool { return self.status == TaskStatus::ready; }
+            public fn IsFailed() -> bool { return self.status == TaskStatus::failed; }
+            public fn IsCancelled() -> bool { return self.status == TaskStatus::cancelled; }
+            public fn Value() -> std::Option<T> { return self.value; }
+            public fn Failure() -> string { return self.failure; }
+        }
+
+        object VoidTaskPoll {
+            private status: TaskStatus;
+            private failure: string;
+
+            public fn OnConstruct(status: TaskStatus, failure: string) {
+                self.status = status;
+                self.failure = failure;
+            }
+
+            public fn Status() -> TaskStatus { return self.status; }
+            public fn IsPending() -> bool { return self.status == TaskStatus::pending; }
+            public fn IsReady() -> bool { return self.status == TaskStatus::ready; }
+            public fn IsFailed() -> bool { return self.status == TaskStatus::failed; }
+            public fn IsCancelled() -> bool { return self.status == TaskStatus::cancelled; }
+            public fn Failure() -> string { return self.failure; }
+        }
+
+        object Selection<T> {
+            private index: usize;
+            private value: T;
+
+            public fn OnConstruct(index: usize, value: T) {
+                self.index = index;
+                self.value = value;
+            }
+
+            public fn Index() -> usize { return self.index; }
+            public fn Value() -> T { return self.value; }
+        }
+
         fn Sleep(milliseconds: u64) -> coroutine<void>
             with native, cpp::name(wio::runtime::AsyncSleep);
 
         fn Yield() -> coroutine<void>
             with native, cpp::name(wio::runtime::AsyncYield);
+
+        fn BindMain()
+            with native, cpp::name(wio::runtime::BindAsyncMainExecutor);
+
+        fn DrainMain() -> u64
+            with native, cpp::name(wio::runtime::DrainAsyncMainExecutor);
+
+        fn MainPendingCount() -> u64
+            with native, cpp::name(wio::runtime::AsyncMainPendingCount);
+
+        fn IsMainThread() -> bool
+            with native, cpp::name(wio::runtime::IsAsyncMainThread);
 
         fn BlockOn<T>(task: coroutine<T>) -> T
             with native, cpp::name(wio::runtime::BlockOn);
@@ -29,6 +106,9 @@ realm std {
         fn IsFaulted<T>(task: coroutine<T>) -> bool
             with native, cpp::name(wio::runtime::AsyncFaulted);
 
+        fn FailureMessage<T>(task: coroutine<T>) -> string
+            with native, cpp::name(wio::runtime::AsyncFailureMessage);
+
         fn WaitFor<T>(task: coroutine<T>, milliseconds: u64) -> bool
             with native, cpp::name(wio::runtime::AsyncWaitFor);
 
@@ -41,6 +121,32 @@ realm std {
         fn Detach<T>(task: coroutine<T>)
             with native, cpp::name(wio::runtime::DetachAsync);
 
+        fn Poll<T>(task: coroutine<T>) -> TaskPoll<T> {
+            if (IsCancelled(task)) {
+                return TaskPoll<T>(TaskStatus::cancelled, std::None<T>(), "");
+            }
+            if (IsReady(task) == false) {
+                return TaskPoll<T>(TaskStatus::pending, std::None<T>(), "");
+            }
+            if (IsFaulted(task)) {
+                return TaskPoll<T>(TaskStatus::failed, std::None<T>(), FailureMessage(task));
+            }
+            return TaskPoll<T>(TaskStatus::ready, std::Some<T>(BlockOn<T>(task)), "");
+        }
+
+        fn Poll(task: coroutine<void>) -> VoidTaskPoll {
+            if (IsCancelled(task)) {
+                return VoidTaskPoll(TaskStatus::cancelled, "");
+            }
+            if (IsReady(task) == false) {
+                return VoidTaskPoll(TaskStatus::pending, "");
+            }
+            if (IsFaulted(task)) {
+                return VoidTaskPoll(TaskStatus::failed, FailureMessage(task));
+            }
+            return VoidTaskPoll(TaskStatus::ready, "");
+        }
+
         fn Run<T>(action: fn() -> T) -> coroutine<T>
             with native, cpp::name(wio::runtime::RunAsync);
 
@@ -48,10 +154,10 @@ realm std {
             with native, cpp::name(wio::runtime::RunAsync);
 
         fn RunBlocking<T>(action: fn() -> T) -> coroutine<T>
-            with native, cpp::name(wio::runtime::RunAsync);
+            with native, cpp::name(wio::runtime::RunBlockingAsync);
 
         fn RunBlocking(action: fn()) -> coroutine<void>
-            with native, cpp::name(wio::runtime::RunAsync);
+            with native, cpp::name(wio::runtime::RunBlockingAsync);
 
         fn All<T>(tasks: coroutine<T>[]) -> coroutine<T[]>
             with native, cpp::name(wio::runtime::WhenAll);
@@ -64,6 +170,17 @@ realm std {
 
         fn Race<T>(tasks: coroutine<T>[]) -> coroutine<T>
             with native, cpp::name(wio::runtime::Race);
+
+        async fn Select<T>(tasks: coroutine<T>[]) -> Selection<T> {
+            let winner = await Any<T>(tasks);
+            let value = await tasks[winner];
+            mut index = 0usize;
+            for (task in tasks) {
+                if (index != winner) { Cancel<T>(task); }
+                index += 1usize;
+            }
+            return Selection<T>(winner, value);
+        }
 
         fn Timeout<T>(task: coroutine<T>, milliseconds: u64) -> coroutine<T>
             with native, cpp::name(wio::runtime::WithTimeout);
@@ -80,6 +197,16 @@ realm std {
                 await std::async::Sleep(milliseconds);
                 return std::None<T>();
             }
+
+            async fn CompletedWhenReady(task: coroutine<void>) -> bool {
+                await task;
+                return true;
+            }
+
+            async fn IncompleteAfter(milliseconds: u64) -> bool {
+                await std::async::Sleep(milliseconds);
+                return false;
+            }
         }
 
         async fn TimeoutOption<T>(task: coroutine<T>, milliseconds: u64) -> std::Option<T> {
@@ -92,8 +219,42 @@ realm std {
             return result;
         }
 
+        async fn TimeoutCompleted(task: coroutine<void>, milliseconds: u64) -> bool {
+            let candidates: coroutine<bool>[] = [
+                detail::CompletedWhenReady(task),
+                detail::IncompleteAfter(milliseconds)
+            ];
+            let completed = await Race(candidates);
+            if (not completed) { Cancel<void>(task); }
+            return completed;
+        }
+
         fn WorkerCount() -> u64
             with native, cpp::name(wio::runtime::AsyncWorkerCount);
+
+        fn BlockingWorkerCount() -> u64
+            with native, cpp::name(wio::runtime::AsyncBlockingWorkerCount);
+
+        fn BlockingQueueCapacity() -> u64
+            with native, cpp::name(wio::runtime::AsyncBlockingQueueCapacity);
+
+        fn BlockingPendingCount() -> u64
+            with native, cpp::name(wio::runtime::AsyncBlockingPendingCount);
+
+        fn IoWorkerCount() -> u64
+            with native, cpp::name(wio::runtime::AsyncIoWorkerCount);
+
+        fn IoQueueCapacity() -> u64
+            with native, cpp::name(wio::runtime::AsyncIoQueueCapacity);
+
+        fn IoPendingCount() -> u64
+            with native, cpp::name(wio::runtime::AsyncIoPendingCount);
+
+        fn IsRuntimeRunning() -> bool
+            with native, cpp::name(wio::runtime::AsyncRuntimeRunning);
+
+        fn ShutdownRuntime()
+            with native, cpp::name(wio::runtime::ShutdownAsyncRuntime);
 
         type CancellationToken = concurrency::CancellationToken;
 
@@ -107,6 +268,222 @@ realm std {
             public fn Token() -> CancellationToken { return self.token; }
             public fn Cancel() { self.token.Cancel(); }
             public fn IsCancelled() -> bool { return self.token.IsCancelled(); }
+        }
+
+        enum ChannelSendStatus {
+            accepted,
+            backpressured,
+            closed
+        };
+
+        enum ChannelReceiveStatus {
+            available,
+            empty,
+            closed
+        };
+
+        object ChannelReceivePoll<T> {
+            private status: ChannelReceiveStatus;
+            private value: std::Option<T>;
+
+            public fn OnConstruct(status: ChannelReceiveStatus, value: std::Option<T>) {
+                self.status = status;
+                self.value = value;
+            }
+
+            public fn Status() -> ChannelReceiveStatus { return self.status; }
+            public fn HasValue() -> bool { return self.status == ChannelReceiveStatus::available; }
+            public fn IsEmpty() -> bool { return self.status == ChannelReceiveStatus::empty; }
+            public fn IsClosed() -> bool { return self.status == ChannelReceiveStatus::closed; }
+            public fn Value() -> std::Option<T> { return self.value; }
+        }
+
+        object AsyncChannel<T> {
+            private gate: concurrency::Mutex;
+            private values: T[];
+            private capacity: usize;
+            private closed: bool;
+
+            // A zero capacity means unbounded. Positive capacities provide
+            // producer backpressure without occupying a blocking worker.
+            public fn OnConstruct(capacity: usize = 0usize) {
+                self.gate = concurrency::Mutex();
+                self.values = [];
+                self.capacity = capacity;
+                self.closed = false;
+            }
+
+            public fn TrySend(value: T) -> ChannelSendStatus {
+                self.gate.Lock();
+                if (self.closed) {
+                    self.gate.Unlock();
+                    return ChannelSendStatus::closed;
+                }
+                if (self.capacity > 0usize and self.values.Count() >= self.capacity) {
+                    self.gate.Unlock();
+                    return ChannelSendStatus::backpressured;
+                }
+                self.values.Push(value);
+                self.gate.Unlock();
+                return ChannelSendStatus::accepted;
+            }
+
+            public async fn Send(value: T) -> bool {
+                while (true) {
+                    let status = self.TrySend(value);
+                    if (status == ChannelSendStatus::accepted) { return true; }
+                    if (status == ChannelSendStatus::closed) { return false; }
+                    await Sleep(1u64);
+                }
+                return false;
+            }
+
+            public fn TryReceive() -> ChannelReceivePoll<T> {
+                self.gate.Lock();
+                if (not self.values.Empty()) {
+                    let value = self.values[0usize];
+                    self.values.RemoveAt(0usize);
+                    self.gate.Unlock();
+                    return ChannelReceivePoll<T>(
+                        ChannelReceiveStatus::available, std::Some<T>(value));
+                }
+                let status = self.closed
+                    ? ChannelReceiveStatus::closed
+                    : ChannelReceiveStatus::empty;
+                self.gate.Unlock();
+                return ChannelReceivePoll<T>(status, std::None<T>());
+            }
+
+            public async fn Receive() -> std::Option<T> {
+                while (true) {
+                    let current = self.TryReceive();
+                    if (current.HasValue()) { return current.Value(); }
+                    if (current.IsClosed()) { return std::None<T>(); }
+                    await Sleep(1u64);
+                }
+                return std::None<T>();
+            }
+
+            public fn Close() {
+                self.gate.Lock();
+                self.closed = true;
+                self.gate.Unlock();
+            }
+
+            public fn IsClosed() -> bool {
+                self.gate.Lock();
+                let result = self.closed;
+                self.gate.Unlock();
+                return result;
+            }
+
+            public fn IsDrained() -> bool {
+                self.gate.Lock();
+                let result = self.closed and self.values.Empty();
+                self.gate.Unlock();
+                return result;
+            }
+
+            public fn Count() -> usize {
+                self.gate.Lock();
+                let result = self.values.Count();
+                self.gate.Unlock();
+                return result;
+            }
+
+            public fn Capacity() -> usize { return self.capacity; }
+            public fn IsBounded() -> bool { return self.capacity > 0usize; }
+            public fn OnDestruct() { self.Close(); }
+        }
+
+        fn ScopeCreate() -> opaque
+            with native, cpp::name(wio::runtime::AsyncScopeCreate);
+
+        fn ScopeDestroy(handle: opaque)
+            with native, cpp::name(wio::runtime::AsyncScopeDestroy);
+
+        fn ScopeSpawn<T>(handle: opaque, task: coroutine<T>) -> coroutine<T>
+            with native, cpp::name(wio::runtime::AsyncScopeSpawn);
+
+        fn ScopeRun<T>(handle: opaque, action: fn() -> T) -> coroutine<T>
+            with native, cpp::name(wio::runtime::AsyncScopeRun);
+
+        fn ScopeRun(handle: opaque, action: fn()) -> coroutine<void>
+            with native, cpp::name(wio::runtime::AsyncScopeRun);
+
+        fn ScopeRunBlocking<T>(handle: opaque, action: fn() -> T) -> coroutine<T>
+            with native, cpp::name(wio::runtime::AsyncScopeRunBlocking);
+
+        fn ScopeRunBlocking(handle: opaque, action: fn()) -> coroutine<void>
+            with native, cpp::name(wio::runtime::AsyncScopeRunBlocking);
+
+        fn ScopeJoin(handle: opaque) -> coroutine<void>
+            with native, cpp::name(wio::runtime::AsyncScopeJoin);
+
+        fn ScopeCancel(handle: opaque)
+            with native, cpp::name(wio::runtime::AsyncScopeCancel);
+
+        fn ScopeCount(handle: opaque) -> u64
+            with native, cpp::name(wio::runtime::AsyncScopeCount);
+
+        fn ScopeClosed(handle: opaque) -> bool
+            with native, cpp::name(wio::runtime::AsyncScopeClosed);
+
+        fn ScopeDeadline(handle: opaque, milliseconds: u64) -> bool
+            with native, cpp::name(wio::runtime::AsyncScopeDeadline);
+
+        object Scope {
+            private handle: opaque;
+            private disposed: bool;
+
+            public fn OnConstruct() {
+                self.handle = ScopeCreate();
+                self.disposed = false;
+            }
+
+            public fn OnConstruct(deadlineMilliseconds: u64) {
+                self.handle = ScopeCreate();
+                self.disposed = false;
+                ScopeDeadline(self.handle, deadlineMilliseconds);
+            }
+
+            public fn Spawn<T>(task: Task<T>) -> Task<T> {
+                return ScopeSpawn<T>(self.handle, task);
+            }
+
+            public fn SpawnWorker<T>(action: fn() -> T) -> Task<T> {
+                return ScopeRun<T>(self.handle, action);
+            }
+
+            public fn SpawnWorker(action: fn()) -> Task<void> {
+                return ScopeRun(self.handle, action);
+            }
+
+            public fn SpawnBlocking<T>(action: fn() -> T) -> Task<T> {
+                return ScopeRunBlocking<T>(self.handle, action);
+            }
+
+            public fn SpawnBlocking(action: fn()) -> Task<void> {
+                return ScopeRunBlocking(self.handle, action);
+            }
+
+            public async fn Join() {
+                await ScopeJoin(self.handle);
+            }
+
+            public fn Cancel() { ScopeCancel(self.handle); }
+            public fn Count() -> u64 { return ScopeCount(self.handle); }
+            public fn IsClosed() -> bool { return ScopeClosed(self.handle); }
+            public fn SetDeadline(milliseconds: u64) -> bool {
+                return ScopeDeadline(self.handle, milliseconds);
+            }
+
+            public fn OnDestruct() {
+                if (not self.disposed) {
+                    ScopeDestroy(self.handle);
+                    self.disposed = true;
+                }
+            }
         }
 
         async fn SleepCancellable(
@@ -127,6 +504,7 @@ realm std {
             return not token.IsCancelled();
         }
 
+        @From(Send, Sync)
         object Dispatcher {
             private gate: concurrency::Mutex;
             private actions: fn()[];

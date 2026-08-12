@@ -1,0 +1,52 @@
+use std::assert as assert;
+use std::async as futures;
+use std::console as console;
+
+async fn DelayedValue(value: i32, milliseconds: u64) -> i32 {
+    await futures::Sleep(milliseconds);
+    return value;
+}
+
+async fn DelayedVoid(milliseconds: u64) {
+    await futures::Sleep(milliseconds);
+}
+
+async fn ImmediateValue() -> i32 {
+    return 7;
+}
+
+fn Entry() -> i32 {
+    let task: futures::Task<i32> = DelayedValue(42, 20u64);
+    let pending = task.Poll();
+    assert::Expect(pending.IsPending(), "Poll observes a suspended task without blocking");
+    assert::Expect(pending.Value().IsNone(), "pending Poll has no value");
+    assert::Expect(not task.IsReady(), "member readiness query is non-blocking");
+
+    let within = task.Within(500u64).Block();
+    assert::Expect(within.IsSome(), "Within returns a recoverable ready value");
+    assert::ExpectEqual(within.Value(), 42, "Within preserves the task result");
+
+    let ready = task.Poll();
+    assert::Expect(ready.IsReady(), "Poll observes stored completion");
+    assert::ExpectEqual(ready.Value().Value(), 42, "Poll exposes the stored value");
+    assert::ExpectEqual(task.Block(), 42, "Block is the explicit synchronous boundary");
+
+    let completed = ImmediateValue();
+    assert::ExpectEqual(completed.Block(), 7, "immediate task completes");
+    completed.Cancel();
+    assert::ExpectEqual(completed.Block(), 7, "late cancellation cannot erase a completed value");
+
+    let voidTask = DelayedVoid(10u64);
+    assert::Expect(voidTask.Poll().IsPending(), "void Poll observes pending state");
+    assert::Expect(voidTask.Within(500u64).Block(), "void Within reports completion");
+    assert::Expect(voidTask.Poll().IsReady(), "void Poll observes completion");
+
+    let cancellable = DelayedValue(99, 500u64);
+    cancellable.CancelAfter(5u64).Block();
+    assert::Expect(cancellable.IsCancelled(), "CancelAfter is discoverable on Task");
+    assert::Expect(cancellable.Poll().IsCancelled(), "Poll distinguishes cancellation");
+
+    console::PrintLine("async-task-surface-ok");
+    futures::ShutdownRuntime();
+    return 0;
+}

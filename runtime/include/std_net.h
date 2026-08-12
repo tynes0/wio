@@ -49,5 +49,8 @@ namespace wio::runtime::std_net
         std::string& remoteAddress,
         std::uint16_t& remotePort,
         std::string& error) noexcept;
+    [[nodiscard]] bool Retain(void* handle, std::string& error) noexcept;
+    [[nodiscard]] std::uint64_t LiveSocketCount() noexcept;
+    void Release(void* handle) noexcept;
     void Close(void* handle) noexcept;
 }

@@ -64,7 +64,10 @@ fn ProjectParser(command: string) -> std::Result<Argonaut::Parser> {
     mut parser = Argonaut::Parser();
     AddProjectBase?(ref parser, command != "describe");
 
-    if (command == "describe" or command == "build") {
+    if (command == "build") {
+        AddFlag?(ref parser, "EMIT-CPP", ["--emit-cpp"], "Keep generated C++ and stop before backend compilation.");
+    }
+    else if (command == "describe") {
     }
     else if (command == "run") {
         AddFlag?(ref parser, "NO-BUILD", ["--no-build"], "Run existing project outputs.");

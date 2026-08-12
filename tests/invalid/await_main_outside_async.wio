@@ -1,0 +1,4 @@
+fn Entry() -> i32 {
+    await main;
+    return 0;
+}

@@ -1,0 +1,113 @@
+use std::assert as assert;
+use std::async as futures;
+use std::console as console;
+use std::process as process;
+
+async fn Entry(args: string[]) -> i32 {
+    if (args.Count() > 1usize and args[1usize] == "--stream-child") {
+        let input = console::ReadLine!();
+        console::PrintLine!("stdout:" + input);
+        console::WriteErrorLine!("stderr:" + input);
+        return 7;
+    }
+    if (args.Count() > 1usize and args[1usize] == "--wait-child") {
+        await futures::Sleep(5000u64);
+        return 0;
+    }
+    if (args.Count() > 1usize and args[1usize] == "--sync-child") {
+        console::PrintLine!("sync-stdout");
+        console::WriteErrorLine!("sync-stderr");
+        return 3;
+    }
+    if (args.Count() > 2usize and args[1usize] == "--argument-child") {
+        return args[2usize] == "çalışan yol" ? 0 : 9;
+    }
+
+    let baseline = process::LiveProcessCount();
+    assert::Expect(process::Spawn("", []).IsError(),
+        "invalid process launches remain recoverable Result errors");
+    let spawned = process::Spawn(process::ExecutablePath(), ["--stream-child"]);
+    assert::Expect(spawned.IsOk(), "owned process launches the current Wio executable");
+    let child = spawned.Value();
+    let running = child.IsRunning();
+    assert::Expect(running.IsOk() and running.Value(), "spawned child reports a running state");
+
+    let written = await child.WriteStdinAsync("hello-stream\n");
+    assert::Expect(written.IsOk() and written.Value() == 13usize,
+        "async stdin preserves the written byte count");
+    assert::Expect(child.CloseStdin().IsOk(), "stdin can be closed independently");
+
+    let stdoutTask = child.ReadAllStdoutAsync();
+    let stderrTask = child.ReadAllStderrAsync();
+    let waitTask = child.WaitAsync();
+    let standardOutput = await stdoutTask;
+    let standardError = await stderrTask;
+    let exitCode = await waitTask;
+    assert::Expect(standardOutput.IsOk(), "streaming stdout reaches EOF as a Result");
+    assert::Expect(standardError.IsOk(), "streaming stderr reaches EOF as a Result");
+    assert::ExpectEqual(standardOutput.Value().Trim(), "stdout:hello-stream",
+        "stdout remains separate from stderr");
+    assert::ExpectEqual(standardError.Value().Trim(), "stderr:hello-stream",
+        "stderr remains separate from stdout");
+    assert::Expect(exitCode.IsOk() and exitCode.Value() == 7,
+        "async wait preserves the child exit code");
+
+    child.Close();
+    assert::Expect(child.ReadStdout(1usize).IsError(),
+        "closed process objects reject synchronous handle access");
+    let closedWait = await child.WaitAsync();
+    assert::Expect(closedWait.IsError(),
+        "closed process objects reject asynchronous handle access");
+    assert::ExpectEqual(process::LiveProcessCount(), baseline,
+        "completed process state is released without leaking native handles");
+
+    let syncChild = process::Spawn!(process::ExecutablePath(), ["--sync-child"]);
+    assert::Expect(syncChild.CloseStdin().IsOk(), "synchronous child stdin closes cleanly");
+    let syncOutput = syncChild.ReadStdout(64usize);
+    let syncError = syncChild.ReadStderr(64usize);
+    let syncExit = syncChild.Wait();
+    assert::Expect(syncOutput.IsOk() and syncOutput.Value().bytes.Trim() == "sync-stdout",
+        "synchronous stdout reads return independent pipe chunks");
+    assert::Expect(syncError.IsOk() and syncError.Value().bytes.Trim() == "sync-stderr",
+        "synchronous stderr reads return independent pipe chunks");
+    assert::Expect(syncExit.IsOk() and syncExit.Value() == 3,
+        "synchronous wait preserves the child exit code");
+    syncChild.Close();
+    assert::ExpectEqual(process::LiveProcessCount(), baseline,
+        "synchronous process state closes without leaking native handles");
+
+    let argumentChild = process::Spawn!(
+        process::ExecutablePath(), ["--argument-child", "çalışan yol"]);
+    let argumentExitTask = argumentChild.WaitAsync();
+    let argumentExit = await argumentExitTask;
+    assert::Expect(argumentExit.IsOk() and argumentExit.Value() == 0,
+        "spawn preserves UTF-8 and space-containing arguments");
+    argumentChild.Close();
+
+    mut iteration = 0u64;
+    while (iteration < 16u64) {
+        let waitingChild = process::Spawn!(process::ExecutablePath(), ["--wait-child"]);
+        let interruptedRead = waitingChild.ReadStdoutAsync(32usize);
+        waitingChild.Close();
+        let interrupted = await interruptedRead;
+        assert::Expect(interrupted.IsError(),
+            "close interrupts an in-flight process pipe read safely");
+        iteration += 1u64;
+    }
+    assert::ExpectEqual(process::LiveProcessCount(), baseline,
+        "close-race leases release every process state");
+
+    let terminatedChild = process::Spawn!(process::ExecutablePath(), ["--wait-child"]);
+    assert::Expect(terminatedChild.Terminate().IsOk(), "explicit terminate requests child shutdown");
+    let terminatedExit = await terminatedChild.WaitAsync();
+    assert::Expect(terminatedExit.IsOk() and terminatedExit.Value() != 0,
+        "terminated children remain waitable with a non-zero exit status");
+    terminatedChild.Close();
+    assert::ExpectEqual(process::LiveProcessCount(), baseline,
+        "explicit terminate and wait release process state");
+    assert::ExpectEqual(futures::IoPendingCount(), 0u64,
+        "streaming process operations drain the I/O executor");
+    console::PrintLine("async-process-stream-ok");
+    futures::ShutdownRuntime();
+    return 0;
+}

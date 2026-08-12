@@ -134,11 +134,26 @@ namespace wio
         Temporary
     };
 
-    FrenumClassInNamespace(wio, IntrinsicMember, uint8_t,
+    // This is compiler-internal state, not a user-visible reflected enum.
+    // Keep it as a regular enum so the intrinsic surface is not capped by
+    // frenum's preprocessor argument limit.
+    enum class IntrinsicMember : uint8_t
+    {
         None,
         PackSize,
         PackArray,
         PackToStaticArray,
+        TaskStart,
+        TaskCancel,
+        TaskIsReady,
+        TaskIsCancelled,
+        TaskIsFaulted,
+        TaskWaitFor,
+        TaskBlock,
+        TaskPoll,
+        TaskWithin,
+        TaskCancelAfter,
+        TaskDetach,
         ArrayCount,
         ArrayEmpty,
         ArrayCapacity,
@@ -259,7 +274,7 @@ namespace wio
         FlagsetWithout,
         FlagsetToggle,
         FlagsetClear
-    );
+    };
 
     struct ASTNode;
     struct Expression;
@@ -408,6 +423,7 @@ namespace wio
         Token op;
         NodePtr<Expression> operand;
         UnaryOperatorType opType;
+        bool isMainExecutorAwait = false;
         OperatorDispatchKind operatorDispatchKind = OperatorDispatchKind::None;
         WeakRef<sema::Type> overloadFunctionType = nullptr;
 
@@ -667,6 +683,10 @@ namespace wio
         std::vector<Parameter> parameters;
         NodePtr<TypeSpecifier> returnType;
         NodePtr<Statement> body;
+        // Filled by semantic analysis. Executor-crossing calls use this to
+        // reject borrowed or otherwise non-transfer-safe captures.
+        std::vector<WeakRef<sema::Symbol>> capturedSymbols;
+        bool capturesSelf = false;
 
         LambdaExpression(std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType, NodePtr<Statement> _body,
             common::Location _loc = common::Location::invalid());

@@ -12,6 +12,39 @@ Notes:
 
 ## Async and coroutine foundation sprint
 
+- [x] The post-0.11 correctness candidate separates continuation, blocking,
+      and I/O capacity; checks executor-crossing captures; makes cancellation
+      wake suspension boundaries; and provides ordered explicit shutdown.
+- [x] `Task<T>` member ergonomics, typed non-blocking polling, recoverable
+      deadlines, heterogeneous owning scopes, language `async scope`/`spawn`,
+      explicit detach, and homogeneous selection are implemented candidates.
+- [x] `spawn worker` and `spawn blocking` schedule synchronous expressions on
+      the appropriate executor while retaining lexical scope ownership; unsafe
+      borrowed captures fail during semantic analysis.
+- [x] Applications bind and deterministically drain the owner executor;
+      `await main` directly transfers the suspended caller, and headless hosts
+      can bind/drain the same queue.
+- [x] The first platform-I/O candidate adds a dedicated bounded executor and
+      ownership-safe, Result-preserving asynchronous filesystem plus process
+      run/capture operations, a cancellable portable first-change watcher, and
+      leased DNS/connect plus TCP/UDP data I/O and ownership-safe async accept
+      with close-race safety.
+- [x] `std::process::Spawn` adds owned child lifetime, separate stdin/stdout/
+      stderr pipes, sync/async streaming, running state, wait, termination,
+      deterministic close/reap, pre-scheduling operation leases, and live-state
+      diagnostics.
+- [x] Windows entry-point arguments are normalized from the native UTF-16
+      command line to UTF-8, including spaced and non-ASCII spawned arguments.
+- [x] `std::async::AsyncChannel<T>` provides bounded or unbounded buffering,
+      non-blocking `TrySend`/`TryReceive`, cancellable async backpressure,
+      close wake-up, and buffered drain-before-completion semantics.
+- [x] Wio enum members remain isolated to their declaring enum through the
+      C++ backend, allowing separate enums to reuse natural names such as
+      `pending`, `empty`, and `closed` without backend collisions.
+- [x] Re-importing an already merged module under another alias now restores
+      cached export/realm metadata, making nested and combined std imports
+      deterministic regardless of module discovery order.
+
 - [x] `async fn`, async object/interface methods, generic async declarations,
       async `Entry`, `await`, and the `coroutine<T>` type are implemented across
       lexer, parser, semantic analysis, and C++20 code generation.
@@ -641,3 +674,18 @@ here as historical evidence rather than active work:
       `std::path::Extension` contextual-keyword regression; its fix and the
       release gate preventing recurrence remain active P0 items in
       `TODOLIST.md`.
+
+## v0.11 Desktop and Editor Validation
+
+- [x] Atlas Desk landed as a substantial native desktop workspace dashboard
+      using the `application` lifecycle, stack-resident systems, async
+      coroutine scanning and cancellation, typed attributes, modern native
+      declarations, extensions, Option/Result, JSON, and Unicode APIs.
+- [x] Atlas Desk was built and smoke-rendered with the published Wio `0.11.0`
+      portable toolchain, with its rendered dashboard retained as release
+      evidence.
+- [x] `wio-vscode` was rebuilt for `0.11.0` around modular CLI, diagnostics,
+      source-index, and provider layers with modern grammar and snippets.
+- [x] Compiler and extension releases now share their major/minor release line;
+      the matching extension check, unit-test, Windows/Ubuntu CI, and VSIX
+      package gates are part of the release policy.

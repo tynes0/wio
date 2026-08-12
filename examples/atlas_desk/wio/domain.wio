@@ -1,0 +1,158 @@
+use native;
+use std::unicode as unicode;
+
+realm atlas {
+    attribute persisted(name: string) for field retain runtime;
+    attribute dashboard(label: string) for component retain runtime;
+
+    component Preferences with dashboard("Atlas preferences") {
+        workspacePath: string with persisted("workspacePath");
+        search: string with persisted("search");
+        scanLimit: u64 with persisted("scanLimit");
+    }
+
+    component KindMetric with dashboard("File kind") {
+        name: string;
+        count: u64;
+    }
+
+    component RecentFile with dashboard("Recent file") {
+        path: string;
+        extension: string;
+        bytes: u64;
+    }
+
+    component WorkspaceSnapshot with dashboard("Workspace snapshot") {
+        root: string;
+        files: u64;
+        directories: u64;
+        bytes: u64;
+        lines: u64;
+        health: i32;
+        truncated: bool;
+        kinds: KindMetric[];
+        recent: RecentFile[];
+        insights: string[];
+    }
+
+    extension SnapshotMetrics for WorkspaceSnapshot {
+        public view fn HealthLabel() -> string {
+            return match (self.health) {
+                90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100: "Excellent";
+                70, 71, 72, 73, 74, 75, 76, 77, 78, 79,
+                80, 81, 82, 83, 84, 85, 86, 87, 88, 89: "Healthy";
+                45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59,
+                60, 61, 62, 63, 64, 65, 66, 67, 68, 69: "Needs attention";
+                assumed: "At risk";
+            };
+        }
+
+        public view fn KindCount(name: string) -> u64 {
+            for metric in self.kinds {
+                if (metric.name == name) { return metric.count; }
+            }
+            return 0u64;
+        }
+
+        public view fn FilterRecent(query: string) -> RecentFile[] {
+            let needle = unicode::CaseFold(query.Trim());
+            if (needle == "") { return self.recent.Clone(); }
+            mut values: RecentFile[] = [];
+            for file in self.recent {
+                if (unicode::CaseFold(file.path).Contains(needle)) { values.Push(file); }
+            }
+            return values;
+        }
+    }
+
+    object DeskState {
+        public regular: FontFace;
+        public medium: FontFace;
+        public bold: FontFace;
+        public preferences: Preferences;
+        public snapshot: WorkspaceSnapshot;
+        public hasSnapshot: bool;
+        public pathInput: string;
+        public searchInput: string;
+        public activeField: i32;
+        public status: string;
+        public error: string;
+        public toast: string;
+        public toastSeconds: f32;
+        public scanSeconds: f32;
+        public lastScanMilliseconds: i64;
+
+        OnConstruct() {
+            self.regular = FontFace("assets/fonts/Manrope-Regular.ttf", 34);
+            self.medium = FontFace("assets/fonts/Manrope-Medium.ttf", 34);
+            self.bold = FontFace("assets/fonts/Manrope-Bold.ttf", 38);
+            self.preferences = DefaultPreferences();
+            self.snapshot = WorkspaceSnapshot();
+            self.hasSnapshot = false;
+            self.pathInput = self.preferences.workspacePath;
+            self.searchInput = "";
+            self.activeField = 0;
+            self.status = "Preparing workspace scan";
+            self.error = "";
+            self.toast = "Atlas Desk is ready";
+            self.toastSeconds = 3.0f32;
+            self.scanSeconds = 0.0f32;
+            self.lastScanMilliseconds = 0i64;
+        }
+
+        public fn Notify(message: string) {
+            self.toast = message;
+            self.toastSeconds = 3.5f32;
+        }
+
+        public fn UnloadFonts() {
+            self.regular.Unload();
+            self.medium.Unload();
+            self.bold.Unload();
+        }
+    }
+
+    fn DefaultPreferences() -> Preferences {
+        mut value = Preferences();
+        value.workspacePath = ".";
+        value.search = "";
+        value.scanLimit = 12000u64;
+        return value;
+    }
+
+    fn EmptySnapshot() -> WorkspaceSnapshot {
+        mut value = WorkspaceSnapshot();
+        value.root = "";
+        value.kinds = [];
+        value.recent = [];
+        value.insights = [];
+        return value;
+    }
+
+    fn FormatCount(value: u64) -> string {
+        if (value >= 1000000u64) { return $"${value / 1000000u64}.${(value / 100000u64) % 10u64}m"; }
+        if (value >= 1000u64) { return $"${value / 1000u64}.${(value / 100u64) % 10u64}k"; }
+        return $"${value}";
+    }
+
+    fn FormatBytes(value: u64) -> string {
+        if (value >= 1073741824u64) {
+            return $"${value / 1073741824u64}.${(value / 107374182u64) % 10u64} GB";
+        }
+        if (value >= 1048576u64) {
+            return $"${value / 1048576u64}.${(value / 104857u64) % 10u64} MB";
+        }
+        if (value >= 1024u64) {
+            return $"${value / 1024u64}.${(value / 102u64) % 10u64} KB";
+        }
+        return $"${value} B";
+    }
+
+    fn ClipText(value: string, maxCodePoints: usize) -> string {
+        let count = unicode::CodePointCount(value);
+        if (count <= maxCodePoints) { return value; }
+        if (maxCodePoints <= 3usize) { return unicode::Slice(value, 0usize, maxCodePoints); }
+        return unicode::Slice(value, 0usize, maxCodePoints - 3usize) + "...";
+    }
+}
+

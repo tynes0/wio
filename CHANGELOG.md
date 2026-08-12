@@ -4,6 +4,95 @@ All notable user-facing changes to Wio are recorded here.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-08-13
+
+### Added
+
+- Added the `std::async::Task<T>` public alias plus `Send`/`Sync` executor
+  safety markers for synchronized user-owned types.
+- Added blocking-executor capacity/runtime diagnostics and explicit,
+  idempotent async runtime shutdown.
+- Added owning heterogeneous async scopes, lexical `async scope`, `spawn`,
+  deadlines, cancellation propagation, explicit detach, and owner/main-thread
+  dispatch integrated with application lifecycle.
+- Added dedicated filesystem and network I/O execution, cancellable file
+  watching, asynchronous DNS/TCP/UDP operations, and ownership-safe async
+  listener accept.
+- Added Result-preserving asynchronous process helpers and owned process
+  streams with separate stdin/stdout/stderr, wait, terminate, close, and
+  live-state diagnostics.
+- Added bounded and unbounded `AsyncChannel<T>` with non-blocking try
+  operations, suspending send/receive, close, drain, and cancellation behavior.
+- Added scoped enum backend emission and module re-import alias regression
+  coverage.
+
+### Changed
+
+- `RunBlocking` now uses a distinct bounded blocking pool configured through
+  `WIO_ASYNC_BLOCKING_WORKERS` and `WIO_ASYNC_BLOCKING_QUEUE`; it no longer
+  consumes continuation/timer workers.
+- Async timer suspension is cancellation-aware and wakes cancelled work
+  promptly instead of retaining it until the original deadline.
+- `Run` and `RunBlocking` now reject borrowed, opaque, callable, or unsafe
+  object captures before C++ generation. Structurally safe values pass
+  automatically; synchronized objects opt in through `std::async::Send`.
+- Network connect timeouts now govern the actual non-blocking connection
+  attempt on Windows and POSIX instead of only later socket I/O.
+- Socket handles retain native descriptors until in-flight leases drain, so
+  close interrupts blocking work without descriptor reuse or mutex deadlock.
+- Release validation now runs on release branches, supersedes stale runs,
+  stresses async/process ownership under sanitizers, and fails fast on hung
+  network regressions.
+
+### Fixed
+
+- Fixed cancelled coroutines continuing past `Yield`/`Sleep` suspension and
+  executing user code after cancellation.
+- Fixed shutdown races between accepted blocking work, continuation posting,
+  delayed timers, and process/static destruction.
+- Fixed async process leases being acquired after coroutine suspension,
+  stream-drain ordering, and UDP test scheduling that could self-starve a
+  bounded I/O executor.
+- Fixed Linux/Windows socket close races that could report a false UDP success,
+  reuse a descriptor during receive, or leave async accept blocked forever.
+- Fixed cached-module re-imports losing exported-symbol and top-level-realm
+  metadata, which broke a second alias of the same module.
+- Fixed duplicate/rejected function declarations leaving an expired weak
+  symbol for the semantic resolution pass and crashing sanitizer fuzzing.
+
+## [0.11.1] - 2026-08-11
+
+### Added
+
+- Added `wio project build --emit-cpp`, which retains generated C++ in the
+  manifest-resolved output directory while preserving source roots, native
+  includes/sources, link configuration, target, and output policy.
+- Added Atlas Desk, a substantial Raylib desktop workspace dashboard exercising
+  application/system lifecycle, async scanning and cancellation, typed
+  attributes, modern native declarations, extensions, Option/Result, JSON, and
+  Unicode APIs.
+- Added a dedicated project emit-C++ regression gate.
+
+### Changed
+
+- The compiler, package, installer, examples, and companion VS Code extension
+  advance together to `0.11.1`.
+- Explicit `--intermediate-dir` now controls retained C++ placement even when
+  `--emit-cpp` is selected; source-adjacent output remains the standalone
+  default when no intermediate directory is supplied.
+
+### Fixed
+
+- The 0.11.1 VS Code extension now routes manifest-owned files through
+  `wio project build/run/describe`, preserving C++ headers, native sources,
+  libraries, source roots, application entry, host targets, and working paths.
+- Standalone library/source files are checked as non-executable targets and no
+  longer report a misleading missing-`Entry` error; attempting to run one now
+  produces an actionable library explanation.
+- Corrected editor C++ emission, project-scoped diagnostic replacement,
+  compile diagnostics during run, multi-root settings, and native-source save
+  checks.
+
 ## [0.11.0] - 2026-08-10
 
 ### Added

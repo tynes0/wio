@@ -1,0 +1,18 @@
+use std::async as tasks;
+use std::console as console;
+use std::fs as fs;
+use std::net as net;
+use std::os as os;
+
+async fn Entry() -> i32 {
+    await tasks::Sleep(1u64);
+    let uri = net::ParseUri!("http://localhost/reimport");
+    let watcher = os::FileWatcher("module-reimport-alias-probe.tmp");
+    let metadata = fs::Metadata("module-reimport-alias-probe.tmp");
+    if (uri.path != "/reimport" or watcher.Poll().IsError() != metadata.IsError()) {
+        return 1;
+    }
+    console::PrintLine("std-module-reimport-alias-ok");
+    tasks::ShutdownRuntime();
+    return 0;
+}

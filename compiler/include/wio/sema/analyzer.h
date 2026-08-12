@@ -45,6 +45,14 @@ namespace wio::sema
         bool allowContextualNumericLiteralTyping_ = false;
         Ref<Type> currentFunctionReturnType_ = nullptr;
         bool currentFunctionIsAsync_ = false;
+        struct LambdaCaptureContext
+        {
+            LambdaExpression* node = nullptr;
+            std::unordered_set<const Symbol*> localSymbols;
+            std::unordered_set<const Symbol*> capturedSymbols;
+            std::vector<Ref<Symbol>> captures;
+        };
+        std::vector<LambdaCaptureContext> lambdaCaptureContexts_;
         Ref<Type> currentStructType_ = nullptr;
         Ref<Type> currentBaseStructType_ = nullptr;
         Ref<Type> currentExtensionTargetType_ = nullptr;
@@ -73,6 +81,7 @@ namespace wio::sema
 
         [[nodiscard]] std::string getCurrentNamespacePath() const;
         Ref<Symbol> createSymbol(std::string name, Ref<Type> type, SymbolKind kind, common::Location loc, SymbolFlags flags = SymbolFlags::createAllFalse());
+        void validateExecutorTransfer(FunctionCallExpression& node, const Ref<Symbol>& functionSymbol);
         bool validateConcreteGenericFunctionBody(
             const FunctionDeclaration& node,
             const Ref<Symbol>& funcSym,

@@ -1,8 +1,27 @@
 use std::fs as fs;
 use std::result as result;
+use std::async as futures;
 
 realm std {
     realm os {
+        enum FileChangeKind {
+            created,
+            modified,
+            removed
+        };
+
+        component FileChange {
+            public path: string;
+            public kind: FileChangeKind;
+            public metadata: fs::MetadataValue;
+
+            OnConstruct(path: string, kind: FileChangeKind, metadata: fs::MetadataValue) {
+                self.path = path;
+                self.kind = kind;
+                self.metadata = metadata;
+            }
+        }
+
         object FileWatcher {
             private path: string;
             private previousWriteTime: i64;
@@ -31,6 +50,57 @@ realm std {
                 self.previousSize = current.Value().size;
                 return std::Ok(changed);
             }
+        }
+
+        async fn WatchFileAsync(pathValue: string, pollMilliseconds: u64) -> std::Result<FileChange> {
+            mut interval = pollMilliseconds;
+            if (interval == 0u64) { interval = 1u64; }
+
+            let initial = await fs::MetadataAsync(pathValue);
+            mut existed = initial.IsOk();
+            mut modificationPending = false;
+            mut previous = fs::MetadataValue();
+            if (existed) {
+                previous = initial.Value();
+            } else if (initial.ErrorValue().code != 2) {
+                return std::Err<FileChange>(initial.ErrorValue());
+            }
+
+            while (true) {
+                await futures::Sleep(interval);
+                let current = await fs::MetadataAsync(pathValue);
+                if (current.IsError()) {
+                    if (current.ErrorValue().code == 2) {
+                        if (existed) {
+                            return std::Ok<FileChange>(FileChange(
+                                pathValue, FileChangeKind::removed, fs::MetadataValue()));
+                        }
+                        continue;
+                    }
+                    return std::Err<FileChange>(current.ErrorValue());
+                }
+
+                if (not existed) {
+                    return std::Ok<FileChange>(FileChange(
+                        pathValue, FileChangeKind::created, current.Value()));
+                }
+
+                let changed = current.Value().lastWriteTime != previous.lastWriteTime or
+                    current.Value().size != previous.size;
+                if (changed) {
+                    previous = current.Value();
+                    modificationPending = true;
+                    continue;
+                }
+                if (modificationPending) {
+                    return std::Ok<FileChange>(FileChange(
+                        pathValue, FileChangeKind::modified, current.Value()));
+                }
+                previous = current.Value();
+            }
+
+            return std::Err<FileChange>(std::MakeResultError(
+                std::ResultDomain::runtime, 1, "File watcher stopped unexpectedly."));
         }
     }
 }

@@ -1,0 +1,19 @@
+use std::async as futures;
+
+fn ReadBorrowed(value: view i32) -> i32 {
+    return deref value;
+}
+
+async fn InvalidWorkerCapture() -> i32 {
+    mut value = 42;
+    let borrowed = ref value;
+    async scope {
+        let task = spawn worker ReadBorrowed(borrowed);
+        return await task;
+    }
+    return 0;
+}
+
+fn Entry() -> i32 {
+    return futures::BlockOn<i32>(InvalidWorkerCapture());
+}

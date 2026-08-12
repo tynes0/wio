@@ -24,6 +24,9 @@ namespace wio
 
         std::vector<Token> tokens_;
         size_t currentTokenIndex_;
+        size_t asyncScopeCounter_ = 0;
+        std::vector<std::string> asyncScopeNames_;
+        bool requiresAsyncModule_ = false;
 
         Token peek(int offset = 0) const;
         Token previous() const;
@@ -59,6 +62,7 @@ namespace wio
         
         NodePtr<Statement> parseStatement();
         NodePtr<Statement> parseBlockStatement();
+        NodePtr<Statement> parseAsyncScopeStatement();
         NodePtr<AttributeStatement> parseAttributeStatement(bool legacyAtSyntax = true);
         void parseWithAttributeClause(std::vector<NodePtr<AttributeStatement>>& attributes);
         NodePtr<AttributeDeclaration> parseAttributeDeclaration();

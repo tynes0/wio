@@ -1,0 +1,51 @@
+use std::assert as assert;
+use std::async as futures;
+use std::concurrency as concurrency;
+use std::console as console;
+
+@From(futures::Send)
+object SharedValue {
+    private gate: concurrency::Mutex;
+    private value: i32;
+
+    public fn OnConstruct(value: i32) {
+        self.gate = concurrency::Mutex();
+        self.value = value;
+    }
+
+    public fn Read() -> i32 {
+        self.gate.Lock();
+        let result = self.value;
+        self.gate.Unlock();
+        return result;
+    }
+}
+
+fn Entry() -> i32 {
+    assert::Expect(futures::WorkerCount() >= 2u64, "continuation executor is available");
+    assert::Expect(futures::BlockingWorkerCount() >= 1u64, "blocking executor is available");
+    assert::Expect(futures::BlockingQueueCapacity() >= 1u64, "blocking executor is bounded");
+    assert::Expect(futures::IsRuntimeRunning(), "runtime starts in running state");
+
+    let base = 40;
+    let blocking: fn() -> i32 = () => base + 2;
+    let task: futures::Task<i32> = futures::RunBlocking<i32>(blocking);
+    assert::ExpectEqual(futures::BlockOn<i32>(task), 42, "transfer-safe capture runs on blocking executor");
+
+    let dispatcher = futures::Dispatcher();
+    let post: fn() = () => dispatcher.Post(() => {});
+    futures::BlockOn(futures::RunBlocking(post));
+    assert::ExpectEqual(dispatcher.Drain(), 1usize, "Send marker permits synchronized owner capture");
+
+    let shared = SharedValue(17);
+    let readShared: fn() -> i32 = () => shared.Read();
+    assert::ExpectEqual(
+        futures::BlockOn<i32>(futures::RunBlocking<i32>(readShared)),
+        17,
+        "user Send marker permits synchronized object capture"
+    );
+
+    console::PrintLine("async-correctness-ok");
+    futures::ShutdownRuntime();
+    return 0;
+}

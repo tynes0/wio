@@ -1,0 +1,112 @@
+use domain;
+use std::fs as fs;
+use std::json as json;
+use std::result as result;
+
+realm atlas {
+    fn DataPath() -> string { return "data/atlas-desk.json"; }
+
+    fn ReadInteger(value: json::Value, fallback: i64) -> i64 {
+        let parsed = value.I64();
+        return parsed.IsOk() ? parsed.Value() : fallback;
+    }
+
+    fn IntegerField(value: json::Value, key: string, fallback: i64) -> i64 {
+        let field = value.Get(key);
+        if (field.IsNone()) { return fallback; }
+        return ReadInteger(field.Value(), fallback);
+    }
+
+    fn StringField(value: json::Value, key: string, fallback: string = "") -> string {
+        let field = value.Get(key);
+        return field.IsSome() ? field.Value().StringOr(fallback) : fallback;
+    }
+
+    fn BoolField(value: json::Value, key: string, fallback: bool = false) -> bool {
+        let field = value.Get(key);
+        return field.IsSome() ? field.Value().BoolOr(fallback) : fallback;
+    }
+
+    fn LoadPreferences() -> std::Result<Preferences> {
+        if (fs::IsMissing(DataPath())) { return std::Ok(DefaultPreferences()); }
+        let text = fs::ReadText(DataPath());
+        if (text.IsError()) { return std::Err<Preferences>(text.ErrorValue()); }
+        let parsed = json::Parse(text.Value());
+        if (parsed.IsError()) { return std::Err<Preferences>(parsed.ErrorValue()); }
+        if (not parsed.Value().IsObject()) {
+            return std::Err<Preferences>(std::MakeResultError(
+                std::ResultDomain::custom, 1, "Atlas preferences must be a JSON object."));
+        }
+
+        mut preferences = DefaultPreferences();
+        let root = parsed.Value();
+        preferences.workspacePath = StringField(root, "workspacePath", ".");
+        preferences.search = StringField(root, "search", "");
+        preferences.scanLimit = IntegerField(root, "scanLimit", 12000i64) fit u64;
+        return std::Ok(preferences);
+    }
+
+    fn SavePreferences(preferences: Preferences) -> std::UnitResult {
+        let root = json::ObjectValue({
+            "format": json::StringValue("atlas-desk-v1"),
+            "workspacePath": json::StringValue(preferences.workspacePath),
+            "search": json::StringValue(preferences.search),
+            "scanLimit": json::IntegerValue($"${preferences.scanLimit}")
+        });
+        return fs::WriteText(DataPath(), json::WritePretty(root, 2usize));
+    }
+
+    fn ParseSnapshot(text: string) -> std::Result<WorkspaceSnapshot> {
+        let parsed = json::Parse(text);
+        if (parsed.IsError()) { return std::Err<WorkspaceSnapshot>(parsed.ErrorValue()); }
+        let root = parsed.Value();
+        if (not root.IsObject()) {
+            return std::Err<WorkspaceSnapshot>(std::MakeResultError(
+                std::ResultDomain::custom, 2, "Workspace scanner returned a non-object payload."));
+        }
+        if (not BoolField(root, "ok", false)) {
+            return std::Err<WorkspaceSnapshot>(std::MakeResultError(
+                std::ResultDomain::custom, 3, StringField(root, "error", "Workspace scan failed.")));
+        }
+
+        mut snapshot = EmptySnapshot();
+        snapshot.root = StringField(root, "root");
+        snapshot.files = IntegerField(root, "files", 0i64) fit u64;
+        snapshot.directories = IntegerField(root, "directories", 0i64) fit u64;
+        snapshot.bytes = IntegerField(root, "bytes", 0i64) fit u64;
+        snapshot.lines = IntegerField(root, "lines", 0i64) fit u64;
+        snapshot.health = IntegerField(root, "health", 0i64) fit i32;
+        snapshot.truncated = BoolField(root, "truncated", false);
+
+        let kinds = root.Get("kinds");
+        if (kinds.IsSome() and kinds.Value().IsArray()) {
+            for item in kinds.Value().arrayValue {
+                mut metric = KindMetric();
+                metric.name = StringField(item, "name");
+                metric.count = IntegerField(item, "count", 0i64) fit u64;
+                snapshot.kinds.Push(metric);
+            }
+        }
+
+        let recent = root.Get("recent");
+        if (recent.IsSome() and recent.Value().IsArray()) {
+            for item in recent.Value().arrayValue {
+                mut file = RecentFile();
+                file.path = StringField(item, "path");
+                file.extension = StringField(item, "extension");
+                file.bytes = IntegerField(item, "bytes", 0i64) fit u64;
+                snapshot.recent.Push(file);
+            }
+        }
+
+        let insights = root.Get("insights");
+        if (insights.IsSome() and insights.Value().IsArray()) {
+            for item in insights.Value().arrayValue {
+                if (item.IsString()) { snapshot.insights.Push(item.StringOr("")); }
+            }
+        }
+
+        return std::Ok(snapshot);
+    }
+}
+

@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <iostream>
+#include <functional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -30,6 +31,18 @@ namespace
     {
         co_await wio::runtime::AsyncYield();
         throw std::runtime_error("async-stress-failure");
+    }
+
+    AsyncTask<std::size_t> ContinuationThread()
+    {
+        co_await wio::runtime::AsyncYield();
+        co_return std::hash<std::thread::id>{}(std::this_thread::get_id());
+    }
+
+    AsyncTask<void> CancelledBody(std::atomic<bool>& reachedBody)
+    {
+        co_await wio::runtime::AsyncSleep(5000);
+        reachedBody.store(true, std::memory_order_release);
     }
 
     void Require(const bool condition, const char* message)
@@ -93,6 +106,75 @@ int main()
             observedCancellation = true;
         }
         Require(observedCancellation, "cancellation propagation");
+
+        const auto cancellationStarted = std::chrono::steady_clock::now();
+        auto cancelledTimer = wio::runtime::AsyncSleep(5000);
+        cancelledTimer.Cancel();
+        try { wio::runtime::BlockOn(cancelledTimer); }
+        catch (const wio::runtime::AsyncCancelled&) { }
+        const auto cancellationElapsed = std::chrono::steady_clock::now() - cancellationStarted;
+        Require(cancellationElapsed < std::chrono::seconds(1), "cancelled timer resumes promptly");
+
+        std::atomic<bool> reachedCancelledBody{false};
+        auto cancelledBody = CancelledBody(reachedCancelledBody);
+        cancelledBody.Cancel();
+        try { wio::runtime::BlockOn(cancelledBody); }
+        catch (const wio::runtime::AsyncCancelled&) { }
+        Require(!reachedCancelledBody.load(std::memory_order_acquire), "cancelled coroutine does not run past suspension");
+
+        const auto continuationThread = wio::runtime::BlockOn(ContinuationThread());
+        const auto blockingThread = wio::runtime::BlockOn(wio::runtime::RunBlockingAsync<std::size_t>([]
+        {
+            return std::hash<std::thread::id>{}(std::this_thread::get_id());
+        }));
+        Require(wio::runtime::AsyncBlockingWorkerCount() >= 1, "blocking worker count");
+        Require(wio::runtime::AsyncBlockingQueueCapacity() >= 1, "blocking queue capacity");
+        Require(continuationThread != blockingThread, "blocking work uses a separate executor");
+        for (int iteration = 0; iteration < 512; ++iteration)
+        {
+            const auto value = wio::runtime::BlockOn(wio::runtime::RunBlockingAsync<int>(
+                [iteration] { return iteration; }));
+            Require(value == iteration, "immediate blocking completion handoff");
+        }
+
+        {
+            wio::runtime::AsyncBlockingScheduler bounded(1, 1);
+            std::mutex gateMutex;
+            std::condition_variable gateChanged;
+            bool firstStarted = false;
+            bool releaseFirst = false;
+            std::atomic<bool> queuedRan{false};
+            Require(bounded.Submit([&]
+            {
+                std::unique_lock lock(gateMutex);
+                firstStarted = true;
+                gateChanged.notify_all();
+                gateChanged.wait(lock, [&] { return releaseFirst; });
+            }), "bounded pool accepts active work");
+            {
+                std::unique_lock lock(gateMutex);
+                gateChanged.wait(lock, [&] { return firstStarted; });
+            }
+            Require(bounded.Submit([&] { queuedRan.store(true, std::memory_order_release); }),
+                "bounded pool accepts work up to capacity");
+            Require(!bounded.Submit([] {}), "bounded pool rejects excess work");
+            {
+                std::lock_guard lock(gateMutex);
+                releaseFirst = true;
+            }
+            gateChanged.notify_all();
+            bounded.Shutdown();
+            Require(queuedRan.load(std::memory_order_acquire), "bounded pool drains accepted work on shutdown");
+        }
+
+        Require(wio::runtime::AsyncRuntimeRunning(), "runtime is running before explicit shutdown");
+        wio::runtime::ShutdownAsyncRuntime();
+        Require(!wio::runtime::AsyncRuntimeRunning(), "explicit shutdown stops both executors");
+
+        bool observedStoppedRuntime = false;
+        try { wio::runtime::BlockOn(wio::runtime::AsyncSleep(1)); }
+        catch (const wio::runtime::AsyncRuntimeStopped&) { observedStoppedRuntime = true; }
+        Require(observedStoppedRuntime, "new work is rejected after shutdown");
 
         std::cout << "async-runtime-stress-ok\n";
         return 0;
