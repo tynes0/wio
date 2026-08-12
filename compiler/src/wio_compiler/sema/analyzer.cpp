@@ -14097,6 +14097,13 @@ namespace wio::sema
         }
 
         auto funcSym = node.name->referencedSymbol.Lock();
+        // A duplicate or otherwise rejected declaration is not retained by
+        // its scope, so the AST's weak symbol reference may have expired
+        // between declaration and resolution passes. The defining pass has
+        // already emitted the diagnostic; do not dereference a missing or
+        // non-function recovery symbol while walking the malformed body.
+        if (!funcSym || !funcSym->type || funcSym->type->kind() != TypeKind::Function)
+            return;
         auto funcType = funcSym->type.AsFast<FunctionType>();
 
         bool isNative = hasAttribute(node.attributes, Attribute::Native);
