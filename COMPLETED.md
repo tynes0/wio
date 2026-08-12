@@ -41,6 +41,9 @@ Notes:
 - [x] Wio enum members remain isolated to their declaring enum through the
       C++ backend, allowing separate enums to reuse natural names such as
       `pending`, `empty`, and `closed` without backend collisions.
+- [x] Re-importing an already merged module under another alias now restores
+      cached export/realm metadata, making nested and combined std imports
+      deterministic regardless of module discovery order.
 
 - [x] `async fn`, async object/interface methods, generic async declarations,
       async `Entry`, `await`, and the `coroutine<T>` type are implemented across

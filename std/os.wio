@@ -1,6 +1,6 @@
 use std::fs as fs;
 use std::result as result;
-use std::async;
+use std::async as futures;
 
 realm std {
     realm os {
@@ -67,7 +67,7 @@ realm std {
             }
 
             while (true) {
-                await std::async::Sleep(interval);
+                await futures::Sleep(interval);
                 let current = await fs::MetadataAsync(pathValue);
                 if (current.IsError()) {
                     if (current.ErrorValue().code == 2) {

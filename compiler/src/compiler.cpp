@@ -17,6 +17,7 @@
 #include <string_view>
 #include <system_error>
 #include <thread>
+#include <unordered_map>
 #include <unordered_set>
 #include <argonaut.h>
 
@@ -57,6 +58,8 @@ namespace wio
         Argonaut::Parser argParser;
         sema::TypeContext typeContext_;
         std::unordered_set<std::string> loadedModules;
+        std::unordered_map<std::string, std::vector<std::string>> moduleExportedSymbols;
+        std::unordered_map<std::string, bool> moduleDeclaresTopLevelRealms;
         std::vector<RequiredCppHeader> requiredCppHeaders;
         BuildTarget buildTarget = BuildTarget::Executable;
     };
@@ -2700,6 +2703,8 @@ namespace wio
             WIO_LOG_PROCESS_ERRORS(CompilationError);
             
             gAppData.loadedModules.clear();
+            gAppData.moduleExportedSymbols.clear();
+            gAppData.moduleDeclaresTopLevelRealms.clear();
             gAppData.requiredCppHeaders.clear();
             gAppData.loadedModules.insert(sourceDisplayPath);
             collectRequiredCppHeaders(program->statements, std::filesystem::path(sourceDisplayPath), gAppData.requiredCppHeaders);
@@ -3209,6 +3214,18 @@ namespace wio
 
         if (gAppData.loadedModules.contains(absolutePath))
         {
+            if (exportedSymbols)
+            {
+                if (const auto it = gAppData.moduleExportedSymbols.find(absolutePath);
+                    it != gAppData.moduleExportedSymbols.end())
+                    *exportedSymbols = it->second;
+            }
+            if (declaresTopLevelRealms)
+            {
+                if (const auto it = gAppData.moduleDeclaresTopLevelRealms.find(absolutePath);
+                    it != gAppData.moduleDeclaresTopLevelRealms.end())
+                    *declaresTopLevelRealms = it->second;
+            }
             return makeNodePtr<Program>(std::vector<NodePtr<Statement>>{});
         }
         gAppData.loadedModules.insert(absolutePath);
@@ -3234,6 +3251,8 @@ namespace wio
         const bool moduleDeclaresTopLevelRealms = hasDeclaredTopLevelRealms(subProgram->statements);
 
         std::vector<std::string> moduleExportedSymbols = collectExportedSymbols(subProgram->statements);
+        gAppData.moduleExportedSymbols[absolutePath] = moduleExportedSymbols;
+        gAppData.moduleDeclaresTopLevelRealms[absolutePath] = moduleDeclaresTopLevelRealms;
         if (exportedSymbols)
             *exportedSymbols = moduleExportedSymbols;
         if (declaresTopLevelRealms)
