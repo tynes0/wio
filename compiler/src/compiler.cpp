@@ -3083,7 +3083,7 @@ namespace wio
                     cmd << " " << quotePath(runtimeLibraryPath);
 #if defined(_WIN32)
                     if (backendCompilerLooksGnuLike(backendCompiler))
-                        cmd << " -lws2_32";
+                        cmd << " -lws2_32 -lshell32";
 #else
                     cmd << " -pthread";
 #endif

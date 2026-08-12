@@ -3262,6 +3262,11 @@ namespace wio::codegen
         emitHeaderLine("#include <ref.h>");
         emitHeaderLine("#include <std_async.h>");
         emitHeaderLine();
+        emitHeaderLine("namespace wio::runtime");
+        emitHeaderLine("{");
+        emitHeaderLine("    std::vector<std::string> CollectEntryArguments(int argc, char* const argv[]);");
+        emitHeaderLine("}");
+        emitHeaderLine();
         emitHeaderLine("#if defined(_WIN32)");
         emitHeaderLine("#define WIO_EXPORT __declspec(dllexport)");
         emitHeaderLine("#else");
@@ -4350,10 +4355,11 @@ namespace wio::codegen
         if (hasArgs)
         {
             emitLine("wio::DArray<wio::String> " + paramName + ";");
-            emitLine(paramName + ".reserve(argc);");
-            emitLine("for (int i = 0; i < argc; ++i) {");
+            emitLine("auto _wio_entry_arguments = wio::runtime::CollectEntryArguments(argc, argv);");
+            emitLine(paramName + ".reserve(_wio_entry_arguments.size());");
+            emitLine("for (const auto& _wio_entry_argument : _wio_entry_arguments) {");
             indent();
-            emitLine(paramName + ".push_back(wio::String(argv[i]));");
+            emitLine(paramName + ".push_back(wio::String(_wio_entry_argument));");
             dedent();
             emitLine("}");
             emitLine("");

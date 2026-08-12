@@ -2,6 +2,8 @@
 
 #include <bit>
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cctype>
 #include <cerrno>
 #include <cwchar>
@@ -9,6 +11,8 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -23,10 +27,18 @@
         #undef SetCurrentDirectory
     #endif
 #elif defined(__APPLE__)
+    #include <fcntl.h>
     #include <mach-o/dyld.h>
+    #include <pthread.h>
+    #include <signal.h>
+    #include <sys/select.h>
     #include <sys/wait.h>
     #include <unistd.h>
 #else
+    #include <fcntl.h>
+    #include <pthread.h>
+    #include <signal.h>
+    #include <sys/select.h>
     #include <sys/wait.h>
     #include <unistd.h>
 #endif
@@ -35,6 +47,316 @@ namespace wio::runtime::std_process
 {
     namespace
     {
+        std::atomic<std::uint64_t> liveProcessCount{0};
+
+        struct ProcessHandle final
+        {
+            ProcessHandle() { liveProcessCount.fetch_add(1, std::memory_order_relaxed); }
+            ~ProcessHandle() { liveProcessCount.fetch_sub(1, std::memory_order_relaxed); }
+
+            std::atomic<std::size_t> references{1};
+            std::mutex lifecycleMutex;
+            std::mutex stdinMutex;
+            std::mutex stdoutMutex;
+            std::mutex stderrMutex;
+            std::mutex waitMutex;
+            bool closed = false;
+            std::atomic_bool waited{false};
+            std::atomic<int> exitCode{-1};
+#if defined(_WIN32)
+            HANDLE process = nullptr;
+            HANDLE stdinWrite = nullptr;
+            HANDLE stdoutRead = nullptr;
+            HANDLE stderrRead = nullptr;
+#else
+            pid_t process = -1;
+            int stdinWrite = -1;
+            int stdoutRead = -1;
+            int stderrRead = -1;
+#endif
+        };
+
+        ProcessHandle* asProcess(void* handle) noexcept
+        {
+            return static_cast<ProcessHandle*>(handle);
+        }
+
+#if defined(_WIN32)
+        void closePipe(HANDLE& handle) noexcept
+        {
+            if (handle)
+            {
+                CloseHandle(handle);
+                handle = nullptr;
+            }
+        }
+#else
+        void closePipe(int& handle) noexcept
+        {
+            if (handle >= 0)
+            {
+                ::close(handle);
+                handle = -1;
+            }
+        }
+
+        class ScopedSigpipeBlock final
+        {
+        public:
+            ScopedSigpipeBlock() noexcept
+            {
+                sigemptyset(&blocked_);
+                sigaddset(&blocked_, SIGPIPE);
+                active_ = pthread_sigmask(SIG_BLOCK, &blocked_, &previous_) == 0;
+                previouslyBlocked_ = active_ && sigismember(&previous_, SIGPIPE) == 1;
+            }
+
+            ~ScopedSigpipeBlock()
+            {
+                if (!active_) return;
+                if (!previouslyBlocked_)
+                {
+                    sigset_t pending{};
+                    if (sigpending(&pending) == 0 && sigismember(&pending, SIGPIPE) == 1)
+                    {
+                        int consumedSignal = 0;
+                        static_cast<void>(sigwait(&blocked_, &consumedSignal));
+                    }
+                }
+                static_cast<void>(pthread_sigmask(SIG_SETMASK, &previous_, nullptr));
+            }
+
+        private:
+            sigset_t blocked_{};
+            sigset_t previous_{};
+            bool active_ = false;
+            bool previouslyBlocked_ = false;
+        };
+#endif
+
+        void setProcessError(
+            ProcessError& error, int& nativeError, std::string& message,
+            const ProcessError value, const int native, std::string text)
+        {
+            error = value;
+            nativeError = native;
+            message = std::move(text);
+        }
+
+        bool retainProcess(void* handle, ProcessError& error, int& nativeError, std::string& message) noexcept
+        {
+            if (!handle)
+            {
+                setProcessError(error, nativeError, message, ProcessError::process_closed, 0, "process handle is null");
+                return false;
+            }
+            auto* state = asProcess(handle);
+            std::lock_guard lock(state->lifecycleMutex);
+            if (state->closed)
+            {
+                setProcessError(error, nativeError, message, ProcessError::process_closed, 0, "process is closed");
+                return false;
+            }
+            state->references.fetch_add(1, std::memory_order_relaxed);
+            return true;
+        }
+
+        class ProcessLease final
+        {
+        public:
+            explicit ProcessLease(void* handle) noexcept : handle_(handle) {}
+            ProcessLease(const ProcessLease&) = delete;
+            ProcessLease& operator=(const ProcessLease&) = delete;
+            ~ProcessLease() { if (handle_) ProcessRelease(handle_); }
+        private:
+            void* handle_ = nullptr;
+        };
+
+        bool waitProcessState(ProcessHandle* state, int& exitCode, ProcessError& error,
+                              int& nativeError, std::string& message) noexcept
+        {
+            std::lock_guard waitLock(state->waitMutex);
+            if (state->waited.load(std::memory_order_acquire))
+            {
+                exitCode = state->exitCode.load(std::memory_order_acquire);
+                return true;
+            }
+#if defined(_WIN32)
+            const DWORD waitResult = WaitForSingleObject(state->process, INFINITE);
+            if (waitResult != WAIT_OBJECT_0)
+            {
+                setProcessError(error, nativeError, message, ProcessError::wait_failed,
+                    static_cast<int>(GetLastError()), "waiting for process failed");
+                return false;
+            }
+            DWORD code = 0;
+            if (!GetExitCodeProcess(state->process, &code))
+            {
+                setProcessError(error, nativeError, message, ProcessError::wait_failed,
+                    static_cast<int>(GetLastError()), "reading process exit code failed");
+                return false;
+            }
+            state->exitCode.store(static_cast<int>(code), std::memory_order_release);
+#else
+            int status = 0;
+            pid_t waited = -1;
+            do { waited = ::waitpid(state->process, &status, 0); }
+            while (waited < 0 && errno == EINTR);
+            if (waited < 0)
+            {
+                setProcessError(error, nativeError, message, ProcessError::wait_failed,
+                    errno, "waiting for process failed");
+                return false;
+            }
+            state->exitCode.store(WIFEXITED(status)
+                ? WEXITSTATUS(status)
+                : WIFSIGNALED(status) ? 128 + WTERMSIG(status) : status,
+                std::memory_order_release);
+#endif
+            state->waited.store(true, std::memory_order_release);
+            exitCode = state->exitCode.load(std::memory_order_acquire);
+            return true;
+        }
+
+        bool processRunningState(ProcessHandle* state, bool& running, ProcessError& error,
+                                 int& nativeError, std::string& message) noexcept
+        {
+            std::lock_guard waitLock(state->waitMutex);
+            if (state->waited.load(std::memory_order_acquire))
+            {
+                running = false;
+                return true;
+            }
+#if defined(_WIN32)
+            DWORD code = 0;
+            if (!GetExitCodeProcess(state->process, &code))
+            {
+                setProcessError(error, nativeError, message, ProcessError::wait_failed,
+                    static_cast<int>(GetLastError()), "reading process status failed");
+                return false;
+            }
+            running = code == STILL_ACTIVE;
+            if (!running)
+            {
+                state->exitCode.store(static_cast<int>(code), std::memory_order_release);
+                state->waited.store(true, std::memory_order_release);
+            }
+#else
+            int status = 0;
+            const pid_t result = ::waitpid(state->process, &status, WNOHANG);
+            if (result < 0)
+            {
+                setProcessError(error, nativeError, message, ProcessError::wait_failed,
+                    errno, "reading process status failed");
+                return false;
+            }
+            running = result == 0;
+            if (!running)
+            {
+                state->exitCode.store(WIFEXITED(status)
+                    ? WEXITSTATUS(status)
+                    : WIFSIGNALED(status) ? 128 + WTERMSIG(status) : status,
+                    std::memory_order_release);
+                state->waited.store(true, std::memory_order_release);
+            }
+#endif
+            return true;
+        }
+
+        bool terminateProcessState(ProcessHandle* state, ProcessError& error,
+                                   int& nativeError, std::string& message) noexcept
+        {
+            if (state->waited.load(std::memory_order_acquire))
+                return true;
+#if defined(_WIN32)
+            DWORD code = 0;
+            if (!GetExitCodeProcess(state->process, &code))
+            {
+                setProcessError(error, nativeError, message, ProcessError::terminate_failed,
+                    static_cast<int>(GetLastError()), "reading process status before terminate failed");
+                return false;
+            }
+            if (code != STILL_ACTIVE)
+                return true;
+            if (!TerminateProcess(state->process, 1))
+            {
+                setProcessError(error, nativeError, message, ProcessError::terminate_failed,
+                    static_cast<int>(GetLastError()), "terminating process failed");
+                return false;
+            }
+#else
+            if (::kill(state->process, SIGKILL) != 0 && errno != ESRCH)
+            {
+                setProcessError(error, nativeError, message, ProcessError::terminate_failed,
+                    errno, "terminating process failed");
+                return false;
+            }
+#endif
+            return true;
+        }
+
+#if defined(_WIN32)
+        std::wstring widenProcessText(const std::string_view value)
+        {
+            if (value.empty()) return {};
+            const int size = MultiByteToWideChar(
+                CP_UTF8, MB_ERR_INVALID_CHARS, value.data(), static_cast<int>(value.size()), nullptr, 0);
+            if (size <= 0) return {};
+            std::wstring result(static_cast<std::size_t>(size), L'\0');
+            if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value.data(),
+                    static_cast<int>(value.size()), result.data(), size) <= 0)
+                return {};
+            return result;
+        }
+
+        std::wstring quoteWindowsProcessArgument(const std::string_view value)
+        {
+            const std::wstring wide = widenProcessText(value);
+            if (!value.empty() && wide.empty()) return {};
+            const bool needsQuotes = wide.empty() || std::ranges::any_of(wide, [](const wchar_t ch)
+            {
+                return ch == L' ' || ch == L'\t' || ch == L'\n' || ch == L'\v' || ch == L'"';
+            });
+            if (!needsQuotes) return wide;
+
+            std::wstring result(1, L'"');
+            std::size_t backslashes = 0;
+            for (const wchar_t ch : wide)
+            {
+                if (ch == L'\\')
+                {
+                    ++backslashes;
+                    continue;
+                }
+                if (ch == L'"')
+                {
+                    result.append(backslashes * 2 + 1, L'\\');
+                    result.push_back(L'"');
+                    backslashes = 0;
+                    continue;
+                }
+                result.append(backslashes, L'\\');
+                backslashes = 0;
+                result.push_back(ch);
+            }
+            result.append(backslashes * 2, L'\\');
+            result.push_back(L'"');
+            return result;
+        }
+
+        std::wstring joinWindowsProcessCommand(
+            const std::string_view program, const std::vector<std::string>& args)
+        {
+            std::wstring result = quoteWindowsProcessArgument(program);
+            for (const auto& argument : args)
+            {
+                result.push_back(L' ');
+                result += quoteWindowsProcessArgument(argument);
+            }
+            return result;
+        }
+#endif
+
         std::string quoteArgument(const std::string_view value)
         {
 #if defined(_WIN32)
@@ -135,6 +457,14 @@ namespace wio::runtime::std_process
             return "invalid_working_directory";
         case ProcessError::launch_failed:
             return "launch_failed";
+        case ProcessError::pipe_failed:
+            return "pipe_failed";
+        case ProcessError::process_closed:
+            return "process_closed";
+        case ProcessError::wait_failed:
+            return "wait_failed";
+        case ProcessError::terminate_failed:
+            return "terminate_failed";
         }
 
         return "launch_failed";
@@ -362,6 +692,470 @@ namespace wio::runtime::std_process
         exitCode = WIFEXITED(rawExitCode) ? WEXITSTATUS(rawExitCode) : rawExitCode;
 #endif
         return true;
+    }
+
+    bool Spawn(
+        const std::string_view program,
+        const std::vector<std::string>& args,
+        const std::string_view workingDirectory,
+        void*& handle,
+        ProcessError& error,
+        int& nativeError,
+        std::string& message) noexcept
+    {
+        handle = nullptr;
+        error = ProcessError::none;
+        nativeError = 0;
+        message.clear();
+        if (program.empty())
+        {
+            error = ProcessError::empty_program;
+            message = "process program cannot be empty";
+            return false;
+        }
+        if (!workingDirectory.empty())
+        {
+            std::error_code pathError;
+            if (!std::filesystem::is_directory(std::filesystem::path(std::string(workingDirectory)), pathError))
+            {
+                setProcessError(error, nativeError, message, ProcessError::invalid_working_directory,
+                    pathError.value(), "working directory does not exist: " + std::string(workingDirectory));
+                return false;
+            }
+        }
+
+#if defined(_WIN32)
+        SECURITY_ATTRIBUTES attributes{};
+        attributes.nLength = sizeof(attributes);
+        attributes.bInheritHandle = TRUE;
+        HANDLE childStdinRead = nullptr;
+        HANDLE parentStdinWrite = nullptr;
+        HANDLE parentStdoutRead = nullptr;
+        HANDLE childStdoutWrite = nullptr;
+        HANDLE parentStderrRead = nullptr;
+        HANDLE childStderrWrite = nullptr;
+        auto closeAll = [&]()
+        {
+            closePipe(childStdinRead); closePipe(parentStdinWrite);
+            closePipe(parentStdoutRead); closePipe(childStdoutWrite);
+            closePipe(parentStderrRead); closePipe(childStderrWrite);
+        };
+        if (!CreatePipe(&childStdinRead, &parentStdinWrite, &attributes, 0) ||
+            !CreatePipe(&parentStdoutRead, &childStdoutWrite, &attributes, 0) ||
+            !CreatePipe(&parentStderrRead, &childStderrWrite, &attributes, 0) ||
+            !SetHandleInformation(parentStdinWrite, HANDLE_FLAG_INHERIT, 0) ||
+            !SetHandleInformation(parentStdoutRead, HANDLE_FLAG_INHERIT, 0) ||
+            !SetHandleInformation(parentStderrRead, HANDLE_FLAG_INHERIT, 0))
+        {
+            const int code = static_cast<int>(GetLastError());
+            closeAll();
+            setProcessError(error, nativeError, message, ProcessError::pipe_failed, code,
+                "creating process pipes failed");
+            return false;
+        }
+
+        STARTUPINFOW startup{};
+        startup.cb = sizeof(startup);
+        startup.dwFlags = STARTF_USESTDHANDLES;
+        startup.hStdInput = childStdinRead;
+        startup.hStdOutput = childStdoutWrite;
+        startup.hStdError = childStderrWrite;
+        PROCESS_INFORMATION information{};
+        const std::wstring application = widenProcessText(program);
+        std::wstring commandLine = joinWindowsProcessCommand(program, args);
+        const std::wstring directory = widenProcessText(workingDirectory);
+        if (application.empty() || commandLine.empty() ||
+            (!workingDirectory.empty() && directory.empty()))
+        {
+            closeAll();
+            setProcessError(error, nativeError, message, ProcessError::launch_failed,
+                ERROR_NO_UNICODE_TRANSLATION, "process path or argument is not valid UTF-8");
+            return false;
+        }
+        const BOOL created = CreateProcessW(
+            application.c_str(), commandLine.data(), nullptr, nullptr, TRUE, 0, nullptr,
+            directory.empty() ? nullptr : directory.c_str(), &startup, &information);
+        closePipe(childStdinRead);
+        closePipe(childStdoutWrite);
+        closePipe(childStderrWrite);
+        if (!created)
+        {
+            const int code = static_cast<int>(GetLastError());
+            closePipe(parentStdinWrite);
+            closePipe(parentStdoutRead);
+            closePipe(parentStderrRead);
+            setProcessError(error, nativeError, message, ProcessError::launch_failed, code,
+                "process launch failed for: " + std::string(program));
+            return false;
+        }
+        CloseHandle(information.hThread);
+        auto state = std::make_unique<ProcessHandle>();
+        state->process = information.hProcess;
+        state->stdinWrite = parentStdinWrite;
+        state->stdoutRead = parentStdoutRead;
+        state->stderrRead = parentStderrRead;
+#else
+        std::string programText(program);
+        std::string workingDirectoryText(workingDirectory);
+        std::vector<std::string> argumentStorage;
+        argumentStorage.reserve(args.size() + 1);
+        argumentStorage.push_back(programText);
+        argumentStorage.insert(argumentStorage.end(), args.begin(), args.end());
+        std::vector<char*> argumentPointers;
+        argumentPointers.reserve(argumentStorage.size() + 1);
+        for (auto& argument : argumentStorage) argumentPointers.push_back(argument.data());
+        argumentPointers.push_back(nullptr);
+
+        int stdinPipe[2]{-1, -1};
+        int stdoutPipe[2]{-1, -1};
+        int stderrPipe[2]{-1, -1};
+        int launchPipe[2]{-1, -1};
+        auto closePair = [](int (&pair)[2]) { closePipe(pair[0]); closePipe(pair[1]); };
+        if (::pipe(stdinPipe) != 0 || ::pipe(stdoutPipe) != 0 ||
+            ::pipe(stderrPipe) != 0 || ::pipe(launchPipe) != 0)
+        {
+            const int code = errno;
+            closePair(stdinPipe); closePair(stdoutPipe); closePair(stderrPipe); closePair(launchPipe);
+            setProcessError(error, nativeError, message, ProcessError::pipe_failed, code,
+                "creating process pipes failed");
+            return false;
+        }
+        if (::fcntl(launchPipe[1], F_SETFD, FD_CLOEXEC) != 0)
+        {
+            const int code = errno;
+            closePair(stdinPipe); closePair(stdoutPipe); closePair(stderrPipe); closePair(launchPipe);
+            setProcessError(error, nativeError, message, ProcessError::pipe_failed, code,
+                "configuring process launch pipe failed");
+            return false;
+        }
+        const pid_t child = ::fork();
+        if (child < 0)
+        {
+            const int code = errno;
+            closePair(stdinPipe); closePair(stdoutPipe); closePair(stderrPipe); closePair(launchPipe);
+            setProcessError(error, nativeError, message, ProcessError::launch_failed, code,
+                "fork failed for process: " + std::string(program));
+            return false;
+        }
+        if (child == 0)
+        {
+            closePipe(stdinPipe[1]); closePipe(stdoutPipe[0]); closePipe(stderrPipe[0]); closePipe(launchPipe[0]);
+            if (::dup2(stdinPipe[0], STDIN_FILENO) < 0 ||
+                ::dup2(stdoutPipe[1], STDOUT_FILENO) < 0 ||
+                ::dup2(stderrPipe[1], STDERR_FILENO) < 0 ||
+                (!workingDirectoryText.empty() && ::chdir(workingDirectoryText.c_str()) != 0))
+            {
+                const int code = errno;
+                static_cast<void>(::write(launchPipe[1], &code, sizeof(code)));
+                _exit(127);
+            }
+            closePipe(stdinPipe[0]); closePipe(stdoutPipe[1]); closePipe(stderrPipe[1]);
+            ::execvp(programText.c_str(), argumentPointers.data());
+            const int code = errno;
+            static_cast<void>(::write(launchPipe[1], &code, sizeof(code)));
+            _exit(127);
+        }
+        closePipe(stdinPipe[0]); closePipe(stdoutPipe[1]); closePipe(stderrPipe[1]); closePipe(launchPipe[1]);
+        int launchError = 0;
+        ssize_t launchRead = -1;
+        do { launchRead = ::read(launchPipe[0], &launchError, sizeof(launchError)); }
+        while (launchRead < 0 && errno == EINTR);
+        const int launchReadError = errno;
+        closePipe(launchPipe[0]);
+        auto abortSpawnedChild = [&]()
+        {
+            static_cast<void>(::kill(child, SIGKILL));
+            int ignored = 0;
+            pid_t waited = -1;
+            do { waited = ::waitpid(child, &ignored, 0); }
+            while (waited < 0 && errno == EINTR);
+            closePipe(stdinPipe[1]); closePipe(stdoutPipe[0]); closePipe(stderrPipe[0]);
+        };
+        if (launchRead < 0)
+        {
+            abortSpawnedChild();
+            setProcessError(error, nativeError, message, ProcessError::launch_failed,
+                launchReadError, "reading process launch status failed");
+            return false;
+        }
+        if (launchRead > 0)
+        {
+            abortSpawnedChild();
+            setProcessError(error, nativeError, message, ProcessError::launch_failed, launchError,
+                "process exec failed for: " + std::string(program));
+            return false;
+        }
+        const int stdoutFlags = ::fcntl(stdoutPipe[0], F_GETFL);
+        const int stderrFlags = ::fcntl(stderrPipe[0], F_GETFL);
+        if (stdoutFlags < 0 || stderrFlags < 0 ||
+            ::fcntl(stdoutPipe[0], F_SETFL, stdoutFlags | O_NONBLOCK) != 0 ||
+            ::fcntl(stderrPipe[0], F_SETFL, stderrFlags | O_NONBLOCK) != 0)
+        {
+            const int code = errno;
+            abortSpawnedChild();
+            setProcessError(error, nativeError, message, ProcessError::pipe_failed, code,
+                "configuring non-blocking process pipes failed");
+            return false;
+        }
+        auto state = std::make_unique<ProcessHandle>();
+        state->process = child;
+        state->stdinWrite = stdinPipe[1];
+        state->stdoutRead = stdoutPipe[0];
+        state->stderrRead = stderrPipe[0];
+#endif
+        handle = state.release();
+        return true;
+    }
+
+    namespace
+    {
+        bool readProcessPipe(void* handle, const bool standardError, const bool waitForData,
+                             const std::size_t maximumBytes,
+                             std::string& bytes, bool& eof, ProcessError& error,
+                             int& nativeError, std::string& message) noexcept
+        {
+            bytes.clear(); eof = false; error = ProcessError::none; nativeError = 0; message.clear();
+            if (!retainProcess(handle, error, nativeError, message)) return false;
+            ProcessLease lease(handle);
+            auto* state = asProcess(handle);
+            std::unique_lock pipeLock(standardError ? state->stderrMutex : state->stdoutMutex);
+            const std::size_t requested = std::max<std::size_t>(
+                1, std::min<std::size_t>(maximumBytes, 1u << 20u));
+            while (true)
+            {
+                {
+                    std::lock_guard lifecycleLock(state->lifecycleMutex);
+                    if (state->closed)
+                    {
+                        setProcessError(error, nativeError, message, ProcessError::process_closed, 0, "process is closed");
+                        return false;
+                    }
+                }
+#if defined(_WIN32)
+                HANDLE pipe = standardError ? state->stderrRead : state->stdoutRead;
+                DWORD available = 0;
+                if (!PeekNamedPipe(pipe, nullptr, 0, nullptr, &available, nullptr))
+                {
+                    const DWORD code = GetLastError();
+                    if (code == ERROR_BROKEN_PIPE)
+                    {
+                        eof = true;
+                        return true;
+                    }
+                    setProcessError(error, nativeError, message, ProcessError::pipe_failed,
+                        static_cast<int>(code), "reading process pipe status failed");
+                    return false;
+                }
+                if (available == 0)
+                {
+                    bool running = false;
+                    if (!processRunningState(state, running, error, nativeError, message)) return false;
+                    if (!running)
+                    {
+                        // The process handle may signal just before the final
+                        // pipe bytes become visible to PeekNamedPipe. A final
+                        // read after exit drains those bytes or observes the
+                        // broken-pipe EOF without blocking on a live writer.
+                        std::vector<char> finalBuffer(requested);
+                        DWORD finalRead = 0;
+                        if (ReadFile(pipe, finalBuffer.data(), static_cast<DWORD>(finalBuffer.size()), &finalRead, nullptr))
+                        {
+                            if (finalRead == 0) { eof = true; return true; }
+                            bytes.assign(finalBuffer.data(), finalRead);
+                            return true;
+                        }
+                        const DWORD finalError = GetLastError();
+                        if (finalError == ERROR_BROKEN_PIPE) { eof = true; return true; }
+                        setProcessError(error, nativeError, message, ProcessError::pipe_failed,
+                            static_cast<int>(finalError), "draining process pipe failed");
+                        return false;
+                    }
+                    if (!waitForData) return true;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    continue;
+                }
+                std::vector<char> buffer(std::min<std::size_t>(requested, available));
+                DWORD read = 0;
+                if (!ReadFile(pipe, buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr))
+                {
+                    const DWORD code = GetLastError();
+                    if (code == ERROR_BROKEN_PIPE) { eof = true; return true; }
+                    setProcessError(error, nativeError, message, ProcessError::pipe_failed,
+                        static_cast<int>(code), "reading process pipe failed");
+                    return false;
+                }
+                bytes.assign(buffer.data(), read);
+                return true;
+#else
+                const int pipe = standardError ? state->stderrRead : state->stdoutRead;
+                fd_set readable; FD_ZERO(&readable); FD_SET(pipe, &readable);
+                timeval timeout{0, waitForData ? 50'000 : 0};
+                const int ready = ::select(pipe + 1, &readable, nullptr, nullptr, &timeout);
+                if (ready < 0 && errno != EINTR)
+                {
+                    setProcessError(error, nativeError, message, ProcessError::pipe_failed, errno,
+                        "waiting for process pipe failed");
+                    return false;
+                }
+                if (ready == 0 && !waitForData) return true;
+                if (ready <= 0) continue;
+                std::vector<char> buffer(requested);
+                const ssize_t read = ::read(pipe, buffer.data(), buffer.size());
+                if (read > 0) { bytes.assign(buffer.data(), static_cast<std::size_t>(read)); return true; }
+                if (read == 0) { eof = true; return true; }
+                if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
+                setProcessError(error, nativeError, message, ProcessError::pipe_failed, errno,
+                    "reading process pipe failed");
+                return false;
+#endif
+            }
+        }
+    }
+
+    bool ProcessReadStdout(void* handle, const std::size_t maximumBytes, std::string& bytes, bool& eof,
+                           ProcessError& error, int& nativeError, std::string& message) noexcept
+    { return readProcessPipe(handle, false, true, maximumBytes, bytes, eof, error, nativeError, message); }
+
+    bool ProcessReadStderr(void* handle, const std::size_t maximumBytes, std::string& bytes, bool& eof,
+                           ProcessError& error, int& nativeError, std::string& message) noexcept
+    { return readProcessPipe(handle, true, true, maximumBytes, bytes, eof, error, nativeError, message); }
+
+    bool ProcessTryReadStdout(void* handle, const std::size_t maximumBytes, std::string& bytes, bool& eof,
+                              ProcessError& error, int& nativeError, std::string& message) noexcept
+    { return readProcessPipe(handle, false, false, maximumBytes, bytes, eof, error, nativeError, message); }
+
+    bool ProcessTryReadStderr(void* handle, const std::size_t maximumBytes, std::string& bytes, bool& eof,
+                              ProcessError& error, int& nativeError, std::string& message) noexcept
+    { return readProcessPipe(handle, true, false, maximumBytes, bytes, eof, error, nativeError, message); }
+
+    bool ProcessWriteStdin(void* handle, const std::string_view bytes, std::size_t& written,
+                           ProcessError& error, int& nativeError, std::string& message) noexcept
+    {
+        written = 0; error = ProcessError::none; nativeError = 0; message.clear();
+        if (!retainProcess(handle, error, nativeError, message)) return false;
+        ProcessLease lease(handle);
+        auto* state = asProcess(handle);
+        std::lock_guard writeLock(state->stdinMutex);
+#if defined(_WIN32)
+        if (!state->stdinWrite)
+#else
+        if (state->stdinWrite < 0)
+#endif
+        {
+            setProcessError(error, nativeError, message, ProcessError::pipe_failed, 0, "process stdin is closed");
+            return false;
+        }
+        while (written < bytes.size())
+        {
+#if defined(_WIN32)
+            DWORD count = 0;
+            if (!WriteFile(state->stdinWrite, bytes.data() + written,
+                    static_cast<DWORD>(std::min<std::size_t>(bytes.size() - written, 1u << 20u)), &count, nullptr))
+            {
+                setProcessError(error, nativeError, message, ProcessError::pipe_failed,
+                    static_cast<int>(GetLastError()), "writing process stdin failed");
+                return false;
+            }
+#else
+            ScopedSigpipeBlock sigpipeGuard;
+            const ssize_t count = ::write(state->stdinWrite, bytes.data() + written, bytes.size() - written);
+            if (count < 0)
+            {
+                if (errno == EINTR) continue;
+                setProcessError(error, nativeError, message, ProcessError::pipe_failed, errno,
+                    "writing process stdin failed");
+                return false;
+            }
+#endif
+            written += static_cast<std::size_t>(count);
+        }
+        return true;
+    }
+
+    bool ProcessCloseStdin(void* handle, ProcessError& error, int& nativeError, std::string& message) noexcept
+    {
+        error = ProcessError::none; nativeError = 0; message.clear();
+        if (!retainProcess(handle, error, nativeError, message)) return false;
+        ProcessLease lease(handle);
+        auto* state = asProcess(handle);
+        std::lock_guard writeLock(state->stdinMutex);
+        closePipe(state->stdinWrite);
+        return true;
+    }
+
+    bool ProcessWait(void* handle, int& exitCode, ProcessError& error, int& nativeError, std::string& message) noexcept
+    {
+        exitCode = -1; error = ProcessError::none; nativeError = 0; message.clear();
+        if (!retainProcess(handle, error, nativeError, message)) return false;
+        ProcessLease lease(handle);
+        return waitProcessState(asProcess(handle), exitCode, error, nativeError, message);
+    }
+
+    bool ProcessIsRunning(void* handle, bool& running, ProcessError& error, int& nativeError, std::string& message) noexcept
+    {
+        running = false; error = ProcessError::none; nativeError = 0; message.clear();
+        if (!retainProcess(handle, error, nativeError, message)) return false;
+        ProcessLease lease(handle);
+        return processRunningState(asProcess(handle), running, error, nativeError, message);
+    }
+
+    bool ProcessTerminate(void* handle, ProcessError& error, int& nativeError, std::string& message) noexcept
+    {
+        error = ProcessError::none; nativeError = 0; message.clear();
+        if (!retainProcess(handle, error, nativeError, message)) return false;
+        ProcessLease lease(handle);
+        return terminateProcessState(asProcess(handle), error, nativeError, message);
+    }
+
+    bool ProcessRetain(void* handle, std::string& message) noexcept
+    {
+        ProcessError error = ProcessError::none;
+        int nativeError = 0;
+        return retainProcess(handle, error, nativeError, message);
+    }
+
+    std::uint64_t LiveProcessCount() noexcept
+    {
+        return liveProcessCount.load(std::memory_order_acquire);
+    }
+
+    void ProcessRelease(void* handle) noexcept
+    {
+        if (!handle) return;
+        auto* state = asProcess(handle);
+        if (state->references.fetch_sub(1, std::memory_order_acq_rel) == 1)
+            delete state;
+    }
+
+    void ProcessClose(void* handle) noexcept
+    {
+        if (!handle) return;
+        auto* state = asProcess(handle);
+        {
+            std::lock_guard lifecycleLock(state->lifecycleMutex);
+            if (state->closed) return;
+            state->closed = true;
+        }
+        ProcessError error = ProcessError::none;
+        int nativeError = 0;
+        std::string message;
+        static_cast<void>(terminateProcessState(state, error, nativeError, message));
+        int exitCode = -1;
+        error = ProcessError::none; nativeError = 0; message.clear();
+        static_cast<void>(waitProcessState(state, exitCode, error, nativeError, message));
+        {
+            std::lock_guard lock(state->stdinMutex); closePipe(state->stdinWrite);
+        }
+        {
+            std::lock_guard lock(state->stdoutMutex); closePipe(state->stdoutRead);
+        }
+        {
+            std::lock_guard lock(state->stderrMutex); closePipe(state->stderrRead);
+        }
+#if defined(_WIN32)
+        if (state->process) { CloseHandle(state->process); state->process = nullptr; }
+#endif
+        ProcessRelease(state);
     }
 }
 

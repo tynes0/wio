@@ -153,15 +153,17 @@ candidate application/system and language-coherence direction is expanded in
    without changing task ownership or result types. The
    platform slice now has a dedicated bounded I/O executor and Result-safe
    async filesystem/process run/capture operations and leased DNS/connect plus
-   TCP/UDP data I/O plus pre-leased async accept; native completion-port
-   backends, streaming process pipes/signals, native watcher backends,
+   TCP/UDP data I/O plus pre-leased async accept; owned processes now provide
+   separate async stdin/stdout/stderr, wait, terminate, close/reap, and native
+   lease safety. Native completion-port backends, process signal/event
+   subscription, native watcher backends,
    streams, and full cross-platform qualification remain. A cancellable,
    debounced portable file watcher is available as the fallback candidate.
    Keep the everyday vocabulary small and prove each slice in console,
    desktop, game, server/tool, and native-host scenarios.
 
 9. [ ] Add OS/application facilities.
-    Environment variables, process pipes, signals, filesystem watching,
+    Environment variables, process signal/event subscription, filesystem watching,
     clipboard, notifications, dialogs, user/config/cache directories, dynamic
     libraries, and platform capability queries. Basic OS/architecture,
     pointer-width, endian, hardware-thread, path-list separator, and native

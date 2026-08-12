@@ -145,12 +145,13 @@ executor rather than the continuation or generic blocking pool.
 
 The unreleased 0.12 `std::net` candidate adds `ResolveAsync`, `ConnectAsync`,
 `Socket.SendAsync`, `Socket.ReceiveAsync`, `UdpSocket.SendToAsync`, and
-`UdpSocket.ReceiveFromAsync`. Expected DNS/socket failures remain
+`UdpSocket.ReceiveFromAsync`, plus ownership-safe `Listener.AcceptAsync`.
+Expected DNS/socket failures remain
 `ResultError` values. Native socket state uses operation leases: close prevents
 new leases, interrupts the native socket, and defers state reclamation until
 in-flight operations finish. `LiveSocketCount` is a diagnostic/testing surface
-for ownership qualification. Async accept, TLS/HTTP, and platform completion-
-port backends are not yet claimed.
+for ownership qualification. TLS/HTTP and platform completion-port backends
+are not yet claimed.
 
 ### 2.1.4 Runtime-Backed Stable Module With Explicit Caveat
 
@@ -163,11 +164,16 @@ explicit caveat:
 - the remaining hardening work is cross-platform behavior and packaged-toolchain
   validation, not a different public API direction.
 
-The unreleased 0.12 candidate adds `RunAsync` and `CaptureAsync`. They preserve
-the synchronous Result/exit-code/output contract while waiting on the bounded
-I/O executor, so process completion cannot occupy a continuation worker or an
-application owner thread. Streaming pipes, signals, and forced cancellation
-are not implied by these whole-process operations.
+The unreleased 0.12 candidate adds `RunAsync`, `CaptureAsync`, and an owned
+`Process` returned by `Spawn`. The owned form separates stdout/stderr, supports
+sync and async stdin writes, chunk/all pipe reads, independent stdin close,
+running-state observation, wait, terminate, and deterministic close. Async
+operations acquire native leases before their first suspension; pipe readiness
+and process completion use timer-backed polling without occupying an I/O worker,
+while stdin writes use the bounded I/O executor. Close terminates and reaps
+unfinished children before reclaiming native state.
+`LiveProcessCount` is the ownership qualification diagnostic. OS signal/event
+subscription and native completion-port pipe backends remain future work.
 
 `std::os::WatchFileAsync(path, pollMilliseconds)` is the portable 0.12 watcher
 candidate. It returns the next created/modified/removed `FileChange`, debounces

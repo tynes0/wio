@@ -12,13 +12,21 @@ realm std {
             none = 0u8,
             empty_program = 1u8,
             invalid_working_directory = 2u8,
-            launch_failed = 3u8
+            launch_failed = 3u8,
+            pipe_failed = 4u8,
+            process_closed = 5u8,
+            wait_failed = 6u8,
+            terminate_failed = 7u8
         };
 
         const ErrorNone: Error = Error::none;
         const ErrorEmptyProgram: Error = Error::empty_program;
         const ErrorInvalidWorkingDirectory: Error = Error::invalid_working_directory;
         const ErrorLaunchFailed: Error = Error::launch_failed;
+        const ErrorPipeFailed: Error = Error::pipe_failed;
+        const ErrorProcessClosed: Error = Error::process_closed;
+        const ErrorWaitFailed: Error = Error::wait_failed;
+        const ErrorTerminateFailed: Error = Error::terminate_failed;
 
         @Native
         @CppName(wio::runtime::std_process::ToString)
@@ -64,6 +72,16 @@ realm std {
             text: string;
         }
 
+        component PipeChunk {
+            bytes: string;
+            eof: bool;
+
+            OnConstruct(bytes: string, eof: bool) {
+                self.bytes = bytes;
+                self.eof = eof;
+            }
+        }
+
         fn TryRunCaptureNative(
             command: string,
             args: string[],
@@ -84,6 +102,50 @@ realm std {
         fn DecodeAsyncNative(payload: string, succeeded: ref bool, exitCode: ref i32,
             output: ref string, error: ref Error, nativeError: ref i32, message: ref string)
             with native, cpp::name(wio::runtime::std_async_process::Decode);
+
+        fn SpawnNative(command: string, args: string[], workingDirectory: string,
+            handle: ref opaque?, error: ref Error, nativeError: ref i32, message: ref string) -> bool
+            with native, cpp::name(wio::runtime::std_process::Spawn);
+        fn ProcessReadStdoutNative(handle: opaque, maximumBytes: usize, bytes: ref string,
+            eof: ref bool, error: ref Error, nativeError: ref i32, message: ref string) -> bool
+            with native, cpp::name(wio::runtime::std_process::ProcessReadStdout);
+        fn ProcessReadStderrNative(handle: opaque, maximumBytes: usize, bytes: ref string,
+            eof: ref bool, error: ref Error, nativeError: ref i32, message: ref string) -> bool
+            with native, cpp::name(wio::runtime::std_process::ProcessReadStderr);
+        fn ProcessWriteStdinNative(handle: opaque, bytes: string, written: ref usize,
+            error: ref Error, nativeError: ref i32, message: ref string) -> bool
+            with native, cpp::name(wio::runtime::std_process::ProcessWriteStdin);
+        fn ProcessCloseStdinNative(handle: opaque, error: ref Error,
+            nativeError: ref i32, message: ref string) -> bool
+            with native, cpp::name(wio::runtime::std_process::ProcessCloseStdin);
+        fn ProcessWaitNative(handle: opaque, exitCode: ref i32, error: ref Error,
+            nativeError: ref i32, message: ref string) -> bool
+            with native, cpp::name(wio::runtime::std_process::ProcessWait);
+        fn ProcessIsRunningNative(handle: opaque, running: ref bool, error: ref Error,
+            nativeError: ref i32, message: ref string) -> bool
+            with native, cpp::name(wio::runtime::std_process::ProcessIsRunning);
+        fn ProcessTerminateNative(handle: opaque, error: ref Error,
+            nativeError: ref i32, message: ref string) -> bool
+            with native, cpp::name(wio::runtime::std_process::ProcessTerminate);
+        fn ProcessCloseNative(handle: opaque)
+            with native, cpp::name(wio::runtime::std_process::ProcessClose);
+        fn LiveProcessCount() -> u64
+            with native, cpp::name(wio::runtime::std_process::LiveProcessCount);
+
+        fn ProcessReadStdoutAsyncNative(handle: opaque, maximumBytes: usize) -> coroutine<string>
+            with native, cpp::name(wio::runtime::std_async_process::ReadStdout);
+        fn ProcessReadStderrAsyncNative(handle: opaque, maximumBytes: usize) -> coroutine<string>
+            with native, cpp::name(wio::runtime::std_async_process::ReadStderr);
+        fn ProcessWriteStdinAsyncNative(handle: opaque, bytes: string) -> coroutine<string>
+            with native, cpp::name(wio::runtime::std_async_process::WriteStdin);
+        fn ProcessWaitAsyncNative(handle: opaque) -> coroutine<string>
+            with native, cpp::name(wio::runtime::std_async_process::Wait);
+        fn DecodeStreamAsyncNative(payload: string, succeeded: ref bool, bytes: ref string,
+            eof: ref bool, error: ref Error, nativeError: ref i32, message: ref string)
+            with native, cpp::name(wio::runtime::std_async_process::DecodeStream);
+        fn DecodeWriteAsyncNative(payload: string, succeeded: ref bool, written: ref usize,
+            error: ref Error, nativeError: ref i32, message: ref string)
+            with native, cpp::name(wio::runtime::std_async_process::DecodeWrite);
 
         fn MakeProcessResultError(error: Error, nativeError: i32, message: string) -> std::ResultError {
             mut finalMessage = message;
@@ -127,6 +189,210 @@ realm std {
 
         fn Capture(command: string, args: string[]) -> std::Result<Output> {
             return Capture(command, args, "");
+        }
+
+        object Process {
+            private handle: opaque;
+            private closed: bool;
+
+            public fn OnConstruct(handle: opaque) {
+                self.handle = handle;
+                self.closed = false;
+            }
+
+            public fn OnDestruct() { self.Close(); }
+            public fn IsClosed() -> bool { return self.closed; }
+
+            public fn Close() {
+                if (not self.closed) {
+                    ProcessCloseNative(self.handle);
+                    self.closed = true;
+                }
+            }
+
+            public fn ReadStdout(maximumBytes: usize) -> std::Result<PipeChunk> {
+                if (self.closed) {
+                    return std::Err<PipeChunk>(MakeProcessResultError(
+                        Error::process_closed, 0, "process is closed"));
+                }
+                mut bytes = ""; mut eof = false; mut error = Error::none;
+                mut nativeError = 0; mut message = "";
+                if (ProcessReadStdoutNative(self.handle, maximumBytes, ref bytes, ref eof,
+                        ref error, ref nativeError, ref message)) {
+                    return std::Ok(PipeChunk(bytes, eof));
+                }
+                return std::Err<PipeChunk>(MakeProcessResultError(error, nativeError, message));
+            }
+
+            public fn ReadStderr(maximumBytes: usize) -> std::Result<PipeChunk> {
+                if (self.closed) {
+                    return std::Err<PipeChunk>(MakeProcessResultError(
+                        Error::process_closed, 0, "process is closed"));
+                }
+                mut bytes = ""; mut eof = false; mut error = Error::none;
+                mut nativeError = 0; mut message = "";
+                if (ProcessReadStderrNative(self.handle, maximumBytes, ref bytes, ref eof,
+                        ref error, ref nativeError, ref message)) {
+                    return std::Ok(PipeChunk(bytes, eof));
+                }
+                return std::Err<PipeChunk>(MakeProcessResultError(error, nativeError, message));
+            }
+
+            public fn WriteStdin(bytes: string) -> std::Result<usize> {
+                if (self.closed) {
+                    return std::Err<usize>(MakeProcessResultError(
+                        Error::process_closed, 0, "process is closed"));
+                }
+                mut written = 0usize; mut error = Error::none;
+                mut nativeError = 0; mut message = "";
+                if (ProcessWriteStdinNative(self.handle, bytes, ref written,
+                        ref error, ref nativeError, ref message)) {
+                    return std::Ok(written);
+                }
+                return std::Err<usize>(MakeProcessResultError(error, nativeError, message));
+            }
+
+            public fn CloseStdin() -> std::UnitResult {
+                if (self.closed) {
+                    return std::ErrUnit(MakeProcessResultError(
+                        Error::process_closed, 0, "process is closed"));
+                }
+                mut error = Error::none; mut nativeError = 0; mut message = "";
+                if (ProcessCloseStdinNative(self.handle, ref error, ref nativeError, ref message)) {
+                    return std::OkUnit();
+                }
+                return std::ErrUnit(MakeProcessResultError(error, nativeError, message));
+            }
+
+            public fn Wait() -> std::Result<i32> {
+                if (self.closed) {
+                    return std::Err<i32>(MakeProcessResultError(
+                        Error::process_closed, 0, "process is closed"));
+                }
+                mut exitCode = -1; mut error = Error::none;
+                mut nativeError = 0; mut message = "";
+                if (ProcessWaitNative(self.handle, ref exitCode, ref error, ref nativeError, ref message)) {
+                    return std::Ok(exitCode);
+                }
+                return std::Err<i32>(MakeProcessResultError(error, nativeError, message));
+            }
+
+            public fn IsRunning() -> std::Result<bool> {
+                if (self.closed) {
+                    return std::Err<bool>(MakeProcessResultError(
+                        Error::process_closed, 0, "process is closed"));
+                }
+                mut running = false; mut error = Error::none;
+                mut nativeError = 0; mut message = "";
+                if (ProcessIsRunningNative(self.handle, ref running, ref error, ref nativeError, ref message)) {
+                    return std::Ok(running);
+                }
+                return std::Err<bool>(MakeProcessResultError(error, nativeError, message));
+            }
+
+            public fn Terminate() -> std::UnitResult {
+                if (self.closed) {
+                    return std::ErrUnit(MakeProcessResultError(
+                        Error::process_closed, 0, "process is closed"));
+                }
+                mut error = Error::none; mut nativeError = 0; mut message = "";
+                if (ProcessTerminateNative(self.handle, ref error, ref nativeError, ref message)) {
+                    return std::OkUnit();
+                }
+                return std::ErrUnit(MakeProcessResultError(error, nativeError, message));
+            }
+
+            public async fn ReadStdoutAsync(maximumBytes: usize) -> std::Result<PipeChunk> {
+                if (self.closed) {
+                    return std::Err<PipeChunk>(MakeProcessResultError(
+                        Error::process_closed, 0, "process is closed"));
+                }
+                let payload = await ProcessReadStdoutAsyncNative(self.handle, maximumBytes);
+                mut succeeded = false; mut bytes = ""; mut eof = false;
+                mut error = Error::none; mut nativeError = 0; mut message = "";
+                DecodeStreamAsyncNative(payload, ref succeeded, ref bytes, ref eof,
+                    ref error, ref nativeError, ref message);
+                if (succeeded) { return std::Ok(PipeChunk(bytes, eof)); }
+                return std::Err<PipeChunk>(MakeProcessResultError(error, nativeError, message));
+            }
+
+            public async fn ReadStderrAsync(maximumBytes: usize) -> std::Result<PipeChunk> {
+                if (self.closed) {
+                    return std::Err<PipeChunk>(MakeProcessResultError(
+                        Error::process_closed, 0, "process is closed"));
+                }
+                let payload = await ProcessReadStderrAsyncNative(self.handle, maximumBytes);
+                mut succeeded = false; mut bytes = ""; mut eof = false;
+                mut error = Error::none; mut nativeError = 0; mut message = "";
+                DecodeStreamAsyncNative(payload, ref succeeded, ref bytes, ref eof,
+                    ref error, ref nativeError, ref message);
+                if (succeeded) { return std::Ok(PipeChunk(bytes, eof)); }
+                return std::Err<PipeChunk>(MakeProcessResultError(error, nativeError, message));
+            }
+
+            public async fn ReadAllStdoutAsync() -> std::Result<string> {
+                mut output = "";
+                while (true) {
+                    let next = await self.ReadStdoutAsync(4096usize);
+                    if (next.IsError()) { return std::Err<string>(next.ErrorValue()); }
+                    output += next.Value().bytes;
+                    if (next.Value().eof) { return std::Ok(output); }
+                }
+                return std::Ok(output);
+            }
+
+            public async fn ReadAllStderrAsync() -> std::Result<string> {
+                mut output = "";
+                while (true) {
+                    let next = await self.ReadStderrAsync(4096usize);
+                    if (next.IsError()) { return std::Err<string>(next.ErrorValue()); }
+                    output += next.Value().bytes;
+                    if (next.Value().eof) { return std::Ok(output); }
+                }
+                return std::Ok(output);
+            }
+
+            public async fn WriteStdinAsync(bytes: string) -> std::Result<usize> {
+                if (self.closed) {
+                    return std::Err<usize>(MakeProcessResultError(
+                        Error::process_closed, 0, "process is closed"));
+                }
+                let payload = await ProcessWriteStdinAsyncNative(self.handle, bytes);
+                mut succeeded = false; mut written = 0usize;
+                mut error = Error::none; mut nativeError = 0; mut message = "";
+                DecodeWriteAsyncNative(payload, ref succeeded, ref written,
+                    ref error, ref nativeError, ref message);
+                if (succeeded) { return std::Ok(written); }
+                return std::Err<usize>(MakeProcessResultError(error, nativeError, message));
+            }
+
+            public async fn WaitAsync() -> std::Result<i32> {
+                if (self.closed) {
+                    return std::Err<i32>(MakeProcessResultError(
+                        Error::process_closed, 0, "process is closed"));
+                }
+                let payload = await ProcessWaitAsyncNative(self.handle);
+                mut succeeded = false; mut exitCode = -1; mut output = "";
+                mut error = Error::none; mut nativeError = 0; mut message = "";
+                DecodeAsyncNative(payload, ref succeeded, ref exitCode, ref output,
+                    ref error, ref nativeError, ref message);
+                if (succeeded) { return std::Ok(exitCode); }
+                return std::Err<i32>(MakeProcessResultError(error, nativeError, message));
+            }
+        }
+
+        fn Spawn(command: string, args: string[], workingDirectory: string) -> std::Result<Process> {
+            mut handle: opaque? = null; mut error = Error::none;
+            mut nativeError = 0; mut message = "";
+            if (SpawnNative(command, args, workingDirectory, ref handle,
+                    ref error, ref nativeError, ref message)) {
+                if (handle != null) { return std::Ok(Process(handle)); }
+            }
+            return std::Err<Process>(MakeProcessResultError(error, nativeError, message));
+        }
+
+        fn Spawn(command: string, args: string[]) -> std::Result<Process> {
+            return Spawn(command, args, "");
         }
 
         async fn RunAsync(command: string, args: string[], workingDirectory: string) -> std::Result<i32> {

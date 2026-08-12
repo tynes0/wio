@@ -241,8 +241,13 @@ starts. The accepted `Socket` remains an owned value inside `Result<Socket>`
 and task state; cancellation or abandonment therefore closes an unobserved
 accepted handle through ordinary Wio destruction. Native accept/receive waits
 observe close in bounded readiness slices, preventing descriptor reuse while
-an already-retained operation exits. Process pipes/signals, TLS, and native
-completion-port socket backends remain later platform work.
+an already-retained operation exits. Owned `std::process::Process` values now
+provide separately streamed stdin/stdout/stderr, async wait, running state,
+termination, and deterministic close/reap. Pipe and wait operations acquire a
+native state lease before their first suspension and poll readiness through
+the timer scheduler, so they neither occupy an I/O worker nor permit immediate
+close to reclaim active state. OS signal/event subscription, TLS, and native
+completion-port socket/process backends remain later platform work.
 
 ## 5. Standard-library surface
 
@@ -293,8 +298,8 @@ use `coroutine<Result<T>>`).
 ## 7. Outside the 0.11 contract
 
 - async generators/streams and source `yield`;
-- completion-port filesystem/socket/native-watcher backends and streaming
-  process pipes/signals;
+- completion-port filesystem/socket/process/native-watcher backends and OS
+  process signal/event subscription;
 - general executor selection, priorities, work stealing, and automatic
   origin-thread continuation capture;
 - ambient cancellation-token access across arbitrary native/task trees beyond

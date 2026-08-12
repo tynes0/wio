@@ -29,6 +29,12 @@ Notes:
       run/capture operations, a cancellable portable first-change watcher, and
       leased DNS/connect plus TCP/UDP data I/O and ownership-safe async accept
       with close-race safety.
+- [x] `std::process::Spawn` adds owned child lifetime, separate stdin/stdout/
+      stderr pipes, sync/async streaming, running state, wait, termination,
+      deterministic close/reap, pre-scheduling operation leases, and live-state
+      diagnostics.
+- [x] Windows entry-point arguments are normalized from the native UTF-16
+      command line to UTF-8, including spaced and non-ASCII spawned arguments.
 
 - [x] `async fn`, async object/interface methods, generic async declarations,
       async `Entry`, `await`, and the `coroutine<T>` type are implemented across

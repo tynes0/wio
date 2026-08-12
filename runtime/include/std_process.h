@@ -12,7 +12,11 @@ namespace wio::runtime::std_process
         none = 0,
         empty_program = 1,
         invalid_working_directory = 2,
-        launch_failed = 3
+        launch_failed = 3,
+        pipe_failed = 4,
+        process_closed = 5,
+        wait_failed = 6,
+        terminate_failed = 7
     };
 
     [[nodiscard]] const char* ToString(ProcessError error) noexcept;
@@ -44,6 +48,44 @@ namespace wio::runtime::std_process
         ProcessError& error,
         int& nativeError,
         std::string& message) noexcept;
+
+    [[nodiscard]] bool Spawn(
+        std::string_view program,
+        const std::vector<std::string>& args,
+        std::string_view workingDirectory,
+        void*& handle,
+        ProcessError& error,
+        int& nativeError,
+        std::string& message) noexcept;
+    [[nodiscard]] bool ProcessReadStdout(
+        void* handle, std::size_t maximumBytes, std::string& bytes, bool& eof,
+        ProcessError& error, int& nativeError, std::string& message) noexcept;
+    [[nodiscard]] bool ProcessReadStderr(
+        void* handle, std::size_t maximumBytes, std::string& bytes, bool& eof,
+        ProcessError& error, int& nativeError, std::string& message) noexcept;
+    [[nodiscard]] bool ProcessTryReadStdout(
+        void* handle, std::size_t maximumBytes, std::string& bytes, bool& eof,
+        ProcessError& error, int& nativeError, std::string& message) noexcept;
+    [[nodiscard]] bool ProcessTryReadStderr(
+        void* handle, std::size_t maximumBytes, std::string& bytes, bool& eof,
+        ProcessError& error, int& nativeError, std::string& message) noexcept;
+    [[nodiscard]] bool ProcessWriteStdin(
+        void* handle, std::string_view bytes, std::size_t& written,
+        ProcessError& error, int& nativeError, std::string& message) noexcept;
+    [[nodiscard]] bool ProcessCloseStdin(
+        void* handle, ProcessError& error, int& nativeError, std::string& message) noexcept;
+    [[nodiscard]] bool ProcessWait(
+        void* handle, int& exitCode,
+        ProcessError& error, int& nativeError, std::string& message) noexcept;
+    [[nodiscard]] bool ProcessIsRunning(
+        void* handle, bool& running,
+        ProcessError& error, int& nativeError, std::string& message) noexcept;
+    [[nodiscard]] bool ProcessTerminate(
+        void* handle, ProcessError& error, int& nativeError, std::string& message) noexcept;
+    [[nodiscard]] bool ProcessRetain(void* handle, std::string& message) noexcept;
+    [[nodiscard]] std::uint64_t LiveProcessCount() noexcept;
+    void ProcessRelease(void* handle) noexcept;
+    void ProcessClose(void* handle) noexcept;
 }
 
 namespace wio::runtime::std_environment
