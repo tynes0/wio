@@ -9409,7 +9409,10 @@ namespace wio::codegen
             }
         }
 
-        emitLine("enum " + enumName + " : " + underType + "\n{");
+        // Wio enum members live in the enum's semantic scope. Keep the C++
+        // representation scoped as well so two enums in one realm may reuse
+        // natural member names such as `pending` or `closed`.
+        emitLine("enum class " + enumName + " : " + underType + "\n{");
         indent();
 
         for (size_t i = 0; i < node.members.size(); ++i)

@@ -38,6 +38,9 @@ Notes:
 - [x] `std::async::AsyncChannel<T>` provides bounded or unbounded buffering,
       non-blocking `TrySend`/`TryReceive`, cancellable async backpressure,
       close wake-up, and buffered drain-before-completion semantics.
+- [x] Wio enum members remain isolated to their declaring enum through the
+      C++ backend, allowing separate enums to reuse natural names such as
+      `pending`, `empty`, and `closed` without backend collisions.
 
 - [x] `async fn`, async object/interface methods, generic async declarations,
       async `Entry`, `await`, and the `coroutine<T>` type are implemented across

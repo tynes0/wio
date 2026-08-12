@@ -33,7 +33,7 @@ async fn Entry() -> i32 {
     let closedReceive = await waitingReceive;
     assert::Expect(closedReceive.IsNone(),
         "closing an empty channel resolves pending receivers");
-    assert::Expect(bounded.TrySend(30) == futures::ChannelSendStatus::send_closed,
+    assert::Expect(bounded.TrySend(30) == futures::ChannelSendStatus::closed,
         "closed channels reject new producers");
     let closedPoll = bounded.TryReceive();
     assert::Expect(closedPoll.IsClosed() and bounded.IsDrained(),

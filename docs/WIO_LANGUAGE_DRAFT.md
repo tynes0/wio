@@ -2790,6 +2790,8 @@ flag NeedsSave;
 
 ### 19.4 Value Conversion and Validity
 
+Enum members are scoped to their declaring enum, so separate enums may reuse
+the same member names without leaking those names into their containing realm.
 Every enum value exposes `Value()` using its declared underlying integer type
 and `IsValid()` to test whether the raw value names a declared member.
 `std::reflect::TryFromValue<T>(raw)` returns `Option<T>` and rejects unknown or

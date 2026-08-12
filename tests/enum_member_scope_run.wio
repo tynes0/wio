@@ -1,0 +1,29 @@
+use std::assert as assert;
+use std::console as console;
+
+enum ProducerState {
+    pending = 1,
+    closed = 2
+}
+
+enum ConsumerState {
+    pending = 10,
+    closed = 20
+}
+
+fn Entry() -> i32 {
+    let producer = ProducerState::closed;
+    let consumer = ConsumerState::closed;
+
+    assert::Expect(producer == ProducerState::closed,
+        "producer enum resolves its own closed member");
+    assert::Expect(consumer == ConsumerState::closed,
+        "consumer enum resolves its own closed member");
+    assert::ExpectEqual(producer.Value(), 2,
+        "producer member retains its declared value");
+    assert::ExpectEqual(consumer.Value(), 20,
+        "consumer member retains its declared value");
+
+    console::PrintLine("enum-member-scope-ok");
+    return 0;
+}

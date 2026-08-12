@@ -273,13 +273,13 @@ realm std {
         enum ChannelSendStatus {
             accepted,
             backpressured,
-            send_closed
+            closed
         };
 
         enum ChannelReceiveStatus {
             available,
-            receive_empty,
-            receive_closed
+            empty,
+            closed
         };
 
         object ChannelReceivePoll<T> {
@@ -293,8 +293,8 @@ realm std {
 
             public fn Status() -> ChannelReceiveStatus { return self.status; }
             public fn HasValue() -> bool { return self.status == ChannelReceiveStatus::available; }
-            public fn IsEmpty() -> bool { return self.status == ChannelReceiveStatus::receive_empty; }
-            public fn IsClosed() -> bool { return self.status == ChannelReceiveStatus::receive_closed; }
+            public fn IsEmpty() -> bool { return self.status == ChannelReceiveStatus::empty; }
+            public fn IsClosed() -> bool { return self.status == ChannelReceiveStatus::closed; }
             public fn Value() -> std::Option<T> { return self.value; }
         }
 
@@ -317,7 +317,7 @@ realm std {
                 self.gate.Lock();
                 if (self.closed) {
                     self.gate.Unlock();
-                    return ChannelSendStatus::send_closed;
+                    return ChannelSendStatus::closed;
                 }
                 if (self.capacity > 0usize and self.values.Count() >= self.capacity) {
                     self.gate.Unlock();
@@ -332,7 +332,7 @@ realm std {
                 while (true) {
                     let status = self.TrySend(value);
                     if (status == ChannelSendStatus::accepted) { return true; }
-                    if (status == ChannelSendStatus::send_closed) { return false; }
+                    if (status == ChannelSendStatus::closed) { return false; }
                     await Sleep(1u64);
                 }
                 return false;
@@ -348,8 +348,8 @@ realm std {
                         ChannelReceiveStatus::available, std::Some<T>(value));
                 }
                 let status = self.closed
-                    ? ChannelReceiveStatus::receive_closed
-                    : ChannelReceiveStatus::receive_empty;
+                    ? ChannelReceiveStatus::closed
+                    : ChannelReceiveStatus::empty;
                 self.gate.Unlock();
                 return ChannelReceivePoll<T>(status, std::None<T>());
             }
