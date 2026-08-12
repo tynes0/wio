@@ -37,9 +37,8 @@ async fn Entry() -> i32 {
     let sender = senderResult.Value();
     assert::Expect(receiver.SetTimeout(2000u64).IsOk(), "UDP async receive has a finite native timeout");
 
-    let receiveTask = receiver.ReceiveFromAsync(64usize);
     let sent = await sender.SendToAsync("127.0.0.1", receiver.LocalPort(), "async-udp");
-    let datagram = await receiveTask;
+    let datagram = await receiver.ReceiveFromAsync(64usize);
     assert::Expect(sent.IsOk() and sent.Value() == 9usize, "UDP async send preserves byte count");
     assert::Expect(datagram.IsOk(), "UDP async receive succeeds");
     assert::ExpectEqual(datagram.Value().bytes, "async-udp", "UDP async payload round-trips");
