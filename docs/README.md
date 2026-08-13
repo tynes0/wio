@@ -61,6 +61,7 @@ These documents answer practical workflow questions such as:
 - [Wio 0.9 generics and constraints specification](./spec/WIO_LANGUAGE_SPEC_0_9.md)
 - [Wio 0.10 const generics and native components specification](./spec/WIO_LANGUAGE_SPEC_0_10.md)
 - [Wio 0.11 language and standard-library foundation specification](./spec/WIO_LANGUAGE_SPEC_0_11.md)
+- [Wio v1 language coherence candidate specification](./spec/WIO_LANGUAGE_SPEC_V1_COHERENCE.md)
 - [Wio standard library contract 0.11](./spec/WIO_STD_SPEC_0_11.md)
 - [Async and coroutine model](./WIO_ASYNC_MODEL.md)
 - [Async and multithreading evolution plan](./WIO_ASYNC_EVOLUTION_PLAN.md)

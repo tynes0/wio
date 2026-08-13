@@ -202,6 +202,11 @@ set(
     "(attribute|pipeline|match|application|async|lambda_capture)"
 )
 
+set(
+    WIO_LANGUAGE_COHERENCE_TEST_REGEX
+    "^(wio_test_(attribute_compact_declaration_run|generic_partial_specialization_ordering_run|extension_default_parameters_run|extension_generic_methods_run|match_enum_exhaustive_guards_run)|wio_invalid_(attribute_named_unknown|attribute_named_duplicate|attribute_named_missing_required|attribute_compact_conflict|generic_partial_specialization_structural_ambiguous|extension_generic_constraint_reject|match_enum_non_exhaustive|match_enum_duplicate_unguarded|match_literal_guard_type_mismatch|match_assumed_guard))$"
+)
+
 add_custom_target(
     wio_tests_traceability
     COMMAND ${CMAKE_COMMAND} -E env "WIO_ROOT=${CMAKE_SOURCE_DIR}"
@@ -219,8 +224,21 @@ add_custom_target(
         ${CMAKE_CTEST_COMMAND} ${wio_ctest_config_args} -R "${WIO_TRACEABILITY_TEST_REGEX}" --output-on-failure
     COMMAND ${CMAKE_COMMAND} -E env "WIO_ROOT=${CMAKE_SOURCE_DIR}"
         ${CMAKE_CTEST_COMMAND} ${wio_ctest_config_args} -R "${WIO_FREEZE_TEST_REGEX}" --output-on-failure
+    COMMAND ${CMAKE_COMMAND} -E env "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+        ${CMAKE_CTEST_COMMAND} ${wio_ctest_config_args} -R "${WIO_LANGUAGE_COHERENCE_TEST_REGEX}" --output-on-failure
     COMMAND_EXPAND_LISTS
     DEPENDS wio_app wio_async_runtime_stress
+    WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+    USES_TERMINAL
+    VERBATIM
+)
+
+add_custom_target(
+    wio_tests_language_coherence
+    COMMAND ${CMAKE_COMMAND} -E env "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+        ${CMAKE_CTEST_COMMAND} ${wio_ctest_config_args} -R "${WIO_LANGUAGE_COHERENCE_TEST_REGEX}" --output-on-failure
+    COMMAND_EXPAND_LISTS
+    DEPENDS wio_app
     WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
     USES_TERMINAL
     VERBATIM
