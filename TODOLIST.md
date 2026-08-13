@@ -116,13 +116,14 @@ application/system and language-coherence direction is expanded in
     vectors. Do not expose C++ `wchar_t`
     width as a Wio language rule.
 
-16. [ ] Infer fixed-size array extents from initializers.
-    Add an explicit auto-extent form for fixed-size arrays so declarations can
-    retain stack/static storage without repeating the initializer length. Freeze
-    its spelling, empty-initializer behavior, nested-array inference, const and
-    generic interaction, diagnostics for incompatible elements, native ABI
-    representation, and reflection/SDK metadata. Inference must remain distinct
-    from the existing dynamic-array `T[]` type.
+16. [x] Infer fixed-size array extents from initializers.
+    `[T; _]` now infers fixed/static storage from an array literal or concrete
+    fixed-array initializer. Empty literals infer zero, nested extents resolve
+    independently, ragged literals and dynamic-array sources are rejected, and
+    `_` is forbidden in parameter/return/alias positions. The inferred type is
+    materialized as ordinary `[T; N]` before code generation, native ABI, and
+    reflection/SDK metadata. Existing `const` array rejection remains explicit;
+    generic element types work without turning the extent into a generic value.
 
 17. [~] Extend compile-time constants to `string` and `text`.
     Literal initialization, references to other constants, concatenation,

@@ -1,0 +1,7 @@
+fn First(values: [i32; _]) -> i32 {
+    return values[0usize];
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

@@ -6,6 +6,10 @@ All notable user-facing changes to Wio are recorded here.
 
 ### Added
 
+- Added explicit fixed-array extent inference with `[T; _]`, including empty,
+  copied, global, component-field, and nested fixed arrays. Ragged nesting,
+  dynamic-array sources, missing initializers, and non-variable use sites now
+  receive semantic diagnostics.
 - Added `const string` and `const text` declarations with literal values,
   constant references, concatenation, comparison, matching, and global, local,
   or component-static storage.
@@ -47,6 +51,8 @@ All notable user-facing changes to Wio are recorded here.
 
 ### Fixed
 
+- Immutable global declarations now preserve `const` in their generated C++
+  forward declarations.
 - Fixed host-interop tests compiling against the source SDK while accidentally
   resolving runtime headers from an older installed Wio distribution.
 

@@ -954,7 +954,25 @@ Examples:
 ```wio
 let dynamic_arr: i32[] = [1, 2, 3];
 let static_arr: [i32; 3] = [1, 2, 3];
+let inferred_static_arr: [i32; _] = [1, 2, 3];
+let matrix: [[i32; _]; _] = [[1, 2], [3, 4]];
 ```
+
+`[T; _]` is an explicitly inferred fixed-size array. It retains fixed/static
+storage, but takes its extent from an array literal or another concrete
+fixed-size array initializer. It is distinct from the dynamic `T[]` type.
+
+The inference rules are deliberately local and deterministic:
+
+- the form is valid only in a variable or component-field declaration that has
+  an initializer,
+- an empty literal infers an extent of zero when its element type is otherwise
+  concrete,
+- every `_` in a nested array is inferred from its corresponding literal level,
+- ragged nested literals are rejected,
+- dynamic arrays cannot silently become fixed arrays,
+- the inferred type is resolved to an ordinary `[T; N]` before C++ generation,
+  native ABI description, or reflection metadata is emitted.
 
 ### 6.6 Initialization Rules
 

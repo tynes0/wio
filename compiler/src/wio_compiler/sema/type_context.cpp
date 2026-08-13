@@ -51,9 +51,12 @@ namespace wio::sema
         return makeType<NullableType>(std::move(valueType));
     }
 
-    Ref<Type> TypeContext::getOrCreateArrayType(Ref<Type> elementType, ArrayType::ArrayKind arrayKind, size_t size, Ref<Type> extentType)
+    Ref<Type> TypeContext::getOrCreateArrayType(Ref<Type> elementType, ArrayType::ArrayKind arrayKind,
+                                                size_t size, Ref<Type> extentType,
+                                                bool hasInferredExtent)
     {
-        return makeType<ArrayType>(std::move(elementType), arrayKind, size, std::move(extentType));
+        return makeType<ArrayType>(std::move(elementType), arrayKind, size,
+                                   std::move(extentType), hasInferredExtent);
     }
     
     Ref<Type> TypeContext::getOrCreateDictionaryType(Ref<Type> keyType, Ref<Type> valueType, bool isOrdered)

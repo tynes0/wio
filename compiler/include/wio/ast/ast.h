@@ -397,6 +397,7 @@ namespace wio
         // generic parameters. A null entry keeps the legacy numeric `size`.
         NodePtrUnchecked<TypeSpecifier> arrayExtent;
         size_t size = 0;
+        bool hasInferredArrayExtent = false;
 
         bool isMut = false;
         bool isRef = false;

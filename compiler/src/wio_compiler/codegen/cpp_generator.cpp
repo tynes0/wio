@@ -5150,9 +5150,13 @@ namespace wio::codegen
             if (!type)
                 return;
 
+            const std::string declarationType =
+                variable->mutability == Mutability::Immutable
+                    ? "const " + toCppType(type)
+                    : toCppType(type);
             emitLine(common::formatString(
                 "extern {} {};",
-                toCppType(type),
+                declarationType,
                 Mangler::mangleGlobalVar(variable->name->token.value, symbol ? symbol->scopePath : "")
             ));
         });

@@ -31,6 +31,39 @@ namespace wio::sema
             return type;
         }
 
+        bool containsInferredArrayExtent(Ref<Type> type)
+        {
+            type = unwrapTransferType(std::move(type));
+            if (!type || type->kind() != TypeKind::Array)
+                return false;
+
+            auto array = type.AsFast<ArrayType>();
+            return array->hasInferredExtent || containsInferredArrayExtent(array->elementType);
+        }
+
+        bool haveIdenticalFixedArrayShape(Ref<Type> left, Ref<Type> right)
+        {
+            left = unwrapTransferType(std::move(left));
+            right = unwrapTransferType(std::move(right));
+            if (!left || !right || left->kind() != TypeKind::Array || right->kind() != TypeKind::Array)
+                return true;
+
+            auto leftArray = left.AsFast<ArrayType>();
+            auto rightArray = right.AsFast<ArrayType>();
+            if (leftArray->arrayKind == ArrayType::ArrayKind::Dynamic ||
+                rightArray->arrayKind == ArrayType::ArrayKind::Dynamic)
+            {
+                return leftArray->arrayKind == rightArray->arrayKind;
+            }
+            if (!leftArray->hasInferredExtent && !rightArray->hasInferredExtent &&
+                !leftArray->extentType && !rightArray->extentType &&
+                leftArray->size != rightArray->size)
+            {
+                return false;
+            }
+            return haveIdenticalFixedArrayShape(leftArray->elementType, rightArray->elementType);
+        }
+
         bool hasAsyncSafetyMarker(
             const Ref<StructType>& type,
             std::string_view marker,
@@ -6933,8 +6966,16 @@ namespace wio::sema
                         extentType = Compiler::get().getTypeContext().getUnknown();
                     }
                 }
+                if (node.hasInferredArrayExtent && !allowInferredStaticArrayExtent_)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "Inferred static array extent '[T; _]' is supported only on variable declarations with an initializer."
+                    );
+                }
                 type = Compiler::get().getTypeContext().getOrCreateArrayType(
-                    node.generics[0]->refType.Lock(), ArrayType::ArrayKind::Static, node.size, extentType);
+                    node.generics[0]->refType.Lock(), ArrayType::ArrayKind::Static,
+                    node.size, extentType, node.hasInferredArrayExtent);
             }
             else if (node.name.type == TokenType::DynamicArray)
             {
@@ -8917,7 +8958,19 @@ namespace wio::sema
         {
             if (expectedArrayType)
             {
-                node.refType = expectedArrayLiteralType;
+                if (containsInferredArrayExtent(expectedArrayLiteralType))
+                {
+                    node.refType = Compiler::get().getTypeContext().getOrCreateArrayType(
+                        expectedArrayType->elementType,
+                        ArrayType::ArrayKind::Static,
+                        expectedArrayType->hasInferredExtent ? 0 : expectedArrayType->size,
+                        expectedArrayType->extentType
+                    );
+                }
+                else
+                {
+                    node.refType = expectedArrayLiteralType;
+                }
                 return;
             }
 
@@ -8940,7 +8993,10 @@ namespace wio::sema
         };
 
         analyzeElement(node.elements[0]);
-        Ref<Type> baseType = expectedArrayType ? expectedArrayType->elementType : node.elements[0]->refType.Lock();
+        Ref<Type> baseType =
+            expectedArrayType && !containsInferredArrayExtent(expectedArrayType->elementType)
+                ? expectedArrayType->elementType
+                : node.elements[0]->refType.Lock();
         if (!baseType)
             baseType = node.elements[0]->refType.Lock();
 
@@ -8949,7 +9005,9 @@ namespace wio::sema
             analyzeElement(node.elements[i]);
             if (auto lockedType = node.elements[i]->refType.Lock(); lockedType)
             {
-                if (!baseType || (!baseType->isCompatibleWith(lockedType) && !(baseType->isNumeric() && lockedType->isNumeric())))
+                if (!baseType ||
+                    !haveIdenticalFixedArrayShape(baseType, lockedType) ||
+                    (!baseType->isCompatibleWith(lockedType) && !(baseType->isNumeric() && lockedType->isNumeric())))
                 {
                     const std::string expectedTypeName = baseType ? baseType->toString() : "<unknown>";
                     WIO_LOG_ADD_ERROR(
@@ -8969,6 +9027,7 @@ namespace wio::sema
         if (expectedArrayType)
         {
             if (expectedArrayType->arrayKind == ArrayType::ArrayKind::Static &&
+                !expectedArrayType->hasInferredExtent &&
                 expectedArrayType->size != node.elements.size())
             {
                 WIO_LOG_ADD_ERROR(
@@ -8979,7 +9038,21 @@ namespace wio::sema
                 );
             }
 
-            node.refType = expectedArrayLiteralType;
+            if (containsInferredArrayExtent(expectedArrayLiteralType))
+            {
+                node.refType = Compiler::get().getTypeContext().getOrCreateArrayType(
+                    baseType,
+                    ArrayType::ArrayKind::Static,
+                    expectedArrayType->hasInferredExtent
+                        ? node.elements.size()
+                        : expectedArrayType->size,
+                    expectedArrayType->extentType
+                );
+            }
+            else
+            {
+                node.refType = expectedArrayLiteralType;
+            }
             return;
         }
 
@@ -9666,6 +9739,7 @@ namespace wio::sema
             if (auto staticIndex = tryEvaluateStaticPackIndex(node.index, variableDeclarationsBySymbol_);
                 staticIndex.has_value() &&
                 (arrType->arrayKind == ArrayType::ArrayKind::Static || arrType->arrayKind == ArrayType::ArrayKind::Literal) &&
+                !arrType->hasInferredExtent &&
                 *staticIndex >= arrType->size)
             {
                 WIO_LOG_ADD_ERROR(
@@ -13990,7 +14064,10 @@ namespace wio::sema
               Ref<Type> declaredType = nullptr;
               if (node.type)
               {
+                  const bool previousAllowInferredStaticArrayExtent = allowInferredStaticArrayExtent_;
+                  allowInferredStaticArrayExtent_ = true;
                   node.type->accept(*this);
+                  allowInferredStaticArrayExtent_ = previousAllowInferredStaticArrayExtent;
                   declaredType = node.type->refType.Lock();
               }
 
@@ -14036,7 +14113,10 @@ namespace wio::sema
               Ref<Type> declaredType = nullptr;
               if (node.type)
               {
+                  const bool previousAllowInferredStaticArrayExtent = allowInferredStaticArrayExtent_;
+                  allowInferredStaticArrayExtent_ = true;
                   node.type->accept(*this);
+                  allowInferredStaticArrayExtent_ = previousAllowInferredStaticArrayExtent;
                   declaredType = node.type->refType.Lock();
               }
 
@@ -14128,6 +14208,32 @@ namespace wio::sema
             allowContextualNumericLiteralTyping_ = previousAllowContextualNumericLiteralTyping;
             Ref<Type> initType = node.initializer->refType.Lock();
 
+            if (containsInferredArrayExtent(sym->type))
+            {
+                Ref<Type> resolvedInitializer = unwrapAliasType(initType);
+                if (resolvedInitializer &&
+                    resolvedInitializer->kind() == TypeKind::Array &&
+                    !containsInferredArrayExtent(resolvedInitializer) &&
+                    resolvedInitializer.AsFast<ArrayType>()->arrayKind != ArrayType::ArrayKind::Dynamic &&
+                    sym->type->isCompatibleWith(initType))
+                {
+                    sym->type = initType;
+                    node.name->refType = initType;
+                    if (node.type)
+                        node.type->refType = initType;
+                }
+                else if (!resolvedInitializer ||
+                         resolvedInitializer->kind() != TypeKind::Array ||
+                         containsInferredArrayExtent(resolvedInitializer) ||
+                         resolvedInitializer.AsFast<ArrayType>()->arrayKind == ArrayType::ArrayKind::Dynamic)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.initializer->location(),
+                        "Inferred static array extent requires an array literal or concrete fixed-size array initializer."
+                    );
+                }
+            }
+
             Ref<Type> resolvedDeclaredType = unwrapAliasType(sym->type);
             Ref<Type> resolvedInitializerType = unwrapAliasType(initType);
             if (resolvedDeclaredType && resolvedInitializerType &&
@@ -14213,6 +14319,14 @@ namespace wio::sema
                 "Non-null type '{}' requires an initializer. Use '{}?' if an empty state is required.",
                 sym->type->toString(),
                 sym->type->toString()
+            );
+        }
+
+        if (!node.initializer && sym && containsInferredArrayExtent(sym->type))
+        {
+            WIO_LOG_ADD_ERROR(
+                node.location(),
+                "Inferred static array extent '[T; _]' requires an initializer."
             );
         }
     }

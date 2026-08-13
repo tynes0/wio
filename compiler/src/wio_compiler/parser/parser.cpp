@@ -1136,6 +1136,7 @@ namespace wio
 
             size_t size = 0;
             NodePtr<TypeSpecifier> arrayExtent = nullptr;
+            bool hasInferredArrayExtent = false;
             if (match(TokenType::semicolon, true))
             {
                 if (match(TokenType::rightBracket))
@@ -1148,7 +1149,17 @@ namespace wio
                     size = traits::IntegerTraits<size_t>::IntegerResultCastedAs(getInteger(sizeToken.value));
                 }
                 else if (match(TokenType::identifier))
-                    arrayExtent = parseGenericArgument();
+                {
+                    if (peek().value == "_")
+                    {
+                        advance();
+                        hasInferredArrayExtent = true;
+                    }
+                    else
+                    {
+                        arrayExtent = parseGenericArgument();
+                    }
+                }
                 else
                 {
                     utError("Static array extents must be a non-negative integer literal or const generic parameter.", currentOrPreviousLocation());
@@ -1167,6 +1178,7 @@ namespace wio
 
             auto arrayType = makeNodePtr<TypeSpecifier>(arrayToken, std::move(generics), nullptr, size, false, false, false, leftBracketToken.loc);
             arrayType->arrayExtent = std::move(arrayExtent);
+            arrayType->hasInferredArrayExtent = hasInferredArrayExtent;
             return finishType(std::move(arrayType));
         }
 

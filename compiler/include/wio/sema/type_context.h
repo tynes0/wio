@@ -51,7 +51,9 @@ namespace wio::sema
         Ref<Type> getOrCreateNullableType(Ref<Type> valueType);
         
         Ref<Type> getOrCreateReferenceType(Ref<Type> referredType, bool isMutable);
-        Ref<Type> getOrCreateArrayType(Ref<Type> elementType, ArrayType::ArrayKind arrayKind, size_t size = 0, Ref<Type> extentType = nullptr);
+        Ref<Type> getOrCreateArrayType(Ref<Type> elementType, ArrayType::ArrayKind arrayKind,
+                                       size_t size = 0, Ref<Type> extentType = nullptr,
+                                       bool hasInferredExtent = false);
         Ref<Type> getOrCreateFunctionType(Ref<Type> returnType, std::vector<Ref<Type>> paramTypes, bool hasParameterPack = false);
         Ref<Type> getOrCreateDictionaryType(Ref<Type> keyType, Ref<Type> valueType, bool isOrdered = false);
         Ref<Type> getOrCreateTreeType(Ref<Type> keyType, Ref<Type> valueType);

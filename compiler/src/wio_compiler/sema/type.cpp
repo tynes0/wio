@@ -412,6 +412,9 @@ namespace wio::sema
             if (a2->arrayKind == ArrayType::ArrayKind::Dynamic)
                 return false;
 
+            if (a1->hasInferredExtent || a2->hasInferredExtent)
+                return a1->elementType->isCompatibleWith(a2->elementType);
+
             if (a1->extentType || a2->extentType)
             {
                 if (!a1->extentType || !a2->extentType ||
@@ -993,8 +996,10 @@ namespace wio::sema
         else return "const " + baseTypeStr + "*";
     }
 
-    ArrayType::ArrayType(Ref<Type> elementType, ArrayKind arrayKind, size_t size, Ref<Type> extentType)
-        : elementType(std::move(elementType)), arrayKind(arrayKind), size(size), extentType(std::move(extentType))
+    ArrayType::ArrayType(Ref<Type> elementType, ArrayKind arrayKind, size_t size,
+                         Ref<Type> extentType, bool hasInferredExtent)
+        : elementType(std::move(elementType)), arrayKind(arrayKind), size(size),
+          extentType(std::move(extentType)), hasInferredExtent(hasInferredExtent)
     {
     }
 
@@ -1007,7 +1012,8 @@ namespace wio::sema
     {
         if (arrayKind == ArrayKind::Static || arrayKind == ArrayKind::Literal)
             return "[" + elementType->toString() + "; " +
-                   (extentType ? extentType->toString() : std::to_string(size)) + "]";
+                   (hasInferredExtent ? "_" :
+                    (extentType ? extentType->toString() : std::to_string(size))) + "]";
         return elementType->toString() + "[]";
     
     }
@@ -1016,7 +1022,8 @@ namespace wio::sema
     {
         if (arrayKind == ArrayKind::Static)
             return "wio::SArray<" + elementType->toCppString() + ", " +
-                   (extentType ? extentType->toCppString() : std::to_string(size)) + ">";
+                   (hasInferredExtent ? "0" :
+                    (extentType ? extentType->toCppString() : std::to_string(size))) + ">";
         return "wio::DArray<" + elementType->toCppString() + ">";
     }
 
