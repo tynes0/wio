@@ -7106,6 +7106,16 @@ namespace wio::codegen
                 extensionImplementation->type->kind() == sema::TypeKind::Function
                     ? extensionImplementation->type.AsFast<sema::FunctionType>()
                     : functionType;
+            if (calleeSym->flags.get_isExtension() && mangledFunctionType && !mangledFunctionType->hasParameterPack)
+            {
+                const size_t emittedParameterCount = std::min(
+                    mangledFunctionType->paramTypes.size(),
+                    node.arguments.size() + 1);
+                mangledFunctionType = Compiler::get().getTypeContext().getOrCreateFunctionType(
+                    mangledFunctionType->returnType,
+                    getLeadingParameterTypes(mangledFunctionType, emittedParameterCount)
+                ).AsFast<sema::FunctionType>();
+            }
             if (!calleeSym->genericParameterNames.empty())
             {
                 Ref<sema::Type> declarationType = calleeSym->type;

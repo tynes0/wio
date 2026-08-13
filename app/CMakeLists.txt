@@ -1528,6 +1528,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_extension_default_parameters_run
+        "${CMAKE_SOURCE_DIR}/tests/extension_default_parameters_run.wio"
+        "extension-default-parameters-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_extension_default_parameters_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
         wio_test_generic_const_parameters_run
         "${CMAKE_SOURCE_DIR}/tests/generic_const_parameters_run.wio"
         "Const generics: ok"

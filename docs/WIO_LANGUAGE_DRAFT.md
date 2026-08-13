@@ -2580,6 +2580,9 @@ position.Scale(2.0f);
 
 - `view fn` receives a read-only `self`.
 - `ref fn` receives a mutable `self` and requires a mutable receiver.
+- Extension methods support the same trailing default-parameter rules as
+  ordinary Wio functions; the implicit receiver is not counted in diagnostics
+  or user-visible arity.
 - Extension methods are external APIs and therefore cannot access private or
   protected component fields.
 - A real component member takes precedence. Defining an extension with the same

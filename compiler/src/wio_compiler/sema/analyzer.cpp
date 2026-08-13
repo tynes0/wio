@@ -10731,14 +10731,41 @@ namespace wio::sema
                 return nullptr;
 
             auto foundDeclaration = functionDeclarationsBySymbol_.find(symbol.Get());
-            return foundDeclaration != functionDeclarationsBySymbol_.end() ? foundDeclaration->second : nullptr;
+            if (foundDeclaration != functionDeclarationsBySymbol_.end())
+                return foundDeclaration->second;
+
+            if (symbol->flags.get_isExtension() && symbol->extensionImplementation)
+            {
+                foundDeclaration = functionDeclarationsBySymbol_.find(symbol->extensionImplementation.Get());
+                if (foundDeclaration != functionDeclarationsBySymbol_.end())
+                    return foundDeclaration->second;
+            }
+
+            return nullptr;
+        };
+
+        auto getRequiredArgumentCountForDeclaration = [&](const FunctionDeclaration* declaration,
+                                                          const Ref<FunctionType>& callableType) -> size_t
+        {
+            if (!declaration)
+                return callableType && callableType->hasParameterPack
+                    ? (callableType->paramTypes.empty() ? 0 : callableType->paramTypes.size() - 1)
+                    : (callableType ? callableType->paramTypes.size() : 0);
+
+            size_t requiredCount = getRequiredParameterCount(declaration);
+            const bool hidesExtensionReceiver =
+                declaration->isExtensionMethod && callableType &&
+                declaration->parameters.size() == callableType->paramTypes.size() + 1;
+            if (hidesExtensionReceiver && requiredCount > 0)
+                --requiredCount;
+            return requiredCount;
         };
 
         auto getRequiredArgumentCountForCallable = [&](const Ref<Symbol>& symbol,
                                                        const Ref<FunctionType>& functionType) -> size_t
         {
             if (const auto* functionDeclaration = getFunctionDeclarationForSymbol(symbol))
-                return getRequiredParameterCount(functionDeclaration);
+                return getRequiredArgumentCountForDeclaration(functionDeclaration, functionType);
 
             if (functionType && functionType->hasParameterPack)
                 return functionType->paramTypes.empty() ? 0 : functionType->paramTypes.size() - 1;
@@ -10799,7 +10826,7 @@ namespace wio::sema
                 ? functionType->paramTypes.size() - 1
                 : functionType->paramTypes.size();
             const size_t requiredArgumentCount = functionDeclaration
-                ? getRequiredParameterCount(functionDeclaration)
+                ? getRequiredArgumentCountForDeclaration(functionDeclaration, functionType)
                 : (hasParameterPack ? fixedParameterCount : functionType->paramTypes.size());
             const size_t totalParameterCount = functionType->paramTypes.size();
 
@@ -11132,7 +11159,10 @@ namespace wio::sema
             {
                 const auto* candidateDeclaration = getFunctionDeclarationForSymbol(candidateSymbol);
                 if (candidateDeclaration &&
-                    getRequiredParameterCount(candidateDeclaration) != candidateDeclaration->parameters.size())
+                    getRequiredArgumentCountForDeclaration(
+                        candidateDeclaration,
+                        candidateSymbol->type.AsFast<FunctionType>()) !=
+                        candidateSymbol->type.AsFast<FunctionType>()->paramTypes.size())
                 {
                     requiresOverloadResolution = true;
                     break;
@@ -11446,7 +11476,7 @@ namespace wio::sema
                     : declaredFunctionType->paramTypes.size();
                 const auto* candidateDeclaration = getFunctionDeclarationForSymbol(overload);
                 size_t requiredArgumentCount = candidateDeclaration
-                    ? getRequiredParameterCount(candidateDeclaration)
+                    ? getRequiredArgumentCountForDeclaration(candidateDeclaration, declaredFunctionType)
                     : (candidateHasParameterPack ? fixedParameterCount : declaredFunctionType->paramTypes.size());
 
                 if (useExplicitFunctionTypeArguments && hasGenericParameterPack && declaredFunctionHadParameterPack && !candidateHasParameterPack && !activeGenericParameterNames.empty())
@@ -15583,16 +15613,6 @@ namespace wio::sema
                         "Extension operator overloads are not supported.");
                     continue;
                 }
-                if (std::ranges::any_of(method->parameters, [](const Parameter& parameter)
-                    {
-                        return parameter.defaultValue != nullptr;
-                    }))
-                {
-                    WIO_LOG_ADD_ERROR(method->location(),
-                        "Extension methods do not support default parameters yet.");
-                    continue;
-                }
-
                 const std::string publicName = method->extensionMemberName;
                 if (auto scope = targetStruct->structScope.Lock();
                     scope && scope->resolveLocally(publicName))

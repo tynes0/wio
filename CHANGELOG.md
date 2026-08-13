@@ -12,6 +12,7 @@ All notable user-facing changes to Wio are recorded here.
   unknown, missing-required, and ordering diagnostics.
 - Added structural partial-specialization ordering, including repeated generic
   parameter relationships such as `Pair<T, Box<T>>`.
+- Added trailing default parameters to component extension methods.
 
 ### Changed
 
