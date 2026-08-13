@@ -1496,6 +1496,20 @@ namespace wio::codegen
                 return "TextSlice";
             case IntrinsicMember::TextToString:
                 return "TextToString";
+            case IntrinsicMember::TextContains:
+                return "TextContains";
+            case IntrinsicMember::TextStartsWith:
+                return "TextStartsWith";
+            case IntrinsicMember::TextEndsWith:
+                return "TextEndsWith";
+            case IntrinsicMember::TextGraphemeCount:
+                return "TextGraphemeCount";
+            case IntrinsicMember::TextSliceGraphemes:
+                return "TextSliceGraphemes";
+            case IntrinsicMember::TextDisplayWidth:
+                return "TextDisplayWidth";
+            case IntrinsicMember::TextCaseFold:
+                return "TextCaseFold";
             case IntrinsicMember::ArrayCapacity:
                 return "ArrayCapacity";
             case IntrinsicMember::ArrayContains:

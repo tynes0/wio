@@ -500,6 +500,20 @@ namespace wio::sema
             }
             else if (memberName == "ToString" || memberName == "Utf8")
                 appendMethodResolution(overloads, IntrinsicMember::TextToString, typeContext.getString(), {}, typeContext, false);
+            else if (memberName == "Contains")
+                appendMethodResolution(overloads, IntrinsicMember::TextContains, typeContext.getBool(), { textType }, typeContext, false);
+            else if (memberName == "StartsWith")
+                appendMethodResolution(overloads, IntrinsicMember::TextStartsWith, typeContext.getBool(), { textType }, typeContext, false);
+            else if (memberName == "EndsWith")
+                appendMethodResolution(overloads, IntrinsicMember::TextEndsWith, typeContext.getBool(), { textType }, typeContext, false);
+            else if (memberName == "GraphemeCount")
+                appendMethodResolution(overloads, IntrinsicMember::TextGraphemeCount, typeContext.getUSize(), {}, typeContext, false);
+            else if (memberName == "SliceGraphemes")
+                appendMethodResolution(overloads, IntrinsicMember::TextSliceGraphemes, textType, { typeContext.getUSize(), typeContext.getUSize() }, typeContext, false);
+            else if (memberName == "DisplayWidth")
+                appendMethodResolution(overloads, IntrinsicMember::TextDisplayWidth, typeContext.getUSize(), {}, typeContext, false);
+            else if (memberName == "CaseFold")
+                appendMethodResolution(overloads, IntrinsicMember::TextCaseFold, textType, {}, typeContext, false);
 
             return overloads;
         }

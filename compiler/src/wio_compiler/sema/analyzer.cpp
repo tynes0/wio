@@ -1869,6 +1869,8 @@ namespace wio::sema
             if (expression->is<ArrayAccessExpression>())
             {
                 auto* arrayAccess = expression->as<ArrayAccessExpression>();
+                if (isTextType(arrayAccess->object ? arrayAccess->object->refType.Lock() : nullptr))
+                    return false;
                 if (arrayAccess->operatorDispatchKind == OperatorDispatchKind::None)
                     return true;
 
@@ -8724,7 +8726,14 @@ namespace wio::sema
             Ref<Type> receiverType = unwrapAliasType(arrayAccess->object ? arrayAccess->object->refType.Lock() : nullptr);
             if (receiverType)
             {
-                if (receiverType->kind() == TypeKind::GenericParameterPack ||
+                if (isTextType(receiverType))
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.op.loc,
+                        "Text indexing is read-only; build a new text value instead."
+                    );
+                }
+                else if (receiverType->kind() == TypeKind::GenericParameterPack ||
                     receiverType->kind() == TypeKind::ValuePackView ||
                     receiverType->kind() == TypeKind::TypePackView)
                 {
@@ -9634,16 +9643,18 @@ namespace wio::sema
             return;
         }
 
-        if (resolvedObjType->kind() != TypeKind::Array && !isStringType(resolvedObjType))
+        if (resolvedObjType->kind() != TypeKind::Array &&
+            !isStringType(resolvedObjType) &&
+            !isTextType(resolvedObjType))
         {
-            WIO_LOG_ADD_ERROR(node.object->location(), "Type '{}' is not an array or string and cannot be indexed.", objType->toString());
+            WIO_LOG_ADD_ERROR(node.object->location(), "Type '{}' is not an array, string, or text and cannot be indexed.", objType->toString());
             node.refType = Compiler::get().getTypeContext().getUnknown();
             return;
         }
         
         if (!allowsIntegerSemantics(idxType))
         {
-            WIO_LOG_ADD_ERROR(node.index->location(), "Array and string indices must be integer values.");
+            WIO_LOG_ADD_ERROR(node.index->location(), "Array, string, and text indices must be integer values.");
         }
         
         if (resolvedObjType->kind() == TypeKind::Array)
@@ -9668,7 +9679,9 @@ namespace wio::sema
             return;
         }
 
-        node.refType = Compiler::get().getTypeContext().getChar();
+        node.refType = isTextType(resolvedObjType)
+            ? Compiler::get().getTypeContext().getText()
+            : Compiler::get().getTypeContext().getChar();
     }
     
     void SemanticAnalyzer::visit(MemberAccessExpression& node)

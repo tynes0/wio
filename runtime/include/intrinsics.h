@@ -584,6 +584,43 @@ namespace wio::intrinsics
         return value.Utf8();
     }
 
+    inline bool TextContains(const runtime::Text& value, const runtime::Text& other)
+    {
+        return value.contains(other);
+    }
+
+    inline bool TextStartsWith(const runtime::Text& value, const runtime::Text& other)
+    {
+        return value.startsWith(other);
+    }
+
+    inline bool TextEndsWith(const runtime::Text& value, const runtime::Text& other)
+    {
+        return value.endsWith(other);
+    }
+
+    inline std::size_t TextGraphemeCount(const runtime::Text& value)
+    {
+        return value.graphemeCount();
+    }
+
+    inline runtime::Text TextSliceGraphemes(const runtime::Text& value,
+                                            const std::size_t start,
+                                            const std::size_t count)
+    {
+        return value.sliceGraphemes(start, count);
+    }
+
+    inline std::size_t TextDisplayWidth(const runtime::Text& value)
+    {
+        return value.displayWidth();
+    }
+
+    inline runtime::Text TextCaseFold(const runtime::Text& value)
+    {
+        return value.caseFold();
+    }
+
     template <typename TContainer, typename TIndex>
     inline decltype(auto) Index(TContainer&& container, const TIndex index)
     {

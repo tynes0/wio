@@ -551,14 +551,20 @@ Its current everyday operations are:
 let count = title.Count();          // Unicode code points, not bytes
 let bytes = title.ByteCount();      // explicit UTF-8 storage size
 let globe = title.Slice(8usize, 1usize);
+let sameGlobe = title[8usize];      // read-only, one-code-point text
 let combined = u"iyi " + u"günler";
 let utf8 = title.ToString();
+let clusters = title.GraphemeCount();
+let folded = title.CaseFold();
 ```
 
 Equality and ordering compare validated UTF-8 values without implicit
 normalization. Consequently, canonically equivalent but differently normalized
 sequences remain distinct until explicit normalization APIs are added.
-`text` literals work in generics and `match` patterns.
+`text` literals work in generics and `match` patterns. Text values are also
+hashable and may be used as `Dict<text, T>` keys. Direct indexing is read-only;
+Unicode-safe editing constructs a new text value rather than exposing a mutable
+byte or code-unit reference.
 
 Conversion is deliberately asymmetric. A validated `text` can flow to a
 `string`/UTF-8 boundary. A general `string` may contain invalid UTF-8, so the

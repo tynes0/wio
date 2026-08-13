@@ -104,9 +104,10 @@ application/system and language-coherence direction is expanded in
 
 15. [~] Complete the first-class Unicode-semantic `text` model.
     `text`, validated UTF-8 `u"..."` and `u$"..."` literals, code-point count
-    and slicing, byte count, concatenation, equality/ordering, pattern matching,
+    and slicing/indexing, grapheme counting/slicing, display width, case fold,
+    byte count, concatenation, equality/ordering/hashing, pattern matching,
     generics, console output, and explicit `std::unicode` UTF-8 conversion now
-    work end to end. Complete code-point/grapheme iteration and indexing,
+    work end to end. Complete code-point/grapheme iteration,
     normalization policy and APIs, reflection/SDK metadata, UTF-16/UTF-32 native
     transcoding, and Unicode conformance vectors. Do not expose C++ `wchar_t`
     width as a Wio language rule.
@@ -118,7 +119,8 @@ application/system and language-coherence direction is expanded in
    basic case folding, codepoint/byte conversion, safe slicing, and builders
    now exist. The first-class Unicode-semantic `text` value and validated
    `u"..."`/`u$"..."` literals now provide ordinary string-like ergonomics,
-   code-point slicing, matching, generic use, console output, and explicit UTF-8
+   code-point indexing/slicing, grapheme operations, matching, hashable generic
+   container use, console output, and explicit UTF-8
    conversion. The compiler/runtime owns validation and normalization policy,
    iteration, and native transcoding; it must not expose the platform-dependent
    C++ `wchar_t`/`std::wstring` representation as Wio semantics. Keep explicit

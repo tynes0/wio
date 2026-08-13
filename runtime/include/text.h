@@ -4,6 +4,7 @@
 
 #include <compare>
 #include <cstddef>
+#include <functional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -30,6 +31,36 @@ namespace wio::runtime
         [[nodiscard]] std::size_t size() const noexcept { return std_unicode::CodePointCount(value_); }
         [[nodiscard]] std::size_t byteSize() const noexcept { return value_.size(); }
         [[nodiscard]] bool empty() const noexcept { return value_.empty(); }
+        [[nodiscard]] Text at(const std::size_t index) const { return slice(index, 1); }
+        [[nodiscard]] Text operator[](const std::size_t index) const { return at(index); }
+        [[nodiscard]] bool contains(const Text& other) const noexcept
+        {
+            return value_.find(other.value_) != std::string::npos;
+        }
+        [[nodiscard]] bool startsWith(const Text& other) const noexcept
+        {
+            return value_.starts_with(other.value_);
+        }
+        [[nodiscard]] bool endsWith(const Text& other) const noexcept
+        {
+            return value_.ends_with(other.value_);
+        }
+        [[nodiscard]] std::size_t graphemeCount() const noexcept
+        {
+            return std_unicode::GraphemeCount(value_);
+        }
+        [[nodiscard]] Text sliceGraphemes(const std::size_t start, const std::size_t count) const
+        {
+            return Text(std_unicode::SliceGraphemes(value_, start, count), ValidatedTag{});
+        }
+        [[nodiscard]] std::size_t displayWidth() const noexcept
+        {
+            return std_unicode::DisplayWidth(value_);
+        }
+        [[nodiscard]] Text caseFold() const
+        {
+            return Text(std_unicode::CaseFold(value_), ValidatedTag{});
+        }
 
         [[nodiscard]] Text slice(const std::size_t start) const
         {
@@ -82,3 +113,12 @@ namespace wio::runtime
         return value.Utf8();
     }
 }
+
+template <>
+struct std::hash<wio::runtime::Text>
+{
+    std::size_t operator()(const wio::runtime::Text& value) const noexcept
+    {
+        return std::hash<std::string_view>{}(value.Utf8());
+    }
+};

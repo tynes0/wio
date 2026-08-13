@@ -204,7 +204,7 @@ set(
 
 set(
     WIO_LANGUAGE_COHERENCE_TEST_REGEX
-    "^(wio_test_(attribute_compact_declaration_run|generic_partial_specialization_ordering_run|extension_default_parameters_run|extension_generic_methods_run|match_enum_exhaustive_guards_run|unicode_text_literal_run)|wio_invalid_(attribute_named_unknown|attribute_named_duplicate|attribute_named_missing_required|attribute_compact_conflict|generic_partial_specialization_structural_ambiguous|extension_generic_constraint_reject|match_enum_non_exhaustive|match_enum_duplicate_unguarded|match_literal_guard_type_mismatch|match_assumed_guard|text_requires_explicit_utf8_validation|text_operator|text_string_mixed_operation))$"
+    "^(wio_test_(attribute_compact_declaration_run|generic_partial_specialization_ordering_run|extension_default_parameters_run|extension_generic_methods_run|match_enum_exhaustive_guards_run|unicode_text_literal_run)|wio_invalid_(attribute_named_unknown|attribute_named_duplicate|attribute_named_missing_required|attribute_compact_conflict|generic_partial_specialization_structural_ambiguous|extension_generic_constraint_reject|match_enum_non_exhaustive|match_enum_duplicate_unguarded|match_literal_guard_type_mismatch|match_assumed_guard|text_requires_explicit_utf8_validation|text_operator|text_string_mixed_operation|text_index_assignment))$"
 )
 
 add_custom_target(
@@ -5197,6 +5197,11 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_text_string_mixed_operation
         "${CMAKE_SOURCE_DIR}/tests/invalid/text_string_mixed_operation.wio"
         "Mixed 'string' and 'text' operations require an explicit conversion"
+    )
+    add_wio_failure_test(
+        wio_invalid_text_index_assignment
+        "${CMAKE_SOURCE_DIR}/tests/invalid/text_index_assignment.wio"
+        "Text indexing is read-only"
     )
     set_tests_properties(
         wio_test_unicode_text_literal_run
