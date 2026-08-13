@@ -1,0 +1,4 @@
+fn Entry() -> i32 {
+    const Value: text = u$"value=${42}";
+    return 0;
+}

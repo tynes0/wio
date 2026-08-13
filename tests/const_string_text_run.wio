@@ -1,0 +1,35 @@
+use std::assert as assert;
+use std::console as console;
+
+const Prefix: string = "Wio ";
+const Version: string = "v1";
+const Label: string = Prefix + Version;
+const Greeting: text = u"Merhaba ";
+const World: text = u"🌍";
+const Message: text = Greeting + World;
+
+component Constants {
+    public const Name: string = "component";
+    public const Symbol: text = u"✅";
+}
+
+fn Entry() -> i32 {
+    const Local: string = Label + " ready";
+    const LocalText: text = Message + u"!";
+    const Same: bool = LocalText == u"Merhaba 🌍!";
+
+    assert::ExpectEqual(Label, "Wio v1", "global const string concatenation");
+    assert::ExpectEqual(Message, u"Merhaba 🌍", "global const text concatenation");
+    assert::ExpectEqual(Local, "Wio v1 ready", "local const string expression");
+    assert::Expect(Same, "const text comparison");
+    assert::ExpectEqual(Constants::Name, "component", "component const string");
+    assert::ExpectEqual(Constants::Symbol, u"✅", "component const text");
+
+    let matched = match (Message) {
+        u"Merhaba 🌍": true;
+        assumed: false;
+    };
+    assert::Expect(matched, "const text in match input");
+    console::PrintLine("const-string-text-ok");
+    return 0;
+}

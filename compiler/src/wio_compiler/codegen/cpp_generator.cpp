@@ -6839,7 +6839,8 @@ namespace wio::codegen
     
         if (auto objSym = node.object->referencedSymbol.Lock())
         {
-            if (objSym->kind == sema::SymbolKind::Namespace || 
+            if (objSym->kind == sema::SymbolKind::Namespace ||
+                objSym->kind == sema::SymbolKind::Struct ||
                 objSym->flags.get_isEnum() || 
                 objSym->flags.get_isFlagset())
             {
@@ -7705,7 +7706,39 @@ namespace wio::codegen
 
         if (node.mutability == Mutability::Const)
         {
-            prefix = currentClassName_.empty() ? "constexpr " : "static constexpr ";
+            std::function<bool(const NodePtr<Expression>&)> containsRuntimeTextValue;
+            containsRuntimeTextValue = [&](const NodePtr<Expression>& expression) -> bool
+            {
+                if (!expression)
+                    return false;
+
+                Ref<sema::Type> expressionType = unwrapAliasTypeForCodegen(expression->refType.Lock());
+                if (expressionType && expressionType->kind() == sema::TypeKind::Primitive)
+                {
+                    const std::string& name = expressionType.AsFast<sema::PrimitiveType>()->name;
+                    if (name == "string" || name == "text")
+                        return true;
+                }
+
+                if (const auto* binary = expression->as<BinaryExpression>())
+                    return containsRuntimeTextValue(binary->left) || containsRuntimeTextValue(binary->right);
+                if (const auto* unary = expression->as<UnaryExpression>())
+                    return containsRuntimeTextValue(unary->operand);
+                if (const auto* fit = expression->as<FitExpression>())
+                    return containsRuntimeTextValue(fit->operand);
+                return false;
+            };
+
+            const bool requiresRuntimeConstStorage =
+                containsRuntimeTextValue(node.initializer) ||
+                (resolvedVarType &&
+                 resolvedVarType->kind() == sema::TypeKind::Primitive &&
+                 (resolvedVarType.AsFast<sema::PrimitiveType>()->name == "string" ||
+                  resolvedVarType.AsFast<sema::PrimitiveType>()->name == "text"));
+            if (requiresRuntimeConstStorage)
+                prefix = currentClassName_.empty() ? "const " : "inline static const ";
+            else
+                prefix = currentClassName_.empty() ? "constexpr " : "static constexpr ";
         }
         else if (node.mutability == Mutability::Immutable)
         {

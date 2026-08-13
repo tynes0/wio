@@ -1602,7 +1602,9 @@ namespace wio::sema
                    name == "f32" ||
                    name == "f64" ||
                    name == "isize" ||
-                   name == "usize";
+                   name == "usize" ||
+                   name == "string" ||
+                   name == "text";
         }
 
         bool isAllowedConstBinaryOperator(TokenType op)
@@ -1647,13 +1649,13 @@ namespace wio::sema
                 expression->is<FloatLiteral>() ||
                 expression->is<BoolLiteral>() ||
                 expression->is<CharLiteral>() ||
-                expression->is<ByteLiteral>())
+                expression->is<ByteLiteral>() ||
+                expression->is<StringLiteral>())
             {
                 return true;
             }
 
-            if (expression->is<StringLiteral>() ||
-                expression->is<InterpolatedStringLiteral>() ||
+            if (expression->is<InterpolatedStringLiteral>() ||
                 expression->is<ArrayLiteral>() ||
                 expression->is<DictionaryLiteral>() ||
                 expression->is<NullExpression>() ||
@@ -14189,7 +14191,7 @@ namespace wio::sema
                     const std::string actualType = sym->type ? sym->type->toString() : "<unknown>";
                     WIO_LOG_ADD_ERROR(
                         node.location(),
-                        "Const declarations currently support primitive scalar types plus enum/flagset values. Got '{}'.",
+                        "Const declarations support scalar, string, text, enum, and flagset values. Got '{}'.",
                         actualType
                     );
                 }
@@ -14197,7 +14199,7 @@ namespace wio::sema
                 {
                     WIO_LOG_ADD_ERROR(
                         node.initializer->location(),
-                        "Const initializer must be a compile-time scalar expression and may reference only other const declarations."
+                        "Const initializer must be a compile-time expression and may reference only other const declarations."
                     );
                 }
             }

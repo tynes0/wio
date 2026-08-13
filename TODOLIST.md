@@ -124,13 +124,13 @@ application/system and language-coherence direction is expanded in
     representation, and reflection/SDK metadata. Inference must remain distinct
     from the existing dynamic-array `T[]` type.
 
-17. [ ] Extend compile-time constants to `string` and `text`.
-    Permit immutable string and validated Unicode text values in `const`
-    declarations and constant expressions. Specify concatenation, comparison,
-    matching, generic/attribute arguments, storage and interning, evaluation
-    limits, cross-module export, reflection/SDK representation, and diagnostics.
-    `const text` must preserve the same UTF-8 validation and normalization policy
-    as runtime `text`.
+17. [~] Extend compile-time constants to `string` and `text`.
+    Literal initialization, references to other constants, concatenation,
+    comparison, matching, and global/local/component-static storage now work for
+    both types. Interpolated strings remain rejected until the compiler has a
+    bounded constant folder. Complete generic/attribute arguments, storage
+    interning, evaluation limits, cross-module export, reflection/SDK metadata,
+    and the final Unicode normalization policy.
 
 ## P1 - Standard Library Correctness and Consistency
 

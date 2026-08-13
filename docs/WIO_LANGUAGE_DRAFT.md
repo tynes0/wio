@@ -910,27 +910,31 @@ In the current v1 freeze, the language model is:
 
 - Wio `const` is not just an immutable variable,
 - Wio `const` requires a compile-time-valid initializer,
-- the backend lowers it as C++ `constexpr`.
+- scalar constants use compile-time backend storage while `string` and `text`
+  constants use immutable runtime storage without exposing that backend detail.
 
 Examples:
 
 ```wio
 const MaxPlayers: i32 = 16;
 const Pi: f64 = 3.141592653589793;
+const Product: string = "Wio " + "v1";
+const Greeting: text = u"Merhaba " + u"🌍";
 ```
 
 #### Current Compiler Note
 
-The semantic layer now enforces a deliberately small and safe subset:
+The semantic layer enforces a deliberately bounded and safe subset:
 
-- only scalar primitive types are supported,
-- the initializer must be a compile-time scalar expression,
+- scalar primitives, `string`, `text`, enums, and flagsets are supported,
+- the initializer must be a compile-time expression,
 - such expressions may reference only other `const` declarations.
 
-Supported value categories currently include numeric, `bool`, `char`, `uchar`,
-and `byte`-like scalar primitives. Runtime containers, objects, dictionaries,
-arrays, function calls, and ordinary `let`/`mut` variables are not allowed in
-`const` initializers yet.
+Literal values, supported unary/binary operations, textual concatenation and
+comparison, and references to other constants may participate. Runtime
+containers, objects, dictionaries, arrays, function calls, interpolated
+strings, and ordinary `let`/`mut` variables are not allowed in `const`
+initializers yet.
 
 ### 6.4 Type Inference
 
