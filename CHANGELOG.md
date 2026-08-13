@@ -25,6 +25,8 @@ All notable user-facing changes to Wio are recorded here.
   and return `text`, including Unicode content and code-point operations.
 - Added runtime reflection metadata for `text`, including its stable language
   name, primitive kind, size, and alignment.
+- Added `std::traits` queries for primitive, byte-string, and Unicode-text
+  identity, and extended `IsArrayType` to recognize fixed arrays.
 - Added compact user-defined attribute declarations such as
   `attribute route(fn)(method: string) with attribute::runtime;`.
 - Added named arguments for user-defined attribute applications with duplicate,

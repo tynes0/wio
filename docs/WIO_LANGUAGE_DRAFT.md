@@ -3255,6 +3255,11 @@ Current supported trait predicates live under `std::traits`:
 - `std::traits::IsArray<T>`
 - `std::traits::IsReference<T>`
 
+Runtime query functions additionally include `IsPrimitiveType<T>()`,
+`IsStringType<T>()`, and `IsTextType<T>()`. `IsArrayType<T>()` recognizes both
+dynamic `T[]` and fixed `[T; N]` types. These are observation APIs; they do not
+implicitly convert `string` and `text` or weaken generic constraints.
+
 For multi-parameter generic functions, positional combinations are allowed:
 
 ```wio

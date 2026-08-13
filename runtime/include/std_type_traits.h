@@ -2,6 +2,7 @@
 
 #include "type_reflection.h"
 
+#include <array>
 #include <map>
 #include <string>
 #include <type_traits>
@@ -18,6 +19,12 @@ namespace wio::runtime::traits
 
     template <typename T, typename TAllocator>
     inline constexpr bool IsStdVector<std::vector<T, TAllocator>> = true;
+
+    template <typename T>
+    inline constexpr bool IsStdArray = false;
+
+    template <typename T, std::size_t N>
+    inline constexpr bool IsStdArray<std::array<T, N>> = true;
 
     template <typename T>
     inline constexpr bool IsStdDictionary = false;
@@ -61,7 +68,25 @@ namespace wio::runtime::traits
     template <typename T>
     [[nodiscard]] constexpr bool IsArrayValue() noexcept
     {
-        return IsStdVector<Bare<T>> || std::is_array_v<Bare<T>>;
+        return IsStdVector<Bare<T>> || IsStdArray<Bare<T>> || std::is_array_v<Bare<T>>;
+    }
+
+    template <typename T>
+    [[nodiscard]] constexpr bool IsPrimitiveValue() noexcept
+    {
+        return TypeReflection<Bare<T>>::Kind == ReflectedTypeKind::primitive_type;
+    }
+
+    template <typename T>
+    [[nodiscard]] constexpr bool IsStringValue() noexcept
+    {
+        return std::is_same_v<Bare<T>, std::string>;
+    }
+
+    template <typename T>
+    [[nodiscard]] constexpr bool IsTextValue() noexcept
+    {
+        return std::is_same_v<Bare<T>, Text>;
     }
 
     template <typename T>

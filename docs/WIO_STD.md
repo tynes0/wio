@@ -355,6 +355,9 @@ Users may declare an empty generic interface, implement its concrete
 specialization with `@From`, and use that interface as a nominal
 `@Apply(UserTrait<T>)` predicate. Query functions include `IsSameType`,
 constructibility checks, and the corresponding type-category checks.
+`IsPrimitiveType`, `IsStringType`, and `IsTextType` keep byte strings and
+Unicode-semantic text distinguishable, while `IsArrayType` recognizes both
+dynamic arrays and fixed `std::array`-backed Wio arrays, including extent zero.
 
 ### 2.3.1 Pure-Wio Stable Module
 

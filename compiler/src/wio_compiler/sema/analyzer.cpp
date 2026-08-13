@@ -5064,6 +5064,9 @@ namespace wio::sema
                    cppNameArg->value == "wio::runtime::traits::IsSignedValue" ||
                    cppNameArg->value == "wio::runtime::traits::IsUnsignedValue" ||
                    cppNameArg->value == "wio::runtime::traits::IsArrayValue" ||
+                   cppNameArg->value == "wio::runtime::traits::IsPrimitiveValue" ||
+                   cppNameArg->value == "wio::runtime::traits::IsStringValue" ||
+                   cppNameArg->value == "wio::runtime::traits::IsTextValue" ||
                    cppNameArg->value == "wio::runtime::traits::IsDictionaryValue" ||
                    cppNameArg->value == "wio::runtime::traits::IsEnumValue" ||
                    cppNameArg->value == "wio::runtime::traits::IsFlagsetValue" ||
