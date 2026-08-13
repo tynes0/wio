@@ -3585,7 +3585,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test_clean(
         wio_invalid_array_index_requires_integer
         "${CMAKE_SOURCE_DIR}/tests/invalid/array_index_requires_integer.wio"
-        "Array and string indices must be integer values\\."
+        "Array, string, and text indices must be integer values\\."
         "stl_vector|Unhandled compiler failure"
     )
 

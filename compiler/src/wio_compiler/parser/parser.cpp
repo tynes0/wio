@@ -2980,7 +2980,7 @@ namespace wio
 
         Token matchVar = Token::invalid();
         if (match(TokenType::kwFit, true))
-            matchVar = consume(TokenType::identifier);
+            matchVar = consumeIdentifier();
 
         if (hasParen)
             consume(TokenType::rightParen);
