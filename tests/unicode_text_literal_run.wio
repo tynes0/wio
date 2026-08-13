@@ -1,0 +1,35 @@
+use std::assert as assert;
+use std::console as console;
+use std::unicode as unicode;
+
+fn Identity<T>(value: T) -> T {
+    return value;
+}
+
+fn Entry() -> i32 {
+    let greeting: text = u"Merhaba 🌍";
+    assert::ExpectEqual(greeting.Count(), 9usize, "text counts Unicode code points");
+    assert::ExpectEqual(greeting.ByteCount(), 12usize, "text exposes explicit UTF-8 byte count");
+    assert::ExpectEqual(greeting.Slice(8usize, 1usize), u"🌍", "text slices on code-point boundaries");
+
+    let name = "Wio";
+    let message: text = u$"Selam ${name} 🌍";
+    assert::ExpectEqual(message.ToString(), "Selam Wio 🌍", "interpolated Unicode text");
+
+    let decoded: text = unicode::FromUtf8("çağrı");
+    assert::ExpectEqual(unicode::ToUtf8(decoded), "çağrı", "explicit UTF-8 conversion boundary");
+    assert::ExpectEqual(Identity(greeting), u"Merhaba 🌍", "text participates in generics");
+    assert::ExpectEqual(u"iyi " + u"günler", u"iyi günler", "text concatenation");
+
+    let matched = match (greeting) {
+        u"Merhaba 🌍": true;
+        assumed: false;
+    };
+    assert::Expect(matched, "text literal patterns");
+
+    let utf8Boundary: string = greeting;
+    assert::ExpectEqual(utf8Boundary, "Merhaba 🌍", "text safely flows to string");
+    console::PrintLine(message);
+    console::PrintLine("unicode-text-ok");
+    return 0;
+}

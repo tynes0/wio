@@ -1041,6 +1041,14 @@ namespace wio::sema
                    resolvedType.AsFast<PrimitiveType>()->name == "string";
         }
 
+        bool isTextType(const Ref<Type>& type)
+        {
+            Ref<Type> resolvedType = unwrapAliasType(type);
+            return resolvedType &&
+                   resolvedType->kind() == TypeKind::Primitive &&
+                   resolvedType.AsFast<PrimitiveType>()->name == "text";
+        }
+
         bool isOpaqueType(const Ref<Type>& type)
         {
             Ref<Type> resolvedType = unwrapAliasType(type);
@@ -1127,7 +1135,8 @@ namespace wio::sema
                    resolvedType->kind() == TypeKind::AsyncTask ||
                    (resolvedType->kind() == TypeKind::Struct &&
                     (resolvedType.AsFast<StructType>()->isEnum || resolvedType.AsFast<StructType>()->isFlagset)) ||
-                   isStringType(resolvedType);
+                   isStringType(resolvedType) ||
+                   isTextType(resolvedType);
         }
 
         bool shouldAutoReadReferenceType(const Ref<Type>& type)
@@ -4216,6 +4225,7 @@ namespace wio::sema
             if (name == "bool") return ctx.getBool();
             if (name == "char") return ctx.getChar();
             if (name == "string") return ctx.getString();
+            if (name == "text") return ctx.getText();
             if (name == "any") return ctx.getAny();
             if (name == "opaque") return ctx.getOpaque();
             if (name == "void") return ctx.getVoid();
@@ -7691,6 +7701,53 @@ namespace wio::sema
         const Ref<Type> semanticRhsType = readableRhsType ? readableRhsType : rhsType;
         const Ref<Type> commonNumericType = getCommonNumericType(semanticLhsType, semanticRhsType);
 
+        const auto primitiveName = [](const Ref<Type>& type) -> std::string_view
+        {
+            Ref<Type> resolved = unwrapAliasType(type);
+            return resolved && resolved->kind() == TypeKind::Primitive
+                ? std::string_view(resolved.AsFast<PrimitiveType>()->name)
+                : std::string_view{};
+        };
+        const std::string_view lhsPrimitive = primitiveName(semanticLhsType);
+        const std::string_view rhsPrimitive = primitiveName(semanticRhsType);
+        const bool lhsTextual = lhsPrimitive == "string" || lhsPrimitive == "text";
+        const bool rhsTextual = rhsPrimitive == "string" || rhsPrimitive == "text";
+
+        if (lhsTextual && rhsTextual && lhsPrimitive != rhsPrimitive &&
+            node.op.type != TokenType::opAssign)
+        {
+            WIO_LOG_ADD_ERROR(
+                node.op.loc,
+                "Mixed 'string' and 'text' operations require an explicit conversion."
+            );
+            node.refType = Compiler::get().getTypeContext().getUnknown();
+            return;
+        }
+
+        if (lhsTextual && rhsTextual && lhsPrimitive == rhsPrimitive)
+        {
+            const bool supported =
+                node.op.type == TokenType::opPlus ||
+                node.op.type == TokenType::opAssign ||
+                node.op.type == TokenType::opPlusAssign ||
+                node.op.type == TokenType::opEqual ||
+                node.op.type == TokenType::opNotEqual ||
+                node.op.type == TokenType::opLess ||
+                node.op.type == TokenType::opLessEqual ||
+                node.op.type == TokenType::opGreater ||
+                node.op.type == TokenType::opGreaterEqual;
+            if (!supported)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.op.loc,
+                    "Textual values do not support operator '{}'.",
+                    node.op.value
+                );
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+        }
+
         bool isCompatible = lhsType->isCompatibleWith(rhsType);
         if (!node.op.isAssignment() && commonNumericType)
             isCompatible = true;
@@ -8797,7 +8854,8 @@ namespace wio::sema
     
     void SemanticAnalyzer::visit(StringLiteral& node)
     {
-        node.refType = Compiler::get().getTypeContext().getString();
+        auto& typeContext = Compiler::get().getTypeContext();
+        node.refType = node.token.isUnicodeString ? typeContext.getText() : typeContext.getString();
     }
     
     void SemanticAnalyzer::visit(InterpolatedStringLiteral& node)
@@ -8806,7 +8864,8 @@ namespace wio::sema
         {
             part->accept(*this);
         }
-        node.refType = Compiler::get().getTypeContext().getString();
+        auto& typeContext = Compiler::get().getTypeContext();
+        node.refType = node.isUnicode ? typeContext.getText() : typeContext.getString();
     }
     
     void SemanticAnalyzer::visit(BoolLiteral& node)

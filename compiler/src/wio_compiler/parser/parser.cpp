@@ -801,7 +801,8 @@ namespace wio
             parts.emplace_back(makeNodePtr<StringLiteral>(std::move(nextPart)));
         }
 
-        return makeNodePtr<InterpolatedStringLiteral>(std::move(parts), startTok.loc);
+        return makeNodePtr<InterpolatedStringLiteral>(
+            std::move(parts), startTok.isUnicodeString, startTok.loc);
     }
 
     std::vector<NodePtr<TypeSpecifier>> Parser::parseExplicitTypeArgumentList()

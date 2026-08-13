@@ -102,22 +102,24 @@ application/system and language-coherence direction is expanded in
     implemented. Add resources, explicit/fixed schedules, headless contexts,
     then parallel execution after `view`/`ref` conflict analysis is stable.
 
-15. [ ] Add a first-class Unicode-semantic value and literal.
-    Reserve and freeze a compact literal such as `u"..."` and its interpolated
-    form, provisionally producing `text`. Specify compile-time validation,
-    conversions with `string` and bytes, equality/ordering, iteration/indexing,
-    normalization, pattern matching, generics, reflection, SDK export, and
-    native transcoding. Keep its everyday syntax and operations aligned with
-    `string`; do not expose C++ `wchar_t` width as a Wio language rule.
+15. [~] Complete the first-class Unicode-semantic `text` model.
+    `text`, validated UTF-8 `u"..."` and `u$"..."` literals, code-point count
+    and slicing, byte count, concatenation, equality/ordering, pattern matching,
+    generics, console output, and explicit `std::unicode` UTF-8 conversion now
+    work end to end. Complete code-point/grapheme iteration and indexing,
+    normalization policy and APIs, reflection/SDK metadata, UTF-16/UTF-32 native
+    transcoding, and Unicode conformance vectors. Do not expose C++ `wchar_t`
+    width as a Wio language rule.
 
 ## P1 - Standard Library Correctness and Consistency
 
 1. [~] Build a real Unicode text model.
    UTF-8 validation, codepoints/runes, grapheme clustering, display width,
    basic case folding, codepoint/byte conversion, safe slicing, and builders
-   now exist. Add a first-class Unicode-semantic `text` value and literal form
-   such as `u"..."`, including interpolated literals, with ordinary string-like
-   ergonomics. The compiler/runtime owns validation, normalization policy,
+   now exist. The first-class Unicode-semantic `text` value and validated
+   `u"..."`/`u$"..."` literals now provide ordinary string-like ergonomics,
+   code-point slicing, matching, generic use, console output, and explicit UTF-8
+   conversion. The compiler/runtime owns validation and normalization policy,
    iteration, and native transcoding; it must not expose the platform-dependent
    C++ `wchar_t`/`std::wstring` representation as Wio semantics. Keep explicit
    UTF-8/UTF-16/UTF-32 conversion at native or byte boundaries. Complete

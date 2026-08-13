@@ -242,6 +242,10 @@ namespace wio::sema
                 auto* p2 = static_cast<const PrimitiveType*>(t2);
                 if (p1->name == p2->name) return true;
 
+                // Validated text can safely flow to an existing UTF-8 byte-string
+                // boundary. The reverse direction requires explicit validation.
+                if (p1->name == "string" && p2->name == "text") return true;
+
                 if (t1->isNumeric() && t2->isNumeric())
                 {
                     bool destIsFloat = (p1->name == "f32" || p1->name == "f64");

@@ -8,7 +8,7 @@
 
 namespace wio
 {
-#define LEXER_FLAGS(X) X(nextStringMultiLine)
+#define LEXER_FLAGS(X) X(nextStringMultiLine) X(nextStringUnicode)
     DEFINE_FLAGS(LexerFlags, LEXER_FLAGS);
 #undef LEXER_FLAGS
     
@@ -22,6 +22,7 @@ namespace wio
         struct InterpolationFrame
         {
             bool multiline = false;
+            bool unicode = false;
             bool inExpression = false;
             uint32_t braceDepth = 0;
         };

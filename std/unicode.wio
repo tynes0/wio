@@ -14,6 +14,10 @@ realm std {
             with native, cpp::name(wio::runtime::std_unicode::TryEncode);
         fn IsValidUtf8(value: string) -> bool
             with native, cpp::name(wio::runtime::std_unicode::IsValidUtf8);
+        fn FromUtf8(value: string) -> text
+            with native, cpp::name(wio::runtime::TextFromUtf8);
+        fn ToUtf8(value: text) -> string
+            with native, cpp::name(wio::runtime::TextToUtf8);
         fn CodePointCount(value: string) -> usize
             with native, cpp::name(wio::runtime::std_unicode::CodePointCount);
         fn Slice(value: string, start: usize, count: usize) -> string

@@ -211,6 +211,7 @@ Current built-in type keywords include:
 - `char`
 - `uchar`
 - `string`
+- `text`
 - `any`
 - `opaque`
 - `void`
@@ -531,7 +532,50 @@ Second line
 Value = ${123}";
 ```
 
-### 4.7 Character Literals
+### 4.7 Unicode Text Literals
+
+The `text` primitive is an owned, validated UTF-8 Unicode value. A text literal
+uses the `u"..."` prefix; its interpolated form uses `u$"..."`:
+
+```wio
+let title: text = u"Merhaba 🌍";
+let name = "Wio";
+let message: text = u$"Selam ${name} 🌍";
+```
+
+The compiler validates the UTF-8 bytes of every literal fragment. `text` does
+not expose `wchar_t`, `std::wstring`, or any platform-dependent character width.
+Its current everyday operations are:
+
+```wio
+let count = title.Count();          // Unicode code points, not bytes
+let bytes = title.ByteCount();      // explicit UTF-8 storage size
+let globe = title.Slice(8usize, 1usize);
+let combined = u"iyi " + u"günler";
+let utf8 = title.ToString();
+```
+
+Equality and ordering compare validated UTF-8 values without implicit
+normalization. Consequently, canonically equivalent but differently normalized
+sequences remain distinct until explicit normalization APIs are added.
+`text` literals work in generics and `match` patterns.
+
+Conversion is deliberately asymmetric. A validated `text` can flow to a
+`string`/UTF-8 boundary. A general `string` may contain invalid UTF-8, so the
+reverse conversion is explicit:
+
+```wio
+use std::unicode as unicode;
+
+let value: text = unicode::FromUtf8(receivedBytes);
+let bytes: string = unicode::ToUtf8(value);
+```
+
+Mixed `string` and `text` operators are rejected; convert at the boundary
+instead. Code-point/grapheme iteration, normalization, and broader native
+transcoding remain partially implemented library work.
+
+### 4.8 Character Literals
 
 Character literals use single quotes:
 
@@ -543,7 +587,7 @@ let c = '\\';
 
 A character literal must contain exactly one character after escape processing.
 
-### 4.8 Byte Literals
+### 4.9 Byte Literals
 
 The current compiler contains `ByteLiteral` in the AST and token set, but the
 surface syntax for byte literals is not finalized in the current lexer.

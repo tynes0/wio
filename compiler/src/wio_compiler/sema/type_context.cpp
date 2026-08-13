@@ -8,6 +8,7 @@ namespace wio::sema
         t_bool   = makeType<PrimitiveType>("bool");
         t_char   = makeType<PrimitiveType>("char");
         t_string = makeType<PrimitiveType>("string");
+        t_text = makeType<PrimitiveType>("text");
         t_any = makeType<PrimitiveType>("any");
         t_opaque = makeType<PrimitiveType>("opaque");
 

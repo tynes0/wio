@@ -3,6 +3,7 @@
 #include "exception.h"
 #include "enum_reflection.h"
 #include "std_convert.h"
+#include "text.h"
 
 #include <algorithm>
 #include <array>
@@ -549,6 +550,38 @@ namespace wio::intrinsics
     inline bool Empty(const TContainer& container)
     {
         return container.empty();
+    }
+
+    inline std::size_t TextCount(const runtime::Text& value)
+    {
+        return value.size();
+    }
+
+    inline std::size_t TextByteCount(const runtime::Text& value)
+    {
+        return value.byteSize();
+    }
+
+    inline bool TextEmpty(const runtime::Text& value)
+    {
+        return value.empty();
+    }
+
+    inline runtime::Text TextSlice(const runtime::Text& value, const std::size_t start)
+    {
+        return value.slice(start);
+    }
+
+    inline runtime::Text TextSlice(const runtime::Text& value,
+                                   const std::size_t start,
+                                   const std::size_t count)
+    {
+        return value.slice(start, count);
+    }
+
+    inline std::string TextToString(const runtime::Text& value)
+    {
+        return value.Utf8();
     }
 
     template <typename TContainer, typename TIndex>

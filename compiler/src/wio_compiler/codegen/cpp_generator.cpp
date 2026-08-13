@@ -1486,6 +1486,16 @@ namespace wio::codegen
             case IntrinsicMember::DictEmpty:
             case IntrinsicMember::StringEmpty:
                 return "Empty";
+            case IntrinsicMember::TextCount:
+                return "TextCount";
+            case IntrinsicMember::TextByteCount:
+                return "TextByteCount";
+            case IntrinsicMember::TextEmpty:
+                return "TextEmpty";
+            case IntrinsicMember::TextSlice:
+                return "TextSlice";
+            case IntrinsicMember::TextToString:
+                return "TextToString";
             case IntrinsicMember::ArrayCapacity:
                 return "ArrayCapacity";
             case IntrinsicMember::ArrayContains:
@@ -3261,6 +3271,7 @@ namespace wio::codegen
         emitHeaderLine("#include <module_api.h>");
         emitHeaderLine("#include <ref.h>");
         emitHeaderLine("#include <std_async.h>");
+        emitHeaderLine("#include <text.h>");
         emitHeaderLine();
         emitHeaderLine("namespace wio::runtime");
         emitHeaderLine("{");
@@ -5926,16 +5937,20 @@ namespace wio::codegen
             emit(valStr + "f"); 
     }
 
-        void CppGenerator::visit(StringLiteral& node)
+    void CppGenerator::visit(StringLiteral& node)
     {
-        emit("\"" + common::wioStringToEscapedCppString(node.token.value) + "\"");
+        const std::string literal = "\"" + common::wioStringToEscapedCppString(node.token.value) + "\"";
+        if (node.token.isUnicodeString)
+            emit("wio::runtime::Text::FromUtf8(" + literal + ")");
+        else
+            emit(literal);
     }
     
     void CppGenerator::visit(InterpolatedStringLiteral& node)
     {
         if (node.parts.empty())
         {
-            emit("\"\"");
+            emit(node.isUnicode ? "wio::runtime::Text{}" : "\"\"");
             return;
         }
 
@@ -5955,6 +5970,8 @@ namespace wio::codegen
             }
         }
 
+        if (node.isUnicode)
+            emit("wio::runtime::Text::FromUtf8(");
         emit("wio::runtime::Format(\"" + formatString + "\"");
 
         for (auto& arg : arguments)
@@ -5978,6 +5995,8 @@ namespace wio::codegen
         }
     
         emit(")");
+        if (node.isUnicode)
+            emit(")");
     }
 
     void CppGenerator::visit(BoolLiteral& node)

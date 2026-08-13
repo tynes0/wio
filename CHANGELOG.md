@@ -6,6 +6,10 @@ All notable user-facing changes to Wio are recorded here.
 
 ### Added
 
+- Added the first-class `text` primitive and validated UTF-8 `u"..."` and
+  interpolated `u$"..."` literals. Text supports Unicode code-point counting
+  and slicing, byte counts, concatenation, comparison, matching, generics,
+  console output, and explicit `std::unicode` UTF-8 conversion boundaries.
 - Added compact user-defined attribute declarations such as
   `attribute route(fn)(method: string) with attribute::runtime;`.
 - Added named arguments for user-defined attribute applications with duplicate,
@@ -20,6 +24,10 @@ All notable user-facing changes to Wio are recorded here.
 
 ### Changed
 
+- Text may flow safely to a UTF-8 `string`; constructing `text` from a
+  potentially invalid `string` requires `std::unicode::FromUtf8`.
+- Invalid textual operators and mixed `string`/`text` expressions now fail in
+  semantic analysis instead of surfacing as C++ backend errors.
 - Attribute declaration policies can use namespaced postfix policy attributes
   instead of the legacy `for`/`retain`/`repeatable` keyword sequence; the old
   declaration spelling remains accepted for compatibility.

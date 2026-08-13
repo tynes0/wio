@@ -24,6 +24,7 @@ namespace wio::sema
         Ref<Type> getBool()   const { return t_bool; }
         Ref<Type> getChar()   const { return t_char; }
         Ref<Type> getString() const { return t_string; }
+        Ref<Type> getText() const { return t_text; }
         Ref<Type> getAny() const { return t_any; }
         Ref<Type> getOpaque() const { return t_opaque; }
         Ref<Type> getUnknown() const { return t_unknown; }
@@ -75,6 +76,7 @@ namespace wio::sema
         Ref<Type> t_bool = nullptr;
         Ref<Type> t_char = nullptr;
         Ref<Type> t_string = nullptr;
+        Ref<Type> t_text = nullptr;
         Ref<Type> t_any = nullptr;
         Ref<Type> t_opaque = nullptr;
         Ref<Type> t_unknown = nullptr;

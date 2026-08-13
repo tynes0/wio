@@ -252,6 +252,11 @@ namespace wio::runtime::std_console
         return WriteStatus([&] { return console::Write(value); });
     }
 
+    std::int32_t WriteValue(const wio::runtime::Text& value)
+    {
+        return WriteValue(value.Utf8());
+    }
+
     std::int32_t WriteLine() noexcept
     {
         return WriteStatus([] { return console::WriteLine(); });
@@ -335,6 +340,11 @@ namespace wio::runtime::std_console
     std::int32_t WriteLineValue(const std::string_view value)
     {
         return WriteStatus([&] { return console::WriteLine(value); });
+    }
+
+    std::int32_t WriteLineValue(const wio::runtime::Text& value)
+    {
+        return WriteLineValue(value.Utf8());
     }
 
     std::int32_t WriteSegment(const std::string_view value, const std::size_t index, const std::size_t count)

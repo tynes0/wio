@@ -1,5 +1,7 @@
 #pragma once
 
+#include "text.h"
+
 #include <cstdio>
 #include <array>
 #include <charconv>
@@ -2829,6 +2831,7 @@ namespace wio::runtime::std_console
     std::int32_t WriteValue(char* value);
     std::int32_t WriteValue(const std::string& value);
     std::int32_t WriteValue(std::string_view value);
+    std::int32_t WriteValue(const wio::runtime::Text& value);
 
     std::int32_t WriteLine() noexcept;
     std::int32_t WriteLineValue(bool value);
@@ -2847,6 +2850,7 @@ namespace wio::runtime::std_console
     std::int32_t WriteLineValue(char* value);
     std::int32_t WriteLineValue(const std::string& value);
     std::int32_t WriteLineValue(std::string_view value);
+    std::int32_t WriteLineValue(const wio::runtime::Text& value);
     std::int32_t WriteSegment(std::string_view value, std::size_t index, std::size_t count);
     std::int32_t WriteBuffer(const char* buffer, int index, int count) noexcept;
     std::int32_t WriteTextDecimal(std::string_view value);

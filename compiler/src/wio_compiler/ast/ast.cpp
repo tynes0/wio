@@ -98,8 +98,10 @@ namespace wio
 
     StringLiteral::~StringLiteral() = default;
 
-    InterpolatedStringLiteral::InterpolatedStringLiteral(std::vector<NodePtr<Expression>> _parts, common::Location _loc)
-        : Expression(_loc), parts(std::move(_parts))
+    InterpolatedStringLiteral::InterpolatedStringLiteral(std::vector<NodePtr<Expression>> _parts,
+                                                         bool _isUnicode,
+                                                         common::Location _loc)
+        : Expression(_loc), parts(std::move(_parts)), isUnicode(_isUnicode)
     {
     }
 

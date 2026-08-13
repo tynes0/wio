@@ -1,0 +1,4 @@
+fn Entry() -> i32 {
+    let invalid = u"left" - u"right";
+    return 0;
+}

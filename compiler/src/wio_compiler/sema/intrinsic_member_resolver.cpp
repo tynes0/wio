@@ -24,6 +24,11 @@ namespace wio::sema
             return isPrimitiveNamed(type, "string");
         }
 
+        bool isTextType(const Ref<Type>& type)
+        {
+            return isPrimitiveNamed(type, "text");
+        }
+
         bool supportsIntrinsicEquality(const Ref<Type>& type)
         {
             Ref<Type> resolvedType = unwrapAliasType(type);
@@ -476,6 +481,29 @@ namespace wio::sema
             return overloads;
         }
 
+        std::vector<IntrinsicMemberResolution> resolveTextIntrinsicMember(TypeContext& typeContext,
+                                                                          const std::string_view memberName)
+        {
+            std::vector<IntrinsicMemberResolution> overloads;
+            const Ref<Type> textType = typeContext.getText();
+
+            if (memberName == "Count")
+                appendMethodResolution(overloads, IntrinsicMember::TextCount, typeContext.getUSize(), {}, typeContext, false);
+            else if (memberName == "ByteCount")
+                appendMethodResolution(overloads, IntrinsicMember::TextByteCount, typeContext.getUSize(), {}, typeContext, false);
+            else if (memberName == "Empty")
+                appendMethodResolution(overloads, IntrinsicMember::TextEmpty, typeContext.getBool(), {}, typeContext, false);
+            else if (memberName == "Slice")
+            {
+                appendMethodResolution(overloads, IntrinsicMember::TextSlice, textType, { typeContext.getUSize() }, typeContext, false);
+                appendMethodResolution(overloads, IntrinsicMember::TextSlice, textType, { typeContext.getUSize(), typeContext.getUSize() }, typeContext, false);
+            }
+            else if (memberName == "ToString" || memberName == "Utf8")
+                appendMethodResolution(overloads, IntrinsicMember::TextToString, typeContext.getString(), {}, typeContext, false);
+
+            return overloads;
+        }
+
         std::vector<IntrinsicMemberResolution> resolveEnumIntrinsicMember(TypeContext& typeContext,
                                                                           const Ref<StructType>& structType,
                                                                           const std::string_view memberName)
@@ -554,6 +582,9 @@ namespace wio::sema
 
         if (isStringType(resolvedOwnerType))
             return resolveStringIntrinsicMember(typeContext, memberName);
+
+        if (isTextType(resolvedOwnerType))
+            return resolveTextIntrinsicMember(typeContext, memberName);
 
         return {};
     }

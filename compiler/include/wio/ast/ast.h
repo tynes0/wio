@@ -264,6 +264,11 @@ namespace wio
         StringTrimInPlace,
         StringToLowerInPlace,
         StringToUpperInPlace,
+        TextCount,
+        TextByteCount,
+        TextEmpty,
+        TextSlice,
+        TextToString,
         EnumName,
         EnumRawValue,
         EnumIsValid,
@@ -495,8 +500,11 @@ namespace wio
         WIO_EXP_NODE_BODY(InterpolatedStringLiteral)
 
         std::vector<NodePtr<Expression>> parts;
+        bool isUnicode = false;
         
-        explicit InterpolatedStringLiteral(std::vector<NodePtr<Expression>> _parts, common::Location _loc = common::Location::invalid());
+        explicit InterpolatedStringLiteral(std::vector<NodePtr<Expression>> _parts,
+                                           bool _isUnicode = false,
+                                           common::Location _loc = common::Location::invalid());
         ~InterpolatedStringLiteral() override;
     };
 

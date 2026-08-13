@@ -28,6 +28,7 @@ set(WIO_RUNTIME_HEADERS
     "${WIO_RUNTIME_INCLUDE_DIR}/std_regex.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_serialization.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_text.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/text.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_time.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_utility.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_type_traits.h"

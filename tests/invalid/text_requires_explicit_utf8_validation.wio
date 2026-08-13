@@ -1,0 +1,5 @@
+fn Entry() -> i32 {
+    let raw: string = "hello";
+    let validated: text = raw;
+    return 0;
+}
