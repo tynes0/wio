@@ -10,12 +10,17 @@ All notable user-facing changes to Wio are recorded here.
   `attribute route(fn)(method: string) with attribute::runtime;`.
 - Added named arguments for user-defined attribute applications with duplicate,
   unknown, missing-required, and ordering diagnostics.
+- Added structural partial-specialization ordering, including repeated generic
+  parameter relationships such as `Pair<T, Box<T>>`.
 
 ### Changed
 
 - Attribute declaration policies can use namespaced postfix policy attributes
   instead of the legacy `for`/`retain`/`repeatable` keyword sequence; the old
   declaration spelling remains accepted for compatibility.
+- Nested generic closers no longer require whitespace: `>>`, `>=`, and `>>=`
+  are split contextually while parsing generic types/calls and remain shift or
+  comparison operators in expressions.
 
 ## [0.12.0] - 2026-08-13
 

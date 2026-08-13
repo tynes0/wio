@@ -1507,6 +1507,27 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_generic_partial_specialization_ordering_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_partial_specialization_ordering_run.wio"
+        "generic-partial-ordering-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_generic_partial_specialization_ordering_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_partial_specialization_structural_ambiguous
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_partial_specialization_structural_ambiguous.wio"
+        "Ambiguous partial specialization"
+    )
+    set_tests_properties(
+        wio_invalid_generic_partial_specialization_structural_ambiguous
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
         wio_test_generic_const_parameters_run
         "${CMAKE_SOURCE_DIR}/tests/generic_const_parameters_run.wio"
         "Const generics: ok"

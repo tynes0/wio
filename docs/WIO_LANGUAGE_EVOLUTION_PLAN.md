@@ -667,6 +667,9 @@ features:
 - establish one proposal/RFC and stabilization process;
 - normalize attributes, constraints, specialization, conversion, extension,
   and native declaration spelling;
+- preserve structural relationships while ordering partial generic
+  specializations, reject incomparable best matches, and parse adjacent nested
+  generic closers contextually without changing expression operators;
 - complete pattern matching with payload enums, Option/Result destructuring,
   guards, exhaustiveness, and ownership/reference binding rules;
 - complete associated types, constrained extensions, generic diagnostics, and

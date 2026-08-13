@@ -1,0 +1,42 @@
+use std::assert as assert;
+use std::console as console;
+
+component Box<T> {
+    public value: T;
+}
+
+component Pair<A, B> {
+    public first: A;
+    public second: B;
+    public kind: string;
+}
+
+@Specialize(T, Box<U>)
+component Pair<T, U> {
+    public first: T;
+    public second: Box<U>;
+    public kind: string;
+    public broad: bool;
+}
+
+@Specialize(T, Box<T>)
+component Pair<T> {
+    public first: T;
+    public second: Box<T>;
+    public kind: string;
+    public narrow: bool;
+}
+
+fn Entry() -> i32 {
+    let broad = Pair<i32, Box<string>>(1, Box<string>("value"), "broad", true);
+    let narrow = Pair<i32, Box<i32>>(2, Box<i32>(3), "narrow", true);
+    let assigned: Pair<i32, Box<i32>>=Pair<i32, Box<i32>>(4, Box<i32>(5), "assigned", true);
+
+    assert::Expect(broad.broad, "broad structural specialization");
+    assert::Expect(narrow.narrow, "repeated-parameter specialization must outrank broad pattern");
+    assert::ExpectEqual(broad.kind, "broad", "broad specialization value");
+    assert::ExpectEqual(narrow.kind, "narrow", "narrow specialization value");
+    assert::ExpectEqual(assigned.kind, "assigned", "nested generic close before assignment");
+    console::PrintLine("generic-partial-ordering-ok");
+    return 0;
+}

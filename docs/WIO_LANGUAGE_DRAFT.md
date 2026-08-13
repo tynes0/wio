@@ -1952,6 +1952,10 @@ Current rules:
   generic functions,
 - generic overload resolution uses parameter-driven deduction first and explicit
   generic arguments second,
+- adjacent generic closers are split by the parser only in generic contexts, so
+  nested types and calls may use `Box<List<i32>>` and `value: Box<List<i32>>=...`
+  without whitespace; `>>`, `>=`, and `>>=` retain their ordinary expression
+  meanings elsewhere,
 - generic methods on `object` declarations are supported,
 - generic methods on `component` declarations stay out of the current v1 slice,
 - generic `interface` methods remain unsupported in v1.
@@ -2011,10 +2015,14 @@ Current rules:
   `object` specializations may also define their own method implementations,
 - duplicate specializations of the same concrete type list are rejected,
 - selection is deterministic: an exact specialization outranks every partial
-  specialization, a more specific partial pattern outranks a less specific
-  pattern, and the primary declaration is the fallback,
-- two matching partial patterns with equal specificity are ambiguous and are
-  rejected at the use site,
+  specialization, structurally more specific partial patterns outrank patterns
+  that accept them, and the primary declaration is the fallback,
+- structural ordering preserves relationships between pattern variables. For
+  example, `Pair<T, Box<T>>` outranks `Pair<T, Box<U>>` when both match because
+  the former requires both occurrences to resolve to the same type,
+- matching partial patterns that are incomparable or structurally equivalent
+  after generic-parameter renaming are ambiguous and are rejected at the use
+  site,
 - specialization declarations are visible through normal module merging; the
   primary must already be visible in the merged scope when its specialization
   is declared,

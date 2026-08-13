@@ -230,6 +230,51 @@ namespace wio
         utError(formattedErrMsg, current.loc);
     }
 
+    void Parser::consumeGenericClose()
+    {
+        if (match(TokenType::opGreater, true))
+            return;
+
+        const Token combined = peek();
+        auto makeRemainder = [&](TokenType type, std::string value, uint64_t columnOffset)
+        {
+            Token token = combined;
+            token.type = type;
+            token.value = std::move(value);
+            if (token.loc.column != 0)
+                token.loc.column += columnOffset;
+            return token;
+        };
+
+        if (combined.type == TokenType::opShiftRight)
+        {
+            advance();
+            tokens_.insert(tokens_.begin() + static_cast<std::ptrdiff_t>(currentTokenIndex_),
+                           makeRemainder(TokenType::opGreater, ">", 1));
+            return;
+        }
+
+        if (combined.type == TokenType::opGreaterEqual)
+        {
+            advance();
+            tokens_.insert(tokens_.begin() + static_cast<std::ptrdiff_t>(currentTokenIndex_),
+                           makeRemainder(TokenType::opAssign, "=", 1));
+            return;
+        }
+
+        if (combined.type == TokenType::opShiftRightAssign)
+        {
+            advance();
+            const auto insertAt = tokens_.begin() + static_cast<std::ptrdiff_t>(currentTokenIndex_);
+            tokens_.insert(insertAt, makeRemainder(TokenType::opGreater, ">", 1));
+            tokens_.insert(tokens_.begin() + static_cast<std::ptrdiff_t>(currentTokenIndex_ + 1),
+                           makeRemainder(TokenType::opAssign, "=", 2));
+            return;
+        }
+
+        consume(TokenType::opGreater);
+    }
+
     bool Parser::matchIdentifier(bool consume)
     {
         if (!peek().isIdentifier() && !peek().isKeyword())
@@ -774,7 +819,7 @@ namespace wio
             }
         }
 
-        consume(TokenType::opGreater);
+        consumeGenericClose();
         return typeArguments;
     }
 
@@ -1195,7 +1240,7 @@ namespace wio
                 generics.push_back(parseGenericArgument());
             }
 
-            consume(TokenType::opGreater);
+            consumeGenericClose();
         }
 
         NodePtr<Expression> packIndex = nullptr;
@@ -2273,7 +2318,7 @@ namespace wio
                 utError("Generic parameter packs must be trailing.", currentOrPreviousLocation());
         }
 
-        consume(TokenType::opGreater);
+        consumeGenericClose();
         return result;
     }
 
@@ -3497,12 +3542,16 @@ namespace wio
                 continue;
             }
 
-            if (type == TokenType::opGreater)
+            const int closeCount = type == TokenType::opShiftRight ? 2 :
+                                   type == TokenType::opGreater ? 1 : 0;
+            if (closeCount != 0)
             {
                 if (angleDepth == 0)
                     return false;
 
-                --angleDepth;
+                angleDepth -= closeCount;
+                if (angleDepth < 0)
+                    return false;
                 if (angleDepth == 0)
                 {
                     if (!sawInnerToken || index + 1 >= tokens_.size())

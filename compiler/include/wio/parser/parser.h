@@ -37,6 +37,7 @@ namespace wio
         bool multiMatch(const std::initializer_list<TokenType>& types, bool consume = false);
         bool matchOneOf(const std::initializer_list<TokenType>& types, bool consume = false);
         Token consume(TokenType type, std::string_view value = "");
+        void consumeGenericClose();
         [[nodiscard]] bool matchIdentifier(bool consume = false);
         Token consumeIdentifier();
         [[nodiscard]] common::Location previousLocation() const;

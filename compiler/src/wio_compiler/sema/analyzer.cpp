@@ -3265,33 +3265,19 @@ namespace wio::sema
             }
         }
 
-        size_t getSpecializationPatternSpecificity(const Ref<Type>& pattern)
+        bool matchesSpecializationPatternList(const std::vector<Ref<Type>>& patterns,
+                                              const std::vector<Ref<Type>>& actuals)
         {
-            Ref<Type> type = unwrapAliasType(pattern);
-            if (!type || type->kind() == TypeKind::GenericParameter ||
-                type->kind() == TypeKind::ConstGenericParameter ||
-                type->kind() == TypeKind::GenericParameterPack)
-                return 0;
+            if (patterns.size() != actuals.size())
+                return false;
 
-            size_t score = 1;
-            switch (type->kind())
+            std::unordered_map<std::string, Ref<Type>> bindings;
+            for (size_t index = 0; index < patterns.size(); ++index)
             {
-            case TypeKind::Reference:
-                return score + getSpecializationPatternSpecificity(type.AsFast<ReferenceType>()->referredType);
-            case TypeKind::Nullable:
-                return score + getSpecializationPatternSpecificity(type.AsFast<NullableType>()->valueType);
-            case TypeKind::Array:
-                return score + getSpecializationPatternSpecificity(type.AsFast<ArrayType>()->elementType);
-            case TypeKind::Dictionary:
-                return score + getSpecializationPatternSpecificity(type.AsFast<DictionaryType>()->keyType) +
-                               getSpecializationPatternSpecificity(type.AsFast<DictionaryType>()->valueType);
-            case TypeKind::Struct:
-                for (const auto& argument : type.AsFast<StructType>()->genericArguments)
-                    score += getSpecializationPatternSpecificity(argument);
-                return score;
-            default:
-                return score;
+                if (!matchSpecializationPattern(patterns[index], actuals[index], bindings))
+                    return false;
             }
+            return true;
         }
 
         Ref<Type> instantiateGenericStructType(const Ref<StructType>& structType,
@@ -3312,10 +3298,12 @@ namespace wio::sema
                     return specialization;
             }
 
-            Ref<StructType> selectedPartialSpecialization = nullptr;
-            std::unordered_map<std::string, Ref<Type>> selectedBindings;
-            size_t selectedSpecificity = 0;
-            bool ambiguousPartialSpecialization = false;
+            struct MatchingPartialSpecialization
+            {
+                Ref<StructType> specialization;
+                std::unordered_map<std::string, Ref<Type>> bindings;
+            };
+            std::vector<MatchingPartialSpecialization> matchingPartialSpecializations;
             for (const auto& weakSpecialization : structType->partialSpecializations)
             {
                 auto specialization = weakSpecialization.Lock();
@@ -3324,10 +3312,8 @@ namespace wio::sema
 
                 std::unordered_map<std::string, Ref<Type>> bindings;
                 bool matches = true;
-                size_t specificity = 0;
                 for (size_t index = 0; index < explicitTypeArguments.size(); ++index)
                 {
-                    specificity += getSpecializationPatternSpecificity(specialization->genericArguments[index]);
                     if (!matchSpecializationPattern(specialization->genericArguments[index], explicitTypeArguments[index], bindings))
                     {
                         matches = false;
@@ -3336,18 +3322,56 @@ namespace wio::sema
                 }
                 if (!matches)
                     continue;
-                if (!selectedPartialSpecialization || specificity > selectedSpecificity)
+                matchingPartialSpecializations.push_back({specialization, std::move(bindings)});
+            }
+
+            Ref<StructType> selectedPartialSpecialization = nullptr;
+            std::unordered_map<std::string, Ref<Type>> selectedBindings;
+            bool ambiguousPartialSpecialization = false;
+            for (size_t candidateIndex = 0;
+                 candidateIndex < matchingPartialSpecializations.size();
+                 ++candidateIndex)
+            {
+                const auto& candidate = matchingPartialSpecializations[candidateIndex];
+                bool isUniquelyMostSpecialized = true;
+                for (size_t otherIndex = 0;
+                     otherIndex < matchingPartialSpecializations.size();
+                     ++otherIndex)
                 {
-                    selectedPartialSpecialization = specialization;
-                    selectedBindings = std::move(bindings);
-                    selectedSpecificity = specificity;
-                    ambiguousPartialSpecialization = false;
+                    if (candidateIndex == otherIndex)
+                        continue;
+
+                    const auto& other = matchingPartialSpecializations[otherIndex];
+                    // Candidate is at least as specialized as other when the
+                    // other pattern accepts every structural relation encoded
+                    // by candidate. The reverse match distinguishes a strict
+                    // ordering from equivalent/renamed patterns.
+                    const bool otherAcceptsCandidate = matchesSpecializationPatternList(
+                        other.specialization->genericArguments,
+                        candidate.specialization->genericArguments);
+                    const bool candidateAcceptsOther = matchesSpecializationPatternList(
+                        candidate.specialization->genericArguments,
+                        other.specialization->genericArguments);
+                    if (!otherAcceptsCandidate || candidateAcceptsOther)
+                    {
+                        isUniquelyMostSpecialized = false;
+                        break;
+                    }
                 }
-                else if (specificity == selectedSpecificity)
+
+                if (!isUniquelyMostSpecialized && matchingPartialSpecializations.size() > 1)
+                    continue;
+                if (selectedPartialSpecialization)
                 {
                     ambiguousPartialSpecialization = true;
+                    break;
                 }
+                selectedPartialSpecialization = candidate.specialization;
+                selectedBindings = candidate.bindings;
             }
+
+            if (!matchingPartialSpecializations.empty() && !selectedPartialSpecialization)
+                ambiguousPartialSpecialization = true;
 
             if (ambiguousPartialSpecialization)
             {
