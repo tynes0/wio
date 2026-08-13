@@ -11,7 +11,9 @@ All notable user-facing changes to Wio are recorded here.
   and slicing, read-only indexing, grapheme counting/slicing, display width,
   case folding, byte counts, concatenation, comparison, hashing, matching,
   generic code-point/grapheme iteration, console output, and explicit
-  `std::unicode` UTF-8 boundaries.
+  `std::unicode` UTF-8/UTF-16/UTF-32 boundaries. Fallible decoding reports a
+  `Result<text>` and rejects invalid UTF-8, unpaired UTF-16 surrogates, and
+  invalid UTF-32 scalar values.
 - Added compact user-defined attribute declarations such as
   `attribute route(fn)(method: string) with attribute::runtime;`.
 - Added named arguments for user-defined attribute applications with duplicate,
@@ -27,7 +29,8 @@ All notable user-facing changes to Wio are recorded here.
 ### Changed
 
 - Text may flow safely to a UTF-8 `string`; constructing `text` from a
-  potentially invalid `string` requires `std::unicode::FromUtf8`.
+  potentially invalid `string` requires the fallible
+  `std::unicode::FromUtf8` conversion.
 - Invalid textual operators and mixed `string`/`text` expressions now fail in
   semantic analysis instead of surfacing as C++ backend errors.
 - Attribute declaration policies can use namespaced postfix policy attributes

@@ -108,9 +108,10 @@ application/system and language-coherence direction is expanded in
     byte count, concatenation, equality/ordering/hashing, pattern matching,
     generics, console output, and explicit `std::unicode` UTF-8 conversion now
     work end to end. `CodePoints()` and `Graphemes()` expose ordinary iterable
-    arrays for `for` loops. Complete normalization policy and APIs,
-    reflection/SDK metadata, UTF-16/UTF-32 native
-    transcoding, and Unicode conformance vectors. Do not expose C++ `wchar_t`
+    arrays for `for` loops. Fallible UTF-8/UTF-16/UTF-32 decoding and
+    platform-independent transcoding are available through `std::unicode`.
+    Complete normalization policy and APIs, reflection/SDK metadata, and
+    Unicode conformance vectors. Do not expose C++ `wchar_t`
     width as a Wio language rule.
 
 16. [ ] Infer fixed-size array extents from initializers.
@@ -138,10 +139,10 @@ application/system and language-coherence direction is expanded in
    `u"..."`/`u$"..."` literals now provide ordinary string-like ergonomics,
    code-point indexing/slicing, grapheme operations, matching, hashable generic
    container use, code-point/grapheme iteration, console output, and explicit UTF-8
-   conversion. The compiler/runtime owns validation and normalization policy,
-   iteration, and native transcoding; it must not expose the platform-dependent
-   C++ `wchar_t`/`std::wstring` representation as Wio semantics. Keep explicit
-   UTF-8/UTF-16/UTF-32 conversion at native or byte boundaries. Complete
+   UTF-8/UTF-16/UTF-32 conversion. The compiler/runtime owns validation and
+   normalization policy, iteration, and native transcoding; it does not expose
+   the platform-dependent C++ `wchar_t`/`std::wstring` representation as Wio
+   semantics. Complete
    normalization,
    full Unicode category/case data, locale-sensitive behavior, and conformance
    vectors. GUI input must not require a native `AppendCharacter` workaround.

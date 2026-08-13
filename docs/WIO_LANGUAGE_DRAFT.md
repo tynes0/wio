@@ -581,14 +581,22 @@ reverse conversion is explicit:
 ```wio
 use std::unicode as unicode;
 
-let value: text = unicode::FromUtf8(receivedBytes);
+let decoded: std::Result<text> = unicode::FromUtf8(receivedBytes);
+let value: text = decoded.Value();
 let bytes: string = unicode::ToUtf8(value);
+
+let utf16: u16[] = unicode::ToUtf16(value);
+let fromUtf16: std::Result<text> = unicode::FromUtf16(utf16);
+
+let utf32: u32[] = unicode::ToUtf32(value);
+let fromUtf32: std::Result<text> = unicode::FromUtf32(utf32);
 ```
 
 Mixed `string` and `text` operators are rejected; convert at the boundary
 instead. `CodePoints()` and `Graphemes()` return ordinary iterable arrays.
-Normalization and broader native transcoding remain partially implemented
-library work.
+UTF-8, UTF-16, and UTF-32 decoding validates its input and returns
+`Result<text>`; encoding from an already validated `text` is infallible.
+Normalization remains partially implemented library work.
 
 ### 4.8 Character Literals
 

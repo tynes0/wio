@@ -40,8 +40,21 @@ fn Entry() -> i32 {
     let message: text = u$"Selam ${name} 🌍";
     assert::ExpectEqual(message.ToString(), "Selam Wio 🌍", "interpolated Unicode text");
 
-    let decoded: text = unicode::FromUtf8("çağrı");
+    let decoded: text = unicode::FromUtf8("çağrı").Value();
     assert::ExpectEqual(unicode::ToUtf8(decoded), "çağrı", "explicit UTF-8 conversion boundary");
+    mut invalidUtf8 = "";
+    unicode::AppendByte(ref invalidUtf8, 0xFFu8);
+    assert::Expect(unicode::FromUtf8(invalidUtf8).IsError(), "invalid UTF-8 returns an error");
+
+    let utf16 = unicode::ToUtf16(u"A🌍");
+    assert::ExpectEqual(utf16.Count(), 3usize, "supplementary scalar uses a UTF-16 surrogate pair");
+    assert::ExpectEqual(unicode::FromUtf16(utf16).Value(), u"A🌍", "UTF-16 round trip");
+    assert::Expect(unicode::FromUtf16([0xD800u16]).IsError(), "unpaired UTF-16 surrogate rejected");
+
+    let utf32 = unicode::ToUtf32(u"A🌍");
+    assert::ExpectEqual(utf32.Count(), 2usize, "UTF-32 scalar count");
+    assert::ExpectEqual(unicode::FromUtf32(utf32).Value(), u"A🌍", "UTF-32 round trip");
+    assert::Expect(unicode::FromUtf32([0xD800u32]).IsError(), "UTF-32 surrogate rejected");
     assert::ExpectEqual(Identity(greeting), u"Merhaba 🌍", "text participates in generics");
     assert::ExpectEqual(u"iyi " + u"günler", u"iyi günler", "text concatenation");
 
