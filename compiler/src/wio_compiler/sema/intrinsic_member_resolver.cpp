@@ -486,6 +486,8 @@ namespace wio::sema
         {
             std::vector<IntrinsicMemberResolution> overloads;
             const Ref<Type> textType = typeContext.getText();
+            const Ref<Type> codePointArrayType = makeDynamicArrayType(typeContext, typeContext.getU32());
+            const Ref<Type> textArrayType = makeDynamicArrayType(typeContext, textType);
 
             if (memberName == "Count")
                 appendMethodResolution(overloads, IntrinsicMember::TextCount, typeContext.getUSize(), {}, typeContext, false);
@@ -514,6 +516,10 @@ namespace wio::sema
                 appendMethodResolution(overloads, IntrinsicMember::TextDisplayWidth, typeContext.getUSize(), {}, typeContext, false);
             else if (memberName == "CaseFold")
                 appendMethodResolution(overloads, IntrinsicMember::TextCaseFold, textType, {}, typeContext, false);
+            else if (memberName == "CodePoints")
+                appendMethodResolution(overloads, IntrinsicMember::TextCodePoints, codePointArrayType, {}, typeContext, false);
+            else if (memberName == "Graphemes")
+                appendMethodResolution(overloads, IntrinsicMember::TextGraphemes, textArrayType, {}, typeContext, false);
 
             return overloads;
         }

@@ -276,6 +276,8 @@ namespace wio
         TextSliceGraphemes,
         TextDisplayWidth,
         TextCaseFold,
+        TextCodePoints,
+        TextGraphemes,
         EnumName,
         EnumRawValue,
         EnumIsValid,

@@ -22,6 +22,17 @@ fn Entry() -> i32 {
     assert::ExpectEqual(u"你".DisplayWidth(), 2usize, "text display width");
     assert::ExpectEqual(u"Straße".CaseFold(), u"strasse", "text case folding");
 
+    let codePoints = u"A🌍".CodePoints();
+    assert::ExpectEqual(codePoints.Count(), 2usize, "text exposes iterable code points");
+    assert::ExpectEqual(codePoints[0usize], 65u32, "ASCII code point value");
+    assert::ExpectEqual(codePoints[1usize], 0x1F30Du32, "emoji code point value");
+
+    mut rebuilt: text = u"";
+    for (cluster in graphemes.Graphemes()) {
+        rebuilt += cluster;
+    }
+    assert::ExpectEqual(rebuilt, graphemes, "grapheme collection works with for-in");
+
     let labels: Dict<text, i32> = { u"anahtar": 7 };
     assert::ExpectEqual(labels.Get(u"anahtar").Value(), 7, "text is hashable as a dictionary key");
 

@@ -107,10 +107,27 @@ application/system and language-coherence direction is expanded in
     and slicing/indexing, grapheme counting/slicing, display width, case fold,
     byte count, concatenation, equality/ordering/hashing, pattern matching,
     generics, console output, and explicit `std::unicode` UTF-8 conversion now
-    work end to end. Complete code-point/grapheme iteration,
-    normalization policy and APIs, reflection/SDK metadata, UTF-16/UTF-32 native
+    work end to end. `CodePoints()` and `Graphemes()` expose ordinary iterable
+    arrays for `for` loops. Complete normalization policy and APIs,
+    reflection/SDK metadata, UTF-16/UTF-32 native
     transcoding, and Unicode conformance vectors. Do not expose C++ `wchar_t`
     width as a Wio language rule.
+
+16. [ ] Infer fixed-size array extents from initializers.
+    Add an explicit auto-extent form for fixed-size arrays so declarations can
+    retain stack/static storage without repeating the initializer length. Freeze
+    its spelling, empty-initializer behavior, nested-array inference, const and
+    generic interaction, diagnostics for incompatible elements, native ABI
+    representation, and reflection/SDK metadata. Inference must remain distinct
+    from the existing dynamic-array `T[]` type.
+
+17. [ ] Extend compile-time constants to `string` and `text`.
+    Permit immutable string and validated Unicode text values in `const`
+    declarations and constant expressions. Specify concatenation, comparison,
+    matching, generic/attribute arguments, storage and interning, evaluation
+    limits, cross-module export, reflection/SDK representation, and diagnostics.
+    `const text` must preserve the same UTF-8 validation and normalization policy
+    as runtime `text`.
 
 ## P1 - Standard Library Correctness and Consistency
 
@@ -120,7 +137,7 @@ application/system and language-coherence direction is expanded in
    now exist. The first-class Unicode-semantic `text` value and validated
    `u"..."`/`u$"..."` literals now provide ordinary string-like ergonomics,
    code-point indexing/slicing, grapheme operations, matching, hashable generic
-   container use, console output, and explicit UTF-8
+   container use, code-point/grapheme iteration, console output, and explicit UTF-8
    conversion. The compiler/runtime owns validation and normalization policy,
    iteration, and native transcoding; it must not expose the platform-dependent
    C++ `wchar_t`/`std::wstring` representation as Wio semantics. Keep explicit

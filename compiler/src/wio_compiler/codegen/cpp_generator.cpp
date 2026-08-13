@@ -1510,6 +1510,10 @@ namespace wio::codegen
                 return "TextDisplayWidth";
             case IntrinsicMember::TextCaseFold:
                 return "TextCaseFold";
+            case IntrinsicMember::TextCodePoints:
+                return "TextCodePoints";
+            case IntrinsicMember::TextGraphemes:
+                return "TextGraphemes";
             case IntrinsicMember::ArrayCapacity:
                 return "ArrayCapacity";
             case IntrinsicMember::ArrayContains:

@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace wio::runtime
 {
@@ -60,6 +61,32 @@ namespace wio::runtime
         [[nodiscard]] Text caseFold() const
         {
             return Text(std_unicode::CaseFold(value_), ValidatedTag{});
+        }
+        [[nodiscard]] std::vector<std::uint32_t> codePoints() const
+        {
+            std::vector<std::uint32_t> result;
+            std::size_t errorOffset = 0;
+            (void)std_unicode::TryDecode(value_, result, errorOffset);
+            return result;
+        }
+        [[nodiscard]] std::vector<Text> graphemes() const
+        {
+            const auto boundaries = std_unicode::GraphemeBoundaries(value_);
+            std::vector<Text> result;
+            if (boundaries.size() < 2)
+                return result;
+
+            result.reserve(boundaries.size() - 1);
+            for (std::size_t index = 1; index < boundaries.size(); ++index)
+            {
+                result.emplace_back(
+                    Text(std::string(value_.substr(
+                        boundaries[index - 1],
+                        boundaries[index] - boundaries[index - 1])),
+                        ValidatedTag{})
+                );
+            }
+            return result;
         }
 
         [[nodiscard]] Text slice(const std::size_t start) const

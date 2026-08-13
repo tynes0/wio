@@ -556,6 +556,14 @@ let combined = u"iyi " + u"günler";
 let utf8 = title.ToString();
 let clusters = title.GraphemeCount();
 let folded = title.CaseFold();
+
+for (codePoint in title.CodePoints()) {
+    // codePoint: u32
+}
+
+for (cluster in title.Graphemes()) {
+    // cluster: text, one extended grapheme cluster
+}
 ```
 
 Equality and ordering compare validated UTF-8 values without implicit
@@ -578,8 +586,9 @@ let bytes: string = unicode::ToUtf8(value);
 ```
 
 Mixed `string` and `text` operators are rejected; convert at the boundary
-instead. Code-point/grapheme iteration, normalization, and broader native
-transcoding remain partially implemented library work.
+instead. `CodePoints()` and `Graphemes()` return ordinary iterable arrays.
+Normalization and broader native transcoding remain partially implemented
+library work.
 
 ### 4.8 Character Literals
 

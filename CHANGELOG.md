@@ -10,7 +10,8 @@ All notable user-facing changes to Wio are recorded here.
   interpolated `u$"..."` literals. Text supports Unicode code-point counting
   and slicing, read-only indexing, grapheme counting/slicing, display width,
   case folding, byte counts, concatenation, comparison, hashing, matching,
-  generics, console output, and explicit `std::unicode` UTF-8 boundaries.
+  generic code-point/grapheme iteration, console output, and explicit
+  `std::unicode` UTF-8 boundaries.
 - Added compact user-defined attribute declarations such as
   `attribute route(fn)(method: string) with attribute::runtime;`.
 - Added named arguments for user-defined attribute applications with duplicate,

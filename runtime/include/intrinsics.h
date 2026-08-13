@@ -621,6 +621,16 @@ namespace wio::intrinsics
         return value.caseFold();
     }
 
+    inline std::vector<std::uint32_t> TextCodePoints(const runtime::Text& value)
+    {
+        return value.codePoints();
+    }
+
+    inline std::vector<runtime::Text> TextGraphemes(const runtime::Text& value)
+    {
+        return value.graphemes();
+    }
+
     template <typename TContainer, typename TIndex>
     inline decltype(auto) Index(TContainer&& container, const TIndex index)
     {
