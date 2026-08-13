@@ -110,8 +110,10 @@ application/system and language-coherence direction is expanded in
     work end to end. `CodePoints()` and `Graphemes()` expose ordinary iterable
     arrays for `for` loops. Fallible UTF-8/UTF-16/UTF-32 decoding and
     platform-independent transcoding are available through `std::unicode`.
-    Complete normalization policy and APIs, reflection/SDK metadata, and
-    Unicode conformance vectors. Do not expose C++ `wchar_t`
+    Native static exports accepting and returning `text` are covered across the
+    generated C++ boundary. Complete normalization policy and APIs,
+    reflection/SDK metadata, shared-module ABI coverage, and Unicode conformance
+    vectors. Do not expose C++ `wchar_t`
     width as a Wio language rule.
 
 16. [ ] Infer fixed-size array extents from initializers.

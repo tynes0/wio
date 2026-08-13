@@ -14,6 +14,8 @@ All notable user-facing changes to Wio are recorded here.
   `std::unicode` UTF-8/UTF-16/UTF-32 boundaries. Fallible decoding reports a
   `Result<text>` and rejects invalid UTF-8, unpaired UTF-16 surrogates, and
   invalid UTF-32 scalar values.
+- Added source-tree host-interop coverage for exported functions that accept
+  and return `text`, including Unicode content and code-point operations.
 - Added compact user-defined attribute declarations such as
   `attribute route(fn)(method: string) with attribute::runtime;`.
 - Added named arguments for user-defined attribute applications with duplicate,
@@ -39,6 +41,11 @@ All notable user-facing changes to Wio are recorded here.
 - Nested generic closers no longer require whitespace: `>>`, `>=`, and `>>=`
   are split contextually while parsing generic types/calls and remain shift or
   comparison operators in expressions.
+
+### Fixed
+
+- Fixed host-interop tests compiling against the source SDK while accidentally
+  resolving runtime headers from an older installed Wio distribution.
 
 ## [0.12.0] - 2026-08-13
 

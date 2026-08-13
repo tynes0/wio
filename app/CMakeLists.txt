@@ -204,7 +204,7 @@ set(
 
 set(
     WIO_LANGUAGE_COHERENCE_TEST_REGEX
-    "^(wio_test_(attribute_compact_declaration_run|generic_partial_specialization_ordering_run|extension_default_parameters_run|extension_generic_methods_run|match_enum_exhaustive_guards_run|unicode_text_literal_run)|wio_invalid_(attribute_named_unknown|attribute_named_duplicate|attribute_named_missing_required|attribute_compact_conflict|generic_partial_specialization_structural_ambiguous|extension_generic_constraint_reject|match_enum_non_exhaustive|match_enum_duplicate_unguarded|match_literal_guard_type_mismatch|match_assumed_guard|text_requires_explicit_utf8_validation|text_operator|text_string_mixed_operation|text_index_assignment))$"
+    "^(wio_test_(attribute_compact_declaration_run|generic_partial_specialization_ordering_run|extension_default_parameters_run|extension_generic_methods_run|match_enum_exhaustive_guards_run|unicode_text_literal_run|unicode_text_export_host_interop)|wio_invalid_(attribute_named_unknown|attribute_named_duplicate|attribute_named_missing_required|attribute_compact_conflict|generic_partial_specialization_structural_ambiguous|extension_generic_constraint_reject|match_enum_non_exhaustive|match_enum_duplicate_unguarded|match_literal_guard_type_mismatch|match_assumed_guard|text_requires_explicit_utf8_validation|text_operator|text_string_mixed_operation|text_index_assignment))$"
 )
 
 add_custom_target(
@@ -1903,6 +1903,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/native/exported_library.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/static_host.cpp"
         "Static export sum: 42"
+    )
+
+    add_wio_host_interop_test(
+        wio_test_unicode_text_export_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/unicode_text_export.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/unicode_text_export_host.cpp"
+        "Text export: valid=true count=9"
+    )
+    set_tests_properties(
+        wio_test_unicode_text_export_host_interop
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 
     add_wio_host_interop_test(

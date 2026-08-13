@@ -84,6 +84,8 @@ set(host_build_command
     -std=c++20
     -I
     "${CMAKE_SOURCE_DIR}/sdk/include"
+    -I
+    "${CMAKE_SOURCE_DIR}/runtime/include"
     "${WIO_HOST_SOURCE}"
 )
 

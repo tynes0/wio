@@ -596,7 +596,10 @@ Mixed `string` and `text` operators are rejected; convert at the boundary
 instead. `CodePoints()` and `Graphemes()` return ordinary iterable arrays.
 UTF-8, UTF-16, and UTF-32 decoding validates its input and returns
 `Result<text>`; encoding from an already validated `text` is infallible.
-Normalization remains partially implemented library work.
+Exported native functions may accept and return `text` as
+`wio::runtime::Text`; this representation is validated UTF-8 and has no
+dependency on the host platform's wide-character width. Normalization and the
+versioned shared-module SDK ABI remain partially implemented library work.
 
 ### 4.8 Character Literals
 
