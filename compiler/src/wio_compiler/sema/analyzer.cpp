@@ -10054,6 +10054,16 @@ namespace wio::sema
                         callableSymbol->extensionTargetType = extensionSymbol->extensionTargetType;
                         callableSymbol->extensionMemberName = extensionSymbol->extensionMemberName;
                         callableSymbol->extensionImplementation = extensionSymbol;
+                        callableSymbol->genericParameterNames = extensionSymbol->genericParameterNames;
+                        callableSymbol->genericParameterTypes = extensionSymbol->genericParameterTypes;
+                        callableSymbol->genericParameterDefaults = extensionSymbol->genericParameterDefaults;
+                        callableSymbol->hasGenericParameterPack = extensionSymbol->hasGenericParameterPack;
+                        callableSymbol->resolvedGenericInstantiations = extensionSymbol->resolvedGenericInstantiations;
+                        if (auto attributes = attributeListsBySymbol_.find(extensionSymbol.Get());
+                            attributes != attributeListsBySymbol_.end())
+                        {
+                            attributeListsBySymbol_[callableSymbol.Get()] = attributes->second;
+                        }
 
                         node.referencedSymbol = callableSymbol;
                         node.refType = visibleType;
@@ -12011,15 +12021,28 @@ namespace wio::sema
                     }
                 }
 
-                auto declarationIt = functionDeclarationsBySymbol_.find(bestMatch->symbol.Get());
+                Ref<Symbol> validationSymbol = bestMatch->symbol->flags.get_isExtension() &&
+                                               bestMatch->symbol->extensionImplementation
+                    ? bestMatch->symbol->extensionImplementation
+                    : bestMatch->symbol;
+                const FunctionDeclaration* validationDeclaration =
+                    getFunctionDeclarationForSymbol(validationSymbol);
+                Ref<FunctionType> validationFunctionType = bestMatch->fullFunctionType;
+                if (validationSymbol != bestMatch->symbol && validationSymbol->type &&
+                    validationSymbol->type->kind() == TypeKind::Function)
+                {
+                    Ref<Type> instantiatedValidationType = instantiateGenericType(
+                        validationSymbol->type,
+                        bestMatch->bindingSet);
+                    validationFunctionType = instantiatedValidationType.AsFast<FunctionType>();
+                }
                 Ref<StructType> concreteOwnerType = getConcreteCallableOwnerType();
-                if (declarationIt != functionDeclarationsBySymbol_.end() &&
-                    declarationIt->second &&
-                    bestMatch->fullFunctionType &&
+                if (validationDeclaration &&
+                    validationFunctionType &&
                     !validateConcreteGenericFunctionBody(
-                        *declarationIt->second,
-                        bestMatch->symbol,
-                        bestMatch->fullFunctionType,
+                        *validationDeclaration,
+                        validationSymbol,
+                        validationFunctionType,
                         concreteOwnerType,
                         bestMatch->bindingSet.directBindings,
                         bestMatch->bindingSet.packBindings,
@@ -15654,12 +15677,6 @@ namespace wio::sema
                 {
                     WIO_LOG_ADD_ERROR(method->location(),
                         "Extension methods are external APIs and must be public.");
-                    continue;
-                }
-                if (!method->genericParameters.empty())
-                {
-                    WIO_LOG_ADD_ERROR(method->location(),
-                        "Generic extension methods are not supported yet.");
                     continue;
                 }
                 if (common::isOperatorOverloadName(method->extensionMemberName))

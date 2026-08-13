@@ -1549,6 +1549,27 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 
+    add_wio_output_test(
+        wio_test_extension_generic_methods_run
+        "${CMAKE_SOURCE_DIR}/tests/extension_generic_methods_run.wio"
+        "extension-generic-methods-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_extension_generic_methods_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_extension_generic_constraint_reject
+        "${CMAKE_SOURCE_DIR}/tests/invalid/extension_generic_constraint_reject.wio"
+        "rejects type arguments"
+    )
+    set_tests_properties(
+        wio_invalid_extension_generic_constraint_reject
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
     add_wio_failure_test(
         wio_invalid_match_enum_non_exhaustive
         "${CMAKE_SOURCE_DIR}/tests/invalid/match_enum_non_exhaustive.wio"

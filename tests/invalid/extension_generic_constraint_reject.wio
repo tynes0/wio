@@ -1,0 +1,17 @@
+use std::traits as traits;
+
+component Marker {
+    public seed: i32;
+}
+
+extension MarkerGenerics for Marker {
+    public view fn Twice<T>(value: T) -> T where T: traits::IsInteger {
+        return value + value;
+    }
+}
+
+fn Entry() -> i32 {
+    let marker = Marker(0);
+    let invalid = marker.Twice("no");
+    return invalid == "nono" ? 0 : 1;
+}

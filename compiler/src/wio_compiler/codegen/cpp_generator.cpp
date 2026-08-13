@@ -7118,7 +7118,9 @@ namespace wio::codegen
             }
             if (!calleeSym->genericParameterNames.empty())
             {
-                Ref<sema::Type> declarationType = calleeSym->type;
+                Ref<sema::Type> declarationType = calleeSym->flags.get_isExtension()
+                    ? extensionImplementation->type
+                    : calleeSym->type;
                 if ((!declarationType || declarationType->kind() != sema::TypeKind::Function) &&
                     calleeSym->kind == sema::SymbolKind::FunctionGroup && !calleeSym->overloads.empty())
                 {
@@ -7134,9 +7136,12 @@ namespace wio::codegen
                     }
                     else
                     {
+                        const size_t visibleArgumentOffset = calleeSym->flags.get_isExtension() ? 1 : 0;
                         mangledFunctionType = Compiler::get().getTypeContext().getOrCreateFunctionType(
                             declarationFunctionType->returnType,
-                            getLeadingParameterTypes(declarationFunctionType, node.arguments.size())
+                            getLeadingParameterTypes(
+                                declarationFunctionType,
+                                node.arguments.size() + visibleArgumentOffset)
                         ).AsFast<sema::FunctionType>();
                     }
                 }

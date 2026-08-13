@@ -2608,13 +2608,17 @@ position.Scale(2.0f);
 - Extension methods support the same trailing default-parameter rules as
   ordinary Wio functions; the implicit receiver is not counted in diagnostics
   or user-visible arity.
+- Extension methods may declare generic parameters, trailing generic defaults,
+  and `where` constraints. Type arguments may be deduced from visible arguments
+  or supplied explicitly with ordinary method-call syntax.
 - Extension methods are external APIs and therefore cannot access private or
   protected component fields.
 - A real component member takes precedence. Defining an extension with the same
   name is diagnosed as a conflict.
 - Multiple visible extensions defining the same method name for the same
   component are diagnosed as ambiguous.
-- Generic extension targets are not supported yet.
+- Generic extension targets such as `extension<T> ... for Box<T>` are not part
+  of the current slice; generic methods on a concrete extension target are.
 
 An extension over a declaration-level `@Native` component may bind a C++ free
 function directly:
