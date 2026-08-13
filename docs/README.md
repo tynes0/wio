@@ -99,6 +99,7 @@ Use these when the question is about:
 
 - [Standard library](./WIO_STD.md)
 - [Host SDK](./WIO_SDK.md)
+- [SDK evolution and v1 parity plan](./WIO_SDK_EVOLUTION_PLAN.md)
 
 Use these when the question is about:
 

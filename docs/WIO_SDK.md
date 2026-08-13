@@ -1,7 +1,9 @@
 # Wio Host SDK
 
 This document defines the current public C++ host and embedding surface for Wio.
-It is the SDK contract for the current Wio v1 host integration layer.
+It is the SDK contract shipped with Wio v0.12 and the baseline of the planned
+Wio v1 host integration layer. The pre-v1 parity and synchronized-version plan
+is tracked in [`WIO_SDK_EVOLUTION_PLAN.md`](./WIO_SDK_EVOLUTION_PLAN.md).
 
 For representative host-interop and stale-binding conformance tests, see
 [`WIO_TRACEABILITY.md`](./WIO_TRACEABILITY.md).
@@ -45,7 +47,7 @@ internals.
 
 ## 1.1 Stability Reading
 
-For the current `v1` freeze, the SDK should be read in three buckets:
+For the current pre-`v1` freeze, the SDK should be read in three buckets:
 
 - **Stable now**: raw ABI loading, ergonomic C++ wrappers, exports, commands,
   events, reload helpers, exported object/component reflection for the
@@ -55,7 +57,7 @@ For the current `v1` freeze, the SDK should be read in three buckets:
 - **Not yet part of the stable SDK boundary**: future-facing reflection layers
   or wrappers that are planned but not yet documented as part of `v1`.
 
-That means “available in the SDK codebase” and “part of the public `v1`
+That means “available in the SDK codebase” and “part of the current public
 contract” should not be treated as the same thing automatically.
 
 ---
@@ -350,7 +352,7 @@ The supported exported field families in the current SDK are:
 - trees
 - function fields
 
-The current v1 SDK treats `ref` and `view` field export semantics as outside the
+The current SDK treats `ref` and `view` field export semantics as outside the
 stable documented host field ABI. They should not be relied on as part of the
 public SDK contract yet.
 
@@ -645,7 +647,7 @@ rather than as obscure backend-only failures.
 
 ---
 
-## 12. Official v1 Boundary
+## 12. Official v0.12 Boundary
 
 For the current SDK version, the public and documented boundary is:
 
@@ -668,7 +670,7 @@ The following should be treated as stable with explicit caveats:
   deeper host-side reflection growth beyond that should still be treated as
   future-facing
 
-The following should not currently be read as part of the stable v1 SDK
+The following should not currently be read as part of the stable v0.12 SDK
 contract:
 
 - compiler-internal AST/parser/sema/codegen APIs
@@ -677,8 +679,9 @@ contract:
   reload generations
 - `ref` / `view` field export behavior as a public host ABI promise
 
-Future SDK work can still grow from here, but this is the intended "complete
-enough to build against" baseline for the current Wio SDK generation.
+This is the implemented v0.12 baseline, not the final v1 parity claim. The
+required path to full host-observable language/runtime parity is maintained in
+[`WIO_SDK_EVOLUTION_PLAN.md`](./WIO_SDK_EVOLUTION_PLAN.md).
 
 ---
 

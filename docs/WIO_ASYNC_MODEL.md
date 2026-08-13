@@ -15,7 +15,7 @@ calls block. The pool is configured before first use with
 through `BlockingWorkerCount`, `BlockingQueueCapacity`, and
 `BlockingPendingCount`.
 
-Filesystem operations in the candidate use a third bounded I/O executor, so
+Filesystem operations in Wio 0.12 use a third bounded I/O executor, so
 portable file calls consume neither continuation workers nor the general
 legacy-blocking pool. `WIO_ASYNC_IO_WORKERS` (1..64) and
 `WIO_ASYNC_IO_QUEUE` (1..1048576) configure it before first use;
@@ -109,7 +109,7 @@ Work that deliberately escapes structured ownership uses the loud statement
 `detach SendTelemetry();`. Homogeneous competing tasks may use `Select<T>` to
 receive both the winner index and value; losing tasks are cancelled.
 
-The candidate application runner also owns a process main executor. It binds
+The Wio 0.12 application runner also owns a process main executor. It binds
 the runner thread before `on start` and drains queued continuations before and
 after every `on update`, plus the start/close boundaries. `await main` is a
 language intrinsic: it suspends the current coroutine and resumes that same
@@ -181,7 +181,7 @@ Continuation execution after a suspension is scheduled on Wio's process-wide
 worker pool. Source code must not assume that code after `await` resumes on the
 originating thread. Main-thread GUI/render work uses `std::async::Dispatcher`:
 workers call `Post`, and the owning loop calls `Drain`. Automatic continuation
-affinity capture is not part of Wio 0.11. On the 0.12 candidate, application
+affinity capture is not part of Wio 0.11. Since Wio 0.12, application
 code may explicitly request owner affinity with `await main`; this is an
 explicit handoff, not automatic capture.
 

@@ -1,6 +1,6 @@
 # Wio Language Evolution Plan
 
-This document records candidate language and runtime work after Wio `v0.11.0`.
+This document records candidate language and runtime work after Wio `v0.12.0`.
 It is a design plan, not a normative specification. Syntax and semantics marked
 as proposed remain open until they are accepted and moved into a versioned
 language specification.
@@ -20,8 +20,9 @@ systems are implemented and frozen by the 0.11 delta specification. Resource
 injection, explicit/fixed schedules, parallel conflict analysis, controlled
 derives, and attribute migration tooling remain proposals in this document.
 The 0.11 freeze also includes value-capturing lambdas and the hot shared-task
-async/coroutine model; generators, true async I/O, and automatic continuation
-affinity remain future work.
+async/coroutine model. Wio 0.12 adds structured work, explicit owner affinity,
+and the first bounded async filesystem/process/network layer; generators and
+native completion backends remain future work.
 
 The post-0.11 concurrency direction is maintained separately in
 [`WIO_ASYNC_EVOLUTION_PLAN.md`](./WIO_ASYNC_EVOLUTION_PLAN.md). Its governing
@@ -491,6 +492,30 @@ Attribute declarations must be able to specify:
 The exact declaration grammar remains to be frozen, but these capabilities are
 part of the required model rather than optional follow-up polish.
 
+The final declaration grammar must minimize attribute-specific vocabulary.
+Source should not read like a list of compiler magic words. Prefer:
+
+- defaults of compile-time retention, non-repeatability, no inheritance, and
+  declaration-local attachment;
+- the existing `with` mechanism for uncommon policies;
+- normal typed functions/interfaces for validation, derive, and behavioral
+  processors;
+- one compact target declaration rather than separate `for`, `retain`,
+  `repeatable`, `scoped`, `affects`, and `returning` clauses in common code.
+
+For example, the eventual surface should be closer in spirit to this compact
+candidate than to the verbose illustrative grammar above:
+
+```wio
+// Candidate syntax only.
+attribute http::route(fn)(method: HttpMethod, path: string)
+    with attribute::runtime, attribute::repeatable;
+```
+
+The exact spelling is still open. The frozen requirement is that advanced
+policy composes through ordinary Wio constructs and does not continuously add
+new contextual keywords.
+
 ### 3.4 Active behavior without unrestricted macros
 
 The attribute system grows in controlled layers:
@@ -524,13 +549,13 @@ already been destroyed. In systems such as Unity this can look like
 library author to express the equivalent receiver-liveness policy once:
 
 ```wio
-// Candidate syntax only; the exact behavioral-attribute grammar is not frozen.
-attribute callback::live_receiver
-    for instance fn returning unit
-    affects entry
-{
-    if !self.IsAlive() {
-        return;
+// Candidate semantics only; the compact declaration grammar is not frozen.
+attribute callback::live_receiver(method) {
+    fn Apply(call: ref attribute::EntryCall) -> attribute::CallAction {
+        if !call.Self.IsAlive() {
+            return attribute::Skip;
+        }
+        return attribute::Continue;
     }
 }
 
@@ -550,12 +575,14 @@ for non-`unit` functions must declare a type-correct fallback or use an
 Contracts are another intended use:
 
 ```wio
-// Candidate syntax only.
-attribute contract::positive_amount
-    for fn(amount: numeric)
-    affects precondition
-{
-    require amount > 0 else "amount must be positive";
+// Candidate semantics only.
+attribute contract::positive_amount(fn) {
+    fn Apply(call: ref attribute::EntryCall) -> ResultUnit {
+        return contract::Require(
+            call.Argument<f64>("amount") > 0,
+            "amount must be positive"
+        );
+    }
 }
 
 fn Withdraw(amount: f64) -> ResultUnit
@@ -665,6 +692,33 @@ Priority foundations:
 
 Application scheduling must build on the shared concurrency and ownership
 model rather than inventing a second threading runtime.
+
+### 5.1 Unicode value and literal direction
+
+Unicode text should be pleasant in ordinary code and explicit only at encoding
+boundaries. Add a first-class Unicode-semantic value, provisionally named
+`text`, with a literal form such as:
+
+```wio
+let title: text = u"İstanbul — 世界 🌍";
+let greeting = u"Merhaba, {user.Name}!";
+```
+
+It should support the same everyday operations and interpolation style as
+`string`; the compiler and standard library select the Unicode-aware behavior
+behind that surface. A literal is validated at compile time. Iteration and
+indexing semantics must be frozen in terms of Unicode scalar values or
+graphemes rather than storage units, and normalization policy must be explicit
+in the specification.
+
+This is similar in intent to having a wide string, but Wio must not inherit
+C++ `std::wstring` semantics: `wchar_t` is 16-bit on Windows and commonly
+32-bit on Unix, so it is not a portable language ABI. Internal storage may be
+UTF-8, UTF-16, a compact tagged form, or another measured representation.
+Conversion to UTF-8/UTF-16/UTF-32 stays explicit at byte, OS, SDK, and native
+interop boundaries. The ordinary `string` and Unicode `text` APIs should share
+names and algorithms where their semantics agree, avoiding a second forest of
+Unicode-specific helper functions.
 
 ---
 

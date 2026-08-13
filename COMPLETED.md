@@ -10,21 +10,21 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
-## Async and coroutine foundation sprint
+## v0.12 async, structured concurrency, and platform-I/O sprint
 
-- [x] The post-0.11 correctness candidate separates continuation, blocking,
+- [x] Wio 0.12 separates continuation, blocking,
       and I/O capacity; checks executor-crossing captures; makes cancellation
       wake suspension boundaries; and provides ordered explicit shutdown.
 - [x] `Task<T>` member ergonomics, typed non-blocking polling, recoverable
       deadlines, heterogeneous owning scopes, language `async scope`/`spawn`,
-      explicit detach, and homogeneous selection are implemented candidates.
+      explicit detach, and homogeneous selection shipped in Wio 0.12.
 - [x] `spawn worker` and `spawn blocking` schedule synchronous expressions on
       the appropriate executor while retaining lexical scope ownership; unsafe
       borrowed captures fail during semantic analysis.
 - [x] Applications bind and deterministically drain the owner executor;
       `await main` directly transfers the suspended caller, and headless hosts
       can bind/drain the same queue.
-- [x] The first platform-I/O candidate adds a dedicated bounded executor and
+- [x] The Wio 0.12 platform-I/O slice adds a dedicated bounded executor and
       ownership-safe, Result-preserving asynchronous filesystem plus process
       run/capture operations, a cancellable portable first-change watcher, and
       leased DNS/connect plus TCP/UDP data I/O and ownership-safe async accept
