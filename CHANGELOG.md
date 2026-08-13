@@ -55,6 +55,8 @@ All notable user-facing changes to Wio are recorded here.
 
 ### Fixed
 
+- Fixed object methods referencing global scalar, `string`, or `text`
+  constants before their generated C++ definitions.
 - Immutable global declarations now preserve `const` in their generated C++
   forward declarations.
 - Fixed host-interop tests compiling against the source SDK while accidentally

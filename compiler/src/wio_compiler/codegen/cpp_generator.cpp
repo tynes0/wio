@@ -5131,18 +5131,14 @@ namespace wio::codegen
         });
 
         // Member functions are emitted inline with their owning type. Declare
-        // mutable globals before those type definitions so lifecycle hooks and
-        // ordinary methods can safely reference globals declared later in the
-        // source module.
+        // globals before those type definitions so lifecycle hooks and ordinary
+        // methods can safely reference globals declared later in the module.
         emitPhase(emitPhase, statements, [&](const auto& stmt)
         {
             if (!stmt->template is<VariableDeclaration>())
                 return;
 
             auto variable = stmt->template as<VariableDeclaration>();
-            if (variable->mutability == Mutability::Const)
-                return;
-
             auto symbol = variable->name->referencedSymbol.Lock();
             Ref<sema::Type> type = symbol && symbol->type
                 ? symbol->type
@@ -5151,7 +5147,7 @@ namespace wio::codegen
                 return;
 
             const std::string declarationType =
-                variable->mutability == Mutability::Immutable
+                variable->mutability != Mutability::Mutable
                     ? "const " + toCppType(type)
                     : toCppType(type);
             emitLine(common::formatString(

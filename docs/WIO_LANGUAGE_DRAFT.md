@@ -936,6 +936,10 @@ containers, objects, dictionaries, arrays, function calls, interpolated
 strings, and ordinary `let`/`mut` variables are not allowed in `const`
 initializers yet.
 
+Global constants are visible from inline object methods regardless of source
+ordering; generated declarations preserve their immutable type before object
+bodies are emitted.
+
 ### 6.4 Type Inference
 
 A declaration with an initializer may omit the explicit type:

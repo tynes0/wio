@@ -1,0 +1,29 @@
+use std::assert as assert;
+use std::console as console;
+
+const Prefix: string = "global";
+const Greeting: text = u"Merhaba 🌍";
+const Answer: i32 = 42;
+
+object GlobalReader {
+    public fn ReadString() -> string {
+        return Prefix + "-const";
+    }
+
+    public fn ReadText() -> text {
+        return Greeting;
+    }
+
+    public fn ReadNumber() -> i32 {
+        return Answer;
+    }
+}
+
+fn Entry() -> i32 {
+    let reader = GlobalReader();
+    assert::ExpectEqual(reader.ReadString(), "global-const", "global const string in object method");
+    assert::ExpectEqual(reader.ReadText(), u"Merhaba 🌍", "global const text in object method");
+    assert::ExpectEqual(reader.ReadNumber(), 42, "global scalar const in object method");
+    console::PrintLine("const-global-type-visibility-ok");
+    return 0;
+}
