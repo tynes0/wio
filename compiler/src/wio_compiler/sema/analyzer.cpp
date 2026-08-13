@@ -13145,6 +13145,7 @@ namespace wio::sema
             : nullptr;
         const bool isOptionMatch = algebraicStruct && algebraicStruct->name == "Option";
         const bool isResultMatch = algebraicStruct && algebraicStruct->name == "Result";
+        const bool isEnumMatch = algebraicStruct && algebraicStruct->isEnum;
         Ref<ArrayType> matchedArray = algebraicType && algebraicType->kind() == TypeKind::Array
             ? algebraicType.AsFast<ArrayType>()
             : nullptr;
@@ -13152,6 +13153,39 @@ namespace wio::sema
         bool sawNone = false;
         bool sawOk = false;
         bool sawErr = false;
+        std::unordered_set<const Symbol*> enumMembers;
+        std::unordered_set<const Symbol*> seenUnguardedEnumMembers;
+        if (isEnumMatch)
+        {
+            if (auto enumScope = algebraicStruct->structScope.Lock())
+            {
+                for (const auto& [name, symbol] : enumScope->getSymbols())
+                {
+                    WIO_UNUSED(name);
+                    if (symbol && symbol->kind == SymbolKind::Variable &&
+                        symbol->flags.get_isReadOnly() &&
+                        unwrapAliasType(symbol->type) == algebraicStruct)
+                    {
+                        enumMembers.insert(symbol.Get());
+                    }
+                }
+            }
+        }
+
+        auto analyzeMatchGuard = [&](MatchCase& matchCase)
+        {
+            if (!matchCase.guard)
+                return;
+
+            matchCase.guard->accept(*this);
+            Ref<Type> guardType = unwrapAliasType(matchCase.guard->refType.Lock());
+            Ref<Type> boolType = Compiler::get().getTypeContext().getBool();
+            if (guardType && !guardType->isUnknown() &&
+                (!guardType->isCompatibleWith(boolType) || !boolType->isCompatibleWith(guardType)))
+            {
+                WIO_LOG_ADD_ERROR(matchCase.guard->location(), "Match guards must have type 'bool'.");
+            }
+        };
 
         for (size_t caseIndex = 0; caseIndex < node.cases.size(); ++caseIndex)
         {
@@ -13296,6 +13330,25 @@ namespace wio::sema
                         matchValueType->toString()
                     );
                 }
+
+                if (isEnumMatch)
+                {
+                    Ref<Symbol> enumMember = val->referencedSymbol.Lock();
+                    if (enumMember && enumMembers.contains(enumMember.Get()))
+                    {
+                        if (seenUnguardedEnumMembers.contains(enumMember.Get()))
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                val->location(),
+                                "Unreachable enum match case '{}' because an earlier unguarded case already covers it.",
+                                enumMember->name);
+                        }
+                        else if (!matchCase.guard)
+                        {
+                            seenUnguardedEnumMembers.insert(enumMember.Get());
+                        }
+                    }
+                }
             }
 
             if (isVariantPattern)
@@ -13321,25 +13374,23 @@ namespace wio::sema
                     binding->refType = bindingSymbol->type;
                 }
 
-                if (matchCase.guard)
-                {
-                    matchCase.guard->accept(*this);
-                    Ref<Type> guardType = unwrapAliasType(matchCase.guard->refType.Lock());
-                    Ref<Type> boolType = Compiler::get().getTypeContext().getBool();
-                    if (guardType && !guardType->isUnknown() &&
-                        (!guardType->isCompatibleWith(boolType) || !boolType->isCompatibleWith(guardType)))
-                    {
-                        WIO_LOG_ADD_ERROR(matchCase.guard->location(), "Match guards must have type 'bool'.");
-                    }
-                }
+                analyzeMatchGuard(matchCase);
 
                 matchCase.body->accept(*this);
                 exitScope();
             }
             else
             {
-                if (matchCase.guard)
-                    WIO_LOG_ADD_ERROR(matchCase.guard->location(), "Guards currently require a destructuring pattern.");
+                if (matchCase.guard && matchCase.matchValues.empty())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        matchCase.guard->location(),
+                        "The final 'assumed' match case cannot have a guard.");
+                }
+                else
+                {
+                    analyzeMatchGuard(matchCase);
+                }
                 matchCase.body->accept(*this);
             }
 
@@ -13382,11 +13433,15 @@ namespace wio::sema
         {
             const bool algebraicExhaustive = (isOptionMatch && sawSome && sawNone) ||
                                              (isResultMatch && sawOk && sawErr);
-            if (!hasAssumedCase && !algebraicExhaustive)
+            const bool enumExhaustive = isEnumMatch && !enumMembers.empty() &&
+                                        seenUnguardedEnumMembers.size() == enumMembers.size();
+            if (!hasAssumedCase && !algebraicExhaustive && !enumExhaustive)
             {
                 WIO_LOG_ADD_ERROR(
                     node.location(),
-                    "Value-producing match expressions must include an 'assumed' fallback case."
+                    isEnumMatch
+                        ? "Value-producing enum matches must cover every member or include an 'assumed' fallback case."
+                        : "Value-producing match expressions must include an 'assumed' fallback case."
                 );
                 node.refType = Compiler::get().getTypeContext().getUnknown();
                 return;

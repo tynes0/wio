@@ -7556,6 +7556,12 @@ namespace wio::codegen
                     if (i < matchCase.matchValues.size() - 1)
                         emit(" || ");
                 }
+                if (matchCase.guard)
+                {
+                    emit(" && (");
+                    matchCase.guard->accept(*this);
+                    emit(")");
+                }
                 emit(") {\n");
             }
             first = false;

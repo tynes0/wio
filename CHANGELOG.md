@@ -13,6 +13,8 @@ All notable user-facing changes to Wio are recorded here.
 - Added structural partial-specialization ordering, including repeated generic
   parameter relationships such as `Pair<T, Box<T>>`.
 - Added trailing default parameters to component extension methods.
+- Added boolean guards to literal, alternative, range, and enum match arms, plus
+  exhaustive value-producing enum matches without a redundant `assumed` arm.
 
 ### Changed
 

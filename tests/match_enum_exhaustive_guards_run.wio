@@ -1,0 +1,37 @@
+use std::assert as assert;
+use std::console as console;
+
+enum State {
+    idle = 0,
+    ready = 1,
+    closed = 2
+}
+
+fn Describe(value: State, urgent: bool) -> string {
+    return match (value) {
+        State::idle: "idle";
+        State::ready if urgent: "urgent";
+        State::ready: "ready";
+        State::closed: "closed";
+    };
+}
+
+fn Classify(value: i32, includeBoundary: bool) -> string {
+    return match (value) {
+        0...10 if includeBoundary: "bounded";
+        5 or 6 if !includeBoundary: "middle";
+        assumed: "other";
+    };
+}
+
+fn Entry() -> i32 {
+    assert::ExpectEqual(Describe(State::idle, false), "idle", "enum member arm");
+    assert::ExpectEqual(Describe(State::ready, true), "urgent", "guarded enum arm");
+    assert::ExpectEqual(Describe(State::ready, false), "ready", "guard fallthrough");
+    assert::ExpectEqual(Describe(State::closed, false), "closed", "exhaustive enum arm");
+    assert::ExpectEqual(Classify(4, true), "bounded", "range guard");
+    assert::ExpectEqual(Classify(5, false), "middle", "alternative guard");
+    assert::ExpectEqual(Classify(4, false), "other", "literal guard fallthrough");
+    console::PrintLine("match-enum-exhaustive-guards-ok");
+    return 0;
+}

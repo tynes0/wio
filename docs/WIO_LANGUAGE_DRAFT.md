@@ -2385,8 +2385,28 @@ match (x) {
 
 - `assumed` may appear at most once.
 - `assumed` must be the last match arm.
+- `assumed` cannot have a guard because there would be no later arm to receive
+  the value when that guard is false.
 
-### 14.6 `match` as an Expression
+### 14.6 Guards and Destructuring
+
+Any non-`assumed` arm may add a boolean guard with `if`. Guards are evaluated
+only after the arm's value, range, or variant pattern matches.
+
+```wio
+match (status) {
+    Status::ready if canRun: Start();
+    Status::ready: Queue();
+    assumed: Ignore();
+}
+```
+
+`Some(value)`, `None()`, `Ok(value)`, `Err(error)`, and fixed-length array
+patterns such as `[left, right]` introduce immutable arm-local bindings. A
+guarded pattern does not make a later equivalent pattern unreachable and does
+not count toward exhaustiveness.
+
+### 14.7 `match` as an Expression
 
 Examples:
 
@@ -2398,7 +2418,11 @@ let text = match (hp) {
 };
 ```
 
-### 14.7 Statement vs Expression Bodies
+For `Option` and `Result`, covering both variants is exhaustive. A value match
+over an enum is also exhaustive when every declared enum member has an
+unguarded arm, so neither form needs an extra `assumed` arm.
+
+### 14.8 Statement vs Expression Bodies
 
 A match arm body is parsed as a statement.
 
@@ -2421,7 +2445,8 @@ The current match typing behavior is:
 
 - if any case body is a block, the match is treated as `void`,
 - if all case bodies are expression statements, the match produces a value,
-- value-producing matches must include `assumed`,
+- value-producing matches must include `assumed` unless exhaustive
+  `Option`/`Result` variants or every enum member is covered,
 - case values must be compatible with the matched value,
 - value-producing arm result types must remain compatible across every arm.
 

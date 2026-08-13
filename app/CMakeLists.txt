@@ -1539,6 +1539,57 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_match_enum_exhaustive_guards_run
+        "${CMAKE_SOURCE_DIR}/tests/match_enum_exhaustive_guards_run.wio"
+        "match-enum-exhaustive-guards-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_match_enum_exhaustive_guards_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_match_enum_non_exhaustive
+        "${CMAKE_SOURCE_DIR}/tests/invalid/match_enum_non_exhaustive.wio"
+        "must cover every member or include an 'assumed' fallback"
+    )
+    set_tests_properties(
+        wio_invalid_match_enum_non_exhaustive
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_match_enum_duplicate_unguarded
+        "${CMAKE_SOURCE_DIR}/tests/invalid/match_enum_duplicate_unguarded.wio"
+        "Unreachable enum match case"
+    )
+    set_tests_properties(
+        wio_invalid_match_enum_duplicate_unguarded
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_match_literal_guard_type_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/match_literal_guard_type_mismatch.wio"
+        "Match guards must have type 'bool'"
+    )
+    set_tests_properties(
+        wio_invalid_match_literal_guard_type_mismatch
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_match_assumed_guard
+        "${CMAKE_SOURCE_DIR}/tests/invalid/match_assumed_guard.wio"
+        "The final 'assumed' match case cannot have a guard"
+    )
+    set_tests_properties(
+        wio_invalid_match_assumed_guard
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
         wio_test_generic_const_parameters_run
         "${CMAKE_SOURCE_DIR}/tests/generic_const_parameters_run.wio"
         "Const generics: ok"

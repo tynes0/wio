@@ -1,0 +1,13 @@
+enum State {
+    idle = 0,
+    ready = 1
+}
+
+fn Entry() -> i32 {
+    match (State::idle) {
+        State::idle: { }
+        State::idle: { }
+        assumed: { }
+    };
+    return 0;
+}
