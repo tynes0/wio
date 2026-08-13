@@ -23,6 +23,8 @@ All notable user-facing changes to Wio are recorded here.
   invalid UTF-32 scalar values.
 - Added source-tree host-interop coverage for exported functions that accept
   and return `text`, including Unicode content and code-point operations.
+- Added runtime reflection metadata for `text`, including its stable language
+  name, primitive kind, size, and alignment.
 - Added compact user-defined attribute declarations such as
   `attribute route(fn)(method: string) with attribute::runtime;`.
 - Added named arguments for user-defined attribute applications with duplicate,

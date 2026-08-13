@@ -2943,6 +2943,12 @@ reflection are current stable features. Component, object, interface, field,
 method, access, base, size, and alignment metadata are provided by
 `std::reflect` as documented in the standard-library reference.
 
+`text` participates as a named primitive: `Describe<text>()` reports the stable
+language name `text`, `primitive_type` kind, and its runtime size/alignment.
+This reflection guarantee does not imply that the shared-module dynamic value
+ABI can transport owned text yet; that boundary requires an explicit ownership
+contract.
+
 ## 20. Attributes
 
 ### 20.1 General Syntax

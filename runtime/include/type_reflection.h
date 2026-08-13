@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ref.h"
+#include "text.h"
 
 #include <array>
 #include <cstddef>
@@ -36,6 +37,20 @@ namespace wio::runtime
             std::is_arithmetic_v<T> || std::is_same_v<T, std::string>
                 ? ReflectedTypeKind::primitive_type
                 : ReflectedTypeKind::unknown;
+        static constexpr std::array<std::string_view, 0> FieldNames{};
+        static constexpr std::array<std::string_view, 0> FieldTypes{};
+        static constexpr std::array<std::string_view, 0> FieldAccess{};
+        static constexpr std::array<std::string_view, 0> MethodNames{};
+        static constexpr std::array<std::string_view, 0> MethodSignatures{};
+        static constexpr std::array<std::string_view, 0> MethodAccess{};
+        static constexpr std::array<std::string_view, 0> BaseTypes{};
+    };
+
+    template <>
+    struct TypeReflection<Text>
+    {
+        static constexpr std::string_view Name = "text";
+        static constexpr ReflectedTypeKind Kind = ReflectedTypeKind::primitive_type;
         static constexpr std::array<std::string_view, 0> FieldNames{};
         static constexpr std::array<std::string_view, 0> FieldTypes{};
         static constexpr std::array<std::string_view, 0> FieldAccess{};

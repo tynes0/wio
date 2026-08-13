@@ -111,10 +111,11 @@ application/system and language-coherence direction is expanded in
     arrays for `for` loops. Fallible UTF-8/UTF-16/UTF-32 decoding and
     platform-independent transcoding are available through `std::unicode`.
     Native static exports accepting and returning `text` are covered across the
-    generated C++ boundary. Complete normalization policy and APIs,
-    reflection/SDK metadata, shared-module ABI coverage, and Unicode conformance
-    vectors. Do not expose C++ `wchar_t`
-    width as a Wio language rule.
+    generated C++ boundary, and runtime reflection reports `text` as a named
+    primitive with stable size/alignment metadata. Complete normalization policy
+    and APIs, SDK descriptor metadata, shared-module dynamic ABI coverage, and
+    Unicode conformance vectors. Do not expose C++ `wchar_t` width as a Wio
+    language rule.
 
 16. [x] Infer fixed-size array extents from initializers.
     `[T; _]` now infers fixed/static storage from an array literal or concrete
