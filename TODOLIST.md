@@ -8,10 +8,11 @@ Status markers:
 - `[ ]` not started
 - `[~]` partially implemented or implemented but not sufficiently hardened
 
-The priorities below reflect the state of Wio after `v0.11.0`, including the
-P0 and P1 language/std/native-interoperability sprints. Completed work is
-recorded in `COMPLETED.md`; this file contains only the remaining work. The
-candidate application/system and language-coherence direction is expanded in
+The priorities below reflect the state of Wio after `v0.12.0`, including the
+P0/P1 language, std, native-interoperability, and structured-async sprints.
+Completed work is recorded in `COMPLETED.md`; this file contains only the
+remaining work. The
+application/system and language-coherence direction is expanded in
 `docs/WIO_LANGUAGE_EVOLUTION_PLAN.md`.
 
 ## P1 - Language Semantics and Type System
@@ -68,8 +69,19 @@ candidate application/system and language-coherence direction is expanded in
     arguments/defaults, target policies, retention, repetition, inheritance,
     conflicts, and runtime type/field reflection are implemented. Add named
     arguments, controlled derives, formatter/LSP/docs support, and automated
-    edition-aware migration from `@Attribute(...)`.
-    Do not expose unrestricted token/AST mutation in the first version.
+    edition-aware migration from `@Attribute(...)`. Add bounded, typed
+    behavioral attributes for entry guards, pre/postconditions, guaranteed
+    exit hooks, and eventually `around` interception. This includes
+    user-defined receiver-liveness guards for callbacks whose native peer may
+    have been destroyed while the Wio wrapper remains alive. Effects must be
+    type-checked, ordered explicitly, visible to tooling, and preserve
+    signatures, evaluation order, thread/cancellation semantics, and ABI.
+    Begin with guards/contracts; do not expose unrestricted token/AST or
+    arbitrary call-site mutation. Keep the declaration surface small: safe
+    defaults should replace most policy keywords, uncommon policies should
+    reuse `with`, and behavioral processors should be ordinary typed
+    functions/interfaces rather than a growing list of magic words such as
+    `retain`, `repeatable`, `scoped`, `affects`, and `returning`.
 
 13. [~] Complete a language-coherence pass before broad surface expansion.
     The first 0.11 stabilization slice aligned scoped attributes, pipelines,
@@ -90,12 +102,26 @@ candidate application/system and language-coherence direction is expanded in
     implemented. Add resources, explicit/fixed schedules, headless contexts,
     then parallel execution after `view`/`ref` conflict analysis is stable.
 
+15. [ ] Add a first-class Unicode-semantic value and literal.
+    Reserve and freeze a compact literal such as `u"..."` and its interpolated
+    form, provisionally producing `text`. Specify compile-time validation,
+    conversions with `string` and bytes, equality/ordering, iteration/indexing,
+    normalization, pattern matching, generics, reflection, SDK export, and
+    native transcoding. Keep its everyday syntax and operations aligned with
+    `string`; do not expose C++ `wchar_t` width as a Wio language rule.
+
 ## P1 - Standard Library Correctness and Consistency
 
 1. [~] Build a real Unicode text model.
    UTF-8 validation, codepoints/runes, grapheme clustering, display width,
    basic case folding, codepoint/byte conversion, safe slicing, and builders
-   now exist. Complete normalization,
+   now exist. Add a first-class Unicode-semantic `text` value and literal form
+   such as `u"..."`, including interpolated literals, with ordinary string-like
+   ergonomics. The compiler/runtime owns validation, normalization policy,
+   iteration, and native transcoding; it must not expose the platform-dependent
+   C++ `wchar_t`/`std::wstring` representation as Wio semantics. Keep explicit
+   UTF-8/UTF-16/UTF-32 conversion at native or byte boundaries. Complete
+   normalization,
    full Unicode category/case data, locale-sensitive behavior, and conformance
    vectors. GUI input must not require a native `AppendCharacter` workaround.
 
@@ -127,7 +153,7 @@ candidate application/system and language-coherence direction is expanded in
 
 7. [~] Add networking foundations.
    DNS, URI, owned sockets, TCP/UDP, timeout, endpoint, and loopback behavior
-   exist. The 0.12 candidate adds bounded-executor DNS/connect, leased TCP/UDP
+   exist. Wio 0.12 adds bounded-executor DNS/connect, leased TCP/UDP
    async data I/O, ownership-safe async accept, close-vs-operation lifetime
    safety, and live-handle diagnostics. Add native completion-port backends,
    TLS,
@@ -148,7 +174,7 @@ candidate application/system and language-coherence direction is expanded in
    shutdown; then add the `Task<T>` facade, `Poll`/`Block`, structured
    `spawn`/scope/deadlines, main-executor integration, true async I/O, and only
    afterward streams. The correctness, task ergonomics, structured scope, and
-   application main-executor slices are implemented 0.12 candidates. Structured
+   application main-executor slices shipped in Wio 0.12. Structured
    scopes now also support compiler-checked `spawn worker` and `spawn blocking`
    without changing task ownership or result types. The
    platform slice now has a dedicated bounded I/O executor and Result-safe
@@ -158,9 +184,9 @@ candidate application/system and language-coherence direction is expanded in
    lease safety. Native completion-port backends, process signal/event
    subscription, native watcher backends,
    stream/generator syntax, and full cross-platform qualification remain. A
-   bounded `AsyncChannel<T>` candidate now supplies thread-free producer
+   bounded `AsyncChannel<T>` now supplies thread-free producer
    backpressure and close/drain semantics. A cancellable,
-   debounced portable file watcher is available as the fallback candidate.
+   debounced portable file watcher is available as the portable fallback.
    Keep the everyday vocabulary small and prove each slice in console,
    desktop, game, server/tool, and native-host scenarios.
 
@@ -200,7 +226,21 @@ candidate application/system and language-coherence direction is expanded in
    Generic component/object export, concrete SDK instantiation tables, and
    cross-toolchain ABI conformance remain.
 
-5. [ ] Complete SDK dynamic field support.
+5. [~] Bring the host SDK to full Wio 1.0 parity and version it with Wio.
+   Before the Wio 1.0 release, every host-observable stable language/runtime
+   feature must have a documented C ABI descriptor and an ergonomic C++ SDK
+   representation or an explicit diagnostic explaining why it cannot cross
+   the host boundary. Complete dynamic field access/assignment, `ref`/`view`
+   lifetime-safe exports, nested containers, tuples, spans, Option/Result,
+   objects, components, interfaces, enums, flagsets, any, Box, opaque values,
+   callbacks/events, async tasks/cancellation, attributes/reflection, and
+   concrete generic/const-generic instantiations. Starting with the next Wio
+   release, publish the SDK at the same product version as the compiler,
+   runtime, std, CLI, and VS Code extension. Keep the low-level ABI revision
+   independently feature-negotiated so compatible hosts can fail cleanly.
+   Track the staged contract in `docs/WIO_SDK_EVOLUTION_PLAN.md`.
+
+   As part of that parity work, complete the current dynamic field surface.
    Remove the current runtime “not yet supported” paths for dynamic field
    access/assignment, broaden SDK-exportable field kinds, and test nested
    arrays, dictionaries, Option/Result, objects, components, enums, flagsets,
@@ -305,7 +345,7 @@ candidate application/system and language-coherence direction is expanded in
    references, rename, symbols, semantic tokens, inlay hints, code actions,
    formatting, workspace imports, generic constraints, and extension methods
    must share compiler logic rather than reimplement it. The version-aligned
-   `wio-vscode 0.11.0` extension now provides a tested editor-side baseline
+   `wio-vscode 0.12.0` extension now provides a tested editor-side baseline
    for diagnostics, completion, navigation, symbols, commands, grammar, and
    snippets; replace its lightweight source index with this compiler-owned
    language service instead of growing a second semantic implementation.
