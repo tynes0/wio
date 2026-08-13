@@ -59,6 +59,8 @@ All notable user-facing changes to Wio are recorded here.
 
 - Preserved keyword-shaped `if (... fit name)` bindings after `text` became a
   first-class type keyword, and synchronized the indexed-value diagnostic test.
+- Gave the repeated asynchronous listener-close stress test a CI-safe timeout
+  budget while retaining all 64 ownership/cancellation iterations.
 - Fixed object methods referencing global scalar, `string`, or `text`
   constants before their generated C++ definitions.
 - Immutable global declarations now preserve `const` in their generated C++
