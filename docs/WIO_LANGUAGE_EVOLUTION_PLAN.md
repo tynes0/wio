@@ -508,13 +508,18 @@ candidate than to the verbose illustrative grammar above:
 
 ```wio
 // Candidate syntax only.
-attribute http::route(fn)(method: HttpMethod, path: string)
-    with attribute::runtime, attribute::repeatable;
+realm http {
+    attribute route(fn)(method: HttpMethod, path: string)
+        with attribute::runtime, attribute::repeatable;
+}
 ```
 
-The exact spelling is still open. The frozen requirement is that advanced
-policy composes through ordinary Wio constructs and does not continuously add
-new contextual keywords.
+This compact spelling and its namespaced policy attributes are implemented as
+the first post-0.12 coherence slice. The verbose 0.11 declaration spelling
+remains compatibility input. Advanced policy composes through ordinary Wio
+constructs and must not continuously add new contextual keywords. User-defined
+attribute applications also accept named arguments and normalize them to the
+declared parameter order before validation/reflection.
 
 ### 3.4 Active behavior without unrestricted macros
 

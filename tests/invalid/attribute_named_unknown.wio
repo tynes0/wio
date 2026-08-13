@@ -1,0 +1,6 @@
+attribute route(fn)(method: string, path: string = "/");
+
+fn Invalid() with route(verb: "GET") {
+}
+
+fn Entry() -> i32 { return 0; }

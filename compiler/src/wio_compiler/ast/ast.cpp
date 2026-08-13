@@ -257,9 +257,10 @@ namespace wio
 
     AttributeStatement::AttributeStatement(Attribute _attribute, std::vector<Token> _args,
         std::vector<NodePtr<TypeSpecifier>> _typeArgs, common::Location _loc,
-        std::string _qualifiedName)
+        std::string _qualifiedName, std::vector<std::string> _argumentNames)
         : Statement(_loc), attribute(_attribute), qualifiedName(std::move(_qualifiedName)),
-          args(std::move(_args)), typeArgs(std::move(_typeArgs))
+          args(std::move(_args)), typeArgs(std::move(_typeArgs)),
+          argumentNames(std::move(_argumentNames))
     {
     }
 

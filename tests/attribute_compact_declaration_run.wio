@@ -1,0 +1,35 @@
+use std::assert as assert;
+use std::console as console;
+use std::reflect as reflect;
+
+attribute entity(component)(name: string, version: i32 = 1)
+    with attribute::runtime;
+
+attribute inherited_entity(component)(name: string)
+    with attribute::runtime, attribute::scoped;
+
+attribute route(fn)(method: string, path: string = "/")
+    with attribute::runtime, attribute::repeatable;
+
+realm Persistent {
+    using inherited_entity(name: "persistent");
+
+    component Session with entity(version: 2, name: "sessions") {
+        id: u64;
+    }
+}
+
+fn Health() -> string
+    with route(path: "/health", method: "GET"), route(method: "HEAD") {
+    return "ok";
+}
+
+fn Entry() -> i32 {
+    let attributes = reflect::TypeAttributes<Persistent::Session>();
+    assert::ExpectEqual(attributes.Count(), 2usize, "compact attribute count");
+    assert::ExpectEqual(attributes[0usize], "entity(sessions,2)", "named arguments normalize to declaration order");
+    assert::ExpectEqual(attributes[1usize], "inherited_entity(persistent)", "compact scoped policy");
+    assert::ExpectEqual(Health(), "ok", "repeatable function attribute");
+    console::PrintLine("attribute-compact-declaration-ok");
+    return 0;
+}

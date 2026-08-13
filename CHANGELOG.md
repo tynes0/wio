@@ -4,6 +4,19 @@ All notable user-facing changes to Wio are recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- Added compact user-defined attribute declarations such as
+  `attribute route(fn)(method: string) with attribute::runtime;`.
+- Added named arguments for user-defined attribute applications with duplicate,
+  unknown, missing-required, and ordering diagnostics.
+
+### Changed
+
+- Attribute declaration policies can use namespaced postfix policy attributes
+  instead of the legacy `for`/`retain`/`repeatable` keyword sequence; the old
+  declaration spelling remains accepted for compatibility.
+
 ## [0.12.0] - 2026-08-13
 
 ### Added

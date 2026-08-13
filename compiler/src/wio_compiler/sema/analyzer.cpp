@@ -13389,6 +13389,126 @@ namespace wio::sema
             attribute->runtimeRetained = std::ranges::find(
                 symbol->attributeRetention, std::string("runtime")) != symbol->attributeRetention.end();
 
+            const bool hasNamedArguments = std::ranges::any_of(
+                attribute->argumentNames,
+                [](const std::string& name) { return !name.empty(); });
+            if (hasNamedArguments)
+            {
+                if (attribute->argumentNames.size() != attribute->args.size() ||
+                    attribute->typeArgs.size() != attribute->args.size())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        attribute->location(),
+                        "Attribute '{}' has inconsistent argument metadata.",
+                        attribute->qualifiedName);
+                    continue;
+                }
+
+                std::vector<std::optional<size_t>> assignedSources(symbol->attributeParameterNames.size());
+                size_t nextPositionalIndex = 0;
+                bool invalidNamedArguments = false;
+                for (size_t sourceIndex = 0; sourceIndex < attribute->args.size(); ++sourceIndex)
+                {
+                    const std::string& argumentName = attribute->argumentNames[sourceIndex];
+                    size_t parameterIndex = 0;
+                    if (argumentName.empty())
+                    {
+                        while (nextPositionalIndex < assignedSources.size() && assignedSources[nextPositionalIndex].has_value())
+                            ++nextPositionalIndex;
+                        parameterIndex = nextPositionalIndex++;
+                        if (parameterIndex >= assignedSources.size())
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                attribute->args[sourceIndex].loc,
+                                "Attribute '{}' received too many positional arguments.",
+                                attribute->qualifiedName);
+                            invalidNamedArguments = true;
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        const auto parameter = std::ranges::find(symbol->attributeParameterNames, argumentName);
+                        if (parameter == symbol->attributeParameterNames.end())
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                attribute->args[sourceIndex].loc,
+                                "Attribute '{}' has no parameter named '{}'.",
+                                attribute->qualifiedName,
+                                argumentName);
+                            invalidNamedArguments = true;
+                            continue;
+                        }
+                        parameterIndex = static_cast<size_t>(std::distance(symbol->attributeParameterNames.begin(), parameter));
+                    }
+
+                    if (assignedSources[parameterIndex].has_value())
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            attribute->args[sourceIndex].loc,
+                            "Attribute parameter '{}' is assigned more than once.",
+                            symbol->attributeParameterNames[parameterIndex]);
+                        invalidNamedArguments = true;
+                        continue;
+                    }
+                    assignedSources[parameterIndex] = sourceIndex;
+                }
+
+                size_t requiredArgumentCount = symbol->attributeParameterTypes.size();
+                while (requiredArgumentCount > 0 &&
+                       symbol->attributeParameterHasDefault[requiredArgumentCount - 1])
+                {
+                    --requiredArgumentCount;
+                }
+                for (size_t parameterIndex = 0; parameterIndex < requiredArgumentCount; ++parameterIndex)
+                {
+                    if (!assignedSources[parameterIndex].has_value())
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            attribute->location(),
+                            "Attribute '{}' is missing required argument '{}'.",
+                            attribute->qualifiedName,
+                            symbol->attributeParameterNames[parameterIndex]);
+                        invalidNamedArguments = true;
+                    }
+                }
+
+                size_t normalizedCount = assignedSources.size();
+                while (normalizedCount > 0 && !assignedSources[normalizedCount - 1].has_value())
+                    --normalizedCount;
+                for (size_t parameterIndex = 0; parameterIndex < normalizedCount; ++parameterIndex)
+                {
+                    if (!assignedSources[parameterIndex].has_value())
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            attribute->location(),
+                            "Named arguments for attribute '{}' cannot skip parameter '{}' before a later argument.",
+                            attribute->qualifiedName,
+                            symbol->attributeParameterNames[parameterIndex]);
+                        invalidNamedArguments = true;
+                    }
+                }
+                if (invalidNamedArguments)
+                    continue;
+
+                std::vector<Token> normalizedArguments;
+                std::vector<NodePtr<TypeSpecifier>> normalizedTypeArguments;
+                std::vector<std::string> normalizedArgumentNames;
+                normalizedArguments.reserve(normalizedCount);
+                normalizedTypeArguments.reserve(normalizedCount);
+                normalizedArgumentNames.reserve(normalizedCount);
+                for (size_t parameterIndex = 0; parameterIndex < normalizedCount; ++parameterIndex)
+                {
+                    const size_t sourceIndex = assignedSources[parameterIndex].value();
+                    normalizedArguments.push_back(std::move(attribute->args[sourceIndex]));
+                    normalizedTypeArguments.push_back(std::move(attribute->typeArgs[sourceIndex]));
+                    normalizedArgumentNames.push_back(symbol->attributeParameterNames[parameterIndex]);
+                }
+                attribute->args = std::move(normalizedArguments);
+                attribute->typeArgs = std::move(normalizedTypeArguments);
+                attribute->argumentNames = std::move(normalizedArgumentNames);
+            }
+
             const bool targetAllowed = !validateTarget || std::ranges::find(
                 symbol->attributeTargets, std::string(target)) != symbol->attributeTargets.end();
             if (validateTarget && !targetAllowed)

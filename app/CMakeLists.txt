@@ -2946,6 +2946,45 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_attribute_compact_declaration_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_compact_declaration_run.wio"
+        "attribute-compact-declaration-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_attribute_compact_declaration_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_attribute_named_unknown
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_named_unknown.wio"
+        "has no parameter named 'verb'"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_named_duplicate
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_named_duplicate.wio"
+        "parameter 'method' is assigned more than once"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_named_missing_required
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_named_missing_required.wio"
+        "missing required argument 'method'"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_compact_conflict
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_compact_conflict.wio"
+        "through conflict group 'serialization'"
+    )
+    set_tests_properties(
+        wio_invalid_attribute_named_unknown
+        wio_invalid_attribute_named_duplicate
+        wio_invalid_attribute_named_missing_required
+        wio_invalid_attribute_compact_conflict
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
         wio_test_attribute_conflict_valid_run
         "${CMAKE_SOURCE_DIR}/tests/attribute_conflict_valid_run.wio"
         "attribute-conflict-ok"

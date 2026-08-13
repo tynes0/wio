@@ -2815,15 +2815,19 @@ method, access, base, size, and alignment metadata are provided by
 
 ### 20.1 General Syntax
 
-Attributes use `@Name(...)`.
+Postfix `with` is the canonical attribute application syntax. `using` activates
+attributes that opt into lexical scoping. Legacy `@Name(...)` remains accepted
+only as compatibility input during the edition migration.
 
 Examples:
 
 ```wio
-@GenerateCtors
-@Default(public)
-@From(Entity)
-@Trust(Foo)
+component User with derive::json {
+    name: string with json::name("displayName");
+}
+
+using cpp::header("widget.h");
+fn Draw(widget: view Widget) with native, cpp::name("DrawWidget");
 ```
 
 Attributes may appear before:
@@ -2836,7 +2840,31 @@ Attributes may appear before:
 
 ### 20.2 Attribute Argument Shape
 
-#### Important Current Compiler Limitation
+User-defined attributes have typed parameters with trailing defaults. Calls may
+use positional arguments or switch to named arguments; positional arguments
+cannot follow the first named argument. Named arguments are normalized to the
+declaration's parameter order before validation and runtime reflection.
+
+```wio
+attribute route(fn)(method: string, path: string = "/")
+    with attribute::runtime, attribute::repeatable;
+
+fn Health() with route(path: "/health", method: "GET") {}
+```
+
+The compact declaration form places the target set after the attribute name.
+Policies reuse postfix attributes instead of adding contextual policy keywords:
+
+- `attribute::source`, `attribute::compile`, or `attribute::runtime`;
+- `attribute::repeatable`;
+- `attribute::inherited`;
+- `attribute::scoped`;
+- `attribute::conflict("group")`.
+
+The older `for fn retain runtime repeatable` declaration form remains accepted
+during the compatibility window.
+
+#### Current argument-expression boundary
 
 Attribute arguments are still more restricted than full expressions, but the
 current compiler reliably supports:
@@ -2846,7 +2874,7 @@ current compiler reliably supports:
 - type-like generic forms such as `@Apply(traits::IsInteger<T>)`,
 - and interop instantiation forms such as `@Instantiate(i32, bool)`.
 
-Reliable examples:
+Reliable legacy/built-in examples:
 
 ```wio
 @From(Entity)
@@ -2859,14 +2887,16 @@ use std::traits as traits;
 @Instantiate(traits::IsNumeric<T>)
 ```
 
-Potentially unreliable today:
+Not part of the current attribute-argument contract:
 
 ```wio
 @From(ns::Entity)
 @Something(1 + 2)
 ```
 
-This means attribute arguments should currently stay simple.
+Built-in compiler attributes currently remain positional. Named arguments are
+reserved for typed user-defined attributes, whose parameter metadata makes
+ordering and diagnostics deterministic.
 
 ### 20.3 `@ReadOnly`
 
