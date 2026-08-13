@@ -129,10 +129,11 @@ application/system and language-coherence direction is expanded in
 17. [~] Extend compile-time constants to `string` and `text`.
     Literal initialization, references to other constants, concatenation,
     comparison, matching, and global/local/component-static storage now work for
-    both types. Interpolated strings remain rejected until the compiler has a
-    bounded constant folder. Complete generic/attribute arguments, storage
-    interning, evaluation limits, cross-module export, reflection/SDK metadata,
-    and the final Unicode normalization policy.
+    both types. Interpolated strings are accepted when every embedded expression
+    is also constant-evaluable; calls and runtime bindings remain rejected.
+    Complete generic/attribute arguments, storage interning, evaluation limits,
+    cross-module export, reflection/SDK metadata, and the final Unicode
+    normalization policy.
 
 ## P1 - Standard Library Correctness and Consistency
 

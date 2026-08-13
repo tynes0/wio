@@ -931,10 +931,10 @@ The semantic layer enforces a deliberately bounded and safe subset:
 - such expressions may reference only other `const` declarations.
 
 Literal values, supported unary/binary operations, textual concatenation and
-comparison, and references to other constants may participate. Runtime
-containers, objects, dictionaries, arrays, function calls, interpolated
-strings, and ordinary `let`/`mut` variables are not allowed in `const`
-initializers yet.
+comparison, references to other constants, and interpolated strings whose every
+embedded expression is itself constant-evaluable may participate. Runtime
+containers, objects, dictionaries, arrays, function calls, and ordinary
+`let`/`mut` variables are not allowed in `const` initializers yet.
 
 Global constants are visible from inline object methods regardless of source
 ordering; generated declarations preserve their immutable type before object

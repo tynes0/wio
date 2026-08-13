@@ -1688,8 +1688,15 @@ namespace wio::sema
                 return true;
             }
 
-            if (expression->is<InterpolatedStringLiteral>() ||
-                expression->is<ArrayLiteral>() ||
+            if (const auto* interpolated = expression->as<InterpolatedStringLiteral>())
+            {
+                return std::ranges::all_of(interpolated->parts, [](const NodePtr<Expression>& part)
+                {
+                    return isConstEvaluableExpression(part);
+                });
+            }
+
+            if (expression->is<ArrayLiteral>() ||
                 expression->is<DictionaryLiteral>() ||
                 expression->is<NullExpression>() ||
                 expression->is<LambdaExpression>() ||

@@ -7,6 +7,9 @@ const Label: string = Prefix + Version;
 const Greeting: text = u"Merhaba ";
 const World: text = u"🌍";
 const Message: text = Greeting + World;
+const Build: i32 = 7;
+const InterpolatedLabel: string = $"${Label}:${Build}";
+const InterpolatedMessage: text = u$"${Greeting}${World}:${Build}";
 
 component Constants {
     public const Name: string = "component";
@@ -20,6 +23,8 @@ fn Entry() -> i32 {
 
     assert::ExpectEqual(Label, "Wio v1", "global const string concatenation");
     assert::ExpectEqual(Message, u"Merhaba 🌍", "global const text concatenation");
+    assert::ExpectEqual(InterpolatedLabel, "Wio v1:7", "const string interpolation");
+    assert::ExpectEqual(InterpolatedMessage, u"Merhaba 🌍:7", "const text interpolation");
     assert::ExpectEqual(Local, "Wio v1 ready", "local const string expression");
     assert::Expect(Same, "const text comparison");
     assert::ExpectEqual(Constants::Name, "component", "component const string");

@@ -13,6 +13,8 @@ All notable user-facing changes to Wio are recorded here.
 - Added `const string` and `const text` declarations with literal values,
   constant references, concatenation, comparison, matching, and global, local,
   or component-static storage.
+- Constant `string` and `text` interpolation now accepts constant-evaluable
+  embedded expressions while continuing to reject runtime calls and bindings.
 - Added the first-class `text` primitive and validated UTF-8 `u"..."` and
   interpolated `u$"..."` literals. Text supports Unicode code-point counting
   and slicing, read-only indexing, grapheme counting/slicing, display width,
