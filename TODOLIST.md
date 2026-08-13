@@ -68,8 +68,15 @@ candidate application/system and language-coherence direction is expanded in
     arguments/defaults, target policies, retention, repetition, inheritance,
     conflicts, and runtime type/field reflection are implemented. Add named
     arguments, controlled derives, formatter/LSP/docs support, and automated
-    edition-aware migration from `@Attribute(...)`.
-    Do not expose unrestricted token/AST mutation in the first version.
+    edition-aware migration from `@Attribute(...)`. Add bounded, typed
+    behavioral attributes for entry guards, pre/postconditions, guaranteed
+    exit hooks, and eventually `around` interception. This includes
+    user-defined receiver-liveness guards for callbacks whose native peer may
+    have been destroyed while the Wio wrapper remains alive. Effects must be
+    type-checked, ordered explicitly, visible to tooling, and preserve
+    signatures, evaluation order, thread/cancellation semantics, and ABI.
+    Begin with guards/contracts; do not expose unrestricted token/AST or
+    arbitrary call-site mutation.
 
 13. [~] Complete a language-coherence pass before broad surface expansion.
     The first 0.11 stabilization slice aligned scoped attributes, pipelines,

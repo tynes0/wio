@@ -339,7 +339,8 @@ schedule grammar because it defines a static dependency edge.
 The attribute overhaul is a prerequisite for the application/system runtime,
 not merely a spelling cleanup. Wio should have typed user-defined attributes
 that are actively consumed by reflection, tooling, serialization, native
-interop, validation, derives, and later scheduler/host integrations.
+interop, validation, derives, controlled behavioral interception, and later
+scheduler/host integrations.
 
 The accepted design direction removes annotation sigils and bracket wrappers.
 A declaration uses a postfix `with` clause:
@@ -505,6 +506,93 @@ The first version does not permit unrestricted token or AST mutation. Such a
 macro system would make compilation order-sensitive, weaken diagnostics,
 complicate the LSP, and create build/security problems before the compile-time
 execution model is ready.
+
+User-defined attributes may nevertheless affect behavior through a bounded,
+typed interception model. This is not textual body rewriting. An attribute may
+declare one or more compiler-defined effect points such as:
+
+- entry guard or precondition;
+- successful-return postcondition;
+- guaranteed exit/finalization behavior;
+- an `around` interceptor that may continue the original call or produce an
+  explicitly type-compatible result;
+- declaration generation through the controlled derive API.
+
+A motivating example is a callback on a Wio wrapper whose native peer may have
+already been destroyed. In systems such as Unity this can look like
+`this == null` even though the managed wrapper still exists. Wio should allow a
+library author to express the equivalent receiver-liveness policy once:
+
+```wio
+// Candidate syntax only; the exact behavioral-attribute grammar is not frozen.
+attribute callback::live_receiver
+    for instance fn returning unit
+    affects entry
+{
+    if !self.IsAlive() {
+        return;
+    }
+}
+
+fn OnNativeEvent(event: view Event) -> unit
+    with callback::live_receiver
+{
+    Handle(event);
+}
+```
+
+The liveness predicate is user code and is not restricted to ordinary null
+testing. A native binding may therefore distinguish a null reference from a
+non-null wrapper whose native handle is no longer valid. Attributes intended
+for non-`unit` functions must declare a type-correct fallback or use an
+`around` interceptor; the compiler must never invent a return value.
+
+Contracts are another intended use:
+
+```wio
+// Candidate syntax only.
+attribute contract::positive_amount
+    for fn(amount: numeric)
+    affects precondition
+{
+    require amount > 0 else "amount must be positive";
+}
+
+fn Withdraw(amount: f64) -> ResultUnit
+    with contract::positive_amount;
+```
+
+Runtime preconditions are enforced at the callee boundary so direct calls,
+callbacks, reflection, native entry points, and function values cannot bypass
+them. The compiler and linter may additionally prove a precondition at a call
+site and diagnose an invalid call, but an attribute must not arbitrarily
+rewrite argument evaluation or overload resolution.
+
+Behavioral attributes require the following safety and predictability rules:
+
+- effect points and permitted targets are part of the attribute's type;
+- generated/intercepting code is type-checked in the target declaration's
+  generic and ownership context;
+- access to `self`, parameters, return values, errors, and attribute arguments
+  is explicit and capability-scoped;
+- source order of an ordinary `with A, B` list remains non-semantic; multiple
+  effects must use declared ordering/dependency rules or a typed pipeline;
+- interceptors cannot silently change a public signature, overload set,
+  evaluation order, thread affinity, cancellation behavior, or ABI;
+- hidden allocation, blocking, I/O, thread switching, and unsafe/native access
+  must be declared as effects and visible to diagnostics and tooling;
+- async methods define separately whether an effect occurs at invocation,
+  coroutine start, successful completion, failure, cancellation, or final
+  suspension cleanup;
+- reflection, generated documentation, LSP hover, and stack traces expose the
+  applied behavioral attributes instead of making them invisible magic;
+- expansion/interception is deterministic, cycle-checked, cacheable, and
+  inspectable through compiler tooling.
+
+The first behavioral slice should implement entry guards and contracts. A
+typed `around` model and guaranteed exit hooks should follow only after return,
+error, cancellation, and async semantics are specified. Arbitrary call-site
+AST rewriting and unrestricted token macros remain outside this design.
 
 Ordinary attribute list order is non-semantic. If ordered behavior is needed,
 it must be represented explicitly by a typed pipeline attribute rather than by
