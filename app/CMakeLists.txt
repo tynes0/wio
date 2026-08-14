@@ -1703,13 +1703,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_generic_const_argument_kind_mismatch
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_const_argument_kind_mismatch.wio"
-        "expects a compile-time integer value"
+        "expects a compile-time value"
     )
 
     add_wio_failure_test(
         wio_invalid_generic_const_function_argument_kind_mismatch
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_const_function_argument_kind_mismatch.wio"
-        "expects a compile-time integer value"
+        "expects a compile-time value"
     )
 
     add_wio_failure_test(
