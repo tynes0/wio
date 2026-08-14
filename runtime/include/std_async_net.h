@@ -149,6 +149,22 @@ namespace wio::runtime::std_async_net
         co_return detail::Encode(result);
     }
 
+    inline AsyncTask<std::string> Accept(void* handle)
+    {
+        std::string error;
+        auto lease = detail::Acquire(handle, error);
+        if (!lease)
+            co_return detail::Encode(OperationResult{.error = std::move(error)});
+        OperationResult result = co_await RunIoAsync<OperationResult>(
+            std::function<OperationResult()>([lease = std::move(lease)]
+            {
+                OperationResult value;
+                value.succeeded = std_net::TcpWaitAccept(lease.get(), value.error);
+                return value;
+            }));
+        co_return detail::Encode(result);
+    }
+
     inline AsyncTask<std::string> UdpSendTo(
         void* handle, const std::string& host, const std::uint16_t port,
         const std::string& bytes)
@@ -214,6 +230,14 @@ namespace wio::runtime::std_async_net
         const auto result = detail::Decode(payload);
         succeeded = result.succeeded;
         bytes = result.bytes;
+        error = result.error;
+    }
+
+    inline void DecodeAccept(
+        const std::string& payload, bool& succeeded, std::string& error)
+    {
+        const auto result = detail::Decode(payload);
+        succeeded = result.succeeded;
         error = result.error;
     }
 

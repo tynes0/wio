@@ -401,6 +401,17 @@ namespace wio::runtime::std_net
         }
     }
 
+    bool TcpWaitAccept(void* listener, std::string& error) noexcept
+    {
+        error.clear();
+        if (!Retain(listener, error)) return false;
+        SocketLease lease(listener);
+        auto* state = asHandle(listener);
+        std::lock_guard receiveLock(state->receiveMutex);
+        NativeSocket value = invalidSocket;
+        return waitReadable(state, false, "accept wait", value, error);
+    }
+
     bool SetTimeout(void* handle, const std::uint64_t milliseconds, std::string& error) noexcept
     {
         error.clear();

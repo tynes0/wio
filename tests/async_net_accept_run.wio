@@ -28,6 +28,10 @@ async fn Entry() -> i32 {
         assert::Expect(interruptedResult.IsError(), "close interrupts async accept");
         iteration += 1u64;
     }
+    assert::ExpectEqual(futures::IoPendingCount(), 0u64,
+        "async accept drains the dedicated I/O queue");
+    assert::ExpectEqual(futures::BlockingPendingCount(), 0u64,
+        "async accept does not consume the blocking executor");
     assert::ExpectEqual(net::LiveSocketCount(), baselineSockets,
         "accepted socket ownership closes without leaks");
     console::PrintLine("async-net-accept-ok");

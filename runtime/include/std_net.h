@@ -26,6 +26,7 @@ namespace wio::runtime::std_net
         void*& handle,
         std::string& error) noexcept;
     [[nodiscard]] bool TcpAccept(void* listener, void*& handle, std::string& error) noexcept;
+    [[nodiscard]] bool TcpWaitAccept(void* listener, std::string& error) noexcept;
     [[nodiscard]] bool SetTimeout(void* handle, std::uint64_t milliseconds, std::string& error) noexcept;
     [[nodiscard]] std::uint16_t LocalPort(void* handle) noexcept;
     [[nodiscard]] bool Send(void* handle, std::string_view bytes, std::size_t& sent, std::string& error) noexcept;

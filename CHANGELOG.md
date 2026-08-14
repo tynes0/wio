@@ -92,6 +92,9 @@ All notable user-facing changes to Wio are recorded here.
   forward declarations.
 - Fixed host-interop tests compiling against the source SDK while accidentally
   resolving runtime headers from an older installed Wio distribution.
+- Moved asynchronous listener readiness onto the dedicated I/O executor with
+  a native pre-scheduling lease. Closing a listener now drains accept work
+  without depending on the general blocking pool on Linux.
 
 ## [0.12.0] - 2026-08-13
 

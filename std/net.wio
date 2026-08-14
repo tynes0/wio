@@ -103,10 +103,6 @@ realm std {
         fn ReceiveNative(handle: opaque, maximumBytes: usize, bytes: ref string, error: ref string) -> bool
             with native, cpp::name(wio::runtime::std_net::Receive);
         fn CloseNative(handle: opaque) with native, cpp::name(wio::runtime::std_net::Close);
-        fn RetainNative(handle: opaque, error: ref string) -> bool
-            with native, cpp::name(wio::runtime::std_net::Retain);
-        fn ReleaseNative(handle: opaque)
-            with native, cpp::name(wio::runtime::std_net::Release);
         fn LiveSocketCount() -> u64 with native, cpp::name(wio::runtime::std_net::LiveSocketCount);
         fn UdpBindNative(address: string, port: u16, handle: ref opaque?, error: ref string) -> bool
             with native, cpp::name(wio::runtime::std_net::UdpBind);
@@ -122,6 +118,8 @@ realm std {
             with native, cpp::name(wio::runtime::std_async_net::Send);
         fn ReceiveAsyncNative(handle: opaque, maximumBytes: usize) -> coroutine<string>
             with native, cpp::name(wio::runtime::std_async_net::Receive);
+        fn AcceptAsyncNative(handle: opaque) -> coroutine<string>
+            with native, cpp::name(wio::runtime::std_async_net::Accept);
         fn UdpSendToAsyncNative(handle: opaque, host: string, port: u16, bytes: string) -> coroutine<string>
             with native, cpp::name(wio::runtime::std_async_net::UdpSendTo);
         fn UdpReceiveFromAsyncNative(handle: opaque, maximumBytes: usize) -> coroutine<string>
@@ -135,6 +133,9 @@ realm std {
         fn DecodeAsyncReceive(payload: string, succeeded: ref bool,
             bytes: ref string, error: ref string)
             with native, cpp::name(wio::runtime::std_async_net::DecodeReceive);
+        fn DecodeAsyncAccept(payload: string, succeeded: ref bool,
+            error: ref string)
+            with native, cpp::name(wio::runtime::std_async_net::DecodeAccept);
         fn DecodeAsyncDatagram(payload: string, succeeded: ref bool, bytes: ref string,
             remoteAddress: ref string, remotePort: ref u16, error: ref string)
             with native, cpp::name(wio::runtime::std_async_net::DecodeDatagram);
@@ -214,33 +215,6 @@ realm std {
             return await futures::RunBlocking<std::Result<Socket> >(action);
         }
 
-        object ListenerLease with from(futures::Send) {
-            private handle: opaque;
-            private active: bool;
-
-            public fn OnConstruct(handle: opaque) {
-                self.handle = handle;
-                self.active = true;
-            }
-            public fn OnDestruct() { self.Release(); }
-
-            public fn Release() {
-                if (self.active) {
-                    ReleaseNative(self.handle);
-                    self.active = false;
-                }
-            }
-
-            public fn Accept() -> std::Result<Socket> {
-                mut accepted: opaque? = null;
-                mut error = "";
-                if (AcceptNative(self.handle, ref accepted, ref error)) {
-                    if (accepted != null) { return std::Ok(Socket(accepted)); }
-                }
-                return std::Err<Socket>(NetError(error));
-            }
-        }
-
         object Listener {
             private handle: opaque;
             private closed: bool;
@@ -258,15 +232,14 @@ realm std {
             }
             public async fn AcceptAsync() -> std::Result<Socket> {
                 if (self.closed) { return std::Err<Socket>(NetError("listener is closed")); }
+                let payload = await AcceptAsyncNative(self.handle);
+                mut succeeded = false;
                 mut error = "";
-                if (not RetainNative(self.handle, ref error)) {
-                    return std::Err<Socket>(NetError(error));
+                DecodeAsyncAccept(payload, ref succeeded, ref error);
+                if (succeeded) {
+                    return self.Accept();
                 }
-                let lease = ListenerLease(self.handle);
-                let action: fn() -> std::Result<Socket> = () => lease.Accept();
-                let accepted = await futures::RunBlocking<std::Result<Socket> >(action);
-                lease.Release();
-                return accepted;
+                return std::Err<Socket>(NetError(error));
             }
         }
 
