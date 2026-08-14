@@ -155,6 +155,12 @@ body. That representation is not a native ABI promise. Declaration-level
 native components and native generic functions therefore continue to permit
 only integer const parameters.
 
+Compile-time constant dependency traversal is finite: one initializer is
+limited to 128 dependency/expression levels, 16,384 visited nodes, and 1 MiB
+of folded textual literal data. Exceeding a limit or forming a dependency cycle
+is a semantic error, never a backend compiler failure. Attribute/default and
+generic-argument folding obey the same ceiling.
+
 ## 6. Conformance boundary
 
 The positive and negative tests linked from `WIO_TRACEABILITY.md` are part of

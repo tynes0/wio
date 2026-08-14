@@ -204,7 +204,7 @@ set(
 
 set(
     WIO_LANGUAGE_COHERENCE_TEST_REGEX
-    "^(wio_test_(attribute_compact_declaration_run|attribute_const_text_defaults_run|generic_partial_specialization_ordering_run|generic_text_const_parameters_run|generic_text_const_values_modules_run|extension_default_parameters_run|extension_generic_methods_run|match_enum_exhaustive_guards_run|unicode_text_literal_run|unicode_text_export_host_interop|unicode_text_reflection_run|const_string_text_run|const_global_type_visibility_run|fixed_array_auto_extent_run|std_traits_text_static_array_run)|wio_invalid_(attribute_named_unknown|attribute_named_duplicate|attribute_named_missing_required|attribute_compact_conflict|attribute_text_requires_unicode_literal|attribute_string_rejects_unicode_literal|generic_partial_specialization_structural_ambiguous|generic_const_parameter_bool_not_supported|generic_string_const_array_extent|generic_text_const_kind_mismatch|native_string_const_generic_component|native_text_const_generic_function|extension_generic_constraint_reject|match_enum_non_exhaustive|match_enum_duplicate_unguarded|match_literal_guard_type_mismatch|match_assumed_guard|text_requires_explicit_utf8_validation|text_operator|text_string_mixed_operation|text_index_assignment|const_interpolated_text_not_folded|fixed_array_auto_extent_without_initializer|fixed_array_auto_extent_parameter|fixed_array_auto_extent_dynamic_source|fixed_array_auto_extent_ragged_nested))$"
+    "^(wio_test_(attribute_compact_declaration_run|attribute_const_text_defaults_run|generic_partial_specialization_ordering_run|generic_text_const_parameters_run|generic_text_const_values_modules_run|extension_default_parameters_run|extension_generic_methods_run|match_enum_exhaustive_guards_run|unicode_text_literal_run|unicode_text_export_host_interop|unicode_text_reflection_run|const_string_text_run|const_global_type_visibility_run|fixed_array_auto_extent_run|std_traits_text_static_array_run)|wio_invalid_(attribute_named_unknown|attribute_named_duplicate|attribute_named_missing_required|attribute_compact_conflict|attribute_text_requires_unicode_literal|attribute_string_rejects_unicode_literal|generic_partial_specialization_structural_ambiguous|generic_const_parameter_bool_not_supported|generic_string_const_array_extent|generic_text_const_kind_mismatch|native_string_const_generic_component|native_text_const_generic_function|const_cyclic_dependency|const_evaluation_depth_limit|extension_generic_constraint_reject|match_enum_non_exhaustive|match_enum_duplicate_unguarded|match_literal_guard_type_mismatch|match_assumed_guard|text_requires_explicit_utf8_validation|text_operator|text_string_mixed_operation|text_index_assignment|const_interpolated_text_not_folded|fixed_array_auto_extent_without_initializer|fixed_array_auto_extent_parameter|fixed_array_auto_extent_dynamic_source|fixed_array_auto_extent_ragged_nested))$"
 )
 
 add_custom_target(
@@ -3165,12 +3165,24 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/invalid/native_text_const_generic_function.wio"
         "@Native functions support only integer const generic parameters"
     )
+    add_wio_failure_test(
+        wio_invalid_const_cyclic_dependency
+        "${CMAKE_SOURCE_DIR}/tests/invalid/const_cyclic_dependency.wio"
+        "Const initializer contains a cyclic const dependency"
+    )
+    add_wio_failure_test(
+        wio_invalid_const_evaluation_depth_limit
+        "${CMAKE_SOURCE_DIR}/tests/invalid/const_evaluation_depth_limit.wio"
+        "Const initializer exceeds the maximum evaluation depth of 128"
+    )
     set_tests_properties(
         wio_invalid_generic_const_parameter_bool_not_supported
         wio_invalid_generic_string_const_array_extent
         wio_invalid_generic_text_const_kind_mismatch
         wio_invalid_native_string_const_generic_component
         wio_invalid_native_text_const_generic_function
+        wio_invalid_const_cyclic_dependency
+        wio_invalid_const_evaluation_depth_limit
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
     set_tests_properties(

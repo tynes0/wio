@@ -138,7 +138,8 @@ application/system and language-coherence direction is expanded in
     Typed attribute arguments/defaults now consume folded constant values;
     functions, aliases, interfaces, components, and objects accept `string`
     and `text` const generic arguments/defaults, specialization patterns, and
-    qualified module constants. Complete storage interning, evaluation limits,
+    qualified module constants. Const evaluation now rejects dependency cycles
+    and enforces depth, node-count, and folded-text budgets. Complete storage interning,
     cross-module export, reflection/SDK metadata, and the final Unicode
     normalization policy.
 

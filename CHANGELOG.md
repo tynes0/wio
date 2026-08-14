@@ -16,6 +16,9 @@ All notable user-facing changes to Wio are recorded here.
 - Added `string` and `text` const generic parameters on functions, aliases,
   interfaces, components, and objects, including defaults, specialization,
   qualified module constants, and a Wio-owned C++20 structural representation.
+- Added deterministic compile-time evaluation budgets for const dependencies:
+  128 nesting levels, 16,384 visited nodes, and 1 MiB of folded text, with a
+  dedicated cyclic-dependency diagnostic before backend generation.
 - Constant `string` and `text` interpolation now accepts constant-evaluable
   embedded expressions while continuing to reject runtime calls and bindings.
 - Added the first-class `text` primitive and validated UTF-8 `u"..."` and

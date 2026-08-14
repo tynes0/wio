@@ -943,6 +943,12 @@ Global constants are visible from inline object methods regardless of source
 ordering; generated declarations preserve their immutable type before object
 bodies are emitted.
 
+Const dependency evaluation is bounded and deterministic. A dependency graph
+may visit at most 16,384 expression nodes, nest at most 128 levels, and fold at
+most 1 MiB of string/text literal data for one initializer. Cyclic const
+dependencies are diagnosed by Wio before C++ generation. Attribute and generic
+constant folding reuse the same limits.
+
 ### 6.4 Type Inference
 
 A declaration with an initializer may omit the explicit type:

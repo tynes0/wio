@@ -1759,6 +1759,105 @@ namespace wio::sema
 
         using ConstVariableDeclarationMap = std::unordered_map<const Symbol*, const VariableDeclaration*>;
 
+        enum class ConstEvaluationLimitStatus
+        {
+            Valid,
+            Cycle,
+            DepthLimit,
+            NodeLimit,
+            TextSizeLimit
+        };
+
+        struct ConstEvaluationBudget
+        {
+            static constexpr size_t MaxDepth = 128;
+            static constexpr size_t MaxNodes = 16384;
+            static constexpr size_t MaxTextBytes = 1024 * 1024;
+
+            size_t nodes = 0;
+            size_t textBytes = 0;
+            std::unordered_set<const Symbol*> activeSymbols;
+        };
+
+        ConstEvaluationLimitStatus validateConstEvaluationLimits(
+            const NodePtr<Expression>& expression,
+            const ConstVariableDeclarationMap& variableDeclarationsBySymbol,
+            ConstEvaluationBudget& budget,
+            const size_t depth = 0)
+        {
+            if (!expression)
+                return ConstEvaluationLimitStatus::Valid;
+            if (depth > ConstEvaluationBudget::MaxDepth)
+                return ConstEvaluationLimitStatus::DepthLimit;
+            if (++budget.nodes > ConstEvaluationBudget::MaxNodes)
+                return ConstEvaluationLimitStatus::NodeLimit;
+
+            if (const auto* literal = expression->as<StringLiteral>())
+            {
+                if (literal->token.value.size() > ConstEvaluationBudget::MaxTextBytes -
+                        std::min(budget.textBytes, ConstEvaluationBudget::MaxTextBytes))
+                {
+                    return ConstEvaluationLimitStatus::TextSizeLimit;
+                }
+                budget.textBytes += literal->token.value.size();
+                return ConstEvaluationLimitStatus::Valid;
+            }
+
+            if (const auto* identifier = expression->as<Identifier>())
+            {
+                Ref<Symbol> symbol = identifier->referencedSymbol.Lock();
+                if (!symbol || !symbol->flags.get_isConst())
+                    return ConstEvaluationLimitStatus::Valid;
+                auto declarationIt = variableDeclarationsBySymbol.find(symbol.Get());
+                if (declarationIt == variableDeclarationsBySymbol.end() ||
+                    !declarationIt->second || !declarationIt->second->initializer)
+                {
+                    return ConstEvaluationLimitStatus::Valid;
+                }
+                if (!budget.activeSymbols.insert(symbol.Get()).second)
+                    return ConstEvaluationLimitStatus::Cycle;
+                const auto result = validateConstEvaluationLimits(
+                    declarationIt->second->initializer,
+                    variableDeclarationsBySymbol,
+                    budget,
+                    depth + 1);
+                budget.activeSymbols.erase(symbol.Get());
+                return result;
+            }
+
+            auto validateChild = [&](const NodePtr<Expression>& child)
+            {
+                return validateConstEvaluationLimits(
+                    child, variableDeclarationsBySymbol, budget, depth + 1);
+            };
+            auto validateChildren = [&](const auto& children)
+            {
+                for (const auto& child : children)
+                {
+                    const auto result = validateChild(child);
+                    if (result != ConstEvaluationLimitStatus::Valid)
+                        return result;
+                }
+                return ConstEvaluationLimitStatus::Valid;
+            };
+
+            if (const auto* interpolated = expression->as<InterpolatedStringLiteral>())
+                return validateChildren(interpolated->parts);
+            if (const auto* unary = expression->as<UnaryExpression>())
+                return validateChild(unary->operand);
+            if (const auto* binary = expression->as<BinaryExpression>())
+            {
+                const auto left = validateChild(binary->left);
+                return left == ConstEvaluationLimitStatus::Valid
+                    ? validateChild(binary->right)
+                    : left;
+            }
+            if (const auto* fit = expression->as<FitExpression>())
+                return validateChild(fit->operand);
+
+            return ConstEvaluationLimitStatus::Valid;
+        }
+
         std::optional<int64_t> tryEvaluateStaticIntegerExpression(
             const NodePtr<Expression>& expression,
             const ConstVariableDeclarationMap& variableDeclarationsBySymbol,
@@ -1898,10 +1997,25 @@ namespace wio::sema
         std::optional<Token> tryEvaluateStaticAttributeConstant(
             const NodePtr<Expression>& expression,
             const ConstVariableDeclarationMap& variableDeclarationsBySymbol,
-            std::unordered_set<const Symbol*>& activeSymbols)
+            std::unordered_set<const Symbol*>& activeSymbols,
+            const size_t depth = 0,
+            size_t* visitedNodes = nullptr,
+            size_t* foldedTextBytes = nullptr)
         {
             if (!expression)
                 return std::nullopt;
+
+            size_t localVisitedNodes = 0;
+            size_t localFoldedTextBytes = 0;
+            if (!visitedNodes)
+                visitedNodes = &localVisitedNodes;
+            if (!foldedTextBytes)
+                foldedTextBytes = &localFoldedTextBytes;
+            if (depth > ConstEvaluationBudget::MaxDepth ||
+                ++(*visitedNodes) > ConstEvaluationBudget::MaxNodes)
+            {
+                return std::nullopt;
+            }
 
             auto preserveLocation = [&](Token token)
             {
@@ -1910,7 +2024,15 @@ namespace wio::sema
             };
 
             if (const auto* literal = expression->as<StringLiteral>())
+            {
+                if (literal->token.value.size() > ConstEvaluationBudget::MaxTextBytes -
+                        std::min(*foldedTextBytes, ConstEvaluationBudget::MaxTextBytes))
+                {
+                    return std::nullopt;
+                }
+                *foldedTextBytes += literal->token.value.size();
                 return preserveLocation(literal->token);
+            }
             if (const auto* literal = expression->as<IntegerLiteral>())
                 return preserveLocation(literal->token);
             if (const auto* literal = expression->as<FloatLiteral>())
@@ -1940,7 +2062,10 @@ namespace wio::sema
                 auto value = tryEvaluateStaticAttributeConstant(
                     declarationIt->second->initializer,
                     variableDeclarationsBySymbol,
-                    activeSymbols);
+                    activeSymbols,
+                    depth + 1,
+                    visitedNodes,
+                    foldedTextBytes);
                 activeSymbols.erase(symbol.Get());
                 if (value)
                     value->loc = expression->location();
@@ -1951,9 +2076,11 @@ namespace wio::sema
                 binary && binary->op.type == TokenType::opPlus)
             {
                 auto left = tryEvaluateStaticAttributeConstant(
-                    binary->left, variableDeclarationsBySymbol, activeSymbols);
+                    binary->left, variableDeclarationsBySymbol, activeSymbols,
+                    depth + 1, visitedNodes, foldedTextBytes);
                 auto right = tryEvaluateStaticAttributeConstant(
-                    binary->right, variableDeclarationsBySymbol, activeSymbols);
+                    binary->right, variableDeclarationsBySymbol, activeSymbols,
+                    depth + 1, visitedNodes, foldedTextBytes);
                 if (left && right &&
                     left->type == TokenType::stringLiteral &&
                     right->type == TokenType::stringLiteral &&
@@ -1976,7 +2103,8 @@ namespace wio::sema
                 for (const auto& part : interpolated->parts)
                 {
                     auto value = tryEvaluateStaticAttributeConstant(
-                        part, variableDeclarationsBySymbol, activeSymbols);
+                        part, variableDeclarationsBySymbol, activeSymbols,
+                        depth + 1, visitedNodes, foldedTextBytes);
                     if (!value)
                         return std::nullopt;
 
@@ -14635,12 +14763,52 @@ namespace wio::sema
                         actualType
                     );
                 }
-                else if (!isConstEvaluableExpression(node.initializer))
+                else
                 {
-                    WIO_LOG_ADD_ERROR(
-                        node.initializer->location(),
-                        "Const initializer must be a compile-time expression and may reference only other const declarations."
-                    );
+                    ConstEvaluationBudget budget;
+                    budget.activeSymbols.insert(sym.Get());
+                    const auto limitStatus = validateConstEvaluationLimits(
+                        node.initializer,
+                        variableDeclarationsBySymbol_,
+                        budget);
+                    if (limitStatus == ConstEvaluationLimitStatus::Cycle)
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            node.initializer->location(),
+                            "Const initializer contains a cyclic const dependency."
+                        );
+                    }
+                    else if (limitStatus == ConstEvaluationLimitStatus::DepthLimit)
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            node.initializer->location(),
+                            "Const initializer exceeds the maximum evaluation depth of {}.",
+                            ConstEvaluationBudget::MaxDepth
+                        );
+                    }
+                    else if (limitStatus == ConstEvaluationLimitStatus::NodeLimit)
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            node.initializer->location(),
+                            "Const initializer exceeds the maximum evaluation node count of {}.",
+                            ConstEvaluationBudget::MaxNodes
+                        );
+                    }
+                    else if (limitStatus == ConstEvaluationLimitStatus::TextSizeLimit)
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            node.initializer->location(),
+                            "Const string/text evaluation exceeds the maximum folded size of {} bytes.",
+                            ConstEvaluationBudget::MaxTextBytes
+                        );
+                    }
+                    else if (!isConstEvaluableExpression(node.initializer))
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            node.initializer->location(),
+                            "Const initializer must be a compile-time expression and may reference only other const declarations."
+                        );
+                    }
                 }
             }
         }
