@@ -18,6 +18,7 @@ async fn Entry() -> i32 {
         assert::ExpectEqual(net::LiveSocketCount(), baselineSockets,
             "completed accept releases its listener lease while the task handle remains alive");
     }
+    console::PrintLine("async-net-accept-connected-ok");
 
     mut iteration = 0u64;
     while (iteration < 64u64) {
@@ -28,6 +29,7 @@ async fn Entry() -> i32 {
         assert::Expect(interruptedResult.IsError(), "close interrupts async accept");
         iteration += 1u64;
     }
+    console::PrintLine("async-net-accept-close-stress-ok");
     assert::ExpectEqual(futures::IoPendingCount(), 0u64,
         "async accept drains the dedicated I/O queue");
     assert::ExpectEqual(futures::BlockingPendingCount(), 0u64,

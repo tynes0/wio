@@ -94,7 +94,9 @@ All notable user-facing changes to Wio are recorded here.
   resolving runtime headers from an older installed Wio distribution.
 - Moved asynchronous listener readiness onto the dedicated I/O executor with
   a native pre-scheduling lease. Closing a listener now drains accept work
-  without depending on the general blocking pool on Linux.
+  without depending on the general blocking pool on Linux. POSIX socket waits
+  use an explicit non-blocking wake pipe, so close does not rely on
+  `shutdown()` waking `select()` for listening sockets.
 
 ## [0.12.0] - 2026-08-13
 
