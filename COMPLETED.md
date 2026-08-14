@@ -334,6 +334,10 @@ Notes:
 
 ## Core Language Foundations
 
+- [x] Fixed arrays support inferred extents through `[T; _]`, including empty,
+      copied, global, field, generic-element, and nested initializers.
+      Inference materializes ordinary fixed storage before codegen and rejects
+      missing, dynamic, ragged, and non-variable inference contexts.
 - [x] The first generic slice landed:
       generic free functions, generic aliases, generic `object` / `component` /
       `interface`, explicit generic calls, and `@Instantiate(...)`.

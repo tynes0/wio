@@ -121,15 +121,6 @@ application/system and language-coherence direction is expanded in
     Unicode conformance vectors. Do not expose C++ `wchar_t` width as a Wio
     language rule.
 
-16. [x] Infer fixed-size array extents from initializers.
-    `[T; _]` now infers fixed/static storage from an array literal or concrete
-    fixed-array initializer. Empty literals infer zero, nested extents resolve
-    independently, ragged literals and dynamic-array sources are rejected, and
-    `_` is forbidden in parameter/return/alias positions. The inferred type is
-    materialized as ordinary `[T; N]` before code generation, native ABI, and
-    reflection/SDK metadata. Existing `const` array rejection remains explicit;
-    generic element types work without turning the extent into a generic value.
-
 17. [~] Extend compile-time constants to `string` and `text`.
     Literal initialization, references to other constants, concatenation,
     comparison, matching, and global/local/component-static storage now work for
@@ -138,10 +129,12 @@ application/system and language-coherence direction is expanded in
     Typed attribute arguments/defaults now consume folded constant values;
     functions, aliases, interfaces, components, and objects accept `string`
     and `text` const generic arguments/defaults, specialization patterns, and
-    qualified module constants. Const evaluation now rejects dependency cycles
-    and enforces depth, node-count, and folded-text budgets. Complete storage interning,
-    cross-module export, reflection/SDK metadata, and the final Unicode
-    normalization policy.
+    qualified module constants. Runtime reflection now exposes primary source
+    parameter names and concrete type/const arguments for ordinary, exact, and
+    partial generic types. Const evaluation rejects dependency cycles and
+    enforces depth, node-count, and folded-text budgets. Complete storage
+    interning, cross-module export, SDK descriptor metadata, and the final
+    Unicode normalization policy.
 
 ## P1 - Standard Library Correctness and Consistency
 

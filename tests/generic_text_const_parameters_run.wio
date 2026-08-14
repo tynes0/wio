@@ -1,5 +1,6 @@
 use std::assert as assert;
 use std::console as console;
+use std::reflect as reflect;
 
 const ProductName: string = "Wio" + " Language";
 const TurkishGreeting: text = u$"Merhaba ${u"🌍"}";
@@ -18,6 +19,22 @@ component Tagged<const Name: string> {
 @Specialize("special")
 component Tagged {
     value: i32;
+    specialized: bool;
+}
+
+component Wrapper<T> {
+    value: T;
+}
+
+component Pair<A, B> {
+    first: A;
+    second: B;
+}
+
+@Specialize(T, Wrapper<U>)
+component Pair<T, U> {
+    first: T;
+    second: Wrapper<U>;
     specialized: bool;
 }
 
@@ -57,6 +74,7 @@ fn Entry() -> i32 {
     let defaults: Named = Named(3);
     let special = Tagged<"special">(4, true);
     let box = TextBox<TurkishGreeting>(5);
+    let partial = Pair<i32, Wrapper<string>>(7, Wrapper<string>("wrapped"), true);
 
     assert::ExpectEqual(direct.value, 1, "direct string const generic");
     assert::Expect(LiteralComparison, "literal string comparison uses value semantics");
@@ -72,6 +90,30 @@ fn Entry() -> i32 {
         u"Merhaba 🌍",
         "interface preserves text const generic identity"
     );
+
+    let namedParameterNames = reflect::GenericParameterNames<Named<ProductName>>();
+    let namedArguments = reflect::GenericArguments<Named<ProductName>>();
+    assert::ExpectEqual(namedParameterNames.Count(), 1usize, "generic reflection parameter count");
+    assert::ExpectEqual(namedParameterNames[0], "Name", "generic reflection source parameter name");
+    assert::ExpectEqual(namedArguments.Count(), 1usize, "generic reflection argument count");
+    assert::ExpectEqual(namedArguments[0], "Wio Language", "generic reflection folded string value");
+
+    let specializedInfo = reflect::Describe<Tagged<"special">>();
+    assert::ExpectEqual(specializedInfo.genericParameters[0], "Name", "specialization parameter identity");
+    assert::ExpectEqual(specializedInfo.genericArguments[0], "special", "specialization argument identity");
+
+    let textArguments = reflect::GenericArguments<TextBox<TurkishGreeting>>();
+    assert::ExpectEqual(textArguments.Count(), 1usize, "text generic reflection argument count");
+    assert::Expect(textArguments[0].Count() > 0usize, "text generic reflection exposes UTF-8 value");
+
+    let partialInfo = reflect::Describe<Pair<i32, Wrapper<string>>>();
+    assert::Expect(partial.specialized, "partial specialization remains usable with reflection");
+    assert::ExpectEqual(partialInfo.genericParameters.Count(), 2usize, "partial generic reflection parameter count");
+    assert::ExpectEqual(partialInfo.genericParameters[0], "A", "partial generic primary parameter identity");
+    assert::ExpectEqual(partialInfo.genericParameters[1], "B", "partial nested parameter identity");
+    assert::ExpectEqual(partialInfo.genericArguments.Count(), 2usize, "partial generic reflection argument count");
+    assert::ExpectEqual(partialInfo.genericArguments[0], "i32", "partial concrete type argument");
+    assert::ExpectEqual(partialInfo.genericArguments[1], "Wrapper<string>", "partial nested type argument");
     console::PrintLine("generic-text-const-parameters-ok");
     return 0;
 }

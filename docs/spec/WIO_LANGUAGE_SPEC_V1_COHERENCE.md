@@ -155,6 +155,15 @@ body. That representation is not a native ABI promise. Declaration-level
 native components and native generic functions therefore continue to permit
 only integer const parameters.
 
+Runtime reflection preserves the primary declaration's source parameter order.
+`std::reflect::GenericParameterNames<T>()` returns those source names and
+`GenericArguments<T>()` returns the concrete arguments. Type arguments use
+canonical Wio type names; integer arguments use their decimal spelling;
+`string` values are returned unchanged; and `text` values are exposed as
+validated UTF-8 strings at this reflection boundary. Exact and partial
+specializations retain the primary parameter identity. `Describe<T>()`
+contains both arrays.
+
 Compile-time constant dependency traversal is finite: one initializer is
 limited to 128 dependency/expression levels, 16,384 visited nodes, and 1 MiB
 of folded textual literal data. Exceeding a limit or forming a dependency cycle

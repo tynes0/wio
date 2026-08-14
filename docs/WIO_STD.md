@@ -392,6 +392,8 @@ The stable ergonomic surface is:
 - `reflect::MethodNames<T>()`, `MethodSignatures<T>()`,
   `MethodAccess<T>()`
 - `reflect::BaseTypes<T>()`
+- `reflect::GenericParameterNames<T>()` and
+  `GenericArguments<T>()`
 - `reflect::Describe<T>()`, which composes those arrays into `TypeInfo`
 
 Enum values also provide member-style `Value()` and `IsValid()`. Unknown raw
@@ -402,9 +404,11 @@ This keeps common state/kind/mode style code readable without forcing all
 flag-oriented operations back to raw integer math, while also giving enum and
 flagset types enough metadata for stable reflection code while exposing the
 same source-level metadata for generic and non-generic components, objects,
-and interfaces. Generic declarations report their declared parameter names in
-field/method signatures while kind, access, bases, and member shape remain
-fully available for each instantiation.
+and interfaces. Generic declarations report their primary source parameter
+names and concrete arguments, including folded `string` values and UTF-8
+`text` values. Exact and partial specializations preserve that primary
+identity while kind, access, bases, and member shape remain fully available
+for each instantiation.
 
 ### 2.4 Stable-With-Caveats Pure-Wio Meta Module
 

@@ -16,6 +16,10 @@ All notable user-facing changes to Wio are recorded here.
 - Added `string` and `text` const generic parameters on functions, aliases,
   interfaces, components, and objects, including defaults, specialization,
   qualified module constants, and a Wio-owned C++20 structural representation.
+- Added runtime generic reflection through
+  `std::reflect::GenericParameterNames<T>()` and `GenericArguments<T>()`.
+  `Describe<T>()` now includes source parameter names and concrete type or
+  const-value arguments for primary, exact, and partial specializations.
 - Added deterministic compile-time evaluation budgets for const dependencies:
   128 nesting levels, 16,384 visited nodes, and 1 MiB of folded text, with a
   dedicated cyclic-dependency diagnostic before backend generation.
@@ -74,7 +78,10 @@ All notable user-facing changes to Wio are recorded here.
 - Fixed literal-to-literal byte-string concatenation and comparison generating
   raw C++ pointer operations instead of Wio string-value operations.
 - Avoided generic reflection template parameters shadowing the stable
-  `TypeReflection::Name` metadata member.
+  `TypeReflection::Name` metadata member, including partial specializations
+  whose source parameter names differ from their primary declaration.
+- Primitive generic arguments now use stable Wio names such as `i32`,
+  `string`, and `text` instead of the backend's `<unknown>` fallback.
 - Preserved keyword-shaped `if (... fit name)` bindings after `text` became a
   first-class type keyword, and synchronized the indexed-value diagnostic test.
 - Gave the repeated asynchronous listener-close stress test a CI-safe timeout

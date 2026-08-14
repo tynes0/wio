@@ -38,6 +38,8 @@ realm std {
             kind: Kind;
             size: usize;
             alignment: usize;
+            genericParameters: string[];
+            genericArguments: string[];
             fields: FieldInfo[];
             methods: MethodInfo[];
             baseTypes: string[];
@@ -95,6 +97,12 @@ realm std {
         @CppName(wio::runtime::ReflectedBaseTypes)
         fn BaseTypes<T>() -> string[];
 
+        fn GenericParameterNames<T>() -> string[]
+            with native, cpp::name(wio::runtime::ReflectedGenericParameterNames);
+
+        fn GenericArguments<T>() -> string[]
+            with native, cpp::name(wio::runtime::ReflectedGenericArguments);
+
         fn TypeAttributes<T>() -> string[]
             with native, cpp::name(wio::runtime::ReflectedTypeAttributes);
 
@@ -130,6 +138,8 @@ realm std {
             result.kind = TypeKind<T>();
             result.size = TypeSize<T>();
             result.alignment = TypeAlignment<T>();
+            result.genericParameters = GenericParameterNames<T>();
+            result.genericArguments = GenericArguments<T>();
             result.baseTypes = BaseTypes<T>();
 
             let fieldNames = FieldNames<T>();
