@@ -486,14 +486,25 @@ namespace wio::runtime::std_net
         if (!Retain(handle, error)) return 0;
         SocketLease lease(handle);
         auto* state = asHandle(handle);
-        std::lock_guard receiveLock(state->receiveMutex);
+        NativeSocket value = invalidSocket;
+        {
+            std::lock_guard lifecycleLock(state->lifecycleMutex);
+            if (state->closed)
+                return 0;
+            value = state->value;
+        }
         sockaddr_storage address{};
 #if defined(_WIN32)
         int size = sizeof(address);
 #else
         socklen_t size = sizeof(address);
 #endif
-        if (getsockname(state->value, reinterpret_cast<sockaddr*>(&address), &size) != 0)
+        // Local endpoint inspection is independent of receive/accept
+        // serialization. Holding receiveMutex here deadlocks when an
+        // asynchronous accept is already waiting for the first connection.
+        // The retained lease keeps the descriptor alive while getsockname
+        // observes the captured native value.
+        if (getsockname(value, reinterpret_cast<sockaddr*>(&address), &size) != 0)
             return 0;
         if (address.ss_family == AF_INET)
             return ntohs(reinterpret_cast<const sockaddr_in*>(&address)->sin_port);
