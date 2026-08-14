@@ -204,7 +204,7 @@ set(
 
 set(
     WIO_LANGUAGE_COHERENCE_TEST_REGEX
-    "^(wio_test_(attribute_compact_declaration_run|generic_partial_specialization_ordering_run|extension_default_parameters_run|extension_generic_methods_run|match_enum_exhaustive_guards_run|unicode_text_literal_run|unicode_text_export_host_interop|unicode_text_reflection_run|const_string_text_run|const_global_type_visibility_run|fixed_array_auto_extent_run|std_traits_text_static_array_run)|wio_invalid_(attribute_named_unknown|attribute_named_duplicate|attribute_named_missing_required|attribute_compact_conflict|generic_partial_specialization_structural_ambiguous|extension_generic_constraint_reject|match_enum_non_exhaustive|match_enum_duplicate_unguarded|match_literal_guard_type_mismatch|match_assumed_guard|text_requires_explicit_utf8_validation|text_operator|text_string_mixed_operation|text_index_assignment|const_interpolated_text_not_folded|fixed_array_auto_extent_without_initializer|fixed_array_auto_extent_parameter|fixed_array_auto_extent_dynamic_source|fixed_array_auto_extent_ragged_nested))$"
+    "^(wio_test_(attribute_compact_declaration_run|attribute_const_text_defaults_run|generic_partial_specialization_ordering_run|extension_default_parameters_run|extension_generic_methods_run|match_enum_exhaustive_guards_run|unicode_text_literal_run|unicode_text_export_host_interop|unicode_text_reflection_run|const_string_text_run|const_global_type_visibility_run|fixed_array_auto_extent_run|std_traits_text_static_array_run)|wio_invalid_(attribute_named_unknown|attribute_named_duplicate|attribute_named_missing_required|attribute_compact_conflict|attribute_text_requires_unicode_literal|attribute_string_rejects_unicode_literal|generic_partial_specialization_structural_ambiguous|extension_generic_constraint_reject|match_enum_non_exhaustive|match_enum_duplicate_unguarded|match_literal_guard_type_mismatch|match_assumed_guard|text_requires_explicit_utf8_validation|text_operator|text_string_mixed_operation|text_index_assignment|const_interpolated_text_not_folded|fixed_array_auto_extent_without_initializer|fixed_array_auto_extent_parameter|fixed_array_auto_extent_dynamic_source|fixed_array_auto_extent_ragged_nested))$"
 )
 
 add_custom_target(
@@ -3108,6 +3108,33 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
     set_tests_properties(
         wio_test_attribute_compact_declaration_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
+        wio_test_attribute_const_text_defaults_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_const_text_defaults_run.wio"
+        "attribute-const-text-defaults-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_attribute_const_text_defaults_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_attribute_text_requires_unicode_literal
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_text_requires_unicode_literal.wio"
+        "must be 'text'"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_string_rejects_unicode_literal
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_string_rejects_unicode_literal.wio"
+        "must be 'string'"
+    )
+    set_tests_properties(
+        wio_invalid_attribute_text_requires_unicode_literal
+        wio_invalid_attribute_string_rejects_unicode_literal
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 

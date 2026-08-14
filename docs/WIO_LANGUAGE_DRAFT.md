@@ -2986,6 +2986,8 @@ User-defined attributes have typed parameters with trailing defaults. Calls may
 use positional arguments or switch to named arguments; positional arguments
 cannot follow the first named argument. Named arguments are normalized to the
 declaration's parameter order before validation and runtime reflection.
+Omitted trailing defaults are materialized, so reflected metadata describes
+the complete effective application rather than only the written arguments.
 
 ```wio
 attribute route(fn)(method: string, path: string = "/")
@@ -3011,6 +3013,9 @@ during the compatibility window.
 Attribute arguments are still more restricted than full expressions, but the
 current compiler reliably supports:
 
+- scalar, `string`, and `text` literals for typed user-defined attributes,
+- evaluable `const` identifiers of those types; their folded values, not their
+  source names, enter runtime metadata,
 - plain identifiers such as `@Trust(Foo)`,
 - plain type names such as `@Type(u32)`,
 - type-like generic forms such as `@Apply(traits::IsInteger<T>)`,
@@ -3038,7 +3043,9 @@ Not part of the current attribute-argument contract:
 
 Built-in compiler attributes currently remain positional. Named arguments are
 reserved for typed user-defined attributes, whose parameter metadata makes
-ordering and diagnostics deterministic.
+ordering and diagnostics deterministic. Typed `string` and `text` parameters
+remain distinct: Unicode `u"..."` values do not silently become byte strings,
+and plain string literals do not silently become Unicode text.
 
 ### 20.3 `@ReadOnly`
 

@@ -1895,6 +1895,134 @@ namespace wio::sema
             return std::nullopt;
         }
 
+        std::optional<Token> tryEvaluateStaticAttributeConstant(
+            const NodePtr<Expression>& expression,
+            const ConstVariableDeclarationMap& variableDeclarationsBySymbol,
+            std::unordered_set<const Symbol*>& activeSymbols)
+        {
+            if (!expression)
+                return std::nullopt;
+
+            auto preserveLocation = [&](Token token)
+            {
+                token.loc = expression->location();
+                return token;
+            };
+
+            if (const auto* literal = expression->as<StringLiteral>())
+                return preserveLocation(literal->token);
+            if (const auto* literal = expression->as<IntegerLiteral>())
+                return preserveLocation(literal->token);
+            if (const auto* literal = expression->as<FloatLiteral>())
+                return preserveLocation(literal->token);
+            if (const auto* literal = expression->as<BoolLiteral>())
+                return preserveLocation(literal->token);
+            if (const auto* literal = expression->as<CharLiteral>())
+                return preserveLocation(literal->token);
+            if (const auto* literal = expression->as<ByteLiteral>())
+                return preserveLocation(literal->token);
+
+            if (const auto* identifier = expression->as<Identifier>())
+            {
+                Ref<Symbol> symbol = identifier->referencedSymbol.Lock();
+                if (!symbol || !symbol->flags.get_isConst())
+                    return std::nullopt;
+
+                auto declarationIt = variableDeclarationsBySymbol.find(symbol.Get());
+                if (declarationIt == variableDeclarationsBySymbol.end() ||
+                    !declarationIt->second || !declarationIt->second->initializer)
+                {
+                    return std::nullopt;
+                }
+
+                if (!activeSymbols.insert(symbol.Get()).second)
+                    return std::nullopt;
+                auto value = tryEvaluateStaticAttributeConstant(
+                    declarationIt->second->initializer,
+                    variableDeclarationsBySymbol,
+                    activeSymbols);
+                activeSymbols.erase(symbol.Get());
+                if (value)
+                    value->loc = expression->location();
+                return value;
+            }
+
+            if (const auto* binary = expression->as<BinaryExpression>();
+                binary && binary->op.type == TokenType::opPlus)
+            {
+                auto left = tryEvaluateStaticAttributeConstant(
+                    binary->left, variableDeclarationsBySymbol, activeSymbols);
+                auto right = tryEvaluateStaticAttributeConstant(
+                    binary->right, variableDeclarationsBySymbol, activeSymbols);
+                if (left && right &&
+                    left->type == TokenType::stringLiteral &&
+                    right->type == TokenType::stringLiteral &&
+                    left->isUnicodeString == right->isUnicodeString)
+                {
+                    left->value += right->value;
+                    left->loc = expression->location();
+                    return left;
+                }
+            }
+
+            if (const auto* interpolated = expression->as<InterpolatedStringLiteral>())
+            {
+                Token result{
+                    .type = TokenType::stringLiteral,
+                    .value = {},
+                    .loc = expression->location(),
+                    .isUnicodeString = interpolated->isUnicode
+                };
+                for (const auto& part : interpolated->parts)
+                {
+                    auto value = tryEvaluateStaticAttributeConstant(
+                        part, variableDeclarationsBySymbol, activeSymbols);
+                    if (!value)
+                        return std::nullopt;
+
+                    if (value->type == TokenType::integerLiteral)
+                        result.value += common::stripIntegerLiteralTypeSuffix(value->value);
+                    else if (value->type == TokenType::floatLiteral)
+                        result.value += common::stripFloatLiteralTypeSuffix(value->value);
+                    else if (value->type == TokenType::stringLiteral ||
+                             value->type == TokenType::kwTrue ||
+                             value->type == TokenType::kwFalse ||
+                             value->type == TokenType::charLiteral ||
+                             value->type == TokenType::byteLiteral)
+                        result.value += value->value;
+                    else
+                        return std::nullopt;
+                }
+                return result;
+            }
+
+            Ref<Type> expressionType = unwrapAliasType(expression->refType.Lock());
+            const bool isIntegerExpression = expressionType &&
+                expressionType->kind() == TypeKind::Primitive &&
+                [&]()
+                {
+                    const std::string& name = expressionType.AsFast<PrimitiveType>()->name;
+                    return name == "i8" || name == "i16" || name == "i32" || name == "i64" ||
+                           name == "u8" || name == "u16" || name == "u32" || name == "u64" ||
+                           name == "isize" || name == "usize" || name == "byte";
+                }();
+            if (isIntegerExpression)
+            {
+                auto value = tryEvaluateStaticIntegerExpression(
+                    expression, variableDeclarationsBySymbol, activeSymbols);
+                if (value)
+                {
+                    return Token{
+                        .type = TokenType::integerLiteral,
+                        .value = std::to_string(*value),
+                        .loc = expression->location()
+                    };
+                }
+            }
+
+            return std::nullopt;
+        }
+
         std::string formatAccessContextType(const Ref<Type>& type)
         {
             if (!type)
@@ -13679,6 +13807,37 @@ namespace wio::sema
             attribute->runtimeRetained = std::ranges::find(
                 symbol->attributeRetention, std::string("runtime")) != symbol->attributeRetention.end();
 
+            // Attribute applications are compile-time metadata. Resolve const
+            // identifiers to their folded scalar value before named-argument
+            // ordering and type validation so metadata never retains a source
+            // identifier in place of its value.
+            for (Token& argument : attribute->args)
+            {
+                if (argument.type != TokenType::identifier)
+                    continue;
+
+                Ref<Symbol> argumentSymbol = resolveQualifiedSymbol(currentScope_, argument.value);
+                if (!argumentSymbol || !argumentSymbol->flags.get_isConst())
+                    continue;
+
+                auto declarationIt = variableDeclarationsBySymbol_.find(argumentSymbol.Get());
+                if (declarationIt == variableDeclarationsBySymbol_.end() ||
+                    !declarationIt->second || !declarationIt->second->initializer)
+                {
+                    continue;
+                }
+
+                std::unordered_set<const Symbol*> activeSymbols{argumentSymbol.Get()};
+                if (auto folded = tryEvaluateStaticAttributeConstant(
+                        declarationIt->second->initializer,
+                        variableDeclarationsBySymbol_,
+                        activeSymbols))
+                {
+                    folded->loc = argument.loc;
+                    argument = std::move(*folded);
+                }
+            }
+
             const bool hasNamedArguments = std::ranges::any_of(
                 attribute->argumentNames,
                 [](const std::string& name) { return !name.empty(); });
@@ -13763,37 +13922,46 @@ namespace wio::sema
                     }
                 }
 
-                size_t normalizedCount = assignedSources.size();
-                while (normalizedCount > 0 && !assignedSources[normalizedCount - 1].has_value())
-                    --normalizedCount;
-                for (size_t parameterIndex = 0; parameterIndex < normalizedCount; ++parameterIndex)
-                {
-                    if (!assignedSources[parameterIndex].has_value())
-                    {
-                        WIO_LOG_ADD_ERROR(
-                            attribute->location(),
-                            "Named arguments for attribute '{}' cannot skip parameter '{}' before a later argument.",
-                            attribute->qualifiedName,
-                            symbol->attributeParameterNames[parameterIndex]);
-                        invalidNamedArguments = true;
-                    }
-                }
                 if (invalidNamedArguments)
                     continue;
 
                 std::vector<Token> normalizedArguments;
                 std::vector<NodePtr<TypeSpecifier>> normalizedTypeArguments;
                 std::vector<std::string> normalizedArgumentNames;
+                const size_t normalizedCount = assignedSources.size();
                 normalizedArguments.reserve(normalizedCount);
                 normalizedTypeArguments.reserve(normalizedCount);
                 normalizedArgumentNames.reserve(normalizedCount);
                 for (size_t parameterIndex = 0; parameterIndex < normalizedCount; ++parameterIndex)
                 {
-                    const size_t sourceIndex = assignedSources[parameterIndex].value();
-                    normalizedArguments.push_back(std::move(attribute->args[sourceIndex]));
-                    normalizedTypeArguments.push_back(std::move(attribute->typeArgs[sourceIndex]));
+                    if (assignedSources[parameterIndex].has_value())
+                    {
+                        const size_t sourceIndex = assignedSources[parameterIndex].value();
+                        normalizedArguments.push_back(std::move(attribute->args[sourceIndex]));
+                        normalizedTypeArguments.push_back(std::move(attribute->typeArgs[sourceIndex]));
+                    }
+                    else if (parameterIndex < symbol->attributeParameterDefaults.size() &&
+                             symbol->attributeParameterDefaults[parameterIndex].isValid())
+                    {
+                        Token defaultValue = symbol->attributeParameterDefaults[parameterIndex];
+                        defaultValue.loc = attribute->location();
+                        normalizedArguments.push_back(std::move(defaultValue));
+                        normalizedTypeArguments.emplace_back(nullptr);
+                    }
+                    else
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            attribute->location(),
+                            "Attribute '{}' could not materialize default argument '{}'.",
+                            attribute->qualifiedName,
+                            symbol->attributeParameterNames[parameterIndex]);
+                        invalidNamedArguments = true;
+                        continue;
+                    }
                     normalizedArgumentNames.push_back(symbol->attributeParameterNames[parameterIndex]);
                 }
+                if (invalidNamedArguments)
+                    continue;
                 attribute->args = std::move(normalizedArguments);
                 attribute->typeArgs = std::move(normalizedTypeArguments);
                 attribute->argumentNames = std::move(normalizedArgumentNames);
@@ -13865,6 +14033,29 @@ namespace wio::sema
                 continue;
             }
 
+            while (attribute->args.size() < symbol->attributeParameterTypes.size())
+            {
+                const size_t parameterIndex = attribute->args.size();
+                if (parameterIndex >= symbol->attributeParameterDefaults.size() ||
+                    !symbol->attributeParameterDefaults[parameterIndex].isValid())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        attribute->location(),
+                        "Attribute '{}' could not materialize default argument '{}'.",
+                        attribute->qualifiedName,
+                        parameterIndex < symbol->attributeParameterNames.size()
+                            ? symbol->attributeParameterNames[parameterIndex]
+                            : std::to_string(parameterIndex));
+                    break;
+                }
+
+                Token defaultValue = symbol->attributeParameterDefaults[parameterIndex];
+                defaultValue.loc = attribute->location();
+                attribute->args.push_back(std::move(defaultValue));
+                attribute->typeArgs.emplace_back(nullptr);
+                attribute->argumentNames.emplace_back();
+            }
+
             for (size_t index = 0; index < attribute->args.size(); ++index)
             {
                 Ref<Type> expectedType = unwrapAliasType(symbol->attributeParameterTypes[index]);
@@ -13877,7 +14068,9 @@ namespace wio::sema
                 {
                     const std::string& primitiveName = expectedType.AsFast<PrimitiveType>()->name;
                     if (primitiveName == "string")
-                        compatible = argument.type == TokenType::stringLiteral;
+                        compatible = argument.type == TokenType::stringLiteral && !argument.isUnicodeString;
+                    else if (primitiveName == "text")
+                        compatible = argument.type == TokenType::stringLiteral && argument.isUnicodeString;
                     else if (primitiveName == "bool")
                         compatible = argument.type == TokenType::kwTrue || argument.type == TokenType::kwFalse;
                     else if (primitiveName == "f32" || primitiveName == "f64")
@@ -13971,9 +14164,11 @@ namespace wio::sema
             std::vector<Ref<Type>> parameterTypes;
             std::vector<std::string> names;
             std::vector<bool> hasDefaults;
+            std::vector<Token> defaults;
             parameterTypes.reserve(node.parameters.size());
             names.reserve(node.parameters.size());
             hasDefaults.reserve(node.parameters.size());
+            defaults.reserve(node.parameters.size());
 
             for (auto& parameter : node.parameters)
             {
@@ -13988,6 +14183,19 @@ namespace wio::sema
                 parameterTypes.push_back(parameter.type->refType.Lock());
                 names.push_back(parameterName);
                 hasDefaults.push_back(parameter.defaultValue != nullptr);
+                Token defaultToken = Token::invalid();
+                if (parameter.defaultValue)
+                {
+                    std::unordered_set<const Symbol*> activeSymbols;
+                    if (auto folded = tryEvaluateStaticAttributeConstant(
+                            parameter.defaultValue,
+                            variableDeclarationsBySymbol_,
+                            activeSymbols))
+                    {
+                        defaultToken = std::move(*folded);
+                    }
+                }
+                defaults.push_back(std::move(defaultToken));
 
                 if (parameter.defaultValue)
                     sawDefault = true;
@@ -14018,6 +14226,7 @@ namespace wio::sema
             symbol->attributeParameterNames = std::move(names);
             symbol->attributeParameterTypes = std::move(parameterTypes);
             symbol->attributeParameterHasDefault = std::move(hasDefaults);
+            symbol->attributeParameterDefaults = std::move(defaults);
             symbol->attributeRepeatable = node.repeatable;
             symbol->attributeInherited = node.inherited;
             symbol->attributeScoped = node.scoped;
@@ -14047,6 +14256,27 @@ namespace wio::sema
                     expectedType->toString(),
                     actualType->toString()
                 );
+            }
+
+            Ref<Symbol> symbol = node.name ? node.name->referencedSymbol.Lock() : nullptr;
+            if (symbol && index < symbol->attributeParameterDefaults.size())
+            {
+                std::unordered_set<const Symbol*> activeSymbols;
+                if (auto folded = tryEvaluateStaticAttributeConstant(
+                        parameter.defaultValue,
+                        variableDeclarationsBySymbol_,
+                        activeSymbols))
+                {
+                    symbol->attributeParameterDefaults[index] = std::move(*folded);
+                }
+                else
+                {
+                    WIO_LOG_ADD_ERROR(
+                        parameter.defaultValue->location(),
+                        "Default value for attribute parameter '{}' must be a compile-time scalar, string, or text expression.",
+                        parameter.name ? parameter.name->token.value : std::to_string(index)
+                    );
+                }
             }
         }
     }

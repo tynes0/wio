@@ -81,7 +81,9 @@ application/system and language-coherence direction is expanded in
     defaults should replace most policy keywords, uncommon policies should
     reuse `with`, and behavioral processors should be ordinary typed
     functions/interfaces rather than a growing list of magic words such as
-    `retain`, `repeatable`, `scoped`, `affects`, and `returning`.
+    `retain`, `repeatable`, `scoped`, `affects`, and `returning`. Typed
+    applications now fold scalar, `string`, and `text` const references and
+    materialize trailing defaults into runtime-reflection metadata.
 
 13. [~] Complete a language-coherence pass before broad surface expansion.
     The first 0.11 stabilization slice aligned scoped attributes, pipelines,
@@ -131,7 +133,8 @@ application/system and language-coherence direction is expanded in
     comparison, matching, and global/local/component-static storage now work for
     both types. Interpolated strings are accepted when every embedded expression
     is also constant-evaluable; calls and runtime bindings remain rejected.
-    Complete generic/attribute arguments, storage interning, evaluation limits,
+    Typed attribute arguments/defaults now consume folded constant values.
+    Complete generic arguments, storage interning, evaluation limits,
     cross-module export, reflection/SDK metadata, and the final Unicode
     normalization policy.
 

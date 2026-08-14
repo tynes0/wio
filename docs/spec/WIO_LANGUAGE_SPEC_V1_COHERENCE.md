@@ -39,6 +39,25 @@ declared exactly once, positional arguments cannot follow named arguments, and
 every required parameter must receive a value. Built-in compiler attributes
 remain positional until their migration to typed declarations is complete.
 
+Typed user-defined attribute arguments are compile-time metadata. A scalar,
+`string`, or `text` argument may name an evaluable `const`; the metadata stores
+the folded value rather than the identifier spelling. Missing trailing
+arguments are materialized from their declared defaults before validation and
+runtime reflection. A `string` parameter accepts a byte-string literal/value;
+a `text` parameter accepts a Unicode `u"..."` literal/value. Neither spelling
+implicitly crosses that boundary.
+
+```wio
+const Root: string = "/api";
+const Title: text = u"İstanbul";
+const Revision: i32 = 7;
+
+attribute endpoint(component)(path: string, title: text, revision: i32 = Revision)
+    with attribute::runtime;
+
+component Dashboard with endpoint(title: Title, path: Root) {}
+```
+
 ## 2. Generic closers and specialization ordering
 
 In a generic type, parameter list, or explicit generic call, adjacent `>>`,
@@ -112,4 +131,3 @@ The positive and negative tests linked from `WIO_TRACEABILITY.md` are part of
 this candidate contract. A frontend acceptance followed by generated-C++
 failure for these rules is a compiler defect; the analyzer and backend must
 agree on visible signatures, selected specializations, and match coverage.
-

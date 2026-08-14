@@ -33,6 +33,9 @@ All notable user-facing changes to Wio are recorded here.
   `attribute route(fn)(method: string) with attribute::runtime;`.
 - Added named arguments for user-defined attribute applications with duplicate,
   unknown, missing-required, and ordering diagnostics.
+- Typed attribute applications now accept folded scalar, `string`, and `text`
+  constants. Trailing defaults are materialized into declaration order before
+  runtime reflection, including defaults that reference other constants.
 - Added structural partial-specialization ordering, including repeated generic
   parameter relationships such as `Pair<T, Box<T>>`.
 - Added trailing default parameters to component extension methods.
@@ -57,6 +60,8 @@ All notable user-facing changes to Wio are recorded here.
 
 ### Fixed
 
+- Distinguished byte-string and Unicode-text literals in typed attribute
+  validation instead of treating `text` as an integer-like fallback type.
 - Preserved keyword-shaped `if (... fit name)` bindings after `text` became a
   first-class type keyword, and synchronized the indexed-value diagnostic test.
 - Gave the repeated asynchronous listener-close stress test a CI-safe timeout
