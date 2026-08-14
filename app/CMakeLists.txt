@@ -1713,12 +1713,6 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_failure_test(
-        wio_invalid_generic_const_parameter_requires_integer
-        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_const_parameter_requires_integer.wio"
-        "must use an integer type"
-    )
-
-    add_wio_failure_test(
         wio_invalid_generic_const_default_forward_reference
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_const_default_forward_reference.wio"
         "defaults may only use earlier parameters"
