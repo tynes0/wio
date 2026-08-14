@@ -221,8 +221,12 @@ realm std {
             public fn OnConstruct(handle: opaque) { self.handle = handle; self.closed = false; }
             public fn OnDestruct() { self.Close(); }
             public fn Close() { if (not self.closed) { CloseNative(self.handle); self.closed = true; } }
-            public fn LocalPort() -> u16 { return LocalPortNative(self.handle); }
+            public fn LocalPort() -> u16 {
+                if (self.closed) { return 0u16; }
+                return LocalPortNative(self.handle);
+            }
             public fn Accept() -> std::Result<Socket> {
+                if (self.closed) { return std::Err<Socket>(NetError("listener is closed")); }
                 mut accepted: opaque? = null;
                 mut error = "";
                 if (AcceptNative(self.handle, ref accepted, ref error)) {
@@ -236,6 +240,9 @@ realm std {
                 mut succeeded = false;
                 mut error = "";
                 DecodeAsyncAccept(payload, ref succeeded, ref error);
+                if (self.closed) {
+                    return std::Err<Socket>(NetError("listener is closed"));
+                }
                 if (succeeded) {
                     return self.Accept();
                 }
