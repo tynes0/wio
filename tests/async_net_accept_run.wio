@@ -3,13 +3,22 @@ use std::async as futures;
 use std::console as console;
 use std::net as net;
 
+fn Trace(message: string) {
+    console::WriteErrorLine(message);
+    console::TryFlushError();
+}
+
 async fn Entry() -> i32 {
+    Trace("async-net-accept: entry");
     let baselineSockets = net::LiveSocketCount();
     {
         let listener = net::Listen!("127.0.0.1", 0u16, 4);
         let acceptedTask = listener.AcceptAsync();
+        Trace("async-net-accept: task-started");
         let client = net::Connect!("127.0.0.1", listener.LocalPort(), 2000u64);
+        Trace("async-net-accept: client-connected");
         let accepted = await acceptedTask;
+        Trace("async-net-accept: first-await-complete");
         assert::Expect(accepted.IsOk(), "async accept returns an owned socket");
         let peer = accepted.Value();
         peer.Close();
@@ -18,10 +27,13 @@ async fn Entry() -> i32 {
         assert::ExpectEqual(net::LiveSocketCount(), baselineSockets,
             "completed accept releases its listener lease while the task handle remains alive");
     }
-    console::PrintLine("async-net-accept-connected-ok");
+    Trace("async-net-accept: connected-case-complete");
 
     mut iteration = 0u64;
     while (iteration < 64u64) {
+        if ((iteration % 8u64) == 0u64) {
+            Trace($"async-net-accept: close-stress ${iteration}");
+        }
         let closingListener = net::Listen!("127.0.0.1", 0u16, 4);
         let interrupted = closingListener.AcceptAsync();
         closingListener.Close();
@@ -29,7 +41,7 @@ async fn Entry() -> i32 {
         assert::Expect(interruptedResult.IsError(), "close interrupts async accept");
         iteration += 1u64;
     }
-    console::PrintLine("async-net-accept-close-stress-ok");
+    Trace("async-net-accept: close-stress-complete");
     assert::ExpectEqual(futures::IoPendingCount(), 0u64,
         "async accept drains the dedicated I/O queue");
     assert::ExpectEqual(futures::BlockingPendingCount(), 0u64,
@@ -37,6 +49,8 @@ async fn Entry() -> i32 {
     assert::ExpectEqual(net::LiveSocketCount(), baselineSockets,
         "accepted socket ownership closes without leaks");
     console::PrintLine("async-net-accept-ok");
+    Trace("async-net-accept: before-runtime-shutdown");
     futures::ShutdownRuntime();
+    Trace("async-net-accept: runtime-shutdown-complete");
     return 0;
 }
