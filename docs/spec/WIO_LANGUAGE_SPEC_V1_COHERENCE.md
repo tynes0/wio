@@ -125,7 +125,37 @@ true:
 Repeated unguarded enum members are unreachable. A non-exhaustive enum value
 match must include a final `assumed` arm.
 
-## 5. Conformance boundary
+## 5. Textual const generics
+
+Const generic parameters may use an integer type, `string`, or `text`.
+Functions, aliases, interfaces, components, and objects share the same rules.
+Textual arguments may be direct literals, earlier compatible const parameters,
+or evaluable const declarations, including qualified constants from merged
+modules.
+
+```wio
+const Product: string = "Wio";
+const Greeting: text = u"Merhaba";
+
+component Named<const Name: string = "unnamed"> { value: i32; }
+fn Value<const Label: text>() -> text { return Label; }
+
+let named: Named<Product> = Named<Product>(1);
+let greeting = Value<Greeting>();
+```
+
+`string` and `text` values are invariant generic identities. The runtime-safe
+conversion from `text` to UTF-8 `string` does not make `Named<u"x">` compatible
+with a `const Name: string` slot. Textual values may select exact/partial
+specializations and defaults. They cannot be static-array extents.
+
+The backend represents textual const generics with Wio-owned structural C++20
+values and converts them to ordinary `string`/`text` when referenced in a Wio
+body. That representation is not a native ABI promise. Declaration-level
+native components and native generic functions therefore continue to permit
+only integer const parameters.
+
+## 6. Conformance boundary
 
 The positive and negative tests linked from `WIO_TRACEABILITY.md` are part of
 this candidate contract. A frontend acceptance followed by generated-C++

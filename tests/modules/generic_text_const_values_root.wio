@@ -1,0 +1,20 @@
+use std::assert as assert;
+use std::console as console;
+use generic_text_const_values_library;
+
+fn Entry() -> i32 {
+    let named: labels::Named<labels::Product> = labels::Named<labels::Product>(42);
+    assert::ExpectEqual(named.value, 42, "module const generic component");
+    assert::ExpectEqual(
+        labels::StringValue<labels::Product>(),
+        "Wio Module",
+        "qualified module string const generic"
+    );
+    assert::ExpectEqual(
+        labels::TextValue<labels::Greeting>(),
+        u"Selam 🌍",
+        "qualified module text const generic"
+    );
+    console::PrintLine("generic-text-const-modules-ok");
+    return 0;
+}

@@ -53,22 +53,42 @@ namespace wio::codegen
             return std::string(identifier);
         }
 
-        std::string formatCppTemplateParameter(const NodePtr<Identifier>& parameter, const bool isPack)
+        std::string formatCppTemplateParameter(
+            const NodePtr<Identifier>& parameter,
+            const bool isPack,
+            std::string_view nameOverride = {})
         {
             if (!parameter)
                 return "typename _wio_missing";
+
+            const std::string backendName = sanitizeCppIdentifier(
+                nameOverride.empty() ? parameter->token.value : nameOverride);
 
             if (parameter->isConstGenericParameter)
             {
                 Ref<sema::Type> valueType = parameter->genericValueType
                     ? parameter->genericValueType->refType.Lock()
                     : nullptr;
+                Ref<sema::Type> resolvedValueType = valueType;
+                while (resolvedValueType && resolvedValueType->kind() == sema::TypeKind::Alias)
+                    resolvedValueType = resolvedValueType.AsFast<sema::AliasType>()->aliasedType;
+                if (resolvedValueType && resolvedValueType->kind() == sema::TypeKind::Primitive)
+                {
+                    const std::string& name = resolvedValueType.AsFast<sema::PrimitiveType>()->name;
+                    if (name == "string" || name == "text")
+                    {
+                        return std::string(name == "text"
+                            ? "wio::runtime::ConstText "
+                            : "wio::runtime::ConstString ") +
+                            backendName;
+                    }
+                }
                 return (valueType ? valueType->toCppString() : "std::size_t") +
-                       " " + sanitizeCppIdentifier(parameter->token.value);
+                       " " + backendName;
             }
 
             return std::string(isPack ? "typename... " : "typename ") +
-                   sanitizeCppIdentifier(parameter->token.value);
+                   backendName;
         }
 
         Ref<sema::Type> unwrapAliasTypeForCodegen(Ref<sema::Type> type)
@@ -3280,6 +3300,7 @@ namespace wio::codegen
         emitHeaderLine("#include <unordered_map>");
         emitHeaderLine();
         emitHeaderLine("#include <exception.h>");
+        emitHeaderLine("#include <constant_value.h>");
         emitHeaderLine("#include <any.h>");
         emitHeaderLine("#include <enum_reflection.h>");
         emitHeaderLine("#include <type_reflection.h>");
@@ -4905,6 +4926,10 @@ namespace wio::codegen
             std::string cppTypeName = reflectedKind == "interface_type"
                 ? Mangler::mangleInterface(structType->name, structType->scopePath)
                 : mangleStructTypeName(structType);
+            std::vector<std::string> reflectionParameterNames;
+            reflectionParameterNames.reserve(declaration.genericParameters.size());
+            for (size_t i = 0; i < declaration.genericParameters.size(); ++i)
+                reflectionParameterNames.push_back("_WIO_REFLECT_ARG_" + std::to_string(i));
             if (structType->isExplicitSpecialization)
             {
                 cppTypeName = mangleStructTypeName(structType);
@@ -4920,7 +4945,7 @@ namespace wio::codegen
                 {
                     if (i > 0)
                         cppTypeName += ", ";
-                    cppTypeName += declaration.genericParameters[i]->token.value;
+                    cppTypeName += reflectionParameterNames[i];
                     if (declaration.hasGenericParameterPack && i + 1 == declaration.genericParameters.size())
                         cppTypeName += "...";
                 }
@@ -4942,7 +4967,10 @@ namespace wio::codegen
                         emit(", ");
                     const bool isPack = declaration.hasGenericParameterPack &&
                                         i + 1 == declaration.genericParameters.size();
-                    emit(formatCppTemplateParameter(declaration.genericParameters[i], isPack));
+                    emit(formatCppTemplateParameter(
+                        declaration.genericParameters[i],
+                        isPack,
+                        reflectionParameterNames[i]));
                 }
                 emitLine(">");
             }
@@ -5504,6 +5532,33 @@ namespace wio::codegen
                    name == "isize" || name == "u8" || name == "u16" || name == "u32" ||
                    name == "u64" || name == "usize" || name == "byte";
         };
+
+        const auto isStringPrimitive = [](const Ref<sema::Type>& type)
+        {
+            return type && type->kind() == sema::TypeKind::Primitive &&
+                   type.AsFast<sema::PrimitiveType>()->name == "string";
+        };
+        const Ref<sema::Type> textualLeftType = unwrapAliasTypeForCodegen(node.left->refType.Lock());
+        const Ref<sema::Type> textualRightType = unwrapAliasTypeForCodegen(node.right->refType.Lock());
+        const bool isStringBinaryOperator =
+            node.op.type == TokenType::opPlus ||
+            node.op.type == TokenType::opEqual ||
+            node.op.type == TokenType::opNotEqual ||
+            node.op.type == TokenType::opLess ||
+            node.op.type == TokenType::opLessEqual ||
+            node.op.type == TokenType::opGreater ||
+            node.op.type == TokenType::opGreaterEqual;
+        if (isStringBinaryOperator &&
+            isStringPrimitive(textualLeftType) &&
+            isStringPrimitive(textualRightType))
+        {
+            emit("(wio::String(");
+            emitReadableExpression(node.left);
+            emit(") " + node.op.value + " ");
+            emitReadableExpression(node.right);
+            emit(")");
+            return;
+        }
 
         std::string_view integerHelper;
         if (isIntegerPrimitive(arithmeticResultType))
@@ -6134,6 +6189,18 @@ namespace wio::codegen
             if (sym->kind == sema::SymbolKind::Struct)
             {
                 emit(Mangler::mangleStruct(sym->name, sym->scopePath));
+                return;
+            }
+        }
+
+        Ref<sema::Type> identifierType = unwrapAliasTypeForCodegen(node.refType.Lock());
+        if (!node.referencedSymbol.Lock() &&
+            identifierType && identifierType->kind() == sema::TypeKind::Primitive)
+        {
+            const std::string& name = identifierType.AsFast<sema::PrimitiveType>()->name;
+            if (name == "string" || name == "text")
+            {
+                emit(sanitizeCppIdentifier(node.token.value) + ".RuntimeValue()");
                 return;
             }
         }

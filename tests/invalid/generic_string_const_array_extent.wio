@@ -1,0 +1,6 @@
+const Label: string = "not-an-extent";
+
+fn Entry() -> i32 {
+    let values: [i32; Label] = [1];
+    return values[0usize];
+}

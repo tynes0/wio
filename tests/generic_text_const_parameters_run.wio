@@ -1,0 +1,77 @@
+use std::assert as assert;
+use std::console as console;
+
+const ProductName: string = "Wio" + " Language";
+const TurkishGreeting: text = u$"Merhaba ${u"🌍"}";
+const LiteralComparison: bool = "same" == "same";
+
+component Named<const Name: string = "unnamed"> {
+    value: i32;
+}
+
+type NamedAlias<const Name: string> = Named<Name>;
+
+component Tagged<const Name: string> {
+    value: i32;
+}
+
+@Specialize("special")
+component Tagged {
+    value: i32;
+    specialized: bool;
+}
+
+interface TextProvider<const Label: text> {
+    fn GetLabel() -> text;
+}
+
+@From(TextProvider<Label>)
+object TextBox<const Label: text> {
+    value: i32;
+
+    OnConstruct(value: i32) {
+        self.value = value;
+    }
+
+    public fn GetLabel() -> text {
+        return Label;
+    }
+}
+
+fn StringValue<const Value: string>() -> string {
+    return Value;
+}
+
+fn TextValue<const Value: text>() -> text {
+    return Value;
+}
+
+fn ReadText<const Label: text>(value: view TextProvider<Label>) -> text {
+    return value.GetLabel();
+}
+
+fn Entry() -> i32 {
+    let direct: Named<"direct"> = Named<"direct">(1);
+    let folded: Named<ProductName> = Named<ProductName>(2);
+    let aliased: NamedAlias<ProductName> = Named<ProductName>(6);
+    let defaults: Named = Named(3);
+    let special = Tagged<"special">(4, true);
+    let box = TextBox<TurkishGreeting>(5);
+
+    assert::ExpectEqual(direct.value, 1, "direct string const generic");
+    assert::Expect(LiteralComparison, "literal string comparison uses value semantics");
+    assert::ExpectEqual(folded.value, 2, "folded const declaration generic argument");
+    assert::ExpectEqual(aliased.value, 6, "string const generic type alias");
+    assert::ExpectEqual(defaults.value, 3, "string const generic default");
+    assert::Expect(special.specialized, "string const partial specialization");
+    assert::ExpectEqual(StringValue<ProductName>(), "Wio Language", "function string const generic");
+    assert::ExpectEqual(TextValue<u"İstanbul">(), u"İstanbul", "function text const generic");
+    assert::ExpectEqual(box.GetLabel(), u"Merhaba 🌍", "object text const generic method");
+    assert::ExpectEqual(
+        ReadText<TurkishGreeting>(box),
+        u"Merhaba 🌍",
+        "interface preserves text const generic identity"
+    );
+    console::PrintLine("generic-text-const-parameters-ok");
+    return 0;
+}

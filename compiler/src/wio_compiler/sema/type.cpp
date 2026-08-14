@@ -705,11 +705,35 @@ namespace wio::sema
 
     std::string ConstValueType::toString() const
     {
+        Ref<Type> resolvedValueType = valueType;
+        while (resolvedValueType && resolvedValueType->kind() == TypeKind::Alias)
+            resolvedValueType = resolvedValueType.AsFast<AliasType>()->aliasedType;
+        if (resolvedValueType && resolvedValueType->kind() == TypeKind::Primitive)
+        {
+            const std::string& name = resolvedValueType.AsFast<PrimitiveType>()->name;
+            if (name == "string" || name == "text")
+                return std::string(name == "text" ? "u\"" : "\"") +
+                       common::wioStringToEscapedCppString(value) + "\"";
+        }
         return value;
     }
 
     std::string ConstValueType::toCppString() const
     {
+        Ref<Type> resolvedValueType = valueType;
+        while (resolvedValueType && resolvedValueType->kind() == TypeKind::Alias)
+            resolvedValueType = resolvedValueType.AsFast<AliasType>()->aliasedType;
+        if (resolvedValueType && resolvedValueType->kind() == TypeKind::Primitive)
+        {
+            const std::string& name = resolvedValueType.AsFast<PrimitiveType>()->name;
+            if (name == "string" || name == "text")
+            {
+                return std::string(name == "text"
+                    ? "wio::runtime::ConstText{\""
+                    : "wio::runtime::ConstString{\"") +
+                    common::wioStringToEscapedCppString(value) + "\"}";
+            }
+        }
         return value;
     }
 

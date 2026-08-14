@@ -11,6 +11,9 @@ for Wio 0.10 in
 [`spec/WIO_LANGUAGE_SPEC_0_10.md`](./spec/WIO_LANGUAGE_SPEC_0_10.md). Typed
 attributes, matching, and sequential applications are normative for Wio
 0.11 in [`spec/WIO_LANGUAGE_SPEC_0_11.md`](./spec/WIO_LANGUAGE_SPEC_0_11.md).
+Post-0.12 attribute, specialization, extension, matching, and textual const-
+generic coherence rules are frozen in
+[`spec/WIO_LANGUAGE_SPEC_V1_COHERENCE.md`](./spec/WIO_LANGUAGE_SPEC_V1_COHERENCE.md).
 The normative async/coroutine boundaries are described in
 [`WIO_ASYNC_MODEL.md`](./WIO_ASYNC_MODEL.md). Where this
 broad reference conflicts with a versioned slice, the newest applicable
@@ -2135,8 +2138,8 @@ supported independently of that static-member surface.
 
 ### 13.7 Const Generics
 
-Ordinary integer const parameters are supported on functions, aliases,
-interfaces, components, and objects:
+Integer, `string`, and `text` const parameters are supported on functions,
+aliases, interfaces, components, and objects:
 
 ```wio
 component Buffer<T, const N: usize = 4> {
@@ -2146,13 +2149,25 @@ component Buffer<T, const N: usize = 4> {
 fn Capacity<const N: usize>() -> usize {
     return N;
 }
+
+fn Label<const Value: string = "unnamed">() -> string {
+    return Value;
+}
+
+object Caption<const Value: text> {
+    public fn Get() -> text { return Value; }
+}
 ```
 
-Const arguments may be non-negative integer literals, earlier const
-parameters, or top-level compile-time integer const declarations. They
-participate in identity, substitution, defaults, static-array extents,
-deduction, specialization, and native C++ template mapping. The precise
-contract and exclusions are defined by the 0.10 normative specification.
+Const arguments may be non-negative integer literals, string/text literals,
+earlier compatible const parameters, or compile-time const declarations.
+They participate in identity, substitution, defaults, specialization, and
+module-qualified lookup. Only integer values may serve as static-array
+extents. Integer const parameters retain the 0.10 native C++ template mapping;
+`string` and `text` use a Wio-owned C++20 structural value and are deliberately
+rejected on native functions/components until a portable ABI is specified.
+`string` and `text` generic identity is invariant and never applies their
+ordinary runtime conversion direction.
 
 ### 13.8 Generic Packs and Pack Storage
 

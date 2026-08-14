@@ -29,8 +29,10 @@ application/system and language-coherence direction is expanded in
    ordering. Default type parameters, dependent trailing defaults, exact and
    partial specialization ordering, ambiguity diagnostics, cross-module
    visibility, and defaulted native instantiation are implemented. Default
-   value parameters depend on the ordinary const-generic work below; generic
-   Generic component/object export remains under the native/export item.
+   `string`/`text` const parameters and defaults now work on every generic
+   declaration category with specialization and module visibility. Additional
+   value kinds and generic component/object export remain under their
+   respective language and native/export items.
 
 5. [~] Expand variadic and compile-time metaprogramming.
    `AllSame`, `IndexOf`, and `UniqueCount` now complement the existing pack
@@ -133,8 +135,10 @@ application/system and language-coherence direction is expanded in
     comparison, matching, and global/local/component-static storage now work for
     both types. Interpolated strings are accepted when every embedded expression
     is also constant-evaluable; calls and runtime bindings remain rejected.
-    Typed attribute arguments/defaults now consume folded constant values.
-    Complete generic arguments, storage interning, evaluation limits,
+    Typed attribute arguments/defaults now consume folded constant values;
+    functions, aliases, interfaces, components, and objects accept `string`
+    and `text` const generic arguments/defaults, specialization patterns, and
+    qualified module constants. Complete storage interning, evaluation limits,
     cross-module export, reflection/SDK metadata, and the final Unicode
     normalization policy.
 

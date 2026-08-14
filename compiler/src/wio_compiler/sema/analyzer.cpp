@@ -3383,7 +3383,7 @@ namespace wio::sema
             case TypeKind::Primitive:
                 return expected.AsFast<PrimitiveType>()->name == candidate.AsFast<PrimitiveType>()->name;
             case TypeKind::ConstValue:
-                return expected.AsFast<ConstValueType>()->value == candidate.AsFast<ConstValueType>()->value;
+                return Type::matchTypes(expected, candidate);
             case TypeKind::Reference:
             {
                 auto expectedRef = expected.AsFast<ReferenceType>();
@@ -3909,6 +3909,53 @@ namespace wio::sema
                    name == "u64" || name == "usize";
         }
 
+        bool isConstGenericValueType(const Ref<Type>& type)
+        {
+            if (isConstGenericIntegerType(type))
+                return true;
+
+            Ref<Type> current = unwrapAliasType(type);
+            if (!current || current->kind() != TypeKind::Primitive)
+                return false;
+            const std::string& name = current.AsFast<PrimitiveType>()->name;
+            return name == "string" || name == "text";
+        }
+
+        bool areConstGenericValueTypesCompatible(const Ref<Type>& declared, const Ref<Type>& actual)
+        {
+            Ref<Type> resolvedDeclared = unwrapAliasType(declared);
+            Ref<Type> resolvedActual = unwrapAliasType(actual);
+            if (!resolvedDeclared || !resolvedActual)
+                return false;
+
+            auto textualName = [](const Ref<Type>& type) -> std::string_view
+            {
+                if (!type || type->kind() != TypeKind::Primitive)
+                    return {};
+                const std::string& name = type.AsFast<PrimitiveType>()->name;
+                return name == "string" || name == "text" ? std::string_view(name) : std::string_view{};
+            };
+            const std::string_view declaredText = textualName(resolvedDeclared);
+            const std::string_view actualText = textualName(resolvedActual);
+            if (!declaredText.empty() || !actualText.empty())
+                return declaredText == actualText && !declaredText.empty();
+
+            return resolvedDeclared->isCompatibleWith(resolvedActual);
+        }
+
+        bool isTextualConstGenericParameterType(const Ref<Type>& type)
+        {
+            Ref<Type> resolved = unwrapAliasType(type);
+            if (!resolved || resolved->kind() != TypeKind::ConstGenericParameter)
+                return false;
+            Ref<Type> valueType = unwrapAliasType(
+                resolved.AsFast<ConstGenericParameterType>()->valueType);
+            if (!valueType || valueType->kind() != TypeKind::Primitive)
+                return false;
+            const std::string& name = valueType.AsFast<PrimitiveType>()->name;
+            return name == "string" || name == "text";
+        }
+
         Ref<Type> createGenericParameterSemanticType(SemanticAnalyzer& analyzer,
                                                      const NodePtr<Identifier>& parameter,
                                                      const bool isPack,
@@ -3940,17 +3987,17 @@ namespace wio::sema
 
             if (!parameter->genericValueType)
             {
-                WIO_LOG_ADD_ERROR(parameter->location(), "Const generic parameter '{}' on {} requires an integer value type.", name, declarationKind);
+                WIO_LOG_ADD_ERROR(parameter->location(), "Const generic parameter '{}' on {} requires an integer, string, or text value type.", name, declarationKind);
                 return Compiler::get().getTypeContext().getUnknown();
             }
 
             parameter->genericValueType->accept(analyzer);
             Ref<Type> valueType = parameter->genericValueType->refType.Lock();
-            if (!isConstGenericIntegerType(valueType))
+            if (!isConstGenericValueType(valueType))
             {
                 WIO_LOG_ADD_ERROR(
                     parameter->genericValueType->location(),
-                    "Const generic parameter '{}' on {} must use an integer type, but got '{}'.",
+                    "Const generic parameter '{}' on {} must use an integer, string, or text type, but got '{}'.",
                     name, declarationKind, valueType ? valueType->toString() : "<unknown>"
                 );
                 return Compiler::get().getTypeContext().getUnknown();
@@ -3990,7 +4037,7 @@ namespace wio::sema
                     WIO_LOG_ADD_ERROR(
                         location,
                         expectsValue
-                            ? "Generic parameter '{}' expects a compile-time integer value, but got type '{}'."
+                            ? "Generic parameter '{}' expects a compile-time value, but got type '{}'."
                             : "Generic parameter '{}' expects a type, but got compile-time value '{}'.",
                         index < parameterNames.size() ? parameterNames[index] : "<unknown>",
                         argument->toString()
@@ -4005,7 +4052,7 @@ namespace wio::sema
                     Ref<Type> actualValueType = argument->kind() == TypeKind::ConstValue
                         ? argument.AsFast<ConstValueType>()->valueType
                         : argument.AsFast<ConstGenericParameterType>()->valueType;
-                    if (!declared->valueType->isCompatibleWith(actualValueType))
+                    if (!areConstGenericValueTypesCompatible(declared->valueType, actualValueType))
                     {
                         WIO_LOG_ADD_ERROR(
                             location,
@@ -4061,11 +4108,11 @@ namespace wio::sema
                             ? defaultType.AsFast<ConstGenericParameterType>()->valueType
                             : nullptr;
                     if (!constParameter || !defaultValueType ||
-                        !constParameter->valueType->isCompatibleWith(defaultValueType))
+                        !areConstGenericValueTypesCompatible(constParameter->valueType, defaultValueType))
                     {
                         WIO_LOG_ADD_ERROR(
                             parameter->genericDefaultType->location(),
-                            "Default for const generic parameter '{}' must be an integer constant compatible with '{}'.",
+                            "Default for const generic parameter '{}' must be a compile-time value compatible with '{}'.",
                             parameter->token.value,
                             constParameter && constParameter->valueType ? constParameter->valueType->toString() : "<unknown>"
                         );
@@ -6994,6 +7041,17 @@ namespace wio::sema
             return;
         }
 
+        if (node.name.type == TokenType::stringLiteral)
+        {
+            Ref<Type> valueType = node.name.isUnicodeString
+                ? Compiler::get().getTypeContext().getText()
+                : Compiler::get().getTypeContext().getString();
+            node.refType = Compiler::get().getTypeContext().getOrCreateConstValueType(
+                node.name.value,
+                valueType);
+            return;
+        }
+
         if (node.name.type == TokenType::kwFn)
         {
             node.generics[0]->accept(*this);
@@ -7097,8 +7155,14 @@ namespace wio::sema
                 {
                     node.arrayExtent->accept(*this);
                     extentType = node.arrayExtent->refType.Lock();
+                    Ref<Type> extentValueType = extentType && extentType->kind() == TypeKind::ConstGenericParameter
+                        ? extentType.AsFast<ConstGenericParameterType>()->valueType
+                        : extentType && extentType->kind() == TypeKind::ConstValue
+                            ? extentType.AsFast<ConstValueType>()->valueType
+                            : nullptr;
                     if (!extentType ||
-                        (extentType->kind() != TypeKind::ConstGenericParameter && extentType->kind() != TypeKind::ConstValue))
+                        (extentType->kind() != TypeKind::ConstGenericParameter && extentType->kind() != TypeKind::ConstValue) ||
+                        !isConstGenericIntegerType(extentValueType))
                     {
                         WIO_LOG_ADD_ERROR(node.arrayExtent->location(), "Static array extent must be an integer const generic parameter or integer literal.");
                         extentType = Compiler::get().getTypeContext().getUnknown();
@@ -7139,6 +7203,36 @@ namespace wio::sema
                             WIO_LOG_ADD_ERROR(node.location(), "Const generic argument '{}' has no evaluable initializer.", node.name.value);
                             node.refType = Compiler::get().getTypeContext().getUnknown();
                             return;
+                        }
+
+                        Ref<Type> constType = unwrapAliasType(sym->type);
+                        if (constType && constType->kind() == TypeKind::Primitive)
+                        {
+                            const std::string& constTypeName = constType.AsFast<PrimitiveType>()->name;
+                            if (constTypeName == "string" || constTypeName == "text")
+                            {
+                                std::unordered_set<const Symbol*> activeSymbols{sym.Get()};
+                                auto value = tryEvaluateStaticAttributeConstant(
+                                    declarationIt->second->initializer,
+                                    variableDeclarationsBySymbol_,
+                                    activeSymbols);
+                                if (!value || value->type != TokenType::stringLiteral ||
+                                    value->isUnicodeString != (constTypeName == "text"))
+                                {
+                                    WIO_LOG_ADD_ERROR(
+                                        node.location(),
+                                        "Const generic argument '{}' must evaluate to '{}'.",
+                                        node.name.value,
+                                        constTypeName);
+                                    node.refType = Compiler::get().getTypeContext().getUnknown();
+                                    return;
+                                }
+
+                                node.refType = Compiler::get().getTypeContext().getOrCreateConstValueType(
+                                    value->value,
+                                    sym->type);
+                                return;
+                            }
                         }
 
                         std::unordered_set<const Symbol*> activeSymbols;
@@ -14877,6 +14971,18 @@ namespace wio::sema
                     "@Native functions cannot return ref/view values because the native borrow lifetime cannot be proven. Return an owning value or handle instead."
                 );
             }
+
+            for (size_t index = 0; index < funcSym->genericParameterTypes.size(); ++index)
+            {
+                if (!isTextualConstGenericParameterType(funcSym->genericParameterTypes[index]))
+                    continue;
+                WIO_LOG_ADD_ERROR(
+                    index < node.genericParameters.size() && node.genericParameters[index]
+                        ? node.genericParameters[index]->location()
+                        : node.location(),
+                    "@Native functions support only integer const generic parameters; string/text const values use a Wio-owned structural backend representation."
+                );
+            }
         }
         std::string activeFunctionPackName = node.hasGenericParameterPack && !node.genericParameters.empty()
             ? node.genericParameters.back()->token.value
@@ -16403,6 +16509,20 @@ namespace wio::sema
             compSym->genericParameterNames = structType.AsFast<StructType>()->genericParameterNames;
             structType.AsFast<StructType>()->genericParameterTypes = collectGenericParameterSemanticTypes(node.genericParameters);
             compSym->genericParameterTypes = structType.AsFast<StructType>()->genericParameterTypes;
+            if (isNativePodComponent)
+            {
+                for (size_t index = 0; index < compSym->genericParameterTypes.size(); ++index)
+                {
+                    if (!isTextualConstGenericParameterType(compSym->genericParameterTypes[index]))
+                        continue;
+                    WIO_LOG_ADD_ERROR(
+                        index < node.genericParameters.size() && node.genericParameters[index]
+                            ? node.genericParameters[index]->location()
+                            : node.location(),
+                        "@Native components support only integer const generic parameters; string/text const values use a Wio-owned structural backend representation."
+                    );
+                }
+            }
             structType.AsFast<StructType>()->genericParameterDefaults = genericParameterDefaults;
             compSym->genericParameterDefaults = std::move(genericParameterDefaults);
             compSym->hasGenericParameterPack = structType.AsFast<StructType>()->hasGenericParameterPack;

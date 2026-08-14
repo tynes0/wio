@@ -23,6 +23,7 @@ namespace wio
             return token.isIdentifier() ||
                    token.isType() ||
                    token.type == TokenType::integerLiteral ||
+                   token.type == TokenType::stringLiteral ||
                    token.type == TokenType::kwRef ||
                    token.type == TokenType::kwView ||
                    token.type == TokenType::kwFn ||
@@ -826,7 +827,7 @@ namespace wio
 
     NodePtr<TypeSpecifier> Parser::parseGenericArgument()
     {
-        if (match(TokenType::integerLiteral))
+        if (match(TokenType::integerLiteral) || match(TokenType::stringLiteral))
         {
             Token value = advance();
             const auto location = value.loc;

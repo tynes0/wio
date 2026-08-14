@@ -1,0 +1,8 @@
+@Native
+@CppHeader("native_text_const_generic.h")
+@CppName(native::Read)
+fn Read<const Label: text>() -> i32;
+
+fn Entry() -> i32 {
+    return 0;
+}

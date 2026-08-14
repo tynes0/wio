@@ -304,7 +304,7 @@ outside this freeze. The normative details are in `WIO_ASYNC_MODEL.md`.
 The following should currently be treated as post-`v1` unless a later release
 decision changes that on purpose.
 
-- const generics beyond the current pack/meta indexing slice
+- const generic value kinds beyond integers, `string`, and `text`
 - `std::meta` beyond the current `v1` wave 3 helper surface
 - pattern-based specialization beyond the current deterministic partial model
 - generalized implicit user-defined conversions

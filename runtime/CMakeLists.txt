@@ -1,6 +1,7 @@
 set(WIO_RUNTIME_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 set(WIO_RUNTIME_HEADERS
+    "${WIO_RUNTIME_INCLUDE_DIR}/constant_value.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/entry_args.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/exception.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/format.h"

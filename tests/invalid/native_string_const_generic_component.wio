@@ -1,0 +1,10 @@
+@Native
+@CppHeader("native_text_const_generic.h")
+@CppName(native::Named)
+component NativeNamed<const Label: string> {
+    value: i32;
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

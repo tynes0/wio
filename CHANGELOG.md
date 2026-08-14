@@ -13,6 +13,9 @@ All notable user-facing changes to Wio are recorded here.
 - Added `const string` and `const text` declarations with literal values,
   constant references, concatenation, comparison, matching, and global, local,
   or component-static storage.
+- Added `string` and `text` const generic parameters on functions, aliases,
+  interfaces, components, and objects, including defaults, specialization,
+  qualified module constants, and a Wio-owned C++20 structural representation.
 - Constant `string` and `text` interpolation now accepts constant-evaluable
   embedded expressions while continuing to reject runtime calls and bindings.
 - Added the first-class `text` primitive and validated UTF-8 `u"..."` and
@@ -57,11 +60,18 @@ All notable user-facing changes to Wio are recorded here.
 - Nested generic closers no longer require whitespace: `>>`, `>=`, and `>>=`
   are split contextually while parsing generic types/calls and remain shift or
   comparison operators in expressions.
+- Textual const generics remain a Wio-owned type-system feature; native
+  functions and native component templates continue to accept only integer
+  const parameters until an ABI contract is deliberately added.
 
 ### Fixed
 
 - Distinguished byte-string and Unicode-text literals in typed attribute
   validation instead of treating `text` as an integer-like fallback type.
+- Fixed literal-to-literal byte-string concatenation and comparison generating
+  raw C++ pointer operations instead of Wio string-value operations.
+- Avoided generic reflection template parameters shadowing the stable
+  `TypeReflection::Name` metadata member.
 - Preserved keyword-shaped `if (... fit name)` bindings after `text` became a
   first-class type keyword, and synchronized the indexed-value diagnostic test.
 - Gave the repeated asynchronous listener-close stress test a CI-safe timeout
