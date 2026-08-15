@@ -19,6 +19,8 @@ For full details, see:
 - [`WIO_SDK.md`](./WIO_SDK.md)
 - [`WIO_COMPATIBILITY.md`](./WIO_COMPATIBILITY.md)
 - [`WIO_PERFORMANCE.md`](./WIO_PERFORMANCE.md)
+- [`WIO_V1_RELEASE_PLAN.md`](./WIO_V1_RELEASE_PLAN.md)
+- [`WIO_POST_V1_ROADMAP.md`](./WIO_POST_V1_ROADMAP.md)
 
 ---
 
@@ -179,8 +181,12 @@ known caveats that should be resolved as polish rather than redesign.
 `const` is in `v1`, but intentionally small:
 
 - compile-time only
-- scalar primitive values plus enum/flagset values
+- scalar primitive values, enum/flagset values, `string`, and `text`
 - compile-time evaluable initializers only
+
+`string` and `text` constants support the frozen literal, reference,
+concatenation, comparison, matching, constant-interpolation, and const-generic
+surface. Further const value categories remain outside v1.
 
 This is a deliberate `v1` boundary, not an accident.
 
@@ -321,6 +327,10 @@ freeze target.
 
 ## 5. Areas Still In Active Hardening
 
+Explicitly deferred items are maintained in
+[`WIO_POST_V1_ROADMAP.md`](./WIO_POST_V1_ROADMAP.md) rather than left as an
+unstructured tail of the v1 backlog.
+
 These are the main language-adjacent items still expected to move before the
 `v1` tag, but they should move inside the already chosen model:
 
@@ -338,3 +348,6 @@ When discussing new work before `v1`, use this rule of thumb:
 - if it clarifies a caveat listed in section 3, it is probably `v1` work,
 - if it belongs to section 4, it should probably wait unless it unblocks a
   release blocker.
+
+The concrete release ownership and scope-intake rules live in
+[`WIO_V1_RELEASE_PLAN.md`](./WIO_V1_RELEASE_PLAN.md).

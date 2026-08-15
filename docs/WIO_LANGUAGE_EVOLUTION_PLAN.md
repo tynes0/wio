@@ -11,7 +11,11 @@ The plan has two purposes:
 - turn those decisions into reviewable slices instead of disconnected syntax
   experiments.
 
-The active implementation order remains in [`../TODOLIST.md`](../TODOLIST.md).
+The active implementation state remains in [`../TODOLIST.md`](../TODOLIST.md).
+Pre-v1 release ownership is defined in
+[`WIO_V1_RELEASE_PLAN.md`](./WIO_V1_RELEASE_PLAN.md), while deliberately
+deferred expansion is grouped in
+[`WIO_POST_V1_ROADMAP.md`](./WIO_POST_V1_ROADMAP.md).
 
 Implementation status after the P1 foundation sprint: typed attributes,
 conflict groups, runtime attribute reflection, ordinary-call pipelines,

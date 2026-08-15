@@ -12,7 +12,7 @@ The current docs strategy is:
 That lets the docs work well both:
 
 - directly inside the repository
-- and later as the content base for a docs website if we want to ship one
+- as the canonical content source consumed by the existing `wio-web` site
 
 ---
 
@@ -24,6 +24,7 @@ If you are brand new to Wio, read in this order:
 2. [CLI reference](./WIO_CLI_REFERENCE.md)
 3. [Project system](./WIO_PROJECT_SYSTEM.md)
 4. [v1 freeze snapshot](./WIO_V1_FREEZE.md)
+5. [v1 release plan](./WIO_V1_RELEASE_PLAN.md)
 
 That path gives you:
 
@@ -116,6 +117,8 @@ Use these when the question is about:
 ## 4. Release, Quality, And Compatibility
 
 - [v1 freeze snapshot](./WIO_V1_FREEZE.md)
+- [v1 release plan](./WIO_V1_RELEASE_PLAN.md)
+- [Post-v1 roadmap](./WIO_POST_V1_ROADMAP.md)
 - [Versioning and compatibility](./WIO_COMPATIBILITY.md)
 - [Performance and memory notes](./WIO_PERFORMANCE.md)
 - [Traceability](./WIO_TRACEABILITY.md)
@@ -125,6 +128,8 @@ These are the "how should I read the product right now?" documents.
 Use them when you want to answer:
 
 - is this part of `v1`?
+- which pre-v1 release owns it?
+- where does deliberately deferred work live?
 - is this stable or experimental?
 - how do I think about performance?
 - which tests prove a feature is real?
@@ -138,7 +143,7 @@ As Wio grows, keep this split:
 - `README.md` at repo root:
   fast orientation, common commands, and entry links
 - `docs/README.md`:
-  navigation and document map
+  navigation and document map used by the repository and `wio-web`
 - major contracts:
   language, project system, std, SDK, runtime model, freeze, compatibility
 - companion docs:
@@ -150,5 +155,6 @@ When a document starts trying to do too many jobs at once, prefer this move:
 2. keep the parent document as the overview/contract
 3. link the companion document from here
 
-That is the same structure we would want if these docs later move into a
-website or Vercel-hosted docs surface.
+`wio-web` fetches these Markdown files from the Wio repository. Keep canonical
+technical content here; keep site navigation, presentation, search, and release
+selection in the web repository.
