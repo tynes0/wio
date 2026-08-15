@@ -15,6 +15,18 @@ remaining work. The
 application/system and language-coherence direction is expanded in
 `docs/WIO_LANGUAGE_EVOLUTION_PLAN.md`.
 
+This backlog is intentionally broader than the `v1.0.0` release gate. Use:
+
+- [`docs/WIO_V1_RELEASE_PLAN.md`](docs/WIO_V1_RELEASE_PLAN.md) for the finite
+  pre-v1 release train and mandatory gates;
+- [`docs/WIO_POST_V1_ROADMAP.md`](docs/WIO_POST_V1_ROADMAP.md) for work that is
+  valuable but does not block v1;
+- [`COMPLETED.md`](COMPLETED.md) for accepted work and its evidence.
+
+Some numbered items contain both a pre-v1 correctness core and a post-v1
+expansion. The release plan routes those parts explicitly; an unchecked item
+here does not by itself mean that v1 cannot ship.
+
 ## P1 - Language Semantics and Type System
 
 1. [~] Turn the draft into a versioned normative language specification.
@@ -462,9 +474,12 @@ application/system and language-coherence direction is expanded in
    Add proposal/RFC templates, acceptance criteria, feature gates,
    experimental namespaces, stabilization checklists, and removal policy.
 
-4. [ ] Build a documentation website and searchable package portal.
-   Publish versioned language/std/SDK docs, tutorials, examples, migration
-   guides, package metadata, API search, and release compatibility tables.
+4. [~] Complete the documentation website and searchable package portal.
+   The `wio-web` React/Vite documentation and download site already consumes
+   canonical Markdown from this repository. Add versioned language/std/SDK
+   selection, tutorials, migration guides, release compatibility tables,
+   full-text/API search, and package metadata/search without duplicating the
+   canonical technical content.
 
 5. [ ] Create a real-world validation portfolio.
    Maintain substantial applications covering CLI, native desktop GUI,

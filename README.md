@@ -12,6 +12,8 @@ Useful reference docs:
 - [CLI reference](docs/WIO_CLI_REFERENCE.md)
 - [Language reference](docs/WIO_LANGUAGE_DRAFT.md)
 - [v1 freeze snapshot](docs/WIO_V1_FREEZE.md)
+- [v1 release plan](docs/WIO_V1_RELEASE_PLAN.md)
+- [Post-v1 roadmap](docs/WIO_POST_V1_ROADMAP.md)
 - [Project system](docs/WIO_PROJECT_SYSTEM.md)
 - [Standard library](docs/WIO_STD.md)
 - [Interop guide](docs/WIO_INTEROP_GUIDE.md)
