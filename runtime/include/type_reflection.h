@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ref.h"
+#include "text.h"
 
 #include <array>
 #include <cstddef>
@@ -36,6 +37,20 @@ namespace wio::runtime
             std::is_arithmetic_v<T> || std::is_same_v<T, std::string>
                 ? ReflectedTypeKind::primitive_type
                 : ReflectedTypeKind::unknown;
+        static constexpr std::array<std::string_view, 0> FieldNames{};
+        static constexpr std::array<std::string_view, 0> FieldTypes{};
+        static constexpr std::array<std::string_view, 0> FieldAccess{};
+        static constexpr std::array<std::string_view, 0> MethodNames{};
+        static constexpr std::array<std::string_view, 0> MethodSignatures{};
+        static constexpr std::array<std::string_view, 0> MethodAccess{};
+        static constexpr std::array<std::string_view, 0> BaseTypes{};
+    };
+
+    template <>
+    struct TypeReflection<Text>
+    {
+        static constexpr std::string_view Name = "text";
+        static constexpr ReflectedTypeKind Kind = ReflectedTypeKind::primitive_type;
         static constexpr std::array<std::string_view, 0> FieldNames{};
         static constexpr std::array<std::string_view, 0> FieldTypes{};
         static constexpr std::array<std::string_view, 0> FieldAccess{};
@@ -96,7 +111,27 @@ namespace wio::runtime
     template <typename T>
     [[nodiscard]] inline std::string ReflectedTypeName()
     {
-        return std::string(TypeReflection<T>::Name);
+        if constexpr (TypeReflection<T>::Name != std::string_view("<unknown>"))
+        {
+            return std::string(TypeReflection<T>::Name);
+        }
+        else if constexpr (std::is_same_v<T, std::string>) return "string";
+        else if constexpr (std::is_same_v<T, bool>) return "bool";
+        else if constexpr (std::is_same_v<T, char>) return "char";
+        else if constexpr (std::is_same_v<T, signed char>) return "i8";
+        else if constexpr (std::is_same_v<T, unsigned char>) return "u8";
+        else if constexpr (std::is_same_v<T, std::int16_t>) return "i16";
+        else if constexpr (std::is_same_v<T, std::uint16_t>) return "u16";
+        else if constexpr (std::is_same_v<T, std::int32_t>) return "i32";
+        else if constexpr (std::is_same_v<T, std::uint32_t>) return "u32";
+        else if constexpr (std::is_same_v<T, std::int64_t>) return "i64";
+        else if constexpr (std::is_same_v<T, std::uint64_t>) return "u64";
+        else if constexpr (std::is_same_v<T, float>) return "f32";
+        else if constexpr (std::is_same_v<T, double>) return "f64";
+        else
+        {
+            return "<unknown>";
+        }
     }
 
     template <typename T>
@@ -157,6 +192,22 @@ namespace wio::runtime
     [[nodiscard]] inline std::vector<std::string> ReflectedBaseTypes()
     {
         return { TypeReflection<T>::BaseTypes.begin(), TypeReflection<T>::BaseTypes.end() };
+    }
+
+    template <typename T>
+    [[nodiscard]] inline std::vector<std::string> ReflectedGenericParameterNames()
+    {
+        if constexpr (requires { TypeReflection<T>::_WIOGenericParameterNames(); })
+            return TypeReflection<T>::_WIOGenericParameterNames();
+        return {};
+    }
+
+    template <typename T>
+    [[nodiscard]] inline std::vector<std::string> ReflectedGenericArguments()
+    {
+        if constexpr (requires { TypeReflection<T>::_WIOGenericArguments(); })
+            return TypeReflection<T>::_WIOGenericArguments();
+        return {};
     }
 
     template <typename T>

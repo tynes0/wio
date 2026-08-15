@@ -1,0 +1,6 @@
+const First: string = Second;
+const Second: string = First;
+
+fn Entry() -> i32 {
+    return 0;
+}

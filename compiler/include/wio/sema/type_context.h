@@ -24,6 +24,7 @@ namespace wio::sema
         Ref<Type> getBool()   const { return t_bool; }
         Ref<Type> getChar()   const { return t_char; }
         Ref<Type> getString() const { return t_string; }
+        Ref<Type> getText() const { return t_text; }
         Ref<Type> getAny() const { return t_any; }
         Ref<Type> getOpaque() const { return t_opaque; }
         Ref<Type> getUnknown() const { return t_unknown; }
@@ -50,7 +51,9 @@ namespace wio::sema
         Ref<Type> getOrCreateNullableType(Ref<Type> valueType);
         
         Ref<Type> getOrCreateReferenceType(Ref<Type> referredType, bool isMutable);
-        Ref<Type> getOrCreateArrayType(Ref<Type> elementType, ArrayType::ArrayKind arrayKind, size_t size = 0, Ref<Type> extentType = nullptr);
+        Ref<Type> getOrCreateArrayType(Ref<Type> elementType, ArrayType::ArrayKind arrayKind,
+                                       size_t size = 0, Ref<Type> extentType = nullptr,
+                                       bool hasInferredExtent = false);
         Ref<Type> getOrCreateFunctionType(Ref<Type> returnType, std::vector<Ref<Type>> paramTypes, bool hasParameterPack = false);
         Ref<Type> getOrCreateDictionaryType(Ref<Type> keyType, Ref<Type> valueType, bool isOrdered = false);
         Ref<Type> getOrCreateTreeType(Ref<Type> keyType, Ref<Type> valueType);
@@ -75,6 +78,7 @@ namespace wio::sema
         Ref<Type> t_bool = nullptr;
         Ref<Type> t_char = nullptr;
         Ref<Type> t_string = nullptr;
+        Ref<Type> t_text = nullptr;
         Ref<Type> t_any = nullptr;
         Ref<Type> t_opaque = nullptr;
         Ref<Type> t_unknown = nullptr;

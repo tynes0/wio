@@ -60,7 +60,9 @@ contract.
 - `interface`
 - `enum`
 - `flagset`
-- typed user-defined attributes
+- typed user-defined attributes, including compact declarations, named
+  application arguments, retention, repetition, inheritance, scoping, and
+  conflict policies
 - `system` and `application`
 - `type` aliases, including generic aliases
 - `let`, `mut`, and `const`
@@ -70,6 +72,8 @@ contract.
 
 - ordinary free functions
 - object methods
+- component extension methods with `view`/`ref` receivers, trailing defaults,
+  generic methods, generic defaults, and `where` constraints
 - lambdas with value capture
 - `async fn`, async object/interface methods, `await`, and `coroutine<T>`
 - constructors through `OnConstruct`
@@ -113,6 +117,8 @@ The intended `v1` reading model is:
 - assignment
 - conditional `?:` and ordinary-call pipelines `|>` / `<|`
 - `if`, `while`, `for`, `match`
+- boolean guards on non-fallback match arms and exhaustive Option, Result, and
+  enum value matches
 - sequential application/system lifecycle and orderly exit
 - range expressions and range-based iteration
 - `is` / `fit`
@@ -140,7 +146,10 @@ The following generic slice is intended to be in `v1`:
 - trailing/dependent generic defaults
 - full explicit `object` and `component` specialization through
   `@Specialize(...)`
-- deterministic partial object/component specialization
+- structural deterministic partial object/component specialization, including
+  repeated generic-parameter relationships and ambiguity for incomparable
+  matches
+- contextual nested generic closers without whitespace
 - explicit generic argument passing
 - constructor deduction for generic `object` and `component` declarations
 - `@Apply(...)`-based constraint checking
@@ -295,14 +304,15 @@ outside this freeze. The normative details are in `WIO_ASYNC_MODEL.md`.
 The following should currently be treated as post-`v1` unless a later release
 decision changes that on purpose.
 
-- const generics beyond the current pack/meta indexing slice
+- const generic value kinds beyond integers, `string`, and `text`
 - `std::meta` beyond the current `v1` wave 3 helper surface
 - pattern-based specialization beyond the current deterministic partial model
 - generalized implicit user-defined conversions
 - user-defined `operator->`
 - async generators/streams and suspension across borrowed component/extension
   lifetimes
-- a larger algebraic-data-type / pattern-matching redesign
+- payload enums and a larger algebraic-data-type redesign beyond the current
+  Option/Result/array/enum matching surface
 
 These items are not “forgotten”; they are intentionally not part of the current
 freeze target.

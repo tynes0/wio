@@ -1,0 +1,8 @@
+component Named<const Name: string> {
+    value: i32;
+}
+
+fn Entry() -> i32 {
+    let value: Named<u"Unicode"> = Named<u"Unicode">(1);
+    return value.value;
+}

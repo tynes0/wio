@@ -65,6 +65,7 @@ namespace wio
       kwChar,
       kwUchar,
       kwString,
+      kwText,
       kwAny,
       kwOpaque,
       kwComponent,
@@ -293,6 +294,7 @@ namespace wio
       { "char",      TokenType::kwChar },
       { "uchar",     TokenType::kwUchar },
       { "string",    TokenType::kwString },
+      { "text",      TokenType::kwText },
       { "any",       TokenType::kwAny },
       { "opaque",    TokenType::kwOpaque },
       { "component", TokenType::kwComponent },
@@ -444,6 +446,7 @@ namespace wio
       TokenType type = TokenType::invalid;
       std::string value;
       common::Location loc;
+      bool isUnicodeString = false;
 
       [[nodiscard]] static Token invalid();
       

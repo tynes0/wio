@@ -1,0 +1,38 @@
+use std::assert as assert;
+use std::console as console;
+use std::reflect as reflect;
+
+let GlobalPrimes: [i32; _] = [2, 3, 5, 7];
+
+component Palette {
+    public colors: [i32; _] = [10, 20, 30];
+}
+
+fn Pair<T>(first: T, second: T) -> [T; 2] {
+    let values: [T; _] = [first, second];
+    return values;
+}
+
+fn Entry() -> i32 {
+    let values: [i32; _] = [8, 13, 21];
+    let copied: [i32; _] = values;
+    let empty: [string; _] = [];
+    let matrix: [[i32; _]; _] = [[1, 2], [3, 4]];
+    let palette = Palette([10, 20, 30]);
+    let genericPair = Pair<string>("left", "right");
+    let paletteInfo = reflect::Describe<Palette>();
+
+    assert::ExpectEqual(values.Count() fit i32, 3, "local extent");
+    assert::ExpectEqual(copied[2usize], 21, "concrete fixed-array source");
+    assert::ExpectEqual(empty.Count() fit i32, 0, "empty extent");
+    assert::ExpectEqual(matrix.Count() fit i32, 2, "outer nested extent");
+    assert::ExpectEqual(matrix[0usize].Count() fit i32, 2, "inner nested extent");
+    assert::ExpectEqual(matrix[1usize][0usize], 3, "nested value");
+    assert::ExpectEqual(GlobalPrimes[3usize], 7, "global extent");
+    assert::ExpectEqual(palette.colors[1usize], 20, "component field extent");
+    assert::ExpectEqual(genericPair[1usize], "right", "generic element extent");
+    assert::ExpectEqual(paletteInfo.fields[0usize].typeName, "[i32; 3]", "reflection extent");
+
+    console::PrintLine("fixed-array-auto-extent-ok");
+    return 0;
+}

@@ -66,6 +66,18 @@ realm std {
         fn IsArrayType<T>() -> bool;
 
         @Native
+        @CppName(wio::runtime::traits::IsPrimitiveValue)
+        fn IsPrimitiveType<T>() -> bool;
+
+        @Native
+        @CppName(wio::runtime::traits::IsStringValue)
+        fn IsStringType<T>() -> bool;
+
+        @Native
+        @CppName(wio::runtime::traits::IsTextValue)
+        fn IsTextType<T>() -> bool;
+
+        @Native
         @CppName(wio::runtime::traits::IsDictionaryValue)
         fn IsDictionaryType<T>() -> bool;
 

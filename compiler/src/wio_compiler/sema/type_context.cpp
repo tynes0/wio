@@ -8,6 +8,7 @@ namespace wio::sema
         t_bool   = makeType<PrimitiveType>("bool");
         t_char   = makeType<PrimitiveType>("char");
         t_string = makeType<PrimitiveType>("string");
+        t_text = makeType<PrimitiveType>("text");
         t_any = makeType<PrimitiveType>("any");
         t_opaque = makeType<PrimitiveType>("opaque");
 
@@ -50,9 +51,12 @@ namespace wio::sema
         return makeType<NullableType>(std::move(valueType));
     }
 
-    Ref<Type> TypeContext::getOrCreateArrayType(Ref<Type> elementType, ArrayType::ArrayKind arrayKind, size_t size, Ref<Type> extentType)
+    Ref<Type> TypeContext::getOrCreateArrayType(Ref<Type> elementType, ArrayType::ArrayKind arrayKind,
+                                                size_t size, Ref<Type> extentType,
+                                                bool hasInferredExtent)
     {
-        return makeType<ArrayType>(std::move(elementType), arrayKind, size, std::move(extentType));
+        return makeType<ArrayType>(std::move(elementType), arrayKind, size,
+                                   std::move(extentType), hasInferredExtent);
     }
     
     Ref<Type> TypeContext::getOrCreateDictionaryType(Ref<Type> keyType, Ref<Type> valueType, bool isOrdered)

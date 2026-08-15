@@ -43,6 +43,7 @@ namespace wio::sema
         Ref<Scope> currentScope_ = nullptr;
         Ref<Type> currentExpectedExpressionType_ = nullptr;
         bool allowContextualNumericLiteralTyping_ = false;
+        bool allowInferredStaticArrayExtent_ = false;
         Ref<Type> currentFunctionReturnType_ = nullptr;
         bool currentFunctionIsAsync_ = false;
         struct LambdaCaptureContext

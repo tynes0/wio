@@ -23,6 +23,7 @@ namespace wio
             return token.isIdentifier() ||
                    token.isType() ||
                    token.type == TokenType::integerLiteral ||
+                   token.type == TokenType::stringLiteral ||
                    token.type == TokenType::kwRef ||
                    token.type == TokenType::kwView ||
                    token.type == TokenType::kwFn ||
@@ -228,6 +229,51 @@ namespace wio
             );
         
         utError(formattedErrMsg, current.loc);
+    }
+
+    void Parser::consumeGenericClose()
+    {
+        if (match(TokenType::opGreater, true))
+            return;
+
+        const Token combined = peek();
+        auto makeRemainder = [&](TokenType type, std::string value, uint64_t columnOffset)
+        {
+            Token token = combined;
+            token.type = type;
+            token.value = std::move(value);
+            if (token.loc.column != 0)
+                token.loc.column += columnOffset;
+            return token;
+        };
+
+        if (combined.type == TokenType::opShiftRight)
+        {
+            advance();
+            tokens_.insert(tokens_.begin() + static_cast<std::ptrdiff_t>(currentTokenIndex_),
+                           makeRemainder(TokenType::opGreater, ">", 1));
+            return;
+        }
+
+        if (combined.type == TokenType::opGreaterEqual)
+        {
+            advance();
+            tokens_.insert(tokens_.begin() + static_cast<std::ptrdiff_t>(currentTokenIndex_),
+                           makeRemainder(TokenType::opAssign, "=", 1));
+            return;
+        }
+
+        if (combined.type == TokenType::opShiftRightAssign)
+        {
+            advance();
+            const auto insertAt = tokens_.begin() + static_cast<std::ptrdiff_t>(currentTokenIndex_);
+            tokens_.insert(insertAt, makeRemainder(TokenType::opGreater, ">", 1));
+            tokens_.insert(tokens_.begin() + static_cast<std::ptrdiff_t>(currentTokenIndex_ + 1),
+                           makeRemainder(TokenType::opAssign, "=", 2));
+            return;
+        }
+
+        consume(TokenType::opGreater);
     }
 
     bool Parser::matchIdentifier(bool consume)
@@ -756,7 +802,8 @@ namespace wio
             parts.emplace_back(makeNodePtr<StringLiteral>(std::move(nextPart)));
         }
 
-        return makeNodePtr<InterpolatedStringLiteral>(std::move(parts), startTok.loc);
+        return makeNodePtr<InterpolatedStringLiteral>(
+            std::move(parts), startTok.isUnicodeString, startTok.loc);
     }
 
     std::vector<NodePtr<TypeSpecifier>> Parser::parseExplicitTypeArgumentList()
@@ -774,13 +821,13 @@ namespace wio
             }
         }
 
-        consume(TokenType::opGreater);
+        consumeGenericClose();
         return typeArguments;
     }
 
     NodePtr<TypeSpecifier> Parser::parseGenericArgument()
     {
-        if (match(TokenType::integerLiteral))
+        if (match(TokenType::integerLiteral) || match(TokenType::stringLiteral))
         {
             Token value = advance();
             const auto location = value.loc;
@@ -1090,6 +1137,7 @@ namespace wio
 
             size_t size = 0;
             NodePtr<TypeSpecifier> arrayExtent = nullptr;
+            bool hasInferredArrayExtent = false;
             if (match(TokenType::semicolon, true))
             {
                 if (match(TokenType::rightBracket))
@@ -1102,7 +1150,17 @@ namespace wio
                     size = traits::IntegerTraits<size_t>::IntegerResultCastedAs(getInteger(sizeToken.value));
                 }
                 else if (match(TokenType::identifier))
-                    arrayExtent = parseGenericArgument();
+                {
+                    if (peek().value == "_")
+                    {
+                        advance();
+                        hasInferredArrayExtent = true;
+                    }
+                    else
+                    {
+                        arrayExtent = parseGenericArgument();
+                    }
+                }
                 else
                 {
                     utError("Static array extents must be a non-negative integer literal or const generic parameter.", currentOrPreviousLocation());
@@ -1121,6 +1179,7 @@ namespace wio
 
             auto arrayType = makeNodePtr<TypeSpecifier>(arrayToken, std::move(generics), nullptr, size, false, false, false, leftBracketToken.loc);
             arrayType->arrayExtent = std::move(arrayExtent);
+            arrayType->hasInferredArrayExtent = hasInferredArrayExtent;
             return finishType(std::move(arrayType));
         }
 
@@ -1195,7 +1254,7 @@ namespace wio
                 generics.push_back(parseGenericArgument());
             }
 
-            consume(TokenType::opGreater);
+            consumeGenericClose();
         }
 
         NodePtr<Expression> packIndex = nullptr;
@@ -1492,12 +1551,26 @@ namespace wio
 
         std::vector<Token> args;
         std::vector<NodePtr<TypeSpecifier>> typeArgs;
+        std::vector<std::string> argumentNames;
         if (match(TokenType::leftParen, true))
         {
             if (!match(TokenType::rightParen))
             {
+                bool sawNamedArgument = false;
                 while (true)
                 {
+                    std::string argumentName;
+                    if (matchIdentifier() && peek(1).type == TokenType::opColon)
+                    {
+                        argumentName = advance().value;
+                        consume(TokenType::opColon);
+                        sawNamedArgument = true;
+                    }
+                    else if (sawNamedArgument)
+                    {
+                        utError("Positional attribute arguments cannot follow named arguments.", peek().loc);
+                    }
+
                     if (canStartAttributeTypeArgument(peek()))
                     {
                         const size_t typeStartIndex = currentTokenIndex_;
@@ -1523,6 +1596,7 @@ namespace wio
                         args.push_back(parseAttributeArgumentToken());
                         typeArgs.emplace_back(nullptr);
                     }
+                    argumentNames.push_back(std::move(argumentName));
 
                     if (!match(TokenType::comma, true))
                         break;
@@ -1535,9 +1609,11 @@ namespace wio
 
         if (std::optional<Attribute> attribute = resolveAttributeName(qualifiedName); attribute.has_value())
         {
-            return makeNodePtr<AttributeStatement>(attribute.value(), args, typeArgs, startLoc, qualifiedName);
+            if (std::ranges::any_of(argumentNames, [](const std::string& name) { return !name.empty(); }))
+                utError("Named arguments are currently supported only for user-defined attributes.", startLoc);
+            return makeNodePtr<AttributeStatement>(attribute.value(), args, typeArgs, startLoc, qualifiedName, argumentNames);
         }
-        return makeNodePtr<AttributeStatement>(Attribute::Unknown, args, typeArgs, startLoc, qualifiedName);
+        return makeNodePtr<AttributeStatement>(Attribute::Unknown, args, typeArgs, startLoc, qualifiedName, argumentNames);
     }
 
     void Parser::parseWithAttributeClause(std::vector<NodePtr<AttributeStatement>>& attributes)
@@ -1545,13 +1621,13 @@ namespace wio
         if (!match(TokenType::kwWith, true))
             return;
 
-        if (peek().type != TokenType::identifier)
+        if (!matchIdentifier())
             utError("Expected an attribute name after 'with'.", peek().loc);
 
         attributes.push_back(parseAttributeStatement(false));
         while (match(TokenType::comma, true))
         {
-            if (peek().type != TokenType::identifier)
+            if (!matchIdentifier())
                 utError("Expected an attribute name after ',' in a 'with' clause.", peek().loc);
             attributes.push_back(parseAttributeStatement(false));
         }
@@ -1564,6 +1640,59 @@ namespace wio
     {
         Token startTok = consume(TokenType::kwAttribute);
         auto name = makeNodePtr<Identifier>(consumeIdentifier());
+
+        auto consumePolicyWord = [&]() -> Token
+        {
+            Token token = peek();
+            if (!token.isIdentifier() && !token.isKeyword())
+                utError("Expected an attribute policy name.", token.loc);
+            advance();
+            return token;
+        };
+
+        auto hasCompactTargetList = [&]()
+        {
+            if (peek().type != TokenType::leftParen)
+                return false;
+
+            size_t offset = 1;
+            bool expectTarget = true;
+            bool sawTarget = false;
+            while (true)
+            {
+                const Token token = peek(static_cast<int>(offset));
+                if (!token.isValid())
+                    return false;
+                if (token.type == TokenType::rightParen)
+                    return sawTarget && !expectTarget &&
+                           peek(static_cast<int>(offset + 1)).type == TokenType::leftParen;
+                if (expectTarget)
+                {
+                    if (!token.isIdentifier() && !token.isKeyword())
+                        return false;
+                    sawTarget = true;
+                    expectTarget = false;
+                }
+                else
+                {
+                    if (token.type != TokenType::opBitOr)
+                        return false;
+                    expectTarget = true;
+                }
+                ++offset;
+            }
+        };
+
+        std::vector<std::string> targets;
+        const bool compactDeclaration = hasCompactTargetList();
+        if (compactDeclaration)
+        {
+            consume(TokenType::leftParen);
+            targets.push_back(consumePolicyWord().value);
+            while (match(TokenType::opBitOr, true))
+                targets.push_back(consumePolicyWord().value);
+            consume(TokenType::rightParen);
+        }
 
         consume(TokenType::leftParen);
         std::vector<Parameter> parameters;
@@ -1588,35 +1717,77 @@ namespace wio
         }
         consume(TokenType::rightParen);
 
-        auto consumePolicyWord = [&]() -> Token
-        {
-            Token token = peek();
-            if (!token.isIdentifier() && !token.isKeyword())
-                utError("Expected an attribute policy name.", token.loc);
-            advance();
-            return token;
-        };
-
-        std::vector<std::string> targets;
         std::vector<std::string> retention;
         std::vector<std::string> conflictGroups;
         bool repeatable = false;
         bool inherited = false;
         bool scoped = false;
 
-        if (match(TokenType::kwFor, true))
+        if (!compactDeclaration && match(TokenType::kwFor, true))
         {
             targets.push_back(consumePolicyWord().value);
             while (match(TokenType::opBitOr, true))
                 targets.push_back(consumePolicyWord().value);
         }
-        else
+        else if (!compactDeclaration)
         {
             utError("Attribute declarations require a 'for' target clause.", startTok.loc);
         }
 
         while (!match(TokenType::semicolon))
         {
+            if (match(TokenType::kwWith))
+            {
+                std::vector<NodePtr<AttributeStatement>> policies;
+                parseWithAttributeClause(policies);
+                for (const auto& policy : policies)
+                {
+                    const std::string& policyName = policy->qualifiedName;
+                    auto requireNoArguments = [&]()
+                    {
+                        if (!policy->args.empty())
+                            utError("Attribute declaration policy '" + policyName + "' does not accept arguments.", policy->location());
+                    };
+
+                    if (policyName == "attribute::source" ||
+                        policyName == "attribute::compile" ||
+                        policyName == "attribute::runtime")
+                    {
+                        requireNoArguments();
+                        retention.push_back(policyName.substr(std::string("attribute::").size()));
+                    }
+                    else if (policyName == "attribute::repeatable")
+                    {
+                        requireNoArguments();
+                        repeatable = true;
+                    }
+                    else if (policyName == "attribute::inherited")
+                    {
+                        requireNoArguments();
+                        inherited = true;
+                    }
+                    else if (policyName == "attribute::scoped")
+                    {
+                        requireNoArguments();
+                        scoped = true;
+                    }
+                    else if (policyName == "attribute::conflict")
+                    {
+                        if (policy->args.size() != 1 ||
+                            (policy->args.front().type != TokenType::stringLiteral &&
+                             policy->args.front().type != TokenType::identifier))
+                        {
+                            utError("Attribute declaration policy 'attribute::conflict' expects one string or identifier argument.", policy->location());
+                        }
+                        conflictGroups.push_back(policy->args.front().value);
+                    }
+                    else
+                    {
+                        utError("Unknown attribute declaration policy '" + policyName + "'.", policy->location());
+                    }
+                }
+                continue;
+            }
             if (match(TokenType::identifier, "retain", true))
             {
                 retention.push_back(consumePolicyWord().value);
@@ -2161,7 +2332,7 @@ namespace wio
                 utError("Generic parameter packs must be trailing.", currentOrPreviousLocation());
         }
 
-        consume(TokenType::opGreater);
+        consumeGenericClose();
         return result;
     }
 
@@ -2810,7 +2981,7 @@ namespace wio
 
         Token matchVar = Token::invalid();
         if (match(TokenType::kwFit, true))
-            matchVar = consume(TokenType::identifier);
+            matchVar = consumeIdentifier();
 
         if (hasParen)
             consume(TokenType::rightParen);
@@ -3385,12 +3556,16 @@ namespace wio
                 continue;
             }
 
-            if (type == TokenType::opGreater)
+            const int closeCount = type == TokenType::opShiftRight ? 2 :
+                                   type == TokenType::opGreater ? 1 : 0;
+            if (closeCount != 0)
             {
                 if (angleDepth == 0)
                     return false;
 
-                --angleDepth;
+                angleDepth -= closeCount;
+                if (angleDepth < 0)
+                    return false;
                 if (angleDepth == 0)
                 {
                     if (!sawInnerToken || index + 1 >= tokens_.size())

@@ -47,6 +47,9 @@ namespace wio::sema
         std::vector<std::string> attributeParameterNames;
         std::vector<Ref<Type>> attributeParameterTypes;
         std::vector<bool> attributeParameterHasDefault;
+        // Aligned with attributeParameterNames. Invalid tokens represent
+        // required parameters or defaults that could not be folded.
+        std::vector<Token> attributeParameterDefaults;
         bool attributeRepeatable = false;
         bool attributeInherited = false;
         bool attributeScoped = false;

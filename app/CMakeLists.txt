@@ -194,12 +194,17 @@ endif()
 
 set(
     WIO_TRACEABILITY_TEST_REGEX
-    "(wio_test_(use_alias_dry_run|realm_basic_run|realm_nested_run|realm_qualified_from_run|object_component_access_semantics_run|interface_ref_upcast_run|component_embedded_member_ctor_run|for_in_dynamic_array_run|for_dict_key_value_run|for_component_binding_run|c_style_for_loop_run|match_value_basic_run|match_statement_basic_run|when_guard_fallback_value_run|fit_numeric_clamp_run|const_scalar_expressions_run|numeric_literal_suffixes_run|numeric_literal_signed_mins_run|default_parameters_run|default_parameter_native_bridge_run|function_parameter_pack_run|function_parameter_pack_explicit_type_arguments_run|function_parameter_pack_constraints_run|function_parameter_pack_defaults_run|pack_storage_write_semantics_run|pack_meta_and_generic_declarations_run|std_meta_second_wave_run|std_meta_wave3_run|generic_apply_function_constraints_run|generic_apply_type_and_object_run|generic_native_predicate_bridge_run|generic_object_explicit_specialization_run|generic_component_constructor_deduction_run|generic_object_constructor_deduction_run|generic_fit_target_constraints_dry_run|generic_parameterized_type_parameter_dry_run|ref_mut_container_members_dry_run|object_method_outer_const_dry_run|object_self_return_run|array_member_methods_run|dictionary_member_methods_run|string_member_methods_run|std_convert_surface_run|std_text_surface_run|std_algorithms_utility_wave_run|direct_indexing_run|control_flow_return_analysis_run|mutable_data_ergonomics_run|std_contract_v1_run|std_heap_box_run|std_heap_box_semantics_run|std_event_any_run|any_generic_box_fit_run|any_opaque_boundary_run|any_value_reference_semantics_run|native_opaque_bridge_run|native_box_bridge_run|direct_module_import_run|std_enum_flagset_surface_run|std_module_reimport_alias_run|enum_member_scope_run|binding_import_smoke|binding_manifest_smoke|sdk_invalid_api_contract|sdk_module_easy_host_interop|sdk_exported_types_host_interop|sdk_exported_inherited_host_interop|sdk_exported_complex_fields_host_interop|sdk_module_hot_reload_interop|sdk_hot_reload_stale_wrappers_interop|sdk_module_stale_bindings_interop|pack_export_host_interop)|wio_runtime_(direct_index_out_of_range|string_to_i32_invalid)|wio_invalid_(entry_invalid_parameter_type|entry_invalid_return_type|entry_too_many_parameters|entry_missing_body|entry_method_not_top_level|use_missing_user_module|use_missing_std_module|use_alias_conflicts_with_symbol|use_alias_hides_unqualified_root_symbol|use_without_direct_import_keeps_namespaced_access|realm_conflicts_with_symbol|ref_requires_addressable_operand|ref_immutable_to_mutable_param|is_left_requires_object_or_interface|is_right_requires_object_or_interface|fit_requires_numeric_or_object_interface|if_fit_requires_is_condition|component_method_not_allowed|object_inherits_component|final_object_inheritance|default_attribute_invalid_access|private_base_member_access|protected_member_access_outside_hierarchy|trust_requires_struct_type|let_without_initializer|mut_without_initializer|let_without_type_or_initializer|const_without_initializer|const_string_not_supported|const_from_non_const_identifier|const_function_call_not_supported|const_array_not_supported|default_parameter_non_trailing|default_parameter_type_mismatch|default_parameter_declaration_only_not_supported|default_parameter_entry_not_allowed|default_parameter_overload_conflict|generic_fit_target_without_supported_constraint|generic_parameter_pack_non_trailing|parameter_pack_non_trailing|parameter_pack_missing_matching_generic_pack|parameter_pack_bare_use_not_allowed|parameter_pack_default_not_supported|parameter_pack_method_not_supported|parameter_pack_apply_reject_non_integer|parameter_pack_export_requires_instantiate|parameter_pack_instantiate_predicate_not_allowed|parameter_pack_view_assignment_not_allowed|generic_apply_reject_function_call|generic_apply_reject_type_alias|generic_apply_reject_constructor|generic_apply_non_generic_function|generic_native_predicate_reject_non_integer|generic_specialization_requires_primary|generic_specialization_argument_count_mismatch|generic_specialization_duplicate|generic_specialization_native_component|pack_field_requires_generic_pack|pack_index_requires_compile_time_constant|pack_index_requires_const_declaration|pack_index_from_size_requires_subtraction|type_pack_to_static_array_not_supported|match_value_requires_assumed|match_assumed_must_be_last|match_duplicate_assumed|match_case_type_mismatch|match_return_type_mismatch|non_void_when_without_else|non_void_missing_return|non_void_if_missing_return|array_index_requires_integer|static_array_index_out_of_range|opaque_arithmetic_not_supported|opaque_is_not_supported|any_non_null_equality_not_supported|when_condition_type_mismatch|when_fallback_return_type_mismatch|for_in_requires_array|for_dict_requires_two_bindings|for_component_binding_count_mismatch|for_range_step_zero|break_outside_loop|continue_outside_loop|c_style_for_invalid_condition_type|array_member_requires_mutable_receiver|dictionary_member_requires_mutable_receiver|string_member_requires_mutable_receiver))"
+    "(wio_test_(use_alias_dry_run|realm_basic_run|realm_nested_run|realm_qualified_from_run|object_component_access_semantics_run|interface_ref_upcast_run|component_embedded_member_ctor_run|for_in_dynamic_array_run|for_dict_key_value_run|for_component_binding_run|c_style_for_loop_run|match_value_basic_run|match_statement_basic_run|when_guard_fallback_value_run|fit_numeric_clamp_run|const_scalar_expressions_run|const_string_text_run|const_global_type_visibility_run|numeric_literal_suffixes_run|numeric_literal_signed_mins_run|default_parameters_run|default_parameter_native_bridge_run|function_parameter_pack_run|function_parameter_pack_explicit_type_arguments_run|function_parameter_pack_constraints_run|function_parameter_pack_defaults_run|pack_storage_write_semantics_run|pack_meta_and_generic_declarations_run|std_meta_second_wave_run|std_meta_wave3_run|generic_apply_function_constraints_run|generic_apply_type_and_object_run|generic_native_predicate_bridge_run|generic_object_explicit_specialization_run|generic_component_constructor_deduction_run|generic_object_constructor_deduction_run|generic_fit_target_constraints_dry_run|generic_parameterized_type_parameter_dry_run|ref_mut_container_members_dry_run|object_method_outer_const_dry_run|object_self_return_run|array_member_methods_run|dictionary_member_methods_run|string_member_methods_run|std_convert_surface_run|std_text_surface_run|std_algorithms_utility_wave_run|direct_indexing_run|fixed_array_auto_extent_run|control_flow_return_analysis_run|mutable_data_ergonomics_run|std_contract_v1_run|std_heap_box_run|std_heap_box_semantics_run|std_event_any_run|any_generic_box_fit_run|any_opaque_boundary_run|any_value_reference_semantics_run|native_opaque_bridge_run|native_box_bridge_run|direct_module_import_run|std_enum_flagset_surface_run|std_module_reimport_alias_run|enum_member_scope_run|binding_import_smoke|binding_manifest_smoke|sdk_invalid_api_contract|sdk_module_easy_host_interop|sdk_exported_types_host_interop|sdk_exported_inherited_host_interop|sdk_exported_complex_fields_host_interop|sdk_module_hot_reload_interop|sdk_hot_reload_stale_wrappers_interop|sdk_module_stale_bindings_interop|pack_export_host_interop)|wio_runtime_(direct_index_out_of_range|string_to_i32_invalid)|wio_invalid_(entry_invalid_parameter_type|entry_invalid_return_type|entry_too_many_parameters|entry_missing_body|entry_method_not_top_level|use_missing_user_module|use_missing_std_module|use_alias_conflicts_with_symbol|use_alias_hides_unqualified_root_symbol|use_without_direct_import_keeps_namespaced_access|realm_conflicts_with_symbol|ref_requires_addressable_operand|ref_immutable_to_mutable_param|is_left_requires_object_or_interface|is_right_requires_object_or_interface|fit_requires_numeric_or_object_interface|if_fit_requires_is_condition|component_method_not_allowed|object_inherits_component|final_object_inheritance|default_attribute_invalid_access|private_base_member_access|protected_member_access_outside_hierarchy|trust_requires_struct_type|let_without_initializer|mut_without_initializer|let_without_type_or_initializer|const_without_initializer|const_interpolated_text_not_folded|const_from_non_const_identifier|const_function_call_not_supported|const_array_not_supported|default_parameter_non_trailing|default_parameter_type_mismatch|default_parameter_declaration_only_not_supported|default_parameter_entry_not_allowed|default_parameter_overload_conflict|generic_fit_target_without_supported_constraint|generic_parameter_pack_non_trailing|parameter_pack_non_trailing|parameter_pack_missing_matching_generic_pack|parameter_pack_bare_use_not_allowed|parameter_pack_default_not_supported|parameter_pack_method_not_supported|parameter_pack_apply_reject_non_integer|parameter_pack_export_requires_instantiate|parameter_pack_instantiate_predicate_not_allowed|parameter_pack_view_assignment_not_allowed|generic_apply_reject_function_call|generic_apply_reject_type_alias|generic_apply_reject_constructor|generic_apply_non_generic_function|generic_native_predicate_reject_non_integer|generic_specialization_requires_primary|generic_specialization_argument_count_mismatch|generic_specialization_duplicate|generic_specialization_native_component|pack_field_requires_generic_pack|pack_index_requires_compile_time_constant|pack_index_requires_const_declaration|pack_index_from_size_requires_subtraction|type_pack_to_static_array_not_supported|match_value_requires_assumed|match_assumed_must_be_last|match_duplicate_assumed|match_case_type_mismatch|match_return_type_mismatch|non_void_when_without_else|non_void_missing_return|non_void_if_missing_return|array_index_requires_integer|static_array_index_out_of_range|fixed_array_auto_extent_without_initializer|fixed_array_auto_extent_parameter|fixed_array_auto_extent_dynamic_source|fixed_array_auto_extent_ragged_nested|opaque_arithmetic_not_supported|opaque_is_not_supported|any_non_null_equality_not_supported|when_condition_type_mismatch|when_fallback_return_type_mismatch|for_in_requires_array|for_dict_requires_two_bindings|for_component_binding_count_mismatch|for_range_step_zero|break_outside_loop|continue_outside_loop|c_style_for_invalid_condition_type|array_member_requires_mutable_receiver|dictionary_member_requires_mutable_receiver|string_member_requires_mutable_receiver))"
 )
 
 set(
     WIO_FREEZE_TEST_REGEX
     "(attribute|pipeline|match|application|async|lambda_capture)"
+)
+
+set(
+    WIO_LANGUAGE_COHERENCE_TEST_REGEX
+    "^(wio_test_(attribute_compact_declaration_run|attribute_const_text_defaults_run|generic_partial_specialization_ordering_run|generic_text_const_parameters_run|generic_text_const_values_modules_run|extension_default_parameters_run|extension_generic_methods_run|match_enum_exhaustive_guards_run|unicode_text_literal_run|unicode_text_export_host_interop|unicode_text_reflection_run|const_string_text_run|const_global_type_visibility_run|fixed_array_auto_extent_run|std_traits_text_static_array_run)|wio_invalid_(attribute_named_unknown|attribute_named_duplicate|attribute_named_missing_required|attribute_compact_conflict|attribute_text_requires_unicode_literal|attribute_string_rejects_unicode_literal|generic_partial_specialization_structural_ambiguous|generic_const_parameter_bool_not_supported|generic_string_const_array_extent|generic_text_const_kind_mismatch|native_string_const_generic_component|native_text_const_generic_function|const_cyclic_dependency|const_evaluation_depth_limit|extension_generic_constraint_reject|match_enum_non_exhaustive|match_enum_duplicate_unguarded|match_literal_guard_type_mismatch|match_assumed_guard|text_requires_explicit_utf8_validation|text_operator|text_string_mixed_operation|text_index_assignment|const_interpolated_text_not_folded|fixed_array_auto_extent_without_initializer|fixed_array_auto_extent_parameter|fixed_array_auto_extent_dynamic_source|fixed_array_auto_extent_ragged_nested))$"
 )
 
 add_custom_target(
@@ -219,8 +224,21 @@ add_custom_target(
         ${CMAKE_CTEST_COMMAND} ${wio_ctest_config_args} -R "${WIO_TRACEABILITY_TEST_REGEX}" --output-on-failure
     COMMAND ${CMAKE_COMMAND} -E env "WIO_ROOT=${CMAKE_SOURCE_DIR}"
         ${CMAKE_CTEST_COMMAND} ${wio_ctest_config_args} -R "${WIO_FREEZE_TEST_REGEX}" --output-on-failure
+    COMMAND ${CMAKE_COMMAND} -E env "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+        ${CMAKE_CTEST_COMMAND} ${wio_ctest_config_args} -R "${WIO_LANGUAGE_COHERENCE_TEST_REGEX}" --output-on-failure
     COMMAND_EXPAND_LISTS
     DEPENDS wio_app wio_async_runtime_stress
+    WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+    USES_TERMINAL
+    VERBATIM
+)
+
+add_custom_target(
+    wio_tests_language_coherence
+    COMMAND ${CMAKE_COMMAND} -E env "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+        ${CMAKE_CTEST_COMMAND} ${wio_ctest_config_args} -R "${WIO_LANGUAGE_COHERENCE_TEST_REGEX}" --output-on-failure
+    COMMAND_EXPAND_LISTS
+    DEPENDS wio_app
     WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
     USES_TERMINAL
     VERBATIM
@@ -1507,6 +1525,110 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_generic_partial_specialization_ordering_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_partial_specialization_ordering_run.wio"
+        "generic-partial-ordering-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_generic_partial_specialization_ordering_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_partial_specialization_structural_ambiguous
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_partial_specialization_structural_ambiguous.wio"
+        "Ambiguous partial specialization"
+    )
+    set_tests_properties(
+        wio_invalid_generic_partial_specialization_structural_ambiguous
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
+        wio_test_extension_default_parameters_run
+        "${CMAKE_SOURCE_DIR}/tests/extension_default_parameters_run.wio"
+        "extension-default-parameters-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_extension_default_parameters_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
+        wio_test_match_enum_exhaustive_guards_run
+        "${CMAKE_SOURCE_DIR}/tests/match_enum_exhaustive_guards_run.wio"
+        "match-enum-exhaustive-guards-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_match_enum_exhaustive_guards_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
+        wio_test_extension_generic_methods_run
+        "${CMAKE_SOURCE_DIR}/tests/extension_generic_methods_run.wio"
+        "extension-generic-methods-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_extension_generic_methods_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_extension_generic_constraint_reject
+        "${CMAKE_SOURCE_DIR}/tests/invalid/extension_generic_constraint_reject.wio"
+        "rejects type arguments"
+    )
+    set_tests_properties(
+        wio_invalid_extension_generic_constraint_reject
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_match_enum_non_exhaustive
+        "${CMAKE_SOURCE_DIR}/tests/invalid/match_enum_non_exhaustive.wio"
+        "must cover every member or include an 'assumed' fallback"
+    )
+    set_tests_properties(
+        wio_invalid_match_enum_non_exhaustive
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_match_enum_duplicate_unguarded
+        "${CMAKE_SOURCE_DIR}/tests/invalid/match_enum_duplicate_unguarded.wio"
+        "Unreachable enum match case"
+    )
+    set_tests_properties(
+        wio_invalid_match_enum_duplicate_unguarded
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_match_literal_guard_type_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/match_literal_guard_type_mismatch.wio"
+        "Match guards must have type 'bool'"
+    )
+    set_tests_properties(
+        wio_invalid_match_literal_guard_type_mismatch
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_match_assumed_guard
+        "${CMAKE_SOURCE_DIR}/tests/invalid/match_assumed_guard.wio"
+        "The final 'assumed' match case cannot have a guard"
+    )
+    set_tests_properties(
+        wio_invalid_match_assumed_guard
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
         wio_test_generic_const_parameters_run
         "${CMAKE_SOURCE_DIR}/tests/generic_const_parameters_run.wio"
         "Const generics: ok"
@@ -1581,19 +1703,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_generic_const_argument_kind_mismatch
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_const_argument_kind_mismatch.wio"
-        "expects a compile-time integer value"
+        "expects a compile-time value"
     )
 
     add_wio_failure_test(
         wio_invalid_generic_const_function_argument_kind_mismatch
         "${CMAKE_SOURCE_DIR}/tests/invalid/generic_const_function_argument_kind_mismatch.wio"
-        "expects a compile-time integer value"
-    )
-
-    add_wio_failure_test(
-        wio_invalid_generic_const_parameter_requires_integer
-        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_const_parameter_requires_integer.wio"
-        "must use an integer type"
+        "expects a compile-time value"
     )
 
     add_wio_failure_test(
@@ -1781,6 +1897,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/native/exported_library.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/static_host.cpp"
         "Static export sum: 42"
+    )
+
+    add_wio_host_interop_test(
+        wio_test_unicode_text_export_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/unicode_text_export.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/unicode_text_export_host.cpp"
+        "Text export: valid=true count=9"
+    )
+    set_tests_properties(
+        wio_test_unicode_text_export_host_interop
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 
     add_wio_host_interop_test(
@@ -2103,6 +2230,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_fixed_array_auto_extent_run
+        "${CMAKE_SOURCE_DIR}/tests/fixed_array_auto_extent_run.wio"
+        "fixed-array-auto-extent-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_fixed_array_auto_extent_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
         wio_test_ref_indexed_element_run
         "${CMAKE_SOURCE_DIR}/tests/ref_indexed_element_run.wio"
         "Ref indexed element: ok"
@@ -2419,6 +2557,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/std_traits_reflection_wave_run.wio"
         "std-traits-reflection-wave-ok"
         --run
+    )
+
+    add_wio_output_test(
+        wio_test_std_traits_text_static_array_run
+        "${CMAKE_SOURCE_DIR}/tests/std_traits_text_static_array_run.wio"
+        "std-traits-text-static-array-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_std_traits_text_static_array_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 
     add_wio_non_dry_failure_test_clean(
@@ -2946,6 +3095,140 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_attribute_compact_declaration_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_compact_declaration_run.wio"
+        "attribute-compact-declaration-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_attribute_compact_declaration_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
+        wio_test_attribute_const_text_defaults_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_const_text_defaults_run.wio"
+        "attribute-const-text-defaults-ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_generic_text_const_parameters_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_text_const_parameters_run.wio"
+        "generic-text-const-parameters-ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_generic_text_const_values_modules_run
+        "${CMAKE_SOURCE_DIR}/tests/modules/generic_text_const_values_root.wio"
+        "generic-text-const-modules-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_generic_text_const_values_modules_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+    set_tests_properties(
+        wio_test_generic_text_const_parameters_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_generic_const_parameter_bool_not_supported
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_const_parameter_bool_not_supported.wio"
+        "must use an integer, string, or text type"
+    )
+    add_wio_failure_test(
+        wio_invalid_generic_string_const_array_extent
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_string_const_array_extent.wio"
+        "Static array extent must be an integer const generic parameter or integer literal"
+    )
+    add_wio_failure_test(
+        wio_invalid_generic_text_const_kind_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/generic_text_const_kind_mismatch.wio"
+        "is not compatible with parameter 'Name: string'"
+    )
+    add_wio_failure_test(
+        wio_invalid_native_string_const_generic_component
+        "${CMAKE_SOURCE_DIR}/tests/invalid/native_string_const_generic_component.wio"
+        "@Native components support only integer const generic parameters"
+    )
+    add_wio_failure_test(
+        wio_invalid_native_text_const_generic_function
+        "${CMAKE_SOURCE_DIR}/tests/invalid/native_text_const_generic_function.wio"
+        "@Native functions support only integer const generic parameters"
+    )
+    add_wio_failure_test(
+        wio_invalid_const_cyclic_dependency
+        "${CMAKE_SOURCE_DIR}/tests/invalid/const_cyclic_dependency.wio"
+        "Const initializer contains a cyclic const dependency"
+    )
+    add_wio_failure_test(
+        wio_invalid_const_evaluation_depth_limit
+        "${CMAKE_SOURCE_DIR}/tests/invalid/const_evaluation_depth_limit.wio"
+        "Const initializer exceeds the maximum evaluation depth of 128"
+    )
+    set_tests_properties(
+        wio_invalid_generic_const_parameter_bool_not_supported
+        wio_invalid_generic_string_const_array_extent
+        wio_invalid_generic_text_const_kind_mismatch
+        wio_invalid_native_string_const_generic_component
+        wio_invalid_native_text_const_generic_function
+        wio_invalid_const_cyclic_dependency
+        wio_invalid_const_evaluation_depth_limit
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+    set_tests_properties(
+        wio_test_attribute_const_text_defaults_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_attribute_text_requires_unicode_literal
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_text_requires_unicode_literal.wio"
+        "must be 'text'"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_string_rejects_unicode_literal
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_string_rejects_unicode_literal.wio"
+        "must be 'string'"
+    )
+    set_tests_properties(
+        wio_invalid_attribute_text_requires_unicode_literal
+        wio_invalid_attribute_string_rejects_unicode_literal
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_attribute_named_unknown
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_named_unknown.wio"
+        "has no parameter named 'verb'"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_named_duplicate
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_named_duplicate.wio"
+        "parameter 'method' is assigned more than once"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_named_missing_required
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_named_missing_required.wio"
+        "missing required argument 'method'"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_compact_conflict
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_compact_conflict.wio"
+        "through conflict group 'serialization'"
+    )
+    set_tests_properties(
+        wio_invalid_attribute_named_unknown
+        wio_invalid_attribute_named_duplicate
+        wio_invalid_attribute_named_missing_required
+        wio_invalid_attribute_compact_conflict
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
         wio_test_attribute_conflict_valid_run
         "${CMAKE_SOURCE_DIR}/tests/attribute_conflict_valid_run.wio"
         "attribute-conflict-ok"
@@ -3391,7 +3674,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test_clean(
         wio_invalid_array_index_requires_integer
         "${CMAKE_SOURCE_DIR}/tests/invalid/array_index_requires_integer.wio"
-        "Array and string indices must be integer values\\."
+        "Array, string, and text indices must be integer values\\."
         "stl_vector|Unhandled compiler failure"
     )
 
@@ -3842,28 +4125,46 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "Constants must be initialized."
     )
 
+    add_wio_output_test(
+        wio_test_const_string_text_run
+        "${CMAKE_SOURCE_DIR}/tests/const_string_text_run.wio"
+        "const-string-text-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_const_global_type_visibility_run
+        "${CMAKE_SOURCE_DIR}/tests/const_global_type_visibility_run.wio"
+        "const-global-type-visibility-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_const_string_text_run
+        wio_test_const_global_type_visibility_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
     add_wio_failure_test(
-        wio_invalid_const_string_not_supported
-        "${CMAKE_SOURCE_DIR}/tests/invalid/const_string_not_supported.wio"
-        "Const declarations currently support primitive scalar types plus enum/flagset values. Got 'string'."
+        wio_invalid_const_interpolated_text_not_folded
+        "${CMAKE_SOURCE_DIR}/tests/invalid/const_interpolated_text_not_folded.wio"
+        "Const initializer must be a compile-time expression and may reference only other const declarations."
     )
 
     add_wio_failure_test(
         wio_invalid_const_from_non_const_identifier
         "${CMAKE_SOURCE_DIR}/tests/invalid/const_from_non_const_identifier.wio"
-        "Const initializer must be a compile-time scalar expression and may reference only other const declarations."
+        "Const initializer must be a compile-time expression and may reference only other const declarations."
     )
 
     add_wio_failure_test(
         wio_invalid_const_function_call_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/const_function_call_not_supported.wio"
-        "Const initializer must be a compile-time scalar expression and may reference only other const declarations."
+        "Const initializer must be a compile-time expression and may reference only other const declarations."
     )
 
     add_wio_failure_test(
         wio_invalid_const_array_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/const_array_not_supported.wio"
-        "Const declarations currently support primitive scalar types plus enum/flagset values. Got 'i32\\[\\]'."
+        "Const declarations support scalar, string, text, enum, and flagset values. Got 'i32\\[\\]'."
     )
 
     add_wio_failure_test(
@@ -3942,6 +4243,30 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_static_array_type_missing_size
         "${CMAKE_SOURCE_DIR}/tests/invalid/static_array_type_missing_size.wio"
         "Static array types must declare a size"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_fixed_array_auto_extent_without_initializer
+        "${CMAKE_SOURCE_DIR}/tests/invalid/fixed_array_auto_extent_without_initializer.wio"
+        "Inferred static array extent '\\[T; _\\]' requires an initializer."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_fixed_array_auto_extent_parameter
+        "${CMAKE_SOURCE_DIR}/tests/invalid/fixed_array_auto_extent_parameter.wio"
+        "Inferred static array extent '\\[T; _\\]' is supported only on variable declarations with an initializer."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_fixed_array_auto_extent_dynamic_source
+        "${CMAKE_SOURCE_DIR}/tests/invalid/fixed_array_auto_extent_dynamic_source.wio"
+        "Inferred static array extent requires an array literal or concrete fixed-size array initializer."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_fixed_array_auto_extent_ragged_nested
+        "${CMAKE_SOURCE_DIR}/tests/invalid/fixed_array_auto_extent_ragged_nested.wio"
+        "Array elements must be of the same type. Expected '\\[i32; 2\\]', but found '\\[i32; 1\\]'."
     )
 
     add_wio_failure_test(
@@ -4863,8 +5188,11 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
     set_tests_properties(
         wio_test_async_net_io_run
-        wio_test_async_net_accept_run
         PROPERTIES TIMEOUT 30
+    )
+    set_tests_properties(
+        wio_test_async_net_accept_run
+        PROPERTIES TIMEOUT 60
     )
     add_wio_output_test(
         wio_test_std_net_timeout_run
@@ -5013,6 +5341,44 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_async_run_blocking_self_capture
         wio_invalid_spawn_worker_borrow_capture
         wio_invalid_spawn_blocking_borrow_capture
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
+        wio_test_unicode_text_literal_run
+        "${CMAKE_SOURCE_DIR}/tests/unicode_text_literal_run.wio"
+        "unicode-text-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_unicode_text_reflection_run
+        "${CMAKE_SOURCE_DIR}/tests/unicode_text_reflection_run.wio"
+        "unicode-text-reflection-ok"
+        --run
+    )
+    add_wio_failure_test(
+        wio_invalid_text_requires_explicit_utf8_validation
+        "${CMAKE_SOURCE_DIR}/tests/invalid/text_requires_explicit_utf8_validation.wio"
+        "Type mismatch for 'validated'"
+    )
+    add_wio_failure_test(
+        wio_invalid_text_operator
+        "${CMAKE_SOURCE_DIR}/tests/invalid/text_invalid_operator.wio"
+        "Textual values do not support operator '-'"
+    )
+    add_wio_failure_test(
+        wio_invalid_text_string_mixed_operation
+        "${CMAKE_SOURCE_DIR}/tests/invalid/text_string_mixed_operation.wio"
+        "Mixed 'string' and 'text' operations require an explicit conversion"
+    )
+    add_wio_failure_test(
+        wio_invalid_text_index_assignment
+        "${CMAKE_SOURCE_DIR}/tests/invalid/text_index_assignment.wio"
+        "Text indexing is read-only"
+    )
+    set_tests_properties(
+        wio_test_unicode_text_literal_run
+        wio_test_unicode_text_reflection_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 endif()

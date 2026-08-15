@@ -16,6 +16,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netdb.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
@@ -84,10 +85,33 @@ namespace wio::runtime::std_net
 
         struct SocketHandle
         {
-            SocketHandle() { liveSocketCount.fetch_add(1, std::memory_order_relaxed); }
+            SocketHandle()
+            {
+#if !defined(_WIN32)
+                int wakePipe[2]{invalidSocket, invalidSocket};
+                if (pipe(wakePipe) == 0)
+                {
+                    wakeRead = wakePipe[0];
+                    wakeWrite = wakePipe[1];
+                    static_cast<void>(setNonBlocking(wakeRead, true));
+                    static_cast<void>(setNonBlocking(wakeWrite, true));
+                    const int readDescriptorFlags = fcntl(wakeRead, F_GETFD, 0);
+                    const int writeDescriptorFlags = fcntl(wakeWrite, F_GETFD, 0);
+                    if (readDescriptorFlags >= 0)
+                        static_cast<void>(fcntl(wakeRead, F_SETFD, readDescriptorFlags | FD_CLOEXEC));
+                    if (writeDescriptorFlags >= 0)
+                        static_cast<void>(fcntl(wakeWrite, F_SETFD, writeDescriptorFlags | FD_CLOEXEC));
+                }
+#endif
+                liveSocketCount.fetch_add(1, std::memory_order_relaxed);
+            }
             ~SocketHandle()
             {
                 closeNative(value);
+#if !defined(_WIN32)
+                closeNative(wakeRead);
+                closeNative(wakeWrite);
+#endif
                 liveSocketCount.fetch_sub(1, std::memory_order_relaxed);
             }
             std::atomic<std::size_t> references{1};
@@ -97,6 +121,10 @@ namespace wio::runtime::std_net
             NativeSocket value = invalidSocket;
             bool closed = false;
             std::uint64_t receiveTimeoutMilliseconds = 0;
+#if !defined(_WIN32)
+            NativeSocket wakeRead = invalidSocket;
+            NativeSocket wakeWrite = invalidSocket;
+#endif
         };
         std::string errorMessage(const char* operation)
         {
@@ -215,16 +243,34 @@ namespace wio::runtime::std_net
                         waitMicroseconds, static_cast<std::uint64_t>(std::max<std::int64_t>(1, remaining)));
                 }
 
+#if defined(_WIN32)
                 fd_set readable;
                 FD_ZERO(&readable);
                 FD_SET(value, &readable);
                 timeval timeout{
                     static_cast<long>(waitMicroseconds / 1'000'000),
                     static_cast<long>(waitMicroseconds % 1'000'000)};
-#if defined(_WIN32)
                 const int ready = select(0, &readable, nullptr, nullptr, &timeout);
 #else
-                const int ready = select(value + 1, &readable, nullptr, nullptr, &timeout);
+                pollfd descriptors[2]{
+                    {value, POLLIN, 0},
+                    {state->wakeRead, POLLIN, 0}};
+                const nfds_t descriptorCount = state->wakeRead == invalidSocket ? 1 : 2;
+                const int timeoutMilliseconds = static_cast<int>(std::max<std::uint64_t>(
+                    1, (waitMicroseconds + 999) / 1'000));
+                const int ready = poll(descriptors, descriptorCount, timeoutMilliseconds);
+                if (ready > 0 && descriptorCount == 2 && descriptors[1].revents != 0)
+                {
+                    std::lock_guard lifecycleLock(state->lifecycleMutex);
+                    if (state->closed)
+                    {
+                        error = "socket is closed";
+                        return false;
+                    }
+                    continue;
+                }
+                if (ready < 0 && errno == EINTR)
+                    continue;
 #endif
                 if (ready > 0)
                 {
@@ -401,6 +447,17 @@ namespace wio::runtime::std_net
         }
     }
 
+    bool TcpWaitAccept(void* listener, std::string& error) noexcept
+    {
+        error.clear();
+        if (!Retain(listener, error)) return false;
+        SocketLease lease(listener);
+        auto* state = asHandle(listener);
+        std::lock_guard receiveLock(state->receiveMutex);
+        NativeSocket value = invalidSocket;
+        return waitReadable(state, false, "accept wait", value, error);
+    }
+
     bool SetTimeout(void* handle, const std::uint64_t milliseconds, std::string& error) noexcept
     {
         error.clear();
@@ -429,14 +486,25 @@ namespace wio::runtime::std_net
         if (!Retain(handle, error)) return 0;
         SocketLease lease(handle);
         auto* state = asHandle(handle);
-        std::lock_guard receiveLock(state->receiveMutex);
+        NativeSocket value = invalidSocket;
+        {
+            std::lock_guard lifecycleLock(state->lifecycleMutex);
+            if (state->closed)
+                return 0;
+            value = state->value;
+        }
         sockaddr_storage address{};
 #if defined(_WIN32)
         int size = sizeof(address);
 #else
         socklen_t size = sizeof(address);
 #endif
-        if (getsockname(state->value, reinterpret_cast<sockaddr*>(&address), &size) != 0)
+        // Local endpoint inspection is independent of receive/accept
+        // serialization. Holding receiveMutex here deadlocks when an
+        // asynchronous accept is already waiting for the first connection.
+        // The retained lease keeps the descriptor alive while getsockname
+        // observes the captured native value.
+        if (getsockname(value, reinterpret_cast<sockaddr*>(&address), &size) != 0)
             return 0;
         if (address.ss_family == AF_INET)
             return ntohs(reinterpret_cast<const sockaddr_in*>(&address)->sin_port);
@@ -614,6 +682,12 @@ namespace wio::runtime::std_net
 #if defined(_WIN32)
             shutdown(value, SD_BOTH);
 #else
+            if (state->wakeWrite != invalidSocket)
+            {
+                const char signal = 1;
+                const ssize_t ignored = ::write(state->wakeWrite, &signal, sizeof(signal));
+                static_cast<void>(ignored);
+            }
             shutdown(value, SHUT_RDWR);
 #endif
         }

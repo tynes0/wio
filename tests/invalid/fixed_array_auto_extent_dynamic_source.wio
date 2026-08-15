@@ -1,0 +1,5 @@
+fn Entry() -> i32 {
+    let dynamicValues: i32[] = [1, 2, 3];
+    let fixedValues: [i32; _] = dynamicValues;
+    return fixedValues.Count() fit i32;
+}

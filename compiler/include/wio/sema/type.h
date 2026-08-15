@@ -213,8 +213,10 @@ namespace wio
             ArrayKind arrayKind;
             size_t size;
             Ref<Type> extentType;
+            bool hasInferredExtent;
 
-            ArrayType(Ref<Type> elementType, ArrayKind arrayKind, size_t size = 0, Ref<Type> extentType = nullptr);
+            ArrayType(Ref<Type> elementType, ArrayKind arrayKind, size_t size = 0,
+                      Ref<Type> extentType = nullptr, bool hasInferredExtent = false);
             
             TypeKind kind() const override;
             std::string toString() const override;

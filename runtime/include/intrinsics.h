@@ -3,6 +3,7 @@
 #include "exception.h"
 #include "enum_reflection.h"
 #include "std_convert.h"
+#include "text.h"
 
 #include <algorithm>
 #include <array>
@@ -549,6 +550,85 @@ namespace wio::intrinsics
     inline bool Empty(const TContainer& container)
     {
         return container.empty();
+    }
+
+    inline std::size_t TextCount(const runtime::Text& value)
+    {
+        return value.size();
+    }
+
+    inline std::size_t TextByteCount(const runtime::Text& value)
+    {
+        return value.byteSize();
+    }
+
+    inline bool TextEmpty(const runtime::Text& value)
+    {
+        return value.empty();
+    }
+
+    inline runtime::Text TextSlice(const runtime::Text& value, const std::size_t start)
+    {
+        return value.slice(start);
+    }
+
+    inline runtime::Text TextSlice(const runtime::Text& value,
+                                   const std::size_t start,
+                                   const std::size_t count)
+    {
+        return value.slice(start, count);
+    }
+
+    inline std::string TextToString(const runtime::Text& value)
+    {
+        return value.Utf8();
+    }
+
+    inline bool TextContains(const runtime::Text& value, const runtime::Text& other)
+    {
+        return value.contains(other);
+    }
+
+    inline bool TextStartsWith(const runtime::Text& value, const runtime::Text& other)
+    {
+        return value.startsWith(other);
+    }
+
+    inline bool TextEndsWith(const runtime::Text& value, const runtime::Text& other)
+    {
+        return value.endsWith(other);
+    }
+
+    inline std::size_t TextGraphemeCount(const runtime::Text& value)
+    {
+        return value.graphemeCount();
+    }
+
+    inline runtime::Text TextSliceGraphemes(const runtime::Text& value,
+                                            const std::size_t start,
+                                            const std::size_t count)
+    {
+        return value.sliceGraphemes(start, count);
+    }
+
+    inline std::size_t TextDisplayWidth(const runtime::Text& value)
+    {
+        return value.displayWidth();
+    }
+
+    inline runtime::Text TextCaseFold(const runtime::Text& value)
+    {
+        return value.caseFold();
+    }
+
+    inline std::vector<std::uint32_t> TextCodePoints(const runtime::Text& value)
+    {
+        return value.codePoints();
+    }
+
+    inline std::vector<runtime::Text> TextGraphemes(const runtime::Text& value)
+    {
+        return value.graphemes();
     }
 
     template <typename TContainer, typename TIndex>

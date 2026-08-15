@@ -1,0 +1,72 @@
+use std::assert as assert;
+use std::console as console;
+use std::unicode as unicode;
+
+fn Identity<T>(value: T) -> T {
+    return value;
+}
+
+fn Entry() -> i32 {
+    let greeting: text = u"Merhaba 🌍";
+    assert::ExpectEqual(greeting.Count(), 9usize, "text counts Unicode code points");
+    assert::ExpectEqual(greeting.ByteCount(), 12usize, "text exposes explicit UTF-8 byte count");
+    assert::ExpectEqual(greeting.Slice(8usize, 1usize), u"🌍", "text slices on code-point boundaries");
+    assert::ExpectEqual(greeting[8usize], u"🌍", "text indexing returns one code point");
+    assert::Expect(greeting.Contains(u"haba"), "text contains");
+    assert::Expect(greeting.StartsWith(u"Mer"), "text starts with");
+    assert::Expect(greeting.EndsWith(u"🌍"), "text ends with");
+
+    let graphemes: text = u"é👩‍💻";
+    assert::ExpectEqual(graphemes.GraphemeCount(), 2usize, "text grapheme count");
+    assert::ExpectEqual(graphemes.SliceGraphemes(1usize, 1usize), u"👩‍💻", "text grapheme slice");
+    assert::ExpectEqual(u"你".DisplayWidth(), 2usize, "text display width");
+    assert::ExpectEqual(u"Straße".CaseFold(), u"strasse", "text case folding");
+
+    let codePoints = u"A🌍".CodePoints();
+    assert::ExpectEqual(codePoints.Count(), 2usize, "text exposes iterable code points");
+    assert::ExpectEqual(codePoints[0usize], 65u32, "ASCII code point value");
+    assert::ExpectEqual(codePoints[1usize], 0x1F30Du32, "emoji code point value");
+
+    mut rebuilt: text = u"";
+    for (cluster in graphemes.Graphemes()) {
+        rebuilt += cluster;
+    }
+    assert::ExpectEqual(rebuilt, graphemes, "grapheme collection works with for-in");
+
+    let labels: Dict<text, i32> = { u"anahtar": 7 };
+    assert::ExpectEqual(labels.Get(u"anahtar").Value(), 7, "text is hashable as a dictionary key");
+
+    let name = "Wio";
+    let message: text = u$"Selam ${name} 🌍";
+    assert::ExpectEqual(message.ToString(), "Selam Wio 🌍", "interpolated Unicode text");
+
+    let decoded: text = unicode::FromUtf8("çağrı").Value();
+    assert::ExpectEqual(unicode::ToUtf8(decoded), "çağrı", "explicit UTF-8 conversion boundary");
+    mut invalidUtf8 = "";
+    unicode::AppendByte(ref invalidUtf8, 0xFFu8);
+    assert::Expect(unicode::FromUtf8(invalidUtf8).IsError(), "invalid UTF-8 returns an error");
+
+    let utf16 = unicode::ToUtf16(u"A🌍");
+    assert::ExpectEqual(utf16.Count(), 3usize, "supplementary scalar uses a UTF-16 surrogate pair");
+    assert::ExpectEqual(unicode::FromUtf16(utf16).Value(), u"A🌍", "UTF-16 round trip");
+    assert::Expect(unicode::FromUtf16([0xD800u16]).IsError(), "unpaired UTF-16 surrogate rejected");
+
+    let utf32 = unicode::ToUtf32(u"A🌍");
+    assert::ExpectEqual(utf32.Count(), 2usize, "UTF-32 scalar count");
+    assert::ExpectEqual(unicode::FromUtf32(utf32).Value(), u"A🌍", "UTF-32 round trip");
+    assert::Expect(unicode::FromUtf32([0xD800u32]).IsError(), "UTF-32 surrogate rejected");
+    assert::ExpectEqual(Identity(greeting), u"Merhaba 🌍", "text participates in generics");
+    assert::ExpectEqual(u"iyi " + u"günler", u"iyi günler", "text concatenation");
+
+    let matched = match (greeting) {
+        u"Merhaba 🌍": true;
+        assumed: false;
+    };
+    assert::Expect(matched, "text literal patterns");
+
+    let utf8Boundary: string = greeting;
+    assert::ExpectEqual(utf8Boundary, "Merhaba 🌍", "text safely flows to string");
+    console::PrintLine(message);
+    console::PrintLine("unicode-text-ok");
+    return 0;
+}

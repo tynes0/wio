@@ -1,0 +1,11 @@
+@Export
+@CppName(WioDecorateText)
+fn DecorateText(value: text) -> text {
+    return u"⟦" + value + u"⟧";
+}
+
+@Export
+@CppName(WioTextCodePointCount)
+fn TextCodePointCount(value: text) -> usize {
+    return value.Count();
+}

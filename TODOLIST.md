@@ -29,8 +29,10 @@ application/system and language-coherence direction is expanded in
    ordering. Default type parameters, dependent trailing defaults, exact and
    partial specialization ordering, ambiguity diagnostics, cross-module
    visibility, and defaulted native instantiation are implemented. Default
-   value parameters depend on the ordinary const-generic work below; generic
-   Generic component/object export remains under the native/export item.
+   `string`/`text` const parameters and defaults now work on every generic
+   declaration category with specialization and module visibility. Additional
+   value kinds and generic component/object export remain under their
+   respective language and native/export items.
 
 5. [~] Expand variadic and compile-time metaprogramming.
    `AllSame`, `IndexOf`, and `UniqueCount` now complement the existing pack
@@ -81,7 +83,9 @@ application/system and language-coherence direction is expanded in
     defaults should replace most policy keywords, uncommon policies should
     reuse `with`, and behavioral processors should be ordinary typed
     functions/interfaces rather than a growing list of magic words such as
-    `retain`, `repeatable`, `scoped`, `affects`, and `returning`.
+    `retain`, `repeatable`, `scoped`, `affects`, and `returning`. Typed
+    applications now fold scalar, `string`, and `text` const references and
+    materialize trailing defaults into runtime-reflection metadata.
 
 13. [~] Complete a language-coherence pass before broad surface expansion.
     The first 0.11 stabilization slice aligned scoped attributes, pipelines,
@@ -102,25 +106,49 @@ application/system and language-coherence direction is expanded in
     implemented. Add resources, explicit/fixed schedules, headless contexts,
     then parallel execution after `view`/`ref` conflict analysis is stable.
 
-15. [ ] Add a first-class Unicode-semantic value and literal.
-    Reserve and freeze a compact literal such as `u"..."` and its interpolated
-    form, provisionally producing `text`. Specify compile-time validation,
-    conversions with `string` and bytes, equality/ordering, iteration/indexing,
-    normalization, pattern matching, generics, reflection, SDK export, and
-    native transcoding. Keep its everyday syntax and operations aligned with
-    `string`; do not expose C++ `wchar_t` width as a Wio language rule.
+15. [~] Complete the first-class Unicode-semantic `text` model.
+    `text`, validated UTF-8 `u"..."` and `u$"..."` literals, code-point count
+    and slicing/indexing, grapheme counting/slicing, display width, case fold,
+    byte count, concatenation, equality/ordering/hashing, pattern matching,
+    generics, console output, and explicit `std::unicode` UTF-8 conversion now
+    work end to end. `CodePoints()` and `Graphemes()` expose ordinary iterable
+    arrays for `for` loops. Fallible UTF-8/UTF-16/UTF-32 decoding and
+    platform-independent transcoding are available through `std::unicode`.
+    Native static exports accepting and returning `text` are covered across the
+    generated C++ boundary, and runtime reflection reports `text` as a named
+    primitive with stable size/alignment metadata. Complete normalization policy
+    and APIs, SDK descriptor metadata, shared-module dynamic ABI coverage, and
+    Unicode conformance vectors. Do not expose C++ `wchar_t` width as a Wio
+    language rule.
+
+17. [~] Extend compile-time constants to `string` and `text`.
+    Literal initialization, references to other constants, concatenation,
+    comparison, matching, and global/local/component-static storage now work for
+    both types. Interpolated strings are accepted when every embedded expression
+    is also constant-evaluable; calls and runtime bindings remain rejected.
+    Typed attribute arguments/defaults now consume folded constant values;
+    functions, aliases, interfaces, components, and objects accept `string`
+    and `text` const generic arguments/defaults, specialization patterns, and
+    qualified module constants. Runtime reflection now exposes primary source
+    parameter names and concrete type/const arguments for ordinary, exact, and
+    partial generic types. Const evaluation rejects dependency cycles and
+    enforces depth, node-count, and folded-text budgets. Complete storage
+    interning, cross-module export, SDK descriptor metadata, and the final
+    Unicode normalization policy.
 
 ## P1 - Standard Library Correctness and Consistency
 
 1. [~] Build a real Unicode text model.
    UTF-8 validation, codepoints/runes, grapheme clustering, display width,
    basic case folding, codepoint/byte conversion, safe slicing, and builders
-   now exist. Add a first-class Unicode-semantic `text` value and literal form
-   such as `u"..."`, including interpolated literals, with ordinary string-like
-   ergonomics. The compiler/runtime owns validation, normalization policy,
-   iteration, and native transcoding; it must not expose the platform-dependent
-   C++ `wchar_t`/`std::wstring` representation as Wio semantics. Keep explicit
-   UTF-8/UTF-16/UTF-32 conversion at native or byte boundaries. Complete
+   now exist. The first-class Unicode-semantic `text` value and validated
+   `u"..."`/`u$"..."` literals now provide ordinary string-like ergonomics,
+   code-point indexing/slicing, grapheme operations, matching, hashable generic
+   container use, code-point/grapheme iteration, console output, and explicit UTF-8
+   UTF-8/UTF-16/UTF-32 conversion. The compiler/runtime owns validation and
+   normalization policy, iteration, and native transcoding; it does not expose
+   the platform-dependent C++ `wchar_t`/`std::wstring` representation as Wio
+   semantics. Complete
    normalization,
    full Unicode category/case data, locale-sensitive behavior, and conformance
    vectors. GUI input must not require a native `AppendCharacter` workaround.

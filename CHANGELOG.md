@@ -4,6 +4,100 @@ All notable user-facing changes to Wio are recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- Added explicit fixed-array extent inference with `[T; _]`, including empty,
+  copied, global, component-field, and nested fixed arrays. Ragged nesting,
+  dynamic-array sources, missing initializers, and non-variable use sites now
+  receive semantic diagnostics.
+- Added `const string` and `const text` declarations with literal values,
+  constant references, concatenation, comparison, matching, and global, local,
+  or component-static storage.
+- Added `string` and `text` const generic parameters on functions, aliases,
+  interfaces, components, and objects, including defaults, specialization,
+  qualified module constants, and a Wio-owned C++20 structural representation.
+- Added runtime generic reflection through
+  `std::reflect::GenericParameterNames<T>()` and `GenericArguments<T>()`.
+  `Describe<T>()` now includes source parameter names and concrete type or
+  const-value arguments for primary, exact, and partial specializations.
+- Added deterministic compile-time evaluation budgets for const dependencies:
+  128 nesting levels, 16,384 visited nodes, and 1 MiB of folded text, with a
+  dedicated cyclic-dependency diagnostic before backend generation.
+- Constant `string` and `text` interpolation now accepts constant-evaluable
+  embedded expressions while continuing to reject runtime calls and bindings.
+- Added the first-class `text` primitive and validated UTF-8 `u"..."` and
+  interpolated `u$"..."` literals. Text supports Unicode code-point counting
+  and slicing, read-only indexing, grapheme counting/slicing, display width,
+  case folding, byte counts, concatenation, comparison, hashing, matching,
+  generic code-point/grapheme iteration, console output, and explicit
+  `std::unicode` UTF-8/UTF-16/UTF-32 boundaries. Fallible decoding reports a
+  `Result<text>` and rejects invalid UTF-8, unpaired UTF-16 surrogates, and
+  invalid UTF-32 scalar values.
+- Added source-tree host-interop coverage for exported functions that accept
+  and return `text`, including Unicode content and code-point operations.
+- Added runtime reflection metadata for `text`, including its stable language
+  name, primitive kind, size, and alignment.
+- Added `std::traits` queries for primitive, byte-string, and Unicode-text
+  identity, and extended `IsArrayType` to recognize fixed arrays.
+- Added compact user-defined attribute declarations such as
+  `attribute route(fn)(method: string) with attribute::runtime;`.
+- Added named arguments for user-defined attribute applications with duplicate,
+  unknown, missing-required, and ordering diagnostics.
+- Typed attribute applications now accept folded scalar, `string`, and `text`
+  constants. Trailing defaults are materialized into declaration order before
+  runtime reflection, including defaults that reference other constants.
+- Added structural partial-specialization ordering, including repeated generic
+  parameter relationships such as `Pair<T, Box<T>>`.
+- Added trailing default parameters to component extension methods.
+- Added generic component extension methods with deduction, explicit type
+  arguments, trailing generic defaults, and `where` constraints.
+- Added boolean guards to literal, alternative, range, and enum match arms, plus
+  exhaustive value-producing enum matches without a redundant `assumed` arm.
+
+### Changed
+
+- Text may flow safely to a UTF-8 `string`; constructing `text` from a
+  potentially invalid `string` requires the fallible
+  `std::unicode::FromUtf8` conversion.
+- Invalid textual operators and mixed `string`/`text` expressions now fail in
+  semantic analysis instead of surfacing as C++ backend errors.
+- Attribute declaration policies can use namespaced postfix policy attributes
+  instead of the legacy `for`/`retain`/`repeatable` keyword sequence; the old
+  declaration spelling remains accepted for compatibility.
+- Nested generic closers no longer require whitespace: `>>`, `>=`, and `>>=`
+  are split contextually while parsing generic types/calls and remain shift or
+  comparison operators in expressions.
+- Textual const generics remain a Wio-owned type-system feature; native
+  functions and native component templates continue to accept only integer
+  const parameters until an ABI contract is deliberately added.
+
+### Fixed
+
+- Distinguished byte-string and Unicode-text literals in typed attribute
+  validation instead of treating `text` as an integer-like fallback type.
+- Fixed literal-to-literal byte-string concatenation and comparison generating
+  raw C++ pointer operations instead of Wio string-value operations.
+- Avoided generic reflection template parameters shadowing the stable
+  `TypeReflection::Name` metadata member, including partial specializations
+  whose source parameter names differ from their primary declaration.
+- Primitive generic arguments now use stable Wio names such as `i32`,
+  `string`, and `text` instead of the backend's `<unknown>` fallback.
+- Preserved keyword-shaped `if (... fit name)` bindings after `text` became a
+  first-class type keyword, and synchronized the indexed-value diagnostic test.
+- Gave the repeated asynchronous listener-close stress test a CI-safe timeout
+  budget while retaining all 64 ownership/cancellation iterations.
+- Fixed object methods referencing global scalar, `string`, or `text`
+  constants before their generated C++ definitions.
+- Immutable global declarations now preserve `const` in their generated C++
+  forward declarations.
+- Fixed host-interop tests compiling against the source SDK while accidentally
+  resolving runtime headers from an older installed Wio distribution.
+- Moved asynchronous listener readiness onto the dedicated I/O executor with
+  a native pre-scheduling lease. Closing a listener now drains accept work
+  without depending on the general blocking pool on Linux. POSIX socket waits
+  use an explicit non-blocking wake pipe, so close does not rely on
+  `shutdown()` waking `select()` for listening sockets.
+
 ## [0.12.0] - 2026-08-13
 
 ### Added

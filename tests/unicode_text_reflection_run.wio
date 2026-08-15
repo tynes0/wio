@@ -1,0 +1,16 @@
+use std::assert as assert;
+use std::console as console;
+use std::reflect as reflect;
+
+fn Entry() -> i32 {
+    let info = reflect::Describe<text>();
+
+    assert::ExpectEqual(info.name, "text", "text reflection name");
+    assert::Expect(info.kind == reflect::Kind::primitive_type, "text reflection kind");
+    assert::Expect(info.size > 0usize, "text reflection size");
+    assert::Expect(info.alignment > 0usize, "text reflection alignment");
+    assert::ExpectEqual(info.fields.Count(), 0usize, "text reflection fields");
+    assert::ExpectEqual(info.methods.Count(), 0usize, "text reflection methods");
+    console::PrintLine("unicode-text-reflection-ok");
+    return 0;
+}

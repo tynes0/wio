@@ -4,6 +4,41 @@
 
 #include <ranges>
 
+namespace
+{
+    bool isValidUtf8(const std::string_view input) noexcept
+    {
+        std::size_t offset = 0;
+        while (offset < input.size())
+        {
+            const auto first = static_cast<unsigned char>(input[offset]);
+            std::size_t length = 0;
+            std::uint32_t value = 0;
+            std::uint32_t minimum = 0;
+
+            if (first < 0x80u) { length = 1; value = first; }
+            else if ((first & 0xe0u) == 0xc0u) { length = 2; value = first & 0x1fu; minimum = 0x80u; }
+            else if ((first & 0xf0u) == 0xe0u) { length = 3; value = first & 0x0fu; minimum = 0x800u; }
+            else if ((first & 0xf8u) == 0xf0u) { length = 4; value = first & 0x07u; minimum = 0x10000u; }
+            else return false;
+
+            if (offset + length > input.size()) return false;
+            for (std::size_t index = 1; index < length; ++index)
+            {
+                const auto next = static_cast<unsigned char>(input[offset + index]);
+                if ((next & 0xc0u) != 0x80u) return false;
+                value = (value << 6u) | (next & 0x3fu);
+            }
+
+            if (value < minimum || value > 0x10ffffu ||
+                (value >= 0xd800u && value <= 0xdfffu))
+                return false;
+            offset += length;
+        }
+        return true;
+    }
+}
+
 namespace wio
 {
     using namespace common;
@@ -35,7 +70,20 @@ namespace wio
                 res = (skipWhitespaces() || skipComments());
             } while (res);
 
-            if (std::isalpha(upeek()) || match('_'))
+            if (multiMatch("u$\""))
+            {
+                flags_.set_nextStringUnicode(true);
+                flags_.set_nextStringMultiLine(true);
+                advance(2); // u$
+                readString();
+            }
+            else if (multiMatch("u\""))
+            {
+                flags_.set_nextStringUnicode(true);
+                advance(); // u
+                readString();
+            }
+            else if (std::isalpha(upeek()) || match('_'))
             {
                 tokens_.push_back(readIdentifier());
             }
@@ -490,6 +538,9 @@ namespace wio
         bool isMultiline = isContinuation
             ? interpolationStack_.back().multiline
             : false;
+        bool isUnicode = isContinuation
+            ? interpolationStack_.back().unicode
+            : false;
 
         if (!isContinuation)
         {
@@ -497,6 +548,11 @@ namespace wio
             {
                 flags_.set_nextStringMultiLine(false);
                 isMultiline = true;
+            }
+            if (flags_.get_nextStringUnicode())
+            {
+                flags_.set_nextStringUnicode(false);
+                isUnicode = true;
             }
             if (match('\"'))
             {
@@ -509,6 +565,18 @@ namespace wio
 
         }
 
+        const auto emitStringSegment = [&](std::string value, const Location& segmentLocation)
+        {
+            if (isUnicode && !isValidUtf8(value))
+                throw InvalidStringError("Unicode text literal contains invalid UTF-8", segmentLocation);
+            tokens_.push_back(Token{
+                .type = TokenType::stringLiteral,
+                .value = std::move(value),
+                .loc = segmentLocation,
+                .isUnicodeString = isUnicode
+            });
+        };
+
         while (true)
         {
             if (isAtEnd())
@@ -517,11 +585,7 @@ namespace wio
             if (match('\"'))
             {
                 advance(); // closing "
-                tokens_.emplace_back(
-                    TokenType::stringLiteral,
-                    buffer,
-                    start
-                );
+                emitStringSegment(std::move(buffer), start);
 
                 if (isContinuation)
                     interpolationStack_.pop_back();
@@ -531,11 +595,7 @@ namespace wio
             // interpolation: ${ ... }
             if (multiMatch("${"))
             {
-                tokens_.emplace_back(
-                    TokenType::stringLiteral,
-                    buffer,
-                    start
-                );
+                emitStringSegment(std::move(buffer), start);
                 buffer.clear();
 
                 // $
@@ -564,6 +624,7 @@ namespace wio
                 {
                     interpolationStack_.push_back(InterpolationFrame{
                         .multiline = isMultiline,
+                        .unicode = isUnicode,
                         .inExpression = true,
                         .braceDepth = 1
                     });

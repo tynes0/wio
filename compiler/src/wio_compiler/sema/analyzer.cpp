@@ -31,6 +31,39 @@ namespace wio::sema
             return type;
         }
 
+        bool containsInferredArrayExtent(Ref<Type> type)
+        {
+            type = unwrapTransferType(std::move(type));
+            if (!type || type->kind() != TypeKind::Array)
+                return false;
+
+            auto array = type.AsFast<ArrayType>();
+            return array->hasInferredExtent || containsInferredArrayExtent(array->elementType);
+        }
+
+        bool haveIdenticalFixedArrayShape(Ref<Type> left, Ref<Type> right)
+        {
+            left = unwrapTransferType(std::move(left));
+            right = unwrapTransferType(std::move(right));
+            if (!left || !right || left->kind() != TypeKind::Array || right->kind() != TypeKind::Array)
+                return true;
+
+            auto leftArray = left.AsFast<ArrayType>();
+            auto rightArray = right.AsFast<ArrayType>();
+            if (leftArray->arrayKind == ArrayType::ArrayKind::Dynamic ||
+                rightArray->arrayKind == ArrayType::ArrayKind::Dynamic)
+            {
+                return leftArray->arrayKind == rightArray->arrayKind;
+            }
+            if (!leftArray->hasInferredExtent && !rightArray->hasInferredExtent &&
+                !leftArray->extentType && !rightArray->extentType &&
+                leftArray->size != rightArray->size)
+            {
+                return false;
+            }
+            return haveIdenticalFixedArrayShape(leftArray->elementType, rightArray->elementType);
+        }
+
         bool hasAsyncSafetyMarker(
             const Ref<StructType>& type,
             std::string_view marker,
@@ -1041,6 +1074,14 @@ namespace wio::sema
                    resolvedType.AsFast<PrimitiveType>()->name == "string";
         }
 
+        bool isTextType(const Ref<Type>& type)
+        {
+            Ref<Type> resolvedType = unwrapAliasType(type);
+            return resolvedType &&
+                   resolvedType->kind() == TypeKind::Primitive &&
+                   resolvedType.AsFast<PrimitiveType>()->name == "text";
+        }
+
         bool isOpaqueType(const Ref<Type>& type)
         {
             Ref<Type> resolvedType = unwrapAliasType(type);
@@ -1127,7 +1168,8 @@ namespace wio::sema
                    resolvedType->kind() == TypeKind::AsyncTask ||
                    (resolvedType->kind() == TypeKind::Struct &&
                     (resolvedType.AsFast<StructType>()->isEnum || resolvedType.AsFast<StructType>()->isFlagset)) ||
-                   isStringType(resolvedType);
+                   isStringType(resolvedType) ||
+                   isTextType(resolvedType);
         }
 
         bool shouldAutoReadReferenceType(const Ref<Type>& type)
@@ -1593,7 +1635,9 @@ namespace wio::sema
                    name == "f32" ||
                    name == "f64" ||
                    name == "isize" ||
-                   name == "usize";
+                   name == "usize" ||
+                   name == "string" ||
+                   name == "text";
         }
 
         bool isAllowedConstBinaryOperator(TokenType op)
@@ -1638,14 +1682,21 @@ namespace wio::sema
                 expression->is<FloatLiteral>() ||
                 expression->is<BoolLiteral>() ||
                 expression->is<CharLiteral>() ||
-                expression->is<ByteLiteral>())
+                expression->is<ByteLiteral>() ||
+                expression->is<StringLiteral>())
             {
                 return true;
             }
 
-            if (expression->is<StringLiteral>() ||
-                expression->is<InterpolatedStringLiteral>() ||
-                expression->is<ArrayLiteral>() ||
+            if (const auto* interpolated = expression->as<InterpolatedStringLiteral>())
+            {
+                return std::ranges::all_of(interpolated->parts, [](const NodePtr<Expression>& part)
+                {
+                    return isConstEvaluableExpression(part);
+                });
+            }
+
+            if (expression->is<ArrayLiteral>() ||
                 expression->is<DictionaryLiteral>() ||
                 expression->is<NullExpression>() ||
                 expression->is<LambdaExpression>() ||
@@ -1707,6 +1758,105 @@ namespace wio::sema
         }
 
         using ConstVariableDeclarationMap = std::unordered_map<const Symbol*, const VariableDeclaration*>;
+
+        enum class ConstEvaluationLimitStatus
+        {
+            Valid,
+            Cycle,
+            DepthLimit,
+            NodeLimit,
+            TextSizeLimit
+        };
+
+        struct ConstEvaluationBudget
+        {
+            static constexpr size_t MaxDepth = 128;
+            static constexpr size_t MaxNodes = 16384;
+            static constexpr size_t MaxTextBytes = 1024 * 1024;
+
+            size_t nodes = 0;
+            size_t textBytes = 0;
+            std::unordered_set<const Symbol*> activeSymbols;
+        };
+
+        ConstEvaluationLimitStatus validateConstEvaluationLimits(
+            const NodePtr<Expression>& expression,
+            const ConstVariableDeclarationMap& variableDeclarationsBySymbol,
+            ConstEvaluationBudget& budget,
+            const size_t depth = 0)
+        {
+            if (!expression)
+                return ConstEvaluationLimitStatus::Valid;
+            if (depth > ConstEvaluationBudget::MaxDepth)
+                return ConstEvaluationLimitStatus::DepthLimit;
+            if (++budget.nodes > ConstEvaluationBudget::MaxNodes)
+                return ConstEvaluationLimitStatus::NodeLimit;
+
+            if (const auto* literal = expression->as<StringLiteral>())
+            {
+                if (literal->token.value.size() > ConstEvaluationBudget::MaxTextBytes -
+                        std::min(budget.textBytes, ConstEvaluationBudget::MaxTextBytes))
+                {
+                    return ConstEvaluationLimitStatus::TextSizeLimit;
+                }
+                budget.textBytes += literal->token.value.size();
+                return ConstEvaluationLimitStatus::Valid;
+            }
+
+            if (const auto* identifier = expression->as<Identifier>())
+            {
+                Ref<Symbol> symbol = identifier->referencedSymbol.Lock();
+                if (!symbol || !symbol->flags.get_isConst())
+                    return ConstEvaluationLimitStatus::Valid;
+                auto declarationIt = variableDeclarationsBySymbol.find(symbol.Get());
+                if (declarationIt == variableDeclarationsBySymbol.end() ||
+                    !declarationIt->second || !declarationIt->second->initializer)
+                {
+                    return ConstEvaluationLimitStatus::Valid;
+                }
+                if (!budget.activeSymbols.insert(symbol.Get()).second)
+                    return ConstEvaluationLimitStatus::Cycle;
+                const auto result = validateConstEvaluationLimits(
+                    declarationIt->second->initializer,
+                    variableDeclarationsBySymbol,
+                    budget,
+                    depth + 1);
+                budget.activeSymbols.erase(symbol.Get());
+                return result;
+            }
+
+            auto validateChild = [&](const NodePtr<Expression>& child)
+            {
+                return validateConstEvaluationLimits(
+                    child, variableDeclarationsBySymbol, budget, depth + 1);
+            };
+            auto validateChildren = [&](const auto& children)
+            {
+                for (const auto& child : children)
+                {
+                    const auto result = validateChild(child);
+                    if (result != ConstEvaluationLimitStatus::Valid)
+                        return result;
+                }
+                return ConstEvaluationLimitStatus::Valid;
+            };
+
+            if (const auto* interpolated = expression->as<InterpolatedStringLiteral>())
+                return validateChildren(interpolated->parts);
+            if (const auto* unary = expression->as<UnaryExpression>())
+                return validateChild(unary->operand);
+            if (const auto* binary = expression->as<BinaryExpression>())
+            {
+                const auto left = validateChild(binary->left);
+                return left == ConstEvaluationLimitStatus::Valid
+                    ? validateChild(binary->right)
+                    : left;
+            }
+            if (const auto* fit = expression->as<FitExpression>())
+                return validateChild(fit->operand);
+
+            return ConstEvaluationLimitStatus::Valid;
+        }
 
         std::optional<int64_t> tryEvaluateStaticIntegerExpression(
             const NodePtr<Expression>& expression,
@@ -1844,6 +1994,163 @@ namespace wio::sema
             return std::nullopt;
         }
 
+        std::optional<Token> tryEvaluateStaticAttributeConstant(
+            const NodePtr<Expression>& expression,
+            const ConstVariableDeclarationMap& variableDeclarationsBySymbol,
+            std::unordered_set<const Symbol*>& activeSymbols,
+            const size_t depth = 0,
+            size_t* visitedNodes = nullptr,
+            size_t* foldedTextBytes = nullptr)
+        {
+            if (!expression)
+                return std::nullopt;
+
+            size_t localVisitedNodes = 0;
+            size_t localFoldedTextBytes = 0;
+            if (!visitedNodes)
+                visitedNodes = &localVisitedNodes;
+            if (!foldedTextBytes)
+                foldedTextBytes = &localFoldedTextBytes;
+            if (depth > ConstEvaluationBudget::MaxDepth ||
+                ++(*visitedNodes) > ConstEvaluationBudget::MaxNodes)
+            {
+                return std::nullopt;
+            }
+
+            auto preserveLocation = [&](Token token)
+            {
+                token.loc = expression->location();
+                return token;
+            };
+
+            if (const auto* literal = expression->as<StringLiteral>())
+            {
+                if (literal->token.value.size() > ConstEvaluationBudget::MaxTextBytes -
+                        std::min(*foldedTextBytes, ConstEvaluationBudget::MaxTextBytes))
+                {
+                    return std::nullopt;
+                }
+                *foldedTextBytes += literal->token.value.size();
+                return preserveLocation(literal->token);
+            }
+            if (const auto* literal = expression->as<IntegerLiteral>())
+                return preserveLocation(literal->token);
+            if (const auto* literal = expression->as<FloatLiteral>())
+                return preserveLocation(literal->token);
+            if (const auto* literal = expression->as<BoolLiteral>())
+                return preserveLocation(literal->token);
+            if (const auto* literal = expression->as<CharLiteral>())
+                return preserveLocation(literal->token);
+            if (const auto* literal = expression->as<ByteLiteral>())
+                return preserveLocation(literal->token);
+
+            if (const auto* identifier = expression->as<Identifier>())
+            {
+                Ref<Symbol> symbol = identifier->referencedSymbol.Lock();
+                if (!symbol || !symbol->flags.get_isConst())
+                    return std::nullopt;
+
+                auto declarationIt = variableDeclarationsBySymbol.find(symbol.Get());
+                if (declarationIt == variableDeclarationsBySymbol.end() ||
+                    !declarationIt->second || !declarationIt->second->initializer)
+                {
+                    return std::nullopt;
+                }
+
+                if (!activeSymbols.insert(symbol.Get()).second)
+                    return std::nullopt;
+                auto value = tryEvaluateStaticAttributeConstant(
+                    declarationIt->second->initializer,
+                    variableDeclarationsBySymbol,
+                    activeSymbols,
+                    depth + 1,
+                    visitedNodes,
+                    foldedTextBytes);
+                activeSymbols.erase(symbol.Get());
+                if (value)
+                    value->loc = expression->location();
+                return value;
+            }
+
+            if (const auto* binary = expression->as<BinaryExpression>();
+                binary && binary->op.type == TokenType::opPlus)
+            {
+                auto left = tryEvaluateStaticAttributeConstant(
+                    binary->left, variableDeclarationsBySymbol, activeSymbols,
+                    depth + 1, visitedNodes, foldedTextBytes);
+                auto right = tryEvaluateStaticAttributeConstant(
+                    binary->right, variableDeclarationsBySymbol, activeSymbols,
+                    depth + 1, visitedNodes, foldedTextBytes);
+                if (left && right &&
+                    left->type == TokenType::stringLiteral &&
+                    right->type == TokenType::stringLiteral &&
+                    left->isUnicodeString == right->isUnicodeString)
+                {
+                    left->value += right->value;
+                    left->loc = expression->location();
+                    return left;
+                }
+            }
+
+            if (const auto* interpolated = expression->as<InterpolatedStringLiteral>())
+            {
+                Token result{
+                    .type = TokenType::stringLiteral,
+                    .value = {},
+                    .loc = expression->location(),
+                    .isUnicodeString = interpolated->isUnicode
+                };
+                for (const auto& part : interpolated->parts)
+                {
+                    auto value = tryEvaluateStaticAttributeConstant(
+                        part, variableDeclarationsBySymbol, activeSymbols,
+                        depth + 1, visitedNodes, foldedTextBytes);
+                    if (!value)
+                        return std::nullopt;
+
+                    if (value->type == TokenType::integerLiteral)
+                        result.value += common::stripIntegerLiteralTypeSuffix(value->value);
+                    else if (value->type == TokenType::floatLiteral)
+                        result.value += common::stripFloatLiteralTypeSuffix(value->value);
+                    else if (value->type == TokenType::stringLiteral ||
+                             value->type == TokenType::kwTrue ||
+                             value->type == TokenType::kwFalse ||
+                             value->type == TokenType::charLiteral ||
+                             value->type == TokenType::byteLiteral)
+                        result.value += value->value;
+                    else
+                        return std::nullopt;
+                }
+                return result;
+            }
+
+            Ref<Type> expressionType = unwrapAliasType(expression->refType.Lock());
+            const bool isIntegerExpression = expressionType &&
+                expressionType->kind() == TypeKind::Primitive &&
+                [&]()
+                {
+                    const std::string& name = expressionType.AsFast<PrimitiveType>()->name;
+                    return name == "i8" || name == "i16" || name == "i32" || name == "i64" ||
+                           name == "u8" || name == "u16" || name == "u32" || name == "u64" ||
+                           name == "isize" || name == "usize" || name == "byte";
+                }();
+            if (isIntegerExpression)
+            {
+                auto value = tryEvaluateStaticIntegerExpression(
+                    expression, variableDeclarationsBySymbol, activeSymbols);
+                if (value)
+                {
+                    return Token{
+                        .type = TokenType::integerLiteral,
+                        .value = std::to_string(*value),
+                        .loc = expression->location()
+                    };
+                }
+            }
+
+            return std::nullopt;
+        }
+
         std::string formatAccessContextType(const Ref<Type>& type)
         {
             if (!type)
@@ -1860,6 +2167,8 @@ namespace wio::sema
             if (expression->is<ArrayAccessExpression>())
             {
                 auto* arrayAccess = expression->as<ArrayAccessExpression>();
+                if (isTextType(arrayAccess->object ? arrayAccess->object->refType.Lock() : nullptr))
+                    return false;
                 if (arrayAccess->operatorDispatchKind == OperatorDispatchKind::None)
                     return true;
 
@@ -3202,7 +3511,7 @@ namespace wio::sema
             case TypeKind::Primitive:
                 return expected.AsFast<PrimitiveType>()->name == candidate.AsFast<PrimitiveType>()->name;
             case TypeKind::ConstValue:
-                return expected.AsFast<ConstValueType>()->value == candidate.AsFast<ConstValueType>()->value;
+                return Type::matchTypes(expected, candidate);
             case TypeKind::Reference:
             {
                 auto expectedRef = expected.AsFast<ReferenceType>();
@@ -3265,33 +3574,19 @@ namespace wio::sema
             }
         }
 
-        size_t getSpecializationPatternSpecificity(const Ref<Type>& pattern)
+        bool matchesSpecializationPatternList(const std::vector<Ref<Type>>& patterns,
+                                              const std::vector<Ref<Type>>& actuals)
         {
-            Ref<Type> type = unwrapAliasType(pattern);
-            if (!type || type->kind() == TypeKind::GenericParameter ||
-                type->kind() == TypeKind::ConstGenericParameter ||
-                type->kind() == TypeKind::GenericParameterPack)
-                return 0;
+            if (patterns.size() != actuals.size())
+                return false;
 
-            size_t score = 1;
-            switch (type->kind())
+            std::unordered_map<std::string, Ref<Type>> bindings;
+            for (size_t index = 0; index < patterns.size(); ++index)
             {
-            case TypeKind::Reference:
-                return score + getSpecializationPatternSpecificity(type.AsFast<ReferenceType>()->referredType);
-            case TypeKind::Nullable:
-                return score + getSpecializationPatternSpecificity(type.AsFast<NullableType>()->valueType);
-            case TypeKind::Array:
-                return score + getSpecializationPatternSpecificity(type.AsFast<ArrayType>()->elementType);
-            case TypeKind::Dictionary:
-                return score + getSpecializationPatternSpecificity(type.AsFast<DictionaryType>()->keyType) +
-                               getSpecializationPatternSpecificity(type.AsFast<DictionaryType>()->valueType);
-            case TypeKind::Struct:
-                for (const auto& argument : type.AsFast<StructType>()->genericArguments)
-                    score += getSpecializationPatternSpecificity(argument);
-                return score;
-            default:
-                return score;
+                if (!matchSpecializationPattern(patterns[index], actuals[index], bindings))
+                    return false;
             }
+            return true;
         }
 
         Ref<Type> instantiateGenericStructType(const Ref<StructType>& structType,
@@ -3312,10 +3607,12 @@ namespace wio::sema
                     return specialization;
             }
 
-            Ref<StructType> selectedPartialSpecialization = nullptr;
-            std::unordered_map<std::string, Ref<Type>> selectedBindings;
-            size_t selectedSpecificity = 0;
-            bool ambiguousPartialSpecialization = false;
+            struct MatchingPartialSpecialization
+            {
+                Ref<StructType> specialization;
+                std::unordered_map<std::string, Ref<Type>> bindings;
+            };
+            std::vector<MatchingPartialSpecialization> matchingPartialSpecializations;
             for (const auto& weakSpecialization : structType->partialSpecializations)
             {
                 auto specialization = weakSpecialization.Lock();
@@ -3324,10 +3621,8 @@ namespace wio::sema
 
                 std::unordered_map<std::string, Ref<Type>> bindings;
                 bool matches = true;
-                size_t specificity = 0;
                 for (size_t index = 0; index < explicitTypeArguments.size(); ++index)
                 {
-                    specificity += getSpecializationPatternSpecificity(specialization->genericArguments[index]);
                     if (!matchSpecializationPattern(specialization->genericArguments[index], explicitTypeArguments[index], bindings))
                     {
                         matches = false;
@@ -3336,18 +3631,56 @@ namespace wio::sema
                 }
                 if (!matches)
                     continue;
-                if (!selectedPartialSpecialization || specificity > selectedSpecificity)
+                matchingPartialSpecializations.push_back({specialization, std::move(bindings)});
+            }
+
+            Ref<StructType> selectedPartialSpecialization = nullptr;
+            std::unordered_map<std::string, Ref<Type>> selectedBindings;
+            bool ambiguousPartialSpecialization = false;
+            for (size_t candidateIndex = 0;
+                 candidateIndex < matchingPartialSpecializations.size();
+                 ++candidateIndex)
+            {
+                const auto& candidate = matchingPartialSpecializations[candidateIndex];
+                bool isUniquelyMostSpecialized = true;
+                for (size_t otherIndex = 0;
+                     otherIndex < matchingPartialSpecializations.size();
+                     ++otherIndex)
                 {
-                    selectedPartialSpecialization = specialization;
-                    selectedBindings = std::move(bindings);
-                    selectedSpecificity = specificity;
-                    ambiguousPartialSpecialization = false;
+                    if (candidateIndex == otherIndex)
+                        continue;
+
+                    const auto& other = matchingPartialSpecializations[otherIndex];
+                    // Candidate is at least as specialized as other when the
+                    // other pattern accepts every structural relation encoded
+                    // by candidate. The reverse match distinguishes a strict
+                    // ordering from equivalent/renamed patterns.
+                    const bool otherAcceptsCandidate = matchesSpecializationPatternList(
+                        other.specialization->genericArguments,
+                        candidate.specialization->genericArguments);
+                    const bool candidateAcceptsOther = matchesSpecializationPatternList(
+                        candidate.specialization->genericArguments,
+                        other.specialization->genericArguments);
+                    if (!otherAcceptsCandidate || candidateAcceptsOther)
+                    {
+                        isUniquelyMostSpecialized = false;
+                        break;
+                    }
                 }
-                else if (specificity == selectedSpecificity)
+
+                if (!isUniquelyMostSpecialized && matchingPartialSpecializations.size() > 1)
+                    continue;
+                if (selectedPartialSpecialization)
                 {
                     ambiguousPartialSpecialization = true;
+                    break;
                 }
+                selectedPartialSpecialization = candidate.specialization;
+                selectedBindings = candidate.bindings;
             }
+
+            if (!matchingPartialSpecializations.empty() && !selectedPartialSpecialization)
+                ambiguousPartialSpecialization = true;
 
             if (ambiguousPartialSpecialization)
             {
@@ -3704,6 +4037,53 @@ namespace wio::sema
                    name == "u64" || name == "usize";
         }
 
+        bool isConstGenericValueType(const Ref<Type>& type)
+        {
+            if (isConstGenericIntegerType(type))
+                return true;
+
+            Ref<Type> current = unwrapAliasType(type);
+            if (!current || current->kind() != TypeKind::Primitive)
+                return false;
+            const std::string& name = current.AsFast<PrimitiveType>()->name;
+            return name == "string" || name == "text";
+        }
+
+        bool areConstGenericValueTypesCompatible(const Ref<Type>& declared, const Ref<Type>& actual)
+        {
+            Ref<Type> resolvedDeclared = unwrapAliasType(declared);
+            Ref<Type> resolvedActual = unwrapAliasType(actual);
+            if (!resolvedDeclared || !resolvedActual)
+                return false;
+
+            auto textualName = [](const Ref<Type>& type) -> std::string_view
+            {
+                if (!type || type->kind() != TypeKind::Primitive)
+                    return {};
+                const std::string& name = type.AsFast<PrimitiveType>()->name;
+                return name == "string" || name == "text" ? std::string_view(name) : std::string_view{};
+            };
+            const std::string_view declaredText = textualName(resolvedDeclared);
+            const std::string_view actualText = textualName(resolvedActual);
+            if (!declaredText.empty() || !actualText.empty())
+                return declaredText == actualText && !declaredText.empty();
+
+            return resolvedDeclared->isCompatibleWith(resolvedActual);
+        }
+
+        bool isTextualConstGenericParameterType(const Ref<Type>& type)
+        {
+            Ref<Type> resolved = unwrapAliasType(type);
+            if (!resolved || resolved->kind() != TypeKind::ConstGenericParameter)
+                return false;
+            Ref<Type> valueType = unwrapAliasType(
+                resolved.AsFast<ConstGenericParameterType>()->valueType);
+            if (!valueType || valueType->kind() != TypeKind::Primitive)
+                return false;
+            const std::string& name = valueType.AsFast<PrimitiveType>()->name;
+            return name == "string" || name == "text";
+        }
+
         Ref<Type> createGenericParameterSemanticType(SemanticAnalyzer& analyzer,
                                                      const NodePtr<Identifier>& parameter,
                                                      const bool isPack,
@@ -3735,17 +4115,17 @@ namespace wio::sema
 
             if (!parameter->genericValueType)
             {
-                WIO_LOG_ADD_ERROR(parameter->location(), "Const generic parameter '{}' on {} requires an integer value type.", name, declarationKind);
+                WIO_LOG_ADD_ERROR(parameter->location(), "Const generic parameter '{}' on {} requires an integer, string, or text value type.", name, declarationKind);
                 return Compiler::get().getTypeContext().getUnknown();
             }
 
             parameter->genericValueType->accept(analyzer);
             Ref<Type> valueType = parameter->genericValueType->refType.Lock();
-            if (!isConstGenericIntegerType(valueType))
+            if (!isConstGenericValueType(valueType))
             {
                 WIO_LOG_ADD_ERROR(
                     parameter->genericValueType->location(),
-                    "Const generic parameter '{}' on {} must use an integer type, but got '{}'.",
+                    "Const generic parameter '{}' on {} must use an integer, string, or text type, but got '{}'.",
                     name, declarationKind, valueType ? valueType->toString() : "<unknown>"
                 );
                 return Compiler::get().getTypeContext().getUnknown();
@@ -3785,7 +4165,7 @@ namespace wio::sema
                     WIO_LOG_ADD_ERROR(
                         location,
                         expectsValue
-                            ? "Generic parameter '{}' expects a compile-time integer value, but got type '{}'."
+                            ? "Generic parameter '{}' expects a compile-time value, but got type '{}'."
                             : "Generic parameter '{}' expects a type, but got compile-time value '{}'.",
                         index < parameterNames.size() ? parameterNames[index] : "<unknown>",
                         argument->toString()
@@ -3800,7 +4180,7 @@ namespace wio::sema
                     Ref<Type> actualValueType = argument->kind() == TypeKind::ConstValue
                         ? argument.AsFast<ConstValueType>()->valueType
                         : argument.AsFast<ConstGenericParameterType>()->valueType;
-                    if (!declared->valueType->isCompatibleWith(actualValueType))
+                    if (!areConstGenericValueTypesCompatible(declared->valueType, actualValueType))
                     {
                         WIO_LOG_ADD_ERROR(
                             location,
@@ -3856,11 +4236,11 @@ namespace wio::sema
                             ? defaultType.AsFast<ConstGenericParameterType>()->valueType
                             : nullptr;
                     if (!constParameter || !defaultValueType ||
-                        !constParameter->valueType->isCompatibleWith(defaultValueType))
+                        !areConstGenericValueTypesCompatible(constParameter->valueType, defaultValueType))
                     {
                         WIO_LOG_ADD_ERROR(
                             parameter->genericDefaultType->location(),
-                            "Default for const generic parameter '{}' must be an integer constant compatible with '{}'.",
+                            "Default for const generic parameter '{}' must be a compile-time value compatible with '{}'.",
                             parameter->token.value,
                             constParameter && constParameter->valueType ? constParameter->valueType->toString() : "<unknown>"
                         );
@@ -4192,6 +4572,7 @@ namespace wio::sema
             if (name == "bool") return ctx.getBool();
             if (name == "char") return ctx.getChar();
             if (name == "string") return ctx.getString();
+            if (name == "text") return ctx.getText();
             if (name == "any") return ctx.getAny();
             if (name == "opaque") return ctx.getOpaque();
             if (name == "void") return ctx.getVoid();
@@ -4982,6 +5363,8 @@ namespace wio::sema
                    cppNameArg->value == "wio::runtime::ReflectedMethodSignatures" ||
                    cppNameArg->value == "wio::runtime::ReflectedMethodAccess" ||
                    cppNameArg->value == "wio::runtime::ReflectedBaseTypes" ||
+                   cppNameArg->value == "wio::runtime::ReflectedGenericParameterNames" ||
+                   cppNameArg->value == "wio::runtime::ReflectedGenericArguments" ||
                    cppNameArg->value == "wio::runtime::ReflectedTypeAttributes" ||
                    cppNameArg->value == "wio::runtime::ReflectedFieldAttributeNames" ||
                    cppNameArg->value == "wio::runtime::ReflectedFieldAttributeOffsets" ||
@@ -4993,6 +5376,9 @@ namespace wio::sema
                    cppNameArg->value == "wio::runtime::traits::IsSignedValue" ||
                    cppNameArg->value == "wio::runtime::traits::IsUnsignedValue" ||
                    cppNameArg->value == "wio::runtime::traits::IsArrayValue" ||
+                   cppNameArg->value == "wio::runtime::traits::IsPrimitiveValue" ||
+                   cppNameArg->value == "wio::runtime::traits::IsStringValue" ||
+                   cppNameArg->value == "wio::runtime::traits::IsTextValue" ||
                    cppNameArg->value == "wio::runtime::traits::IsDictionaryValue" ||
                    cppNameArg->value == "wio::runtime::traits::IsEnumValue" ||
                    cppNameArg->value == "wio::runtime::traits::IsFlagsetValue" ||
@@ -6785,6 +7171,17 @@ namespace wio::sema
             return;
         }
 
+        if (node.name.type == TokenType::stringLiteral)
+        {
+            Ref<Type> valueType = node.name.isUnicodeString
+                ? Compiler::get().getTypeContext().getText()
+                : Compiler::get().getTypeContext().getString();
+            node.refType = Compiler::get().getTypeContext().getOrCreateConstValueType(
+                node.name.value,
+                valueType);
+            return;
+        }
+
         if (node.name.type == TokenType::kwFn)
         {
             node.generics[0]->accept(*this);
@@ -6888,15 +7285,29 @@ namespace wio::sema
                 {
                     node.arrayExtent->accept(*this);
                     extentType = node.arrayExtent->refType.Lock();
+                    Ref<Type> extentValueType = extentType && extentType->kind() == TypeKind::ConstGenericParameter
+                        ? extentType.AsFast<ConstGenericParameterType>()->valueType
+                        : extentType && extentType->kind() == TypeKind::ConstValue
+                            ? extentType.AsFast<ConstValueType>()->valueType
+                            : nullptr;
                     if (!extentType ||
-                        (extentType->kind() != TypeKind::ConstGenericParameter && extentType->kind() != TypeKind::ConstValue))
+                        (extentType->kind() != TypeKind::ConstGenericParameter && extentType->kind() != TypeKind::ConstValue) ||
+                        !isConstGenericIntegerType(extentValueType))
                     {
                         WIO_LOG_ADD_ERROR(node.arrayExtent->location(), "Static array extent must be an integer const generic parameter or integer literal.");
                         extentType = Compiler::get().getTypeContext().getUnknown();
                     }
                 }
+                if (node.hasInferredArrayExtent && !allowInferredStaticArrayExtent_)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "Inferred static array extent '[T; _]' is supported only on variable declarations with an initializer."
+                    );
+                }
                 type = Compiler::get().getTypeContext().getOrCreateArrayType(
-                    node.generics[0]->refType.Lock(), ArrayType::ArrayKind::Static, node.size, extentType);
+                    node.generics[0]->refType.Lock(), ArrayType::ArrayKind::Static,
+                    node.size, extentType, node.hasInferredArrayExtent);
             }
             else if (node.name.type == TokenType::DynamicArray)
             {
@@ -6922,6 +7333,36 @@ namespace wio::sema
                             WIO_LOG_ADD_ERROR(node.location(), "Const generic argument '{}' has no evaluable initializer.", node.name.value);
                             node.refType = Compiler::get().getTypeContext().getUnknown();
                             return;
+                        }
+
+                        Ref<Type> constType = unwrapAliasType(sym->type);
+                        if (constType && constType->kind() == TypeKind::Primitive)
+                        {
+                            const std::string& constTypeName = constType.AsFast<PrimitiveType>()->name;
+                            if (constTypeName == "string" || constTypeName == "text")
+                            {
+                                std::unordered_set<const Symbol*> activeSymbols{sym.Get()};
+                                auto value = tryEvaluateStaticAttributeConstant(
+                                    declarationIt->second->initializer,
+                                    variableDeclarationsBySymbol_,
+                                    activeSymbols);
+                                if (!value || value->type != TokenType::stringLiteral ||
+                                    value->isUnicodeString != (constTypeName == "text"))
+                                {
+                                    WIO_LOG_ADD_ERROR(
+                                        node.location(),
+                                        "Const generic argument '{}' must evaluate to '{}'.",
+                                        node.name.value,
+                                        constTypeName);
+                                    node.refType = Compiler::get().getTypeContext().getUnknown();
+                                    return;
+                                }
+
+                                node.refType = Compiler::get().getTypeContext().getOrCreateConstValueType(
+                                    value->value,
+                                    sym->type);
+                                return;
+                            }
                         }
 
                         std::unordered_set<const Symbol*> activeSymbols;
@@ -7666,6 +8107,53 @@ namespace wio::sema
         const Ref<Type> semanticLhsType = readableLhsType ? readableLhsType : lhsType;
         const Ref<Type> semanticRhsType = readableRhsType ? readableRhsType : rhsType;
         const Ref<Type> commonNumericType = getCommonNumericType(semanticLhsType, semanticRhsType);
+
+        const auto primitiveName = [](const Ref<Type>& type) -> std::string_view
+        {
+            Ref<Type> resolved = unwrapAliasType(type);
+            return resolved && resolved->kind() == TypeKind::Primitive
+                ? std::string_view(resolved.AsFast<PrimitiveType>()->name)
+                : std::string_view{};
+        };
+        const std::string_view lhsPrimitive = primitiveName(semanticLhsType);
+        const std::string_view rhsPrimitive = primitiveName(semanticRhsType);
+        const bool lhsTextual = lhsPrimitive == "string" || lhsPrimitive == "text";
+        const bool rhsTextual = rhsPrimitive == "string" || rhsPrimitive == "text";
+
+        if (lhsTextual && rhsTextual && lhsPrimitive != rhsPrimitive &&
+            node.op.type != TokenType::opAssign)
+        {
+            WIO_LOG_ADD_ERROR(
+                node.op.loc,
+                "Mixed 'string' and 'text' operations require an explicit conversion."
+            );
+            node.refType = Compiler::get().getTypeContext().getUnknown();
+            return;
+        }
+
+        if (lhsTextual && rhsTextual && lhsPrimitive == rhsPrimitive)
+        {
+            const bool supported =
+                node.op.type == TokenType::opPlus ||
+                node.op.type == TokenType::opAssign ||
+                node.op.type == TokenType::opPlusAssign ||
+                node.op.type == TokenType::opEqual ||
+                node.op.type == TokenType::opNotEqual ||
+                node.op.type == TokenType::opLess ||
+                node.op.type == TokenType::opLessEqual ||
+                node.op.type == TokenType::opGreater ||
+                node.op.type == TokenType::opGreaterEqual;
+            if (!supported)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.op.loc,
+                    "Textual values do not support operator '{}'.",
+                    node.op.value
+                );
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+        }
 
         bool isCompatible = lhsType->isCompatibleWith(rhsType);
         if (!node.op.isAssignment() && commonNumericType)
@@ -8643,7 +9131,14 @@ namespace wio::sema
             Ref<Type> receiverType = unwrapAliasType(arrayAccess->object ? arrayAccess->object->refType.Lock() : nullptr);
             if (receiverType)
             {
-                if (receiverType->kind() == TypeKind::GenericParameterPack ||
+                if (isTextType(receiverType))
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.op.loc,
+                        "Text indexing is read-only; build a new text value instead."
+                    );
+                }
+                else if (receiverType->kind() == TypeKind::GenericParameterPack ||
                     receiverType->kind() == TypeKind::ValuePackView ||
                     receiverType->kind() == TypeKind::TypePackView)
                 {
@@ -8773,7 +9268,8 @@ namespace wio::sema
     
     void SemanticAnalyzer::visit(StringLiteral& node)
     {
-        node.refType = Compiler::get().getTypeContext().getString();
+        auto& typeContext = Compiler::get().getTypeContext();
+        node.refType = node.token.isUnicodeString ? typeContext.getText() : typeContext.getString();
     }
     
     void SemanticAnalyzer::visit(InterpolatedStringLiteral& node)
@@ -8782,7 +9278,8 @@ namespace wio::sema
         {
             part->accept(*this);
         }
-        node.refType = Compiler::get().getTypeContext().getString();
+        auto& typeContext = Compiler::get().getTypeContext();
+        node.refType = node.isUnicode ? typeContext.getText() : typeContext.getString();
     }
     
     void SemanticAnalyzer::visit(BoolLiteral& node)
@@ -8823,7 +9320,19 @@ namespace wio::sema
         {
             if (expectedArrayType)
             {
-                node.refType = expectedArrayLiteralType;
+                if (containsInferredArrayExtent(expectedArrayLiteralType))
+                {
+                    node.refType = Compiler::get().getTypeContext().getOrCreateArrayType(
+                        expectedArrayType->elementType,
+                        ArrayType::ArrayKind::Static,
+                        expectedArrayType->hasInferredExtent ? 0 : expectedArrayType->size,
+                        expectedArrayType->extentType
+                    );
+                }
+                else
+                {
+                    node.refType = expectedArrayLiteralType;
+                }
                 return;
             }
 
@@ -8846,7 +9355,10 @@ namespace wio::sema
         };
 
         analyzeElement(node.elements[0]);
-        Ref<Type> baseType = expectedArrayType ? expectedArrayType->elementType : node.elements[0]->refType.Lock();
+        Ref<Type> baseType =
+            expectedArrayType && !containsInferredArrayExtent(expectedArrayType->elementType)
+                ? expectedArrayType->elementType
+                : node.elements[0]->refType.Lock();
         if (!baseType)
             baseType = node.elements[0]->refType.Lock();
 
@@ -8855,7 +9367,9 @@ namespace wio::sema
             analyzeElement(node.elements[i]);
             if (auto lockedType = node.elements[i]->refType.Lock(); lockedType)
             {
-                if (!baseType || (!baseType->isCompatibleWith(lockedType) && !(baseType->isNumeric() && lockedType->isNumeric())))
+                if (!baseType ||
+                    !haveIdenticalFixedArrayShape(baseType, lockedType) ||
+                    (!baseType->isCompatibleWith(lockedType) && !(baseType->isNumeric() && lockedType->isNumeric())))
                 {
                     const std::string expectedTypeName = baseType ? baseType->toString() : "<unknown>";
                     WIO_LOG_ADD_ERROR(
@@ -8875,6 +9389,7 @@ namespace wio::sema
         if (expectedArrayType)
         {
             if (expectedArrayType->arrayKind == ArrayType::ArrayKind::Static &&
+                !expectedArrayType->hasInferredExtent &&
                 expectedArrayType->size != node.elements.size())
             {
                 WIO_LOG_ADD_ERROR(
@@ -8885,7 +9400,21 @@ namespace wio::sema
                 );
             }
 
-            node.refType = expectedArrayLiteralType;
+            if (containsInferredArrayExtent(expectedArrayLiteralType))
+            {
+                node.refType = Compiler::get().getTypeContext().getOrCreateArrayType(
+                    baseType,
+                    ArrayType::ArrayKind::Static,
+                    expectedArrayType->hasInferredExtent
+                        ? node.elements.size()
+                        : expectedArrayType->size,
+                    expectedArrayType->extentType
+                );
+            }
+            else
+            {
+                node.refType = expectedArrayLiteralType;
+            }
             return;
         }
 
@@ -9551,16 +10080,18 @@ namespace wio::sema
             return;
         }
 
-        if (resolvedObjType->kind() != TypeKind::Array && !isStringType(resolvedObjType))
+        if (resolvedObjType->kind() != TypeKind::Array &&
+            !isStringType(resolvedObjType) &&
+            !isTextType(resolvedObjType))
         {
-            WIO_LOG_ADD_ERROR(node.object->location(), "Type '{}' is not an array or string and cannot be indexed.", objType->toString());
+            WIO_LOG_ADD_ERROR(node.object->location(), "Type '{}' is not an array, string, or text and cannot be indexed.", objType->toString());
             node.refType = Compiler::get().getTypeContext().getUnknown();
             return;
         }
         
         if (!allowsIntegerSemantics(idxType))
         {
-            WIO_LOG_ADD_ERROR(node.index->location(), "Array and string indices must be integer values.");
+            WIO_LOG_ADD_ERROR(node.index->location(), "Array, string, and text indices must be integer values.");
         }
         
         if (resolvedObjType->kind() == TypeKind::Array)
@@ -9570,6 +10101,7 @@ namespace wio::sema
             if (auto staticIndex = tryEvaluateStaticPackIndex(node.index, variableDeclarationsBySymbol_);
                 staticIndex.has_value() &&
                 (arrType->arrayKind == ArrayType::ArrayKind::Static || arrType->arrayKind == ArrayType::ArrayKind::Literal) &&
+                !arrType->hasInferredExtent &&
                 *staticIndex >= arrType->size)
             {
                 WIO_LOG_ADD_ERROR(
@@ -9585,7 +10117,9 @@ namespace wio::sema
             return;
         }
 
-        node.refType = Compiler::get().getTypeContext().getChar();
+        node.refType = isTextType(resolvedObjType)
+            ? Compiler::get().getTypeContext().getText()
+            : Compiler::get().getTypeContext().getChar();
     }
     
     void SemanticAnalyzer::visit(MemberAccessExpression& node)
@@ -10030,6 +10564,16 @@ namespace wio::sema
                         callableSymbol->extensionTargetType = extensionSymbol->extensionTargetType;
                         callableSymbol->extensionMemberName = extensionSymbol->extensionMemberName;
                         callableSymbol->extensionImplementation = extensionSymbol;
+                        callableSymbol->genericParameterNames = extensionSymbol->genericParameterNames;
+                        callableSymbol->genericParameterTypes = extensionSymbol->genericParameterTypes;
+                        callableSymbol->genericParameterDefaults = extensionSymbol->genericParameterDefaults;
+                        callableSymbol->hasGenericParameterPack = extensionSymbol->hasGenericParameterPack;
+                        callableSymbol->resolvedGenericInstantiations = extensionSymbol->resolvedGenericInstantiations;
+                        if (auto attributes = attributeListsBySymbol_.find(extensionSymbol.Get());
+                            attributes != attributeListsBySymbol_.end())
+                        {
+                            attributeListsBySymbol_[callableSymbol.Get()] = attributes->second;
+                        }
 
                         node.referencedSymbol = callableSymbol;
                         node.refType = visibleType;
@@ -10707,14 +11251,41 @@ namespace wio::sema
                 return nullptr;
 
             auto foundDeclaration = functionDeclarationsBySymbol_.find(symbol.Get());
-            return foundDeclaration != functionDeclarationsBySymbol_.end() ? foundDeclaration->second : nullptr;
+            if (foundDeclaration != functionDeclarationsBySymbol_.end())
+                return foundDeclaration->second;
+
+            if (symbol->flags.get_isExtension() && symbol->extensionImplementation)
+            {
+                foundDeclaration = functionDeclarationsBySymbol_.find(symbol->extensionImplementation.Get());
+                if (foundDeclaration != functionDeclarationsBySymbol_.end())
+                    return foundDeclaration->second;
+            }
+
+            return nullptr;
+        };
+
+        auto getRequiredArgumentCountForDeclaration = [&](const FunctionDeclaration* declaration,
+                                                          const Ref<FunctionType>& callableType) -> size_t
+        {
+            if (!declaration)
+                return callableType && callableType->hasParameterPack
+                    ? (callableType->paramTypes.empty() ? 0 : callableType->paramTypes.size() - 1)
+                    : (callableType ? callableType->paramTypes.size() : 0);
+
+            size_t requiredCount = getRequiredParameterCount(declaration);
+            const bool hidesExtensionReceiver =
+                declaration->isExtensionMethod && callableType &&
+                declaration->parameters.size() == callableType->paramTypes.size() + 1;
+            if (hidesExtensionReceiver && requiredCount > 0)
+                --requiredCount;
+            return requiredCount;
         };
 
         auto getRequiredArgumentCountForCallable = [&](const Ref<Symbol>& symbol,
                                                        const Ref<FunctionType>& functionType) -> size_t
         {
             if (const auto* functionDeclaration = getFunctionDeclarationForSymbol(symbol))
-                return getRequiredParameterCount(functionDeclaration);
+                return getRequiredArgumentCountForDeclaration(functionDeclaration, functionType);
 
             if (functionType && functionType->hasParameterPack)
                 return functionType->paramTypes.empty() ? 0 : functionType->paramTypes.size() - 1;
@@ -10775,7 +11346,7 @@ namespace wio::sema
                 ? functionType->paramTypes.size() - 1
                 : functionType->paramTypes.size();
             const size_t requiredArgumentCount = functionDeclaration
-                ? getRequiredParameterCount(functionDeclaration)
+                ? getRequiredArgumentCountForDeclaration(functionDeclaration, functionType)
                 : (hasParameterPack ? fixedParameterCount : functionType->paramTypes.size());
             const size_t totalParameterCount = functionType->paramTypes.size();
 
@@ -11108,7 +11679,10 @@ namespace wio::sema
             {
                 const auto* candidateDeclaration = getFunctionDeclarationForSymbol(candidateSymbol);
                 if (candidateDeclaration &&
-                    getRequiredParameterCount(candidateDeclaration) != candidateDeclaration->parameters.size())
+                    getRequiredArgumentCountForDeclaration(
+                        candidateDeclaration,
+                        candidateSymbol->type.AsFast<FunctionType>()) !=
+                        candidateSymbol->type.AsFast<FunctionType>()->paramTypes.size())
                 {
                     requiresOverloadResolution = true;
                     break;
@@ -11422,7 +11996,7 @@ namespace wio::sema
                     : declaredFunctionType->paramTypes.size();
                 const auto* candidateDeclaration = getFunctionDeclarationForSymbol(overload);
                 size_t requiredArgumentCount = candidateDeclaration
-                    ? getRequiredParameterCount(candidateDeclaration)
+                    ? getRequiredArgumentCountForDeclaration(candidateDeclaration, declaredFunctionType)
                     : (candidateHasParameterPack ? fixedParameterCount : declaredFunctionType->paramTypes.size());
 
                 if (useExplicitFunctionTypeArguments && hasGenericParameterPack && declaredFunctionHadParameterPack && !candidateHasParameterPack && !activeGenericParameterNames.empty())
@@ -11957,15 +12531,28 @@ namespace wio::sema
                     }
                 }
 
-                auto declarationIt = functionDeclarationsBySymbol_.find(bestMatch->symbol.Get());
+                Ref<Symbol> validationSymbol = bestMatch->symbol->flags.get_isExtension() &&
+                                               bestMatch->symbol->extensionImplementation
+                    ? bestMatch->symbol->extensionImplementation
+                    : bestMatch->symbol;
+                const FunctionDeclaration* validationDeclaration =
+                    getFunctionDeclarationForSymbol(validationSymbol);
+                Ref<FunctionType> validationFunctionType = bestMatch->fullFunctionType;
+                if (validationSymbol != bestMatch->symbol && validationSymbol->type &&
+                    validationSymbol->type->kind() == TypeKind::Function)
+                {
+                    Ref<Type> instantiatedValidationType = instantiateGenericType(
+                        validationSymbol->type,
+                        bestMatch->bindingSet);
+                    validationFunctionType = instantiatedValidationType.AsFast<FunctionType>();
+                }
                 Ref<StructType> concreteOwnerType = getConcreteCallableOwnerType();
-                if (declarationIt != functionDeclarationsBySymbol_.end() &&
-                    declarationIt->second &&
-                    bestMatch->fullFunctionType &&
+                if (validationDeclaration &&
+                    validationFunctionType &&
                     !validateConcreteGenericFunctionBody(
-                        *declarationIt->second,
-                        bestMatch->symbol,
-                        bestMatch->fullFunctionType,
+                        *validationDeclaration,
+                        validationSymbol,
+                        validationFunctionType,
                         concreteOwnerType,
                         bestMatch->bindingSet.directBindings,
                         bestMatch->bindingSet.packBindings,
@@ -13091,6 +13678,7 @@ namespace wio::sema
             : nullptr;
         const bool isOptionMatch = algebraicStruct && algebraicStruct->name == "Option";
         const bool isResultMatch = algebraicStruct && algebraicStruct->name == "Result";
+        const bool isEnumMatch = algebraicStruct && algebraicStruct->isEnum;
         Ref<ArrayType> matchedArray = algebraicType && algebraicType->kind() == TypeKind::Array
             ? algebraicType.AsFast<ArrayType>()
             : nullptr;
@@ -13098,6 +13686,39 @@ namespace wio::sema
         bool sawNone = false;
         bool sawOk = false;
         bool sawErr = false;
+        std::unordered_set<const Symbol*> enumMembers;
+        std::unordered_set<const Symbol*> seenUnguardedEnumMembers;
+        if (isEnumMatch)
+        {
+            if (auto enumScope = algebraicStruct->structScope.Lock())
+            {
+                for (const auto& [name, symbol] : enumScope->getSymbols())
+                {
+                    WIO_UNUSED(name);
+                    if (symbol && symbol->kind == SymbolKind::Variable &&
+                        symbol->flags.get_isReadOnly() &&
+                        unwrapAliasType(symbol->type) == algebraicStruct)
+                    {
+                        enumMembers.insert(symbol.Get());
+                    }
+                }
+            }
+        }
+
+        auto analyzeMatchGuard = [&](MatchCase& matchCase)
+        {
+            if (!matchCase.guard)
+                return;
+
+            matchCase.guard->accept(*this);
+            Ref<Type> guardType = unwrapAliasType(matchCase.guard->refType.Lock());
+            Ref<Type> boolType = Compiler::get().getTypeContext().getBool();
+            if (guardType && !guardType->isUnknown() &&
+                (!guardType->isCompatibleWith(boolType) || !boolType->isCompatibleWith(guardType)))
+            {
+                WIO_LOG_ADD_ERROR(matchCase.guard->location(), "Match guards must have type 'bool'.");
+            }
+        };
 
         for (size_t caseIndex = 0; caseIndex < node.cases.size(); ++caseIndex)
         {
@@ -13242,6 +13863,25 @@ namespace wio::sema
                         matchValueType->toString()
                     );
                 }
+
+                if (isEnumMatch)
+                {
+                    Ref<Symbol> enumMember = val->referencedSymbol.Lock();
+                    if (enumMember && enumMembers.contains(enumMember.Get()))
+                    {
+                        if (seenUnguardedEnumMembers.contains(enumMember.Get()))
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                val->location(),
+                                "Unreachable enum match case '{}' because an earlier unguarded case already covers it.",
+                                enumMember->name);
+                        }
+                        else if (!matchCase.guard)
+                        {
+                            seenUnguardedEnumMembers.insert(enumMember.Get());
+                        }
+                    }
+                }
             }
 
             if (isVariantPattern)
@@ -13267,25 +13907,23 @@ namespace wio::sema
                     binding->refType = bindingSymbol->type;
                 }
 
-                if (matchCase.guard)
-                {
-                    matchCase.guard->accept(*this);
-                    Ref<Type> guardType = unwrapAliasType(matchCase.guard->refType.Lock());
-                    Ref<Type> boolType = Compiler::get().getTypeContext().getBool();
-                    if (guardType && !guardType->isUnknown() &&
-                        (!guardType->isCompatibleWith(boolType) || !boolType->isCompatibleWith(guardType)))
-                    {
-                        WIO_LOG_ADD_ERROR(matchCase.guard->location(), "Match guards must have type 'bool'.");
-                    }
-                }
+                analyzeMatchGuard(matchCase);
 
                 matchCase.body->accept(*this);
                 exitScope();
             }
             else
             {
-                if (matchCase.guard)
-                    WIO_LOG_ADD_ERROR(matchCase.guard->location(), "Guards currently require a destructuring pattern.");
+                if (matchCase.guard && matchCase.matchValues.empty())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        matchCase.guard->location(),
+                        "The final 'assumed' match case cannot have a guard.");
+                }
+                else
+                {
+                    analyzeMatchGuard(matchCase);
+                }
                 matchCase.body->accept(*this);
             }
 
@@ -13328,11 +13966,15 @@ namespace wio::sema
         {
             const bool algebraicExhaustive = (isOptionMatch && sawSome && sawNone) ||
                                              (isResultMatch && sawOk && sawErr);
-            if (!hasAssumedCase && !algebraicExhaustive)
+            const bool enumExhaustive = isEnumMatch && !enumMembers.empty() &&
+                                        seenUnguardedEnumMembers.size() == enumMembers.size();
+            if (!hasAssumedCase && !algebraicExhaustive && !enumExhaustive)
             {
                 WIO_LOG_ADD_ERROR(
                     node.location(),
-                    "Value-producing match expressions must include an 'assumed' fallback case."
+                    isEnumMatch
+                        ? "Value-producing enum matches must cover every member or include an 'assumed' fallback case."
+                        : "Value-producing match expressions must include an 'assumed' fallback case."
                 );
                 node.refType = Compiler::get().getTypeContext().getUnknown();
                 return;
@@ -13388,6 +14030,166 @@ namespace wio::sema
 
             attribute->runtimeRetained = std::ranges::find(
                 symbol->attributeRetention, std::string("runtime")) != symbol->attributeRetention.end();
+
+            // Attribute applications are compile-time metadata. Resolve const
+            // identifiers to their folded scalar value before named-argument
+            // ordering and type validation so metadata never retains a source
+            // identifier in place of its value.
+            for (Token& argument : attribute->args)
+            {
+                if (argument.type != TokenType::identifier)
+                    continue;
+
+                Ref<Symbol> argumentSymbol = resolveQualifiedSymbol(currentScope_, argument.value);
+                if (!argumentSymbol || !argumentSymbol->flags.get_isConst())
+                    continue;
+
+                auto declarationIt = variableDeclarationsBySymbol_.find(argumentSymbol.Get());
+                if (declarationIt == variableDeclarationsBySymbol_.end() ||
+                    !declarationIt->second || !declarationIt->second->initializer)
+                {
+                    continue;
+                }
+
+                std::unordered_set<const Symbol*> activeSymbols{argumentSymbol.Get()};
+                if (auto folded = tryEvaluateStaticAttributeConstant(
+                        declarationIt->second->initializer,
+                        variableDeclarationsBySymbol_,
+                        activeSymbols))
+                {
+                    folded->loc = argument.loc;
+                    argument = std::move(*folded);
+                }
+            }
+
+            const bool hasNamedArguments = std::ranges::any_of(
+                attribute->argumentNames,
+                [](const std::string& name) { return !name.empty(); });
+            if (hasNamedArguments)
+            {
+                if (attribute->argumentNames.size() != attribute->args.size() ||
+                    attribute->typeArgs.size() != attribute->args.size())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        attribute->location(),
+                        "Attribute '{}' has inconsistent argument metadata.",
+                        attribute->qualifiedName);
+                    continue;
+                }
+
+                std::vector<std::optional<size_t>> assignedSources(symbol->attributeParameterNames.size());
+                size_t nextPositionalIndex = 0;
+                bool invalidNamedArguments = false;
+                for (size_t sourceIndex = 0; sourceIndex < attribute->args.size(); ++sourceIndex)
+                {
+                    const std::string& argumentName = attribute->argumentNames[sourceIndex];
+                    size_t parameterIndex = 0;
+                    if (argumentName.empty())
+                    {
+                        while (nextPositionalIndex < assignedSources.size() && assignedSources[nextPositionalIndex].has_value())
+                            ++nextPositionalIndex;
+                        parameterIndex = nextPositionalIndex++;
+                        if (parameterIndex >= assignedSources.size())
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                attribute->args[sourceIndex].loc,
+                                "Attribute '{}' received too many positional arguments.",
+                                attribute->qualifiedName);
+                            invalidNamedArguments = true;
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        const auto parameter = std::ranges::find(symbol->attributeParameterNames, argumentName);
+                        if (parameter == symbol->attributeParameterNames.end())
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                attribute->args[sourceIndex].loc,
+                                "Attribute '{}' has no parameter named '{}'.",
+                                attribute->qualifiedName,
+                                argumentName);
+                            invalidNamedArguments = true;
+                            continue;
+                        }
+                        parameterIndex = static_cast<size_t>(std::distance(symbol->attributeParameterNames.begin(), parameter));
+                    }
+
+                    if (assignedSources[parameterIndex].has_value())
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            attribute->args[sourceIndex].loc,
+                            "Attribute parameter '{}' is assigned more than once.",
+                            symbol->attributeParameterNames[parameterIndex]);
+                        invalidNamedArguments = true;
+                        continue;
+                    }
+                    assignedSources[parameterIndex] = sourceIndex;
+                }
+
+                size_t requiredArgumentCount = symbol->attributeParameterTypes.size();
+                while (requiredArgumentCount > 0 &&
+                       symbol->attributeParameterHasDefault[requiredArgumentCount - 1])
+                {
+                    --requiredArgumentCount;
+                }
+                for (size_t parameterIndex = 0; parameterIndex < requiredArgumentCount; ++parameterIndex)
+                {
+                    if (!assignedSources[parameterIndex].has_value())
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            attribute->location(),
+                            "Attribute '{}' is missing required argument '{}'.",
+                            attribute->qualifiedName,
+                            symbol->attributeParameterNames[parameterIndex]);
+                        invalidNamedArguments = true;
+                    }
+                }
+
+                if (invalidNamedArguments)
+                    continue;
+
+                std::vector<Token> normalizedArguments;
+                std::vector<NodePtr<TypeSpecifier>> normalizedTypeArguments;
+                std::vector<std::string> normalizedArgumentNames;
+                const size_t normalizedCount = assignedSources.size();
+                normalizedArguments.reserve(normalizedCount);
+                normalizedTypeArguments.reserve(normalizedCount);
+                normalizedArgumentNames.reserve(normalizedCount);
+                for (size_t parameterIndex = 0; parameterIndex < normalizedCount; ++parameterIndex)
+                {
+                    if (assignedSources[parameterIndex].has_value())
+                    {
+                        const size_t sourceIndex = assignedSources[parameterIndex].value();
+                        normalizedArguments.push_back(std::move(attribute->args[sourceIndex]));
+                        normalizedTypeArguments.push_back(std::move(attribute->typeArgs[sourceIndex]));
+                    }
+                    else if (parameterIndex < symbol->attributeParameterDefaults.size() &&
+                             symbol->attributeParameterDefaults[parameterIndex].isValid())
+                    {
+                        Token defaultValue = symbol->attributeParameterDefaults[parameterIndex];
+                        defaultValue.loc = attribute->location();
+                        normalizedArguments.push_back(std::move(defaultValue));
+                        normalizedTypeArguments.emplace_back(nullptr);
+                    }
+                    else
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            attribute->location(),
+                            "Attribute '{}' could not materialize default argument '{}'.",
+                            attribute->qualifiedName,
+                            symbol->attributeParameterNames[parameterIndex]);
+                        invalidNamedArguments = true;
+                        continue;
+                    }
+                    normalizedArgumentNames.push_back(symbol->attributeParameterNames[parameterIndex]);
+                }
+                if (invalidNamedArguments)
+                    continue;
+                attribute->args = std::move(normalizedArguments);
+                attribute->typeArgs = std::move(normalizedTypeArguments);
+                attribute->argumentNames = std::move(normalizedArgumentNames);
+            }
 
             const bool targetAllowed = !validateTarget || std::ranges::find(
                 symbol->attributeTargets, std::string(target)) != symbol->attributeTargets.end();
@@ -13455,6 +14257,29 @@ namespace wio::sema
                 continue;
             }
 
+            while (attribute->args.size() < symbol->attributeParameterTypes.size())
+            {
+                const size_t parameterIndex = attribute->args.size();
+                if (parameterIndex >= symbol->attributeParameterDefaults.size() ||
+                    !symbol->attributeParameterDefaults[parameterIndex].isValid())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        attribute->location(),
+                        "Attribute '{}' could not materialize default argument '{}'.",
+                        attribute->qualifiedName,
+                        parameterIndex < symbol->attributeParameterNames.size()
+                            ? symbol->attributeParameterNames[parameterIndex]
+                            : std::to_string(parameterIndex));
+                    break;
+                }
+
+                Token defaultValue = symbol->attributeParameterDefaults[parameterIndex];
+                defaultValue.loc = attribute->location();
+                attribute->args.push_back(std::move(defaultValue));
+                attribute->typeArgs.emplace_back(nullptr);
+                attribute->argumentNames.emplace_back();
+            }
+
             for (size_t index = 0; index < attribute->args.size(); ++index)
             {
                 Ref<Type> expectedType = unwrapAliasType(symbol->attributeParameterTypes[index]);
@@ -13467,7 +14292,9 @@ namespace wio::sema
                 {
                     const std::string& primitiveName = expectedType.AsFast<PrimitiveType>()->name;
                     if (primitiveName == "string")
-                        compatible = argument.type == TokenType::stringLiteral;
+                        compatible = argument.type == TokenType::stringLiteral && !argument.isUnicodeString;
+                    else if (primitiveName == "text")
+                        compatible = argument.type == TokenType::stringLiteral && argument.isUnicodeString;
                     else if (primitiveName == "bool")
                         compatible = argument.type == TokenType::kwTrue || argument.type == TokenType::kwFalse;
                     else if (primitiveName == "f32" || primitiveName == "f64")
@@ -13561,9 +14388,11 @@ namespace wio::sema
             std::vector<Ref<Type>> parameterTypes;
             std::vector<std::string> names;
             std::vector<bool> hasDefaults;
+            std::vector<Token> defaults;
             parameterTypes.reserve(node.parameters.size());
             names.reserve(node.parameters.size());
             hasDefaults.reserve(node.parameters.size());
+            defaults.reserve(node.parameters.size());
 
             for (auto& parameter : node.parameters)
             {
@@ -13578,6 +14407,19 @@ namespace wio::sema
                 parameterTypes.push_back(parameter.type->refType.Lock());
                 names.push_back(parameterName);
                 hasDefaults.push_back(parameter.defaultValue != nullptr);
+                Token defaultToken = Token::invalid();
+                if (parameter.defaultValue)
+                {
+                    std::unordered_set<const Symbol*> activeSymbols;
+                    if (auto folded = tryEvaluateStaticAttributeConstant(
+                            parameter.defaultValue,
+                            variableDeclarationsBySymbol_,
+                            activeSymbols))
+                    {
+                        defaultToken = std::move(*folded);
+                    }
+                }
+                defaults.push_back(std::move(defaultToken));
 
                 if (parameter.defaultValue)
                     sawDefault = true;
@@ -13608,6 +14450,7 @@ namespace wio::sema
             symbol->attributeParameterNames = std::move(names);
             symbol->attributeParameterTypes = std::move(parameterTypes);
             symbol->attributeParameterHasDefault = std::move(hasDefaults);
+            symbol->attributeParameterDefaults = std::move(defaults);
             symbol->attributeRepeatable = node.repeatable;
             symbol->attributeInherited = node.inherited;
             symbol->attributeScoped = node.scoped;
@@ -13638,6 +14481,27 @@ namespace wio::sema
                     actualType->toString()
                 );
             }
+
+            Ref<Symbol> symbol = node.name ? node.name->referencedSymbol.Lock() : nullptr;
+            if (symbol && index < symbol->attributeParameterDefaults.size())
+            {
+                std::unordered_set<const Symbol*> activeSymbols;
+                if (auto folded = tryEvaluateStaticAttributeConstant(
+                        parameter.defaultValue,
+                        variableDeclarationsBySymbol_,
+                        activeSymbols))
+                {
+                    symbol->attributeParameterDefaults[index] = std::move(*folded);
+                }
+                else
+                {
+                    WIO_LOG_ADD_ERROR(
+                        parameter.defaultValue->location(),
+                        "Default value for attribute parameter '{}' must be a compile-time scalar, string, or text expression.",
+                        parameter.name ? parameter.name->token.value : std::to_string(index)
+                    );
+                }
+            }
         }
     }
     
@@ -13664,7 +14528,10 @@ namespace wio::sema
               Ref<Type> declaredType = nullptr;
               if (node.type)
               {
+                  const bool previousAllowInferredStaticArrayExtent = allowInferredStaticArrayExtent_;
+                  allowInferredStaticArrayExtent_ = true;
                   node.type->accept(*this);
+                  allowInferredStaticArrayExtent_ = previousAllowInferredStaticArrayExtent;
                   declaredType = node.type->refType.Lock();
               }
 
@@ -13710,7 +14577,10 @@ namespace wio::sema
               Ref<Type> declaredType = nullptr;
               if (node.type)
               {
+                  const bool previousAllowInferredStaticArrayExtent = allowInferredStaticArrayExtent_;
+                  allowInferredStaticArrayExtent_ = true;
                   node.type->accept(*this);
+                  allowInferredStaticArrayExtent_ = previousAllowInferredStaticArrayExtent;
                   declaredType = node.type->refType.Lock();
               }
 
@@ -13802,6 +14672,32 @@ namespace wio::sema
             allowContextualNumericLiteralTyping_ = previousAllowContextualNumericLiteralTyping;
             Ref<Type> initType = node.initializer->refType.Lock();
 
+            if (containsInferredArrayExtent(sym->type))
+            {
+                Ref<Type> resolvedInitializer = unwrapAliasType(initType);
+                if (resolvedInitializer &&
+                    resolvedInitializer->kind() == TypeKind::Array &&
+                    !containsInferredArrayExtent(resolvedInitializer) &&
+                    resolvedInitializer.AsFast<ArrayType>()->arrayKind != ArrayType::ArrayKind::Dynamic &&
+                    sym->type->isCompatibleWith(initType))
+                {
+                    sym->type = initType;
+                    node.name->refType = initType;
+                    if (node.type)
+                        node.type->refType = initType;
+                }
+                else if (!resolvedInitializer ||
+                         resolvedInitializer->kind() != TypeKind::Array ||
+                         containsInferredArrayExtent(resolvedInitializer) ||
+                         resolvedInitializer.AsFast<ArrayType>()->arrayKind == ArrayType::ArrayKind::Dynamic)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.initializer->location(),
+                        "Inferred static array extent requires an array literal or concrete fixed-size array initializer."
+                    );
+                }
+            }
+
             Ref<Type> resolvedDeclaredType = unwrapAliasType(sym->type);
             Ref<Type> resolvedInitializerType = unwrapAliasType(initType);
             if (resolvedDeclaredType && resolvedInitializerType &&
@@ -13865,16 +14761,56 @@ namespace wio::sema
                     const std::string actualType = sym->type ? sym->type->toString() : "<unknown>";
                     WIO_LOG_ADD_ERROR(
                         node.location(),
-                        "Const declarations currently support primitive scalar types plus enum/flagset values. Got '{}'.",
+                        "Const declarations support scalar, string, text, enum, and flagset values. Got '{}'.",
                         actualType
                     );
                 }
-                else if (!isConstEvaluableExpression(node.initializer))
+                else
                 {
-                    WIO_LOG_ADD_ERROR(
-                        node.initializer->location(),
-                        "Const initializer must be a compile-time scalar expression and may reference only other const declarations."
-                    );
+                    ConstEvaluationBudget budget;
+                    budget.activeSymbols.insert(sym.Get());
+                    const auto limitStatus = validateConstEvaluationLimits(
+                        node.initializer,
+                        variableDeclarationsBySymbol_,
+                        budget);
+                    if (limitStatus == ConstEvaluationLimitStatus::Cycle)
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            node.initializer->location(),
+                            "Const initializer contains a cyclic const dependency."
+                        );
+                    }
+                    else if (limitStatus == ConstEvaluationLimitStatus::DepthLimit)
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            node.initializer->location(),
+                            "Const initializer exceeds the maximum evaluation depth of {}.",
+                            ConstEvaluationBudget::MaxDepth
+                        );
+                    }
+                    else if (limitStatus == ConstEvaluationLimitStatus::NodeLimit)
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            node.initializer->location(),
+                            "Const initializer exceeds the maximum evaluation node count of {}.",
+                            ConstEvaluationBudget::MaxNodes
+                        );
+                    }
+                    else if (limitStatus == ConstEvaluationLimitStatus::TextSizeLimit)
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            node.initializer->location(),
+                            "Const string/text evaluation exceeds the maximum folded size of {} bytes.",
+                            ConstEvaluationBudget::MaxTextBytes
+                        );
+                    }
+                    else if (!isConstEvaluableExpression(node.initializer))
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            node.initializer->location(),
+                            "Const initializer must be a compile-time expression and may reference only other const declarations."
+                        );
+                    }
                 }
             }
         }
@@ -13887,6 +14823,14 @@ namespace wio::sema
                 "Non-null type '{}' requires an initializer. Use '{}?' if an empty state is required.",
                 sym->type->toString(),
                 sym->type->toString()
+            );
+        }
+
+        if (!node.initializer && sym && containsInferredArrayExtent(sym->type))
+        {
+            WIO_LOG_ADD_ERROR(
+                node.location(),
+                "Inferred static array extent '[T; _]' requires an initializer."
             );
         }
     }
@@ -14195,6 +15139,18 @@ namespace wio::sema
                 WIO_LOG_ADD_ERROR(
                     node.location(),
                     "@Native functions cannot return ref/view values because the native borrow lifetime cannot be proven. Return an owning value or handle instead."
+                );
+            }
+
+            for (size_t index = 0; index < funcSym->genericParameterTypes.size(); ++index)
+            {
+                if (!isTextualConstGenericParameterType(funcSym->genericParameterTypes[index]))
+                    continue;
+                WIO_LOG_ADD_ERROR(
+                    index < node.genericParameters.size() && node.genericParameters[index]
+                        ? node.genericParameters[index]->location()
+                        : node.location(),
+                    "@Native functions support only integer const generic parameters; string/text const values use a Wio-owned structural backend representation."
                 );
             }
         }
@@ -15427,28 +16383,12 @@ namespace wio::sema
                         "Extension methods are external APIs and must be public.");
                     continue;
                 }
-                if (!method->genericParameters.empty())
-                {
-                    WIO_LOG_ADD_ERROR(method->location(),
-                        "Generic extension methods are not supported yet.");
-                    continue;
-                }
                 if (common::isOperatorOverloadName(method->extensionMemberName))
                 {
                     WIO_LOG_ADD_ERROR(method->location(),
                         "Extension operator overloads are not supported.");
                     continue;
                 }
-                if (std::ranges::any_of(method->parameters, [](const Parameter& parameter)
-                    {
-                        return parameter.defaultValue != nullptr;
-                    }))
-                {
-                    WIO_LOG_ADD_ERROR(method->location(),
-                        "Extension methods do not support default parameters yet.");
-                    continue;
-                }
-
                 const std::string publicName = method->extensionMemberName;
                 if (auto scope = targetStruct->structScope.Lock();
                     scope && scope->resolveLocally(publicName))
@@ -15739,6 +16679,20 @@ namespace wio::sema
             compSym->genericParameterNames = structType.AsFast<StructType>()->genericParameterNames;
             structType.AsFast<StructType>()->genericParameterTypes = collectGenericParameterSemanticTypes(node.genericParameters);
             compSym->genericParameterTypes = structType.AsFast<StructType>()->genericParameterTypes;
+            if (isNativePodComponent)
+            {
+                for (size_t index = 0; index < compSym->genericParameterTypes.size(); ++index)
+                {
+                    if (!isTextualConstGenericParameterType(compSym->genericParameterTypes[index]))
+                        continue;
+                    WIO_LOG_ADD_ERROR(
+                        index < node.genericParameters.size() && node.genericParameters[index]
+                            ? node.genericParameters[index]->location()
+                            : node.location(),
+                        "@Native components support only integer const generic parameters; string/text const values use a Wio-owned structural backend representation."
+                    );
+                }
+            }
             structType.AsFast<StructType>()->genericParameterDefaults = genericParameterDefaults;
             compSym->genericParameterDefaults = std::move(genericParameterDefaults);
             compSym->hasGenericParameterPack = structType.AsFast<StructType>()->hasGenericParameterPack;

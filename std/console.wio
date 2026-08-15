@@ -451,6 +451,7 @@ realm std {
         @Instantiate(u64)
         @Instantiate(f32)
         @Instantiate(f64)
+        @Instantiate(text)
         fn PrintRaw<T>(value: T) -> i32;
 
         @Native
@@ -472,6 +473,7 @@ realm std {
         @Instantiate(u64)
         @Instantiate(f32)
         @Instantiate(f64)
+        @Instantiate(text)
         fn PrintLineRaw<T>(value: T) -> i32;
 
         @Native

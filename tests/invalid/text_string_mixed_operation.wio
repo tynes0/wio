@@ -1,0 +1,4 @@
+fn Entry() -> i32 {
+    let invalid = u"text" + "string";
+    return 0;
+}

@@ -264,6 +264,20 @@ namespace wio
         StringTrimInPlace,
         StringToLowerInPlace,
         StringToUpperInPlace,
+        TextCount,
+        TextByteCount,
+        TextEmpty,
+        TextSlice,
+        TextToString,
+        TextContains,
+        TextStartsWith,
+        TextEndsWith,
+        TextGraphemeCount,
+        TextSliceGraphemes,
+        TextDisplayWidth,
+        TextCaseFold,
+        TextCodePoints,
+        TextGraphemes,
         EnumName,
         EnumRawValue,
         EnumIsValid,
@@ -383,6 +397,7 @@ namespace wio
         // generic parameters. A null entry keeps the legacy numeric `size`.
         NodePtrUnchecked<TypeSpecifier> arrayExtent;
         size_t size = 0;
+        bool hasInferredArrayExtent = false;
 
         bool isMut = false;
         bool isRef = false;
@@ -495,8 +510,11 @@ namespace wio
         WIO_EXP_NODE_BODY(InterpolatedStringLiteral)
 
         std::vector<NodePtr<Expression>> parts;
+        bool isUnicode = false;
         
-        explicit InterpolatedStringLiteral(std::vector<NodePtr<Expression>> _parts, common::Location _loc = common::Location::invalid());
+        explicit InterpolatedStringLiteral(std::vector<NodePtr<Expression>> _parts,
+                                           bool _isUnicode = false,
+                                           common::Location _loc = common::Location::invalid());
         ~InterpolatedStringLiteral() override;
     };
 
@@ -786,6 +804,10 @@ namespace wio
         std::string qualifiedName;
         std::vector<Token> args;
         std::vector<NodePtr<TypeSpecifier>> typeArgs;
+        // Empty entries are positional arguments. Named entries are resolved
+        // against the user-defined attribute declaration during analysis and
+        // then normalized into declaration order together with args/typeArgs.
+        std::vector<std::string> argumentNames;
         // Where clauses may place more than one conjunctive constraint in a
         // generic-parameter slot. Offsets has parameter-count + 1 entries and
         // indexes the flattened args/typeArgs vectors. Plain @Apply keeps this
@@ -797,7 +819,8 @@ namespace wio
         AttributeStatement(Attribute _attribute, std::vector<Token> _args,
             std::vector<NodePtr<TypeSpecifier>> _typeArgs = {},
             common::Location _loc = common::Location::invalid(),
-            std::string _qualifiedName = {});
+            std::string _qualifiedName = {},
+            std::vector<std::string> _argumentNames = {});
         ~AttributeStatement() override;
     };
 

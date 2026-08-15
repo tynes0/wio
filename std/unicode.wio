@@ -12,8 +12,16 @@ realm std {
             with native, cpp::name(wio::runtime::std_unicode::TryDecode);
         fn TryEncodeNative(value: u32[], output: ref string, errorIndex: ref usize) -> bool
             with native, cpp::name(wio::runtime::std_unicode::TryEncode);
+        fn TryDecodeUtf16Native(value: u16[], output: ref string, errorIndex: ref usize) -> bool
+            with native, cpp::name(wio::runtime::std_unicode::TryDecodeUtf16);
+        fn ToUtf16Native(value: string) -> u16[]
+            with native, cpp::name(wio::runtime::std_unicode::EncodeUtf16);
         fn IsValidUtf8(value: string) -> bool
             with native, cpp::name(wio::runtime::std_unicode::IsValidUtf8);
+        fn FromUtf8Native(value: string) -> text
+            with native, cpp::name(wio::runtime::TextFromUtf8);
+        fn ToUtf8(value: text) -> string
+            with native, cpp::name(wio::runtime::TextToUtf8);
         fn CodePointCount(value: string) -> usize
             with native, cpp::name(wio::runtime::std_unicode::CodePointCount);
         fn Slice(value: string, start: usize, count: usize) -> string
@@ -48,6 +56,49 @@ realm std {
             with native, cpp::name(wio::runtime::std_unicode::DisplayWidth);
         fn CaseFold(value: string) -> string
             with native, cpp::name(wio::runtime::std_unicode::CaseFold);
+
+        fn FromUtf8(value: string) -> std::Result<text> {
+            if (IsValidUtf8(value)) {
+                return std::Ok(FromUtf8Native(value));
+            }
+            return std::Err<text>(std::MakeResultError(
+                std::ResultDomain::runtime, 1, "Invalid UTF-8 text."
+            ));
+        }
+
+        fn FromUtf16(value: u16[]) -> std::Result<text> {
+            mut output = "";
+            mut errorIndex: usize = 0usize;
+            if (TryDecodeUtf16Native(value, ref output, ref errorIndex)) {
+                return std::Ok(FromUtf8Native(output));
+            }
+            return std::Err<text>(std::MakeResultError(
+                std::ResultDomain::runtime,
+                3,
+                $"Invalid UTF-16 at code-unit index ${errorIndex}."
+            ));
+        }
+
+        fn ToUtf16(value: text) -> u16[] {
+            return ToUtf16Native(ToUtf8(value));
+        }
+
+        fn FromUtf32(value: u32[]) -> std::Result<text> {
+            mut output = "";
+            mut errorIndex: usize = 0usize;
+            if (TryEncodeNative(value, ref output, ref errorIndex)) {
+                return std::Ok(FromUtf8Native(output));
+            }
+            return std::Err<text>(std::MakeResultError(
+                std::ResultDomain::runtime,
+                4,
+                $"Invalid UTF-32 scalar at index ${errorIndex}."
+            ));
+        }
+
+        fn ToUtf32(value: text) -> u32[] {
+            return value.CodePoints();
+        }
 
         fn Decode(value: string) -> std::Result<u32[]> {
             mut output: u32[] = [];

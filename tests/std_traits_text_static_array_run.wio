@@ -1,0 +1,35 @@
+use std::assert as assert;
+use std::console as console;
+use std::traits as traits;
+
+component Marker {
+    value: i32;
+}
+
+type Triple = [i32; 3];
+type EmptyTextArray = [text; 0];
+
+fn IsArrayValue<T>(value: T) -> bool {
+    return traits::IsArrayType<T>();
+}
+
+fn Entry() -> i32 {
+    assert::Expect(traits::IsPrimitiveType<i32>(), "integer primitive trait");
+    assert::Expect(traits::IsPrimitiveType<string>(), "string primitive trait");
+    assert::Expect(traits::IsPrimitiveType<text>(), "text primitive trait");
+    assert::Expect(not traits::IsPrimitiveType<Marker>(), "component primitive trait");
+
+    assert::Expect(traits::IsStringType<string>(), "string identity trait");
+    assert::Expect(not traits::IsStringType<text>(), "text is distinct from string");
+    assert::Expect(traits::IsTextType<text>(), "text identity trait");
+    assert::Expect(not traits::IsTextType<string>(), "string is distinct from text");
+
+    assert::Expect(traits::IsArrayType<i32[]>(), "dynamic array trait");
+    assert::Expect(traits::IsArrayType<Triple>(), "fixed array trait");
+    assert::Expect(traits::IsArrayType<EmptyTextArray>(), "empty fixed array trait");
+    let inferred: [i32; _] = [1, 2, 3, 4];
+    assert::Expect(IsArrayValue(inferred), "inferred fixed array trait");
+
+    console::PrintLine("std-traits-text-static-array-ok");
+    return 0;
+}

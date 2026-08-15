@@ -1,0 +1,39 @@
+use std::assert as assert;
+use std::console as console;
+use std::reflect as reflect;
+
+const ApiRoot: string = "api";
+const ApiVersion: string = "v1";
+const Route: string = $"/${ApiRoot}/${ApiVersion}";
+const TurkishTitle: text = u$"İstanbul ${u"🌍"}";
+const DefaultRevision: i32 = 7;
+
+attribute endpoint(component)(path: string, title: text, revision: i32 = DefaultRevision)
+    with attribute::runtime;
+
+component Dashboard with endpoint(title: TurkishTitle, path: Route) {
+    id: u64;
+}
+
+component Explicit with endpoint("/health", u"Sağlık", 9) {
+    id: u64;
+}
+
+fn Entry() -> i32 {
+    let dashboard = reflect::TypeAttributes<Dashboard>();
+    assert::ExpectEqual(dashboard.Count(), 1usize, "one materialized endpoint attribute");
+    assert::ExpectEqual(
+        dashboard[0usize],
+        "endpoint(/api/v1,İstanbul 🌍,7)",
+        "const string/text arguments and const default should fold in declaration order"
+    );
+
+    let explicit = reflect::TypeAttributes<Explicit>();
+    assert::ExpectEqual(
+        explicit[0usize],
+        "endpoint(/health,Sağlık,9)",
+        "direct Unicode attribute arguments should remain typed"
+    );
+    console::PrintLine("attribute-const-text-defaults-ok");
+    return 0;
+}

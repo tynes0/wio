@@ -1,0 +1,8 @@
+fn RuntimeValue() -> i32 {
+    return 42;
+}
+
+fn Entry() -> i32 {
+    const Value: text = u$"value=${RuntimeValue()}";
+    return 0;
+}

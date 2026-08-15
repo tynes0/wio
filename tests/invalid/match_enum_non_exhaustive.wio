@@ -1,0 +1,14 @@
+enum State {
+    idle = 0,
+    ready = 1
+}
+
+fn Describe(value: State) -> string {
+    return match (value) {
+        State::idle: "idle";
+    };
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

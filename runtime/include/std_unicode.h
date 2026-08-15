@@ -125,6 +125,93 @@ namespace wio::runtime::std_unicode
         return true;
     }
 
+    inline bool TryDecodeUtf16(
+        const std::vector<std::uint16_t>& input,
+        std::string& output,
+        std::size_t& errorIndex) noexcept
+    {
+        output.clear();
+        errorIndex = 0;
+        for (std::size_t index = 0; index < input.size(); ++index)
+        {
+            const std::size_t scalarStart = index;
+            std::uint32_t codePoint = input[index];
+            if (codePoint >= 0xd800u && codePoint <= 0xdbffu)
+            {
+                if (index + 1 >= input.size())
+                {
+                    errorIndex = scalarStart;
+                    output.clear();
+                    return false;
+                }
+                const std::uint32_t low = input[++index];
+                if (low < 0xdc00u || low > 0xdfffu)
+                {
+                    errorIndex = scalarStart;
+                    output.clear();
+                    return false;
+                }
+                codePoint = 0x10000u + ((codePoint - 0xd800u) << 10u) + (low - 0xdc00u);
+            }
+            else if (codePoint >= 0xdc00u && codePoint <= 0xdfffu)
+            {
+                errorIndex = scalarStart;
+                output.clear();
+                return false;
+            }
+
+            if (!detail::appendOne(output, codePoint))
+            {
+                errorIndex = scalarStart;
+                output.clear();
+                return false;
+            }
+        }
+        return true;
+    }
+
+    inline bool TryEncodeUtf16(
+        const std::string_view input,
+        std::vector<std::uint16_t>& output,
+        std::size_t& errorOffset) noexcept
+    {
+        output.clear();
+        errorOffset = 0;
+        std::size_t offset = 0;
+        while (offset < input.size())
+        {
+            const std::size_t scalarStart = offset;
+            std::uint32_t codePoint = 0;
+            if (!detail::decodeOne(input, offset, codePoint))
+            {
+                errorOffset = scalarStart;
+                output.clear();
+                return false;
+            }
+
+            if (codePoint <= 0xffffu)
+            {
+                output.push_back(static_cast<std::uint16_t>(codePoint));
+            }
+            else
+            {
+                codePoint -= 0x10000u;
+                output.push_back(static_cast<std::uint16_t>(0xd800u + (codePoint >> 10u)));
+                output.push_back(static_cast<std::uint16_t>(0xdc00u + (codePoint & 0x3ffu)));
+            }
+        }
+        return true;
+    }
+
+    inline std::vector<std::uint16_t> EncodeUtf16(const std::string_view input)
+    {
+        std::vector<std::uint16_t> output;
+        std::size_t errorOffset = 0;
+        if (!TryEncodeUtf16(input, output, errorOffset))
+            output.clear();
+        return output;
+    }
+
     inline bool TryAppendCodePoint(std::string& output, const std::uint32_t codePoint) noexcept
     {
         return detail::appendOne(output, codePoint);

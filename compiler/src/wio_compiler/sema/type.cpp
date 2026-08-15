@@ -242,6 +242,10 @@ namespace wio::sema
                 auto* p2 = static_cast<const PrimitiveType*>(t2);
                 if (p1->name == p2->name) return true;
 
+                // Validated text can safely flow to an existing UTF-8 byte-string
+                // boundary. The reverse direction requires explicit validation.
+                if (p1->name == "string" && p2->name == "text") return true;
+
                 if (t1->isNumeric() && t2->isNumeric())
                 {
                     bool destIsFloat = (p1->name == "f32" || p1->name == "f64");
@@ -407,6 +411,9 @@ namespace wio::sema
 
             if (a2->arrayKind == ArrayType::ArrayKind::Dynamic)
                 return false;
+
+            if (a1->hasInferredExtent || a2->hasInferredExtent)
+                return a1->elementType->isCompatibleWith(a2->elementType);
 
             if (a1->extentType || a2->extentType)
             {
@@ -698,11 +705,35 @@ namespace wio::sema
 
     std::string ConstValueType::toString() const
     {
+        Ref<Type> resolvedValueType = valueType;
+        while (resolvedValueType && resolvedValueType->kind() == TypeKind::Alias)
+            resolvedValueType = resolvedValueType.AsFast<AliasType>()->aliasedType;
+        if (resolvedValueType && resolvedValueType->kind() == TypeKind::Primitive)
+        {
+            const std::string& name = resolvedValueType.AsFast<PrimitiveType>()->name;
+            if (name == "string" || name == "text")
+                return std::string(name == "text" ? "u\"" : "\"") +
+                       common::wioStringToEscapedCppString(value) + "\"";
+        }
         return value;
     }
 
     std::string ConstValueType::toCppString() const
     {
+        Ref<Type> resolvedValueType = valueType;
+        while (resolvedValueType && resolvedValueType->kind() == TypeKind::Alias)
+            resolvedValueType = resolvedValueType.AsFast<AliasType>()->aliasedType;
+        if (resolvedValueType && resolvedValueType->kind() == TypeKind::Primitive)
+        {
+            const std::string& name = resolvedValueType.AsFast<PrimitiveType>()->name;
+            if (name == "string" || name == "text")
+            {
+                return std::string(name == "text"
+                    ? "wio::runtime::ConstText{\""
+                    : "wio::runtime::ConstString{\"") +
+                    common::wioStringToEscapedCppString(value) + "\"}";
+            }
+        }
         return value;
     }
 
@@ -989,8 +1020,10 @@ namespace wio::sema
         else return "const " + baseTypeStr + "*";
     }
 
-    ArrayType::ArrayType(Ref<Type> elementType, ArrayKind arrayKind, size_t size, Ref<Type> extentType)
-        : elementType(std::move(elementType)), arrayKind(arrayKind), size(size), extentType(std::move(extentType))
+    ArrayType::ArrayType(Ref<Type> elementType, ArrayKind arrayKind, size_t size,
+                         Ref<Type> extentType, bool hasInferredExtent)
+        : elementType(std::move(elementType)), arrayKind(arrayKind), size(size),
+          extentType(std::move(extentType)), hasInferredExtent(hasInferredExtent)
     {
     }
 
@@ -1003,7 +1036,8 @@ namespace wio::sema
     {
         if (arrayKind == ArrayKind::Static || arrayKind == ArrayKind::Literal)
             return "[" + elementType->toString() + "; " +
-                   (extentType ? extentType->toString() : std::to_string(size)) + "]";
+                   (hasInferredExtent ? "_" :
+                    (extentType ? extentType->toString() : std::to_string(size))) + "]";
         return elementType->toString() + "[]";
     
     }
@@ -1012,7 +1046,8 @@ namespace wio::sema
     {
         if (arrayKind == ArrayKind::Static)
             return "wio::SArray<" + elementType->toCppString() + ", " +
-                   (extentType ? extentType->toCppString() : std::to_string(size)) + ">";
+                   (hasInferredExtent ? "0" :
+                    (extentType ? extentType->toCppString() : std::to_string(size))) + ">";
         return "wio::DArray<" + elementType->toCppString() + ">";
     }
 

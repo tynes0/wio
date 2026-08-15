@@ -11,6 +11,9 @@ for Wio 0.10 in
 [`spec/WIO_LANGUAGE_SPEC_0_10.md`](./spec/WIO_LANGUAGE_SPEC_0_10.md). Typed
 attributes, matching, and sequential applications are normative for Wio
 0.11 in [`spec/WIO_LANGUAGE_SPEC_0_11.md`](./spec/WIO_LANGUAGE_SPEC_0_11.md).
+Post-0.12 attribute, specialization, extension, matching, and textual const-
+generic coherence rules are frozen in
+[`spec/WIO_LANGUAGE_SPEC_V1_COHERENCE.md`](./spec/WIO_LANGUAGE_SPEC_V1_COHERENCE.md).
 The normative async/coroutine boundaries are described in
 [`WIO_ASYNC_MODEL.md`](./WIO_ASYNC_MODEL.md). Where this
 broad reference conflicts with a versioned slice, the newest applicable
@@ -211,6 +214,7 @@ Current built-in type keywords include:
 - `char`
 - `uchar`
 - `string`
+- `text`
 - `any`
 - `opaque`
 - `void`
@@ -531,7 +535,76 @@ Second line
 Value = ${123}";
 ```
 
-### 4.7 Character Literals
+### 4.7 Unicode Text Literals
+
+The `text` primitive is an owned, validated UTF-8 Unicode value. A text literal
+uses the `u"..."` prefix; its interpolated form uses `u$"..."`:
+
+```wio
+let title: text = u"Merhaba 🌍";
+let name = "Wio";
+let message: text = u$"Selam ${name} 🌍";
+```
+
+The compiler validates the UTF-8 bytes of every literal fragment. `text` does
+not expose `wchar_t`, `std::wstring`, or any platform-dependent character width.
+Its current everyday operations are:
+
+```wio
+let count = title.Count();          // Unicode code points, not bytes
+let bytes = title.ByteCount();      // explicit UTF-8 storage size
+let globe = title.Slice(8usize, 1usize);
+let sameGlobe = title[8usize];      // read-only, one-code-point text
+let combined = u"iyi " + u"günler";
+let utf8 = title.ToString();
+let clusters = title.GraphemeCount();
+let folded = title.CaseFold();
+
+for (codePoint in title.CodePoints()) {
+    // codePoint: u32
+}
+
+for (cluster in title.Graphemes()) {
+    // cluster: text, one extended grapheme cluster
+}
+```
+
+Equality and ordering compare validated UTF-8 values without implicit
+normalization. Consequently, canonically equivalent but differently normalized
+sequences remain distinct until explicit normalization APIs are added.
+`text` literals work in generics and `match` patterns. Text values are also
+hashable and may be used as `Dict<text, T>` keys. Direct indexing is read-only;
+Unicode-safe editing constructs a new text value rather than exposing a mutable
+byte or code-unit reference.
+
+Conversion is deliberately asymmetric. A validated `text` can flow to a
+`string`/UTF-8 boundary. A general `string` may contain invalid UTF-8, so the
+reverse conversion is explicit:
+
+```wio
+use std::unicode as unicode;
+
+let decoded: std::Result<text> = unicode::FromUtf8(receivedBytes);
+let value: text = decoded.Value();
+let bytes: string = unicode::ToUtf8(value);
+
+let utf16: u16[] = unicode::ToUtf16(value);
+let fromUtf16: std::Result<text> = unicode::FromUtf16(utf16);
+
+let utf32: u32[] = unicode::ToUtf32(value);
+let fromUtf32: std::Result<text> = unicode::FromUtf32(utf32);
+```
+
+Mixed `string` and `text` operators are rejected; convert at the boundary
+instead. `CodePoints()` and `Graphemes()` return ordinary iterable arrays.
+UTF-8, UTF-16, and UTF-32 decoding validates its input and returns
+`Result<text>`; encoding from an already validated `text` is infallible.
+Exported native functions may accept and return `text` as
+`wio::runtime::Text`; this representation is validated UTF-8 and has no
+dependency on the host platform's wide-character width. Normalization and the
+versioned shared-module SDK ABI remain partially implemented library work.
+
+### 4.8 Character Literals
 
 Character literals use single quotes:
 
@@ -543,7 +616,7 @@ let c = '\\';
 
 A character literal must contain exactly one character after escape processing.
 
-### 4.8 Byte Literals
+### 4.9 Byte Literals
 
 The current compiler contains `ByteLiteral` in the AST and token set, but the
 surface syntax for byte literals is not finalized in the current lexer.
@@ -840,27 +913,41 @@ In the current v1 freeze, the language model is:
 
 - Wio `const` is not just an immutable variable,
 - Wio `const` requires a compile-time-valid initializer,
-- the backend lowers it as C++ `constexpr`.
+- scalar constants use compile-time backend storage while `string` and `text`
+  constants use immutable runtime storage without exposing that backend detail.
 
 Examples:
 
 ```wio
 const MaxPlayers: i32 = 16;
 const Pi: f64 = 3.141592653589793;
+const Product: string = "Wio " + "v1";
+const Greeting: text = u"Merhaba " + u"🌍";
 ```
 
 #### Current Compiler Note
 
-The semantic layer now enforces a deliberately small and safe subset:
+The semantic layer enforces a deliberately bounded and safe subset:
 
-- only scalar primitive types are supported,
-- the initializer must be a compile-time scalar expression,
+- scalar primitives, `string`, `text`, enums, and flagsets are supported,
+- the initializer must be a compile-time expression,
 - such expressions may reference only other `const` declarations.
 
-Supported value categories currently include numeric, `bool`, `char`, `uchar`,
-and `byte`-like scalar primitives. Runtime containers, objects, dictionaries,
-arrays, function calls, and ordinary `let`/`mut` variables are not allowed in
-`const` initializers yet.
+Literal values, supported unary/binary operations, textual concatenation and
+comparison, references to other constants, and interpolated strings whose every
+embedded expression is itself constant-evaluable may participate. Runtime
+containers, objects, dictionaries, arrays, function calls, and ordinary
+`let`/`mut` variables are not allowed in `const` initializers yet.
+
+Global constants are visible from inline object methods regardless of source
+ordering; generated declarations preserve their immutable type before object
+bodies are emitted.
+
+Const dependency evaluation is bounded and deterministic. A dependency graph
+may visit at most 16,384 expression nodes, nest at most 128 levels, and fold at
+most 1 MiB of string/text literal data for one initializer. Cyclic const
+dependencies are diagnosed by Wio before C++ generation. Attribute and generic
+constant folding reuse the same limits.
 
 ### 6.4 Type Inference
 
@@ -880,7 +967,25 @@ Examples:
 ```wio
 let dynamic_arr: i32[] = [1, 2, 3];
 let static_arr: [i32; 3] = [1, 2, 3];
+let inferred_static_arr: [i32; _] = [1, 2, 3];
+let matrix: [[i32; _]; _] = [[1, 2], [3, 4]];
 ```
+
+`[T; _]` is an explicitly inferred fixed-size array. It retains fixed/static
+storage, but takes its extent from an array literal or another concrete
+fixed-size array initializer. It is distinct from the dynamic `T[]` type.
+
+The inference rules are deliberately local and deterministic:
+
+- the form is valid only in a variable or component-field declaration that has
+  an initializer,
+- an empty literal infers an extent of zero when its element type is otherwise
+  concrete,
+- every `_` in a nested array is inferred from its corresponding literal level,
+- ragged nested literals are rejected,
+- dynamic arrays cannot silently become fixed arrays,
+- the inferred type is resolved to an ordinary `[T; N]` before C++ generation,
+  native ABI description, or reflection metadata is emitted.
 
 ### 6.6 Initialization Rules
 
@@ -1952,6 +2057,10 @@ Current rules:
   generic functions,
 - generic overload resolution uses parameter-driven deduction first and explicit
   generic arguments second,
+- adjacent generic closers are split by the parser only in generic contexts, so
+  nested types and calls may use `Box<List<i32>>` and `value: Box<List<i32>>=...`
+  without whitespace; `>>`, `>=`, and `>>=` retain their ordinary expression
+  meanings elsewhere,
 - generic methods on `object` declarations are supported,
 - generic methods on `component` declarations stay out of the current v1 slice,
 - generic `interface` methods remain unsupported in v1.
@@ -2011,10 +2120,14 @@ Current rules:
   `object` specializations may also define their own method implementations,
 - duplicate specializations of the same concrete type list are rejected,
 - selection is deterministic: an exact specialization outranks every partial
-  specialization, a more specific partial pattern outranks a less specific
-  pattern, and the primary declaration is the fallback,
-- two matching partial patterns with equal specificity are ambiguous and are
-  rejected at the use site,
+  specialization, structurally more specific partial patterns outrank patterns
+  that accept them, and the primary declaration is the fallback,
+- structural ordering preserves relationships between pattern variables. For
+  example, `Pair<T, Box<T>>` outranks `Pair<T, Box<U>>` when both match because
+  the former requires both occurrences to resolve to the same type,
+- matching partial patterns that are incomparable or structurally equivalent
+  after generic-parameter renaming are ambiguous and are rejected at the use
+  site,
 - specialization declarations are visible through normal module merging; the
   primary must already be visible in the merged scope when its specialization
   is declared,
@@ -2031,8 +2144,8 @@ supported independently of that static-member surface.
 
 ### 13.7 Const Generics
 
-Ordinary integer const parameters are supported on functions, aliases,
-interfaces, components, and objects:
+Integer, `string`, and `text` const parameters are supported on functions,
+aliases, interfaces, components, and objects:
 
 ```wio
 component Buffer<T, const N: usize = 4> {
@@ -2042,13 +2155,25 @@ component Buffer<T, const N: usize = 4> {
 fn Capacity<const N: usize>() -> usize {
     return N;
 }
+
+fn Label<const Value: string = "unnamed">() -> string {
+    return Value;
+}
+
+object Caption<const Value: text> {
+    public fn Get() -> text { return Value; }
+}
 ```
 
-Const arguments may be non-negative integer literals, earlier const
-parameters, or top-level compile-time integer const declarations. They
-participate in identity, substitution, defaults, static-array extents,
-deduction, specialization, and native C++ template mapping. The precise
-contract and exclusions are defined by the 0.10 normative specification.
+Const arguments may be non-negative integer literals, string/text literals,
+earlier compatible const parameters, or compile-time const declarations.
+They participate in identity, substitution, defaults, specialization, and
+module-qualified lookup. Only integer values may serve as static-array
+extents. Integer const parameters retain the 0.10 native C++ template mapping;
+`string` and `text` use a Wio-owned C++20 structural value and are deliberately
+rejected on native functions/components until a portable ABI is specified.
+`string` and `text` generic identity is invariant and never applies their
+ordinary runtime conversion direction.
 
 ### 13.8 Generic Packs and Pack Storage
 
@@ -2377,8 +2502,28 @@ match (x) {
 
 - `assumed` may appear at most once.
 - `assumed` must be the last match arm.
+- `assumed` cannot have a guard because there would be no later arm to receive
+  the value when that guard is false.
 
-### 14.6 `match` as an Expression
+### 14.6 Guards and Destructuring
+
+Any non-`assumed` arm may add a boolean guard with `if`. Guards are evaluated
+only after the arm's value, range, or variant pattern matches.
+
+```wio
+match (status) {
+    Status::ready if canRun: Start();
+    Status::ready: Queue();
+    assumed: Ignore();
+}
+```
+
+`Some(value)`, `None()`, `Ok(value)`, `Err(error)`, and fixed-length array
+patterns such as `[left, right]` introduce immutable arm-local bindings. A
+guarded pattern does not make a later equivalent pattern unreachable and does
+not count toward exhaustiveness.
+
+### 14.7 `match` as an Expression
 
 Examples:
 
@@ -2390,7 +2535,11 @@ let text = match (hp) {
 };
 ```
 
-### 14.7 Statement vs Expression Bodies
+For `Option` and `Result`, covering both variants is exhaustive. A value match
+over an enum is also exhaustive when every declared enum member has an
+unguarded arm, so neither form needs an extra `assumed` arm.
+
+### 14.8 Statement vs Expression Bodies
 
 A match arm body is parsed as a statement.
 
@@ -2413,7 +2562,8 @@ The current match typing behavior is:
 
 - if any case body is a block, the match is treated as `void`,
 - if all case bodies are expression statements, the match produces a value,
-- value-producing matches must include `assumed`,
+- value-producing matches must include `assumed` unless exhaustive
+  `Option`/`Result` variants or every enum member is covered,
 - case values must be compatible with the matched value,
 - value-producing arm result types must remain compatible across every arm.
 
@@ -2572,13 +2722,20 @@ position.Scale(2.0f);
 
 - `view fn` receives a read-only `self`.
 - `ref fn` receives a mutable `self` and requires a mutable receiver.
+- Extension methods support the same trailing default-parameter rules as
+  ordinary Wio functions; the implicit receiver is not counted in diagnostics
+  or user-visible arity.
+- Extension methods may declare generic parameters, trailing generic defaults,
+  and `where` constraints. Type arguments may be deduced from visible arguments
+  or supplied explicitly with ordinary method-call syntax.
 - Extension methods are external APIs and therefore cannot access private or
   protected component fields.
 - A real component member takes precedence. Defining an extension with the same
   name is diagnosed as a conflict.
 - Multiple visible extensions defining the same method name for the same
   component are diagnosed as ambiguous.
-- Generic extension targets are not supported yet.
+- Generic extension targets such as `extension<T> ... for Box<T>` are not part
+  of the current slice; generic methods on a concrete extension target are.
 
 An extension over a declaration-level `@Native` component may bind a C++ free
 function directly:
@@ -2811,19 +2968,29 @@ reflection are current stable features. Component, object, interface, field,
 method, access, base, size, and alignment metadata are provided by
 `std::reflect` as documented in the standard-library reference.
 
+`text` participates as a named primitive: `Describe<text>()` reports the stable
+language name `text`, `primitive_type` kind, and its runtime size/alignment.
+This reflection guarantee does not imply that the shared-module dynamic value
+ABI can transport owned text yet; that boundary requires an explicit ownership
+contract.
+
 ## 20. Attributes
 
 ### 20.1 General Syntax
 
-Attributes use `@Name(...)`.
+Postfix `with` is the canonical attribute application syntax. `using` activates
+attributes that opt into lexical scoping. Legacy `@Name(...)` remains accepted
+only as compatibility input during the edition migration.
 
 Examples:
 
 ```wio
-@GenerateCtors
-@Default(public)
-@From(Entity)
-@Trust(Foo)
+component User with derive::json {
+    name: string with json::name("displayName");
+}
+
+using cpp::header("widget.h");
+fn Draw(widget: view Widget) with native, cpp::name("DrawWidget");
 ```
 
 Attributes may appear before:
@@ -2836,17 +3003,46 @@ Attributes may appear before:
 
 ### 20.2 Attribute Argument Shape
 
-#### Important Current Compiler Limitation
+User-defined attributes have typed parameters with trailing defaults. Calls may
+use positional arguments or switch to named arguments; positional arguments
+cannot follow the first named argument. Named arguments are normalized to the
+declaration's parameter order before validation and runtime reflection.
+Omitted trailing defaults are materialized, so reflected metadata describes
+the complete effective application rather than only the written arguments.
+
+```wio
+attribute route(fn)(method: string, path: string = "/")
+    with attribute::runtime, attribute::repeatable;
+
+fn Health() with route(path: "/health", method: "GET") {}
+```
+
+The compact declaration form places the target set after the attribute name.
+Policies reuse postfix attributes instead of adding contextual policy keywords:
+
+- `attribute::source`, `attribute::compile`, or `attribute::runtime`;
+- `attribute::repeatable`;
+- `attribute::inherited`;
+- `attribute::scoped`;
+- `attribute::conflict("group")`.
+
+The older `for fn retain runtime repeatable` declaration form remains accepted
+during the compatibility window.
+
+#### Current argument-expression boundary
 
 Attribute arguments are still more restricted than full expressions, but the
 current compiler reliably supports:
 
+- scalar, `string`, and `text` literals for typed user-defined attributes,
+- evaluable `const` identifiers of those types; their folded values, not their
+  source names, enter runtime metadata,
 - plain identifiers such as `@Trust(Foo)`,
 - plain type names such as `@Type(u32)`,
 - type-like generic forms such as `@Apply(traits::IsInteger<T>)`,
 - and interop instantiation forms such as `@Instantiate(i32, bool)`.
 
-Reliable examples:
+Reliable legacy/built-in examples:
 
 ```wio
 @From(Entity)
@@ -2859,14 +3055,18 @@ use std::traits as traits;
 @Instantiate(traits::IsNumeric<T>)
 ```
 
-Potentially unreliable today:
+Not part of the current attribute-argument contract:
 
 ```wio
 @From(ns::Entity)
 @Something(1 + 2)
 ```
 
-This means attribute arguments should currently stay simple.
+Built-in compiler attributes currently remain positional. Named arguments are
+reserved for typed user-defined attributes, whose parameter metadata makes
+ordering and diagnostics deterministic. Typed `string` and `text` parameters
+remain distinct: Unicode `u"..."` values do not silently become byte strings,
+and plain string literals do not silently become Unicode text.
 
 ### 20.3 `@ReadOnly`
 
@@ -3086,6 +3286,11 @@ Current supported trait predicates live under `std::traits`:
 - `std::traits::IsInterface<T>`
 - `std::traits::IsArray<T>`
 - `std::traits::IsReference<T>`
+
+Runtime query functions additionally include `IsPrimitiveType<T>()`,
+`IsStringType<T>()`, and `IsTextType<T>()`. `IsArrayType<T>()` recognizes both
+dynamic `T[]` and fixed `[T; N]` types. These are observation APIs; they do not
+implicitly convert `string` and `text` or weaken generic constraints.
 
 For multi-parameter generic functions, positional combinations are allowed:
 

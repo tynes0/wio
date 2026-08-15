@@ -1,4 +1,0 @@
-fn Entry(args: string[]) -> i32 {
-    const title: string = "wio";
-    return 0;
-}

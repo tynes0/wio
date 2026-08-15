@@ -1,0 +1,32 @@
+use std::assert as assert;
+use std::console as console;
+
+component Counter {
+    public value: i32;
+}
+
+extension CounterMath for Counter {
+    public view fn Added(amount: i32 = 1, scale: i32 = 2) -> i32 {
+        return self.value + amount * scale;
+    }
+
+    public ref fn Add(amount: i32 = 1) {
+        self.value += amount;
+    }
+}
+
+fn Entry() -> i32 {
+    mut counter = Counter(10);
+
+    assert::ExpectEqual(counter.Added(), 12, "view extension uses all defaults");
+    assert::ExpectEqual(counter.Added(3), 16, "view extension uses trailing default");
+    assert::ExpectEqual(counter.Added(3, 4), 22, "view extension uses explicit arguments");
+
+    counter.Add();
+    assert::ExpectEqual(counter.value, 11, "ref extension uses default");
+    counter.Add(4);
+    assert::ExpectEqual(counter.value, 15, "ref extension uses explicit argument");
+
+    console::PrintLine("extension-default-parameters-ok");
+    return 0;
+}

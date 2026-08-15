@@ -64,6 +64,7 @@ namespace wio
        case TokenType::kwChar: return "kwChar";
        case TokenType::kwUchar: return "kwUchar";
        case TokenType::kwString: return "kwString";
+       case TokenType::kwText: return "kwText";
        case TokenType::kwAny: return "kwAny";
        case TokenType::kwOpaque: return "kwOpaque";
        case TokenType::kwComponent: return "kwComponent";
@@ -346,6 +347,7 @@ namespace wio
        case TokenType::kwChar:  
        case TokenType::kwUchar: 
        case TokenType::kwString:
+       case TokenType::kwText:
        case TokenType::kwAny:
        case TokenType::kwOpaque:
        case TokenType::kwVoid:

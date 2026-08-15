@@ -1,0 +1,32 @@
+use std::assert as assert;
+use std::console as console;
+use std::traits as traits;
+
+component Marker {
+    public seed: i32;
+}
+
+extension MarkerGenerics for Marker {
+    public view fn Identity<T>(value: T) -> T {
+        return value;
+    }
+
+    public view fn Zero<T = i32>() -> T {
+        let value: T;
+        return value;
+    }
+
+    public view fn Twice<T>(value: T) -> T where T: traits::IsInteger {
+        return value + value;
+    }
+}
+
+fn Entry() -> i32 {
+    let marker = Marker(7);
+    assert::ExpectEqual(marker.Identity("wio"), "wio", "deduced generic extension method");
+    assert::ExpectEqual(marker.Identity<i32>(42), 42, "explicit generic extension method");
+    assert::ExpectEqual(marker.Zero(), 0, "defaulted generic extension method");
+    assert::ExpectEqual(marker.Twice(21), 42, "constrained generic extension method");
+    console::PrintLine("extension-generic-methods-ok");
+    return 0;
+}

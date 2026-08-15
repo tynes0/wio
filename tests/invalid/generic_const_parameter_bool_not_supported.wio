@@ -1,0 +1,7 @@
+fn Invalid<const Value: bool>() -> bool {
+    return Value;
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

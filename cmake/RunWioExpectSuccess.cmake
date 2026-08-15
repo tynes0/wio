@@ -20,6 +20,8 @@ execute_process(
     RESULT_VARIABLE wio_result
     OUTPUT_VARIABLE wio_stdout
     ERROR_VARIABLE wio_stderr
+    ECHO_OUTPUT_VARIABLE
+    ECHO_ERROR_VARIABLE
 )
 
 set(wio_output "${wio_stdout}${wio_stderr}")
