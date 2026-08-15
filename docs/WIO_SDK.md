@@ -1,7 +1,7 @@
 # Wio Host SDK
 
 This document defines the current public C++ host and embedding surface for Wio.
-It is the SDK contract shipped with Wio v0.12 and the baseline of the planned
+It is the SDK contract shipped with Wio v0.13 and the baseline of the planned
 Wio v1 host integration layer. The pre-v1 parity and synchronized-version plan
 is tracked in [`WIO_SDK_EVOLUTION_PLAN.md`](./WIO_SDK_EVOLUTION_PLAN.md).
 
@@ -15,11 +15,26 @@ For a practical interop-first walkthrough, also see:
 
 Official public headers:
 
+- `sdk/include/wio_version.h`
 - `sdk/include/module_api.h`
 - `sdk/include/wio_sdk.h`
 
 Everything else should be treated as implementation detail unless it is
 explicitly re-exported through those headers.
+
+The SDK product version is available without loading a module:
+
+```cpp
+static_assert(WIO_SDK_VERSION_MAJOR == 0);
+static_assert(WIO_SDK_VERSION_MINOR == 13);
+static_assert(wio::sdk::product_version.patch == 0);
+
+std::cout << wio::sdk::product_version_string; // 0.13.0
+```
+
+`WIO_MODULE_API_DESCRIPTOR_VERSION` remains an independent low-level ABI
+revision. Product releases advance even when the ABI descriptor does not; hosts
+must check both values for their respective purposes.
 
 ---
 

@@ -1,6 +1,6 @@
 # Wio SDK Evolution Plan
 
-Status: pre-v1 parity plan after Wio `v0.12.0`. The current stable SDK contract
+Status: pre-v1 parity plan for Wio `v0.13.0` and later. The current stable SDK contract
 remains in [`WIO_SDK.md`](./WIO_SDK.md); this document tracks the work required
 before Wio `1.0.0`.
 

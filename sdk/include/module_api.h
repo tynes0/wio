@@ -5,6 +5,8 @@
 #include <cstring>
 #include <utility>
 
+#include "wio_version.h"
+
 inline constexpr std::uint32_t WIO_MODULE_API_DESCRIPTOR_VERSION = 6u;
 
 enum WioModuleCapability : std::uint32_t

@@ -6,6 +6,10 @@ All notable user-facing changes to Wio are recorded here.
 
 ### Added
 
+- Added a public SDK product-version contract through `wio_version.h`,
+  `wio::sdk::product_version`, and `product_version_string`. A release manifest
+  now aligns compiler, runtime, std, CLI, SDK, VS Code, and documentation
+  product versions while keeping the module ABI descriptor revision independent.
 - Added explicit fixed-array extent inference with `[T; _]`, including empty,
   copied, global, component-field, and nested fixed arrays. Ragged nesting,
   dynamic-array sources, missing initializers, and non-variable use sites now
