@@ -87,6 +87,7 @@ Use these when the question is about:
 - [CLI reference](./WIO_CLI_REFERENCE.md)
 - [Project system](./WIO_PROJECT_SYSTEM.md)
 - [Self-hosted CLI architecture](./WIO_SELF_HOSTED_CLI.md)
+- [Editor ecosystem plan](./WIO_EDITOR_ECOSYSTEM_PLAN.md)
 
 Use these when the question is about:
 

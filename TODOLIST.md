@@ -380,6 +380,10 @@ here does not by itself mean that v1 cannot ship.
 
 ## P2 - Editor and Developer Experience
 
+The shared architecture and pre-v1 delivery gates for VS Code, Visual Studio,
+Rider, and CLion are defined in
+[`docs/WIO_EDITOR_ECOSYSTEM_PLAN.md`](docs/WIO_EDITOR_ECOSYSTEM_PLAN.md).
+
 1. [ ] Build a production Language Server.
    Diagnostics, completion, signature help, hover, go-to-definition, find
    references, rename, symbols, semantic tokens, inlay hints, code actions,
@@ -414,6 +418,12 @@ here does not by itself mean that v1 cannot ship.
    Extract function/type, organize imports, change signature, move symbol,
    generate interface implementation, wrap with Option/Result handling, and
    convert free functions to extensions.
+
+7. [ ] Ship version-aligned Visual Studio and JetBrains clients before v1.
+   Build `wio-vs` for Visual Studio and one shared IntelliJ Platform plugin for
+   Rider and CLion. Both must use the compiler-owned language service, share
+   conformance fixtures with `wio-vscode`, and pass packaged install, upgrade,
+   compatibility, and daily command-flow gates by `v0.18.0`.
 
 ## P2 - Performance, Portability, and Security
 

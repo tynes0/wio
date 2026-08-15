@@ -10,6 +10,7 @@ Useful reference docs:
 - [Documentation index](docs/README.md)
 - [Getting started](docs/WIO_GETTING_STARTED.md)
 - [CLI reference](docs/WIO_CLI_REFERENCE.md)
+- [Editor ecosystem plan](docs/WIO_EDITOR_ECOSYSTEM_PLAN.md)
 - [Language reference](docs/WIO_LANGUAGE_DRAFT.md)
 - [v1 freeze snapshot](docs/WIO_V1_FREEZE.md)
 - [v1 release plan](docs/WIO_V1_RELEASE_PLAN.md)

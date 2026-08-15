@@ -55,7 +55,8 @@ The following are mandatory before `v1.0.0`:
 - stable CLI behavior, machine-readable diagnostics, formatter support, and a
   compiler-owned language-service baseline;
 - version alignment across compiler, runtime, std, CLI, SDK, VS Code extension,
-  documentation, and release metadata;
+  Visual Studio extension, Rider/CLion plugin, documentation, and release
+  metadata;
 - substantial console, native GUI, SDK-host, library, async/network, and package
   consumer projects passing as release gates;
 - migration, compatibility, security, and release-process documentation.
@@ -84,6 +85,8 @@ Required scope:
   application, async, and native semantics across implementation and docs;
 - update the versioned specification and stable/experimental feature tables;
 - align the VS Code grammar, snippets, diagnostics, and product version;
+- establish the shared editor/version contract used by the later Visual Studio
+  and Rider/CLion clients;
 - close stale documentation claims such as scalar-only `const` and obsolete
   async executor descriptions.
 
@@ -189,12 +192,16 @@ Required scope:
 - compiler-owned language-service support sufficient for diagnostics,
   completion, hover, navigation, symbols, semantic tokens, formatting, and
   workspace imports;
+- release-gate Visual Studio and shared Rider/CLion clients using that same
+  language service rather than independent semantic implementations;
 - consistent CLI exits, quiet/verbose/color policy, cancellation, help, config
   precedence, and machine output;
 - maintained templates for console, library, native library, desktop app,
   service, tests, bindings, and SDK hosts;
 - versioned documentation navigation and migration guides on `wio-web`;
-- product-version alignment across all shipped repositories and artifacts.
+- product-version alignment across all shipped repositories and artifacts;
+- packaged extension/plugin install, upgrade, uninstall, and compatibility
+  checks for VS Code, Visual Studio, Rider, and CLion.
 
 Exit gate: the VS Code extension no longer needs an independent approximation
 of Wio semantics for the baseline feature set, and each maintained template is
