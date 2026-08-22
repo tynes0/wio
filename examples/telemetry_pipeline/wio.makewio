@@ -1,0 +1,41 @@
+schemaVersion = 1
+name = "TelemetryPipeline"
+template = "hybrid-module"
+
+[toolchain]
+buildDir = "build"
+config = "Debug"
+
+[wio]
+entry = "wio/module.wio"
+target = "shared"
+sourceRoots = ["wio"]
+includeDirs = ["native/include"]
+linkDirs = []
+linkLibraries = []
+nativeSources = ["native/src/telemetry_native.cpp"]
+backendArgs = []
+
+[host]
+enabled = true
+compiler = "g++"
+sourceRoots = ["host"]
+includeDirs = []
+linkDirs = []
+linkLibraries = []
+compilerArgs = []
+
+[build]
+buildDir = ".wio-build"
+config = "Debug"
+
+[outputs]
+directory = ".wio-build/interop"
+baseName = "telemetry_pipeline"
+wioName = "telemetry_pipeline"
+hostName = "telemetry_pipeline.host"
+
+[run]
+passLibraryPath = true
+args = []
+workingDirectory = "."

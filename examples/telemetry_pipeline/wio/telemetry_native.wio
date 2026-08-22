@@ -1,0 +1,36 @@
+@Native
+@CppHeader("telemetry_native.h")
+@CppName(telemetry_native::Sample)
+component NativeSample {
+    sensorId: i32;
+    value: f32;
+    baseline: f32;
+    timestampMs: u64;
+}
+
+extension NativeSampleOperations for NativeSample {
+    @Native
+    @CppHeader("telemetry_native.h")
+    @CppName(telemetry_native::Deviation)
+    public view fn Deviation() -> f32;
+
+    @Native
+    @CppHeader("telemetry_native.h")
+    @CppName(telemetry_native::NormalizedScore)
+    public view fn Score() -> f32;
+
+    @Native
+    @CppHeader("telemetry_native.h")
+    @CppName(telemetry_native::Calibrate)
+    public ref fn Calibrate(gain: f32, offset: f32);
+
+    @Native
+    @CppHeader("telemetry_native.h")
+    @CppName(telemetry_native::Classify)
+    public view fn Classify(warningScore: f32, criticalScore: f32) -> i32;
+
+    @Native
+    @CppHeader("telemetry_native.h")
+    @CppName(telemetry_native::Fingerprint)
+    public view fn Fingerprint() -> u64;
+}
