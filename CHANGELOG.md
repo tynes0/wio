@@ -109,6 +109,8 @@ All notable user-facing changes to Wio are recorded here.
   pinned the project, performance, hybrid, and example CTest environments.
   Out-of-tree build directories no longer fall through to an ambient installed
   toolchain or user cache during repository validation.
+- Updated the hybrid-arena host to negotiate the complete ABI v7 capability,
+  product-version, and descriptor-size contract during both reload phases.
 - Isolated all source-tree tests from ambient `WIO_ROOT`/`WIO_HOME` values so
   an older installed toolchain cannot supply mismatched std, runtime, or SDK
   headers during repository validation.
