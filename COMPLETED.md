@@ -10,6 +10,34 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## v0.13 language coherence and SDK parity sprint
+
+- [x] The normative Wio 0.13 coherence specification freezes first-class
+      Unicode `text`, `const string`/`const text`, textual const generics,
+      fixed-array extent inference, compact typed attributes, named attribute
+      arguments, generic extensions, deterministic partial specialization,
+      and guarded/exhaustive matching behavior.
+- [x] Canonical `with`/`using` native metadata is emitted by project and
+      binding generators, while legacy `@Attribute` source remains accepted as
+      compatibility input.
+- [x] Source-tree validation pins its own runtime, std, and SDK roots so an
+      older installed Wio cannot silently satisfy or break repository tests.
+- [x] The public C++ SDK is version-aligned at 0.13.0 and ships a
+      machine-readable feature inventory plus host-semantic values for text,
+      Option, Result/UnitResult, tuples, queues, sets, spans, buffers, pools,
+      Box, any, and nullable values.
+- [x] Module ABI descriptor v7 publishes product version, descriptor size,
+      capabilities, canonical stable type IDs, and ordered concrete generic
+      arguments. Generated shared modules round-trip Unicode `text` through
+      typed and dynamic SDK field access.
+- [x] The SDK parity matrix distinguishes real bridges, metadata-only values,
+      host values, opaque identities, and deliberately deferred surfaces. The
+      packaged distribution includes the SDK headers, release manifest, and
+      parity documentation.
+- [x] The focused SDK/interop regression matrix passed 16/16, package smoke
+      passed, and an independently installed SDK header probe compiled and ran
+      successfully with the 0.13 package surface.
+
 ## v0.12 async, structured concurrency, and platform-I/O sprint
 
 - [x] Wio 0.12 separates continuation, blocking,

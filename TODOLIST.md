@@ -8,8 +8,9 @@ Status markers:
 - `[ ]` not started
 - `[~]` partially implemented or implemented but not sufficiently hardened
 
-The priorities below reflect the state of Wio after `v0.12.0`, including the
-P0/P1 language, std, native-interoperability, and structured-async sprints.
+The priorities below reflect the state of Wio at the `v0.13.0` release-candidate
+freeze, including the P0/P1 language, std, native-interoperability,
+structured-async, language-coherence, and SDK-parity sprints.
 Completed work is recorded in `COMPLETED.md`; this file contains only the
 remaining work. The
 application/system and language-coherence direction is expanded in
@@ -81,8 +82,9 @@ here does not by itself mean that v1 cannot ship.
     activation, for example `fn Foo() with native, cpp::name("Foo");` and
     `using cpp::header("foo.h");`. Add lowercase realm-scoped names, typed
     arguments/defaults, target policies, retention, repetition, inheritance,
-    conflicts, and runtime type/field reflection are implemented. Add named
-    arguments, controlled derives, formatter/LSP/docs support, and automated
+    conflicts, named arguments, folded scalar/string/text defaults, and runtime
+    type/field reflection are implemented. Add controlled derives,
+    formatter/LSP/docs support, and automated
     edition-aware migration from `@Attribute(...)`. Add bounded, typed
     behavioral attributes for entry guards, pre/postconditions, guaranteed
     exit hooks, and eventually `around` interception. This includes
@@ -128,8 +130,9 @@ here does not by itself mean that v1 cannot ship.
     platform-independent transcoding are available through `std::unicode`.
     Native static exports accepting and returning `text` are covered across the
     generated C++ boundary, and runtime reflection reports `text` as a named
-    primitive with stable size/alignment metadata. Complete normalization policy
-    and APIs, SDK descriptor metadata, shared-module dynamic ABI coverage, and
+    primitive with stable size/alignment metadata. SDK ABI v7 now publishes a
+    dedicated text descriptor and shared modules round-trip text fields through
+    typed/dynamic host access. Complete normalization policy and APIs and broad
     Unicode conformance vectors. Do not expose C++ `wchar_t` width as a Wio
     language rule.
 
@@ -144,8 +147,9 @@ here does not by itself mean that v1 cannot ship.
     qualified module constants. Runtime reflection now exposes primary source
     parameter names and concrete type/const arguments for ordinary, exact, and
     partial generic types. Const evaluation rejects dependency cycles and
-    enforces depth, node-count, and folded-text budgets. Complete storage
-    interning, cross-module export, SDK descriptor metadata, and the final
+    enforces depth, node-count, and folded-text budgets. SDK ABI v7 retains
+    canonical concrete generic argument identities. Complete storage
+    interning, cross-module constant export, and the final
     Unicode normalization policy.
 
 ## P1 - Standard Library Correctness and Consistency
@@ -279,6 +283,16 @@ here does not by itself mean that v1 cannot ship.
    runtime, std, CLI, and VS Code extension. Keep the low-level ABI revision
    independently feature-negotiated so compatible hosts can fail cleanly.
    Track the staged contract in `docs/WIO_SDK_EVOLUTION_PLAN.md`.
+
+   The 0.13 parity foundation is complete: product version 0.13.0, ABI
+   descriptor v7, descriptor-size/capability negotiation, stable type IDs,
+   generic arguments, Unicode text field round-trips, host value mirrors, an
+   owned module inspection snapshot, a machine-readable feature catalog, and a
+   normative parity matrix ship together. Remaining work is recursively nested
+   dynamic value exchange, export-time rejection for unsupported shapes,
+   lifetime-safe `ref`/`view`, interface/Box/any/resource adapters, callbacks,
+   async/application hosting, retained attribute metadata, and the independent
+   platform ABI matrix.
 
    As part of that parity work, complete the current dynamic field surface.
    Remove the current runtime “not yet supported” paths for dynamic field

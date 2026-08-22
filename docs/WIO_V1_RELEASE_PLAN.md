@@ -1,6 +1,6 @@
 # Wio v1 Release Plan
 
-This document is the finite delivery plan from the current `v0.12.0` baseline
+This document is the finite delivery plan from the released `v0.13.0` baseline
 to `v1.0.0`. It answers a different question from the active backlog:
 
 - [`../TODOLIST.md`](../TODOLIST.md) records every unfinished item;
@@ -70,6 +70,12 @@ and an independent backend can ship after v1.
 ## 3. Planned Release Train
 
 ### v0.13.0 - Language Coherence
+
+Status: **released on 2026-08-22**. The 0.13 SDK foundation was intentionally
+pulled forward so the compiler, runtime, std, CLI, SDK, editor, documentation,
+and release metadata could share one product-version contract. The deeper
+nested-value and native-lifetime work remains assigned to the later slices
+below.
 
 Goal: turn the work currently accumulated after `v0.12.0` into one internally
 consistent language release.

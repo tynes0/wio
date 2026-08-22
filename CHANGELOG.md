@@ -4,6 +4,8 @@ All notable user-facing changes to Wio are recorded here.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-08-22
+
 ### Added
 
 - Expanded the 0.13 C++ host SDK to the current language/std surface with
