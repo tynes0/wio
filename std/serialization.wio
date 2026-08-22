@@ -2,7 +2,7 @@ use std::convert as convert;
 
 realm std {
     realm serialization {
-        use @CppHeader("std_serialization.h");
+        using cpp::header("std_serialization.h");
 
         @Native @CppName(wio::runtime::std_serialization::JsonEscape)
         fn EscapeJson(value: string) -> string;

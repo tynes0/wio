@@ -1,6 +1,6 @@
 realm std {
     realm platform {
-        use @CppHeader("std_process.h");
+        using cpp::header("std_process.h");
 
         @Native
         @Type(u8)

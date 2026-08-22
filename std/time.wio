@@ -1,6 +1,6 @@
 realm std {
     realm time {
-        use @CppHeader("std_time.h");
+        using cpp::header("std_time.h");
 
         object Duration {
             public nanoseconds: i64;

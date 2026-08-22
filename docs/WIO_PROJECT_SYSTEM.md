@@ -311,7 +311,7 @@ Meaning:
 - `wio/`: Wio source files
 - `host/`: C++ host source files
 - `host/include/`: host-only headers
-- `native/include/`: headers visible to Wio `@CppHeader(...)`
+- `native/include/`: headers visible to Wio `using cpp::header(...)`
 - `native/src/`: extra native C/C++ files compiled into the Wio backend output
 - `native/lib/`: prebuilt native libraries used by Wio or the host
 
@@ -404,7 +404,7 @@ If `wio.includeDirs` is omitted, Wio uses:
 This is the default user-owned place for headers referenced by:
 
 ```wio
-@CppHeader("foo.h")
+using cpp::header("foo.h");
 ```
 
 ### 4.4 Wio Native Sources
@@ -914,7 +914,7 @@ For the full SDK surface, field reflection contract, and hot-reload helpers, see
 Wio code uses:
 
 ```wio
-@CppHeader("foo.h")
+using cpp::header("foo.h");
 ```
 
 That header may come from:
@@ -938,7 +938,7 @@ powershell -ExecutionPolicy Bypass -File C:\Wio\scripts\New-WioBindingModule.ps1
 The manifest-driven helper is intentionally small and source-first:
 
 - it generates a `.wio` binding module skeleton,
-- it can emit `const`, `@CppHeader`, `@CppName`, `component`, `enum`,
+- it can emit `const`, `cpp::header`, `cpp::name`, `component`, `enum`,
   `flagset`, and native function declarations,
 - it is meant to remove boilerplate for files like `raylib.wio`, not to be a
   full C parser.

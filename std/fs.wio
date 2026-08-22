@@ -4,7 +4,7 @@ use std::async as async;
 
 realm std {
     realm fs {
-        use @CppHeader("std_fs.h");
+        using cpp::header("std_fs.h");
         using cpp::header("std_async_fs.h");
 
         @Type(i32)

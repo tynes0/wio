@@ -2,7 +2,7 @@ use std::result;
 
 realm std {
     realm console {
-        use @CppHeader("std_console.h");
+        using cpp::header("std_console.h");
 
         type StatusCode = u8;
 

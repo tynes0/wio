@@ -1,6 +1,6 @@
 realm std {
     realm assert {
-        use @CppHeader("std_assert.h");
+        using cpp::header("std_assert.h");
 
         @Native
         @CppName(wio::runtime::std_assert::Fail)

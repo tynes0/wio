@@ -1,6 +1,6 @@
 realm std {
     realm encoding {
-        use @CppHeader("std_encoding.h");
+        using cpp::header("std_encoding.h");
 
         @Native @CppName(wio::runtime::std_encoding::HexEncode)
         fn HexEncode(value: string, upper: bool) -> string;

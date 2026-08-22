@@ -6,7 +6,7 @@ Use it when you want to answer questions like:
 
 - How does Wio call C++?
 - How does C++ call Wio?
-- When do I use `@Native`, `@Export`, `@Command`, or `@Event`?
+- When do I use `native`, `export::c`, commands, or events?
 - How do exported `object` and `component` types appear in the SDK?
 - What is safe across hot reload, and what is intentionally generation-bound?
 
@@ -25,11 +25,11 @@ Wio currently has four important interop paths.
 
 Use this when Wio source needs to call existing C++.
 
-Surface:
+Canonical surface:
 
-- `@Native`
-- `@CppHeader(...)`
-- `@CppName(...)`
+- `with native`
+- `using cpp::header(...)`
+- `cpp::name(...)`
 
 ### 1.2 Native C++ -> Wio Exports
 
@@ -70,10 +70,10 @@ Surface:
 The normal pattern is:
 
 ```wio
-@Native
-@CppHeader("native_math.h")
-@CppName(native_math::Multiply)
-fn Multiply(lhs: i32, rhs: i32) -> i32;
+using cpp::header("native_math.h");
+
+fn Multiply(lhs: i32, rhs: i32) -> i32
+    with native, cpp::name(native_math::Multiply);
 ```
 
 This means:
@@ -82,9 +82,9 @@ This means:
 - the generated backend C++ includes `native_math.h`
 - the call lowers to `native_math::Multiply(...)`
 
-### 2.1 What `@CppHeader` Means
+### 2.1 What `cpp::header` Means
 
-`@CppHeader("...")` adds a public include edge to generated backend C++.
+`using cpp::header("...")` adds a public include edge to generated backend C++.
 
 That header must be reachable through:
 
@@ -93,16 +93,19 @@ That header must be reachable through:
 - `--include-dir`
 - project manifest include settings
 
-### 2.2 What `@CppName` Means
+### 2.2 What `cpp::name` Means
 
-`@CppName(...)` binds the Wio declaration to a concrete native symbol or C++
+`cpp::name(...)` binds the Wio declaration to a concrete native symbol or C++
 identifier path.
 
 Examples:
 
 ```wio
-@CppName(native_math::Multiply)
-@CppName(wio::runtime::std_console::WriteLine)
+fn Multiply(lhs: i32, rhs: i32) -> i32
+    with native, cpp::name(native_math::Multiply);
+
+fn WriteLine(value: string)
+    with native, cpp::name(wio::runtime::std_console::WriteLine);
 ```
 
 ### 2.3 How To Build Native Inputs
@@ -137,22 +140,19 @@ C++ free functions that receive a declaration-level native component can be
 presented as extension methods without adding methods to the POD type:
 
 ```wio
-@Native
-@CppHeader("vector.h")
-@CppName(native::Vector)
-component Vector {
+using cpp::header("vector.h");
+
+component Vector with native, cpp::name(native::Vector) {
     x: f32;
     y: f32;
 }
 
 extension VectorNative for Vector {
-    @Native
-    @CppName(native::Length)
-    public view fn Length() -> f32;
+    public view fn Length() -> f32
+        with native, cpp::name(native::Length);
 
-    @Native
-    @CppName(native::Translate)
-    public ref fn Translate(x: f32, y: f32);
+    public ref fn Translate(x: f32, y: f32)
+        with native, cpp::name(native::Translate);
 }
 ```
 
@@ -162,18 +162,21 @@ extension VectorNative for Vector {
 the receiver is never copied. Native borrow returns are still rejected; return
 an owning value or opaque handle instead.
 
+Legacy `@Native`, `@CppHeader`, and `@CppName` syntax remains accepted during
+the compatibility window. It describes the same metadata, but documentation,
+generated bindings, and new source should use `with` and `using`.
+
 ---
 
 ## 3. Exporting Wio Back To A Host
 
-If the host wants to call Wio, the narrow base mechanism is `@Export`.
+If the host wants to call Wio, the narrow base mechanism is `export::c`.
 
 Example:
 
 ```wio
-@Export
-@CppName(WioAddNumbers)
-fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
+fn AddNumbers(lhs: i32, rhs: i32) -> i32
+    with export::c, cpp::name(WioAddNumbers) {
     return lhs + rhs;
 }
 ```
@@ -185,7 +188,7 @@ This produces a host-visible bridge export.
 The current `v1` export intent is:
 
 - exports are narrow and ABI-oriented
-- `@Export` is the low-level escape hatch
+- `export::c` is the low-level escape hatch
 - commands/events provide higher-level discovery on top
 
 ### 3.2 When To Use `@Export`
@@ -361,7 +364,7 @@ This is the right tradeoff for `v1`:
 
 ### 9.1 Do
 
-- keep `@Native` declarations bodyless
+- keep `with native` declarations bodyless
 - keep public bridge headers stable
 - prefer commands/events when names matter semantically
 - use exported objects/components when the host needs structured reflection

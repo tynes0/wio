@@ -1,6 +1,6 @@
 realm std {
     realm environment {
-        use @CppHeader("std_process.h");
+        using cpp::header("std_process.h");
 
         @Native
         @CppName(wio::runtime::std_environment::TryGet)

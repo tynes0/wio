@@ -1,6 +1,6 @@
 realm std {
     realm uuid {
-        use @CppHeader("std_utility.h");
+        using cpp::header("std_utility.h");
 
         @Native @CppName(wio::runtime::std_uuid::NewV4)
         fn NewV4() -> string;

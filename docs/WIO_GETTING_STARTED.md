@@ -199,15 +199,15 @@ The stable user-facing project flow is:
 
 ## 4. First Native Bridge
 
-Wio can call into existing C++ through `@Native`, `@CppHeader`, and `@CppName`.
+Wio can call into existing C++ through typed native attributes.
 
 Example:
 
 ```wio
-@Native
-@CppHeader("native_math.h")
-@CppName(native_math::Multiply)
-fn Multiply(lhs: i32, rhs: i32) -> i32;
+using cpp::header("native_math.h");
+
+fn Multiply(lhs: i32, rhs: i32) -> i32
+    with native, cpp::name(native_math::Multiply);
 ```
 
 Then build or run with the required include/source inputs:

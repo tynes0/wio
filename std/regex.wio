@@ -2,7 +2,7 @@ use std::result as result;
 
 realm std {
     realm regex {
-        use @CppHeader("std_regex.h");
+        using cpp::header("std_regex.h");
 
         @Native
         @Type(u8)

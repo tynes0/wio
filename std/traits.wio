@@ -1,6 +1,6 @@
 realm std {
     realm traits {
-        use @CppHeader("std_type_traits.h");
+        using cpp::header("std_type_traits.h");
 
         interface IsInteger<T> {
         }

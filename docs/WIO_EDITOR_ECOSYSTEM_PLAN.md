@@ -16,6 +16,15 @@ commands should live in one plugin codebase. Product-specific adapters are
 allowed only where Rider or CLion exposes a genuinely different project/build
 integration API. We should not maintain separate Wio parsers for the two IDEs.
 
+The shared plugin core depends only on IntelliJ Platform modules available in
+both products. Rider- or CLion-specific modules belong in optional descriptors
+and adapter source sets, and the compatibility matrix is verified with the
+JetBrains Plugin Verifier. The Wio client must not depend on CLion Classic C++
+PSI APIs: CLion 2026.2 ships Nova as its only bundled C++ engine, while Wio
+syntax and semantics already belong to the compiler-owned service. See the
+[JetBrains product compatibility guide](https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html)
+and [CLion plugin guide](https://plugins.jetbrains.com/docs/intellij/clion.html).
+
 ---
 
 ## 1. Shared Architecture

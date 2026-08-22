@@ -39,7 +39,7 @@ endif()
 
 file(READ "${WIO_OUTPUT}" wio_generated_text)
 
-foreach(expected_name IN ITEMS WIO_EXPECT_1 WIO_EXPECT_2 WIO_EXPECT_3 WIO_EXPECT_4)
+foreach(expected_name IN ITEMS WIO_EXPECT_1 WIO_EXPECT_2 WIO_EXPECT_3 WIO_EXPECT_4 WIO_EXPECT_5 WIO_EXPECT_6)
     if(DEFINED ${expected_name} AND NOT "${${expected_name}}" STREQUAL "")
         string(FIND "${wio_generated_text}" "${${expected_name}}" found_index)
         if(found_index EQUAL -1)

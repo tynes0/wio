@@ -60,6 +60,18 @@ All notable user-facing changes to Wio are recorded here.
 
 ### Changed
 
+- Made typed `with`/`using` native metadata the canonical spelling throughout
+  current guides and migrated all standard-library header imports to
+  `using cpp::header(...)`; legacy `@...` spellings remain compatible.
+- `wio bind new`, `wio bind import`, and every `wio project new` template now
+  emit the canonical `with`/`using` attribute syntax. Binding smoke tests
+  compile the generated modules and assert the emitted spelling.
+- Source-tree tests now pin `WIO_ROOT` and `WIO_HOME` to their checkout so an
+  older installed toolchain cannot silently supply mismatched std/runtime/SDK
+  files during validation.
+- Published the normative Wio 0.13 coherence/Unicode specification and linked
+  its text, const-generic, fixed-array, attribute, extension, specialization,
+  and match rules to the conformance corpus.
 - Text may flow safely to a UTF-8 `string`; constructing `text` from a
   potentially invalid `string` requires the fallible
   `std::unicode::FromUtf8` conversion.
@@ -77,6 +89,9 @@ All notable user-facing changes to Wio are recorded here.
 
 ### Fixed
 
+- Isolated all source-tree tests from ambient `WIO_ROOT`/`WIO_HOME` values so
+  an older installed toolchain cannot supply mismatched std, runtime, or SDK
+  headers during repository validation.
 - Distinguished byte-string and Unicode-text literals in typed attribute
   validation instead of treating `text` as an integer-like fallback type.
 - Fixed literal-to-literal byte-string concatenation and comparison generating
