@@ -965,6 +965,22 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_test(
+        NAME wio_test_example_telemetry_pipeline_run
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DEXAMPLE_ROOT=${CMAKE_SOURCE_DIR}/examples/telemetry_pipeline
+            -DWIO_EXPECT=Telemetry\ pipeline:\ Wio\ 0.13.0
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExampleProject.cmake"
+    )
+    set_tests_properties(
+        wio_test_example_telemetry_pipeline_run
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
         NAME wio_test_example_binding_import
         COMMAND
             ${CMAKE_COMMAND}
