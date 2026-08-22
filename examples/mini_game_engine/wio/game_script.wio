@@ -1,0 +1,113 @@
+@Export
+object GameScript {
+    public title: string;
+    public frame: i32;
+    public score: i32;
+    public wave: i32;
+    public playerSpeed: f32;
+    public enemySpeed: f32;
+    public spawnTimer: f32;
+    public backgroundR: i32;
+    public backgroundG: i32;
+    public backgroundB: i32;
+    public accentR: i32;
+    public accentG: i32;
+    public accentB: i32;
+
+    public OnConstruct() {
+        self.title = "Wio Orbit Sandbox";
+        self.frame = 0;
+        self.score = 0;
+        self.wave = 1;
+        self.playerSpeed = 245.0f;
+        self.enemySpeed = 58.0f;
+        self.spawnTimer = 0.0f;
+        self.backgroundR = 18;
+        self.backgroundG = 22;
+        self.backgroundB = 34;
+        self.accentR = 75;
+        self.accentG = 215;
+        self.accentB = 165;
+    }
+
+    public fn Start() {
+        self.frame = 0;
+        self.score = 0;
+        self.wave = 1;
+        self.spawnTimer = 0.0f;
+    }
+
+    public fn Tick(inputX: f32, inputY: f32, deltaTime: f32, enemyCount: i32, headless: bool) -> i32 {
+        self.frame += 1;
+        self.spawnTimer += deltaTime;
+
+        mut actions = 0;
+        if (self.spawnTimer >= 0.75f and enemyCount < 14) {
+            self.spawnTimer = 0.0f;
+            actions = actions | 1;
+        }
+
+        self.wave = 1 + (self.frame / 120);
+        self.enemySpeed = 58.0f + ((self.wave - 1) fit f32 * 8.0f);
+
+        if (headless and self.frame >= 240) {
+            actions = actions | 2;
+        }
+
+        return actions;
+    }
+
+    public fn PlayerVelocityX(inputX: f32, inputY: f32) -> f32 {
+        return inputX * self.playerSpeed;
+    }
+
+    public fn PlayerVelocityY(inputX: f32, inputY: f32) -> f32 {
+        return inputY * self.playerSpeed;
+    }
+
+    public fn EnemyVelocityX(deltaX: f32, deltaY: f32) -> f32 {
+        if (deltaX > 4.0f) {
+            return self.enemySpeed;
+        }
+        if (deltaX < -4.0f) {
+            return -self.enemySpeed;
+        }
+        return 0.0f;
+    }
+
+    public fn EnemyVelocityY(deltaX: f32, deltaY: f32) -> f32 {
+        if (deltaY > 4.0f) {
+            return self.enemySpeed;
+        }
+        if (deltaY < -4.0f) {
+            return -self.enemySpeed;
+        }
+        return 0.0f;
+    }
+
+    public fn OnCollision() -> i32 {
+        self.score += 100 * self.wave;
+
+        self.backgroundR = 18 + ((self.score / 100) % 3) * 3;
+        self.accentB = 165 + ((self.score / 100) % 4) * 8;
+        return self.score;
+    }
+}
+
+@ModuleApiVersion
+fn ScriptApiVersion() -> u32 {
+    return 1u32;
+}
+
+@ModuleLoad
+fn LoadGameScript() -> i32 {
+    return 0;
+}
+
+@ModuleUpdate
+fn UpdateGameScript(deltaTime: f32) {
+}
+
+@ModuleUnload
+fn UnloadGameScript() {
+}
