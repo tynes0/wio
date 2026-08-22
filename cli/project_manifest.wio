@@ -1,6 +1,7 @@
 use argonaut;
 use project_new;
 use std::console as console;
+use std::environment as environment;
 use std::fs as fs;
 use std::path as path;
 use std::process as process;
@@ -154,6 +155,16 @@ realm SelfHostedProject {
     }
 
     fn FindToolchainRoot(selfPath: string) -> string {
+        let configuredRoot = environment::Get("WIO_ROOT", "");
+        if (configuredRoot != "") {
+            let resolvedRoot = path::AbsoluteRaw(configuredRoot);
+            if (fs::IsDirectory(path::Join3(resolvedRoot, "sdk", "include")) and
+                fs::IsDirectory(path::Join3(resolvedRoot, "runtime", "include")) and
+                fs::IsDirectory(path::Join(resolvedRoot, "std"))) {
+                return resolvedRoot;
+            }
+        }
+
         mut candidate = path::ParentPath(path::AbsoluteRaw(selfPath));
         mut remaining = 5usize;
         while (remaining > 0usize and candidate != "") {

@@ -105,6 +105,10 @@ All notable user-facing changes to Wio are recorded here.
 
 ### Fixed
 
+- Made source-tree self-hosted CLI discovery honor an explicit `WIO_ROOT` and
+  pinned the project, performance, hybrid, and example CTest environments.
+  Out-of-tree build directories no longer fall through to an ambient installed
+  toolchain or user cache during repository validation.
 - Isolated all source-tree tests from ambient `WIO_ROOT`/`WIO_HOME` values so
   an older installed toolchain cannot supply mismatched std, runtime, or SDK
   headers during repository validation.

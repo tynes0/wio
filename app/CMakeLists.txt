@@ -835,6 +835,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_perf_cli_smoke
         PROPERTIES
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
             RESOURCE_LOCK wio_distribution_package
     )
 
@@ -850,6 +851,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_project_cli_smoke
         PROPERTIES
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 
     add_test(
@@ -864,6 +866,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_project_emit_cpp_smoke
         PROPERTIES
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 
     add_test(
@@ -878,6 +881,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_project_test_package_smoke
         PROPERTIES
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 
     add_test(
@@ -892,6 +896,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_hybrid_project_cli_smoke
         PROPERTIES
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 
     add_test(
@@ -907,6 +912,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_example_plain_app_run
         PROPERTIES
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 
     add_test(
@@ -922,6 +928,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_example_native_app_run
         PROPERTIES
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 
     add_test(
@@ -937,6 +944,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_example_observatory_run
         PROPERTIES
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 
     add_test(
@@ -952,6 +960,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_example_hybrid_module_run
         PROPERTIES
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 
     add_test(
