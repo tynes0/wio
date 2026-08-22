@@ -27,7 +27,7 @@ function Get-Sha256Hex([string]$Path) {
 }
 
 $files = Get-ChildItem -LiteralPath $releaseDirFull -File |
-    Where-Object { $_.Name -match '\.(zip|exe|ps1|md)$' } |
+    Where-Object { $_.Name -match '\.(zip|exe|ps1|md|vsix)$' } |
     Sort-Object Name
 
 $lines = foreach ($file in $files) {
