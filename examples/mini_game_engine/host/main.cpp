@@ -26,10 +26,6 @@ namespace
               enemyVelocityY_(instance_.method<float(float, float)>("EnemyVelocityY")),
               onCollision_(instance_.method<std::int32_t()>("OnCollision"))
         {
-            const auto info = module_.inspect();
-            if (!info.has_capability(WIO_MODULE_CAP_TYPE_METADATA_V2))
-                throw std::runtime_error("The Wio game script does not expose type metadata v2.");
-
             const auto type = module_.load_object("GameScript");
             if (type.list_fields().size() != 13u || type.descriptor().methodCount != 7u)
                 throw std::runtime_error("The Wio GameScript SDK contract is incomplete.");

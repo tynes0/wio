@@ -64,3 +64,7 @@ SDK is isolated in the host adapter, and the Wio script never receives a raw
 Raylib object, native world pointer, or entity container. That gives the demo a
 clear ownership boundary and makes a future reloadable script adapter possible
 without rewriting the engine.
+
+The adapter deliberately uses the SDK surface shared by Wio 0.12 and 0.13.
+Newer optional inspection/capability helpers are not required to run the game;
+the exported object field and method tables still validate the script contract.
