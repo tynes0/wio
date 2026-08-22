@@ -88,6 +88,7 @@ if(EXISTS "${WIO_SELFHOST_CLI_SOURCE}" AND EXISTS "${WIO_SELFHOST_ARGONAUT_SOURC
             --module-dir "${CMAKE_SOURCE_DIR}/cli/vendor"
         DEPENDS
             wio_app
+            "${WIO_BACKEND_RUNTIME_LIBRARY}"
             ${WIO_SELFHOST_CLI_DEPENDENCIES}
         COMMENT "Building the Argonaut-Wio self-hosted CLI companion..."
         VERBATIM

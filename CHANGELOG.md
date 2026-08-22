@@ -111,6 +111,12 @@ All notable user-facing changes to Wio are recorded here.
   toolchain or user cache during repository validation.
 - Updated the hybrid-arena host to negotiate the complete ABI v7 capability,
   product-version, and descriptor-size contract during both reload phases.
+- Made recursive filesystem copies walk directory entries explicitly instead
+  of delegating an entire tree to one platform `std::filesystem::copy` call.
+  Deep Windows toolchain trees use normalized extended-length paths and Win32
+  file copies, so they can be bundled into portable release packages.
+- Made the self-hosted CLI build output depend on the generated backend runtime
+  archive, preventing stale CLI executables after runtime-only changes.
 - Isolated all source-tree tests from ambient `WIO_ROOT`/`WIO_HOME` values so
   an older installed toolchain cannot supply mismatched std, runtime, or SDK
   headers during repository validation.

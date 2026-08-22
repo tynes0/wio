@@ -164,8 +164,11 @@ realm SelfHostedPackage {
         }
         for name in ["bin", "include", "lib", "libexec", "x86_64-w64-mingw32"] {
             let source = path::Join(sourceRoot, name);
-            if (fs::Exists(source) and not fs::TryCopyRecursive(source, path::Join(targetRoot, name))) {
-                return Failure<string>($"Could not copy backend subtree: ${source}");
+            if (fs::Exists(source)) {
+                let copied = fs::CopyRecursive(source, path::Join(targetRoot, name));
+                if (copied.IsError()) {
+                    return std::Err<string>(copied.ErrorValue());
+                }
             }
         }
         for name in ["build-info.txt", "COPYING", "COPYING.txt", "LICENSE", "LICENSE.txt"] {
