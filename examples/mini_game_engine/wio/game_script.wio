@@ -3,111 +3,119 @@ object GameScript {
     public title: string;
     public frame: i32;
     public score: i32;
-    public wave: i32;
-    public playerSpeed: f32;
-    public enemySpeed: f32;
-    public spawnTimer: f32;
-    public backgroundR: i32;
-    public backgroundG: i32;
-    public backgroundB: i32;
-    public accentR: i32;
-    public accentG: i32;
-    public accentB: i32;
+    public bestScore: i32;
+    public level: i32;
+    public crashCount: i32;
+    public gravity: f32;
+    public flapImpulse: f32;
+    public pipeSpeed: f32;
+    public pipeGap: f32;
+    public spawnInterval: f32;
+    public skyR: i32;
+    public skyG: i32;
+    public skyB: i32;
+    public birdR: i32;
+    public birdG: i32;
+    public birdB: i32;
+    public pipeR: i32;
+    public pipeG: i32;
+    public pipeB: i32;
 
     public OnConstruct() {
-        self.title = "Wio Orbit Sandbox";
+        self.title = "Wio Sky Hopper";
         self.frame = 0;
         self.score = 0;
-        self.wave = 1;
-        self.playerSpeed = 245.0f;
-        self.enemySpeed = 58.0f;
-        self.spawnTimer = 0.0f;
-        self.backgroundR = 18;
-        self.backgroundG = 22;
-        self.backgroundB = 34;
-        self.accentR = 75;
-        self.accentG = 215;
-        self.accentB = 165;
+        self.bestScore = 0;
+        self.level = 1;
+        self.crashCount = 0;
+        self.gravity = 1050.0f;
+        self.flapImpulse = -365.0f;
+        self.pipeSpeed = 185.0f;
+        self.pipeGap = 215.0f;
+        self.spawnInterval = 1.55f;
+        self.skyR = 104;
+        self.skyG = 196;
+        self.skyB = 232;
+        self.birdR = 255;
+        self.birdG = 210;
+        self.birdB = 70;
+        self.pipeR = 64;
+        self.pipeG = 180;
+        self.pipeB = 92;
     }
 
     public fn Start() {
         self.frame = 0;
         self.score = 0;
-        self.wave = 1;
-        self.spawnTimer = 0.0f;
+        self.bestScore = 0;
+        self.level = 1;
+        self.crashCount = 0;
     }
 
-    public fn Tick(inputX: f32, inputY: f32, deltaTime: f32, enemyCount: i32, headless: bool) -> i32 {
+    public fn Tick(deltaTime: f32, alive: bool, headless: bool) -> i32 {
         self.frame += 1;
-        self.spawnTimer += deltaTime;
-
-        mut actions = 0;
-        if (self.spawnTimer >= 0.75f and enemyCount < 14) {
-            self.spawnTimer = 0.0f;
-            actions = actions | 1;
+        if (headless and self.frame >= 720) {
+            return 1;
         }
-
-        self.wave = 1 + (self.frame / 120);
-        self.enemySpeed = 58.0f + ((self.wave - 1) fit f32 * 8.0f);
-
-        if (headless and self.frame >= 240) {
-            actions = actions | 2;
-        }
-
-        return actions;
+        return 0;
     }
 
-    public fn PlayerVelocityX(inputX: f32, inputY: f32) -> f32 {
-        return inputX * self.playerSpeed;
+    public fn BirdVelocity(currentVelocity: f32, flapPressed: bool, deltaTime: f32) -> f32 {
+        if (flapPressed) {
+            return self.flapImpulse;
+        }
+        return currentVelocity + self.gravity * deltaTime;
     }
 
-    public fn PlayerVelocityY(inputX: f32, inputY: f32) -> f32 {
-        return inputY * self.playerSpeed;
-    }
+    public fn PipeSpeed() -> f32 { return self.pipeSpeed; }
+    public fn PipeGap() -> f32 { return self.pipeGap; }
+    public fn SpawnInterval() -> f32 { return self.spawnInterval; }
 
-    public fn EnemyVelocityX(deltaX: f32, deltaY: f32) -> f32 {
-        if (deltaX > 4.0f) {
-            return self.enemySpeed;
+    public fn OnPipePassed() -> i32 {
+        self.score += 1;
+        if (self.score > self.bestScore) {
+            self.bestScore = self.score;
         }
-        if (deltaX < -4.0f) {
-            return -self.enemySpeed;
-        }
-        return 0.0f;
-    }
 
-    public fn EnemyVelocityY(deltaX: f32, deltaY: f32) -> f32 {
-        if (deltaY > 4.0f) {
-            return self.enemySpeed;
+        self.level = 1 + (self.score / 4);
+        self.pipeSpeed = 185.0f + ((self.level - 1) fit f32 * 16.0f);
+        self.pipeGap = 215.0f - ((self.level - 1) fit f32 * 10.0f);
+        if (self.pipeGap < 155.0f) {
+            self.pipeGap = 155.0f;
         }
-        if (deltaY < -4.0f) {
-            return -self.enemySpeed;
+
+        self.spawnInterval = 1.55f - ((self.level - 1) fit f32 * 0.05f);
+        if (self.spawnInterval < 1.15f) {
+            self.spawnInterval = 1.15f;
         }
-        return 0.0f;
-    }
 
-    public fn OnCollision() -> i32 {
-        self.score += 100 * self.wave;
-
-        self.backgroundR = 18 + ((self.score / 100) % 3) * 3;
-        self.accentB = 165 + ((self.score / 100) % 4) * 8;
+        self.skyR = 104 - ((self.level - 1) % 4) * 5;
+        self.skyB = 232 - ((self.level - 1) % 3) * 8;
         return self.score;
+    }
+
+    public fn OnCrash() -> i32 {
+        self.crashCount += 1;
+        if (self.score > self.bestScore) {
+            self.bestScore = self.score;
+        }
+        self.score = 0;
+        self.level = 1;
+        self.pipeSpeed = 185.0f;
+        self.pipeGap = 215.0f;
+        self.spawnInterval = 1.55f;
+        return self.bestScore;
     }
 }
 
 @ModuleApiVersion
-fn ScriptApiVersion() -> u32 {
-    return 1u32;
-}
+fn ScriptApiVersion() -> u32 { return 1u32; }
 
 @ModuleLoad
-fn LoadGameScript() -> i32 {
-    return 0;
-}
+fn LoadGameScript() -> i32 { return 0; }
 
 @ModuleUpdate
-fn UpdateGameScript(deltaTime: f32) {
-}
+fn UpdateGameScript(deltaTime: f32) { }
 
 @ModuleUnload
-fn UnloadGameScript() {
-}
+fn UnloadGameScript() { }

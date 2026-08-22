@@ -103,8 +103,10 @@ Use it for:
 
 - a Raylib engine library and main loop written entirely in C++
 - a stable C++ script interface implemented by an SDK-backed Wio adapter
-- Wio-authored movement, spawning, enemy steering, score, wave, and theme rules
-- deterministic headless acceptance and an interactive windowed mode
+- a playable Flappy-style game whose gravity, flap, pipes, scoring, difficulty,
+  and theme rules are authored in Wio
+- deterministic headless acceptance and an interactive windowed mode opened by
+  ordinary `wio project run`
 
 ### 2.6 I Want To Generate Bridge Files
 

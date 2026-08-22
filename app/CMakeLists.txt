@@ -986,7 +986,8 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
             ${CMAKE_COMMAND}
             -DWIO_EXE=$<TARGET_FILE:wio_app>
             -DEXAMPLE_ROOT=${CMAKE_SOURCE_DIR}/examples/mini_game_engine
-            -DWIO_EXPECT=MiniWio\ engine:\ mode=headless\ frames=240
+            -DWIO_EXPECT=MiniWio\ Flappy:\ mode=headless\ frames=720
+            -DWIO_RUN_ARGS=--headless
             -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExampleProject.cmake"
     )
     set_tests_properties(
