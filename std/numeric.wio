@@ -2,7 +2,7 @@ use std::option as option;
 
 realm std {
     realm numeric {
-        use @CppHeader("std_utility.h");
+        using cpp::header("std_utility.h");
 
         @Native @CppName(wio::runtime::std_numeric::CheckedAddI8)
         fn TryAdd(left: i8, right: i8, value: ref i8) -> bool;

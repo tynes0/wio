@@ -2,7 +2,7 @@ use std::result as result;
 
 realm std {
     realm process {
-        use @CppHeader("std_process.h");
+        using cpp::header("std_process.h");
         using cpp::header("std_async_process.h");
 
         @Native

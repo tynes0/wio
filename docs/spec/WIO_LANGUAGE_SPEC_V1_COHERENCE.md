@@ -1,6 +1,7 @@
 # Wio v1 Language Coherence Candidate Specification
 
-Status: normative release-candidate contract  
+Status: design record; superseded for Wio 0.13 by `WIO_LANGUAGE_SPEC_0_13.md`
+
 Target edition: v1  
 Builds on: language specifications 0.8, 0.9, 0.10, and 0.11
 

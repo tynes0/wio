@@ -2391,8 +2391,11 @@ namespace wio::codegen
                     else
                         fieldInfo.accessModifier = AccessModifier::Public;
 
+                    const bool isTextField = resolvedFieldType && resolvedFieldType->kind() == sema::TypeKind::Primitive &&
+                        resolvedFieldType.AsFast<sema::PrimitiveType>()->name == "text";
                     const bool needsDynamicBridge = resolvedFieldType &&
-                        (resolvedFieldType->kind() == sema::TypeKind::Array ||
+                        (isTextField ||
+                         resolvedFieldType->kind() == sema::TypeKind::Array ||
                          resolvedFieldType->kind() == sema::TypeKind::Dictionary ||
                          resolvedFieldType->kind() == sema::TypeKind::Function);
                     if (needsDynamicBridge)
@@ -3405,6 +3408,9 @@ namespace wio::codegen
         if (lifecycleFunctions.unload) capabilities |= (1u << 3);
         if (lifecycleFunctions.saveState) capabilities |= (1u << 4);
         if (lifecycleFunctions.restoreState) capabilities |= (1u << 5);
+        capabilities |= (1u << 6); // product version
+        capabilities |= (1u << 7); // type metadata v2
+        capabilities |= (1u << 8); // Unicode text dynamic fields
         std::uint32_t stateSchemaVersion = (lifecycleFunctions.saveState || lifecycleFunctions.restoreState) ? 1u : 0u;
 
         auto isInvokeCompatibleExport = [&](const ExportedFunctionInfo& exportInfo) -> bool
@@ -3833,6 +3839,7 @@ namespace wio::codegen
             std::optional<size_t> valueIndex;
             std::optional<size_t> returnIndex;
             std::vector<size_t> parameterIndices;
+            std::vector<size_t> genericArgumentIndices;
             std::vector<EnumMemberInfo> enumMembers;
         };
 
@@ -3936,6 +3943,7 @@ namespace wio::codegen
                 info.kindExpr = "WIO_MODULE_TYPE_DESC_NULLABLE";
                 info.abiExpr = getAbiTypeEnumName(nullableType->valueType);
                 info.elementIndex = ensureTypeDescriptor(nullableType->valueType);
+                info.displayName = emittedTypeDescriptors[*info.elementIndex].displayName + "?";
                 break;
             }
             case sema::TypeKind::Primitive:
@@ -3943,9 +3951,23 @@ namespace wio::codegen
                 const std::string primitiveName = resolvedType.AsFast<sema::PrimitiveType>()->name;
                 if (primitiveName == "string")
                     info.kindExpr = "WIO_MODULE_TYPE_DESC_STRING";
+                else if (primitiveName == "text")
+                    info.kindExpr = "WIO_MODULE_TYPE_DESC_TEXT";
+                else if (primitiveName == "opaque")
+                    info.kindExpr = "WIO_MODULE_TYPE_DESC_OPAQUE";
+                else if (primitiveName == "any")
+                    info.kindExpr = "WIO_MODULE_TYPE_DESC_ANY";
                 else
                     info.kindExpr = "WIO_MODULE_TYPE_DESC_PRIMITIVE";
                 info.abiExpr = getAbiTypeEnumName(resolvedType);
+                break;
+            }
+            case sema::TypeKind::AsyncTask:
+            {
+                auto taskType = resolvedType.AsFast<sema::AsyncTaskType>();
+                info.kindExpr = "WIO_MODULE_TYPE_DESC_ASYNC_TASK";
+                info.elementIndex = ensureTypeDescriptor(taskType->valueType);
+                info.displayName = "coroutine<" + emittedTypeDescriptors[*info.elementIndex].displayName + ">";
                 break;
             }
             case sema::TypeKind::Array:
@@ -3956,6 +3978,10 @@ namespace wio::codegen
                     : "WIO_MODULE_TYPE_DESC_DYNAMIC_ARRAY";
                 info.staticArraySize = static_cast<std::uint64_t>(arrayType->size);
                 info.elementIndex = ensureTypeDescriptor(arrayType->elementType);
+                const std::string elementName = emittedTypeDescriptors[*info.elementIndex].displayName;
+                info.displayName = arrayType->arrayKind == sema::ArrayType::ArrayKind::Static
+                    ? ("[" + elementName + "; " + std::to_string(info.staticArraySize) + "]")
+                    : (elementName + "[]");
                 break;
             }
             case sema::TypeKind::Dictionary:
@@ -3964,6 +3990,9 @@ namespace wio::codegen
                 info.kindExpr = dictType->isOrdered ? "WIO_MODULE_TYPE_DESC_TREE" : "WIO_MODULE_TYPE_DESC_DICT";
                 info.keyIndex = ensureTypeDescriptor(dictType->keyType);
                 info.valueIndex = ensureTypeDescriptor(dictType->valueType);
+                info.displayName = std::string(dictType->isOrdered ? "Tree<" : "Dict<") +
+                    emittedTypeDescriptors[*info.keyIndex].displayName + ", " +
+                    emittedTypeDescriptors[*info.valueIndex].displayName + ">";
                 break;
             }
             case sema::TypeKind::Function:
@@ -3974,12 +4003,38 @@ namespace wio::codegen
                 info.parameterIndices.reserve(functionType->paramTypes.size());
                 for (const auto& parameterType : functionType->paramTypes)
                     info.parameterIndices.push_back(ensureTypeDescriptor(parameterType));
+                info.displayName = "fn(";
+                for (size_t parameterIndex = 0; parameterIndex < info.parameterIndices.size(); ++parameterIndex)
+                {
+                    if (parameterIndex > 0)
+                        info.displayName += ", ";
+                    info.displayName += emittedTypeDescriptors[info.parameterIndices[parameterIndex]].displayName;
+                }
+                info.displayName += ") -> " + emittedTypeDescriptors[*info.returnIndex].displayName;
                 break;
             }
             case sema::TypeKind::Struct:
             {
                 auto structType = resolvedType.AsFast<sema::StructType>();
                 info.logicalTypeName = getLogicalTypeName(structType);
+                info.genericArgumentIndices.reserve(structType->genericArguments.size());
+                for (const auto& genericArgument : structType->genericArguments)
+                    info.genericArgumentIndices.push_back(ensureTypeDescriptor(genericArgument));
+                if (!info.logicalTypeName.empty())
+                {
+                    info.displayName = info.logicalTypeName;
+                    if (!info.genericArgumentIndices.empty())
+                    {
+                        info.displayName += "<";
+                        for (size_t argumentIndex = 0; argumentIndex < info.genericArgumentIndices.size(); ++argumentIndex)
+                        {
+                            if (argumentIndex > 0)
+                                info.displayName += ", ";
+                            info.displayName += emittedTypeDescriptors[info.genericArgumentIndices[argumentIndex]].displayName;
+                        }
+                        info.displayName += ">";
+                    }
+                }
                 if (structType->isEnum)
                 {
                     info.kindExpr = "WIO_MODULE_TYPE_DESC_ENUM";
@@ -4028,10 +4083,32 @@ namespace wio::codegen
                         }
                     }
                 }
+                else if (structType->isInterface)
+                    info.kindExpr = "WIO_MODULE_TYPE_DESC_INTERFACE";
+                else if ((structType->scopePath == "std" || structType->scopePath.starts_with("std::")) && structType->name == "Option")
+                    info.kindExpr = "WIO_MODULE_TYPE_DESC_OPTION";
+                else if ((structType->scopePath == "std" || structType->scopePath.starts_with("std::")) && structType->name == "Result")
+                    info.kindExpr = "WIO_MODULE_TYPE_DESC_RESULT";
+                else if ((structType->scopePath == "std" || structType->scopePath.starts_with("std::")) && structType->name == "Tuple")
+                    info.kindExpr = "WIO_MODULE_TYPE_DESC_TUPLE";
+                else if ((structType->scopePath == "std" || structType->scopePath.starts_with("std::")) && structType->name == "Queue")
+                    info.kindExpr = "WIO_MODULE_TYPE_DESC_QUEUE";
+                else if ((structType->scopePath == "std" || structType->scopePath.starts_with("std::")) && structType->name == "UnorderedSet")
+                    info.kindExpr = "WIO_MODULE_TYPE_DESC_UNORDERED_SET";
+                else if ((structType->scopePath == "std" || structType->scopePath.starts_with("std::")) && structType->name == "OrderedSet")
+                    info.kindExpr = "WIO_MODULE_TYPE_DESC_ORDERED_SET";
+                else if ((structType->scopePath == "std" || structType->scopePath.starts_with("std::")) && structType->name == "Span")
+                    info.kindExpr = "WIO_MODULE_TYPE_DESC_SPAN";
+                else if ((structType->scopePath == "std" || structType->scopePath.starts_with("std::")) && structType->name == "ByteBuffer")
+                    info.kindExpr = "WIO_MODULE_TYPE_DESC_BYTE_BUFFER";
+                else if ((structType->scopePath == "std" || structType->scopePath.starts_with("std::")) && structType->name == "box")
+                    info.kindExpr = "WIO_MODULE_TYPE_DESC_BOX";
                 else if (objectDeclarations.contains(structType.Get()))
                     info.kindExpr = "WIO_MODULE_TYPE_DESC_OBJECT";
                 else if (componentDeclarations.contains(structType.Get()))
                     info.kindExpr = "WIO_MODULE_TYPE_DESC_COMPONENT";
+                else if (!structType->genericArguments.empty())
+                    info.kindExpr = "WIO_MODULE_TYPE_DESC_GENERIC_INSTANCE";
                 else
                     info.kindExpr = "WIO_MODULE_TYPE_DESC_OPAQUE";
                 break;
@@ -4071,6 +4148,24 @@ namespace wio::codegen
                 {
                     const std::string suffix = (parameterIndex + 1 < descriptor.parameterIndices.size()) ? "," : "";
                     emitLine("&WIO_TYPE_DESCRIPTOR_" + std::to_string(descriptor.parameterIndices[parameterIndex]) + suffix);
+                }
+                dedent();
+                emitLine("};");
+            }
+
+            for (size_t descriptorIndex = 0; descriptorIndex < emittedTypeDescriptors.size(); ++descriptorIndex)
+            {
+                const auto& descriptor = emittedTypeDescriptors[descriptorIndex];
+                if (descriptor.genericArgumentIndices.empty())
+                    continue;
+
+                emitLine("static const WioModuleTypeDescriptor* WIO_TYPE_DESCRIPTOR_GENERIC_ARGS_" + std::to_string(descriptorIndex) + "[] =");
+                emitLine("{");
+                indent();
+                for (size_t argumentIndex = 0; argumentIndex < descriptor.genericArgumentIndices.size(); ++argumentIndex)
+                {
+                    const std::string suffix = (argumentIndex + 1 < descriptor.genericArgumentIndices.size()) ? "," : "";
+                    emitLine("&WIO_TYPE_DESCRIPTOR_" + std::to_string(descriptor.genericArgumentIndices[argumentIndex]) + suffix);
                 }
                 dedent();
                 emitLine("};");
@@ -4121,6 +4216,9 @@ namespace wio::codegen
                 const std::string enumMembersExpr = descriptor.enumMembers.empty()
                     ? "nullptr"
                     : ("WIO_TYPE_DESCRIPTOR_ENUM_MEMBERS_" + std::to_string(descriptorIndex));
+                const std::string genericArgumentsExpr = descriptor.genericArgumentIndices.empty()
+                    ? "nullptr"
+                    : ("WIO_TYPE_DESCRIPTOR_GENERIC_ARGS_" + std::to_string(descriptorIndex));
 
                 emitLine(
                     "const WioModuleTypeDescriptor WIO_TYPE_DESCRIPTOR_" + std::to_string(descriptorIndex) +
@@ -4131,7 +4229,9 @@ namespace wio::codegen
                     ", " + std::to_string(descriptor.staticArraySize) + "ull, " +
                     elementExpr + ", " + keyExpr + ", " + valueExpr + ", " + returnExpr +
                     ", " + std::to_string(descriptor.parameterIndices.size()) + "u, " + paramExpr +
-                    ", " + std::to_string(descriptor.enumMembers.size()) + "u, " + enumMembersExpr + " };"
+                    ", " + std::to_string(descriptor.enumMembers.size()) + "u, " + enumMembersExpr +
+                    ", WioStableTypeId(\"" + common::wioStringToEscapedCppString(descriptor.displayName) + "\")" +
+                    ", " + std::to_string(descriptor.genericArgumentIndices.size()) + "u, " + genericArgumentsExpr + " };"
                 );
                 }
             }
@@ -4145,6 +4245,9 @@ namespace wio::codegen
                         continue;
 
                     const size_t descriptorIndex = ensureTypeDescriptor(field.fieldType);
+                    Ref<sema::Type> dynamicFieldType = unwrapAliasType(field.fieldType);
+                    const bool isTextField = dynamicFieldType && dynamicFieldType->kind() == sema::TypeKind::Primitive &&
+                        dynamicFieldType.AsFast<sema::PrimitiveType>()->name == "text";
                     emitLine(
                         "static WioErasedValue* " + *field.dynamicGetterSymbol + "(std::uintptr_t handle)"
                     );
@@ -4152,11 +4255,22 @@ namespace wio::codegen
                     indent();
                     emitLine("auto* instance = reinterpret_cast<" + exportedType.cppTypeName + "*>(handle);");
                     emitLine("if (instance == nullptr) return nullptr;");
-                    emitLine(
-                        "return new WioErasedValueModel<" + field.memberCppTypeName + ">(" +
-                        "&WIO_TYPE_DESCRIPTOR_" + std::to_string(descriptorIndex) +
-                        ", instance->" + field.memberCppName + ");"
-                    );
+                    if (isTextField)
+                    {
+                        emitLine(
+                            std::string("return new WioErasedValueModel<std::string>(") +
+                            "&WIO_TYPE_DESCRIPTOR_" + std::to_string(descriptorIndex) +
+                            ", instance->" + field.memberCppName + ".Utf8());"
+                        );
+                    }
+                    else
+                    {
+                        emitLine(
+                            "return new WioErasedValueModel<" + field.memberCppTypeName + ">(" +
+                            "&WIO_TYPE_DESCRIPTOR_" + std::to_string(descriptorIndex) +
+                            ", instance->" + field.memberCppName + ");"
+                        );
+                    }
                     dedent();
                     emitLine("}");
                     emitLine();
@@ -4171,11 +4285,17 @@ namespace wio::codegen
                         indent();
                         emitLine("auto* instance = reinterpret_cast<" + exportedType.cppTypeName + "*>(handle);");
                         emitLine("if (instance == nullptr || value == nullptr) return WIO_INVOKE_BAD_ARGUMENTS;");
-                        emitLine(
-                            "auto* typedValue = dynamic_cast<const WioErasedValueModel<" + field.memberCppTypeName + ">*>(value);"
-                        );
+                        if (isTextField)
+                            emitLine("auto* typedValue = dynamic_cast<const WioErasedValueModel<std::string>*>(value);");
+                        else
+                            emitLine(
+                                "auto* typedValue = dynamic_cast<const WioErasedValueModel<" + field.memberCppTypeName + ">*>(value);"
+                            );
                         emitLine("if (typedValue == nullptr) return WIO_INVOKE_TYPE_MISMATCH;");
-                        emitLine("instance->" + field.memberCppName + " = typedValue->value;");
+                        if (isTextField)
+                            emitLine("instance->" + field.memberCppName + " = wio::runtime::Text::FromUtf8(typedValue->value);");
+                        else
+                            emitLine("instance->" + field.memberCppName + " = typedValue->value;");
                         emitLine("return WIO_INVOKE_OK;");
                         dedent();
                         emitLine("}");
@@ -4326,7 +4446,9 @@ namespace wio::codegen
         emitLine(std::to_string(eventExportIndices.size()) + "u,");
         emitLine(eventExportIndices.empty() ? "nullptr," : "WIO_MODULE_EVENT_HOOKS,");
         emitLine(std::to_string(exportedTypes.size()) + "u,");
-        emitLine(exportedTypes.empty() ? "nullptr" : "WIO_MODULE_TYPES");
+        emitLine(exportedTypes.empty() ? "nullptr," : "WIO_MODULE_TYPES,");
+        emitLine("{ WIO_SDK_VERSION_MAJOR, WIO_SDK_VERSION_MINOR, WIO_SDK_VERSION_PATCH },");
+        emitLine("sizeof(WioModuleApi)");
         dedent();
         emitLine("};");
         emitLine("return &API;");

@@ -1,6 +1,6 @@
 realm std {
     realm meta {
-        use @CppHeader("meta.h");
+        using cpp::header("meta.h");
 
         const SecondIndex: usize = 1usize;
         const PenultimateDistance: usize = 2usize;

@@ -1,0 +1,12 @@
+use std::option as option;
+
+@Export
+object Sdk13State {
+    public label: text;
+    public selected: std::Option<i32>;
+
+    public OnConstruct() {
+        self.label = u"Başlangıç 🚀";
+        self.selected = option::Some<i32>(13);
+    }
+}

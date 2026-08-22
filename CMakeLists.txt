@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(wio_lang
-    VERSION 0.12.0
+    VERSION 0.13.0
     LANGUAGES C CXX
 )
 
@@ -54,6 +54,11 @@ endif()
 install(FILES
     "${CMAKE_SOURCE_DIR}/cmake/WioProject.cmake"
     DESTINATION cmake
+)
+
+install(FILES
+    "${CMAKE_SOURCE_DIR}/release-manifest.json"
+    DESTINATION .
 )
 
 install(FILES

@@ -2,7 +2,7 @@ use std::convert as convert;
 
 realm std {
     realm hash {
-        use @CppHeader("std_hash.h");
+        using cpp::header("std_hash.h");
 
         @Native
         @CppName(wio::runtime::std_hash::Fnv1a32)

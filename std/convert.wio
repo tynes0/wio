@@ -6,7 +6,7 @@ realm std {
     }
 
     realm convert {
-        use @CppHeader("std_convert.h");
+        using cpp::header("std_convert.h");
 
         @Native
         @Type(u8)

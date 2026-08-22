@@ -21,6 +21,29 @@ namespace wio::runtime::std_fs
             return std::filesystem::path(value);
         }
 
+        std::filesystem::path toOperationPath(const std::filesystem::path& value)
+        {
+#if defined(_WIN32)
+            auto absolute = value;
+            if (!absolute.is_absolute())
+            {
+                std::error_code ec;
+                absolute = std::filesystem::absolute(value, ec);
+                if (ec)
+                    return value;
+            }
+            std::wstring native = absolute.native();
+            std::replace(native.begin(), native.end(), L'/', L'\\');
+            if (native.starts_with(L"\\\\?\\"))
+                return absolute;
+            if (native.starts_with(L"\\\\"))
+                return std::filesystem::path(L"\\\\?\\UNC\\" + native.substr(2));
+            return std::filesystem::path(L"\\\\?\\" + native);
+#else
+            return value;
+#endif
+        }
+
         std::string toGenericString(const std::filesystem::path& value)
         {
             return value.generic_string();
@@ -171,37 +194,10 @@ namespace wio::runtime::std_fs
 
     bool CopyRecursive(const std::string& source, const std::string& target)
     {
-        std::error_code ec;
-        const std::filesystem::path sourcePath = toPath(source);
-        const std::filesystem::path targetPath = toPath(target);
-        if (!std::filesystem::exists(sourcePath, ec) || ec)
-            return false;
-
-        if (std::filesystem::is_directory(sourcePath, ec))
-        {
-            std::filesystem::create_directories(targetPath, ec);
-            if (ec)
-                return false;
-            std::filesystem::copy(
-                sourcePath,
-                targetPath,
-                std::filesystem::copy_options::recursive |
-                    std::filesystem::copy_options::overwrite_existing,
-                ec
-            );
-            return !ec;
-        }
-
-        std::filesystem::create_directories(targetPath.parent_path(), ec);
-        if (ec)
-            return false;
-        std::filesystem::copy_file(
-            sourcePath,
-            targetPath,
-            std::filesystem::copy_options::overwrite_existing,
-            ec
-        );
-        return !ec;
+        std::int32_t error = 0;
+        std::int64_t nativeError = 0;
+        std::string message;
+        return TryCopyRecursiveResult(source, target, error, nativeError, message);
     }
 
     bool MoveFile(const std::string& source, const std::string& target)
@@ -536,6 +532,8 @@ namespace wio::runtime::std_fs
         std::error_code ec;
         const auto sourcePath = toPath(source);
         const auto targetPath = toPath(target);
+        const auto targetOperationPath = toOperationPath(targetPath);
+        std::string failureSubject = source + " -> " + target;
         if (!std::filesystem::exists(sourcePath, ec) || ec)
         {
             if (!ec)
@@ -544,21 +542,82 @@ namespace wio::runtime::std_fs
         }
         if (std::filesystem::is_directory(sourcePath, ec))
         {
-            std::filesystem::create_directories(targetPath, ec);
+            std::filesystem::create_directories(targetOperationPath, ec);
             if (!ec)
-                std::filesystem::copy(sourcePath, targetPath,
-                    std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing, ec);
+            {
+                std::filesystem::recursive_directory_iterator iterator(sourcePath, ec);
+                const std::filesystem::recursive_directory_iterator end;
+                while (!ec && iterator != end)
+                {
+                    const auto& entry = *iterator;
+                    failureSubject = entry.path().string() + " -> " +
+                        (targetPath / entry.path().lexically_relative(sourcePath)).string();
+                    const auto relativePath = entry.path().lexically_relative(sourcePath);
+                    const auto destination = targetOperationPath / relativePath;
+                    const auto status = entry.symlink_status(ec);
+                    if (ec)
+                        break;
+
+                    if (std::filesystem::is_directory(status))
+                    {
+                        std::filesystem::create_directories(destination, ec);
+                    }
+                    else if (std::filesystem::is_regular_file(status))
+                    {
+                        const auto parent = destination.parent_path();
+                        if (!parent.empty())
+                            std::filesystem::create_directories(parent, ec);
+                        if (!ec)
+#if defined(_WIN32)
+                        {
+                            const auto sourceOperationPath = toOperationPath(entry.path());
+                            if (!::CopyFileW(sourceOperationPath.c_str(), destination.c_str(), FALSE))
+                                ec = std::error_code(static_cast<int>(GetLastError()), std::system_category());
+                        }
+#else
+                            std::filesystem::copy_file(entry.path(), destination,
+                                std::filesystem::copy_options::overwrite_existing, ec);
+#endif
+                    }
+                    else if (std::filesystem::is_symlink(status))
+                    {
+                        const auto parent = destination.parent_path();
+                        if (!parent.empty())
+                            std::filesystem::create_directories(parent, ec);
+                        if (!ec)
+                        {
+                            std::filesystem::remove(destination, ec);
+                            if (!ec)
+                                std::filesystem::copy(entry.path(), destination,
+                                    std::filesystem::copy_options::copy_symlinks |
+                                    std::filesystem::copy_options::overwrite_existing, ec);
+                        }
+                    }
+
+                    if (!ec)
+                        iterator.increment(ec);
+                }
+            }
         }
         else
         {
-            const auto parent = targetPath.parent_path();
+            const auto parent = targetOperationPath.parent_path();
             if (!parent.empty())
                 std::filesystem::create_directories(parent, ec);
             if (!ec)
-                std::filesystem::copy_file(sourcePath, targetPath, std::filesystem::copy_options::overwrite_existing, ec);
+#if defined(_WIN32)
+            {
+                const auto sourceOperationPath = toOperationPath(sourcePath);
+                if (!::CopyFileW(sourceOperationPath.c_str(), targetOperationPath.c_str(), FALSE))
+                    ec = std::error_code(static_cast<int>(GetLastError()), std::system_category());
+            }
+#else
+                std::filesystem::copy_file(sourcePath, targetOperationPath,
+                    std::filesystem::copy_options::overwrite_existing, ec);
+#endif
         }
         if (ec)
-            return failResult("copy recursively", source + " -> " + target, ec, error, nativeError, message);
+            return failResult("copy recursively", failureSubject, ec, error, nativeError, message);
         return true;
     }
 

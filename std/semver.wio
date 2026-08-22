@@ -2,7 +2,7 @@ use std::option as option;
 
 realm std {
     realm semver {
-        use @CppHeader("std_utility.h");
+        using cpp::header("std_utility.h");
 
         const PartMask: u64 = 2097151u64;
 

@@ -1,5 +1,6 @@
 use argonaut;
 use std::console as console;
+use std::environment as environment;
 use std::fs as fs;
 use std::path as path;
 use std::process as process;
@@ -55,6 +56,14 @@ realm SelfHostedCli {
     }
 
     fn FindRepositoryRoot(selfPath: string) -> string {
+        let configuredRoot = environment::Get("WIO_ROOT", "");
+        if (configuredRoot != "") {
+            let resolvedRoot = path::AbsoluteRaw(configuredRoot);
+            if (IsRepositoryRoot(resolvedRoot)) {
+                return resolvedRoot;
+            }
+        }
+
         mut current = path::AbsoluteRaw(fs::CurrentPathRaw());
         while (current != "") {
             if (IsRepositoryRoot(current)) {

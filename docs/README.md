@@ -62,6 +62,7 @@ These documents answer practical workflow questions such as:
 - [Wio 0.9 generics and constraints specification](./spec/WIO_LANGUAGE_SPEC_0_9.md)
 - [Wio 0.10 const generics and native components specification](./spec/WIO_LANGUAGE_SPEC_0_10.md)
 - [Wio 0.11 language and standard-library foundation specification](./spec/WIO_LANGUAGE_SPEC_0_11.md)
+- [Wio 0.13 coherence and Unicode specification](./spec/WIO_LANGUAGE_SPEC_0_13.md)
 - [Wio v1 language coherence candidate specification](./spec/WIO_LANGUAGE_SPEC_V1_COHERENCE.md)
 - [Wio standard library contract 0.11](./spec/WIO_STD_SPEC_0_11.md)
 - [Async and coroutine model](./WIO_ASYNC_MODEL.md)
@@ -87,6 +88,7 @@ Use these when the question is about:
 - [CLI reference](./WIO_CLI_REFERENCE.md)
 - [Project system](./WIO_PROJECT_SYSTEM.md)
 - [Self-hosted CLI architecture](./WIO_SELF_HOSTED_CLI.md)
+- [Editor ecosystem plan](./WIO_EDITOR_ECOSYSTEM_PLAN.md)
 
 Use these when the question is about:
 
@@ -101,6 +103,7 @@ Use these when the question is about:
 
 - [Standard library](./WIO_STD.md)
 - [Host SDK](./WIO_SDK.md)
+- [SDK 0.13 parity matrix](./WIO_SDK_0_13_PARITY_MATRIX.md)
 - [SDK evolution and v1 parity plan](./WIO_SDK_EVOLUTION_PLAN.md)
 
 Use these when the question is about:

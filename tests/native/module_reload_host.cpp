@@ -116,7 +116,12 @@ int main(int argc, char** argv)
 
     if (apiA == nullptr ||
         apiA->descriptorVersion != WIO_MODULE_API_DESCRIPTOR_VERSION ||
-        apiA->capabilities != (WIO_MODULE_CAP_API_VERSION | WIO_MODULE_CAP_LOAD | WIO_MODULE_CAP_UPDATE | WIO_MODULE_CAP_UNLOAD | WIO_MODULE_CAP_SAVE_STATE | WIO_MODULE_CAP_RESTORE_STATE) ||
+        apiA->capabilities != (WIO_MODULE_CAP_API_VERSION | WIO_MODULE_CAP_LOAD | WIO_MODULE_CAP_UPDATE | WIO_MODULE_CAP_UNLOAD | WIO_MODULE_CAP_SAVE_STATE | WIO_MODULE_CAP_RESTORE_STATE |
+                               WIO_MODULE_CAP_PRODUCT_VERSION | WIO_MODULE_CAP_TYPE_METADATA_V2 | WIO_MODULE_CAP_TEXT_FIELDS) ||
+        apiA->productVersion.major != WIO_SDK_VERSION_MAJOR ||
+        apiA->productVersion.minor != WIO_SDK_VERSION_MINOR ||
+        apiA->productVersion.patch != WIO_SDK_VERSION_PATCH ||
+        apiA->descriptorSize != sizeof(WioModuleApi) ||
         apiA->stateSchemaVersion != 1 ||
         apiA->apiVersion == nullptr ||
         apiA->load == nullptr ||
@@ -186,7 +191,12 @@ int main(int argc, char** argv)
 
     if (apiB == nullptr ||
         apiB->descriptorVersion != WIO_MODULE_API_DESCRIPTOR_VERSION ||
-        apiB->capabilities != (WIO_MODULE_CAP_API_VERSION | WIO_MODULE_CAP_LOAD | WIO_MODULE_CAP_UPDATE | WIO_MODULE_CAP_UNLOAD | WIO_MODULE_CAP_SAVE_STATE | WIO_MODULE_CAP_RESTORE_STATE) ||
+        apiB->capabilities != (WIO_MODULE_CAP_API_VERSION | WIO_MODULE_CAP_LOAD | WIO_MODULE_CAP_UPDATE | WIO_MODULE_CAP_UNLOAD | WIO_MODULE_CAP_SAVE_STATE | WIO_MODULE_CAP_RESTORE_STATE |
+                               WIO_MODULE_CAP_PRODUCT_VERSION | WIO_MODULE_CAP_TYPE_METADATA_V2 | WIO_MODULE_CAP_TEXT_FIELDS) ||
+        apiB->productVersion.major != WIO_SDK_VERSION_MAJOR ||
+        apiB->productVersion.minor != WIO_SDK_VERSION_MINOR ||
+        apiB->productVersion.patch != WIO_SDK_VERSION_PATCH ||
+        apiB->descriptorSize != sizeof(WioModuleApi) ||
         apiB->stateSchemaVersion != 1 ||
         apiB->restoreState == nullptr ||
         apiB->update == nullptr ||

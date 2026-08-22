@@ -1,6 +1,6 @@
 realm std {
     realm random {
-        use @CppHeader("std_random.h");
+        using cpp::header("std_random.h");
 
         @Native
         @CppName(wio::runtime::std_random::SystemSeed)

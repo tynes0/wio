@@ -2,7 +2,7 @@ use std::result;
 
 realm std {
     realm io {
-        use @CppHeader("std_io.h");
+        using cpp::header("std_io.h");
 
         @Native
         @CppName(wio::runtime::std_io::File)

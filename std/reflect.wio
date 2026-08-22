@@ -2,8 +2,8 @@ use std::option;
 
 realm std {
     realm reflect {
-        use @CppHeader("enum_reflection.h");
-        use @CppHeader("type_reflection.h");
+        using cpp::header("enum_reflection.h");
+        using cpp::header("type_reflection.h");
 
         @Native
         @Type(u8)

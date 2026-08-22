@@ -1,6 +1,6 @@
 realm std {
     realm chars {
-        use @CppHeader("std_text.h");
+        using cpp::header("std_text.h");
 
         @Native
         @CppName(wio::runtime::std_text::IsAscii)

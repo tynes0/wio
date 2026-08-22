@@ -1,6 +1,6 @@
 realm std {
     realm math {
-        use @CppHeader("std_math.h");
+        using cpp::header("std_math.h");
 
         const Pi: f64 = 3.141592653589793;
         const Tau: f64 = 6.283185307179586;

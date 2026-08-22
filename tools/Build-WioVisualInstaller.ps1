@@ -24,6 +24,21 @@ function Resolve-FullPath([string]$Path) {
     return [System.IO.Path]::GetFullPath($Path)
 }
 
+function Get-Sha256Hex([string]$Path) {
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        $sha256 = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            $bytes = $sha256.ComputeHash($stream)
+            return ([System.BitConverter]::ToString($bytes)).Replace("-", "")
+        } finally {
+            $sha256.Dispose()
+        }
+    } finally {
+        $stream.Dispose()
+    }
+}
+
 function Read-PackageInfoVersion([string]$Root) {
     $packageInfo = Join-Path $Root "WIO_PACKAGE_INFO.json"
     if (-not (Test-Path -LiteralPath $packageInfo)) {
@@ -201,10 +216,10 @@ if ($LASTEXITCODE -ne 0) {
 
 $setupExe = Join-Path $OutputDir "WioSetup-$Version-windows-x64.exe"
 if (Test-Path -LiteralPath $setupExe) {
-    $hash = Get-FileHash -LiteralPath $setupExe -Algorithm SHA256
+    $hash = Get-Sha256Hex $setupExe
     Write-Host ""
     Write-Host "Built: $setupExe"
-    Write-Host "SHA256: $($hash.Hash)"
+    Write-Host "SHA256: $hash"
 } else {
     Write-Warning "Build completed, but expected output was not found: $setupExe"
 }

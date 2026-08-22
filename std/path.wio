@@ -2,7 +2,7 @@ use std::result;
 
 realm std {
     realm path {
-        use @CppHeader("std_fs.h");
+        using cpp::header("std_fs.h");
 
         @Native
         @CppName(wio::runtime::std_fs::IsAbsolute)

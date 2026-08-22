@@ -3,9 +3,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <string_view>
 #include <utility>
 
-inline constexpr std::uint32_t WIO_MODULE_API_DESCRIPTOR_VERSION = 6u;
+#include "wio_version.h"
+
+inline constexpr std::uint32_t WIO_MODULE_API_DESCRIPTOR_VERSION = 7u;
 
 enum WioModuleCapability : std::uint32_t
 {
@@ -14,7 +17,17 @@ enum WioModuleCapability : std::uint32_t
     WIO_MODULE_CAP_UPDATE = 1u << 2,
     WIO_MODULE_CAP_UNLOAD = 1u << 3,
     WIO_MODULE_CAP_SAVE_STATE = 1u << 4,
-    WIO_MODULE_CAP_RESTORE_STATE = 1u << 5
+    WIO_MODULE_CAP_RESTORE_STATE = 1u << 5,
+    WIO_MODULE_CAP_PRODUCT_VERSION = 1u << 6,
+    WIO_MODULE_CAP_TYPE_METADATA_V2 = 1u << 7,
+    WIO_MODULE_CAP_TEXT_FIELDS = 1u << 8
+};
+
+struct WioModuleProductVersion
+{
+    std::uint32_t major;
+    std::uint32_t minor;
+    std::uint32_t patch;
 };
 
 enum WioAbiType : std::uint32_t
@@ -178,8 +191,33 @@ enum WioModuleTypeDescriptorKind : std::uint32_t
     WIO_MODULE_TYPE_DESC_OPAQUE = 10u,
     WIO_MODULE_TYPE_DESC_ENUM = 11u,
     WIO_MODULE_TYPE_DESC_FLAGSET = 12u,
-    WIO_MODULE_TYPE_DESC_NULLABLE = 13u
+    WIO_MODULE_TYPE_DESC_NULLABLE = 13u,
+    WIO_MODULE_TYPE_DESC_TEXT = 14u,
+    WIO_MODULE_TYPE_DESC_OPTION = 15u,
+    WIO_MODULE_TYPE_DESC_RESULT = 16u,
+    WIO_MODULE_TYPE_DESC_TUPLE = 17u,
+    WIO_MODULE_TYPE_DESC_QUEUE = 18u,
+    WIO_MODULE_TYPE_DESC_UNORDERED_SET = 19u,
+    WIO_MODULE_TYPE_DESC_ORDERED_SET = 20u,
+    WIO_MODULE_TYPE_DESC_SPAN = 21u,
+    WIO_MODULE_TYPE_DESC_BYTE_BUFFER = 22u,
+    WIO_MODULE_TYPE_DESC_BOX = 23u,
+    WIO_MODULE_TYPE_DESC_ANY = 24u,
+    WIO_MODULE_TYPE_DESC_INTERFACE = 25u,
+    WIO_MODULE_TYPE_DESC_ASYNC_TASK = 26u,
+    WIO_MODULE_TYPE_DESC_GENERIC_INSTANCE = 27u
 };
+
+[[nodiscard]] constexpr std::uint64_t WioStableTypeId(const std::string_view name) noexcept
+{
+    std::uint64_t hash = 14695981039346656037ull;
+    for (const char character : name)
+    {
+        hash ^= static_cast<std::uint8_t>(character);
+        hash *= 1099511628211ull;
+    }
+    return hash;
+}
 
 struct WioModuleEnumMemberDescriptor
 {
@@ -202,6 +240,9 @@ struct WioModuleTypeDescriptor
     const WioModuleTypeDescriptor* const* parameterTypes;
     std::uint32_t enumMemberCount;
     const WioModuleEnumMemberDescriptor* enumMembers;
+    std::uint64_t stableTypeId;
+    std::uint32_t genericArgumentCount;
+    const WioModuleTypeDescriptor* const* genericArguments;
 };
 
 struct WioErasedValue
@@ -296,6 +337,8 @@ struct WioModuleApi
     const WioModuleEventHook* eventHooks;
     std::uint32_t typeCount;
     const WioModuleType* types;
+    WioModuleProductVersion productVersion;
+    std::uint32_t descriptorSize;
 };
 
 using WioModuleGetApiFn = const WioModuleApi*(*)();

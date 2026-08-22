@@ -19,7 +19,7 @@ close interrupts work without freeing live operation state. Native completion-
 port/watcher/process-pipe backends, TLS, and process signal/event subscription
 remain open. Owned processes now expose separate streaming stdin/stdout/stderr,
 async wait, termination, deterministic close/reap, and live-state diagnostics.
-`Listener.AcceptAsync` is implemented through the bounded blocking executor
+`Listener.AcceptAsync` is implemented through the dedicated bounded I/O executor
 with a pre-scheduling native lease and owned `Result<Socket>` handoff; close
 interrupts the readiness wait without freeing in-flight listener state.
 Executor-qualified structured work is implemented as `spawn worker expression`

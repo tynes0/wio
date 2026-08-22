@@ -10,6 +10,7 @@ Useful reference docs:
 - [Documentation index](docs/README.md)
 - [Getting started](docs/WIO_GETTING_STARTED.md)
 - [CLI reference](docs/WIO_CLI_REFERENCE.md)
+- [Editor ecosystem plan](docs/WIO_EDITOR_ECOSYSTEM_PLAN.md)
 - [Language reference](docs/WIO_LANGUAGE_DRAFT.md)
 - [v1 freeze snapshot](docs/WIO_V1_FREEZE.md)
 - [v1 release plan](docs/WIO_V1_RELEASE_PLAN.md)
@@ -18,6 +19,7 @@ Useful reference docs:
 - [Standard library](docs/WIO_STD.md)
 - [Interop guide](docs/WIO_INTEROP_GUIDE.md)
 - [Host SDK](docs/WIO_SDK.md)
+- [SDK 0.13 parity matrix](docs/WIO_SDK_0_13_PARITY_MATRIX.md)
 - [Examples guide](docs/WIO_EXAMPLES.md)
 - [Troubleshooting](docs/WIO_TROUBLESHOOTING.md)
 - [FAQ](docs/WIO_FAQ.md)
@@ -266,27 +268,27 @@ If the CMake tool window is available, you can also run the generated targets
 such as `wio_playground_run`, `wio_tests`, `wio_tests_list`, or
 `wio_file_<name>_run` directly from there.
 
-### Experimental Native Interop
+### Native Interop
 
 Wio now has an early native bridge for top-level functions:
 
 ```wio
-@Native
-@CppHeader("native_math.h")
-@CppName(native_math::Multiply)
-fn Multiply(lhs: i32, rhs: i32) -> i32;
+using cpp::header("native_math.h");
+
+fn Multiply(lhs: i32, rhs: i32) -> i32
+    with native, cpp::name(native_math::Multiply);
 ```
 
 Current status:
 
-- `@Native` works for top-level bodyless functions.
-- `@CppHeader("...")` injects a C++ header include into generated output.
-- `@CppName(...)` maps the Wio declaration to an existing C++ symbol.
+- `with native` marks a declaration as native-backed.
+- `using cpp::header("...")` injects a C++ header include into generated output.
+- `cpp::name(...)` maps the Wio declaration to an existing C++ symbol.
 - `--include-dir`, `--link-dir`, `--link-lib`, and `--backend-arg` forward
   backend build inputs to the generated C++ compile step.
 
-This is intentionally still an alpha bridge, but it already lets Wio call into
-existing C++ code with a real end-to-end workflow.
+Legacy `@Native`, `@CppHeader`, and `@CppName` spellings remain compatibility
+input, but new code should use the typed `with`/`using` forms above.
 
 ### Source-Based `std`
 
@@ -323,7 +325,7 @@ fn Entry(args: string[]) -> i32 {
 
 This keeps the user-facing library in Wio itself while still allowing
 low-level runtime-backed pieces such as `std::io` to bridge into C++ through
-`@Native`.
+`with native`.
 
 Numeric and boolean text conversion is available both ergonomically and
 safely:
@@ -350,19 +352,18 @@ Wio now also has an early distinction between executable and library outputs:
 - `--target shared` builds a shared library.
 - `--output <path>` overrides the produced file path.
 
-For host-visible Wio functions, use `@Export`:
+For host-visible Wio functions, use `export::c`:
 
 ```wio
-@Export
-@CppName(WioAddNumbers)
-fn AddNumbers(lhs: i32, rhs: i32) -> i32 {
+fn AddNumbers(lhs: i32, rhs: i32) -> i32
+    with export::c, cpp::name(WioAddNumbers) {
     return lhs + rhs;
 }
 ```
 
 Current status:
 
-- `@Export` works for top-level Wio functions with bodies.
+- `export::c` works for top-level Wio functions with bodies.
 - Export wrappers are emitted as `extern "C"` bridge functions.
 - The export ABI is intentionally narrow for now: primitive parameters and
   primitive or `void` return types only.

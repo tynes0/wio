@@ -116,7 +116,12 @@ int main(int argc, char** argv)
 
     if (api == nullptr ||
         api->descriptorVersion != WIO_MODULE_API_DESCRIPTOR_VERSION ||
-        api->capabilities != (WIO_MODULE_CAP_API_VERSION | WIO_MODULE_CAP_LOAD | WIO_MODULE_CAP_UPDATE | WIO_MODULE_CAP_UNLOAD) ||
+        api->capabilities != (WIO_MODULE_CAP_API_VERSION | WIO_MODULE_CAP_LOAD | WIO_MODULE_CAP_UPDATE | WIO_MODULE_CAP_UNLOAD |
+                              WIO_MODULE_CAP_PRODUCT_VERSION | WIO_MODULE_CAP_TYPE_METADATA_V2 | WIO_MODULE_CAP_TEXT_FIELDS) ||
+        api->productVersion.major != WIO_SDK_VERSION_MAJOR ||
+        api->productVersion.minor != WIO_SDK_VERSION_MINOR ||
+        api->productVersion.patch != WIO_SDK_VERSION_PATCH ||
+        api->descriptorSize != sizeof(WioModuleApi) ||
         api->stateSchemaVersion != 0 ||
         api->apiVersion == nullptr ||
         api->load == nullptr ||

@@ -4,8 +4,28 @@ All notable user-facing changes to Wio are recorded here.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-08-22
+
 ### Added
 
+- Expanded the 0.13 C++ host SDK to the current language/std surface with
+  validated `WioText`, Option/Result/UnitResult, tuple, queue, ordered and
+  unordered sets, span, byte buffer, generation-safe byte/generic pools, Box,
+  and any host values plus a machine-readable feature catalog.
+- Added module ABI descriptor v7 with generated product-version and layout-size
+  negotiation, stable FNV-1a type IDs, concrete generic arguments, distinct
+  descriptors for current language/std types, and owned `ModuleInfo`
+  inspection snapshots.
+- Added typed and dynamic Unicode `text` field exchange between generated Wio
+  shared modules and C++ hosts, including invalid UTF-8 rejection and
+  code-point-oriented host operations.
+- Added the normative SDK 0.13 parity matrix and real shared-module conformance
+  coverage for version/capability discovery, text round-tripping, generic
+  metadata, and post-unload inspection snapshots.
+- Added a public SDK product-version contract through `wio_version.h`,
+  `wio::sdk::product_version`, and `product_version_string`. A release manifest
+  now aligns compiler, runtime, std, CLI, SDK, VS Code, and documentation
+  product versions while keeping the module ABI descriptor revision independent.
 - Added explicit fixed-array extent inference with `[T; _]`, including empty,
   copied, global, component-field, and nested fixed arrays. Ragged nesting,
   dynamic-array sources, missing initializers, and non-variable use sites now
@@ -56,6 +76,18 @@ All notable user-facing changes to Wio are recorded here.
 
 ### Changed
 
+- Made typed `with`/`using` native metadata the canonical spelling throughout
+  current guides and migrated all standard-library header imports to
+  `using cpp::header(...)`; legacy `@...` spellings remain compatible.
+- `wio bind new`, `wio bind import`, and every `wio project new` template now
+  emit the canonical `with`/`using` attribute syntax. Binding smoke tests
+  compile the generated modules and assert the emitted spelling.
+- Source-tree tests now pin `WIO_ROOT` and `WIO_HOME` to their checkout so an
+  older installed toolchain cannot silently supply mismatched std/runtime/SDK
+  files during validation.
+- Published the normative Wio 0.13 coherence/Unicode specification and linked
+  its text, const-generic, fixed-array, attribute, extension, specialization,
+  and match rules to the conformance corpus.
 - Text may flow safely to a UTF-8 `string`; constructing `text` from a
   potentially invalid `string` requires the fallible
   `std::unicode::FromUtf8` conversion.
@@ -73,6 +105,21 @@ All notable user-facing changes to Wio are recorded here.
 
 ### Fixed
 
+- Made source-tree self-hosted CLI discovery honor an explicit `WIO_ROOT` and
+  pinned the project, performance, hybrid, and example CTest environments.
+  Out-of-tree build directories no longer fall through to an ambient installed
+  toolchain or user cache during repository validation.
+- Updated the hybrid-arena host to negotiate the complete ABI v7 capability,
+  product-version, and descriptor-size contract during both reload phases.
+- Made recursive filesystem copies walk directory entries explicitly instead
+  of delegating an entire tree to one platform `std::filesystem::copy` call.
+  Deep Windows toolchain trees use normalized extended-length paths and Win32
+  file copies, so they can be bundled into portable release packages.
+- Made the self-hosted CLI build output depend on the generated backend runtime
+  archive, preventing stale CLI executables after runtime-only changes.
+- Isolated all source-tree tests from ambient `WIO_ROOT`/`WIO_HOME` values so
+  an older installed toolchain cannot supply mismatched std, runtime, or SDK
+  headers during repository validation.
 - Distinguished byte-string and Unicode-text literals in typed attribute
   validation instead of treating `text` as an integer-like fallback type.
 - Fixed literal-to-literal byte-string concatenation and comparison generating

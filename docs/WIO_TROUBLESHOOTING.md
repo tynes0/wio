@@ -76,12 +76,12 @@ from filling up with backend artifacts.
 
 ---
 
-## 4. `@CppHeader(...)` Cannot Be Resolved
+## 4. `cpp::header(...)` Cannot Be Resolved
 
 Symptom:
 
 - backend compile says a header cannot be found
-- `@Native` import compiles semantically, but C++ compilation fails
+- `with native` import compiles semantically, but C++ compilation fails
 
 What to check:
 
@@ -170,7 +170,7 @@ or provided native symbol does not match the generated C++ call.
 
 Good first checks:
 
-1. Is the `@CppName(...)` symbol actually a template or ordinary function?
+1. Is the `cpp::name(...)` symbol actually a template or ordinary function?
 2. Does the native function expect explicit template arguments or normal
    argument deduction?
 3. Does the declaration-only Wio signature match the native callable shape?

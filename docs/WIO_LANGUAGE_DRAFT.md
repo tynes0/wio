@@ -11,9 +11,10 @@ for Wio 0.10 in
 [`spec/WIO_LANGUAGE_SPEC_0_10.md`](./spec/WIO_LANGUAGE_SPEC_0_10.md). Typed
 attributes, matching, and sequential applications are normative for Wio
 0.11 in [`spec/WIO_LANGUAGE_SPEC_0_11.md`](./spec/WIO_LANGUAGE_SPEC_0_11.md).
-Post-0.12 attribute, specialization, extension, matching, and textual const-
-generic coherence rules are frozen in
-[`spec/WIO_LANGUAGE_SPEC_V1_COHERENCE.md`](./spec/WIO_LANGUAGE_SPEC_V1_COHERENCE.md).
+Unicode `text`, fixed-array extent inference, compact/named attributes,
+specialization, extension, matching, and textual const-generic coherence rules
+are normative for Wio 0.13 in
+[`spec/WIO_LANGUAGE_SPEC_0_13.md`](./spec/WIO_LANGUAGE_SPEC_0_13.md).
 The normative async/coroutine boundaries are described in
 [`WIO_ASYNC_MODEL.md`](./WIO_ASYNC_MODEL.md). Where this
 broad reference conflicts with a versioned slice, the newest applicable
