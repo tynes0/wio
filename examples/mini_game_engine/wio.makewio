@@ -37,5 +37,5 @@ hostName = "miniwio_engine"
 
 [run]
 passLibraryPath = true
-args = ["--headless"]
+args = []
 workingDirectory = "."

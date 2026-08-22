@@ -1,70 +1,92 @@
-# MiniWio Game Engine
+# MiniWio Game Engine: Sky Hopper
 
-MiniWio demonstrates an engine-first embedding model:
+Sky Hopper is a small, playable Flappy-style game built on the MiniWio
+embedding example:
 
 ```text
-C++ engine library + C++ main loop
-                  |
-                  | Wio public SDK
-                  v
-          user-authored Wio script DLL
+C++ engine library + Raylib + C++ main loop
+                         |
+                         | Wio public SDK
+                         v
+                  Wio game script DLL
 ```
 
-The engine is not written in Wio. Raylib windowing/rendering, input polling,
-entity storage, collision detection, deterministic spawning, and the main loop
-all live in C++. Wio owns the game-specific behavior: movement speed, enemy
-steering, spawn cadence, waves, score, title, and visual theme.
+The engine is not written in Wio. Window creation, input, bird and pipe
+storage, collision detection, deterministic spawning, rendering, and the main
+loop all live in C++. Wio owns the user-authored rules: gravity, flap impulse,
+pipe speed, gap size, spawn cadence, score, best score, difficulty level, and
+the color theme.
+
+## Play
+
+With Wio 0.13 installed, open this directory and run:
+
+```powershell
+wio project run
+```
+
+The project now opens the game window by default. Use any of:
+
+- `Space`
+- `Up Arrow`
+- left mouse button
+
+The same input starts a round, flaps, and restarts after a crash.
 
 ## Layout
 
-- `engine/include/miniwio_engine.h`: engine-facing script interface and public
-  engine types.
-- `engine/src/miniwio_engine.cpp`: world/entity system, collision, rendering,
-  input, deterministic headless simulation, and main loop.
+- `engine/include/miniwio_engine.h`: engine-facing `GameScript` contract and
+  public engine types.
+- `engine/src/miniwio_engine.cpp`: C++ bird/pipe world, physics integration,
+  collision, drawing, headless autopilot, and main loop.
 - `host/main.cpp`: Wio SDK adapter and native executable entrypoint.
-- `wio/game_script.wio`: the complete user game script.
-- `wio.makewio`: builds the Wio script as a shared module and the C++ engine as
-  the host executable.
+- `wio/game_script.wio`: the complete user-authored Sky Hopper behavior.
+- `wio.makewio`: builds the Wio script DLL and C++/Raylib host.
 
-The example reuses the Raylib headers and Windows x64 MinGW library already
-shipped with `examples/atlas_desk`, avoiding a duplicate 3 MB binary in the
-repository.
+The example reuses the Raylib headers and Windows x64 MinGW library shipped
+with `examples/atlas_desk`, avoiding a duplicate binary in the repository.
 
-## Automated headless run
+## Script-owned rules
 
-From the Wio repository root:
+The Wio script exposes an exported `GameScript` object. Its methods decide:
 
-```powershell
-$env:WIO_ROOT = (Get-Location).Path
-build\app\Debug\wio.exe project run --project .\examples\mini_game_engine
+- how gravity changes vertical velocity
+- the velocity applied by a flap
+- pipe scroll speed
+- pipe gap and spawn interval
+- scoring and best-score retention
+- level-based difficulty scaling
+- sky, bird, and pipe colors
+
+For example, changing only these Wio fields noticeably changes the game:
+
+```wio
+self.gravity = 850.0f;
+self.flapImpulse = -330.0f;
+self.pipeGap = 245.0f;
+self.pipeSpeed = 160.0f;
 ```
 
-The manifest selects `--headless`, runs exactly 240 deterministic frames, and
-fails if spawning, collision, Wio-driven scoring, or waves stop working.
+No Raylib object, native world pointer, or entity container crosses into Wio.
+The SDK adapter translates the exported object into the engine's pure C++
+`miniwio::GameScript` interface.
 
-## Windowed run
+## Deterministic acceptance mode
 
-Build once, then launch the host directly so `--windowed` replaces the
-manifest's acceptance-test argument:
+The interactive game and automated test use the same engine. Headless mode
+runs 720 deterministic frames with a small autopilot and a forced recovery
+cycle:
 
 ```powershell
-$env:WIO_ROOT = (Get-Location).Path
-build\app\Debug\wio.exe project build --project .\examples\mini_game_engine
-examples\mini_game_engine\.wio-build\interop\miniwio_engine.exe `
-  examples\mini_game_engine\.wio-build\interop\miniwio_game.dll --windowed
+wio project run -- --headless
 ```
 
-Use WASD or the arrow keys. Closing the window stops the C++ main loop and
-unloads the Wio script module through the SDK.
+It exits non-zero unless pipes spawn and pass, collision/restart works, and the
+Wio-owned best score is retained. The current reference result begins with:
 
-## Boundary rule
+```text
+MiniWio Flappy: mode=headless frames=720
+```
 
-The engine library knows only the C++ `miniwio::GameScript` interface. The Wio
-SDK is isolated in the host adapter, and the Wio script never receives a raw
-Raylib object, native world pointer, or entity container. That gives the demo a
-clear ownership boundary and makes a future reloadable script adapter possible
-without rewriting the engine.
-
-The adapter deliberately uses the SDK surface shared by Wio 0.12 and 0.13.
-Newer optional inspection/capability helpers are not required to run the game;
-the exported object field and method tables still validate the script contract.
+The adapter uses the SDK surface shared by Wio 0.12 and 0.13, while the
+recommended installed toolchain for this example is Wio 0.13.0.

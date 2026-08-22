@@ -40,8 +40,13 @@ if(NOT build_result EQUAL 0)
     )
 endif()
 
+set(run_command "${WIO_EXE}" project run --project "${EXAMPLE_ROOT}")
+if(DEFINED WIO_RUN_ARGS AND NOT WIO_RUN_ARGS STREQUAL "")
+    list(APPEND run_command -- ${WIO_RUN_ARGS})
+endif()
+
 execute_process(
-    COMMAND "${WIO_EXE}" project run --project "${EXAMPLE_ROOT}"
+    COMMAND ${run_command}
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     RESULT_VARIABLE run_result
     OUTPUT_VARIABLE run_stdout
@@ -64,4 +69,3 @@ if(expected_index EQUAL -1)
 endif()
 
 message(STATUS "Example project smoke succeeded for ${EXAMPLE_ROOT}")
-
