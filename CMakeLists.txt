@@ -57,6 +57,11 @@ install(FILES
 )
 
 install(FILES
+    "${CMAKE_SOURCE_DIR}/release-manifest.json"
+    DESTINATION .
+)
+
+install(FILES
     "${CMAKE_SOURCE_DIR}/scripts/Build-Wio.ps1"
     "${CMAKE_SOURCE_DIR}/scripts/Test-Wio.ps1"
     "${CMAKE_SOURCE_DIR}/scripts/Run-WioFile.ps1"

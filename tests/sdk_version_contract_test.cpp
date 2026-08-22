@@ -21,11 +21,11 @@ int main()
     if (wio::sdk::product_version_string != WIO_EXPECTED_PRODUCT_VERSION)
     {
         std::cerr << "SDK product version " << wio::sdk::product_version_string
-                  << " does not match Wio " << WIO_EXPECTED_PRODUCT_VERSION << '.\n';
+                  << " does not match Wio " << WIO_EXPECTED_PRODUCT_VERSION << ".\n";
         return 1;
     }
 
-    if (WIO_MODULE_API_DESCRIPTOR_VERSION != 6u)
+    if (WIO_MODULE_API_DESCRIPTOR_VERSION != 7u)
     {
         std::cerr << "Unexpected module ABI descriptor version.\n";
         return 2;

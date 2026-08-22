@@ -23,6 +23,8 @@
 #include <vector>
 
 #include "module_api.h"
+#include "wio_features.h"
+#include "wio_values.h"
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -169,6 +171,11 @@ namespace wio::sdk
             return kind() == WIO_MODULE_TYPE_DESC_STRING;
         }
 
+        [[nodiscard]] bool is_text() const noexcept
+        {
+            return kind() == WIO_MODULE_TYPE_DESC_TEXT;
+        }
+
         [[nodiscard]] bool is_object() const noexcept
         {
             return kind() == WIO_MODULE_TYPE_DESC_OBJECT;
@@ -183,6 +190,20 @@ namespace wio::sdk
         {
             return kind() == WIO_MODULE_TYPE_DESC_NULLABLE;
         }
+
+        [[nodiscard]] bool is_option() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_OPTION; }
+        [[nodiscard]] bool is_result() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_RESULT; }
+        [[nodiscard]] bool is_tuple() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_TUPLE; }
+        [[nodiscard]] bool is_queue() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_QUEUE; }
+        [[nodiscard]] bool is_unordered_set() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_UNORDERED_SET; }
+        [[nodiscard]] bool is_ordered_set() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_ORDERED_SET; }
+        [[nodiscard]] bool is_span() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_SPAN; }
+        [[nodiscard]] bool is_byte_buffer() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_BYTE_BUFFER; }
+        [[nodiscard]] bool is_box() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_BOX; }
+        [[nodiscard]] bool is_any() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_ANY; }
+        [[nodiscard]] bool is_interface() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_INTERFACE; }
+        [[nodiscard]] bool is_async_task() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_ASYNC_TASK; }
+        [[nodiscard]] bool is_generic_instance() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_GENERIC_INSTANCE; }
 
         [[nodiscard]] bool is_dynamic_array() const noexcept
         {
@@ -241,9 +262,35 @@ namespace wio::sdk
 
         [[nodiscard]] bool is_dynamic_value_supported() const noexcept
         {
-            return is_primitive() || is_string() || is_object() || is_component() ||
+            return is_primitive() || is_string() || is_text() || is_object() || is_component() ||
                 is_dynamic_array() || is_static_array() || is_dict() || is_tree() || is_function() ||
                 is_enum() || is_flagset();
+        }
+
+        [[nodiscard]] std::uint64_t stable_id() const noexcept
+        {
+            return descriptor_ != nullptr ? descriptor_->stableTypeId : 0u;
+        }
+
+        [[nodiscard]] std::uint32_t generic_argument_count() const noexcept
+        {
+            return descriptor_ != nullptr ? descriptor_->genericArgumentCount : 0u;
+        }
+
+        [[nodiscard]] TypeDescriptorView generic_argument(const std::uint32_t index) const noexcept
+        {
+            if (descriptor_ == nullptr || descriptor_->genericArguments == nullptr || index >= descriptor_->genericArgumentCount)
+                return {};
+            return TypeDescriptorView(descriptor_->genericArguments[index]);
+        }
+
+        [[nodiscard]] std::vector<TypeDescriptorView> generic_arguments() const
+        {
+            std::vector<TypeDescriptorView> result;
+            result.reserve(generic_argument_count());
+            for (std::uint32_t index = 0u; index < generic_argument_count(); ++index)
+                result.push_back(generic_argument(index));
+            return result;
         }
 
         [[nodiscard]] WioAbiType abi_type() const noexcept
@@ -556,6 +603,11 @@ namespace wio::sdk
         [[nodiscard]] bool is_string() const noexcept
         {
             return type.is_string();
+        }
+
+        [[nodiscard]] bool is_text() const noexcept
+        {
+            return type.is_text();
         }
 
         [[nodiscard]] bool is_object() const noexcept
@@ -2345,7 +2397,8 @@ namespace wio::sdk
 
         inline void validateTypeDescriptor(const WioModuleTypeDescriptor* descriptor,
                                            std::string_view context,
-                                           std::unordered_set<const WioModuleTypeDescriptor*>& visited)
+                                           std::unordered_set<const WioModuleTypeDescriptor*>& visited,
+                                           const bool requireV2)
         {
             if (descriptor == nullptr)
                 throwInvalidApiDescriptor(context, "Encountered a null type descriptor.");
@@ -2363,6 +2416,27 @@ namespace wio::sdk
                 throwInvalidApiDescriptor(context, problem.str());
             }
 
+            if (descriptor->genericArgumentCount > 0u && descriptor->genericArguments == nullptr)
+            {
+                std::ostringstream problem;
+                problem << "Type descriptor '" << descriptor->displayName << "' declares generic arguments but does not provide a generic argument array.";
+                throwInvalidApiDescriptor(context, problem.str());
+            }
+
+            if (requireV2 && descriptor->stableTypeId == 0u)
+            {
+                std::ostringstream problem;
+                problem << "Type descriptor '" << descriptor->displayName << "' is missing its stableTypeId.";
+                throwInvalidApiDescriptor(context, problem.str());
+            }
+
+            if (descriptor->stableTypeId != 0u && descriptor->stableTypeId != WioStableTypeId(descriptor->displayName))
+            {
+                std::ostringstream problem;
+                problem << "Type descriptor '" << descriptor->displayName << "' reports an invalid stableTypeId.";
+                throwInvalidApiDescriptor(context, problem.str());
+            }
+
             switch (descriptor->kind)
             {
             case WIO_MODULE_TYPE_DESC_PRIMITIVE:
@@ -2374,13 +2448,57 @@ namespace wio::sdk
                 }
                 break;
             case WIO_MODULE_TYPE_DESC_STRING:
+            case WIO_MODULE_TYPE_DESC_TEXT:
+            case WIO_MODULE_TYPE_DESC_SPAN:
+            case WIO_MODULE_TYPE_DESC_BYTE_BUFFER:
+            case WIO_MODULE_TYPE_DESC_ANY:
                 break;
             case WIO_MODULE_TYPE_DESC_OBJECT:
             case WIO_MODULE_TYPE_DESC_COMPONENT:
+            case WIO_MODULE_TYPE_DESC_INTERFACE:
                 if (!hasText(descriptor->logicalTypeName))
                 {
                     std::ostringstream problem;
                     problem << "Type descriptor '" << descriptor->displayName << "' must declare logicalTypeName for exported object/component types.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+                break;
+            case WIO_MODULE_TYPE_DESC_NULLABLE:
+            case WIO_MODULE_TYPE_DESC_ASYNC_TASK:
+                if (descriptor->elementType == nullptr)
+                {
+                    std::ostringstream problem;
+                    problem << "Type descriptor '" << descriptor->displayName << "' is missing its value type.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+                break;
+            case WIO_MODULE_TYPE_DESC_OPTION:
+            case WIO_MODULE_TYPE_DESC_QUEUE:
+            case WIO_MODULE_TYPE_DESC_UNORDERED_SET:
+            case WIO_MODULE_TYPE_DESC_ORDERED_SET:
+            case WIO_MODULE_TYPE_DESC_BOX:
+                if (descriptor->genericArgumentCount != 1u)
+                {
+                    std::ostringstream problem;
+                    problem << "Type descriptor '" << descriptor->displayName << "' must expose exactly one generic argument.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+                break;
+            case WIO_MODULE_TYPE_DESC_RESULT:
+                if (descriptor->genericArgumentCount != 1u)
+                {
+                    std::ostringstream problem;
+                    problem << "Result descriptor '" << descriptor->displayName << "' must expose its success type argument.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+                break;
+            case WIO_MODULE_TYPE_DESC_TUPLE:
+                break;
+            case WIO_MODULE_TYPE_DESC_GENERIC_INSTANCE:
+                if (!hasText(descriptor->logicalTypeName) || descriptor->genericArgumentCount == 0u)
+                {
+                    std::ostringstream problem;
+                    problem << "Generic descriptor '" << descriptor->displayName << "' must expose logicalTypeName and concrete arguments.";
                     throwInvalidApiDescriptor(context, problem.str());
                 }
                 break;
@@ -2444,16 +2562,18 @@ namespace wio::sdk
             }
 
             if (descriptor->elementType != nullptr)
-                validateTypeDescriptor(descriptor->elementType, context, visited);
+                validateTypeDescriptor(descriptor->elementType, context, visited, requireV2);
             if (descriptor->keyType != nullptr)
-                validateTypeDescriptor(descriptor->keyType, context, visited);
+                validateTypeDescriptor(descriptor->keyType, context, visited, requireV2);
             if (descriptor->valueType != nullptr)
-                validateTypeDescriptor(descriptor->valueType, context, visited);
+                validateTypeDescriptor(descriptor->valueType, context, visited, requireV2);
             if (descriptor->returnType != nullptr)
-                validateTypeDescriptor(descriptor->returnType, context, visited);
+                validateTypeDescriptor(descriptor->returnType, context, visited, requireV2);
 
             for (std::uint32_t parameterIndex = 0; parameterIndex < descriptor->parameterCount; ++parameterIndex)
-                validateTypeDescriptor(descriptor->parameterTypes[parameterIndex], context, visited);
+                validateTypeDescriptor(descriptor->parameterTypes[parameterIndex], context, visited, requireV2);
+            for (std::uint32_t argumentIndex = 0; argumentIndex < descriptor->genericArgumentCount; ++argumentIndex)
+                validateTypeDescriptor(descriptor->genericArguments[argumentIndex], context, visited, requireV2);
         }
 
         inline void validateExportPointerOwnership(const WioModuleApi* api,
@@ -2681,6 +2801,26 @@ namespace wio::sdk
             if (api->typeCount > 0u && api->types == nullptr)
                 throwInvalidApiDescriptor(context, "typeCount is non-zero but types is null.");
 
+            if (hasCapability(api, WIO_MODULE_CAP_PRODUCT_VERSION))
+            {
+                if (api->descriptorSize < sizeof(WioModuleApi))
+                    throwInvalidApiDescriptor(context, "product-version capability requires a complete WioModuleApi descriptorSize.");
+
+                if (api->productVersion.major != WIO_SDK_VERSION_MAJOR ||
+                    api->productVersion.minor != WIO_SDK_VERSION_MINOR ||
+                    api->productVersion.patch != WIO_SDK_VERSION_PATCH)
+                {
+                    std::ostringstream problem;
+                    problem << "product version mismatch: SDK is " << WIO_SDK_VERSION_STRING
+                            << " but module reports " << api->productVersion.major << '.'
+                            << api->productVersion.minor << '.' << api->productVersion.patch << '.';
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+            }
+
+            if (hasCapability(api, WIO_MODULE_CAP_TYPE_METADATA_V2) && api->descriptorSize < sizeof(WioModuleApi))
+                throwInvalidApiDescriptor(context, "type-metadata-v2 capability requires a complete WioModuleApi descriptorSize.");
+
             validateCapabilityContract(api, WIO_MODULE_CAP_API_VERSION, reinterpret_cast<const void*>(api->apiVersion), "@ModuleApiVersion", context);
             validateCapabilityContract(api, WIO_MODULE_CAP_LOAD, reinterpret_cast<const void*>(api->load), "@ModuleLoad", context);
             validateCapabilityContract(api, WIO_MODULE_CAP_UPDATE, reinterpret_cast<const void*>(api->update), "@ModuleUpdate", context);
@@ -2852,7 +2992,11 @@ namespace wio::sdk
                         throwInvalidApiDescriptor(context, problem.str());
                     }
 
-                    validateTypeDescriptor(fieldEntry.typeDescriptor, context, visitedDescriptors);
+                    validateTypeDescriptor(
+                        fieldEntry.typeDescriptor,
+                        context,
+                        visitedDescriptors,
+                        hasCapability(api, WIO_MODULE_CAP_TYPE_METADATA_V2));
 
                     if (fieldEntry.accessModifier == WIO_MODULE_ACCESS_UNKNOWN)
                     {
@@ -2960,7 +3104,7 @@ namespace wio::sdk
                         {
                             validateExactExportContract(fieldEntry.getterExport, context, "Field getter", fieldEntry.fieldName, WIO_ABI_USIZE, 1u, fieldGetterParameters, true, false);
                         }
-                        else if (fieldType.is_string() || fieldType.is_dynamic_array() || fieldType.is_static_array() ||
+                        else if (fieldType.is_string() || fieldType.is_text() || fieldType.is_dynamic_array() || fieldType.is_static_array() ||
                                  fieldType.is_dict() || fieldType.is_tree() || fieldType.is_function())
                         {
                             validateExactExportContract(fieldEntry.getterExport, context, "Field getter", fieldEntry.fieldName, WIO_ABI_UNKNOWN, 1u, fieldGetterParameters, false, true);
@@ -2977,14 +3121,14 @@ namespace wio::sdk
                         {
                             validateExactExportContract(fieldEntry.setterExport, context, "Field setter", fieldEntry.fieldName, WIO_ABI_VOID, 2u, fieldSetterHandleParameters, true, false);
                         }
-                        else if (fieldType.is_string() || fieldType.is_dynamic_array() || fieldType.is_static_array() ||
+                        else if (fieldType.is_string() || fieldType.is_text() || fieldType.is_dynamic_array() || fieldType.is_static_array() ||
                                  fieldType.is_dict() || fieldType.is_tree() || fieldType.is_function())
                         {
                             validateExactExportContract(fieldEntry.setterExport, context, "Field setter", fieldEntry.fieldName, WIO_ABI_VOID, 2u, fieldSetterOpaqueParameters, false, true);
                         }
                     }
 
-                    if (fieldType.is_dynamic_array() || fieldType.is_static_array() || fieldType.is_dict() ||
+                    if (fieldType.is_text() || fieldType.is_dynamic_array() || fieldType.is_static_array() || fieldType.is_dict() ||
                         fieldType.is_tree() || fieldType.is_function())
                     {
                         if ((fieldEntry.flags & WIO_MODULE_FIELD_READABLE) != 0u && fieldEntry.dynamicGetter == nullptr)
@@ -3906,6 +4050,9 @@ namespace wio::sdk
             set_as(std::move(value));
         }
 
+        [[nodiscard]] WioText get_text() const;
+        void set_text(WioText value) const;
+
         template <typename T>
         [[nodiscard]] WioArray<T> get_array() const
         {
@@ -4765,6 +4912,7 @@ namespace wio::sdk
         Enum,
         Flagset,
         String,
+        Text,
         Object,
         Component,
         DynamicArray,
@@ -4807,6 +4955,11 @@ namespace wio::sdk
         }
 
         explicit WioDynamicValue(wio::string value)
+            : value_(std::move(value))
+        {
+        }
+
+        explicit WioDynamicValue(WioText value)
             : value_(std::move(value))
         {
         }
@@ -4886,6 +5039,8 @@ namespace wio::sdk
                 return WioDynamicValueKind::Flagset;
             if (std::holds_alternative<wio::string>(value_))
                 return WioDynamicValueKind::String;
+            if (std::holds_alternative<WioText>(value_))
+                return WioDynamicValueKind::Text;
             if (std::holds_alternative<WioObject>(value_))
                 return WioDynamicValueKind::Object;
             if (std::holds_alternative<WioComponent>(value_))
@@ -4916,6 +5071,11 @@ namespace wio::sdk
         [[nodiscard]] bool is_string() const noexcept
         {
             return kind() == WioDynamicValueKind::String;
+        }
+
+        [[nodiscard]] bool is_text() const noexcept
+        {
+            return kind() == WioDynamicValueKind::Text;
         }
 
         [[nodiscard]] bool is_enum() const noexcept
@@ -5016,6 +5176,20 @@ namespace wio::sdk
             if (!is_string())
                 throw Error(ErrorCode::SignatureMismatch, "Wio SDK dynamic value does not hold a string.");
             return std::get<wio::string>(std::move(value_));
+        }
+
+        [[nodiscard]] const WioText& as_text() const
+        {
+            if (!is_text())
+                throw Error(ErrorCode::SignatureMismatch, "Wio SDK dynamic value does not hold text.");
+            return std::get<WioText>(value_);
+        }
+
+        [[nodiscard]] WioText take_text() &&
+        {
+            if (!is_text())
+                throw Error(ErrorCode::SignatureMismatch, "Wio SDK dynamic value does not hold text.");
+            return std::get<WioText>(std::move(value_));
         }
 
         [[nodiscard]] const WioObject& as_object() const
@@ -5123,6 +5297,7 @@ namespace wio::sdk
             WioEnum,
             WioFlagset,
             wio::string,
+            WioText,
             WioObject,
             WioComponent,
             WioDynamicArray,
@@ -5545,6 +5720,36 @@ namespace wio::sdk
         }
     }
 
+    inline WioText WioFieldAccessor::get_text() const
+    {
+        ensure_live();
+        if (!info_.is_text())
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a text field descriptor.");
+        if (!info_.can_read() || fieldEntry_ == nullptr || fieldEntry_->dynamicGetter == nullptr)
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK text field does not expose a dynamic getter bridge.");
+
+        std::unique_ptr<WioErasedValue> erasedValue(fieldEntry_->dynamicGetter(handle_));
+        const auto* typedValue = dynamic_cast<const WioErasedValueModel<std::string>*>(erasedValue.get());
+        if (typedValue == nullptr)
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK text field bridge returned an incompatible payload.");
+        return WioText::from_utf8(typedValue->value);
+    }
+
+    inline void WioFieldAccessor::set_text(WioText value) const
+    {
+        ensure_live();
+        if (!info_.is_text())
+            throw Error(ErrorCode::SignatureMismatch, "Wio SDK expected a text field descriptor.");
+        if (!info_.can_write() || fieldEntry_ == nullptr || fieldEntry_->dynamicSetter == nullptr)
+            throw Error(ErrorCode::FieldNotWritable, "Wio SDK text field is not writable.");
+
+        WioErasedValueModel<std::string> erasedValue(fieldEntry_->typeDescriptor, value.utf8());
+        const std::int32_t status = fieldEntry_->dynamicSetter(handle_, &erasedValue);
+        if (status != WIO_INVOKE_OK)
+            throw Error(status == WIO_INVOKE_TYPE_MISMATCH ? ErrorCode::SignatureMismatch : ErrorCode::InvokeFailed,
+                        "Wio SDK failed to write a text field.");
+    }
+
     inline WioDynamicValue WioFieldAccessor::get_dynamic() const
     {
         ensure_live();
@@ -5556,6 +5761,8 @@ namespace wio::sdk
             return WioDynamicValue(get_scalar_value());
         if (info_.is_string())
             return WioDynamicValue(get_string());
+        if (info_.is_text())
+            return WioDynamicValue(get_text());
         if (info_.is_object())
             return WioDynamicValue(get_object());
         if (info_.is_component())
@@ -5621,6 +5828,9 @@ namespace wio::sdk
             return;
         case WioDynamicValueKind::String:
             set_string(std::move(value).take_string());
+            return;
+        case WioDynamicValueKind::Text:
+            set_text(std::move(value).take_text());
             return;
         case WioDynamicValueKind::Object:
             set_object(value.as_object());
@@ -5826,6 +6036,50 @@ namespace wio::sdk
     [[nodiscard]] WioObjectType wio_load_object(const WioModuleApi* api, std::string_view logicalName);
     [[nodiscard]] WioComponentType wio_load_component(const WioModuleApi* api, std::string_view logicalName);
 
+    struct ModuleInfo
+    {
+        std::uint32_t descriptor_version = 0u;
+        std::uint32_t descriptor_size = 0u;
+        std::uint32_t capabilities = 0u;
+        std::optional<ProductVersion> product_version{};
+        std::uint32_t state_schema_version = 0u;
+        std::vector<std::string> exports{};
+        std::vector<std::string> commands{};
+        std::vector<std::string> event_hooks{};
+        std::vector<std::string> types{};
+
+        [[nodiscard]] bool has_capability(const WioModuleCapability capability) const noexcept
+        {
+            return (capabilities & static_cast<std::uint32_t>(capability)) != 0u;
+        }
+    };
+
+    [[nodiscard]] inline ModuleInfo inspect_module_api(const WioModuleApi* api)
+    {
+        detail::validateModuleApi(api);
+        ModuleInfo info{};
+        info.descriptor_version = api->descriptorVersion;
+        info.descriptor_size = api->descriptorSize;
+        info.capabilities = api->capabilities;
+        info.state_schema_version = api->stateSchemaVersion;
+        if (detail::hasCapability(api, WIO_MODULE_CAP_PRODUCT_VERSION))
+            info.product_version = ProductVersion{ api->productVersion.major, api->productVersion.minor, api->productVersion.patch, {} };
+
+        info.exports.reserve(api->exportCount);
+        for (std::uint32_t index = 0u; index < api->exportCount; ++index)
+            info.exports.emplace_back(api->exports[index].logicalName);
+        info.commands.reserve(api->commandCount);
+        for (std::uint32_t index = 0u; index < api->commandCount; ++index)
+            info.commands.emplace_back(api->commands[index].commandName);
+        info.event_hooks.reserve(api->eventHookCount);
+        for (std::uint32_t index = 0u; index < api->eventHookCount; ++index)
+            info.event_hooks.emplace_back(api->eventHooks[index].hookName);
+        info.types.reserve(api->typeCount);
+        for (std::uint32_t index = 0u; index < api->typeCount; ++index)
+            info.types.emplace_back(api->types[index].logicalName);
+        return info;
+    }
+
     class Module
     {
     public:
@@ -5978,6 +6232,23 @@ namespace wio::sdk
         [[nodiscard]] bool has_api() const noexcept
         {
             return api_ != nullptr;
+        }
+
+        [[nodiscard]] ModuleInfo inspect() const
+        {
+            return inspect_module_api(api_);
+        }
+
+        [[nodiscard]] bool has_capability(const WioModuleCapability capability) const noexcept
+        {
+            return detail::hasCapability(api_, capability);
+        }
+
+        [[nodiscard]] std::optional<ProductVersion> module_product_version() const noexcept
+        {
+            if (!has_capability(WIO_MODULE_CAP_PRODUCT_VERSION))
+                return std::nullopt;
+            return ProductVersion{ api_->productVersion.major, api_->productVersion.minor, api_->productVersion.patch, {} };
         }
 
         void validate_api() const
@@ -6430,6 +6701,18 @@ namespace wio::sdk
         {
             maybeAutoReload();
             return module_.load_component(logicalName);
+        }
+
+        [[nodiscard]] ModuleInfo inspect()
+        {
+            maybeAutoReload();
+            return module_.inspect();
+        }
+
+        [[nodiscard]] std::optional<ProductVersion> module_product_version()
+        {
+            maybeAutoReload();
+            return module_.module_product_version();
         }
 
     private:

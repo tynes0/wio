@@ -6,6 +6,20 @@ All notable user-facing changes to Wio are recorded here.
 
 ### Added
 
+- Expanded the 0.13 C++ host SDK to the current language/std surface with
+  validated `WioText`, Option/Result/UnitResult, tuple, queue, ordered and
+  unordered sets, span, byte buffer, generation-safe byte/generic pools, Box,
+  and any host values plus a machine-readable feature catalog.
+- Added module ABI descriptor v7 with generated product-version and layout-size
+  negotiation, stable FNV-1a type IDs, concrete generic arguments, distinct
+  descriptors for current language/std types, and owned `ModuleInfo`
+  inspection snapshots.
+- Added typed and dynamic Unicode `text` field exchange between generated Wio
+  shared modules and C++ hosts, including invalid UTF-8 rejection and
+  code-point-oriented host operations.
+- Added the normative SDK 0.13 parity matrix and real shared-module conformance
+  coverage for version/capability discovery, text round-tripping, generic
+  metadata, and post-unload inspection snapshots.
 - Added a public SDK product-version contract through `wio_version.h`,
   `wio::sdk::product_version`, and `product_version_string`. A release manifest
   now aligns compiler, runtime, std, CLI, SDK, VS Code, and documentation

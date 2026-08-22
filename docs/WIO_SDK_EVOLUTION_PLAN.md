@@ -108,6 +108,34 @@ supported" path.
    across supported compilers, static/shared modules, debug/release builds, and
    x64/ARM64 where available.
 
+### 4.1 Progress after the 0.13 SDK parity sprint
+
+The 0.13 foundation now completes these parts of slices 1 and 2:
+
+- public SDK, generated module, compiler/runtime/std/CLI, and release manifest
+  all report product version `0.13.0`;
+- ABI descriptor version 7 publishes descriptor size, product version, stable
+  type IDs, generic arguments, Unicode text, and machine-readable capability
+  bits;
+- [`WIO_SDK_0_13_PARITY_MATRIX.md`](./WIO_SDK_0_13_PARITY_MATRIX.md) records an
+  explicit bridge, metadata, host-value, opaque, or deferred outcome;
+- `wio_features.h` exposes the same distinction programmatically;
+- `wio_values.h` supplies current host semantics for text, Option, Result,
+  UnitResult, tuple, queue, sets, span, buffers, pools, Box, and any;
+- generated `text` fields support typed and dynamic round-tripping;
+- concrete std and user generic instantiations retain ordered arguments instead
+  of collapsing into an unknown type.
+
+Still open before slice 1/2 can be called fully closed:
+
+- export-time diagnostics for public shapes that have neither a bridge nor an
+  explicitly documented metadata/opaque outcome;
+- recursively nested dynamic values for every advertised collection/value
+  combination;
+- retained typed-attribute metadata and its capability/version rules;
+- interface, Box, any, and move-only resource adapters where metadata alone is
+  insufficient for real host invocation.
+
 After the parity baseline lands, each Wio release updates the SDK in the same
 release PR and package. A release cannot be called complete when it adds a
 host-observable stable feature without its SDK representation, explicit opaque

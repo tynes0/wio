@@ -19,6 +19,7 @@ Useful reference docs:
 - [Standard library](docs/WIO_STD.md)
 - [Interop guide](docs/WIO_INTEROP_GUIDE.md)
 - [Host SDK](docs/WIO_SDK.md)
+- [SDK 0.13 parity matrix](docs/WIO_SDK_0_13_PARITY_MATRIX.md)
 - [Examples guide](docs/WIO_EXAMPLES.md)
 - [Troubleshooting](docs/WIO_TROUBLESHOOTING.md)
 - [FAQ](docs/WIO_FAQ.md)

@@ -3,7 +3,7 @@
   "product": "wio",
   "version": "0.13.0",
   "channel": "release-candidate",
-  "moduleAbiDescriptorVersion": 6,
+  "moduleAbiDescriptorVersion": 7,
   "components": {
     "compiler": "0.13.0",
     "runtime": "0.13.0",

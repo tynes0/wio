@@ -3,7 +3,9 @@ set(WIO_SDK_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 set(WIO_SDK_HEADERS
     "${WIO_SDK_INCLUDE_DIR}/wio_version.h"
     "${WIO_SDK_INCLUDE_DIR}/module_api.h"
+    "${WIO_SDK_INCLUDE_DIR}/wio_features.h"
     "${WIO_SDK_INCLUDE_DIR}/wio_sdk.h"
+    "${WIO_SDK_INCLUDE_DIR}/wio_values.h"
 )
 
 add_library(wio_sdk INTERFACE)
@@ -21,6 +23,15 @@ if(BUILD_TESTING)
     add_test(
         NAME wio_sdk_version_contract
         COMMAND wio_sdk_version_contract_test
+    )
+
+    add_executable(wio_sdk_013_value_surface_test
+        "${CMAKE_SOURCE_DIR}/tests/sdk_013_value_surface_test.cpp"
+    )
+    target_link_libraries(wio_sdk_013_value_surface_test PRIVATE wio_sdk)
+    add_test(
+        NAME wio_sdk_013_value_surface
+        COMMAND wio_sdk_013_value_surface_test
     )
 endif()
 

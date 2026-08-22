@@ -17,6 +17,8 @@ Official public headers:
 
 - `sdk/include/wio_version.h`
 - `sdk/include/module_api.h`
+- `sdk/include/wio_features.h`
+- `sdk/include/wio_values.h`
 - `sdk/include/wio_sdk.h`
 
 Everything else should be treated as implementation detail unless it is
@@ -42,6 +44,7 @@ must check both values for their respective purposes.
 
 The current SDK covers:
 
+- inspecting module product version, ABI layout size, capabilities, and feature support
 - loading shared Wio modules through `wio::sdk::Module`
 - reloading shared Wio modules through `wio::sdk::HotReloadModule`
 - binding `@Export`, `@Command`, `@Event`, and event-hook entrypoints
@@ -50,6 +53,10 @@ The current SDK covers:
 - reading metadata for exported fields and methods
 - typed and dynamic field access for all currently supported exported field kinds
 - first-class enum/flagset field identity through `WioEnum` and `WioFlagset`
+- validated Unicode `text` field exchange through `WioText`
+- host-semantic values for Option, Result/UnitResult, tuple, queue, sets, span,
+  buffers, pools, Box, and any
+- stable type IDs and concrete generic-argument metadata for generated modules
 
 The current SDK does not expose compiler internals such as AST, parser, sema,
 or codegen APIs.
@@ -120,6 +127,7 @@ using wio::isize;
 using wio::usize;
 using wio::byte;
 using wio::string;
+using wio::text;
 using wio::opaque;
 ```
 
@@ -128,10 +136,46 @@ Important mappings:
 - `wio::isize` -> `std::intptr_t`
 - `wio::usize` -> `std::uintptr_t`
 - `wio::string` -> `std::string`
+- `wio::text` -> `wio::sdk::WioText` (owned, validated UTF-8 with code-point indexing)
 - `wio::opaque` -> `void*`
 
 This means host code can stay visually aligned with Wio source code instead of
 mixing Wio type names with unrelated C++ spellings.
+
+### 3.1 Current value surface
+
+`wio_values.h` mirrors stable Wio value semantics without pretending that C++
+templates are a binary ABI:
+
+```cpp
+using namespace wio::sdk;
+
+auto label = WioText::from_utf8("İstanbul 🚀");
+auto selected = WioOption<wio::i32>::some(13);
+auto loaded = WioResult<wio::i32>::ok(42);
+WioTuple<wio::i32, std::string> pair{13, "wio"};
+
+WioQueue<std::string> queue{"first", "second"};
+WioUnorderedSet<wio::i32> ids{1, 2, 2};
+WioOrderedSet<wio::i32> sorted{9, 3, 7};
+
+std::array<wio::i32, 3> storage{1, 2, 3};
+WioSpan<wio::i32> view(storage);
+
+WioByteBuffer bytes(64);
+WioPool<std::string> pool;
+auto handle = pool.rent("owned by the pool");
+```
+
+These are host-side semantic counterparts. `WioOption<T>` and
+`WioResult<T>`, for example, do not establish a raw C++ template ABI with a
+Wio object instance. Generated descriptors publish the concrete identity and
+generic arguments; a direct value bridge is added only when the feature
+catalog advertises one.
+
+Use `wio::sdk::features()`, `feature_info(...)`, or `find_feature(...)` to
+inspect that distinction programmatically. The authoritative human-readable
+matrix is [`WIO_SDK_0_13_PARITY_MATRIX.md`](./WIO_SDK_0_13_PARITY_MATRIX.md).
 
 ---
 
@@ -167,6 +211,22 @@ int main()
 - resolves `WioModuleGetApi`
 - validates the SDK descriptor version and the full host-visible ABI descriptor contract
 - invokes `@ModuleLoad` automatically when present
+
+Generated 0.13 modules also publish their product version and descriptor size.
+Hosts can take an owned inspection snapshot:
+
+```cpp
+auto info = module.inspect();
+if (!info.product_version || info.product_version->minor != 13)
+    throw std::runtime_error("unexpected Wio module version");
+
+if (!info.has_capability(WIO_MODULE_CAP_TYPE_METADATA_V2))
+    throw std::runtime_error("generic metadata is unavailable");
+```
+
+`ModuleInfo` owns its export, command, event, and type names, so those lists
+remain valid after the module is unloaded. Descriptor views and instance
+wrappers remain generation-bound.
 
 Use `Module::open(...)` if you need the raw module without calling the load
 lifecycle hook yet.
@@ -359,6 +419,7 @@ The supported exported field families in the current SDK are:
 - enum
 - flagset
 - `string`
+- `text`
 - `object`
 - `component`
 - dynamic arrays
@@ -378,6 +439,7 @@ Practical access matrix:
 - enum field -> `get_enum()`, `set_enum(...)`, `get_dynamic()`
 - flagset field -> `get_flagset()`, `set_flagset(...)`, `get_dynamic()`
 - `string` field -> `get<string>()`, `set(...)`, `get_dynamic()`
+- `text` field -> `field(...).get_text()`, `set_text(...)`, `get_dynamic()`
 - `object` / `component` field -> typed object/component wrappers or dynamic
   wrappers
 - container field -> typed container helpers or dynamic wrappers
@@ -415,6 +477,12 @@ for (const auto& field : stateType.list_fields())
 
 - whether a type is explicitly nullable through `is_nullable()`; for a
   nullable descriptor, `element_type()` returns the non-null value type
+- whether a type is `text`, Option, Result, tuple, queue, ordered/unordered
+  set, span, byte buffer, Box, any, interface, async task, or another concrete
+  generic instance
+- its deterministic FNV-1a `stable_id()`
+- `generic_argument_count()`, `generic_argument(index)`, and
+  `generic_arguments()` for concrete generic instantiations
 
 - primitive ABI type
 - logical type name
@@ -511,6 +579,7 @@ runtime reflection rather than compile-time knowledge.
 - `WioEnum`
 - `WioFlagset`
 - `string`
+- validated Unicode `WioText`
 - `WioObject`
 - `WioComponent`
 - `WioDynamicArray`
@@ -662,11 +731,13 @@ rather than as obscure backend-only failures.
 
 ---
 
-## 12. Official v0.12 Boundary
+## 12. Official v0.13 Boundary
 
 For the current SDK version, the public and documented boundary is:
 
 - `module_api.h` for the raw ABI
+- `wio_version.h`, `wio_features.h`, and `wio_values.h` for release identity,
+  machine-readable capability inventory, and host-semantic values
 - `wio_sdk.h` for the ergonomic C++ layer
 - shared-module loading, static-module consumption, reload helpers, exports,
   commands, events, exported object/component reflection, and dynamic field access
@@ -676,6 +747,8 @@ For the current SDK version, the public and documented boundary is:
 - `WioDynamicValue` and the current dynamic container wrappers as the runtime
   reflection payload family
 - generation-aware stale-wrapper diagnostics for reload-sensitive wrappers
+- ABI descriptor version `7`, module product/version inspection, stable type
+  IDs, generic arguments, and Unicode text dynamic fields
 
 The following should be treated as stable with explicit caveats:
 
@@ -685,7 +758,7 @@ The following should be treated as stable with explicit caveats:
   deeper host-side reflection growth beyond that should still be treated as
   future-facing
 
-The following should not currently be read as part of the stable v0.12 SDK
+The following should not currently be read as part of the stable v0.13 SDK
 contract:
 
 - compiler-internal AST/parser/sema/codegen APIs
@@ -693,8 +766,13 @@ contract:
 - automatic semantic reconciliation of stale object/component wrappers across
   reload generations
 - `ref` / `view` field export behavior as a public host ABI promise
+- direct binary exchange for Option/Result/tuple/queue/set/span/Box/any host
+  mirrors; their 0.13 contract is host semantics plus metadata unless the
+  feature catalog reports a dynamic or direct-call surface
+- retained typed-attribute metadata, non-blocking task control, and the future
+  application/system host lifecycle ABI
 
-This is the implemented v0.12 baseline, not the final v1 parity claim. The
+This is the implemented v0.13 baseline, not the final v1 parity claim. The
 required path to full host-observable language/runtime parity is maintained in
 [`WIO_SDK_EVOLUTION_PLAN.md`](./WIO_SDK_EVOLUTION_PLAN.md).
 
@@ -703,5 +781,6 @@ required path to full host-observable language/runtime parity is maintained in
 ## 13. See Also
 
 - [`WIO_PROJECT_SYSTEM.md`](./WIO_PROJECT_SYSTEM.md)
+- [`WIO_SDK_0_13_PARITY_MATRIX.md`](./WIO_SDK_0_13_PARITY_MATRIX.md)
 - [`examples/static_cmake_consumer/README.md`](../examples/static_cmake_consumer/README.md)
 - [`tests/native/sdk_exported_complex_fields_host.cpp`](../tests/native/sdk_exported_complex_fields_host.cpp)
