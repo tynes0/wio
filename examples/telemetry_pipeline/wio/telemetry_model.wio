@@ -23,8 +23,8 @@ component TelemetrySnapshot {
     public score: f32;
     public level: AlertLevel;
     public flags: QualityFlags;
-    public timestampMs: u32;
-    public fingerprint: u32;
+    public timestampMs: u64;
+    public fingerprint: u64;
 
     OnConstruct() {
         self.sensorId = 0;
@@ -35,8 +35,8 @@ component TelemetrySnapshot {
         self.score = 0.0f;
         self.level = AlertLevel::Normal;
         self.flags = QualityFlags::None;
-        self.timestampMs = 0u32;
-        self.fingerprint = 0u32;
+        self.timestampMs = 0u64;
+        self.fingerprint = 0u64;
     }
 }
 
@@ -52,8 +52,8 @@ fn ResolveAlertLevel(code: i32) -> AlertLevel {
     return AlertLevel::Normal;
 }
 
-fn BuildSnapshot(sensorId: i32, rawValue: f32, baseline: f32, timestampMs: u32, gain: f32, offset: f32) -> TelemetrySnapshot {
-    mut sample = NativeSample(sensorId, rawValue, baseline, timestampMs fit u64);
+fn BuildSnapshot(sensorId: i32, rawValue: f32, baseline: f32, timestampMs: u64, gain: f32, offset: f32) -> TelemetrySnapshot {
+    mut sample = NativeSample(sensorId, rawValue, baseline, timestampMs);
     sample.Calibrate(gain, offset);
 
     let levelCode = sample.Classify(1.5f, 3.0f);
@@ -78,7 +78,7 @@ fn BuildSnapshot(sensorId: i32, rawValue: f32, baseline: f32, timestampMs: u32, 
     snapshot.level = level;
     snapshot.flags = flags;
     snapshot.timestampMs = timestampMs;
-    snapshot.fingerprint = (sample.Fingerprint() & 0xffffffffu64) fit u32;
+    snapshot.fingerprint = sample.Fingerprint();
     return snapshot;
 }
 
@@ -106,7 +106,7 @@ object TelemetrySession {
         };
     }
 
-    public fn Process(sensorId: i32, rawValue: f32, baseline: f32, timestampMs: u32, gain: f32, offset: f32) -> i32 {
+    public fn Process(sensorId: i32, rawValue: f32, baseline: f32, timestampMs: u64, gain: f32, offset: f32) -> i32 {
         self.last = BuildSnapshot(sensorId, rawValue, baseline, timestampMs, gain, offset);
         self.accepted += 1;
         self.recentScores.Push(self.last.score);

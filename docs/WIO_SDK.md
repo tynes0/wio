@@ -142,7 +142,41 @@ Important mappings:
 This means host code can stay visually aligned with Wio source code instead of
 mixing Wio type names with unrelated C++ spellings.
 
-### 3.1 Current value surface
+### 3.1 Explicit ABI integer markers
+
+C++ typedef identity cannot always preserve Wio's semantic distinction. On a
+64-bit platform `std::uint64_t` and `std::uintptr_t` may be the same type; on
+common platforms `std::uint8_t` is an alias of `unsigned char`. A function
+template therefore cannot infer whether the host intended `u64` or `usize`, or
+`u8` or `uchar`, from those aliases alone.
+
+Use explicit SDK marker values whenever the distinction is observable at the
+module boundary:
+
+```cpp
+using namespace wio::sdk;
+
+auto readFingerprint = module.load_command<WioU64()>("telemetry.fingerprint");
+auto resize = module.load_command<void(WioUSize)>("buffer.resize");
+auto decodeByte = module.load_command<WioU8(WioUChar)>("decode.byte");
+
+const std::uint64_t fingerprint = readFingerprint().value();
+resize(WioUSize{4096u});
+```
+
+The complete explicit integer set is:
+
+- `WioUChar`
+- `WioI8`, `WioI16`, `WioI32`, `WioI64`
+- `WioU8`, `WioU16`, `WioU32`, `WioU64`
+- `WioISize`, `WioUSize`
+
+The wrappers contain only the requested C++ storage value, expose `.value()`,
+and bind to the ABI kind encoded in their name. Existing natural C++ scalar
+bindings remain source-compatible; markers are the deterministic choice for
+platform-dependent alias collisions.
+
+### 3.2 Current value surface
 
 `wio_values.h` mirrors stable Wio value semantics without pretending that C++
 templates are a binary ABI:

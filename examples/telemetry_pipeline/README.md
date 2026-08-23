@@ -18,8 +18,8 @@ and public SDK.
 - a multi-file Wio shared module
 - exported objects and components with constructors, fields, and methods
 - Unicode `text`, dynamic arrays, dictionaries, nested components, enums, and flagsets
-- fixed-width scalar values crossing both boundaries, including an internal
-  native/Wio `u64` fingerprint folded into a stable SDK-facing `u32`
+- fixed-width scalar values crossing both boundaries, including native/Wio/SDK
+  `u64` timestamps and FNV-1a fingerprints
 - module lifecycle, typed commands, and multi-argument events
 - SDK metadata inspection and dynamic field access
 - native-derived values returning to C++ through the SDK
@@ -52,8 +52,8 @@ summary line beginning with `Telemetry pipeline:`.
 ## Current boundary exposed by this example
 
 On 64-bit Windows, `std::uint64_t` and `std::uintptr_t` can be the same C++
-type. The current typed SDK therefore cannot always distinguish Wio `u64` from
-`usize` by a C++ function signature alone. This example keeps the full 64-bit
-timestamp and FNV-1a calculation across the native C++/Wio boundary, then
-publishes stable `u32` values to the typed SDK host. Resolving that ambiguity
-with explicit ABI marker types belongs to the v0.14 SDK value-parity work.
+type. The typed SDK therefore cannot infer whether that typedef means Wio
+`u64` or `usize` from the C++ type alone. Wio 0.14 exposes explicit
+`wio::sdk::WioU64` and `WioUSize` marker values (plus corresponding signed and
+8-bit markers). This example uses `WioU64` for its timestamp and fingerprint so
+the entire native C++ -> Wio -> SDK C++ chain retains all 64 bits.

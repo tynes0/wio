@@ -68,6 +68,46 @@ namespace wio
 
 namespace wio::sdk
 {
+    template <typename TStorage, WioAbiType TAbiType>
+    class WioAbiInteger
+    {
+        static_assert(std::is_integral_v<TStorage>, "WioAbiInteger storage must be an integral C++ type.");
+        static_assert(TAbiType == WIO_ABI_UCHAR ||
+                      TAbiType == WIO_ABI_I8 || TAbiType == WIO_ABI_I16 ||
+                      TAbiType == WIO_ABI_I32 || TAbiType == WIO_ABI_I64 ||
+                      TAbiType == WIO_ABI_U8 || TAbiType == WIO_ABI_U16 ||
+                      TAbiType == WIO_ABI_U32 || TAbiType == WIO_ABI_U64 ||
+                      TAbiType == WIO_ABI_ISIZE || TAbiType == WIO_ABI_USIZE,
+                      "WioAbiInteger requires an integer Wio ABI kind.");
+
+    public:
+        using storage_type = TStorage;
+        static constexpr WioAbiType abi_type = TAbiType;
+
+        constexpr WioAbiInteger() noexcept = default;
+        constexpr WioAbiInteger(const TStorage value) noexcept : value_(value) {}
+
+        [[nodiscard]] constexpr TStorage value() const noexcept { return value_; }
+        [[nodiscard]] constexpr explicit operator TStorage() const noexcept { return value_; }
+
+        friend constexpr bool operator==(const WioAbiInteger&, const WioAbiInteger&) noexcept = default;
+
+    private:
+        TStorage value_{};
+    };
+
+    using WioUChar = WioAbiInteger<unsigned char, WIO_ABI_UCHAR>;
+    using WioI8 = WioAbiInteger<std::int8_t, WIO_ABI_I8>;
+    using WioI16 = WioAbiInteger<std::int16_t, WIO_ABI_I16>;
+    using WioI32 = WioAbiInteger<std::int32_t, WIO_ABI_I32>;
+    using WioI64 = WioAbiInteger<std::int64_t, WIO_ABI_I64>;
+    using WioU8 = WioAbiInteger<std::uint8_t, WIO_ABI_U8>;
+    using WioU16 = WioAbiInteger<std::uint16_t, WIO_ABI_U16>;
+    using WioU32 = WioAbiInteger<std::uint32_t, WIO_ABI_U32>;
+    using WioU64 = WioAbiInteger<std::uint64_t, WIO_ABI_U64>;
+    using WioISize = WioAbiInteger<std::intptr_t, WIO_ABI_ISIZE>;
+    using WioUSize = WioAbiInteger<std::uintptr_t, WIO_ABI_USIZE>;
+
     enum class FieldAccess
     {
         Unknown,
@@ -1423,6 +1463,18 @@ namespace wio::sdk
 
         const char* abiTypeName(WioAbiType type) noexcept;
 
+        template <typename T>
+        struct IsExplicitAbiInteger : std::false_type
+        {
+        };
+
+        template <typename TStorage, WioAbiType TAbiType>
+        struct IsExplicitAbiInteger<WioAbiInteger<TStorage, TAbiType>> : std::true_type
+        {
+            using Storage = TStorage;
+            static constexpr WioAbiType AbiType = TAbiType;
+        };
+
         inline FieldAccess toFieldAccess(const WioModuleAccessModifier accessModifier) noexcept
         {
             switch (accessModifier)
@@ -1436,6 +1488,7 @@ namespace wio::sdk
 
         template <typename T>
         constexpr bool IsAbiScalarType =
+            IsExplicitAbiInteger<Decay<T>>::value ||
             std::is_same_v<Decay<T>, bool> ||
             std::is_same_v<Decay<T>, char> ||
             std::is_same_v<Decay<T>, unsigned char> ||
@@ -1577,7 +1630,11 @@ namespace wio::sdk
         {
             using U = Decay<T>;
 
-            if constexpr (std::is_same_v<U, void>)
+            if constexpr (IsExplicitAbiInteger<U>::value)
+            {
+                return IsExplicitAbiInteger<U>::AbiType;
+            }
+            else if constexpr (std::is_same_v<U, void>)
             {
                 return WIO_ABI_VOID;
             }
@@ -1888,7 +1945,35 @@ namespace wio::sdk
             WioValue result{};
             result.type = getAbiType<U>();
 
-            if constexpr (std::is_same_v<U, bool>)
+            if constexpr (IsExplicitAbiInteger<U>::value)
+            {
+                const auto raw = value.value();
+                if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_UCHAR)
+                    result.value.v_uchar = static_cast<unsigned char>(raw);
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_I8)
+                    result.value.v_i8 = static_cast<std::int8_t>(raw);
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_I16)
+                    result.value.v_i16 = static_cast<std::int16_t>(raw);
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_I32)
+                    result.value.v_i32 = static_cast<std::int32_t>(raw);
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_I64)
+                    result.value.v_i64 = static_cast<std::int64_t>(raw);
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_U8)
+                    result.value.v_u8 = static_cast<std::uint8_t>(raw);
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_U16)
+                    result.value.v_u16 = static_cast<std::uint16_t>(raw);
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_U32)
+                    result.value.v_u32 = static_cast<std::uint32_t>(raw);
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_U64)
+                    result.value.v_u64 = static_cast<std::uint64_t>(raw);
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_ISIZE)
+                    result.value.v_isize = static_cast<std::intptr_t>(raw);
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_USIZE)
+                    result.value.v_usize = static_cast<std::uintptr_t>(raw);
+                else
+                    static_assert(AlwaysFalse<U>, "Unsupported explicit Wio ABI integer type.");
+            }
+            else if constexpr (std::is_same_v<U, bool>)
             {
                 result.value.v_bool = value;
             }
@@ -1967,7 +2052,35 @@ namespace wio::sdk
                 throw Error(ErrorCode::SignatureMismatch, message.str());
             }
 
-            if constexpr (std::is_same_v<U, bool>)
+            if constexpr (IsExplicitAbiInteger<U>::value)
+            {
+                using Storage = typename IsExplicitAbiInteger<U>::Storage;
+                if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_UCHAR)
+                    return U(static_cast<Storage>(value.value.v_uchar));
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_I8)
+                    return U(static_cast<Storage>(value.value.v_i8));
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_I16)
+                    return U(static_cast<Storage>(value.value.v_i16));
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_I32)
+                    return U(static_cast<Storage>(value.value.v_i32));
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_I64)
+                    return U(static_cast<Storage>(value.value.v_i64));
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_U8)
+                    return U(static_cast<Storage>(value.value.v_u8));
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_U16)
+                    return U(static_cast<Storage>(value.value.v_u16));
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_U32)
+                    return U(static_cast<Storage>(value.value.v_u32));
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_U64)
+                    return U(static_cast<Storage>(value.value.v_u64));
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_ISIZE)
+                    return U(static_cast<Storage>(value.value.v_isize));
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_USIZE)
+                    return U(static_cast<Storage>(value.value.v_usize));
+                else
+                    static_assert(AlwaysFalse<U>, "Unsupported explicit Wio ABI integer type.");
+            }
+            else if constexpr (std::is_same_v<U, bool>)
             {
                 return static_cast<T>(value.value.v_bool);
             }

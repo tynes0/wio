@@ -48,24 +48,24 @@ int main(int argc, char** argv)
         require(info.has_capability(WIO_MODULE_CAP_TYPE_METADATA_V2), "Type metadata v2 is unavailable.");
         require(info.has_capability(WIO_MODULE_CAP_TEXT_FIELDS), "Unicode text fields are unavailable.");
 
-        auto ingest = module.load_command<std::int32_t(std::int32_t, float, float, std::uint32_t, float, float)>("telemetry.ingest");
+        auto ingest = module.load_command<std::int32_t(std::int32_t, float, float, wio::sdk::WioU64, float, float)>("telemetry.ingest");
         auto accepted = module.load_command<std::int32_t()>("telemetry.accepted");
         auto warnings = module.load_command<std::int32_t()>("telemetry.warnings");
         auto criticals = module.load_command<std::int32_t()>("telemetry.criticals");
         auto lastScore1000 = module.load_command<std::int32_t()>("telemetry.last-score-1000");
-        auto lastFingerprint = module.load_command<std::uint32_t()>("telemetry.last-fingerprint");
-        auto publishSample = module.load_event<void(std::int32_t, float, float, std::uint32_t)>("telemetry.sample");
+        auto lastFingerprint = module.load_command<wio::sdk::WioU64()>("telemetry.last-fingerprint");
+        auto publishSample = module.load_event<void(std::int32_t, float, float, wio::sdk::WioU64)>("telemetry.sample");
 
-        require(ingest(7, 20.5f, 20.0f, 1'000u, 1.0f, 0.0f) == 0, "Expected the first global sample to be normal.");
-        require(ingest(7, 24.0f, 20.0f, 2'000u, 1.0f, 0.0f) == 1, "Expected the second global sample to be a warning.");
-        require(ingest(9, 42.0f, 20.0f, 3'000u, 1.0f, 0.0f) == 2, "Expected the third global sample to be critical.");
-        publishSample(11, 19.0f, 20.0f, 4'000u);
+        require(ingest(7, 20.5f, 20.0f, wio::sdk::WioU64{1'000u}, 1.0f, 0.0f) == 0, "Expected the first global sample to be normal.");
+        require(ingest(7, 24.0f, 20.0f, wio::sdk::WioU64{2'000u}, 1.0f, 0.0f) == 1, "Expected the second global sample to be a warning.");
+        require(ingest(9, 42.0f, 20.0f, wio::sdk::WioU64{3'000u}, 1.0f, 0.0f) == 2, "Expected the third global sample to be critical.");
+        publishSample(11, 19.0f, 20.0f, wio::sdk::WioU64{4'000u});
 
         require(accepted() == 4, "Global command/event accounting is inconsistent.");
         require(warnings() == 1, "Global warning accounting is inconsistent.");
         require(criticals() == 1, "Global critical accounting is inconsistent.");
         require(lastScore1000() == 500, "The event did not update the native score.");
-        require(lastFingerprint() != 0u, "The native fingerprint did not cross the SDK boundary.");
+        require(lastFingerprint().value() != 0u, "The native fingerprint did not cross the SDK boundary.");
 
         auto sessionType = module.load_object("TelemetrySession");
         auto snapshotType = module.load_component("TelemetrySnapshot");
@@ -85,12 +85,12 @@ int main(int argc, char** argv)
         const auto replacementTitle = wio::sdk::WioText::from_utf8("İstanbul gözlem hattı 🌍");
         session.field("title").set_dynamic(wio::sdk::WioDynamicValue(replacementTitle));
 
-        auto process = session.method<std::int32_t(std::int32_t, float, float, std::uint32_t, float, float)>("Process");
+        auto process = session.method<std::int32_t(std::int32_t, float, float, wio::sdk::WioU64, float, float)>("Process");
         auto scoreSum = session.method<float()>("ScoreSum");
 
-        require(process(101, 10.2f, 10.0f, 10'000u, 1.0f, 0.0f) == 0, "Session normal classification failed.");
-        require(process(101, 12.0f, 10.0f, 11'000u, 1.0f, 0.0f) == 1, "Session warning classification failed.");
-        require(process(202, 14.0f, 10.0f, 12'000u, 1.0f, 0.0f) == 2, "Session critical classification failed.");
+        require(process(101, 10.2f, 10.0f, wio::sdk::WioU64{10'000u}, 1.0f, 0.0f) == 0, "Session normal classification failed.");
+        require(process(101, 12.0f, 10.0f, wio::sdk::WioU64{11'000u}, 1.0f, 0.0f) == 1, "Session warning classification failed.");
+        require(process(202, 14.0f, 10.0f, wio::sdk::WioU64{12'000u}, 1.0f, 0.0f) == 2, "Session critical classification failed.");
 
         const auto title = session.field("title").get_text();
         const auto scores = session.get_array<float>("recentScores");
@@ -108,7 +108,8 @@ int main(int argc, char** argv)
         require(last.get<std::int32_t>("sensorId") == 202, "Nested component scalar read failed.");
         require(level == HostAlertLevel::Critical, "Enum value did not cross the SDK boundary.");
         require((static_cast<std::uint32_t>(flags) & static_cast<std::uint32_t>(HostQualityFlags::Alerted)) != 0u, "Flagset value did not cross the SDK boundary.");
-        require(last.get<std::uint32_t>("fingerprint") != 0u, "Nested native fingerprint is missing.");
+        require(last.get<wio::sdk::WioU64>("timestampMs").value() == 12'000u, "Nested u64 timestamp did not cross the SDK boundary.");
+        require(last.get<wio::sdk::WioU64>("fingerprint").value() != 0u, "Nested native fingerprint is missing.");
 
         std::cout << "Telemetry pipeline: Wio "
                   << version->major << '.' << version->minor << '.' << version->patch
@@ -118,7 +119,7 @@ int main(int argc, char** argv)
                   << " | score-sum=" << std::fixed << std::setprecision(2) << scoreSum()
                   << " | title-codepoints=" << title.code_point_count()
                   << " | last-sensor=" << last.get<std::int32_t>("sensorId")
-                  << " | fingerprint=" << last.get<std::uint32_t>("fingerprint")
+                  << " | fingerprint=" << last.get<wio::sdk::WioU64>("fingerprint").value()
                   << '\n';
     }
     catch (const std::exception& error)

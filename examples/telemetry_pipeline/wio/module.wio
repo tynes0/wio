@@ -4,17 +4,17 @@ mut gAccepted: i32 = 0;
 mut gWarnings: i32 = 0;
 mut gCriticals: i32 = 0;
 mut gLastScore1000: i32 = 0;
-mut gLastFingerprint: u32 = 0u32;
+mut gLastFingerprint: u64 = 0u64;
 
 fn ResetGlobalPipeline() {
     gAccepted = 0;
     gWarnings = 0;
     gCriticals = 0;
     gLastScore1000 = 0;
-    gLastFingerprint = 0u32;
+    gLastFingerprint = 0u64;
 }
 
-fn IngestGlobal(sensorId: i32, rawValue: f32, baseline: f32, timestampMs: u32, gain: f32, offset: f32) -> i32 {
+fn IngestGlobal(sensorId: i32, rawValue: f32, baseline: f32, timestampMs: u64, gain: f32, offset: f32) -> i32 {
     let snapshot = BuildSnapshot(sensorId, rawValue, baseline, timestampMs, gain, offset);
     mut levelCode = 0;
     if (snapshot.level == AlertLevel::Critical) {
@@ -61,7 +61,7 @@ fn StopTelemetryPipeline() {
 @Export
 @Command("telemetry.ingest")
 @CppName(WioTelemetryIngest)
-fn TelemetryIngest(sensorId: i32, rawValue: f32, baseline: f32, timestampMs: u32, gain: f32, offset: f32) -> i32 {
+fn TelemetryIngest(sensorId: i32, rawValue: f32, baseline: f32, timestampMs: u64, gain: f32, offset: f32) -> i32 {
     return IngestGlobal(sensorId, rawValue, baseline, timestampMs, gain, offset);
 }
 
@@ -96,13 +96,13 @@ fn TelemetryLastScore1000() -> i32 {
 @Export
 @Command("telemetry.last-fingerprint")
 @CppName(WioTelemetryLastFingerprint)
-fn TelemetryLastFingerprint() -> u32 {
+fn TelemetryLastFingerprint() -> u64 {
     return gLastFingerprint;
 }
 
 @Export
 @Event("telemetry.sample")
 @CppName(WioTelemetrySampleEvent)
-fn TelemetrySampleEvent(sensorId: i32, rawValue: f32, baseline: f32, timestampMs: u32) {
+fn TelemetrySampleEvent(sensorId: i32, rawValue: f32, baseline: f32, timestampMs: u64) {
     IngestGlobal(sensorId, rawValue, baseline, timestampMs, 1.0f, 0.0f);
 }
