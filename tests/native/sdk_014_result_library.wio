@@ -1,0 +1,36 @@
+use std::result as result;
+
+@Export
+object Sdk14Results {
+    public calculation: std::Result<i32>;
+    public completion: std::UnitResult;
+    public marker: result::Unit;
+
+    public OnConstruct() {
+        self.calculation = result::Ok<i32>(21);
+        self.completion = result::OkUnit();
+        self.marker = result::Unit();
+    }
+
+    public fn CalculationOr(fallback: i32) -> i32 {
+        return self.calculation.ValueOr(fallback);
+    }
+
+    public fn CalculationCode() -> i32 {
+        if (self.calculation.IsOk()) {
+            return 0;
+        }
+        return self.calculation.ErrorValue().code;
+    }
+
+    public fn CompletionOk() -> bool {
+        return self.completion.IsOk();
+    }
+
+    public fn CompletionCode() -> i32 {
+        if (self.completion.IsOk()) {
+            return 0;
+        }
+        return self.completion.ErrorValue().code;
+    }
+}

@@ -252,7 +252,8 @@ enum WioModuleTypeDescriptorKind : std::uint32_t
     WIO_MODULE_TYPE_DESC_ANY = 24u,
     WIO_MODULE_TYPE_DESC_INTERFACE = 25u,
     WIO_MODULE_TYPE_DESC_ASYNC_TASK = 26u,
-    WIO_MODULE_TYPE_DESC_GENERIC_INSTANCE = 27u
+    WIO_MODULE_TYPE_DESC_GENERIC_INSTANCE = 27u,
+    WIO_MODULE_TYPE_DESC_UNIT = 28u
 };
 
 [[nodiscard]] constexpr std::uint64_t WioStableTypeId(const std::string_view name) noexcept

@@ -6060,7 +6060,7 @@ namespace wio::sema
             return typeName != "string" && typeName != "object";
         }
 
-        bool isSdkOptionBridgeValueType(const Ref<Type>& type)
+        bool isSdkValueBridgeType(const Ref<Type>& type)
         {
             Ref<Type> current = type;
             while (current && current->kind() == TypeKind::Alias)
@@ -6079,14 +6079,21 @@ namespace wio::sema
                 return false;
 
             auto structType = current.AsFast<StructType>();
-            if (!structType || structType->name != "Option" ||
-                !(structType->scopePath == "std" || structType->scopePath.starts_with("std::")) ||
-                structType->genericArguments.size() != 1)
+            if (!structType || !(structType->scopePath == "std" || structType->scopePath.starts_with("std::")))
             {
                 return false;
             }
 
-            return isSdkOptionBridgeValueType(structType->genericArguments.front());
+            if (structType->name == "ResultUnit")
+                return structType->genericArguments.empty();
+
+            if ((structType->name == "Option" || structType->name == "Result") &&
+                structType->genericArguments.size() == 1)
+            {
+                return isSdkValueBridgeType(structType->genericArguments.front());
+            }
+
+            return false;
         }
 
         bool isSdkExportableFieldType(const Ref<Type>& type)
@@ -6139,11 +6146,11 @@ namespace wio::sema
                 if (!structType || structType->isInterface)
                     return false;
 
-                if (structType->name == "Option" &&
+                if ((structType->name == "Option" || structType->name == "Result") &&
                     (structType->scopePath == "std" || structType->scopePath.starts_with("std::")))
                 {
                     return structType->genericArguments.size() == 1 &&
-                        isSdkOptionBridgeValueType(structType->genericArguments.front());
+                        isSdkValueBridgeType(structType->genericArguments.front());
                 }
 
                 return true;

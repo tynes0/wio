@@ -715,6 +715,26 @@ The initial bridge supports primitive, `string`, `text`, and recursively nested
 `Option` payloads. Unsupported payloads are rejected while compiling the Wio
 module, so they cannot degrade into a host-side `not callable` surprise.
 
+`std::Result<T>` uses the existing `WioResult<T>` host value in the same way:
+
+```cpp
+using HostResult = WioResult<std::int32_t>;
+auto calculation = state.field("calculation");
+
+calculation.set_as(HostResult::ok(84));
+calculation.set_as(HostResult::error({
+    WioResultDomain::Custom,
+    701,
+    -9001,
+    "host calculation failed"
+}));
+```
+
+The bridge preserves the success value and the complete Wio error record:
+domain, portable code, native code, and message. `std::UnitResult` maps to
+`WioUnitResult`, with `WioUnit` represented by the dedicated `UNIT` type
+descriptor rather than pretending it is an exported component handle.
+
 ---
 
 ## 10. Hot Reload

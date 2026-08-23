@@ -605,7 +605,7 @@ namespace wio::codegen
             return structType;
         }
 
-        bool isSdkOptionBridgeValueType(const Ref<sema::Type>& type)
+        bool isSdkValueBridgeType(const Ref<sema::Type>& type)
         {
             Ref<sema::Type> resolvedType = unwrapAliasType(type);
             if (!resolvedType)
@@ -617,10 +617,15 @@ namespace wio::codegen
                 return name != "void" && name != "object" && name != "any" && name != "opaque";
             }
 
-            if (auto optionType = getStdValueStructType(resolvedType, "Option");
-                optionType && optionType->genericArguments.size() == 1)
+            if (auto unitType = getStdValueStructType(resolvedType, "ResultUnit"); unitType)
+                return unitType->genericArguments.empty();
+
+            auto optionType = getStdValueStructType(resolvedType, "Option");
+            auto resultType = getStdValueStructType(resolvedType, "Result");
+            auto algebraicType = optionType ? optionType : resultType;
+            if (algebraicType && algebraicType->genericArguments.size() == 1)
             {
-                return isSdkOptionBridgeValueType(optionType->genericArguments.front());
+                return isSdkValueBridgeType(algebraicType->genericArguments.front());
             }
 
             return false;
@@ -2406,7 +2411,8 @@ namespace wio::codegen
                                 accessorBridgeType = typeContext.getUSize();
                                 fieldBridgeCppTypeName = mangleStructTypeName(structType);
                             }
-                            else if (componentDeclarations.contains(structType.Get()))
+                            else if (componentDeclarations.contains(structType.Get()) &&
+                                     getStdValueStructType(structType, "ResultUnit") == nullptr)
                             {
                                 accessorKind = ExportedFunctionInfo::FieldAccessorKind::ComponentHandle;
                                 accessorBridgeType = typeContext.getUSize();
@@ -2433,9 +2439,13 @@ namespace wio::codegen
                         resolvedFieldType.AsFast<sema::PrimitiveType>()->name == "text";
                     auto optionFieldType = getStdValueStructType(resolvedFieldType, "Option");
                     const bool isOptionField = optionFieldType && optionFieldType->genericArguments.size() == 1 &&
-                        isSdkOptionBridgeValueType(optionFieldType->genericArguments.front());
+                        isSdkValueBridgeType(optionFieldType->genericArguments.front());
+                    auto resultFieldType = getStdValueStructType(resolvedFieldType, "Result");
+                    const bool isResultField = resultFieldType && resultFieldType->genericArguments.size() == 1 &&
+                        isSdkValueBridgeType(resultFieldType->genericArguments.front());
+                    const bool isUnitField = getStdValueStructType(resolvedFieldType, "ResultUnit") != nullptr;
                     const bool needsDynamicBridge = resolvedFieldType &&
-                        (isTextField || isOptionField ||
+                        (isTextField || isOptionField || isResultField || isUnitField ||
                          resolvedFieldType->kind() == sema::TypeKind::Array ||
                          resolvedFieldType->kind() == sema::TypeKind::Dictionary ||
                          resolvedFieldType->kind() == sema::TypeKind::Function);
@@ -2999,6 +3009,18 @@ namespace wio::codegen
                 return "wio::sdk::WioOption<" + *valueType + ">";
             }
 
+            if (getStdValueStructType(resolvedType, "ResultUnit"))
+                return "wio::sdk::WioUnit";
+
+            if (auto resultType = getStdValueStructType(resolvedType, "Result");
+                resultType && resultType->genericArguments.size() == 1)
+            {
+                auto valueType = getSdkDynamicBridgeCppType(resultType->genericArguments.front());
+                if (!valueType.has_value())
+                    return std::nullopt;
+                return "wio::sdk::WioResult<" + *valueType + ">";
+            }
+
             return std::nullopt;
         }
 
@@ -3056,6 +3078,48 @@ namespace wio::codegen
                 );
             }
 
+            if (getStdValueStructType(resolvedType, "ResultUnit"))
+                return "wio::sdk::WioUnit{}";
+
+            if (auto resultType = getStdValueStructType(resolvedType, "Result");
+                resultType && resultType->genericArguments.size() == 1)
+            {
+                const Ref<sema::Type>& valueType = resultType->genericArguments.front();
+                auto hostType = getSdkDynamicBridgeCppType(valueType);
+                const std::string variableName = "_wio_result_" + std::to_string(depth);
+                const std::string errorName = "_wio_error_" + std::to_string(depth);
+                auto convertedValue = makeSdkDynamicToHostExpression(
+                    variableName + "->_WF_Value()",
+                    valueType,
+                    depth + 1
+                );
+                if (!hostType.has_value() || !convertedValue.has_value())
+                    return std::nullopt;
+
+                return common::formatString(
+                    "([&]() -> wio::sdk::WioResult<{}> {{ auto {} = {}; "
+                    "if (!{} || {}->_WF_IsError()) {{ auto {} = {}->_WF_ErrorValue(); "
+                    "return wio::sdk::WioResult<{}>::error(wio::sdk::WioResultError{{"
+                    "static_cast<wio::sdk::WioResultDomain>(static_cast<std::int32_t>({}.domain)), "
+                    "{}.code, {}.nativeCode, {}.message}}); }} "
+                    "return wio::sdk::WioResult<{}>::ok({}); }}())",
+                    *hostType,
+                    variableName,
+                    expression,
+                    variableName,
+                    variableName,
+                    errorName,
+                    variableName,
+                    *hostType,
+                    errorName,
+                    errorName,
+                    errorName,
+                    errorName,
+                    *hostType,
+                    *convertedValue
+                );
+            }
+
             return std::nullopt;
         }
 
@@ -3104,6 +3168,47 @@ namespace wio::codegen
                     variableName,
                     expression,
                     variableName,
+                    cppStructType,
+                    cppStructType,
+                    *convertedValue
+                );
+            }
+
+            if (auto unitType = getStdValueStructType(resolvedType, "ResultUnit"); unitType)
+                return mangleStructTypeName(unitType) + "()";
+
+            if (auto resultType = getStdValueStructType(resolvedType, "Result");
+                resultType && resultType->genericArguments.size() == 1)
+            {
+                const Ref<sema::Type>& valueType = resultType->genericArguments.front();
+                const std::string variableName = "_wio_result_" + std::to_string(depth);
+                auto convertedValue = makeSdkDynamicFromHostExpression(
+                    variableName + ".value()",
+                    valueType,
+                    depth + 1
+                );
+                if (!convertedValue.has_value())
+                    return std::nullopt;
+
+                const std::string cppStructType = mangleStructTypeName(resultType);
+                const std::string resultErrorType = Mangler::mangleStruct("ResultError", "std");
+                const std::string resultDomainType = Mangler::mangleStruct("ResultDomain", "std");
+                return common::formatString(
+                    "([&]() -> wio::runtime::Ref<{}> {{ const auto& {} = {}; "
+                    "if ({}.is_error()) {{ const auto& _wio_host_error = {}.error_value(); "
+                    "{} _wio_error{{}}; "
+                    "_wio_error.domain = static_cast<{}>(static_cast<std::int32_t>(_wio_host_error.domain)); "
+                    "_wio_error.code = _wio_host_error.code; _wio_error.nativeCode = _wio_host_error.native_code; "
+                    "_wio_error.message = _wio_host_error.message; "
+                    "return wio::runtime::Ref<{}>::Create(_wio_error); }} "
+                    "return wio::runtime::Ref<{}>::Create({}); }}())",
+                    cppStructType,
+                    variableName,
+                    expression,
+                    variableName,
+                    variableName,
+                    resultErrorType,
+                    resultDomainType,
                     cppStructType,
                     cppStructType,
                     *convertedValue
@@ -4277,6 +4382,8 @@ namespace wio::codegen
                     info.kindExpr = "WIO_MODULE_TYPE_DESC_OPTION";
                 else if ((structType->scopePath == "std" || structType->scopePath.starts_with("std::")) && structType->name == "Result")
                     info.kindExpr = "WIO_MODULE_TYPE_DESC_RESULT";
+                else if ((structType->scopePath == "std" || structType->scopePath.starts_with("std::")) && structType->name == "ResultUnit")
+                    info.kindExpr = "WIO_MODULE_TYPE_DESC_UNIT";
                 else if ((structType->scopePath == "std" || structType->scopePath.starts_with("std::")) && structType->name == "Tuple")
                     info.kindExpr = "WIO_MODULE_TYPE_DESC_TUPLE";
                 else if ((structType->scopePath == "std" || structType->scopePath.starts_with("std::")) && structType->name == "Queue")
@@ -4437,10 +4544,13 @@ namespace wio::codegen
                     const bool isTextField = dynamicFieldType && dynamicFieldType->kind() == sema::TypeKind::Primitive &&
                         dynamicFieldType.AsFast<sema::PrimitiveType>()->name == "text";
                     const bool isOptionField = getStdValueStructType(dynamicFieldType, "Option") != nullptr;
-                    const auto optionPayloadType = isOptionField
+                    const bool isResultField = getStdValueStructType(dynamicFieldType, "Result") != nullptr;
+                    const bool isUnitField = getStdValueStructType(dynamicFieldType, "ResultUnit") != nullptr;
+                    const bool isAlgebraicField = isOptionField || isResultField || isUnitField;
+                    const auto algebraicPayloadType = isAlgebraicField
                         ? getSdkDynamicBridgeCppType(dynamicFieldType)
                         : std::optional<std::string>{};
-                    const auto optionGetterExpression = isOptionField
+                    const auto algebraicGetterExpression = isAlgebraicField
                         ? makeSdkDynamicToHostExpression("instance->" + field.memberCppName, dynamicFieldType)
                         : std::optional<std::string>{};
                     emitLine(
@@ -4458,12 +4568,12 @@ namespace wio::codegen
                             ", instance->" + field.memberCppName + ".Utf8());"
                         );
                     }
-                    else if (isOptionField && optionPayloadType.has_value() && optionGetterExpression.has_value())
+                    else if (isAlgebraicField && algebraicPayloadType.has_value() && algebraicGetterExpression.has_value())
                     {
                         emitLine(
-                            "return new WioErasedValueModel<" + *optionPayloadType + ">(" +
+                            "return new WioErasedValueModel<" + *algebraicPayloadType + ">(" +
                             "&WIO_TYPE_DESCRIPTOR_" + std::to_string(descriptorIndex) +
-                            ", " + *optionGetterExpression + ");"
+                            ", " + *algebraicGetterExpression + ");"
                         );
                     }
                     else
@@ -4490,8 +4600,8 @@ namespace wio::codegen
                         emitLine("if (instance == nullptr || value == nullptr) return WIO_INVOKE_BAD_ARGUMENTS;");
                         if (isTextField)
                             emitLine("auto* typedValue = dynamic_cast<const WioErasedValueModel<std::string>*>(value);");
-                        else if (isOptionField && optionPayloadType.has_value())
-                            emitLine("auto* typedValue = dynamic_cast<const WioErasedValueModel<" + *optionPayloadType + ">*>(value);");
+                        else if (isAlgebraicField && algebraicPayloadType.has_value())
+                            emitLine("auto* typedValue = dynamic_cast<const WioErasedValueModel<" + *algebraicPayloadType + ">*>(value);");
                         else
                             emitLine(
                                 "auto* typedValue = dynamic_cast<const WioErasedValueModel<" + field.memberCppTypeName + ">*>(value);"
@@ -4499,7 +4609,7 @@ namespace wio::codegen
                         emitLine("if (typedValue == nullptr) return WIO_INVOKE_TYPE_MISMATCH;");
                         if (isTextField)
                             emitLine("instance->" + field.memberCppName + " = wio::runtime::Text::FromUtf8(typedValue->value);");
-                        else if (isOptionField)
+                        else if (isAlgebraicField)
                         {
                             const auto setterExpression = makeSdkDynamicFromHostExpression("typedValue->value", dynamicFieldType);
                             if (setterExpression.has_value())

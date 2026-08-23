@@ -204,6 +204,7 @@ namespace wio::sdk
         [[nodiscard]] bool is_interface() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_INTERFACE; }
         [[nodiscard]] bool is_async_task() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_ASYNC_TASK; }
         [[nodiscard]] bool is_generic_instance() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_GENERIC_INSTANCE; }
+        [[nodiscard]] bool is_unit() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_UNIT; }
 
         [[nodiscard]] bool is_dynamic_array() const noexcept
         {
@@ -1562,6 +1563,17 @@ namespace wio::sdk
         };
 
         template <typename T>
+        struct IsWioResult : std::false_type
+        {
+        };
+
+        template <typename TValue>
+        struct IsWioResult<WioResult<TValue>> : std::true_type
+        {
+            using Value = TValue;
+        };
+
+        template <typename T>
         struct IsStdUnorderedMap : std::false_type
         {
         };
@@ -1758,6 +1770,14 @@ namespace wio::sdk
             {
                 return "Option<" + hostFieldTypeName<typename IsWioOption<U>::Value>() + ">";
             }
+            else if constexpr (IsWioResult<U>::value)
+            {
+                return "Result<" + hostFieldTypeName<typename IsWioResult<U>::Value>() + ">";
+            }
+            else if constexpr (std::is_same_v<U, WioUnit>)
+            {
+                return "ResultUnit";
+            }
             else if constexpr (IsStdUnorderedMap<U>::value)
             {
                 return "Dict<" + hostFieldTypeName<typename IsStdUnorderedMap<U>::Key>()
@@ -1852,6 +1872,16 @@ namespace wio::sdk
                 return type.is_option() &&
                     type.generic_argument_count() == 1u &&
                     matchesTypeDescriptor<typename IsWioOption<U>::Value>(type.generic_argument(0u));
+            }
+            else if constexpr (IsWioResult<U>::value)
+            {
+                return type.is_result() &&
+                    type.generic_argument_count() == 1u &&
+                    matchesTypeDescriptor<typename IsWioResult<U>::Value>(type.generic_argument(0u));
+            }
+            else if constexpr (std::is_same_v<U, WioUnit>)
+            {
+                return type.is_unit() && type.logical_name() == "std::ResultUnit";
             }
             else if constexpr (IsStdUnorderedMap<U>::value)
             {
@@ -2547,6 +2577,7 @@ namespace wio::sdk
                 break;
             case WIO_MODULE_TYPE_DESC_STRING:
             case WIO_MODULE_TYPE_DESC_TEXT:
+            case WIO_MODULE_TYPE_DESC_UNIT:
             case WIO_MODULE_TYPE_DESC_SPAN:
             case WIO_MODULE_TYPE_DESC_BYTE_BUFFER:
             case WIO_MODULE_TYPE_DESC_ANY:
@@ -3203,7 +3234,8 @@ namespace wio::sdk
                             validateExactExportContract(fieldEntry.getterExport, context, "Field getter", fieldEntry.fieldName, WIO_ABI_USIZE, 1u, fieldGetterParameters, true, false);
                         }
                         else if (fieldType.is_string() || fieldType.is_text() || fieldType.is_dynamic_array() || fieldType.is_static_array() ||
-                                 fieldType.is_dict() || fieldType.is_tree() || fieldType.is_function() || fieldType.is_option())
+                                 fieldType.is_dict() || fieldType.is_tree() || fieldType.is_function() ||
+                                 fieldType.is_option() || fieldType.is_result() || fieldType.is_unit())
                         {
                             validateExactExportContract(fieldEntry.getterExport, context, "Field getter", fieldEntry.fieldName, WIO_ABI_UNKNOWN, 1u, fieldGetterParameters, false, true);
                         }
@@ -3220,14 +3252,16 @@ namespace wio::sdk
                             validateExactExportContract(fieldEntry.setterExport, context, "Field setter", fieldEntry.fieldName, WIO_ABI_VOID, 2u, fieldSetterHandleParameters, true, false);
                         }
                         else if (fieldType.is_string() || fieldType.is_text() || fieldType.is_dynamic_array() || fieldType.is_static_array() ||
-                                 fieldType.is_dict() || fieldType.is_tree() || fieldType.is_function() || fieldType.is_option())
+                                 fieldType.is_dict() || fieldType.is_tree() || fieldType.is_function() ||
+                                 fieldType.is_option() || fieldType.is_result() || fieldType.is_unit())
                         {
                             validateExactExportContract(fieldEntry.setterExport, context, "Field setter", fieldEntry.fieldName, WIO_ABI_VOID, 2u, fieldSetterOpaqueParameters, false, true);
                         }
                     }
 
                     if (fieldType.is_text() || fieldType.is_dynamic_array() || fieldType.is_static_array() || fieldType.is_dict() ||
-                        fieldType.is_tree() || fieldType.is_function() || fieldType.is_option())
+                        fieldType.is_tree() || fieldType.is_function() || fieldType.is_option() ||
+                        fieldType.is_result() || fieldType.is_unit())
                     {
                         if ((fieldEntry.flags & WIO_MODULE_FIELD_READABLE) != 0u && fieldEntry.dynamicGetter == nullptr)
                         {
