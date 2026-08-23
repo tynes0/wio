@@ -35,6 +35,7 @@ set(WIO_RUNTIME_HEADERS
     "${WIO_RUNTIME_INCLUDE_DIR}/std_type_traits.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_unicode.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/type_reflection.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/utf8proc.h"
 )
 
 set(WIO_RUNTIME_SOURCES
@@ -68,6 +69,7 @@ set(WIO_BACKEND_RUNTIME_OBJ_STD_PROCESS "${WIO_BACKEND_RUNTIME_DIR}/std_process.
 set(WIO_BACKEND_RUNTIME_OBJ_STD_RANDOM "${WIO_BACKEND_RUNTIME_DIR}/std_random.o")
 set(WIO_BACKEND_RUNTIME_OBJ_STD_REGEX "${WIO_BACKEND_RUNTIME_DIR}/std_regex.o")
 set(WIO_BACKEND_RUNTIME_OBJ_STD_TIME "${WIO_BACKEND_RUNTIME_DIR}/std_time.o")
+set(WIO_BACKEND_RUNTIME_OBJ_UTF8PROC "${WIO_BACKEND_RUNTIME_DIR}/utf8proc.o")
 
 file(MAKE_DIRECTORY "${WIO_BACKEND_RUNTIME_DIR}")
 
@@ -303,6 +305,25 @@ add_custom_command(
 
 add_custom_command(
     OUTPUT
+        "${WIO_BACKEND_RUNTIME_OBJ_UTF8PROC}"
+    COMMAND
+        ${WIO_BACKEND_CXX_COMPILER}
+        -x c
+        -std=c99
+        -DUTF8PROC_STATIC
+        -I "${WIO_RUNTIME_INCLUDE_DIR}"
+        -I "${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/utf8proc"
+        -c "${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/utf8proc/utf8proc.c"
+        -o "${WIO_BACKEND_RUNTIME_OBJ_UTF8PROC}"
+    DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/utf8proc/utf8proc.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/utf8proc/utf8proc_data.c"
+        "${WIO_RUNTIME_INCLUDE_DIR}/utf8proc.h"
+    VERBATIM
+)
+
+add_custom_command(
+    OUTPUT
         "${WIO_BACKEND_RUNTIME_LIB}"
     COMMAND
         ${WIO_BACKEND_AR}
@@ -321,6 +342,7 @@ add_custom_command(
         "${WIO_BACKEND_RUNTIME_OBJ_STD_RANDOM}"
         "${WIO_BACKEND_RUNTIME_OBJ_STD_REGEX}"
         "${WIO_BACKEND_RUNTIME_OBJ_STD_TIME}"
+        "${WIO_BACKEND_RUNTIME_OBJ_UTF8PROC}"
     DEPENDS
         "${WIO_BACKEND_RUNTIME_OBJ_ENTRY_ARGS}"
         "${WIO_BACKEND_RUNTIME_OBJ_STD_ASSERT}"
@@ -335,6 +357,7 @@ add_custom_command(
         "${WIO_BACKEND_RUNTIME_OBJ_STD_RANDOM}"
         "${WIO_BACKEND_RUNTIME_OBJ_STD_REGEX}"
         "${WIO_BACKEND_RUNTIME_OBJ_STD_TIME}"
+        "${WIO_BACKEND_RUNTIME_OBJ_UTF8PROC}"
     VERBATIM
 )
 
@@ -346,6 +369,11 @@ set(WIO_BACKEND_RUNTIME_LIBRARY "${WIO_BACKEND_RUNTIME_LIB}" CACHE INTERNAL "Bac
 
 install(DIRECTORY "${WIO_RUNTIME_INCLUDE_DIR}/"
     DESTINATION runtime/include
+)
+
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/third_party/utf8proc/LICENSE.md"
+              "${CMAKE_CURRENT_SOURCE_DIR}/third_party/utf8proc/README.md"
+    DESTINATION runtime/third_party/utf8proc
 )
 
 install(FILES "${WIO_BACKEND_RUNTIME_LIB}"
