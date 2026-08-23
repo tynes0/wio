@@ -1276,8 +1276,7 @@ namespace wio
             return nullptr;
 
         std::vector<NodePtr<AttributeStatement>> attributes;
-        while (match(TokenType::atSign))
-            attributes.push_back(parseAttributeStatement());
+        parseLeadingAttributes(attributes, bracketAttributeListPrecedesDeclaration());
         
         if (peek().isKeyword())
         {
@@ -1614,6 +1613,114 @@ namespace wio
             return makeNodePtr<AttributeStatement>(attribute.value(), args, typeArgs, startLoc, qualifiedName, argumentNames);
         }
         return makeNodePtr<AttributeStatement>(Attribute::Unknown, args, typeArgs, startLoc, qualifiedName, argumentNames);
+    }
+
+    void Parser::parseBracketAttributeList(std::vector<NodePtr<AttributeStatement>>& attributes)
+    {
+        const Token open = consume(TokenType::leftBracket);
+        if (match(TokenType::rightBracket))
+            utError("An attribute list cannot be empty.", open.loc);
+
+        while (true)
+        {
+            if (!matchIdentifier())
+                utError("Expected an attribute name in attribute list.", peek().loc);
+
+            attributes.push_back(parseAttributeStatement(false));
+            if (!match(TokenType::comma, true))
+                break;
+            if (match(TokenType::rightBracket))
+                utError("Expected an attribute after ','.", peek().loc);
+        }
+
+        consume(TokenType::rightBracket);
+    }
+
+    void Parser::parseLeadingAttributes(std::vector<NodePtr<AttributeStatement>>& attributes,
+                                        bool acceptBracketSyntax)
+    {
+        while (true)
+        {
+            if (match(TokenType::atSign))
+            {
+                attributes.push_back(parseAttributeStatement());
+                continue;
+            }
+            if (acceptBracketSyntax && match(TokenType::leftBracket))
+            {
+                parseBracketAttributeList(attributes);
+                continue;
+            }
+            break;
+        }
+    }
+
+    bool Parser::bracketAttributeListPrecedesDeclaration() const
+    {
+        if (peek().type != TokenType::leftBracket)
+            return false;
+
+        size_t offset = 0;
+        do
+        {
+            int squareDepth = 0;
+            int parenDepth = 0;
+            int braceDepth = 0;
+            bool closed = false;
+            for (; currentTokenIndex_ + offset < tokens_.size(); ++offset)
+            {
+                const TokenType type = peek(static_cast<int>(offset)).type;
+                if (type == TokenType::leftBracket)
+                    ++squareDepth;
+                else if (type == TokenType::rightBracket)
+                {
+                    --squareDepth;
+                    if (squareDepth == 0 && parenDepth == 0 && braceDepth == 0)
+                    {
+                        ++offset;
+                        closed = true;
+                        break;
+                    }
+                }
+                else if (type == TokenType::leftParen)
+                    ++parenDepth;
+                else if (type == TokenType::rightParen)
+                    --parenDepth;
+                else if (type == TokenType::leftBrace)
+                    ++braceDepth;
+                else if (type == TokenType::rightBrace)
+                    --braceDepth;
+                else if (type == TokenType::endOfFile)
+                    return false;
+            }
+            if (!closed)
+                return false;
+        }
+        while (peek(static_cast<int>(offset)).type == TokenType::leftBracket);
+
+        switch (peek(static_cast<int>(offset)).type)
+        {
+        case TokenType::kwLet:
+        case TokenType::kwMut:
+        case TokenType::kwConst:
+        case TokenType::kwType:
+        case TokenType::kwAttribute:
+        case TokenType::kwApplication:
+        case TokenType::kwSystem:
+        case TokenType::kwFn:
+        case TokenType::kwAsync:
+        case TokenType::kwInterface:
+        case TokenType::kwComponent:
+        case TokenType::kwExtension:
+        case TokenType::kwObject:
+        case TokenType::kwEnum:
+        case TokenType::kwFlagset:
+        case TokenType::kwFlag:
+        case TokenType::kwRealm:
+            return true;
+        default:
+            return false;
+        }
     }
 
     void Parser::parseWithAttributeClause(std::vector<NodePtr<AttributeStatement>>& attributes)
@@ -2642,8 +2749,7 @@ namespace wio
         while (peek().isValid() && !match(TokenType::rightBrace))
         {
             std::vector<NodePtr<AttributeStatement>> methodAttrs;
-            while (peek().type == TokenType::atSign)
-                methodAttrs.push_back(parseAttributeStatement());
+            parseLeadingAttributes(methodAttrs);
 
             const bool isAsync = match(TokenType::kwAsync);
             auto method = parseFunctionDeclaration(std::move(methodAttrs), false, true, isAsync);
@@ -2676,8 +2782,7 @@ namespace wio
         while (peek().isValid() && !match(TokenType::rightBrace))
         {
             std::vector<NodePtr<AttributeStatement>> memberAttrs;
-            while (peek().type == TokenType::atSign)
-                memberAttrs.push_back(parseAttributeStatement());
+            parseLeadingAttributes(memberAttrs);
 
             AccessModifier access = AccessModifier::None; 
             if (match(TokenType::kwPublic, true)) access = AccessModifier::Public;
@@ -2764,8 +2869,7 @@ namespace wio
         while (peek().isValid() && !match(TokenType::rightBrace))
         {
             std::vector<NodePtr<AttributeStatement>> methodAttrs;
-            while (peek().type == TokenType::atSign)
-                methodAttrs.push_back(parseAttributeStatement());
+            parseLeadingAttributes(methodAttrs);
 
             AccessModifier access = AccessModifier::None;
             if (match(TokenType::kwPublic, true)) access = AccessModifier::Public;
@@ -2836,8 +2940,7 @@ namespace wio
         while (peek().isValid() && !match(TokenType::rightBrace))
         {
             std::vector<NodePtr<AttributeStatement>> memberAttrs;
-            while (peek().type == TokenType::atSign)
-                memberAttrs.push_back(parseAttributeStatement());
+            parseLeadingAttributes(memberAttrs);
 
             AccessModifier access = AccessModifier::None; 
             if (match(TokenType::kwPublic, true)) access = AccessModifier::Public;

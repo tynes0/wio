@@ -3353,6 +3353,30 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_attribute_bracket_syntax_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_bracket_syntax_run.wio"
+        "attribute-bracket-syntax-ok"
+        --run
+    )
+    set_tests_properties(wio_test_attribute_bracket_syntax_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
+    add_wio_failure_test(
+        wio_invalid_attribute_bracket_empty
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_bracket_empty.wio"
+        "An attribute list cannot be empty"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_bracket_trailing_comma
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_bracket_trailing_comma.wio"
+        "Expected an attribute after ','"
+    )
+    set_tests_properties(
+        wio_invalid_attribute_bracket_empty
+        wio_invalid_attribute_bracket_trailing_comma
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
         wio_test_attribute_scoped_activation_run
         "${CMAKE_SOURCE_DIR}/tests/attribute_scoped_activation_run.wio"
         "attribute-scoped-activation-ok"
