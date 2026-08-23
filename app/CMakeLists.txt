@@ -2062,6 +2062,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "SDK 0.14 sequences: queue=2 tags=2 levels=4-9"
     )
 
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_014_tuple_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_tuple_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_tuple_host.cpp"
+        "SDK 0.14 tuple: selected=none error=730 revision=9000000000"
+    )
+
     add_wio_shared_reload_interop_test(
         wio_test_module_reload_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/module_reload.wio"
@@ -5150,6 +5157,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_exported_queue_unsupported_payload
         "${CMAKE_SOURCE_DIR}/tests/invalid/exported_queue_unsupported_payload.wio"
         "@Export object 'BadQueueProfile' exposes public field 'workers' with type 'std::Queue<Option<IWorker>>' that is not yet SDK-exportable\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_exported_tuple_unsupported_payload
+        "${CMAKE_SOURCE_DIR}/tests/invalid/exported_tuple_unsupported_payload.wio"
+        "@Export object 'BadTupleProfile' exposes public field 'worker' with type 'std::Tuple<i32, IWorker>' that is not yet SDK-exportable\\."
     )
 
     add_wio_failure_test(

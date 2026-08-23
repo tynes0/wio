@@ -769,6 +769,30 @@ state.field("tags").set_as(Tags{"host", "sdk"});
 Queue order and ordered-set ordering are preserved. Unordered sets preserve
 membership without promising iteration order.
 
+`std::Tuple<...>` fields also cross the generated bridge as
+`wio::sdk::WioTuple<...>` (an SDK spelling for `std::tuple`). Every tuple slot
+is checked against the published generic argument descriptor and converted
+recursively, so mixed values remain strongly typed:
+
+```cpp
+using Snapshot = WioTuple<
+    WioOption<std::int32_t>,
+    WioResult<std::string>,
+    WioU64
+>;
+
+Snapshot snapshot = object.field("snapshot").get_as<Snapshot>();
+object.field("snapshot").set_as(Snapshot{
+    WioOption<std::int32_t>::none(),
+    WioResult<std::string>::ok("updated"),
+    WioU64{14}
+});
+```
+
+Tuple arity and every element type participate in `can_access_as<T>()`.
+Unsupported nested values are rejected by Wio analysis instead of reaching a
+C++ template or erased-payload failure.
+
 ---
 
 ## 10. Hot Reload

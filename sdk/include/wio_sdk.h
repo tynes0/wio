@@ -1552,6 +1552,18 @@ namespace wio::sdk
         };
 
         template <typename T>
+        struct IsStdTuple : std::false_type
+        {
+        };
+
+        template <typename... TValues>
+        struct IsStdTuple<std::tuple<TValues...>> : std::true_type
+        {
+            using Type = std::tuple<TValues...>;
+            static constexpr std::size_t Size = sizeof...(TValues);
+        };
+
+        template <typename T>
         struct IsWioOption : std::false_type
         {
         };
@@ -1753,6 +1765,18 @@ namespace wio::sdk
         template <typename T>
         std::string hostFieldTypeName();
 
+        template <typename TTuple, size_t... Indices>
+        std::string hostTupleTypeName(std::index_sequence<Indices...>)
+        {
+            std::ostringstream message;
+            message << "Tuple<";
+            bool first = true;
+            ((message << (std::exchange(first, false) ? "" : ", ")
+                      << hostFieldTypeName<std::tuple_element_t<Indices, TTuple>>()), ...);
+            message << ">";
+            return message.str();
+        }
+
         template <typename Signature, size_t... Indices>
         std::string hostFunctionTypeName(std::index_sequence<Indices...>)
         {
@@ -1802,6 +1826,12 @@ namespace wio::sdk
             else if constexpr (IsWioOption<U>::value)
             {
                 return "Option<" + hostFieldTypeName<typename IsWioOption<U>::Value>() + ">";
+            }
+            else if constexpr (IsStdTuple<U>::value)
+            {
+                return hostTupleTypeName<typename IsStdTuple<U>::Type>(
+                    std::make_index_sequence<IsStdTuple<U>::Size>{}
+                );
             }
             else if constexpr (IsWioResult<U>::value)
             {
@@ -1860,6 +1890,16 @@ namespace wio::sdk
         template <typename T>
         bool matchesTypeDescriptor(const TypeDescriptorView& type);
 
+        template <typename TTuple, size_t... Indices>
+        bool matchesTupleDescriptor(const TypeDescriptorView& type, std::index_sequence<Indices...>)
+        {
+            if (!type.is_tuple() || type.generic_argument_count() != sizeof...(Indices))
+                return false;
+
+            return (matchesTypeDescriptor<std::tuple_element_t<Indices, TTuple>>(
+                type.generic_argument(static_cast<std::uint32_t>(Indices))) && ...);
+        }
+
         template <typename Signature, size_t... Indices>
         bool matchesFunctionDescriptor(const TypeDescriptorView& type, std::index_sequence<Indices...>)
         {
@@ -1917,6 +1957,13 @@ namespace wio::sdk
                 return type.is_option() &&
                     type.generic_argument_count() == 1u &&
                     matchesTypeDescriptor<typename IsWioOption<U>::Value>(type.generic_argument(0u));
+            }
+            else if constexpr (IsStdTuple<U>::value)
+            {
+                return matchesTupleDescriptor<typename IsStdTuple<U>::Type>(
+                    type,
+                    std::make_index_sequence<IsStdTuple<U>::Size>{}
+                );
             }
             else if constexpr (IsWioResult<U>::value)
             {

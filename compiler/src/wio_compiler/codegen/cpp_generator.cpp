@@ -643,6 +643,15 @@ namespace wio::codegen
             auto queueType = getStdValueStructType(resolvedType, "Queue");
             auto unorderedSetType = getStdValueStructType(resolvedType, "UnorderedSet");
             auto orderedSetType = getStdValueStructType(resolvedType, "OrderedSet");
+            auto tupleType = getStdValueStructType(resolvedType, "Tuple");
+            if (tupleType)
+            {
+                return std::all_of(
+                    tupleType->genericArguments.begin(),
+                    tupleType->genericArguments.end(),
+                    [](const Ref<sema::Type>& argument) { return isSdkValueBridgeType(argument); }
+                );
+            }
             auto genericValueType = optionType ? optionType :
                 (resultType ? resultType :
                  (queueType ? queueType :
@@ -1425,7 +1434,24 @@ namespace wio::codegen
                     std::vector<Ref<sema::Type>> instantiatedArguments;
                     instantiatedArguments.reserve(structType->genericArguments.size());
                     for (const auto& genericArgument : structType->genericArguments)
-                        instantiatedArguments.push_back(instantiateGenericType(genericArgument, bindings));
+                    {
+                        auto instantiatedArgument = instantiateGenericType(genericArgument, bindings);
+                        auto resolvedArgument = unwrapAliasType(instantiatedArgument);
+                        if (structType->hasGenericParameterPack && resolvedArgument &&
+                            resolvedArgument->kind() == sema::TypeKind::TypePackView)
+                        {
+                            const auto packView = resolvedArgument.AsFast<sema::TypePackViewType>();
+                            instantiatedArguments.insert(
+                                instantiatedArguments.end(),
+                                packView->elementTypes.begin(),
+                                packView->elementTypes.end()
+                            );
+                        }
+                        else
+                        {
+                            instantiatedArguments.push_back(instantiatedArgument);
+                        }
+                    }
 
                     return instantiateGenericStructType(structType, instantiatedArguments);
                 }
@@ -2471,12 +2497,18 @@ namespace wio::codegen
                     auto queueFieldType = getStdValueStructType(resolvedFieldType, "Queue");
                     auto unorderedSetFieldType = getStdValueStructType(resolvedFieldType, "UnorderedSet");
                     auto orderedSetFieldType = getStdValueStructType(resolvedFieldType, "OrderedSet");
+                    auto tupleFieldType = getStdValueStructType(resolvedFieldType, "Tuple");
+                    const bool isTupleField = tupleFieldType && std::all_of(
+                        tupleFieldType->genericArguments.begin(),
+                        tupleFieldType->genericArguments.end(),
+                        [](const Ref<sema::Type>& argument) { return isSdkValueBridgeType(argument); }
+                    );
                     const bool isSequenceContainerField =
                         (queueFieldType && queueFieldType->genericArguments.size() == 1 && isSdkValueBridgeType(queueFieldType->genericArguments.front())) ||
                         (unorderedSetFieldType && unorderedSetFieldType->genericArguments.size() == 1 && isSdkValueBridgeType(unorderedSetFieldType->genericArguments.front())) ||
                         (orderedSetFieldType && orderedSetFieldType->genericArguments.size() == 1 && isSdkValueBridgeType(orderedSetFieldType->genericArguments.front()));
                     const bool needsDynamicBridge = resolvedFieldType &&
-                        (isTextField || isOptionField || isResultField || isUnitField || isSequenceContainerField ||
+                        (isTextField || isOptionField || isResultField || isUnitField || isSequenceContainerField || isTupleField ||
                          resolvedFieldType->kind() == sema::TypeKind::Array ||
                          resolvedFieldType->kind() == sema::TypeKind::Dictionary ||
                          resolvedFieldType->kind() == sema::TypeKind::Function);
@@ -3069,6 +3101,22 @@ namespace wio::codegen
             if (getStdValueStructType(resolvedType, "ResultUnit"))
                 return "wio::sdk::WioUnit";
 
+            if (auto tupleType = getStdValueStructType(resolvedType, "Tuple"); tupleType)
+            {
+                std::string hostType = "wio::sdk::WioTuple<";
+                for (std::size_t index = 0; index < tupleType->genericArguments.size(); ++index)
+                {
+                    auto argumentType = getSdkDynamicBridgeCppType(tupleType->genericArguments[index]);
+                    if (!argumentType.has_value())
+                        return std::nullopt;
+                    if (index > 0)
+                        hostType += ", ";
+                    hostType += *argumentType;
+                }
+                hostType += ">";
+                return hostType;
+            }
+
             if (auto resultType = getStdValueStructType(resolvedType, "Result");
                 resultType && resultType->genericArguments.size() == 1)
             {
@@ -3242,6 +3290,40 @@ namespace wio::codegen
 
             if (getStdValueStructType(resolvedType, "ResultUnit"))
                 return "wio::sdk::WioUnit{}";
+
+            if (auto tupleType = getStdValueStructType(resolvedType, "Tuple"); tupleType)
+            {
+                auto hostType = getSdkDynamicBridgeCppType(resolvedType);
+                if (!hostType.has_value())
+                    return std::nullopt;
+
+                const std::string sourceName = "_wio_tuple_" + std::to_string(depth);
+                std::string values;
+                for (std::size_t index = 0; index < tupleType->genericArguments.size(); ++index)
+                {
+                    auto convertedValue = makeSdkDynamicToHostExpression(
+                        sourceName + "->data.template Get<" + std::to_string(index) + ">()",
+                        tupleType->genericArguments[index],
+                        depth + 1
+                    );
+                    if (!convertedValue.has_value())
+                        return std::nullopt;
+                    if (!values.empty())
+                        values += ", ";
+                    values += *convertedValue;
+                }
+
+                return common::formatString(
+                    "([&]() -> {} {{ auto {} = {}; if (!{}) throw std::runtime_error(\"Wio SDK tuple field is null.\"); "
+                    "return {}{{{}}}; }}())",
+                    *hostType,
+                    sourceName,
+                    expression,
+                    sourceName,
+                    *hostType,
+                    values
+                );
+            }
 
             if (auto resultType = getStdValueStructType(resolvedType, "Result");
                 resultType && resultType->genericArguments.size() == 1)
@@ -3446,6 +3528,36 @@ namespace wio::codegen
 
             if (auto unitType = getStdValueStructType(resolvedType, "ResultUnit"); unitType)
                 return mangleStructTypeName(unitType) + "()";
+
+            if (auto tupleType = getStdValueStructType(resolvedType, "Tuple"); tupleType)
+            {
+                const std::string sourceName = "_wio_host_tuple_" + std::to_string(depth);
+                std::string values;
+                for (std::size_t index = 0; index < tupleType->genericArguments.size(); ++index)
+                {
+                    auto convertedValue = makeSdkDynamicFromHostExpression(
+                        "std::get<" + std::to_string(index) + ">(" + sourceName + ")",
+                        tupleType->genericArguments[index],
+                        depth + 1
+                    );
+                    if (!convertedValue.has_value())
+                        return std::nullopt;
+                    if (!values.empty())
+                        values += ", ";
+                    values += *convertedValue;
+                }
+
+                const std::string cppStructType = mangleStructTypeName(tupleType);
+                return common::formatString(
+                    "([&]() -> wio::runtime::Ref<{}> {{ const auto& {} = {}; "
+                    "return wio::runtime::Ref<{}>::Create({}); }}())",
+                    cppStructType,
+                    sourceName,
+                    expression,
+                    cppStructType,
+                    values
+                );
+            }
 
             if (auto resultType = getStdValueStructType(resolvedType, "Result");
                 resultType && resultType->genericArguments.size() == 1)
@@ -4850,11 +4962,12 @@ namespace wio::codegen
                     const bool isOptionField = getStdValueStructType(dynamicFieldType, "Option") != nullptr;
                     const bool isResultField = getStdValueStructType(dynamicFieldType, "Result") != nullptr;
                     const bool isUnitField = getStdValueStructType(dynamicFieldType, "ResultUnit") != nullptr;
+                    const bool isTupleField = getStdValueStructType(dynamicFieldType, "Tuple") != nullptr;
                     const bool isSequenceContainerField =
                         getStdValueStructType(dynamicFieldType, "Queue") != nullptr ||
                         getStdValueStructType(dynamicFieldType, "UnorderedSet") != nullptr ||
                         getStdValueStructType(dynamicFieldType, "OrderedSet") != nullptr;
-                    const bool isPortableBridgeField = isOptionField || isResultField || isUnitField || isSequenceContainerField ||
+                    const bool isPortableBridgeField = isOptionField || isResultField || isUnitField || isTupleField || isSequenceContainerField ||
                         (dynamicFieldType && (dynamicFieldType->kind() == sema::TypeKind::Array ||
                                               dynamicFieldType->kind() == sema::TypeKind::Dictionary));
                     const auto portablePayloadType = isPortableBridgeField

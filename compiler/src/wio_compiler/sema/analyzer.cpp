@@ -3984,7 +3984,24 @@ namespace wio::sema
                 {
                     instantiatedArguments.reserve(structType->genericArguments.size());
                     for (const auto& genericArgument : structType->genericArguments)
-                        instantiatedArguments.push_back(instantiateGenericType(genericArgument, bindings));
+                    {
+                        auto instantiatedArgument = instantiateGenericType(genericArgument, bindings);
+                        auto resolvedArgument = unwrapAliasType(instantiatedArgument);
+                        if (structType->hasGenericParameterPack && resolvedArgument &&
+                            resolvedArgument->kind() == TypeKind::TypePackView)
+                        {
+                            const auto packView = resolvedArgument.AsFast<TypePackViewType>();
+                            instantiatedArguments.insert(
+                                instantiatedArguments.end(),
+                                packView->elementTypes.begin(),
+                                packView->elementTypes.end()
+                            );
+                        }
+                        else
+                        {
+                            instantiatedArguments.push_back(instantiatedArgument);
+                        }
+                    }
 
                     return instantiateGenericStructType(structType, instantiatedArguments);
                 }
@@ -6106,6 +6123,15 @@ namespace wio::sema
             if (structType->name == "ResultUnit")
                 return structType->genericArguments.empty();
 
+            if (structType->name == "Tuple")
+            {
+                return std::all_of(
+                    structType->genericArguments.begin(),
+                    structType->genericArguments.end(),
+                    [](const Ref<Type>& argument) { return isSdkValueBridgeType(argument); }
+                );
+            }
+
             if ((structType->name == "Option" || structType->name == "Result" ||
                  structType->name == "Queue" || structType->name == "UnorderedSet" ||
                  structType->name == "OrderedSet") &&
@@ -6174,6 +6200,15 @@ namespace wio::sema
                 {
                     return structType->genericArguments.size() == 1 &&
                         isSdkValueBridgeType(structType->genericArguments.front());
+                }
+
+                if (structType->name == "Tuple" && isStdLibraryScopePath(structType->scopePath))
+                {
+                    return std::all_of(
+                        structType->genericArguments.begin(),
+                        structType->genericArguments.end(),
+                        [](const Ref<Type>& argument) { return isSdkValueBridgeType(argument); }
+                    );
                 }
 
                 return true;
