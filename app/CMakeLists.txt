@@ -2076,6 +2076,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "SDK 0.14 span: start=2 count=2 values=30-40"
     )
 
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_014_byte_buffer_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_byte_buffer_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_byte_buffer_host.cpp"
+        "SDK 0.14 buffer: count=3 position=1 capacity=32 bytes=52-18-171"
+    )
+
     add_wio_shared_reload_interop_test(
         wio_test_module_reload_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/module_reload.wio"

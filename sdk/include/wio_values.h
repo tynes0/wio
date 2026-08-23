@@ -625,6 +625,22 @@ namespace wio::sdk
         WioByteBuffer() = default;
         explicit WioByteBuffer(const std::size_t capacity) { data_.reserve(capacity); }
         explicit WioByteBuffer(std::vector<std::byte> values) : data_(std::move(values)) {}
+        WioByteBuffer(const WioByteBuffer& other)
+            : data_(other.data_), position_(other.position_)
+        {
+            data_.reserve(other.data_.capacity());
+        }
+        WioByteBuffer& operator=(const WioByteBuffer& other)
+        {
+            if (this == &other)
+                return *this;
+            data_ = other.data_;
+            data_.reserve(other.data_.capacity());
+            position_ = other.position_;
+            return *this;
+        }
+        WioByteBuffer(WioByteBuffer&&) noexcept = default;
+        WioByteBuffer& operator=(WioByteBuffer&&) noexcept = default;
         [[nodiscard]] bool empty() const noexcept { return data_.empty(); }
         [[nodiscard]] std::size_t count() const noexcept { return data_.size(); }
         [[nodiscard]] std::size_t capacity() const noexcept { return data_.capacity(); }

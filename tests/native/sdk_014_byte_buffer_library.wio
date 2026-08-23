@@ -1,0 +1,12 @@
+use std::buffer as buffer;
+
+@Export
+object Sdk14BufferProfile {
+    public payload: std::ByteBuffer;
+
+    public OnConstruct() {
+        self.payload = buffer::ByteBuffer(16usize);
+        self.payload.WriteU32LE(0x12345678u32);
+        self.payload.Seek(2usize);
+    }
+}

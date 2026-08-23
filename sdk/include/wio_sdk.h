@@ -266,7 +266,8 @@ namespace wio::sdk
             return is_primitive() || is_string() || is_text() || is_object() || is_component() ||
                 is_dynamic_array() || is_static_array() || is_dict() || is_tree() || is_function() ||
                 is_enum() || is_flagset() || is_option() || is_result() || is_tuple() ||
-                is_queue() || is_unordered_set() || is_ordered_set() || is_span() || is_unit();
+                is_queue() || is_unordered_set() || is_ordered_set() || is_span() ||
+                is_byte_buffer() || is_unit();
         }
 
         [[nodiscard]] std::uint64_t stable_id() const noexcept
@@ -1838,6 +1839,10 @@ namespace wio::sdk
             {
                 return "Span";
             }
+            else if constexpr (std::is_same_v<U, WioByteBuffer>)
+            {
+                return "ByteBuffer";
+            }
             else if constexpr (IsWioResult<U>::value)
             {
                 return "Result<" + hostFieldTypeName<typename IsWioResult<U>::Value>() + ">";
@@ -1973,6 +1978,10 @@ namespace wio::sdk
             else if constexpr (std::is_same_v<U, WioSpanRange>)
             {
                 return type.is_span() && type.generic_argument_count() == 0u;
+            }
+            else if constexpr (std::is_same_v<U, WioByteBuffer>)
+            {
+                return type.is_byte_buffer() && type.generic_argument_count() == 0u;
             }
             else if constexpr (IsWioResult<U>::value)
             {

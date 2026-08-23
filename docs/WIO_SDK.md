@@ -808,6 +808,21 @@ host span clamps it to the source bounds, matching `std::span::Make` and
 `std::span::Slice`. The SDK does not disguise an exported range token as a
 borrow into memory owned by another module.
 
+`std::ByteBuffer` uses the owned `WioByteBuffer` bridge. Reads and writes copy
+the byte content across the module boundary and retain both reserved capacity
+and cursor position:
+
+```cpp
+auto payload = object.field("payload").get_as<WioByteBuffer>();
+payload.write_u32_le(0x12345678u);
+payload.rewind();
+object.field("payload").set_as(std::move(payload));
+```
+
+No Wio object pointer or private buffer layout crosses the ABI. Pools remain a
+separate ownership facility: their generation handles are meaningful only to
+the pool instance that issued them and are not flattened into an owned buffer.
+
 ---
 
 ## 10. Hot Reload

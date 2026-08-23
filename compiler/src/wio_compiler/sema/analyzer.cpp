@@ -6126,6 +6126,9 @@ namespace wio::sema
             if (structType->name == "Span")
                 return structType->genericArguments.empty();
 
+            if (structType->name == "ByteBuffer")
+                return structType->genericArguments.empty();
+
             if (structType->name == "Tuple")
             {
                 return std::all_of(

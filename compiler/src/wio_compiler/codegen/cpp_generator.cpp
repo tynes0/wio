@@ -641,6 +641,9 @@ namespace wio::codegen
             if (auto spanType = getStdValueStructType(resolvedType, "Span"); spanType)
                 return spanType->genericArguments.empty();
 
+            if (auto byteBufferType = getStdValueStructType(resolvedType, "ByteBuffer"); byteBufferType)
+                return byteBufferType->genericArguments.empty();
+
             auto optionType = getStdValueStructType(resolvedType, "Option");
             auto resultType = getStdValueStructType(resolvedType, "Result");
             auto queueType = getStdValueStructType(resolvedType, "Queue");
@@ -2458,7 +2461,8 @@ namespace wio::codegen
                                 accessorBridgeType = structType->enumUnderlyingType;
                                 valueRequiresBridgeCast = true;
                             }
-                            else if (objectDeclarations.contains(structType.Get()))
+                            else if (objectDeclarations.contains(structType.Get()) &&
+                                     getStdValueStructType(structType, "ByteBuffer") == nullptr)
                             {
                                 accessorKind = ExportedFunctionInfo::FieldAccessorKind::ObjectHandle;
                                 accessorBridgeType = typeContext.getUSize();
@@ -2499,6 +2503,7 @@ namespace wio::codegen
                         isSdkValueBridgeType(resultFieldType->genericArguments.front());
                     const bool isUnitField = getStdValueStructType(resolvedFieldType, "ResultUnit") != nullptr;
                     const bool isSpanField = getStdValueStructType(resolvedFieldType, "Span") != nullptr;
+                    const bool isByteBufferField = getStdValueStructType(resolvedFieldType, "ByteBuffer") != nullptr;
                     auto queueFieldType = getStdValueStructType(resolvedFieldType, "Queue");
                     auto unorderedSetFieldType = getStdValueStructType(resolvedFieldType, "UnorderedSet");
                     auto orderedSetFieldType = getStdValueStructType(resolvedFieldType, "OrderedSet");
@@ -2513,7 +2518,8 @@ namespace wio::codegen
                         (unorderedSetFieldType && unorderedSetFieldType->genericArguments.size() == 1 && isSdkValueBridgeType(unorderedSetFieldType->genericArguments.front())) ||
                         (orderedSetFieldType && orderedSetFieldType->genericArguments.size() == 1 && isSdkValueBridgeType(orderedSetFieldType->genericArguments.front()));
                     const bool needsDynamicBridge = resolvedFieldType &&
-                        (isTextField || isOptionField || isResultField || isUnitField || isSpanField || isSequenceContainerField || isTupleField ||
+                        (isTextField || isOptionField || isResultField || isUnitField || isSpanField || isByteBufferField ||
+                         isSequenceContainerField || isTupleField ||
                          resolvedFieldType->kind() == sema::TypeKind::Array ||
                          resolvedFieldType->kind() == sema::TypeKind::Dictionary ||
                          resolvedFieldType->kind() == sema::TypeKind::Function);
@@ -3109,6 +3115,9 @@ namespace wio::codegen
             if (getStdValueStructType(resolvedType, "Span"))
                 return "wio::sdk::WioSpanRange";
 
+            if (getStdValueStructType(resolvedType, "ByteBuffer"))
+                return "wio::sdk::WioByteBuffer";
+
             if (auto tupleType = getStdValueStructType(resolvedType, "Tuple"); tupleType)
             {
                 std::string hostType = "wio::sdk::WioTuple<";
@@ -3303,6 +3312,24 @@ namespace wio::codegen
             {
                 return "wio::sdk::WioSpanRange{static_cast<std::size_t>((" + expression +
                     ").start), static_cast<std::size_t>((" + expression + ").count)}";
+            }
+
+            if (getStdValueStructType(resolvedType, "ByteBuffer"))
+            {
+                const std::string sourceName = "_wio_byte_buffer_" + std::to_string(depth);
+                return common::formatString(
+                    "([&]() -> wio::sdk::WioByteBuffer {{ auto {} = {}; wio::sdk::WioByteBuffer _wio_output; "
+                    "if (!{}) return _wio_output; _wio_output.reserve(static_cast<std::size_t>({}->_WF_Capacity())); "
+                    "for (const auto _wio_byte : {}->_WF_ToArray()) "
+                    "_wio_output.write(static_cast<std::byte>(_wio_byte)); "
+                    "(void)_wio_output.seek(static_cast<std::size_t>({}->_WF_Position())); return _wio_output; }}())",
+                    sourceName,
+                    expression,
+                    sourceName,
+                    sourceName,
+                    sourceName,
+                    sourceName
+                );
             }
 
             if (auto tupleType = getStdValueStructType(resolvedType, "Tuple"); tupleType)
@@ -3547,6 +3574,28 @@ namespace wio::codegen
             {
                 return mangleStructTypeName(spanType) + "(static_cast<std::size_t>((" + expression +
                     ").start()), static_cast<std::size_t>((" + expression + ").count()))";
+            }
+
+            if (auto byteBufferType = getStdValueStructType(resolvedType, "ByteBuffer"); byteBufferType)
+            {
+                const std::string sourceName = "_wio_host_byte_buffer_" + std::to_string(depth);
+                const std::string cppStructType = mangleStructTypeName(byteBufferType);
+                return common::formatString(
+                    "([&]() -> wio::runtime::Ref<{}> {{ const auto& {} = {}; wio::DArray<uint8_t> _wio_bytes; "
+                    "_wio_bytes.reserve({}.count()); for (const auto _wio_byte : {}.data()) "
+                    "_wio_bytes.push_back(std::to_integer<uint8_t>(_wio_byte)); "
+                    "auto _wio_output = wio::runtime::Ref<{}>::Create(_wio_bytes); "
+                    "_wio_output->_WF_Reserve_usize(static_cast<std::size_t>({}.capacity())); "
+                    "(void)_wio_output->_WF_Seek_usize(static_cast<std::size_t>({}.position())); return _wio_output; }}())",
+                    cppStructType,
+                    sourceName,
+                    expression,
+                    sourceName,
+                    sourceName,
+                    cppStructType,
+                    sourceName,
+                    sourceName
+                );
             }
 
             if (auto tupleType = getStdValueStructType(resolvedType, "Tuple"); tupleType)
@@ -4983,12 +5032,14 @@ namespace wio::codegen
                     const bool isResultField = getStdValueStructType(dynamicFieldType, "Result") != nullptr;
                     const bool isUnitField = getStdValueStructType(dynamicFieldType, "ResultUnit") != nullptr;
                     const bool isSpanField = getStdValueStructType(dynamicFieldType, "Span") != nullptr;
+                    const bool isByteBufferField = getStdValueStructType(dynamicFieldType, "ByteBuffer") != nullptr;
                     const bool isTupleField = getStdValueStructType(dynamicFieldType, "Tuple") != nullptr;
                     const bool isSequenceContainerField =
                         getStdValueStructType(dynamicFieldType, "Queue") != nullptr ||
                         getStdValueStructType(dynamicFieldType, "UnorderedSet") != nullptr ||
                         getStdValueStructType(dynamicFieldType, "OrderedSet") != nullptr;
-                    const bool isPortableBridgeField = isOptionField || isResultField || isUnitField || isSpanField || isTupleField || isSequenceContainerField ||
+                    const bool isPortableBridgeField = isOptionField || isResultField || isUnitField || isSpanField ||
+                        isByteBufferField || isTupleField || isSequenceContainerField ||
                         (dynamicFieldType && (dynamicFieldType->kind() == sema::TypeKind::Array ||
                                               dynamicFieldType->kind() == sema::TypeKind::Dictionary));
                     const auto portablePayloadType = isPortableBridgeField
