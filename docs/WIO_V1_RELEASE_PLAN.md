@@ -140,8 +140,14 @@ Required scope:
   folded structural arguments;
 - deterministic validation and checked derive processors without unrestricted
   token or AST mutation;
-- typed entry guards, pre/postconditions, guaranteed exit behavior, and bounded
-  `around` interception with explicit ordering and effect declarations;
+- separate typed pre, post, finally, and around processor interfaces, including
+  entry guards, result mapping, guaranteed exit, explicit ordering, and effect
+  declarations;
+- user attributes composed from existing attributes, with normalized target,
+  requirement, allow-list, conflict, exclusivity, cardinality, and ordering
+  constraints;
+- declarations for every compiler-known attribute and processor interface in
+  `std::attribute`, including native/export and their compatibility rules;
 - callback receiver-liveness contracts, including wrappers whose native peer
   has already been destroyed;
 - sync/async phase, ownership, cancellation, thread-affinity, and ABI rules for

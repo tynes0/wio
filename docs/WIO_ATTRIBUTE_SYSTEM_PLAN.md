@@ -170,24 +170,26 @@ evaluation.
 ## 4. Attribute bodies and processors
 
 Attribute declarations may contain ordinary Wio functions and may implement
-standard processor interfaces. The processor interface, not a magic method
-name, decides how the body participates:
+standard processor interfaces. Pre- and post-processing are separate contracts;
+an attribute does not implement a broad processor and then discover its phase
+at runtime. The interface type, not a magic method name, decides how the body
+participates:
 
 ```wio
 [attribute::Targets(method)]
-[attribute::Processor(CallbackMethodProcessor)]
+[attribute::Processor(CallbackMethodPre)]
 attribute CallbackMethod;
 
-object CallbackMethodProcessor : attribute::AroundProcessor {
-    public fn Invoke<TSelf, TArgs, TResult>(
-        call: ref attribute::Call<TSelf, TArgs, TResult>
-    ) -> attribute::Flow<TResult>
+object CallbackMethodPre : attribute::PreProcessor {
+    public fn Before<TSelf, TArgs, TResult>(
+        call: ref attribute::PreCall<TSelf, TArgs, TResult>
+    ) -> attribute::PreFlow<TResult>
     where TSelf: native::LivePeer
     {
         if (not call.Self().IsAlive()) {
             return call.Skip();
         }
-        return call.Proceed();
+        return call.Continue();
     }
 }
 
@@ -200,8 +202,10 @@ fn OnNativeEvent(event: view Event) {
 The example syntax for the generic processor API remains subject to
 implementation feedback, but the semantic rules are fixed:
 
-- `Call` exposes only capabilities valid for the target: receiver, parameters,
-  result/error state, attribute arguments, and `Proceed`;
+- each phase context exposes only capabilities valid at that phase: `PreCall`
+  has receiver/parameters but no result, `PostCall` has a successful result,
+  `ExitCall` has success/error/cancellation outcome, and `AroundCall` owns the
+  single `Proceed` capability;
 - the original body is not exposed as mutable tokens or an arbitrary AST;
 - `Proceed` is invoked at most once in the initial model;
 - `Skip` is valid for `unit` functions, or when the attribute supplies a
@@ -213,18 +217,113 @@ implementation feedback, but the semantic rules are fixed:
 - processor expansion is deterministic, cycle-checked, cacheable, and
   inspectable.
 
-The initial behavioral layer contains four fixed capabilities:
+The behavioral layer contains four independent interfaces:
 
-- entry guard/precondition;
-- successful-return postcondition/result mapping;
-- guaranteed exit/finalization;
-- typed `around` interception.
+- `attribute::PreProcessor` for entry guards and preconditions;
+- `attribute::PostProcessor` for successful-return postconditions and
+  type-compatible result mapping;
+- `attribute::FinallyProcessor` for guaranteed exit/finalization;
+- `attribute::AroundProcessor` for typed interception that may invoke the
+  original body exactly once or produce a valid replacement outcome.
+
+An attribute may attach more than one processor, for example a transaction may
+use a pre processor to open state, a post processor to commit, and a finally
+processor to roll back or release resources. Phase state crosses hooks only
+through a declared typed state value; hidden thread-local or global coupling is
+not part of the contract.
 
 These are standard processor interfaces, not unrestricted macro hooks. Call-
 site rewriting, token macros, arbitrary AST mutation, hidden overloads, and
 silent public-signature changes are outside the system.
 
 ## 5. Ordering and composition
+
+### 5.1 Composing existing attributes
+
+Users may define an attribute from existing attributes without writing a
+processor. `compose` is a contextual clause on attribute declarations, not a
+general expression operator:
+
+```wio
+attribute PublicApi(symbol: string)
+    compose [Export, CppName(symbol)];
+
+[PublicApi("CreateWidget")]
+fn CreateWidget() -> i32 {
+    return 0;
+}
+```
+
+Composition may itself use another composite attribute. Expansion is
+compile-time, recursive, cycle-checked, and atomic: either the complete
+normalized set is valid for the target or the application is rejected. The
+source application remains visible as the parent; expanded applications record
+`origin = composed` and the parent attribute stable ID. Runtime reflection
+retains only applications whose effective retention requires it, while
+compiler inspection can display the full expansion chain.
+
+An attribute may combine composition and processors:
+
+```wio
+[attribute::Targets(method)]
+[attribute::Processor(AuthorizePre)]
+attribute AuthorizedExport(role: Role, symbol: string)
+    compose [Export, CppName(symbol), Audit(role)];
+```
+
+Composition cannot capture runtime locals, mutate the target, synthesize
+arguments by reflection, or defer constraint checking until runtime. Composite
+arguments are folded structural compile-time values.
+
+### 5.2 Combination limits
+
+Attribute compatibility is declared with standard meta-attributes. This keeps
+the grammar small while giving the analyzer a complete constraint graph:
+
+```wio
+[attribute::Targets(fn)]
+[attribute::Requires(Export)]
+[attribute::Conflicts(Native, Event)]
+[attribute::OnlyWith(Export, CppName, Deprecated, Audit)]
+[attribute::Cardinality(1)]
+attribute Command(name: string);
+```
+
+The constraint vocabulary is:
+
+- `Targets(...)`: valid declaration/member/parameter target kinds;
+- `Requires(...)`: all listed attributes must be effective after composition;
+- `RequiresAny(...)`: at least one listed attribute must be effective;
+- `Conflicts(...)`: listed attributes may not be effective together;
+- `OnlyWith(...)`: when present, every other non-policy attribute must be in
+  the allow-list;
+- `Exclusive("group")`: at most one effective attribute in the named group;
+- `Cardinality(min, max)`: effective application count on one target;
+- `Before(...)` and `After(...)`: behavioral processor ordering dependencies;
+- `Implies(...)`: a metadata-only logical implication used for validation and
+  querying; unlike `compose`, it does not create an application or arguments.
+
+Constraints are evaluated on the normalized effective set after scoped,
+inherited, composed, generated, and direct applications have been collected.
+Diagnostics identify both sides, the composition/inheritance origin chain, and
+the rule declaration. `OnlyWith` is intentionally uncommon; default behavior
+allows unrelated metadata attributes unless a conflict or exclusivity rule
+forbids them.
+
+Core examples include:
+
+- `Native` conflicts with `Export` on the same function;
+- `CppHeader` requires `Native` at declaration scope but may activate lexically
+  through `using`;
+- `CppName` requires one of `Native` or `Export`;
+- `Command` and `Event` require `Export` and conflict with each other;
+- one module-lifecycle role is allowed per function, and fixed-symbol lifecycle
+  attributes conflict with `CppName`;
+- `Specialize` is valid only on matching generic object/component primaries;
+- behavioral processors that can block conflict with main-loop/update targets
+  unless the target explicitly permits blocking.
+
+### 5.3 Ordering
 
 Attribute list order is metadata order only. Behavioral composition must be
 declared by processor dependencies or an explicit pipeline:
@@ -247,7 +346,60 @@ failure, cancellation, and final cleanup are distinct phases. An attribute
 must select supported phases explicitly; synchronous `finally` behavior is not
 silently treated as cancellation-safe asynchronous cleanup.
 
-## 6. Reflection, SDK, and tooling
+## 6. Standard compile-time attribute interfaces
+
+Every compiler-recognized attribute and processor contract is declared for
+users in `std::attribute`; compiler knowledge is bound to stable declaration
+identity rather than hidden spelling checks. The surface includes `Native`,
+`Export`, `CppHeader`, `CppName`, module lifecycle attributes, generic
+specialization/instantiation constraints, access/layout attributes, command/
+event attributes, threading attributes, and all meta-attributes in this plan.
+
+The standard module also declares the compile-time interfaces:
+
+```wio
+realm std {
+    realm attribute {
+        interface Validator<TTarget>;
+        interface DeriveProcessor<TTarget>;
+        interface PreProcessor;
+        interface PostProcessor;
+        interface FinallyProcessor;
+        interface AroundProcessor;
+
+        attribute Targets(targets: Target...);
+        attribute Requires(attributes: AttributeType...);
+        attribute RequiresAny(attributes: AttributeType...);
+        attribute Conflicts(attributes: AttributeType...);
+        attribute OnlyWith(attributes: AttributeType...);
+        attribute Exclusive(group: string);
+        attribute Cardinality(min: usize = 0usize, max: usize = 1usize);
+        attribute Processor(type: type);
+
+        [Targets(fn, method)]
+        [Conflicts(Export)]
+        attribute Native;
+
+        [Targets(fn, object, component)]
+        [Conflicts(Native)]
+        attribute Export;
+    }
+}
+```
+
+The snippet is an interface sketch; exact pack/type-value spelling follows the
+language's structural const/type metadata rules. A minimal compiler bootstrap
+recognizes only the foundational meta-attribute declarations by stable ID so
+that the file can describe itself. All ordinary built-ins use the same
+resolution, normalization, constraint, reflection, and tooling pipeline as
+user attributes. The std file contains declarations and contracts, not native
+compiler implementation bodies.
+
+Users may import/alias these declarations normally, while short canonical
+forms such as `[Native]` resolve through the attribute prelude. Shadowing a
+prelude attribute is diagnosed rather than silently changing compiler meaning.
+
+## 7. Reflection, SDK, and tooling
 
 The current `string[]` reflection surface is migration-only. It flattens an
 application such as `[Route(method: Get, path: "/health")]` into display text,
@@ -255,7 +407,7 @@ which loses argument types, defaults, stable identity, origin, and processor
 information. Wio 0.15 replaces that representation with two complementary
 layers.
 
-### 6.1 Typed queries
+### 7.1 Typed queries
 
 Code that knows the attribute type uses generic queries and receives the actual
 normalized attribute value:
@@ -278,7 +430,7 @@ defaults have been normalized. There is no string parsing and a wrong query
 type is rejected or returns `None`, depending on whether the target is known at
 compile time.
 
-### 6.2 Erased inspection
+### 7.2 Erased inspection
 
 Editors, serializers, debuggers, generic frameworks, and hosts that do not know
 the attribute type use descriptors:
@@ -322,7 +474,7 @@ traces, diagnostics, and pipeline inspection even when its user metadata is
 compile-retained. That descriptor does not expose arbitrary executable memory
 or permit reflection to run a processor again.
 
-### 6.3 Behavioral pipeline reflection
+### 7.3 Behavioral pipeline reflection
 
 Methods expose their effective behavioral pipeline separately from metadata:
 
@@ -343,7 +495,7 @@ declared effects, source attribute, and whether it may skip/proceed/transform.
 It is read-only metadata; reflection cannot reorder or mutate the compiled
 pipeline.
 
-### 6.4 C++ SDK view
+### 7.4 C++ SDK view
 
 The C++ SDK receives owned inspection snapshots analogous to `Module::inspect()`:
 
@@ -383,7 +535,7 @@ The compiler and editor provide:
 - compile-time diagnostics attributed to both processor code and application;
 - `wio migrate attributes --check|--write` for source migration.
 
-## 7. Compatibility and migration
+## 8. Compatibility and migration
 
 Wio 0.15 parses the previous `@Name(...)` and postfix `with` forms as legacy
 input while all formatters, generators, examples, SDK bindings, documentation,
@@ -408,7 +560,7 @@ available and is removed only at an explicit language-edition boundary. ABI
 identity is based on the normalized attribute declaration and arguments, not
 the source spelling used during the compatibility window.
 
-## 8. Delivery order and release gate
+## 9. Delivery order and release gate
 
 1. Parse `[Attribute]`, grouped lists, and all target positions while preserving
    legacy input and the existing scoped `using` grammar.

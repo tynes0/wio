@@ -101,7 +101,12 @@ here does not by itself mean that v1 cannot ship.
     functions/interfaces. Typed applications already fold scalar, `string`,
     and `text` const references and materialize trailing defaults into runtime-
     reflection metadata. The normative delivery plan is
-    `docs/WIO_ATTRIBUTE_SYSTEM_PLAN.md`.
+    `docs/WIO_ATTRIBUTE_SYSTEM_PLAN.md`. Pre, post, finally, and around
+    processors are separate interfaces. User attributes may compose existing
+    attributes, with normalized target/require/require-any/conflict/only-with/
+    exclusivity/cardinality/order constraints. Publish every compiler-known
+    attribute, including native/export and their limits, as declarations in
+    `std::attribute`; built-ins must not retain a separate hidden model.
 
 13. [~] Complete a language-coherence pass before broad surface expansion.
     The first 0.11 stabilization slice aligned scoped attributes, pipelines,
