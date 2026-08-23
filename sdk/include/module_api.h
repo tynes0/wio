@@ -9,7 +9,7 @@
 
 #include "wio_version.h"
 
-inline constexpr std::uint32_t WIO_MODULE_API_DESCRIPTOR_VERSION = 7u;
+inline constexpr std::uint32_t WIO_MODULE_API_DESCRIPTOR_VERSION = 8u;
 
 enum WioModuleCapability : std::uint32_t
 {
@@ -253,7 +253,8 @@ enum WioModuleTypeDescriptorKind : std::uint32_t
     WIO_MODULE_TYPE_DESC_INTERFACE = 25u,
     WIO_MODULE_TYPE_DESC_ASYNC_TASK = 26u,
     WIO_MODULE_TYPE_DESC_GENERIC_INSTANCE = 27u,
-    WIO_MODULE_TYPE_DESC_UNIT = 28u
+    WIO_MODULE_TYPE_DESC_UNIT = 28u,
+    WIO_MODULE_TYPE_DESC_CONST_VALUE = 29u
 };
 
 [[nodiscard]] constexpr std::uint64_t WioStableTypeId(const std::string_view name) noexcept
@@ -291,6 +292,8 @@ struct WioModuleTypeDescriptor
     std::uint64_t stableTypeId;
     std::uint32_t genericArgumentCount;
     const WioModuleTypeDescriptor* const* genericArguments;
+    const WioModuleTypeDescriptor* constValueType;
+    const char* constValue;
 };
 
 struct WioErasedValue

@@ -2083,6 +2083,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "SDK 0.14 buffer: count=3 position=1 capacity=32 bytes=52-18-171"
     )
 
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_014_const_generic_metadata_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_const_generic_metadata_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_const_generic_metadata_host.cpp"
+        "SDK 0.14 const metadata: abi=8 block=4 label=sdk empty=ok"
+    )
+
     add_wio_shared_reload_interop_test(
         wio_test_module_reload_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/module_reload.wio"
@@ -5177,6 +5184,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_exported_tuple_unsupported_payload
         "${CMAKE_SOURCE_DIR}/tests/invalid/exported_tuple_unsupported_payload.wio"
         "@Export object 'BadTupleProfile' exposes public field 'worker' with type 'std::Tuple<i32, IWorker>' that is not yet SDK-exportable\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_exported_unspecialized_generic_component
+        "${CMAKE_SOURCE_DIR}/tests/invalid/exported_unspecialized_generic_component.wio"
+        "@Export object 'BadGenericProfile' exposes public field 'value' with type 'GenericValue<i32>' that is not yet SDK-exportable\\."
     )
 
     add_wio_failure_test(

@@ -3739,6 +3739,7 @@ namespace wio::sema
             instantiatedType->genericParameterTypes = structType->genericParameterTypes;
             instantiatedType->genericParameterDefaults = structType->genericParameterDefaults;
             instantiatedType->genericArguments = explicitTypeArguments;
+            instantiatedType->genericPrimaryType = structType;
             instantiatedType->hasGenericParameterPack = structType->hasGenericParameterPack;
             instantiatedType->fieldNames = structType->fieldNames;
             instantiatedType->trustedTypeKeys = structType->trustedTypeKeys;
@@ -6215,6 +6216,13 @@ namespace wio::sema
                         structType->genericArguments.end(),
                         [](const Ref<Type>& argument) { return isSdkValueBridgeType(argument); }
                     );
+                }
+
+                if (!structType->genericArguments.empty() &&
+                    structType->genericPrimaryType.Lock() &&
+                    !structType->isExplicitSpecialization)
+                {
+                    return false;
                 }
 
                 return true;

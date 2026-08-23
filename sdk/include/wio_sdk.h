@@ -205,6 +205,7 @@ namespace wio::sdk
         [[nodiscard]] bool is_async_task() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_ASYNC_TASK; }
         [[nodiscard]] bool is_generic_instance() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_GENERIC_INSTANCE; }
         [[nodiscard]] bool is_unit() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_UNIT; }
+        [[nodiscard]] bool is_const_value() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_CONST_VALUE; }
 
         [[nodiscard]] bool is_dynamic_array() const noexcept
         {
@@ -285,6 +286,23 @@ namespace wio::sdk
             if (descriptor_ == nullptr || descriptor_->genericArguments == nullptr || index >= descriptor_->genericArgumentCount)
                 return {};
             return TypeDescriptorView(descriptor_->genericArguments[index]);
+        }
+
+        [[nodiscard]] bool has_const_value_type() const noexcept
+        {
+            return descriptor_ != nullptr && descriptor_->constValueType != nullptr;
+        }
+
+        [[nodiscard]] TypeDescriptorView const_value_type() const noexcept
+        {
+            return TypeDescriptorView(descriptor_ != nullptr ? descriptor_->constValueType : nullptr);
+        }
+
+        [[nodiscard]] std::string_view const_value() const noexcept
+        {
+            return descriptor_ != nullptr && descriptor_->constValue != nullptr
+                ? std::string_view(descriptor_->constValue)
+                : std::string_view{};
         }
 
         [[nodiscard]] std::vector<TypeDescriptorView> generic_arguments() const
@@ -2748,6 +2766,15 @@ namespace wio::sdk
                 break;
             case WIO_MODULE_TYPE_DESC_TUPLE:
                 break;
+            case WIO_MODULE_TYPE_DESC_CONST_VALUE:
+                if (descriptor->constValueType == nullptr || descriptor->constValue == nullptr)
+                {
+                    std::ostringstream problem;
+                    problem << "Const-generic descriptor '" << descriptor->displayName
+                            << "' must expose its declared value type and canonical value.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
+                break;
             case WIO_MODULE_TYPE_DESC_GENERIC_INSTANCE:
                 if (!hasText(descriptor->logicalTypeName) || descriptor->genericArgumentCount == 0u)
                 {
@@ -2823,6 +2850,8 @@ namespace wio::sdk
                 validateTypeDescriptor(descriptor->valueType, context, visited, requireV2);
             if (descriptor->returnType != nullptr)
                 validateTypeDescriptor(descriptor->returnType, context, visited, requireV2);
+            if (descriptor->constValueType != nullptr)
+                validateTypeDescriptor(descriptor->constValueType, context, visited, requireV2);
 
             for (std::uint32_t parameterIndex = 0; parameterIndex < descriptor->parameterCount; ++parameterIndex)
                 validateTypeDescriptor(descriptor->parameterTypes[parameterIndex], context, visited, requireV2);

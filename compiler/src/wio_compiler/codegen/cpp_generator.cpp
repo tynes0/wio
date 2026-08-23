@@ -1192,6 +1192,7 @@ namespace wio::codegen
             instantiatedType->genericParameterNames = structType->genericParameterNames;
             instantiatedType->genericParameterTypes = structType->genericParameterTypes;
             instantiatedType->genericArguments = explicitTypeArguments;
+            instantiatedType->genericPrimaryType = structType;
             instantiatedType->hasGenericParameterPack = structType->hasGenericParameterPack;
             instantiatedType->fieldNames = structType->fieldNames;
             instantiatedType->trustedTypeKeys = structType->trustedTypeKeys;
@@ -4619,6 +4620,8 @@ namespace wio::codegen
             std::vector<size_t> parameterIndices;
             std::vector<size_t> genericArgumentIndices;
             std::vector<EnumMemberInfo> enumMembers;
+            std::optional<size_t> constValueTypeIndex;
+            std::optional<std::string> constValue;
         };
 
         std::vector<TypeDescriptorEmissionInfo> emittedTypeDescriptors;
@@ -4697,14 +4700,21 @@ namespace wio::codegen
 
         std::function<size_t(const Ref<sema::Type>&)> ensureTypeDescriptor = [&](const Ref<sema::Type>& type) -> size_t
         {
-            const std::string key = type ? type->toString() : std::string("<unknown>");
+            const std::string displayName = type ? type->toString() : std::string("<unknown>");
+            Ref<sema::Type> resolvedType = unwrapAliasType(type);
+            std::string key = displayName;
+            if (resolvedType && resolvedType->kind() == sema::TypeKind::ConstValue)
+            {
+                const auto constValueType = resolvedType.AsFast<sema::ConstValueType>();
+                key = "const<" + (constValueType->valueType ? constValueType->valueType->toString() : std::string("<unknown>")) +
+                    ">:" + displayName;
+            }
             if (auto it = emittedTypeDescriptorIndices.find(key); it != emittedTypeDescriptorIndices.end())
                 return it->second;
 
             TypeDescriptorEmissionInfo info;
-            info.displayName = key;
+            info.displayName = displayName;
 
-            Ref<sema::Type> resolvedType = unwrapAliasType(type);
             if (!resolvedType)
             {
                 const size_t index = emittedTypeDescriptors.size();
@@ -4715,6 +4725,16 @@ namespace wio::codegen
 
             switch (resolvedType->kind())
             {
+            case sema::TypeKind::ConstValue:
+            {
+                const auto constValueType = resolvedType.AsFast<sema::ConstValueType>();
+                info.kindExpr = "WIO_MODULE_TYPE_DESC_CONST_VALUE";
+                info.constValueTypeIndex = ensureTypeDescriptor(constValueType->valueType);
+                info.constValue = constValueType->value;
+                info.displayName = "const " + emittedTypeDescriptors[*info.constValueTypeIndex].displayName +
+                    " = " + constValueType->toString();
+                break;
+            }
             case sema::TypeKind::Nullable:
             {
                 auto nullableType = resolvedType.AsFast<sema::NullableType>();
@@ -4795,9 +4815,30 @@ namespace wio::codegen
             {
                 auto structType = resolvedType.AsFast<sema::StructType>();
                 info.logicalTypeName = getLogicalTypeName(structType);
+                const auto genericPrimaryType = structType->genericPrimaryType.Lock();
+                const auto& genericParameterTypes = !structType->genericParameterTypes.empty()
+                    ? structType->genericParameterTypes
+                    : (genericPrimaryType ? genericPrimaryType->genericParameterTypes : structType->genericParameterTypes);
                 info.genericArgumentIndices.reserve(structType->genericArguments.size());
-                for (const auto& genericArgument : structType->genericArguments)
+                for (size_t genericIndex = 0; genericIndex < structType->genericArguments.size(); ++genericIndex)
+                {
+                    Ref<sema::Type> genericArgument = structType->genericArguments[genericIndex];
+                    if (genericArgument && genericArgument->kind() == sema::TypeKind::ConstValue &&
+                        genericIndex < genericParameterTypes.size())
+                    {
+                        auto parameterType = unwrapAliasType(genericParameterTypes[genericIndex]);
+                        if (parameterType && parameterType->kind() == sema::TypeKind::ConstGenericParameter)
+                        {
+                            const auto value = genericArgument.AsFast<sema::ConstValueType>();
+                            const auto parameter = parameterType.AsFast<sema::ConstGenericParameterType>();
+                            genericArgument = Compiler::get().getTypeContext().getOrCreateConstValueType(
+                                value->value,
+                                parameter->valueType
+                            );
+                        }
+                    }
                     info.genericArgumentIndices.push_back(ensureTypeDescriptor(genericArgument));
+                }
                 if (!info.logicalTypeName.empty())
                 {
                     info.displayName = info.logicalTypeName;
@@ -4999,6 +5040,12 @@ namespace wio::codegen
                 const std::string genericArgumentsExpr = descriptor.genericArgumentIndices.empty()
                     ? "nullptr"
                     : ("WIO_TYPE_DESCRIPTOR_GENERIC_ARGS_" + std::to_string(descriptorIndex));
+                const std::string constValueTypeExpr = descriptor.constValueTypeIndex.has_value()
+                    ? ("&WIO_TYPE_DESCRIPTOR_" + std::to_string(*descriptor.constValueTypeIndex))
+                    : "nullptr";
+                const std::string constValueExpr = !descriptor.constValue.has_value()
+                    ? "nullptr"
+                    : ("\"" + common::wioStringToEscapedCppString(*descriptor.constValue) + "\"");
 
                 emitLine(
                     "const WioModuleTypeDescriptor WIO_TYPE_DESCRIPTOR_" + std::to_string(descriptorIndex) +
@@ -5011,7 +5058,8 @@ namespace wio::codegen
                     ", " + std::to_string(descriptor.parameterIndices.size()) + "u, " + paramExpr +
                     ", " + std::to_string(descriptor.enumMembers.size()) + "u, " + enumMembersExpr +
                     ", WioStableTypeId(\"" + common::wioStringToEscapedCppString(descriptor.displayName) + "\")" +
-                    ", " + std::to_string(descriptor.genericArgumentIndices.size()) + "u, " + genericArgumentsExpr + " };"
+                    ", " + std::to_string(descriptor.genericArgumentIndices.size()) + "u, " + genericArgumentsExpr +
+                    ", " + constValueTypeExpr + ", " + constValueExpr + " };"
                 );
                 }
             }

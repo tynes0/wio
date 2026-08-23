@@ -1,0 +1,42 @@
+component SizedValue<T, const N: usize> {
+    public value: T;
+}
+
+@Specialize(i32, 4)
+@Export
+component SizedValue {
+    public value: i32;
+}
+
+component NamedSdk<const Name: string> {
+    public value: i32;
+}
+
+@Specialize("sdk")
+@Export
+component NamedSdk {
+    public value: i32;
+}
+
+component NamedEmpty<const Name: string> {
+    public value: i32;
+}
+
+@Specialize("")
+@Export
+component NamedEmpty {
+    public value: i32;
+}
+
+@Export
+object Sdk14GenericMetadata {
+    public block: SizedValue<i32, 4>;
+    public label: NamedSdk<"sdk">;
+    public empty: NamedEmpty<"">;
+
+    public OnConstruct() {
+        self.block = SizedValue<i32, 4>(14);
+        self.label = NamedSdk<"sdk">(28);
+        self.empty = NamedEmpty<"">(42);
+    }
+}

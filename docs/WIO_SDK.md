@@ -823,6 +823,34 @@ No Wio object pointer or private buffer layout crosses the ABI. Pools remain a
 separate ownership facility: their generation handles are meaningful only to
 the pool instance that issued them and are not flattened into an owned buffer.
 
+### Concrete const-generic metadata in v0.14
+
+ABI descriptor version `8` adds a dedicated `CONST_VALUE` descriptor. Generic
+arguments now distinguish a type argument from a compile-time value and expose
+both the value's declared type and its canonical payload:
+
+```cpp
+auto blockType = object.field("block").type(); // SizedValue<i32, 4>
+auto extent = blockType.generic_argument(1);
+
+if (extent.is_const_value() &&
+    extent.const_value_type().abi_type() == WIO_ABI_USIZE) {
+    std::cout << extent.const_value(); // "4"
+}
+```
+
+Integer, `string`, and `text` const arguments retain distinct value-type
+descriptors. Empty strings are represented by a non-null, zero-length payload,
+so they cannot be confused with missing metadata. Stable IDs continue to hash
+an unambiguous canonical displayed identity, including both the declared
+const-value type and its concrete value.
+
+User-defined generic object/component fields require an explicitly exported
+concrete specialization. An unspecialized instance is rejected during Wio
+analysis because the host would otherwise receive metadata for a type absent
+from the module's concrete type table. This keeps the failure at the source
+declaration instead of deferring it to module loading.
+
 ---
 
 ## 10. Hot Reload
