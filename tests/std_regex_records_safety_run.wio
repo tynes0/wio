@@ -1,0 +1,34 @@
+use std::assert as assert;
+use std::console as console;
+use std::regex as regex;
+
+fn Entry() -> i32 {
+    let matches = regex::FindAllMatches("id=12 id=345", "id=(\\d+)");
+    assert::Expect(matches.IsOk(), "detailed matches compile and execute");
+    assert::ExpectEqual(matches.Value().Count(), 2usize, "two detailed matches");
+    assert::ExpectEqual(matches.Value()[0usize].index, 0usize, "first match byte index");
+    assert::ExpectEqual(matches.Value()[1usize].index, 6usize, "second match byte index");
+    assert::ExpectEqual(matches.Value()[1usize].captures.Count(), 1usize, "capture count");
+    assert::Expect(matches.Value()[1usize].captures[0usize].matched, "capture matched state");
+    assert::ExpectEqual(matches.Value()[1usize].captures[0usize].value, "345", "capture value");
+    assert::ExpectEqual(matches.Value()[1usize].captures[0usize].byteIndex, 9usize, "capture byte index");
+
+    let optional = regex::FindAllMatches("b", "(a)?b");
+    assert::Expect(optional.IsOk(), "optional capture pattern");
+    assert::Expect(not optional.Value()[0usize].captures[0usize].matched, "unmatched capture is explicit");
+
+    assert::Expect(not regex::PatternLooksSafe("(a+)+$"), "nested repetition rejected");
+    assert::Expect(not regex::PatternLooksSafe("(a|aa)+$"), "repeated alternation rejected");
+    assert::Expect(not regex::PatternLooksSafe("(a)\\1"), "backreference rejected");
+    assert::Expect(not regex::PatternLooksSafe("(?=a)a"), "lookaround rejected");
+    assert::Expect(regex::PatternLooksSafe("^[a-z]+\\d{1,3}$"), "bounded safe subset accepted");
+
+    mut limits = regex::DefaultLimits();
+    limits.maxMatches = 1usize;
+    let limited = regex::FindAllMatchesSafe("1 2", "\\d", false, limits);
+    assert::Expect(limited.IsError(), "match count limit is enforced natively");
+    assert::ExpectEqual(limited.ErrorValue().code, 3, "limit error code");
+
+    console::PrintLine!("std-regex-records-safety-ok");
+    return 0;
+}

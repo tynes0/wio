@@ -11,7 +11,8 @@ namespace wio::runtime::std_regex
     {
         none = 0,
         invalid_pattern = 1,
-        runtime_error = 2
+        runtime_error = 2,
+        limit_exceeded = 3
     };
 
     [[nodiscard]] const char* ToString(RegexError error) noexcept;
@@ -42,6 +43,23 @@ namespace wio::runtime::std_regex
         std::string_view pattern,
         bool ignoreCase,
         std::vector<std::string>& matches,
+        RegexError& error,
+        std::string& message) noexcept;
+
+    [[nodiscard]] bool TryFindAllDetailed(
+        std::string_view input,
+        std::string_view pattern,
+        bool ignoreCase,
+        std::size_t maxMatches,
+        std::size_t maxCaptureGroups,
+        std::vector<std::string>& values,
+        std::vector<std::size_t>& indices,
+        std::vector<std::size_t>& lengths,
+        std::vector<std::string>& captureValues,
+        std::vector<std::size_t>& captureIndices,
+        std::vector<std::size_t>& captureLengths,
+        std::vector<std::uint8_t>& captureMatched,
+        std::vector<std::size_t>& captureCounts,
         RegexError& error,
         std::string& message) noexcept;
 
