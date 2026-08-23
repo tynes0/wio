@@ -1574,6 +1574,39 @@ namespace wio::sdk
         };
 
         template <typename T>
+        struct IsWioQueue : std::false_type
+        {
+        };
+
+        template <typename TValue>
+        struct IsWioQueue<WioQueue<TValue>> : std::true_type
+        {
+            using Value = TValue;
+        };
+
+        template <typename T>
+        struct IsWioUnorderedSet : std::false_type
+        {
+        };
+
+        template <typename TValue>
+        struct IsWioUnorderedSet<WioUnorderedSet<TValue>> : std::true_type
+        {
+            using Value = TValue;
+        };
+
+        template <typename T>
+        struct IsWioOrderedSet : std::false_type
+        {
+        };
+
+        template <typename TValue>
+        struct IsWioOrderedSet<WioOrderedSet<TValue>> : std::true_type
+        {
+            using Value = TValue;
+        };
+
+        template <typename T>
         struct IsStdUnorderedMap : std::false_type
         {
         };
@@ -1778,6 +1811,18 @@ namespace wio::sdk
             {
                 return "ResultUnit";
             }
+            else if constexpr (IsWioQueue<U>::value)
+            {
+                return "Queue<" + hostFieldTypeName<typename IsWioQueue<U>::Value>() + ">";
+            }
+            else if constexpr (IsWioUnorderedSet<U>::value)
+            {
+                return "UnorderedSet<" + hostFieldTypeName<typename IsWioUnorderedSet<U>::Value>() + ">";
+            }
+            else if constexpr (IsWioOrderedSet<U>::value)
+            {
+                return "OrderedSet<" + hostFieldTypeName<typename IsWioOrderedSet<U>::Value>() + ">";
+            }
             else if constexpr (IsStdUnorderedMap<U>::value)
             {
                 return "Dict<" + hostFieldTypeName<typename IsStdUnorderedMap<U>::Key>()
@@ -1882,6 +1927,21 @@ namespace wio::sdk
             else if constexpr (std::is_same_v<U, WioUnit>)
             {
                 return type.is_unit() && type.logical_name() == "std::ResultUnit";
+            }
+            else if constexpr (IsWioQueue<U>::value)
+            {
+                return type.is_queue() && type.generic_argument_count() == 1u &&
+                    matchesTypeDescriptor<typename IsWioQueue<U>::Value>(type.generic_argument(0u));
+            }
+            else if constexpr (IsWioUnorderedSet<U>::value)
+            {
+                return type.is_unordered_set() && type.generic_argument_count() == 1u &&
+                    matchesTypeDescriptor<typename IsWioUnorderedSet<U>::Value>(type.generic_argument(0u));
+            }
+            else if constexpr (IsWioOrderedSet<U>::value)
+            {
+                return type.is_ordered_set() && type.generic_argument_count() == 1u &&
+                    matchesTypeDescriptor<typename IsWioOrderedSet<U>::Value>(type.generic_argument(0u));
             }
             else if constexpr (IsStdUnorderedMap<U>::value)
             {
@@ -3235,7 +3295,8 @@ namespace wio::sdk
                         }
                         else if (fieldType.is_string() || fieldType.is_text() || fieldType.is_dynamic_array() || fieldType.is_static_array() ||
                                  fieldType.is_dict() || fieldType.is_tree() || fieldType.is_function() ||
-                                 fieldType.is_option() || fieldType.is_result() || fieldType.is_unit())
+                                 fieldType.is_option() || fieldType.is_result() || fieldType.is_unit() ||
+                                 fieldType.is_queue() || fieldType.is_unordered_set() || fieldType.is_ordered_set())
                         {
                             validateExactExportContract(fieldEntry.getterExport, context, "Field getter", fieldEntry.fieldName, WIO_ABI_UNKNOWN, 1u, fieldGetterParameters, false, true);
                         }
@@ -3253,7 +3314,8 @@ namespace wio::sdk
                         }
                         else if (fieldType.is_string() || fieldType.is_text() || fieldType.is_dynamic_array() || fieldType.is_static_array() ||
                                  fieldType.is_dict() || fieldType.is_tree() || fieldType.is_function() ||
-                                 fieldType.is_option() || fieldType.is_result() || fieldType.is_unit())
+                                 fieldType.is_option() || fieldType.is_result() || fieldType.is_unit() ||
+                                 fieldType.is_queue() || fieldType.is_unordered_set() || fieldType.is_ordered_set())
                         {
                             validateExactExportContract(fieldEntry.setterExport, context, "Field setter", fieldEntry.fieldName, WIO_ABI_VOID, 2u, fieldSetterOpaqueParameters, false, true);
                         }
@@ -3261,7 +3323,8 @@ namespace wio::sdk
 
                     if (fieldType.is_text() || fieldType.is_dynamic_array() || fieldType.is_static_array() || fieldType.is_dict() ||
                         fieldType.is_tree() || fieldType.is_function() || fieldType.is_option() ||
-                        fieldType.is_result() || fieldType.is_unit())
+                        fieldType.is_result() || fieldType.is_unit() || fieldType.is_queue() ||
+                        fieldType.is_unordered_set() || fieldType.is_ordered_set())
                     {
                         if ((fieldEntry.flags & WIO_MODULE_FIELD_READABLE) != 0u && fieldEntry.dynamicGetter == nullptr)
                         {

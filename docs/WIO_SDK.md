@@ -754,6 +754,21 @@ Conversion is recursive in both directions. A nested category without a stable
 bridge is rejected in semantic analysis instead of exporting a raw generated
 C++ template type that the host cannot name safely.
 
+Queue and set fields use their semantic SDK mirrors rather than exposing their
+private Wio storage:
+
+```cpp
+using Work = WioQueue<WioOption<std::int32_t>>;
+using Tags = WioUnorderedSet<std::string>;
+using Levels = WioOrderedSet<std::int32_t>;
+
+auto work = state.field("work").get_as<Work>();
+state.field("tags").set_as(Tags{"host", "sdk"});
+```
+
+Queue order and ordered-set ordering are preserved. Unordered sets preserve
+membership without promising iteration order.
+
 ---
 
 ## 10. Hot Reload

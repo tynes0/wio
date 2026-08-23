@@ -2055,6 +2055,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "SDK 0.14 nested: choices=2 fixed-error=501 wide=18000000000 ordered-error=502"
     )
 
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_014_sequence_containers_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_sequence_containers_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_sequence_containers_host.cpp"
+        "SDK 0.14 sequences: queue=2 tags=2 levels=4-9"
+    )
+
     add_wio_shared_reload_interop_test(
         wio_test_module_reload_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/module_reload.wio"
@@ -5137,6 +5144,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_exported_nested_collection_unsupported_payload
         "${CMAKE_SOURCE_DIR}/tests/invalid/exported_nested_collection_unsupported_payload.wio"
         "@Export object 'BadNestedCollection' exposes public field 'workers' with type 'Option<IWorker>\\[\\]' that is not yet SDK-exportable\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_exported_queue_unsupported_payload
+        "${CMAKE_SOURCE_DIR}/tests/invalid/exported_queue_unsupported_payload.wio"
+        "@Export object 'BadQueueProfile' exposes public field 'workers' with type 'std::Queue<Option<IWorker>>' that is not yet SDK-exportable\\."
     )
 
     add_wio_failure_test(

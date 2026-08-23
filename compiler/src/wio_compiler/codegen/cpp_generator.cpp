@@ -588,6 +588,11 @@ namespace wio::codegen
             return type;
         }
 
+        bool isStdLibraryScopePath(const std::string_view scopePath)
+        {
+            return scopePath == "std" || scopePath.starts_with("std::") || scopePath.starts_with("std_");
+        }
+
         Ref<sema::StructType> getStdValueStructType(const Ref<sema::Type>& type,
                                                     const std::string_view expectedName)
         {
@@ -596,8 +601,7 @@ namespace wio::codegen
                 return nullptr;
 
             auto structType = resolvedType.AsFast<sema::StructType>();
-            if (!structType || structType->name != expectedName ||
-                !(structType->scopePath == "std" || structType->scopePath.starts_with("std::")))
+            if (!structType || structType->name != expectedName || !isStdLibraryScopePath(structType->scopePath))
             {
                 return nullptr;
             }
@@ -636,10 +640,16 @@ namespace wio::codegen
 
             auto optionType = getStdValueStructType(resolvedType, "Option");
             auto resultType = getStdValueStructType(resolvedType, "Result");
-            auto algebraicType = optionType ? optionType : resultType;
-            if (algebraicType && algebraicType->genericArguments.size() == 1)
+            auto queueType = getStdValueStructType(resolvedType, "Queue");
+            auto unorderedSetType = getStdValueStructType(resolvedType, "UnorderedSet");
+            auto orderedSetType = getStdValueStructType(resolvedType, "OrderedSet");
+            auto genericValueType = optionType ? optionType :
+                (resultType ? resultType :
+                 (queueType ? queueType :
+                  (unorderedSetType ? unorderedSetType : orderedSetType)));
+            if (genericValueType && genericValueType->genericArguments.size() == 1)
             {
-                return isSdkValueBridgeType(algebraicType->genericArguments.front());
+                return isSdkValueBridgeType(genericValueType->genericArguments.front());
             }
 
             return false;
@@ -2458,8 +2468,15 @@ namespace wio::codegen
                     const bool isResultField = resultFieldType && resultFieldType->genericArguments.size() == 1 &&
                         isSdkValueBridgeType(resultFieldType->genericArguments.front());
                     const bool isUnitField = getStdValueStructType(resolvedFieldType, "ResultUnit") != nullptr;
+                    auto queueFieldType = getStdValueStructType(resolvedFieldType, "Queue");
+                    auto unorderedSetFieldType = getStdValueStructType(resolvedFieldType, "UnorderedSet");
+                    auto orderedSetFieldType = getStdValueStructType(resolvedFieldType, "OrderedSet");
+                    const bool isSequenceContainerField =
+                        (queueFieldType && queueFieldType->genericArguments.size() == 1 && isSdkValueBridgeType(queueFieldType->genericArguments.front())) ||
+                        (unorderedSetFieldType && unorderedSetFieldType->genericArguments.size() == 1 && isSdkValueBridgeType(unorderedSetFieldType->genericArguments.front())) ||
+                        (orderedSetFieldType && orderedSetFieldType->genericArguments.size() == 1 && isSdkValueBridgeType(orderedSetFieldType->genericArguments.front()));
                     const bool needsDynamicBridge = resolvedFieldType &&
-                        (isTextField || isOptionField || isResultField || isUnitField ||
+                        (isTextField || isOptionField || isResultField || isUnitField || isSequenceContainerField ||
                          resolvedFieldType->kind() == sema::TypeKind::Array ||
                          resolvedFieldType->kind() == sema::TypeKind::Dictionary ||
                          resolvedFieldType->kind() == sema::TypeKind::Function);
@@ -3061,6 +3078,22 @@ namespace wio::codegen
                 return "wio::sdk::WioResult<" + *valueType + ">";
             }
 
+            auto queueType = getStdValueStructType(resolvedType, "Queue");
+            auto unorderedSetType = getStdValueStructType(resolvedType, "UnorderedSet");
+            auto orderedSetType = getStdValueStructType(resolvedType, "OrderedSet");
+            auto sequenceType = queueType ? queueType : (unorderedSetType ? unorderedSetType : orderedSetType);
+            if (sequenceType && sequenceType->genericArguments.size() == 1)
+            {
+                auto valueType = getSdkDynamicBridgeCppType(sequenceType->genericArguments.front());
+                if (!valueType.has_value())
+                    return std::nullopt;
+
+                const std::string wrapperName = queueType
+                    ? "wio::sdk::WioQueue<"
+                    : (unorderedSetType ? "wio::sdk::WioUnorderedSet<" : "wio::sdk::WioOrderedSet<");
+                return wrapperName + *valueType + ">";
+            }
+
             return std::nullopt;
         }
 
@@ -3249,6 +3282,37 @@ namespace wio::codegen
                 );
             }
 
+            auto queueType = getStdValueStructType(resolvedType, "Queue");
+            auto unorderedSetType = getStdValueStructType(resolvedType, "UnorderedSet");
+            auto orderedSetType = getStdValueStructType(resolvedType, "OrderedSet");
+            auto sequenceType = queueType ? queueType : (unorderedSetType ? unorderedSetType : orderedSetType);
+            if (sequenceType && sequenceType->genericArguments.size() == 1)
+            {
+                const Ref<sema::Type>& valueType = sequenceType->genericArguments.front();
+                auto hostType = getSdkDynamicBridgeCppType(resolvedType);
+                const std::string sourceName = "_wio_sequence_" + std::to_string(depth);
+                const std::string itemName = "_wio_sequence_item_" + std::to_string(depth);
+                auto convertedItem = makeSdkDynamicToHostExpression(itemName, valueType, depth + 1);
+                if (!hostType.has_value() || !convertedItem.has_value())
+                    return std::nullopt;
+
+                const std::string appendExpression = queueType
+                    ? "_wio_output.push(" + *convertedItem + ");"
+                    : "(void)_wio_output.add(" + *convertedItem + ");";
+                return common::formatString(
+                    "([&]() -> {} {{ auto {} = {}; {} _wio_output; if (!{}) return _wio_output; "
+                    "for (const auto& {} : {}->_WF_ToArray()) {{ {} }} return _wio_output; }}())",
+                    *hostType,
+                    sourceName,
+                    expression,
+                    *hostType,
+                    sourceName,
+                    itemName,
+                    sourceName,
+                    appendExpression
+                );
+            }
+
             return std::nullopt;
         }
 
@@ -3418,6 +3482,40 @@ namespace wio::codegen
                     cppStructType,
                     cppStructType,
                     *convertedValue
+                );
+            }
+
+            auto queueType = getStdValueStructType(resolvedType, "Queue");
+            auto unorderedSetType = getStdValueStructType(resolvedType, "UnorderedSet");
+            auto orderedSetType = getStdValueStructType(resolvedType, "OrderedSet");
+            auto sequenceType = queueType ? queueType : (unorderedSetType ? unorderedSetType : orderedSetType);
+            if (sequenceType && sequenceType->genericArguments.size() == 1)
+            {
+                const Ref<sema::Type>& valueType = sequenceType->genericArguments.front();
+                const std::string sourceName = "_wio_host_sequence_" + std::to_string(depth);
+                const std::string itemName = "_wio_host_sequence_item_" + std::to_string(depth);
+                auto convertedItem = makeSdkDynamicFromHostExpression(itemName, valueType, depth + 1);
+                if (!convertedItem.has_value())
+                    return std::nullopt;
+
+                const std::string cppStructType = mangleStructTypeName(sequenceType);
+                const std::string valuesExpression = queueType
+                    ? sourceName + ".to_array()"
+                    : sourceName + ".values()";
+                const std::string appendExpression = queueType
+                    ? "_wio_output->_WF_Enqueue_T(" + *convertedItem + ");"
+                    : "(void)_wio_output->_WF_Add_T(" + *convertedItem + ");";
+                return common::formatString(
+                    "([&]() -> wio::runtime::Ref<{}> {{ const auto& {} = {}; "
+                    "auto _wio_output = wio::runtime::Ref<{}>::Create(); "
+                    "for (const auto& {} : {}) {{ {} }} return _wio_output; }}())",
+                    cppStructType,
+                    sourceName,
+                    expression,
+                    cppStructType,
+                    itemName,
+                    valuesExpression,
+                    appendExpression
                 );
             }
 
@@ -4584,25 +4682,25 @@ namespace wio::codegen
                 }
                 else if (structType->isInterface)
                     info.kindExpr = "WIO_MODULE_TYPE_DESC_INTERFACE";
-                else if ((structType->scopePath == "std" || structType->scopePath.starts_with("std::")) && structType->name == "Option")
+                else if (isStdLibraryScopePath(structType->scopePath) && structType->name == "Option")
                     info.kindExpr = "WIO_MODULE_TYPE_DESC_OPTION";
-                else if ((structType->scopePath == "std" || structType->scopePath.starts_with("std::")) && structType->name == "Result")
+                else if (isStdLibraryScopePath(structType->scopePath) && structType->name == "Result")
                     info.kindExpr = "WIO_MODULE_TYPE_DESC_RESULT";
-                else if ((structType->scopePath == "std" || structType->scopePath.starts_with("std::")) && structType->name == "ResultUnit")
+                else if (isStdLibraryScopePath(structType->scopePath) && structType->name == "ResultUnit")
                     info.kindExpr = "WIO_MODULE_TYPE_DESC_UNIT";
-                else if ((structType->scopePath == "std" || structType->scopePath.starts_with("std::")) && structType->name == "Tuple")
+                else if (isStdLibraryScopePath(structType->scopePath) && structType->name == "Tuple")
                     info.kindExpr = "WIO_MODULE_TYPE_DESC_TUPLE";
-                else if ((structType->scopePath == "std" || structType->scopePath.starts_with("std::")) && structType->name == "Queue")
+                else if (isStdLibraryScopePath(structType->scopePath) && structType->name == "Queue")
                     info.kindExpr = "WIO_MODULE_TYPE_DESC_QUEUE";
-                else if ((structType->scopePath == "std" || structType->scopePath.starts_with("std::")) && structType->name == "UnorderedSet")
+                else if (isStdLibraryScopePath(structType->scopePath) && structType->name == "UnorderedSet")
                     info.kindExpr = "WIO_MODULE_TYPE_DESC_UNORDERED_SET";
-                else if ((structType->scopePath == "std" || structType->scopePath.starts_with("std::")) && structType->name == "OrderedSet")
+                else if (isStdLibraryScopePath(structType->scopePath) && structType->name == "OrderedSet")
                     info.kindExpr = "WIO_MODULE_TYPE_DESC_ORDERED_SET";
-                else if ((structType->scopePath == "std" || structType->scopePath.starts_with("std::")) && structType->name == "Span")
+                else if (isStdLibraryScopePath(structType->scopePath) && structType->name == "Span")
                     info.kindExpr = "WIO_MODULE_TYPE_DESC_SPAN";
-                else if ((structType->scopePath == "std" || structType->scopePath.starts_with("std::")) && structType->name == "ByteBuffer")
+                else if (isStdLibraryScopePath(structType->scopePath) && structType->name == "ByteBuffer")
                     info.kindExpr = "WIO_MODULE_TYPE_DESC_BYTE_BUFFER";
-                else if ((structType->scopePath == "std" || structType->scopePath.starts_with("std::")) && structType->name == "box")
+                else if (isStdLibraryScopePath(structType->scopePath) && structType->name == "box")
                     info.kindExpr = "WIO_MODULE_TYPE_DESC_BOX";
                 else if (objectDeclarations.contains(structType.Get()))
                     info.kindExpr = "WIO_MODULE_TYPE_DESC_OBJECT";
@@ -4752,7 +4850,11 @@ namespace wio::codegen
                     const bool isOptionField = getStdValueStructType(dynamicFieldType, "Option") != nullptr;
                     const bool isResultField = getStdValueStructType(dynamicFieldType, "Result") != nullptr;
                     const bool isUnitField = getStdValueStructType(dynamicFieldType, "ResultUnit") != nullptr;
-                    const bool isPortableBridgeField = isOptionField || isResultField || isUnitField ||
+                    const bool isSequenceContainerField =
+                        getStdValueStructType(dynamicFieldType, "Queue") != nullptr ||
+                        getStdValueStructType(dynamicFieldType, "UnorderedSet") != nullptr ||
+                        getStdValueStructType(dynamicFieldType, "OrderedSet") != nullptr;
+                    const bool isPortableBridgeField = isOptionField || isResultField || isUnitField || isSequenceContainerField ||
                         (dynamicFieldType && (dynamicFieldType->kind() == sema::TypeKind::Array ||
                                               dynamicFieldType->kind() == sema::TypeKind::Dictionary));
                     const auto portablePayloadType = isPortableBridgeField

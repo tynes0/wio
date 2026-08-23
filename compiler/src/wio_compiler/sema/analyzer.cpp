@@ -6060,6 +6060,11 @@ namespace wio::sema
             return typeName != "string" && typeName != "object";
         }
 
+        bool isStdLibraryScopePath(const std::string_view scopePath)
+        {
+            return scopePath == "std" || scopePath.starts_with("std::") || scopePath.starts_with("std_");
+        }
+
         bool isSdkValueBridgeType(const Ref<Type>& type)
         {
             Ref<Type> current = type;
@@ -6093,7 +6098,7 @@ namespace wio::sema
                 return false;
 
             auto structType = current.AsFast<StructType>();
-            if (!structType || !(structType->scopePath == "std" || structType->scopePath.starts_with("std::")))
+            if (!structType || !isStdLibraryScopePath(structType->scopePath))
             {
                 return false;
             }
@@ -6101,7 +6106,9 @@ namespace wio::sema
             if (structType->name == "ResultUnit")
                 return structType->genericArguments.empty();
 
-            if ((structType->name == "Option" || structType->name == "Result") &&
+            if ((structType->name == "Option" || structType->name == "Result" ||
+                 structType->name == "Queue" || structType->name == "UnorderedSet" ||
+                 structType->name == "OrderedSet") &&
                 structType->genericArguments.size() == 1)
             {
                 return isSdkValueBridgeType(structType->genericArguments.front());
@@ -6160,8 +6167,10 @@ namespace wio::sema
                 if (!structType || structType->isInterface)
                     return false;
 
-                if ((structType->name == "Option" || structType->name == "Result") &&
-                    (structType->scopePath == "std" || structType->scopePath.starts_with("std::")))
+                if ((structType->name == "Option" || structType->name == "Result" ||
+                     structType->name == "Queue" || structType->name == "UnorderedSet" ||
+                     structType->name == "OrderedSet") &&
+                    isStdLibraryScopePath(structType->scopePath))
                 {
                     return structType->genericArguments.size() == 1 &&
                         isSdkValueBridgeType(structType->genericArguments.front());
