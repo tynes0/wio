@@ -10,8 +10,16 @@ realm std {
         enum Error {
             none = 0u8,
             invalid_pattern = 1u8,
-            runtime_error = 2u8
+            runtime_error = 2u8,
+            limit_exceeded = 3u8
         };
+
+        component Capture {
+            matched: bool;
+            byteIndex: usize;
+            byteLength: usize;
+            value: string;
+        }
 
         component Match {
             found: bool;
@@ -19,6 +27,7 @@ realm std {
             length: usize;
             value: string;
             groups: string[];
+            captures: Capture[];
         }
 
         @Native
@@ -63,6 +72,24 @@ realm std {
             error: ref Error,
             message: ref string) -> bool;
 
+        fn TryFindAllDetailedNative(
+            input: string,
+            pattern: string,
+            ignoreCase: bool,
+            maxMatches: usize,
+            maxCaptureGroups: usize,
+            values: ref string[],
+            indices: ref usize[],
+            lengths: ref usize[],
+            captureValues: ref string[],
+            captureIndices: ref usize[],
+            captureLengths: ref usize[],
+            captureMatched: ref u8[],
+            captureCounts: ref usize[],
+            error: ref Error,
+            message: ref string) -> bool
+            with native, cpp::name(wio::runtime::std_regex::TryFindAllDetailed);
+
         @Native
         @CppName(wio::runtime::std_regex::TryReplace)
         fn TryReplaceNative(
@@ -94,24 +121,34 @@ realm std {
         component Limits {
             maxInputBytes: usize;
             maxPatternBytes: usize;
+            maxMatches: usize;
+            maxCaptureGroups: usize;
         }
 
         fn DefaultLimits() -> Limits {
             mut limits = Limits();
             limits.maxInputBytes = 1048576usize;
             limits.maxPatternBytes = 4096usize;
+            limits.maxMatches = 10000usize;
+            limits.maxCaptureGroups = 64usize;
             return limits;
         }
 
-        fn IsMatchSafe(input: string, pattern: string, limits: Limits) -> std::Result<bool> {
+        fn CheckSafety(input: string, pattern: string, limits: Limits) -> std::UnitResult {
             if (input.Count() > limits.maxInputBytes or pattern.Count() > limits.maxPatternBytes) {
-                return std::Err<bool>(std::MakeResultError(
+                return std::ErrUnit(std::MakeResultError(
                     std::ResultDomain::runtime, 3, "Regular-expression input limit exceeded."));
             }
             if (not PatternLooksSafe(pattern)) {
-                return std::Err<bool>(std::MakeResultError(
+                return std::ErrUnit(std::MakeResultError(
                     std::ResultDomain::runtime, 4, "Potentially unsafe regular-expression pattern rejected."));
             }
+            return std::OkUnit();
+        }
+
+        fn IsMatchSafe(input: string, pattern: string, limits: Limits) -> std::Result<bool> {
+            let safety = CheckSafety(input, pattern, limits);
+            if (safety.IsError()) { return std::Err<bool>(safety.ErrorValue()); }
             return IsMatch(input, pattern);
         }
 
@@ -175,6 +212,82 @@ realm std {
             return FindAll(input, pattern, false);
         }
 
+        fn FindAllMatchesSafe(
+            input: string,
+            pattern: string,
+            ignoreCase: bool,
+            limits: Limits
+        ) -> std::Result<Match[]> {
+            let safety = CheckSafety(input, pattern, limits);
+            if (safety.IsError()) { return std::Err<Match[]>(safety.ErrorValue()); }
+
+            mut values: string[] = [];
+            mut indices: usize[] = [];
+            mut lengths: usize[] = [];
+            mut captureValues: string[] = [];
+            mut captureIndices: usize[] = [];
+            mut captureLengths: usize[] = [];
+            mut captureMatched: u8[] = [];
+            mut captureCounts: usize[] = [];
+            mut error = Error::none;
+            mut message = "";
+            if (not TryFindAllDetailedNative(
+                    input,
+                    pattern,
+                    ignoreCase,
+                    limits.maxMatches,
+                    limits.maxCaptureGroups,
+                    ref values,
+                    ref indices,
+                    ref lengths,
+                    ref captureValues,
+                    ref captureIndices,
+                    ref captureLengths,
+                    ref captureMatched,
+                    ref captureCounts,
+                    ref error,
+                    ref message)) {
+                return std::Err<Match[]>(MakeError(error, message));
+            }
+
+            mut matches: Match[] = [];
+            mut captureOffset = 0usize;
+            mut matchIndex = 0usize;
+            while (matchIndex < values.Count()) {
+                mut found = Match();
+                found.found = true;
+                found.index = indices[matchIndex];
+                found.length = lengths[matchIndex];
+                found.value = values[matchIndex];
+                found.groups = [];
+                found.captures = [];
+                mut groupIndex = 0usize;
+                while (groupIndex < captureCounts[matchIndex]) {
+                    let flatIndex = captureOffset + groupIndex;
+                    mut capture = Capture();
+                    capture.matched = captureMatched[flatIndex] != 0u8;
+                    capture.byteIndex = captureIndices[flatIndex];
+                    capture.byteLength = captureLengths[flatIndex];
+                    capture.value = captureValues[flatIndex];
+                    found.groups.Push(capture.value);
+                    found.captures.Push(capture);
+                    groupIndex += 1usize;
+                }
+                captureOffset += captureCounts[matchIndex];
+                matches.Push(found);
+                matchIndex += 1usize;
+            }
+            return std::Ok(matches);
+        }
+
+        fn FindAllMatches(input: string, pattern: string, ignoreCase: bool) -> std::Result<Match[]> {
+            return FindAllMatchesSafe(input, pattern, ignoreCase, DefaultLimits());
+        }
+
+        fn FindAllMatches(input: string, pattern: string) -> std::Result<Match[]> {
+            return FindAllMatches(input, pattern, false);
+        }
+
         fn Replace(input: string, pattern: string, replacement: string, ignoreCase: bool) -> std::Result<string> {
             mut output = "";
             mut error = Error::none;
@@ -227,6 +340,10 @@ realm std {
 
             public fn FindAll(input: string) -> std::Result<string[]> {
                 return regex::FindAll(input, self.pattern, self.ignoreCase);
+            }
+
+            public fn FindAllMatches(input: string) -> std::Result<Match[]> {
+                return regex::FindAllMatches(input, self.pattern, self.ignoreCase);
             }
 
             public fn Replace(input: string, replacement: string) -> std::Result<string> {

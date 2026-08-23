@@ -1,0 +1,16 @@
+use std::option as option;
+use std::result;
+use std::tuple;
+
+@Export
+object Sdk14TupleProfile {
+    public snapshot: std::Tuple<std::Option<i32>, std::Result<string>, u64>;
+
+    public OnConstruct() {
+        self.snapshot = std::Tuple<std::Option<i32>, std::Result<string>, u64>(
+            option::Some<i32>(7),
+            std::Ok<string>("ready"),
+            42u64
+        );
+    }
+}

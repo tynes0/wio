@@ -11,7 +11,7 @@ int main()
 {
     using namespace wio::sdk;
 
-    static_assert(product_version.major == 0u && product_version.minor == 13u);
+    static_assert(product_version.major == 0u && product_version.minor >= 13u);
     static_assert(feature_catalog.size() == 32u);
     static_assert(feature_info(Feature::UnicodeText)->supports(FeatureSurface::HostValue));
     static_assert(feature_info(Feature::UnicodeText)->supports(FeatureSurface::DynamicField));
@@ -141,7 +141,7 @@ int main()
     api.descriptorSize = sizeof(WioModuleApi);
     const ModuleInfo info = inspect_module_api(&api);
     assert(info.product_version.has_value());
-    assert(info.product_version->minor == 13u);
+    assert(info.product_version->minor >= 13u);
     assert(info.has_capability(WIO_MODULE_CAP_TEXT_FIELDS));
 
     bool productMismatchRejected = false;

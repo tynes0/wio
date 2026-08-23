@@ -40,6 +40,11 @@ namespace wio::sema
         Ref<Type> extensionTargetType = nullptr;
         std::string extensionMemberName;
         Ref<Symbol> extensionImplementation = nullptr;
+        // Interface/base declarations whose C++ virtual slots this method
+        // implements. Generic base methods may have a different mangled name
+        // before their owner type arguments are substituted, so codegen emits
+        // small forwarding bridges for these symbols.
+        std::vector<WeakRef<Symbol>> overriddenSymbols;
 
         std::vector<std::string> attributeTargets;
         std::vector<std::string> attributeRetention;

@@ -4,6 +4,27 @@ All notable user-facing changes to Wio are recorded here.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-08-23
+
+### Added
+
+- Added recursive SDK field bridges for Option, Result/unit, tuple,
+  collections, checked span ranges, owned ByteBuffer, and nested combinations.
+- Added ABI v8 exact const-value metadata and an explicit SDK support inventory.
+- Added Unicode normalization, typed serialization codecs, bounded regex match
+  records, and cross-platform deterministic std vectors.
+
+### Changed
+
+- JSON preserves valid numeric tokens exactly and converts them on request.
+- UTC civil conversion no longer depends on platform `time_t` range.
+- Pool handles include owner identity; span/queue/buffer invariants are hardened.
+
+### Fixed
+
+- Fixed generic interface parameter methods becoming abstract in generated C++.
+- Fixed full-width signed `Mt19937.NextI32` ranges overflowing.
+
 ## [0.13.0] - 2026-08-22
 
 ### Added

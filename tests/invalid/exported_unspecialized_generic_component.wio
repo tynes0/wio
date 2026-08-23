@@ -1,0 +1,8 @@
+component GenericValue<T> {
+    public value: T;
+}
+
+@Export
+object BadGenericProfile {
+    public value: GenericValue<i32>;
+}

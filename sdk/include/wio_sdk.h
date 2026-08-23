@@ -204,6 +204,8 @@ namespace wio::sdk
         [[nodiscard]] bool is_interface() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_INTERFACE; }
         [[nodiscard]] bool is_async_task() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_ASYNC_TASK; }
         [[nodiscard]] bool is_generic_instance() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_GENERIC_INSTANCE; }
+        [[nodiscard]] bool is_unit() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_UNIT; }
+        [[nodiscard]] bool is_const_value() const noexcept { return kind() == WIO_MODULE_TYPE_DESC_CONST_VALUE; }
 
         [[nodiscard]] bool is_dynamic_array() const noexcept
         {
@@ -264,7 +266,9 @@ namespace wio::sdk
         {
             return is_primitive() || is_string() || is_text() || is_object() || is_component() ||
                 is_dynamic_array() || is_static_array() || is_dict() || is_tree() || is_function() ||
-                is_enum() || is_flagset();
+                is_enum() || is_flagset() || is_option() || is_result() || is_tuple() ||
+                is_queue() || is_unordered_set() || is_ordered_set() || is_span() ||
+                is_byte_buffer() || is_unit();
         }
 
         [[nodiscard]] std::uint64_t stable_id() const noexcept
@@ -282,6 +286,23 @@ namespace wio::sdk
             if (descriptor_ == nullptr || descriptor_->genericArguments == nullptr || index >= descriptor_->genericArgumentCount)
                 return {};
             return TypeDescriptorView(descriptor_->genericArguments[index]);
+        }
+
+        [[nodiscard]] bool has_const_value_type() const noexcept
+        {
+            return descriptor_ != nullptr && descriptor_->constValueType != nullptr;
+        }
+
+        [[nodiscard]] TypeDescriptorView const_value_type() const noexcept
+        {
+            return TypeDescriptorView(descriptor_ != nullptr ? descriptor_->constValueType : nullptr);
+        }
+
+        [[nodiscard]] std::string_view const_value() const noexcept
+        {
+            return descriptor_ != nullptr && descriptor_->constValue != nullptr
+                ? std::string_view(descriptor_->constValue)
+                : std::string_view{};
         }
 
         [[nodiscard]] std::vector<TypeDescriptorView> generic_arguments() const
@@ -1423,6 +1444,18 @@ namespace wio::sdk
 
         const char* abiTypeName(WioAbiType type) noexcept;
 
+        template <typename T>
+        struct IsExplicitAbiInteger : std::false_type
+        {
+        };
+
+        template <typename TStorage, WioAbiType TAbiType>
+        struct IsExplicitAbiInteger<WioAbiInteger<TStorage, TAbiType>> : std::true_type
+        {
+            using Storage = TStorage;
+            static constexpr WioAbiType AbiType = TAbiType;
+        };
+
         inline FieldAccess toFieldAccess(const WioModuleAccessModifier accessModifier) noexcept
         {
             switch (accessModifier)
@@ -1436,6 +1469,7 @@ namespace wio::sdk
 
         template <typename T>
         constexpr bool IsAbiScalarType =
+            IsExplicitAbiInteger<Decay<T>>::value ||
             std::is_same_v<Decay<T>, bool> ||
             std::is_same_v<Decay<T>, char> ||
             std::is_same_v<Decay<T>, unsigned char> ||
@@ -1538,6 +1572,73 @@ namespace wio::sdk
         };
 
         template <typename T>
+        struct IsStdTuple : std::false_type
+        {
+        };
+
+        template <typename... TValues>
+        struct IsStdTuple<std::tuple<TValues...>> : std::true_type
+        {
+            using Type = std::tuple<TValues...>;
+            static constexpr std::size_t Size = sizeof...(TValues);
+        };
+
+        template <typename T>
+        struct IsWioOption : std::false_type
+        {
+        };
+
+        template <typename TValue>
+        struct IsWioOption<WioOption<TValue>> : std::true_type
+        {
+            using Value = TValue;
+        };
+
+        template <typename T>
+        struct IsWioResult : std::false_type
+        {
+        };
+
+        template <typename TValue>
+        struct IsWioResult<WioResult<TValue>> : std::true_type
+        {
+            using Value = TValue;
+        };
+
+        template <typename T>
+        struct IsWioQueue : std::false_type
+        {
+        };
+
+        template <typename TValue>
+        struct IsWioQueue<WioQueue<TValue>> : std::true_type
+        {
+            using Value = TValue;
+        };
+
+        template <typename T>
+        struct IsWioUnorderedSet : std::false_type
+        {
+        };
+
+        template <typename TValue>
+        struct IsWioUnorderedSet<WioUnorderedSet<TValue>> : std::true_type
+        {
+            using Value = TValue;
+        };
+
+        template <typename T>
+        struct IsWioOrderedSet : std::false_type
+        {
+        };
+
+        template <typename TValue>
+        struct IsWioOrderedSet<WioOrderedSet<TValue>> : std::true_type
+        {
+            using Value = TValue;
+        };
+
+        template <typename T>
         struct IsStdUnorderedMap : std::false_type
         {
         };
@@ -1577,7 +1678,11 @@ namespace wio::sdk
         {
             using U = Decay<T>;
 
-            if constexpr (std::is_same_v<U, void>)
+            if constexpr (IsExplicitAbiInteger<U>::value)
+            {
+                return IsExplicitAbiInteger<U>::AbiType;
+            }
+            else if constexpr (std::is_same_v<U, void>)
             {
                 return WIO_ABI_VOID;
             }
@@ -1680,6 +1785,18 @@ namespace wio::sdk
         template <typename T>
         std::string hostFieldTypeName();
 
+        template <typename TTuple, size_t... Indices>
+        std::string hostTupleTypeName(std::index_sequence<Indices...>)
+        {
+            std::ostringstream message;
+            message << "Tuple<";
+            bool first = true;
+            ((message << (std::exchange(first, false) ? "" : ", ")
+                      << hostFieldTypeName<std::tuple_element_t<Indices, TTuple>>()), ...);
+            message << ">";
+            return message.str();
+        }
+
         template <typename Signature, size_t... Indices>
         std::string hostFunctionTypeName(std::index_sequence<Indices...>)
         {
@@ -1726,6 +1843,44 @@ namespace wio::sdk
                         << "; " << IsStdArray<U>::Extent << "]";
                 return message.str();
             }
+            else if constexpr (IsWioOption<U>::value)
+            {
+                return "Option<" + hostFieldTypeName<typename IsWioOption<U>::Value>() + ">";
+            }
+            else if constexpr (IsStdTuple<U>::value)
+            {
+                return hostTupleTypeName<typename IsStdTuple<U>::Type>(
+                    std::make_index_sequence<IsStdTuple<U>::Size>{}
+                );
+            }
+            else if constexpr (std::is_same_v<U, WioSpanRange>)
+            {
+                return "Span";
+            }
+            else if constexpr (std::is_same_v<U, WioByteBuffer>)
+            {
+                return "ByteBuffer";
+            }
+            else if constexpr (IsWioResult<U>::value)
+            {
+                return "Result<" + hostFieldTypeName<typename IsWioResult<U>::Value>() + ">";
+            }
+            else if constexpr (std::is_same_v<U, WioUnit>)
+            {
+                return "ResultUnit";
+            }
+            else if constexpr (IsWioQueue<U>::value)
+            {
+                return "Queue<" + hostFieldTypeName<typename IsWioQueue<U>::Value>() + ">";
+            }
+            else if constexpr (IsWioUnorderedSet<U>::value)
+            {
+                return "UnorderedSet<" + hostFieldTypeName<typename IsWioUnorderedSet<U>::Value>() + ">";
+            }
+            else if constexpr (IsWioOrderedSet<U>::value)
+            {
+                return "OrderedSet<" + hostFieldTypeName<typename IsWioOrderedSet<U>::Value>() + ">";
+            }
             else if constexpr (IsStdUnorderedMap<U>::value)
             {
                 return "Dict<" + hostFieldTypeName<typename IsStdUnorderedMap<U>::Key>()
@@ -1762,6 +1917,16 @@ namespace wio::sdk
 
         template <typename T>
         bool matchesTypeDescriptor(const TypeDescriptorView& type);
+
+        template <typename TTuple, size_t... Indices>
+        bool matchesTupleDescriptor(const TypeDescriptorView& type, std::index_sequence<Indices...>)
+        {
+            if (!type.is_tuple() || type.generic_argument_count() != sizeof...(Indices))
+                return false;
+
+            return (matchesTypeDescriptor<std::tuple_element_t<Indices, TTuple>>(
+                type.generic_argument(static_cast<std::uint32_t>(Indices))) && ...);
+        }
 
         template <typename Signature, size_t... Indices>
         bool matchesFunctionDescriptor(const TypeDescriptorView& type, std::index_sequence<Indices...>)
@@ -1814,6 +1979,52 @@ namespace wio::sdk
                     type.static_extent() == IsStdArray<U>::Extent &&
                     type.has_element_type() &&
                     matchesTypeDescriptor<typename IsStdArray<U>::Element>(type.element_type());
+            }
+            else if constexpr (IsWioOption<U>::value)
+            {
+                return type.is_option() &&
+                    type.generic_argument_count() == 1u &&
+                    matchesTypeDescriptor<typename IsWioOption<U>::Value>(type.generic_argument(0u));
+            }
+            else if constexpr (IsStdTuple<U>::value)
+            {
+                return matchesTupleDescriptor<typename IsStdTuple<U>::Type>(
+                    type,
+                    std::make_index_sequence<IsStdTuple<U>::Size>{}
+                );
+            }
+            else if constexpr (std::is_same_v<U, WioSpanRange>)
+            {
+                return type.is_span() && type.generic_argument_count() == 0u;
+            }
+            else if constexpr (std::is_same_v<U, WioByteBuffer>)
+            {
+                return type.is_byte_buffer() && type.generic_argument_count() == 0u;
+            }
+            else if constexpr (IsWioResult<U>::value)
+            {
+                return type.is_result() &&
+                    type.generic_argument_count() == 1u &&
+                    matchesTypeDescriptor<typename IsWioResult<U>::Value>(type.generic_argument(0u));
+            }
+            else if constexpr (std::is_same_v<U, WioUnit>)
+            {
+                return type.is_unit() && type.logical_name() == "std::ResultUnit";
+            }
+            else if constexpr (IsWioQueue<U>::value)
+            {
+                return type.is_queue() && type.generic_argument_count() == 1u &&
+                    matchesTypeDescriptor<typename IsWioQueue<U>::Value>(type.generic_argument(0u));
+            }
+            else if constexpr (IsWioUnorderedSet<U>::value)
+            {
+                return type.is_unordered_set() && type.generic_argument_count() == 1u &&
+                    matchesTypeDescriptor<typename IsWioUnorderedSet<U>::Value>(type.generic_argument(0u));
+            }
+            else if constexpr (IsWioOrderedSet<U>::value)
+            {
+                return type.is_ordered_set() && type.generic_argument_count() == 1u &&
+                    matchesTypeDescriptor<typename IsWioOrderedSet<U>::Value>(type.generic_argument(0u));
             }
             else if constexpr (IsStdUnorderedMap<U>::value)
             {
@@ -1888,7 +2099,37 @@ namespace wio::sdk
             WioValue result{};
             result.type = getAbiType<U>();
 
-            if constexpr (std::is_same_v<U, bool>)
+            if constexpr (IsExplicitAbiInteger<U>::value)
+            {
+                const auto raw = value.value();
+                if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_UCHAR)
+                    result.value.v_uchar = static_cast<unsigned char>(raw);
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_BYTE)
+                    result.value.v_byte = static_cast<std::uint8_t>(raw);
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_I8)
+                    result.value.v_i8 = static_cast<std::int8_t>(raw);
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_I16)
+                    result.value.v_i16 = static_cast<std::int16_t>(raw);
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_I32)
+                    result.value.v_i32 = static_cast<std::int32_t>(raw);
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_I64)
+                    result.value.v_i64 = static_cast<std::int64_t>(raw);
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_U8)
+                    result.value.v_u8 = static_cast<std::uint8_t>(raw);
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_U16)
+                    result.value.v_u16 = static_cast<std::uint16_t>(raw);
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_U32)
+                    result.value.v_u32 = static_cast<std::uint32_t>(raw);
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_U64)
+                    result.value.v_u64 = static_cast<std::uint64_t>(raw);
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_ISIZE)
+                    result.value.v_isize = static_cast<std::intptr_t>(raw);
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_USIZE)
+                    result.value.v_usize = static_cast<std::uintptr_t>(raw);
+                else
+                    static_assert(AlwaysFalse<U>, "Unsupported explicit Wio ABI integer type.");
+            }
+            else if constexpr (std::is_same_v<U, bool>)
             {
                 result.value.v_bool = value;
             }
@@ -1967,7 +2208,37 @@ namespace wio::sdk
                 throw Error(ErrorCode::SignatureMismatch, message.str());
             }
 
-            if constexpr (std::is_same_v<U, bool>)
+            if constexpr (IsExplicitAbiInteger<U>::value)
+            {
+                using Storage = typename IsExplicitAbiInteger<U>::Storage;
+                if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_UCHAR)
+                    return U(static_cast<Storage>(value.value.v_uchar));
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_BYTE)
+                    return U(static_cast<Storage>(value.value.v_byte));
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_I8)
+                    return U(static_cast<Storage>(value.value.v_i8));
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_I16)
+                    return U(static_cast<Storage>(value.value.v_i16));
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_I32)
+                    return U(static_cast<Storage>(value.value.v_i32));
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_I64)
+                    return U(static_cast<Storage>(value.value.v_i64));
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_U8)
+                    return U(static_cast<Storage>(value.value.v_u8));
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_U16)
+                    return U(static_cast<Storage>(value.value.v_u16));
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_U32)
+                    return U(static_cast<Storage>(value.value.v_u32));
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_U64)
+                    return U(static_cast<Storage>(value.value.v_u64));
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_ISIZE)
+                    return U(static_cast<Storage>(value.value.v_isize));
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_USIZE)
+                    return U(static_cast<Storage>(value.value.v_usize));
+                else
+                    static_assert(AlwaysFalse<U>, "Unsupported explicit Wio ABI integer type.");
+            }
+            else if constexpr (std::is_same_v<U, bool>)
             {
                 return static_cast<T>(value.value.v_bool);
             }
@@ -2449,6 +2720,7 @@ namespace wio::sdk
                 break;
             case WIO_MODULE_TYPE_DESC_STRING:
             case WIO_MODULE_TYPE_DESC_TEXT:
+            case WIO_MODULE_TYPE_DESC_UNIT:
             case WIO_MODULE_TYPE_DESC_SPAN:
             case WIO_MODULE_TYPE_DESC_BYTE_BUFFER:
             case WIO_MODULE_TYPE_DESC_ANY:
@@ -2493,6 +2765,15 @@ namespace wio::sdk
                 }
                 break;
             case WIO_MODULE_TYPE_DESC_TUPLE:
+                break;
+            case WIO_MODULE_TYPE_DESC_CONST_VALUE:
+                if (descriptor->constValueType == nullptr || descriptor->constValue == nullptr)
+                {
+                    std::ostringstream problem;
+                    problem << "Const-generic descriptor '" << descriptor->displayName
+                            << "' must expose its declared value type and canonical value.";
+                    throwInvalidApiDescriptor(context, problem.str());
+                }
                 break;
             case WIO_MODULE_TYPE_DESC_GENERIC_INSTANCE:
                 if (!hasText(descriptor->logicalTypeName) || descriptor->genericArgumentCount == 0u)
@@ -2569,6 +2850,8 @@ namespace wio::sdk
                 validateTypeDescriptor(descriptor->valueType, context, visited, requireV2);
             if (descriptor->returnType != nullptr)
                 validateTypeDescriptor(descriptor->returnType, context, visited, requireV2);
+            if (descriptor->constValueType != nullptr)
+                validateTypeDescriptor(descriptor->constValueType, context, visited, requireV2);
 
             for (std::uint32_t parameterIndex = 0; parameterIndex < descriptor->parameterCount; ++parameterIndex)
                 validateTypeDescriptor(descriptor->parameterTypes[parameterIndex], context, visited, requireV2);
@@ -3105,7 +3388,9 @@ namespace wio::sdk
                             validateExactExportContract(fieldEntry.getterExport, context, "Field getter", fieldEntry.fieldName, WIO_ABI_USIZE, 1u, fieldGetterParameters, true, false);
                         }
                         else if (fieldType.is_string() || fieldType.is_text() || fieldType.is_dynamic_array() || fieldType.is_static_array() ||
-                                 fieldType.is_dict() || fieldType.is_tree() || fieldType.is_function())
+                                 fieldType.is_dict() || fieldType.is_tree() || fieldType.is_function() ||
+                                 fieldType.is_option() || fieldType.is_result() || fieldType.is_unit() ||
+                                 fieldType.is_queue() || fieldType.is_unordered_set() || fieldType.is_ordered_set())
                         {
                             validateExactExportContract(fieldEntry.getterExport, context, "Field getter", fieldEntry.fieldName, WIO_ABI_UNKNOWN, 1u, fieldGetterParameters, false, true);
                         }
@@ -3122,14 +3407,18 @@ namespace wio::sdk
                             validateExactExportContract(fieldEntry.setterExport, context, "Field setter", fieldEntry.fieldName, WIO_ABI_VOID, 2u, fieldSetterHandleParameters, true, false);
                         }
                         else if (fieldType.is_string() || fieldType.is_text() || fieldType.is_dynamic_array() || fieldType.is_static_array() ||
-                                 fieldType.is_dict() || fieldType.is_tree() || fieldType.is_function())
+                                 fieldType.is_dict() || fieldType.is_tree() || fieldType.is_function() ||
+                                 fieldType.is_option() || fieldType.is_result() || fieldType.is_unit() ||
+                                 fieldType.is_queue() || fieldType.is_unordered_set() || fieldType.is_ordered_set())
                         {
                             validateExactExportContract(fieldEntry.setterExport, context, "Field setter", fieldEntry.fieldName, WIO_ABI_VOID, 2u, fieldSetterOpaqueParameters, false, true);
                         }
                     }
 
                     if (fieldType.is_text() || fieldType.is_dynamic_array() || fieldType.is_static_array() || fieldType.is_dict() ||
-                        fieldType.is_tree() || fieldType.is_function())
+                        fieldType.is_tree() || fieldType.is_function() || fieldType.is_option() ||
+                        fieldType.is_result() || fieldType.is_unit() || fieldType.is_queue() ||
+                        fieldType.is_unordered_set() || fieldType.is_ordered_set())
                     {
                         if ((fieldEntry.flags & WIO_MODULE_FIELD_READABLE) != 0u && fieldEntry.dynamicGetter == nullptr)
                         {
@@ -3466,6 +3755,20 @@ namespace wio::sdk
                 }
             }
 
+            if (fieldEntry->dynamicGetter != nullptr)
+            {
+                std::unique_ptr<WioErasedValue> erasedValue(fieldEntry->dynamicGetter(handle));
+                const auto* typedValue = dynamic_cast<const WioErasedValueModel<Decay<T>>*>(erasedValue.get());
+                if (typedValue != nullptr)
+                    return typedValue->value;
+
+                std::ostringstream message;
+                message << "Wio SDK dynamic getter payload mismatch for field '" << fieldName
+                        << "' on exported type '"
+                        << (typeEntry && typeEntry->logicalName ? typeEntry->logicalName : "<unknown>") << "'.";
+                throw Error(ErrorCode::SignatureMismatch, message.str());
+            }
+
             if (fieldEntry->getterExport->rawFunction == nullptr)
             {
                 std::ostringstream message;
@@ -3516,6 +3819,21 @@ namespace wio::sdk
                     }
                     return;
                 }
+            }
+
+            if (fieldEntry->dynamicSetter != nullptr)
+            {
+                WioErasedValueModel<Decay<T>> erasedValue(fieldEntry->typeDescriptor, Decay<T>(std::forward<T>(value)));
+                const std::int32_t status = fieldEntry->dynamicSetter(handle, &erasedValue);
+                if (status == WIO_INVOKE_OK)
+                    return;
+
+                std::ostringstream message;
+                message << "Wio SDK failed to write dynamic field '" << fieldName << "' on exported type '"
+                        << (typeEntry && typeEntry->logicalName ? typeEntry->logicalName : "<unknown>")
+                        << "': " << invokeStatusName(status) << '.';
+                throw Error(status == WIO_INVOKE_TYPE_MISMATCH ? ErrorCode::SignatureMismatch : ErrorCode::InvokeFailed,
+                            message.str());
             }
 
             if (fieldEntry->setterExport->rawFunction == nullptr)
@@ -4905,6 +5223,59 @@ namespace wio::sdk
         std::unique_ptr<WioErasedValue> value_{};
     };
 
+    class WioDynamicTypedValue
+    {
+    public:
+        WioDynamicTypedValue() = default;
+        WioDynamicTypedValue(const WioDynamicTypedValue&) = delete;
+        WioDynamicTypedValue& operator=(const WioDynamicTypedValue&) = delete;
+        WioDynamicTypedValue(WioDynamicTypedValue&&) noexcept = default;
+        WioDynamicTypedValue& operator=(WioDynamicTypedValue&&) noexcept = default;
+
+        template <typename T>
+        explicit WioDynamicTypedValue(T value)
+            : value_(std::make_unique<WioErasedValueModel<detail::Decay<T>>>(nullptr, std::move(value)))
+        {
+        }
+
+        [[nodiscard]] TypeDescriptorView type() const noexcept
+        {
+            return type_;
+        }
+
+        template <typename T>
+        [[nodiscard]] bool can_access_as() const noexcept
+        {
+            return dynamic_cast<const WioErasedValueModel<detail::Decay<T>>*>(value_.get()) != nullptr;
+        }
+
+        template <typename T>
+        [[nodiscard]] T get_as() const
+        {
+            const auto* typedValue = dynamic_cast<const WioErasedValueModel<detail::Decay<T>>*>(value_.get());
+            if (typedValue == nullptr)
+                throw Error(ErrorCode::SignatureMismatch, "Wio SDK dynamic typed value has a different host representation.");
+            return typedValue->value;
+        }
+
+    private:
+        friend class WioDynamicValue;
+        friend class WioFieldAccessor;
+
+        WioDynamicTypedValue(TypeDescriptorView type, std::unique_ptr<WioErasedValue> value) noexcept
+            : type_(type), value_(std::move(value))
+        {
+        }
+
+        [[nodiscard]] const WioErasedValue* raw_erased() const noexcept
+        {
+            return value_.get();
+        }
+
+        TypeDescriptorView type_{};
+        std::unique_ptr<WioErasedValue> value_{};
+    };
+
     enum class WioDynamicValueKind
     {
         Empty,
@@ -4919,7 +5290,8 @@ namespace wio::sdk
         StaticArray,
         Dict,
         Tree,
-        Function
+        Function,
+        Typed
     };
 
     class WioDynamicValue
@@ -5023,10 +5395,21 @@ namespace wio::sdk
         {
         }
 
+        explicit WioDynamicValue(WioDynamicTypedValue value)
+            : value_(std::move(value))
+        {
+        }
+
         template <typename TReturn, typename... TArgs>
         explicit WioDynamicValue(std::function<TReturn(TArgs...)> value)
             : value_(WioDynamicFunction(std::move(value)))
         {
+        }
+
+        template <typename T>
+        [[nodiscard]] static WioDynamicValue typed(T value)
+        {
+            return WioDynamicValue(WioDynamicTypedValue(std::move(value)));
         }
 
         [[nodiscard]] WioDynamicValueKind kind() const noexcept
@@ -5055,6 +5438,8 @@ namespace wio::sdk
                 return WioDynamicValueKind::Tree;
             if (std::holds_alternative<WioDynamicFunction>(value_))
                 return WioDynamicValueKind::Function;
+            if (std::holds_alternative<WioDynamicTypedValue>(value_))
+                return WioDynamicValueKind::Typed;
             return WioDynamicValueKind::Empty;
         }
 
@@ -5121,6 +5506,11 @@ namespace wio::sdk
         [[nodiscard]] bool is_function() const noexcept
         {
             return kind() == WioDynamicValueKind::Function;
+        }
+
+        [[nodiscard]] bool is_typed() const noexcept
+        {
+            return kind() == WioDynamicValueKind::Typed;
         }
 
         [[nodiscard]] const WioValue& as_scalar_value() const
@@ -5290,6 +5680,20 @@ namespace wio::sdk
             return std::get<WioDynamicFunction>(std::move(value_));
         }
 
+        [[nodiscard]] const WioDynamicTypedValue& as_typed() const
+        {
+            if (!is_typed())
+                throw Error(ErrorCode::SignatureMismatch, "Wio SDK dynamic value does not hold a typed value.");
+            return std::get<WioDynamicTypedValue>(value_);
+        }
+
+        [[nodiscard]] WioDynamicTypedValue take_typed() &&
+        {
+            if (!is_typed())
+                throw Error(ErrorCode::SignatureMismatch, "Wio SDK dynamic value does not hold a typed value.");
+            return std::get<WioDynamicTypedValue>(std::move(value_));
+        }
+
     private:
         std::variant<
             std::monostate,
@@ -5304,7 +5708,8 @@ namespace wio::sdk
             WioDynamicStaticArray,
             WioDynamicDict,
             WioDynamicTree,
-            WioDynamicFunction> value_{};
+            WioDynamicFunction,
+            WioDynamicTypedValue> value_{};
     };
 
     class WioObjectType
@@ -5798,6 +6203,30 @@ namespace wio::sdk
             return WioDynamicValue(WioDynamicFunction(type(), std::move(erasedValue)));
         }
 
+        if (info_.type.is_option() || info_.type.is_result() || info_.type.is_tuple() || info_.type.is_queue() ||
+            info_.type.is_unordered_set() || info_.type.is_ordered_set() || info_.type.is_span() ||
+            info_.type.is_byte_buffer() || info_.type.is_unit())
+        {
+            if (fieldEntry_ == nullptr || fieldEntry_->dynamicGetter == nullptr)
+            {
+                std::ostringstream message;
+                message << "Wio SDK field '" << name() << "' on exported type '"
+                        << (type_ && type_->logicalName ? type_->logicalName : "<unknown>")
+                        << "' does not expose a dynamic getter bridge.";
+                throw Error(ErrorCode::SignatureMismatch, message.str());
+            }
+
+            std::unique_ptr<WioErasedValue> erasedValue(fieldEntry_->dynamicGetter(handle_));
+            if (!erasedValue)
+            {
+                std::ostringstream message;
+                message << "Wio SDK failed to read dynamic field '" << name() << "' from exported type '"
+                        << (type_ && type_->logicalName ? type_->logicalName : "<unknown>") << "'.";
+                throw Error(ErrorCode::InvokeFailed, message.str());
+            }
+            return WioDynamicValue(WioDynamicTypedValue(type(), std::move(erasedValue)));
+        }
+
         std::ostringstream message;
         message << "Wio SDK dynamic field access is not yet supported for field '" << name()
                 << "' with exported type '" << detail::descriptorDisplayName(type()) << "'.";
@@ -5843,6 +6272,7 @@ namespace wio::sdk
         case WioDynamicValueKind::Dict:
         case WioDynamicValueKind::Tree:
         case WioDynamicValueKind::Function:
+        case WioDynamicValueKind::Typed:
         {
             if (fieldEntry_ == nullptr || fieldEntry_->dynamicSetter == nullptr)
             {
@@ -5870,6 +6300,9 @@ namespace wio::sdk
                 break;
             case WioDynamicValueKind::Function:
                 erasedValue = value.as_dynamic_function().raw_erased();
+                break;
+            case WioDynamicValueKind::Typed:
+                erasedValue = value.as_typed().raw_erased();
                 break;
             default:
                 break;

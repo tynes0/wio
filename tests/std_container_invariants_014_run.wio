@@ -1,0 +1,67 @@
+use std::assert as assert;
+use std::buffer as buffer;
+use std::console as console;
+use std::queue as queue;
+use std::sets as sets;
+use std::span as span;
+
+fn Entry() -> i32 {
+    let work = queue::Queue<i32>();
+    mut index = 0;
+    while (index < 80) {
+        work.Enqueue(index);
+        index += 1;
+    }
+    index = 0;
+    while (index < 65) {
+        assert::ExpectEqual(work.Dequeue(), index, "queue FIFO through compaction");
+        index += 1;
+    }
+    work.Reserve(128usize);
+    assert::ExpectEqual(work.Count(), 15usize, "queue reserve preserves active count");
+    assert::ExpectEqual(work.Peek(), 65, "queue reserve preserves active head");
+    assert::Expect(work.Capacity() >= 128usize, "queue reserve applies to compact storage");
+
+    let ordered = sets::OrderedSet<i32>();
+    assert::Expect(ordered.Add(9), "ordered set first insert");
+    assert::Expect(ordered.Add(1), "ordered set second insert");
+    assert::Expect(ordered.Add(4), "ordered set third insert");
+    assert::Expect(not ordered.Add(4), "ordered set duplicate rejection");
+    let orderedValues = ordered.ToArray();
+    assert::ExpectEqual(orderedValues[0usize], 1, "ordered set ascending value 0");
+    assert::ExpectEqual(orderedValues[1usize], 4, "ordered set ascending value 1");
+    assert::ExpectEqual(orderedValues[2usize], 9, "ordered set ascending value 2");
+
+    let bytes = buffer::ByteBuffer(64usize);
+    bytes.Write([7u8, 8u8, 9u8]);
+    bytes.Seek(1usize);
+    let cloned = bytes.Clone();
+    assert::ExpectEqual(cloned.ToArray(), bytes.ToArray(), "buffer clone content");
+    assert::ExpectEqual(cloned.Position(), 1usize, "buffer clone cursor");
+    assert::Expect(cloned.Capacity() >= bytes.Capacity(), "buffer clone reserved capacity");
+
+    let firstPool = buffer::BytePool(8usize);
+    let secondPool = buffer::BytePool(8usize);
+    let firstLease = firstPool.Rent();
+    let secondLease = secondPool.Rent();
+    assert::Expect(not firstPool.Return(secondLease), "byte pool rejects a foreign handle");
+    assert::Expect(firstPool.Return(firstLease), "byte pool returns its own handle");
+    assert::Expect(not firstPool.Owns(firstLease), "returned byte handle becomes stale");
+
+    let firstValues = buffer::Pool<string>();
+    let secondValues = buffer::Pool<string>();
+    let valueLease = firstValues.Rent("owned");
+    let foreignLease = secondValues.Rent("foreign");
+    assert::Expect(not firstValues.Set(foreignLease, "wrong"), "generic pool rejects a foreign handle");
+    assert::ExpectEqual(firstValues.Get(valueLease).Value(), "owned", "foreign handle cannot alias a slot");
+
+    mut hostile = span::Span();
+    hostile.start = 18446744073709551613usize;
+    hostile.count = 10usize;
+    assert::ExpectEqual(hostile.End(), 18446744073709551615usize, "span end saturates");
+    let small: i32[] = [1, 2, 3];
+    assert::Expect(span::Get<i32>(ref small, hostile, 0usize).IsNone(), "hostile span cannot wrap into data");
+
+    console::PrintLine!("std-container-invariants-014-ok");
+    return 0;
+}

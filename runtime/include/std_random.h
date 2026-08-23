@@ -15,6 +15,11 @@ namespace wio::runtime::std_random
         std::vector<std::uint32_t>& state,
         std::size_t& index,
         std::uint32_t maxExclusive);
+    [[nodiscard]] std::int32_t Mt19937NextI32(
+        std::vector<std::uint32_t>& state,
+        std::size_t& index,
+        std::int32_t minInclusive,
+        std::int32_t maxExclusive);
     [[nodiscard]] double Mt19937NextF64(std::vector<std::uint32_t>& state, std::size_t& index);
 
     void Xoroshiro128PlusSeed(std::uint64_t seed, std::uint64_t& state0, std::uint64_t& state1) noexcept;

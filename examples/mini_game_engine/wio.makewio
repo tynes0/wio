@@ -1,0 +1,41 @@
+schemaVersion = 1
+name = "MiniWioGameEngine"
+template = "hybrid-module"
+
+[toolchain]
+buildDir = "build"
+config = "Debug"
+
+[wio]
+entry = "wio/game_script.wio"
+target = "shared"
+sourceRoots = ["wio"]
+includeDirs = []
+linkDirs = []
+linkLibraries = []
+nativeSources = []
+backendArgs = []
+
+[host]
+enabled = true
+compiler = "g++"
+sourceRoots = ["host", "engine/src"]
+includeDirs = ["engine/include", "../atlas_desk/native/include"]
+linkDirs = ["../atlas_desk/native/lib"]
+linkLibraries = ["raylib", "opengl32", "gdi32", "winmm"]
+compilerArgs = []
+
+[build]
+buildDir = ".wio-build"
+config = "Debug"
+
+[outputs]
+directory = ".wio-build/interop"
+baseName = "miniwio_game"
+wioName = "miniwio_game"
+hostName = "miniwio_engine"
+
+[run]
+passLibraryPath = true
+args = []
+workingDirectory = "."

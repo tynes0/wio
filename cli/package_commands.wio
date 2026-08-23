@@ -289,9 +289,16 @@ realm SelfHostedPackage {
         if (generator != "") { configureArgs.Push("-G"); configureArgs.Push(generator); }
         let configured = SelfHostedCli::Run?("cmake", configureArgs, repositoryRoot);
         if (configured != 0) { return std::Ok<i32>(configured); }
+        // This command is running inside wio-selfhost. Building wio_dist here
+        // would try to replace the currently executing companion on Windows.
+        // Build the native deliverables, then stage the already-running
+        // companion and the rest of the install tree in a separate step.
         let built = SelfHostedCli::Run?(
-            "cmake", ["--build", buildDirectory, "--target", "wio_dist", "--config", config], repositoryRoot);
+            "cmake", ["--build", buildDirectory, "--target", "wio_app", "wio_runtime_backend", "--config", config], repositoryRoot);
         if (built != 0) { return std::Ok<i32>(built); }
+        let installed = SelfHostedCli::Run?(
+            "cmake", ["--install", buildDirectory, "--config", config, "--prefix", distRoot], repositoryRoot);
+        if (installed != 0) { return std::Ok<i32>(installed); }
         if (fs::Exists(packageRoot) and not fs::TryRemoveAll(packageRoot)) {
             return Failure<i32>($"Could not replace package root: ${packageRoot}");
         }

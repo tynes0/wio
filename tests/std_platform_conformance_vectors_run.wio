@@ -1,0 +1,88 @@
+use std::assert as assert;
+use std::console as console;
+use std::convert as convert;
+use std::hash as hash;
+use std::random as random;
+use std::time as time;
+
+fn Entry() -> i32 {
+    assert::ExpectEqual(hash::Fnv1a32("hello"), 1335831723u32, "FNV-1a 32 vector");
+    assert::ExpectEqual(
+        hash::Fnv1a64("hello"),
+        11831194018420276491u64,
+        "FNV-1a 64 vector"
+    );
+    assert::ExpectEqual(
+        hash::Sha256(""),
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "SHA-256 empty vector"
+    );
+    assert::ExpectEqual(
+        hash::Sha256("abc"),
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+        "SHA-256 abc vector"
+    );
+
+    let mt = random::Mt19937(5489u64);
+    assert::ExpectEqual(mt.NextU32(), 3499211612u32, "MT19937 vector 0");
+    assert::ExpectEqual(mt.NextU32(), 581869302u32, "MT19937 vector 1");
+    assert::ExpectEqual(mt.NextU32(), 3890346734u32, "MT19937 vector 2");
+
+    let xoroshiro = random::Xoroshiro128Plus(42u64);
+    assert::ExpectEqual(xoroshiro.NextU64(), 16629283624882167704u64, "xoroshiro vector 0");
+    assert::ExpectEqual(xoroshiro.NextU64(), 1420492921613871959u64, "xoroshiro vector 1");
+    assert::ExpectEqual(xoroshiro.NextU64(), 9768315062676884790u64, "xoroshiro vector 2");
+
+    let lxm = random::Lxm(42u64);
+    assert::ExpectEqual(lxm.NextU64(), 3450279432374012225u64, "LXM vector 0");
+    assert::ExpectEqual(lxm.NextU64(), 14630751094276470489u64, "LXM vector 1");
+    assert::ExpectEqual(lxm.NextU64(), 17511808818378210830u64, "LXM vector 2");
+
+    let wichmann = random::WichmannHill(42u64);
+    assert::ExpectEqual(wichmann.NextU32(), 1054522305u32, "Wichmann-Hill vector 0");
+    assert::ExpectEqual(wichmann.NextU32(), 749168877u32, "Wichmann-Hill vector 1");
+    assert::ExpectEqual(wichmann.NextU32(), 3684143972u32, "Wichmann-Hill vector 2");
+
+    let fullRange = random::Mt19937(7u64).NextI32(-2147483648, 2147483647);
+    assert::Expect(
+        fullRange >= -2147483648 and fullRange < 2147483647,
+        "full-width i32 range does not overflow"
+    );
+
+    assert::ExpectEqual(
+        convert::ParseI64("-9223372036854775808").Value(),
+        -9223372036854775808i64,
+        "i64 minimum parse"
+    );
+    assert::ExpectEqual(
+        convert::ParseU64("18446744073709551615").Value(),
+        18446744073709551615u64,
+        "u64 maximum parse"
+    );
+    assert::Expect(convert::ParseI64("9223372036854775808").IsError(), "i64 overflow parse");
+    assert::Expect(convert::ParseF64("1e309").IsError(), "non-finite f64 parse rejected");
+
+    let beforeEpoch = time::FromUnixMilliseconds(-1i64, false);
+    assert::ExpectEqual(
+        beforeEpoch.ToIso8601(),
+        "1969-12-31T23:59:59.999Z",
+        "negative UTC millisecond breakdown"
+    );
+    assert::ExpectEqual(beforeEpoch.weekDay, 3, "UTC weekday vector uses Sunday zero");
+    assert::ExpectEqual(beforeEpoch.yearDay, 365, "UTC year-day vector uses one-based days");
+    mut leap = time::DateTime();
+    assert::Expect(
+        time::TryCreate(2400, 2, 29, 0, 0, 0, 0, false, ref leap),
+        "Gregorian year 2400 leap date"
+    );
+    assert::ExpectEqual(leap.unixMilliseconds, 13574563200000i64, "UTC civil conversion vector");
+    assert::ExpectEqual(leap.ToIso8601(), "2400-02-29T00:00:00.000Z", "UTC roundtrip vector");
+    assert::ExpectEqual(leap.yearDay, 60, "leap-date year-day vector");
+    assert::Expect(
+        not time::TryCreate(2000, 1, 1, 0, 0, 60, 0, false, ref leap),
+        "Unix DateTime rejects an unrepresentable leap second"
+    );
+
+    console::PrintLine!("std-platform-conformance-vectors-ok");
+    return 0;
+}

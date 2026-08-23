@@ -130,11 +130,13 @@ here does not by itself mean that v1 cannot ship.
     platform-independent transcoding are available through `std::unicode`.
     Native static exports accepting and returning `text` are covered across the
     generated C++ boundary, and runtime reflection reports `text` as a named
-    primitive with stable size/alignment metadata. SDK ABI v7 now publishes a
+    primitive with stable size/alignment metadata. SDK ABI v8 now publishes a
     dedicated text descriptor and shared modules round-trip text fields through
-    typed/dynamic host access. Complete normalization policy and APIs and broad
-    Unicode conformance vectors. Do not expose C++ `wchar_t` width as a Wio
-    language rule.
+    typed/dynamic host access. NFC, NFD, NFKC, and NFKD normalization are now
+    implemented with pinned Unicode 17 data and focused conformance vectors.
+    Complete the broader Unicode category/case tables, locale-sensitive
+    behavior, and the full upstream conformance corpus. Do not expose C++
+    `wchar_t` width as a Wio language rule.
 
 17. [~] Extend compile-time constants to `string` and `text`.
     Literal initialization, references to other constants, concatenation,
@@ -164,26 +166,32 @@ here does not by itself mean that v1 cannot ship.
    UTF-8/UTF-16/UTF-32 conversion. The compiler/runtime owns validation and
    normalization policy, iteration, and native transcoding; it does not expose
    the platform-dependent C++ `wchar_t`/`std::wstring` representation as Wio
-   semantics. Complete
-   normalization,
-   full Unicode category/case data, locale-sensitive behavior, and conformance
-   vectors. GUI input must not require a native `AppendCharacter` workaround.
+   semantics. Unicode 17 NFC/NFD/NFKC/NFKD normalization and focused canonical/
+   compatibility conformance vectors are implemented. Complete full Unicode
+   category/case data, locale-sensitive behavior, and the full upstream
+   conformance corpus. GUI input must not require a native `AppendCharacter`
+   workaround.
 
 3. [~] Harden JSON into a production-grade module.
-   Parsing/writing, nested values, errors, and pretty output exist. Add exact
-   integer preservation, configurable duplicate-key policy, deterministic key
-   ordering, depth/size limits, UTF validation, JSON Pointer, and Merge Patch
-   are implemented. Add streaming parser/writer, RFC 6902 Patch, schema hooks,
-   and generic encode/decode traits.
+   Parsing/writing, nested values, errors, pretty output, exact numeric-token
+   preservation, typed integer accessors, configurable duplicate-key policy,
+   deterministic key ordering, depth/size limits, UTF validation, JSON Pointer,
+   and Merge Patch are implemented. Typed `serialization::Codec<TValue,
+   TWire>` adapters now provide checked JSON encode/decode composition. Add a
+   streaming parser/writer, RFC 6902 Patch, schema hooks, and declarative codec
+   derivation/registration.
 
 4. [~] Add serialization beyond JSON.
    Versioned bounded binary frames, endian/varint readers and writers,
-   Base64/hex, CSV, and INI exist. Add stable generic serialization traits,
-   streaming codecs, unknown-field/migration policy, TOML, and enum policy.
+   Base64/hex, CSV, INI, and typed checked codecs exist. Add declarative codec
+   derivation/registration, streaming codecs, unknown-field/migration policy,
+   TOML, and enum policy.
 
 5. [~] Harden time, random, hash, log, numeric, encoding, stream, UUID, and
     SemVer. These modules exist; add cross-platform vectors, deterministic
-   contracts and cryptographic/non-cryptographic distinctions. Secure random,
+   contracts and cryptographic/non-cryptographic distinctions. Frozen vectors
+   now cover FNV-1a, SHA-256, MT19937, xoroshiro128+, LXM, Wichmann-Hill,
+   numeric parsing, and platform-independent UTC civil conversion. Secure random,
    UUID variants, full SemVer metadata/precedence, host time formatting/offsets,
    and structured console/file log sinks are implemented.
    Add time-zone database/calendar types, floating-point edge matrices,
@@ -192,8 +200,10 @@ here does not by itself mean that v1 cannot ship.
 6. [~] Add regular-expression safety and completeness.
    Engine behavior, escaping, captures, replacement, iteration, and the error
    model are documented and implemented with conservative pattern/input safety
-   limits. Add Unicode mode documentation, full match iteration records, and a
-   backend capable of enforceable execution timeouts.
+   limits. Bounded match/capture records with byte offsets and conservative
+   rejection of backreferences, lookarounds, nested repeats, and repeated
+   alternation are implemented. Add Unicode mode documentation and a backend
+   capable of enforceable execution timeouts.
 
 7. [~] Add networking foundations.
    DNS, URI, owned sockets, TCP/UDP, timeout, endpoint, and loopback behavior
@@ -284,13 +294,13 @@ here does not by itself mean that v1 cannot ship.
    independently feature-negotiated so compatible hosts can fail cleanly.
    Track the staged contract in `docs/WIO_SDK_EVOLUTION_PLAN.md`.
 
-   The 0.13 parity foundation is complete: product version 0.13.0, ABI
-   descriptor v7, descriptor-size/capability negotiation, stable type IDs,
-   generic arguments, Unicode text field round-trips, host value mirrors, an
-   owned module inspection snapshot, a machine-readable feature catalog, and a
-   normative parity matrix ship together. Remaining work is recursively nested
-   dynamic value exchange, export-time rejection for unsupported shapes,
-   lifetime-safe `ref`/`view`, interface/Box/any/resource adapters, callbacks,
+   The 0.14 value-parity baseline is complete: product version 0.14.0, ABI
+   descriptor v8, descriptor-size/capability negotiation, stable type IDs,
+   concrete generic/const-generic arguments, Unicode text, Option, Result/unit,
+   tuples, nested arrays/maps, queues/sets, checked spans, and owned byte buffers
+   cross the typed/dynamic host boundary. A machine-readable support inventory
+   distinguishes supported, metadata-only, and rejected shapes. Remaining work
+   is lifetime-safe `ref`/`view`, interface/Box/any/resource adapters, callbacks,
    async/application hosting, retained attribute metadata, and the independent
    platform ABI matrix.
 

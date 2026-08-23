@@ -105,6 +105,8 @@ positive test, negative test, and generated-C++ validation where applicable.
 Goal: make stable Wio values behave consistently inside Wio and across the host
 boundary.
 
+Status: implemented on `releases/v0.14.0`; release qualification pending.
+
 Required scope:
 
 - publish the SDK product version, ABI revision, capability query, and complete

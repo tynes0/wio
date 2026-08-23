@@ -3739,6 +3739,7 @@ namespace wio::sema
             instantiatedType->genericParameterTypes = structType->genericParameterTypes;
             instantiatedType->genericParameterDefaults = structType->genericParameterDefaults;
             instantiatedType->genericArguments = explicitTypeArguments;
+            instantiatedType->genericPrimaryType = structType;
             instantiatedType->hasGenericParameterPack = structType->hasGenericParameterPack;
             instantiatedType->fieldNames = structType->fieldNames;
             instantiatedType->trustedTypeKeys = structType->trustedTypeKeys;
@@ -3984,7 +3985,24 @@ namespace wio::sema
                 {
                     instantiatedArguments.reserve(structType->genericArguments.size());
                     for (const auto& genericArgument : structType->genericArguments)
-                        instantiatedArguments.push_back(instantiateGenericType(genericArgument, bindings));
+                    {
+                        auto instantiatedArgument = instantiateGenericType(genericArgument, bindings);
+                        auto resolvedArgument = unwrapAliasType(instantiatedArgument);
+                        if (structType->hasGenericParameterPack && resolvedArgument &&
+                            resolvedArgument->kind() == TypeKind::TypePackView)
+                        {
+                            const auto packView = resolvedArgument.AsFast<TypePackViewType>();
+                            instantiatedArguments.insert(
+                                instantiatedArguments.end(),
+                                packView->elementTypes.begin(),
+                                packView->elementTypes.end()
+                            );
+                        }
+                        else
+                        {
+                            instantiatedArguments.push_back(instantiatedArgument);
+                        }
+                    }
 
                     return instantiateGenericStructType(structType, instantiatedArguments);
                 }
@@ -6060,6 +6078,78 @@ namespace wio::sema
             return typeName != "string" && typeName != "object";
         }
 
+        bool isStdLibraryScopePath(const std::string_view scopePath)
+        {
+            return scopePath == "std" || scopePath.starts_with("std::") || scopePath.starts_with("std_");
+        }
+
+        bool isSdkValueBridgeType(const Ref<Type>& type)
+        {
+            Ref<Type> current = type;
+            while (current && current->kind() == TypeKind::Alias)
+                current = current.AsFast<AliasType>()->aliasedType;
+
+            if (!current)
+                return false;
+
+            if (current->kind() == TypeKind::Primitive)
+            {
+                const std::string typeName = current->toString();
+                return typeName != "void" && typeName != "object" && typeName != "any" && typeName != "opaque";
+            }
+
+            if (current->kind() == TypeKind::Array)
+            {
+                auto arrayType = current.AsFast<ArrayType>();
+                return arrayType && isSdkValueBridgeType(arrayType->elementType);
+            }
+
+            if (current->kind() == TypeKind::Dictionary)
+            {
+                auto dictionaryType = current.AsFast<DictionaryType>();
+                return dictionaryType &&
+                    isSdkValueBridgeType(dictionaryType->keyType) &&
+                    isSdkValueBridgeType(dictionaryType->valueType);
+            }
+
+            if (current->kind() != TypeKind::Struct)
+                return false;
+
+            auto structType = current.AsFast<StructType>();
+            if (!structType || !isStdLibraryScopePath(structType->scopePath))
+            {
+                return false;
+            }
+
+            if (structType->name == "ResultUnit")
+                return structType->genericArguments.empty();
+
+            if (structType->name == "Span")
+                return structType->genericArguments.empty();
+
+            if (structType->name == "ByteBuffer")
+                return structType->genericArguments.empty();
+
+            if (structType->name == "Tuple")
+            {
+                return std::all_of(
+                    structType->genericArguments.begin(),
+                    structType->genericArguments.end(),
+                    [](const Ref<Type>& argument) { return isSdkValueBridgeType(argument); }
+                );
+            }
+
+            if ((structType->name == "Option" || structType->name == "Result" ||
+                 structType->name == "Queue" || structType->name == "UnorderedSet" ||
+                 structType->name == "OrderedSet") &&
+                structType->genericArguments.size() == 1)
+            {
+                return isSdkValueBridgeType(structType->genericArguments.front());
+            }
+
+            return false;
+        }
+
         bool isSdkExportableFieldType(const Ref<Type>& type)
         {
             Ref<Type> current = type;
@@ -6081,14 +6171,14 @@ namespace wio::sema
             case TypeKind::Array:
             {
                 auto arrayType = current.AsFast<ArrayType>();
-                return arrayType && isSdkExportableFieldType(arrayType->elementType);
+                return arrayType && isSdkValueBridgeType(arrayType->elementType);
             }
             case TypeKind::Dictionary:
             {
                 auto dictType = current.AsFast<DictionaryType>();
                 return dictType &&
-                    isSdkExportableFieldType(dictType->keyType) &&
-                    isSdkExportableFieldType(dictType->valueType);
+                    isSdkValueBridgeType(dictType->keyType) &&
+                    isSdkValueBridgeType(dictType->valueType);
             }
             case TypeKind::Function:
             {
@@ -6107,7 +6197,35 @@ namespace wio::sema
             case TypeKind::Struct:
             {
                 auto structType = current.AsFast<StructType>();
-                return structType && !structType->isInterface;
+                if (!structType || structType->isInterface)
+                    return false;
+
+                if ((structType->name == "Option" || structType->name == "Result" ||
+                     structType->name == "Queue" || structType->name == "UnorderedSet" ||
+                     structType->name == "OrderedSet") &&
+                    isStdLibraryScopePath(structType->scopePath))
+                {
+                    return structType->genericArguments.size() == 1 &&
+                        isSdkValueBridgeType(structType->genericArguments.front());
+                }
+
+                if (structType->name == "Tuple" && isStdLibraryScopePath(structType->scopePath))
+                {
+                    return std::all_of(
+                        structType->genericArguments.begin(),
+                        structType->genericArguments.end(),
+                        [](const Ref<Type>& argument) { return isSdkValueBridgeType(argument); }
+                    );
+                }
+
+                if (!structType->genericArguments.empty() &&
+                    structType->genericPrimaryType.Lock() &&
+                    !structType->isExplicitSpecialization)
+                {
+                    return false;
+                }
+
+                return true;
             }
             default:
                 return false;
@@ -17541,10 +17659,62 @@ namespace wio::sema
                             {
                                 if (auto lockedScope = baseType->structScope.Lock(); lockedScope)
                                 {
-                                    if (lockedScope->resolveLocally(funcName))
+                                    auto baseMember = lockedScope->resolveLocally(funcName);
+                                    if (baseMember)
                                     {
-                                        isOverride = true; 
-                                        break;
+                                        std::vector<Ref<Symbol>> candidates;
+                                        if (baseMember->kind == SymbolKind::FunctionGroup)
+                                            candidates = baseMember->overloads;
+                                        else if (baseMember->kind == SymbolKind::Function)
+                                            candidates.push_back(baseMember);
+
+                                        auto genericOwner = baseType->genericPrimaryType.Lock();
+                                        const auto& parameterNames = genericOwner
+                                            ? genericOwner->genericParameterNames
+                                            : baseType->genericParameterNames;
+                                        const bool hasParameterPack = genericOwner
+                                            ? genericOwner->hasGenericParameterPack
+                                            : baseType->hasGenericParameterPack;
+                                        const auto bindings = buildExtendedGenericBindings(
+                                            parameterNames,
+                                            hasParameterPack,
+                                            baseType->genericArguments
+                                        );
+                                        auto memberFunctionType = memberSym && memberSym->type
+                                            ? memberSym->type.AsFast<FunctionType>()
+                                            : nullptr;
+
+                                        for (const auto& candidate : candidates)
+                                        {
+                                            auto candidateType = candidate && candidate->type
+                                                ? candidate->type.AsFast<FunctionType>()
+                                                : nullptr;
+                                            auto instantiatedCandidate = candidateType
+                                                ? instantiateGenericType(candidateType, bindings).AsFast<FunctionType>()
+                                                : nullptr;
+                                            if (!memberFunctionType || !instantiatedCandidate ||
+                                                memberFunctionType->paramTypes.size() != instantiatedCandidate->paramTypes.size())
+                                                continue;
+
+                                            bool signatureMatches = isExactType(
+                                                memberFunctionType->returnType,
+                                                instantiatedCandidate->returnType
+                                            );
+                                            for (size_t parameterIndex = 0;
+                                                 signatureMatches && parameterIndex < memberFunctionType->paramTypes.size();
+                                                 ++parameterIndex)
+                                            {
+                                                signatureMatches = isExactType(
+                                                    memberFunctionType->paramTypes[parameterIndex],
+                                                    instantiatedCandidate->paramTypes[parameterIndex]
+                                                );
+                                            }
+                                            if (!signatureMatches)
+                                                continue;
+
+                                            isOverride = true;
+                                            memberSym->overriddenSymbols.emplace_back(candidate);
+                                        }
                                     }
                                 }
                             }

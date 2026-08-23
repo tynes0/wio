@@ -1,0 +1,26 @@
+use std::option as option;
+use std::queue;
+use std::sets;
+
+@Export
+object Sdk14SequenceContainers {
+    public work: std::Queue<std::Option<i32> >;
+    public tags: std::UnorderedSet<string>;
+    public levels: std::OrderedSet<i32>;
+
+    public OnConstruct() {
+        self.work = std::Queue<std::Option<i32> >();
+        self.work.Enqueue(option::Some<i32>(2));
+        self.work.Enqueue(option::None<i32>());
+        self.work.Enqueue(option::Some<i32>(6));
+
+        self.tags = std::UnorderedSet<string>();
+        self.tags.Add("red");
+        self.tags.Add("blue");
+
+        self.levels = std::OrderedSet<i32>();
+        self.levels.Add(3);
+        self.levels.Add(1);
+        self.levels.Add(2);
+    }
+}

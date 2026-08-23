@@ -1,0 +1,12 @@
+use std::span as span;
+
+@Export
+object Sdk14SpanProfile {
+    public values: i32[];
+    public window: std::Span;
+
+    public OnConstruct() {
+        self.values = [3, 6, 9, 12, 15];
+        self.window = span::Make<i32>(ref self.values, 1usize, 3usize);
+    }
+}

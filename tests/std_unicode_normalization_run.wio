@@ -1,0 +1,56 @@
+use std::assert as assert;
+use std::console as console;
+use std::unicode as unicode;
+
+fn Entry() -> i32 {
+    let decomposedAcute = "é";
+    let composedAcute = "é";
+    assert::ExpectEqual(
+        unicode::NormalizeNfc(decomposedAcute).Value(),
+        composedAcute,
+        "NFC composes canonical equivalents"
+    );
+    assert::ExpectEqual(
+        unicode::NormalizeNfd(composedAcute).Value(),
+        decomposedAcute,
+        "NFD decomposes canonical equivalents"
+    );
+    assert::ExpectEqual(
+        unicode::NormalizeNfkc("Ｗｉｏ ①").Value(),
+        "Wio 1",
+        "NFKC folds compatibility characters"
+    );
+    assert::ExpectEqual(
+        unicode::NormalizeNfkd("ﬃ").Value(),
+        "ffi",
+        "NFKD expands compatibility ligatures"
+    );
+    assert::ExpectEqual(
+        unicode::NormalizeNfc("한").Value(),
+        "한",
+        "NFC composes Hangul algorithmically"
+    );
+    assert::ExpectEqual(
+        unicode::Normalize(u"é", unicode::NormalizationForm::nfc).Value(),
+        u"é",
+        "text normalization preserves the semantic Unicode type"
+    );
+    assert::Expect(
+        unicode::IsNormalized(composedAcute, unicode::NormalizationForm::nfc),
+        "composed text reports NFC"
+    );
+    assert::Expect(
+        not unicode::IsNormalized(decomposedAcute, unicode::NormalizationForm::nfc),
+        "decomposed text is not NFC"
+    );
+
+    mut invalidUtf8 = "";
+    unicode::AppendByte(ref invalidUtf8, 0xFFu8);
+    assert::Expect(
+        unicode::NormalizeNfc(invalidUtf8).IsError(),
+        "normalization rejects invalid UTF-8"
+    );
+
+    console::PrintLine!("std-unicode-normalization-ok");
+    return 0;
+}

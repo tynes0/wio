@@ -125,6 +125,24 @@ namespace wio::runtime::std_random
         return value % maxExclusive;
     }
 
+    std::int32_t Mt19937NextI32(
+        std::vector<std::uint32_t>& state,
+        std::size_t& index,
+        const std::int32_t minInclusive,
+        const std::int32_t maxExclusive)
+    {
+        if (maxExclusive <= minInclusive)
+            return minInclusive;
+
+        const auto span = static_cast<std::uint32_t>(
+            static_cast<std::uint64_t>(
+                static_cast<std::int64_t>(maxExclusive) -
+                static_cast<std::int64_t>(minInclusive)));
+        const std::uint32_t offset = Mt19937NextBounded(state, index, span);
+        return static_cast<std::int32_t>(
+            static_cast<std::int64_t>(minInclusive) + offset);
+    }
+
     double Mt19937NextF64(std::vector<std::uint32_t>& state, std::size_t& index)
     {
         const std::uint64_t high = static_cast<std::uint64_t>(Mt19937Next(state, index) >> 5u);

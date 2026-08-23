@@ -3,12 +3,67 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <limits>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
+
+#ifndef UTF8PROC_STATIC
+#define UTF8PROC_STATIC
+#endif
+#include "utf8proc.h"
 
 namespace wio::runtime::std_unicode
 {
+    template <typename TForm>
+    inline bool TryNormalize(const std::string_view input,
+                             const TForm formValue,
+                             std::string& output) noexcept
+    {
+        static_assert(std::is_enum_v<TForm> || std::is_integral_v<TForm>);
+        const auto form = static_cast<std::uint8_t>(formValue);
+        output.clear();
+        if (input.size() > static_cast<std::size_t>((std::numeric_limits<utf8proc_ssize_t>::max)()))
+            return false;
+
+        utf8proc_option_t options = UTF8PROC_STABLE;
+        switch (form)
+        {
+        case 0:
+            options = static_cast<utf8proc_option_t>(options | UTF8PROC_COMPOSE);
+            break;
+        case 1:
+            options = static_cast<utf8proc_option_t>(options | UTF8PROC_DECOMPOSE);
+            break;
+        case 2:
+            options = static_cast<utf8proc_option_t>(options | UTF8PROC_COMPOSE | UTF8PROC_COMPAT);
+            break;
+        case 3:
+            options = static_cast<utf8proc_option_t>(options | UTF8PROC_DECOMPOSE | UTF8PROC_COMPAT);
+            break;
+        default:
+            return false;
+        }
+
+        utf8proc_uint8_t* normalized = nullptr;
+        const utf8proc_ssize_t size = utf8proc_map(
+            reinterpret_cast<const utf8proc_uint8_t*>(input.data()),
+            static_cast<utf8proc_ssize_t>(input.size()),
+            &normalized,
+            options
+        );
+        if (size < 0 || normalized == nullptr)
+        {
+            std::free(normalized);
+            return false;
+        }
+        output.assign(reinterpret_cast<const char*>(normalized), static_cast<std::size_t>(size));
+        std::free(normalized);
+        return true;
+    }
+
     namespace detail
     {
         inline bool decodeOne(std::string_view input, std::size_t& offset, std::uint32_t& codePoint) noexcept

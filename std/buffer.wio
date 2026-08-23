@@ -3,13 +3,19 @@ use std::option;
 
 realm std {
     realm heap {
+        using cpp::header("std_utility.h");
+
+        fn NextPoolOwnerIdNative() -> u64
+            with native, cpp::name(wio::runtime::std_heap::NextPoolOwnerId);
+
         component PoolHandle {
+            owner: u64;
             index: usize;
             generation: u32;
         }
 
         fn IsValid(handle: PoolHandle) -> bool {
-            return handle.generation != 0u32;
+            return handle.owner != 0u64 and handle.generation != 0u32;
         }
 
         object ByteBuffer {
@@ -195,7 +201,8 @@ realm std {
             }
 
             public fn Clone() -> ByteBuffer {
-                let copy = ByteBuffer(self.data);
+                let copy = ByteBuffer(self.Capacity());
+                copy.Write(self.data);
                 copy.Seek(self.position);
                 return copy;
             }
@@ -208,6 +215,7 @@ realm std {
             private free: usize[];
             private blockCapacity: usize;
             private active: usize;
+            private ownerId: u64;
 
             public fn OnConstruct(blockCapacity: usize) {
                 self.buffers = [];
@@ -216,6 +224,7 @@ realm std {
                 self.free = [];
                 self.blockCapacity = blockCapacity;
                 self.active = 0usize;
+                self.ownerId = NextPoolOwnerIdNative();
             }
 
             public fn Count() -> usize { return self.active; }
@@ -236,13 +245,15 @@ realm std {
                 }
                 self.active += 1usize;
                 mut handle = PoolHandle();
+                handle.owner = self.ownerId;
                 handle.index = index;
                 handle.generation = self.generations[index];
                 return handle;
             }
 
             public fn Owns(handle: PoolHandle) -> bool {
-                return handle.index < self.buffers.Count() and
+                return handle.owner == self.ownerId and
+                    handle.index < self.buffers.Count() and
                     self.used[handle.index] and
                     self.generations[handle.index] == handle.generation;
             }
@@ -283,6 +294,7 @@ realm std {
             private active: usize;
             private emptyValue: T;
             private clearReturned: bit;
+            private ownerId: u64;
 
             public fn OnConstruct() {
                 self.values = [];
@@ -291,6 +303,7 @@ realm std {
                 self.free = [];
                 self.active = 0usize;
                 self.clearReturned = false;
+                self.ownerId = NextPoolOwnerIdNative();
             }
 
             public fn OnConstruct(emptyValue: T) {
@@ -301,6 +314,7 @@ realm std {
                 self.active = 0usize;
                 self.emptyValue = emptyValue;
                 self.clearReturned = true;
+                self.ownerId = NextPoolOwnerIdNative();
             }
 
             public fn Count() -> usize { return self.active; }
@@ -320,13 +334,15 @@ realm std {
                 }
                 self.active += 1usize;
                 mut handle = PoolHandle();
+                handle.owner = self.ownerId;
                 handle.index = index;
                 handle.generation = self.generations[index];
                 return handle;
             }
 
             public fn Owns(handle: PoolHandle) -> bool {
-                return handle.index < self.values.Count() and
+                return handle.owner == self.ownerId and
+                    handle.index < self.values.Count() and
                     self.used[handle.index] and
                     self.generations[handle.index] == handle.generation;
             }

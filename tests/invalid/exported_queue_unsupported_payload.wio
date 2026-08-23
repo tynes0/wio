@@ -1,0 +1,11 @@
+use std::option;
+use std::queue;
+
+interface IWorker {
+    fn Run() -> i32;
+}
+
+@Export
+object BadQueueProfile {
+    public workers: std::Queue<std::Option<IWorker> >;
+}

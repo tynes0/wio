@@ -8,6 +8,14 @@ realm std {
             byteOffset: usize;
         }
 
+        @Type(u8)
+        enum NormalizationForm {
+            nfc = 0u8,
+            nfd = 1u8,
+            nfkc = 2u8,
+            nfkd = 3u8
+        };
+
         fn TryDecodeNative(value: string, output: ref u32[], errorOffset: ref usize) -> bool
             with native, cpp::name(wio::runtime::std_unicode::TryDecode);
         fn TryEncodeNative(value: u32[], output: ref string, errorIndex: ref usize) -> bool
@@ -56,6 +64,43 @@ realm std {
             with native, cpp::name(wio::runtime::std_unicode::DisplayWidth);
         fn CaseFold(value: string) -> string
             with native, cpp::name(wio::runtime::std_unicode::CaseFold);
+        fn TryNormalizeNative(value: string, form: NormalizationForm, output: ref string) -> bool
+            with native, cpp::name(wio::runtime::std_unicode::TryNormalize);
+
+        fn Normalize(value: string, form: NormalizationForm) -> std::Result<string> {
+            mut output = "";
+            if (TryNormalizeNative(value, form, ref output)) {
+                return std::Ok(output);
+            }
+            return std::Err<string>(std::MakeResultError(
+                std::ResultDomain::runtime, 5, "Unicode normalization failed: invalid UTF-8 or form."
+            ));
+        }
+
+        fn Normalize(value: text, form: NormalizationForm) -> std::Result<text> {
+            let normalized = Normalize(ToUtf8(value), form);
+            if (normalized.IsError()) {
+                return std::Err<text>(normalized.ErrorValue());
+            }
+            return std::Ok(FromUtf8Native(normalized.Value()));
+        }
+
+        fn NormalizeNfc(value: string) -> std::Result<string> {
+            return Normalize(value, NormalizationForm::nfc);
+        }
+        fn NormalizeNfd(value: string) -> std::Result<string> {
+            return Normalize(value, NormalizationForm::nfd);
+        }
+        fn NormalizeNfkc(value: string) -> std::Result<string> {
+            return Normalize(value, NormalizationForm::nfkc);
+        }
+        fn NormalizeNfkd(value: string) -> std::Result<string> {
+            return Normalize(value, NormalizationForm::nfkd);
+        }
+        fn IsNormalized(value: string, form: NormalizationForm) -> bool {
+            let normalized = Normalize(value, form);
+            return normalized.IsOk() and normalized.Value() == value;
+        }
 
         fn FromUtf8(value: string) -> std::Result<text> {
             if (IsValidUtf8(value)) {

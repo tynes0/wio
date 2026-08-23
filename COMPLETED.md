@@ -721,3 +721,15 @@ here as historical evidence rather than active work:
 - [x] Compiler and extension releases now share their major/minor release line;
       the matching extension check, unit-test, Windows/Ubuntu CI, and VSIX
       package gates are part of the release policy.
+
+## v0.14 Standard Library and SDK Value Parity
+
+- [x] Stable Option, Result/unit, tuple, nested collection, queue, set, checked
+      span-range, and owned ByteBuffer values gained C++ SDK round-trips.
+- [x] ABI descriptor v8 gained exact const-generic metadata and analysis-time
+      rejection for unsupported or unspecialized export shapes.
+- [x] The SDK feature inventory gained explicit Supported, Partial, and
+      Deferred states and a normative 0.14 parity matrix.
+- [x] Unicode normalization, exact JSON numbers, typed serialization codecs,
+      bounded regex records, deterministic vectors, and container invariants
+      landed with focused conformance tests.

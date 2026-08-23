@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <charconv>
 #include <cctype>
 #include <cstddef>
@@ -10,6 +11,18 @@
 #include <random>
 #include <string>
 #include <string_view>
+
+namespace wio::runtime::std_heap
+{
+    inline std::uint64_t NextPoolOwnerId() noexcept
+    {
+        static std::atomic<std::uint64_t> next{1u};
+        std::uint64_t value = next.fetch_add(1u, std::memory_order_relaxed);
+        while (value == 0u)
+            value = next.fetch_add(1u, std::memory_order_relaxed);
+        return value;
+    }
+}
 
 namespace wio::runtime::std_numeric
 {

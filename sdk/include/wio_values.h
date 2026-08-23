@@ -516,13 +516,62 @@ namespace wio::sdk
         std::set<T> values_{};
     };
 
+    class WioSpanRange
+    {
+    public:
+        constexpr WioSpanRange() noexcept = default;
+        constexpr WioSpanRange(const std::size_t start, const std::size_t count) noexcept
+            : start_(start), count_(count)
+        {
+        }
+
+        [[nodiscard]] static constexpr WioSpanRange full(const std::size_t count) noexcept
+        {
+            return WioSpanRange(0u, count);
+        }
+
+        [[nodiscard]] constexpr std::size_t start() const noexcept { return start_; }
+        [[nodiscard]] constexpr std::size_t count() const noexcept { return count_; }
+        [[nodiscard]] constexpr std::size_t end() const noexcept { return start_ + count_; }
+        [[nodiscard]] constexpr bool empty() const noexcept { return count_ == 0u; }
+
+        [[nodiscard]] constexpr WioSpanRange clamped(const std::size_t sourceCount) const noexcept
+        {
+            if (start_ >= sourceCount)
+                return WioSpanRange(sourceCount, 0u);
+            return WioSpanRange(start_, std::min(count_, sourceCount - start_));
+        }
+
+        [[nodiscard]] constexpr WioSpanRange slice(const std::size_t start,
+                                                   const std::size_t count) const noexcept
+        {
+            if (start >= count_)
+                return WioSpanRange(end(), 0u);
+            return WioSpanRange(start_ + start, std::min(count, count_ - start));
+        }
+
+        [[nodiscard]] friend constexpr bool operator==(const WioSpanRange&, const WioSpanRange&) noexcept = default;
+
+    private:
+        std::size_t start_ = 0u;
+        std::size_t count_ = 0u;
+    };
+
     template <typename T>
     class WioSpan
     {
     public:
         WioSpan() = default;
         explicit WioSpan(std::span<T> values) noexcept : values_(values) {}
+        WioSpan(std::span<T> values, const WioSpanRange range) noexcept
+            : values_(apply_range(values, range))
+        {
+        }
         WioSpan(T* data, const std::size_t count) noexcept : values_(data, count) {}
+        WioSpan(T* data, const std::size_t count, const WioSpanRange range) noexcept
+            : WioSpan(std::span<T>(data, count), range)
+        {
+        }
         template <std::size_t N>
         WioSpan(T (&values)[N]) noexcept : values_(values) {}
         template <std::size_t N>
@@ -543,6 +592,10 @@ namespace wio::sdk
                 return {};
             return WioSpan(values_.subspan(start, std::min(count, values_.size() - start)));
         }
+        [[nodiscard]] WioSpan slice(const WioSpanRange range) const noexcept
+        {
+            return WioSpan(values_, range);
+        }
         [[nodiscard]] WioOption<std::remove_const_t<T>> first() const
         {
             return empty() ? WioOption<std::remove_const_t<T>>::none()
@@ -556,6 +609,13 @@ namespace wio::sdk
         [[nodiscard]] std::span<T> raw() const noexcept { return values_; }
 
     private:
+        [[nodiscard]] static std::span<T> apply_range(std::span<T> values,
+                                                      const WioSpanRange range) noexcept
+        {
+            const auto safeRange = range.clamped(values.size());
+            return values.subspan(safeRange.start(), safeRange.count());
+        }
+
         std::span<T> values_{};
     };
 
@@ -565,6 +625,22 @@ namespace wio::sdk
         WioByteBuffer() = default;
         explicit WioByteBuffer(const std::size_t capacity) { data_.reserve(capacity); }
         explicit WioByteBuffer(std::vector<std::byte> values) : data_(std::move(values)) {}
+        WioByteBuffer(const WioByteBuffer& other)
+            : data_(other.data_), position_(other.position_)
+        {
+            data_.reserve(other.data_.capacity());
+        }
+        WioByteBuffer& operator=(const WioByteBuffer& other)
+        {
+            if (this == &other)
+                return *this;
+            data_ = other.data_;
+            data_.reserve(other.data_.capacity());
+            position_ = other.position_;
+            return *this;
+        }
+        WioByteBuffer(WioByteBuffer&&) noexcept = default;
+        WioByteBuffer& operator=(WioByteBuffer&&) noexcept = default;
         [[nodiscard]] bool empty() const noexcept { return data_.empty(); }
         [[nodiscard]] std::size_t count() const noexcept { return data_.size(); }
         [[nodiscard]] std::size_t capacity() const noexcept { return data_.capacity(); }

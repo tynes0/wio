@@ -1,7 +1,7 @@
 # Wio Examples Guide
 
 This document is the release-facing map for the example set that ships with
-Wio `v0.13.0`.
+Wio `v0.14.0`.
 
 The goal is simple:
 
@@ -21,11 +21,13 @@ These examples are the intended first-stop references:
 1. [`examples/plain_app`](../examples/plain_app/README.md)
 2. [`examples/native_app`](../examples/native_app/README.md)
 3. [`examples/hybrid_module`](../examples/hybrid_module/README.md)
-4. [`examples/binding_import`](../examples/binding_import/README.md)
-5. [`examples/packaged_quickstart`](../examples/packaged_quickstart/README.md)
-6. [`examples/static_cmake_consumer`](../examples/static_cmake_consumer/README.md)
-7. [`examples/wio_observatory`](../examples/wio_observatory/README.md)
-8. [`examples/atlas_desk`](../examples/atlas_desk/README.md)
+4. [`examples/telemetry_pipeline`](../examples/telemetry_pipeline/README.md)
+5. [`examples/mini_game_engine`](../examples/mini_game_engine/README.md)
+6. [`examples/binding_import`](../examples/binding_import/README.md)
+7. [`examples/packaged_quickstart`](../examples/packaged_quickstart/README.md)
+8. [`examples/static_cmake_consumer`](../examples/static_cmake_consumer/README.md)
+9. [`examples/wio_observatory`](../examples/wio_observatory/README.md)
+10. [`examples/atlas_desk`](../examples/atlas_desk/README.md)
 
 They are complemented by:
 
@@ -77,7 +79,36 @@ Use it for:
 - host executable build from the same manifest
 - `@Command`, `@Event`, and module lifecycle behavior
 
-### 2.4 I Want To Generate Bridge Files
+### 2.4 I Want The Full Native -> Wio -> SDK Chain
+
+Open:
+
+- [`examples/telemetry_pipeline`](../examples/telemetry_pipeline/README.md)
+
+Use it for:
+
+- a substantial C++ native library -> Wio -> C++ SDK pipeline
+- native POD component extension methods using `view` and `ref`
+- exported reflected objects with Unicode text, arrays, dictionaries, nested
+  components, enums, and flagsets
+- module lifecycle, typed commands, multi-argument events, and SDK inspection
+
+### 2.5 I Want A C++ Game Engine With Wio Scripts
+
+Open:
+
+- [`examples/mini_game_engine`](../examples/mini_game_engine/README.md)
+
+Use it for:
+
+- a Raylib engine library and main loop written entirely in C++
+- a stable C++ script interface implemented by an SDK-backed Wio adapter
+- a playable Flappy-style game whose gravity, flap, pipes, scoring, difficulty,
+  and theme rules are authored in Wio
+- deterministic headless acceptance and an interactive windowed mode opened by
+  ordinary `wio project run`
+
+### 2.6 I Want To Generate Bridge Files
 
 Open:
 
@@ -89,7 +120,7 @@ Use it for:
 - `wio bind new`
 - validating generated bridge files
 
-### 2.5 I Want To Understand Installed / Packaged Wio
+### 2.7 I Want To Understand Installed / Packaged Wio
 
 Open:
 
@@ -102,7 +133,7 @@ Use it for:
 - `wio env doctor --backend-smoke`
 - first project and single-file run from an installed toolchain
 
-### 2.6 I Want A Host SDK / CMake Embedding Example
+### 2.8 I Want A Host SDK / CMake Embedding Example
 
 Open:
 
@@ -115,7 +146,7 @@ Use it for:
 - `cmake/WioProject.cmake`
 - host-side calls through the public SDK
 
-### 2.7 I Want A Heavier Stress Example
+### 2.9 I Want A Heavier Stress Example
 
 Open:
 
@@ -128,7 +159,7 @@ Use it for:
 - richer module/host choreography
 - reload-oriented integration reading
 
-### 2.8 I Want A Full Modern Wio Application
+### 2.10 I Want A Full Modern Wio Application
 
 Open:
 
@@ -143,7 +174,7 @@ Use it for:
 - filesystem, regex, hash, random, time, collections, span, tuple, and buffer
   composition
 
-### 2.9 I Want A Native Desktop Application
+### 2.11 I Want A Native Desktop Application
 
 Open:
 
@@ -199,17 +230,19 @@ host-interop microscope.
 
 ## 5. Release Reading
 
-For `v0.13.0`, the intended reading order is:
+For `v0.14.0`, the intended reading order is:
 
 1. `examples/plain_app`
 2. `examples/native_app`
 3. `examples/hybrid_module`
-4. `examples/binding_import`
-5. `examples/packaged_quickstart`
-6. `examples/static_cmake_consumer`
-7. `examples/hybrid_arena`
-8. `examples/wio_observatory`
-9. `examples/atlas_desk`
+4. `examples/telemetry_pipeline`
+5. `examples/mini_game_engine`
+6. `examples/binding_import`
+7. `examples/packaged_quickstart`
+8. `examples/static_cmake_consumer`
+9. `examples/hybrid_arena`
+10. `examples/wio_observatory`
+11. `examples/atlas_desk`
 
 That sequence moves from:
 

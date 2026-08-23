@@ -1,0 +1,156 @@
+use telemetry_native;
+
+enum AlertLevel {
+    Normal = 0,
+    Warning = 1,
+    Critical = 2
+};
+
+flagset QualityFlags {
+    None = 0u32,
+    Calibrated = 1u32 << 0u32,
+    Alerted = 1u32 << 1u32,
+    BaselineMissing = 1u32 << 2u32
+};
+
+@Export
+component TelemetrySnapshot {
+    public sensorId: i32;
+    public rawValue: f32;
+    public adjustedValue: f32;
+    public baseline: f32;
+    public deviation: f32;
+    public score: f32;
+    public level: AlertLevel;
+    public flags: QualityFlags;
+    public timestampMs: u64;
+    public fingerprint: u64;
+
+    OnConstruct() {
+        self.sensorId = 0;
+        self.rawValue = 0.0f;
+        self.adjustedValue = 0.0f;
+        self.baseline = 0.0f;
+        self.deviation = 0.0f;
+        self.score = 0.0f;
+        self.level = AlertLevel::Normal;
+        self.flags = QualityFlags::None;
+        self.timestampMs = 0u64;
+        self.fingerprint = 0u64;
+    }
+}
+
+fn ResolveAlertLevel(code: i32) -> AlertLevel {
+    if (code >= 2) {
+        return AlertLevel::Critical;
+    }
+
+    if (code == 1) {
+        return AlertLevel::Warning;
+    }
+
+    return AlertLevel::Normal;
+}
+
+fn BuildSnapshot(sensorId: i32, rawValue: f32, baseline: f32, timestampMs: u64, gain: f32, offset: f32) -> TelemetrySnapshot {
+    mut sample = NativeSample(sensorId, rawValue, baseline, timestampMs);
+    sample.Calibrate(gain, offset);
+
+    let levelCode = sample.Classify(1.5f, 3.0f);
+    let level = ResolveAlertLevel(levelCode);
+    mut flags = QualityFlags::Calibrated;
+
+    if (levelCode > 0) {
+        flags = flags | QualityFlags::Alerted;
+    }
+
+    if (baseline == 0.0f) {
+        flags = flags | QualityFlags::BaselineMissing;
+    }
+
+    mut snapshot = TelemetrySnapshot();
+    snapshot.sensorId = sensorId;
+    snapshot.rawValue = rawValue;
+    snapshot.adjustedValue = sample.value;
+    snapshot.baseline = baseline;
+    snapshot.deviation = sample.Deviation();
+    snapshot.score = sample.Score();
+    snapshot.level = level;
+    snapshot.flags = flags;
+    snapshot.timestampMs = timestampMs;
+    snapshot.fingerprint = sample.Fingerprint();
+    return snapshot;
+}
+
+@Export
+object TelemetrySession {
+    public title: text;
+    public accepted: i32;
+    public warnings: i32;
+    public criticals: i32;
+    public last: TelemetrySnapshot;
+    public recentScores: f32[];
+    public buckets: Dict<string, i32>;
+
+    public OnConstruct() {
+        self.title = u"Yeni telemetri oturumu 📡";
+        self.accepted = 0;
+        self.warnings = 0;
+        self.criticals = 0;
+        self.last = TelemetrySnapshot();
+        self.recentScores = [];
+        self.buckets = {
+            "normal": 0,
+            "warning": 0,
+            "critical": 0
+        };
+    }
+
+    public fn Process(sensorId: i32, rawValue: f32, baseline: f32, timestampMs: u64, gain: f32, offset: f32) -> i32 {
+        self.last = BuildSnapshot(sensorId, rawValue, baseline, timestampMs, gain, offset);
+        self.accepted += 1;
+        self.recentScores.Push(self.last.score);
+
+        if (self.recentScores.Count() > 8usize) {
+            self.recentScores.RemoveAt(0usize);
+        }
+
+        mut levelCode = 0;
+        if (self.last.level == AlertLevel::Critical) {
+            levelCode = 2;
+            self.criticals += 1;
+            self.buckets.Set("critical", self.criticals);
+        }
+        else if (self.last.level == AlertLevel::Warning) {
+            levelCode = 1;
+            self.warnings += 1;
+            self.buckets.Set("warning", self.warnings);
+        }
+        else {
+            self.buckets.Set("normal", self.buckets.GetOr("normal", 0) + 1);
+        }
+
+        return levelCode;
+    }
+
+    public fn ScoreSum() -> f32 {
+        mut total = 0.0f;
+        for (score in self.recentScores) {
+            total += score;
+        }
+        return total;
+    }
+
+    public fn Reset() {
+        self.accepted = 0;
+        self.warnings = 0;
+        self.criticals = 0;
+        self.last = TelemetrySnapshot();
+        self.recentScores = [];
+        self.buckets = {
+            "normal": 0,
+            "warning": 0,
+            "critical": 0
+        };
+    }
+}

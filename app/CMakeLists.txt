@@ -965,6 +965,39 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_test(
+        NAME wio_test_example_telemetry_pipeline_run
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DEXAMPLE_ROOT=${CMAKE_SOURCE_DIR}/examples/telemetry_pipeline
+            -DWIO_EXPECT=Telemetry\ pipeline:\ Wio\ 0.14.0
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExampleProject.cmake"
+    )
+    set_tests_properties(
+        wio_test_example_telemetry_pipeline_run
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
+        NAME wio_test_example_mini_game_engine_run
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DEXAMPLE_ROOT=${CMAKE_SOURCE_DIR}/examples/mini_game_engine
+            -DWIO_EXPECT=MiniWio\ Flappy:\ mode=headless\ frames=720
+            -DWIO_RUN_ARGS=--headless
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExampleProject.cmake"
+    )
+    set_tests_properties(
+        wio_test_example_mini_game_engine_run
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
         NAME wio_test_example_binding_import
         COMMAND
             ${CMAKE_COMMAND}
@@ -1998,7 +2031,63 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_sdk_013_parity_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_013_parity_library.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_013_parity_host.cpp"
-        "SDK 0.13 parity: version=0.13.0 text-codepoints=10 generic=std::Option<i32>"
+        "SDK 0.13 parity: version=0\\.[0-9]+\\.[0-9]+ text-codepoints=10 generic=std::Option<i32>"
+    )
+
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_014_option_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_option_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_option_host.cpp"
+        "SDK 0.14 Option: selected=7 nested=9 empty-roundtrip=ok"
+    )
+
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_014_result_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_result_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_result_host.cpp"
+        "SDK 0.14 Result: value=84 error-code=701 unit=ok native-error=12345"
+    )
+
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_014_nested_collections_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_nested_collections_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_nested_collections_host.cpp"
+        "SDK 0.14 nested: choices=2 fixed-error=501 wide=18000000000 ordered-error=502"
+    )
+
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_014_sequence_containers_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_sequence_containers_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_sequence_containers_host.cpp"
+        "SDK 0.14 sequences: queue=2 tags=2 levels=4-9"
+    )
+
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_014_tuple_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_tuple_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_tuple_host.cpp"
+        "SDK 0.14 tuple: selected=none error=730 revision=9000000000"
+    )
+
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_014_span_range_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_span_range_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_span_range_host.cpp"
+        "SDK 0.14 span: start=2 count=2 values=30-40"
+    )
+
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_014_byte_buffer_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_byte_buffer_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_byte_buffer_host.cpp"
+        "SDK 0.14 buffer: count=3 position=1 capacity=32 bytes=52-18-171"
+    )
+
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_014_const_generic_metadata_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_const_generic_metadata_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_const_generic_metadata_host.cpp"
+        "SDK 0.14 const metadata: abi=8 block=4 label=sdk empty=ok"
     )
 
     add_wio_shared_reload_interop_test(
@@ -3486,6 +3575,39 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_std_unicode_grapheme_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
+
+    add_wio_output_test(
+        wio_test_std_unicode_normalization_run
+        "${CMAKE_SOURCE_DIR}/tests/std_unicode_normalization_run.wio"
+        "std-unicode-normalization-ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_std_container_invariants_014_run
+        "${CMAKE_SOURCE_DIR}/tests/std_container_invariants_014_run.wio"
+        "std-container-invariants-014-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_std_container_invariants_014_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
+        wio_test_std_platform_conformance_vectors_run
+        "${CMAKE_SOURCE_DIR}/tests/std_platform_conformance_vectors_run.wio"
+        "std-platform-conformance-vectors-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_std_platform_conformance_vectors_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+    set_tests_properties(
+        wio_test_std_unicode_normalization_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
     set_tests_properties(
         wio_test_std_structured_log_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
@@ -3512,6 +3634,45 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     set_tests_properties(
         wio_test_std_json_hardening_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
+        wio_test_std_json_numeric_bounds_run
+        "${CMAKE_SOURCE_DIR}/tests/std_json_numeric_bounds_run.wio"
+        "std-json-numeric-bounds-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_std_json_numeric_bounds_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
+        wio_test_std_serialization_codec_run
+        "${CMAKE_SOURCE_DIR}/tests/std_serialization_codec_run.wio"
+        "std-serialization-codec-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_std_serialization_codec_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
+        wio_test_generic_interface_parameter_override_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_interface_parameter_override_run.wio"
+        "generic-interface-parameter-override-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_generic_interface_parameter_override_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_std_serialization_codec_type_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/std_serialization_codec_type_mismatch.wio"
+        "No matching overload for 'Encode' with arguments"
     )
 
     add_wio_output_test(
@@ -3639,6 +3800,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
     set_tests_properties(
         wio_test_std_regex_time_hardening_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
+        wio_test_std_regex_records_safety_run
+        "${CMAKE_SOURCE_DIR}/tests/std_regex_records_safety_run.wio"
+        "std-regex-records-safety-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_std_regex_records_safety_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 
@@ -5065,6 +5237,42 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_exported_object_non_abi_field
         "${CMAKE_SOURCE_DIR}/tests/invalid/exported_object_non_abi_field.wio"
         "@Export object 'BadProfile' exposes public field 'worker' with type 'IWorker' that is not yet SDK-exportable\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_exported_option_unsupported_payload
+        "${CMAKE_SOURCE_DIR}/tests/invalid/exported_option_unsupported_payload.wio"
+        "@Export object 'BadOptionalProfile' exposes public field 'worker' with type 'Option<IWorker>' that is not yet SDK-exportable\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_exported_result_unsupported_payload
+        "${CMAKE_SOURCE_DIR}/tests/invalid/exported_result_unsupported_payload.wio"
+        "@Export object 'BadResultProfile' exposes public field 'worker' with type 'Result<IWorker>' that is not yet SDK-exportable\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_exported_nested_collection_unsupported_payload
+        "${CMAKE_SOURCE_DIR}/tests/invalid/exported_nested_collection_unsupported_payload.wio"
+        "@Export object 'BadNestedCollection' exposes public field 'workers' with type 'Option<IWorker>\\[\\]' that is not yet SDK-exportable\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_exported_queue_unsupported_payload
+        "${CMAKE_SOURCE_DIR}/tests/invalid/exported_queue_unsupported_payload.wio"
+        "@Export object 'BadQueueProfile' exposes public field 'workers' with type 'std::Queue<Option<IWorker>>' that is not yet SDK-exportable\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_exported_tuple_unsupported_payload
+        "${CMAKE_SOURCE_DIR}/tests/invalid/exported_tuple_unsupported_payload.wio"
+        "@Export object 'BadTupleProfile' exposes public field 'worker' with type 'std::Tuple<i32, IWorker>' that is not yet SDK-exportable\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_exported_unspecialized_generic_component
+        "${CMAKE_SOURCE_DIR}/tests/invalid/exported_unspecialized_generic_component.wio"
+        "@Export object 'BadGenericProfile' exposes public field 'value' with type 'GenericValue<i32>' that is not yet SDK-exportable\\."
     )
 
     add_wio_failure_test(

@@ -1,7 +1,7 @@
 # Wio Host SDK
 
 This document defines the current public C++ host and embedding surface for Wio.
-It is the SDK contract shipped with Wio v0.13 and the baseline of the planned
+It is the SDK contract shipped with Wio v0.14 and the baseline of the planned
 Wio v1 host integration layer. The pre-v1 parity and synchronized-version plan
 is tracked in [`WIO_SDK_EVOLUTION_PLAN.md`](./WIO_SDK_EVOLUTION_PLAN.md).
 
@@ -28,10 +28,10 @@ The SDK product version is available without loading a module:
 
 ```cpp
 static_assert(WIO_SDK_VERSION_MAJOR == 0);
-static_assert(WIO_SDK_VERSION_MINOR == 13);
+static_assert(WIO_SDK_VERSION_MINOR == 14);
 static_assert(wio::sdk::product_version.patch == 0);
 
-std::cout << wio::sdk::product_version_string; // 0.13.0
+std::cout << wio::sdk::product_version_string; // 0.14.0
 ```
 
 `WIO_MODULE_API_DESCRIPTOR_VERSION` remains an independent low-level ABI
@@ -142,7 +142,41 @@ Important mappings:
 This means host code can stay visually aligned with Wio source code instead of
 mixing Wio type names with unrelated C++ spellings.
 
-### 3.1 Current value surface
+### 3.1 Explicit ABI integer markers
+
+C++ typedef identity cannot always preserve Wio's semantic distinction. On a
+64-bit platform `std::uint64_t` and `std::uintptr_t` may be the same type; on
+common platforms `std::uint8_t` is an alias of `unsigned char`. A function
+template therefore cannot infer whether the host intended `u64` or `usize`, or
+`u8` or `uchar`, from those aliases alone.
+
+Use explicit SDK marker values whenever the distinction is observable at the
+module boundary:
+
+```cpp
+using namespace wio::sdk;
+
+auto readFingerprint = module.load_command<WioU64()>("telemetry.fingerprint");
+auto resize = module.load_command<void(WioUSize)>("buffer.resize");
+auto decodeByte = module.load_command<WioU8(WioUChar)>("decode.byte");
+
+const std::uint64_t fingerprint = readFingerprint().value();
+resize(WioUSize{4096u});
+```
+
+The complete explicit integer set is:
+
+- `WioUChar`, `WioByte`
+- `WioI8`, `WioI16`, `WioI32`, `WioI64`
+- `WioU8`, `WioU16`, `WioU32`, `WioU64`
+- `WioISize`, `WioUSize`
+
+The wrappers contain only the requested C++ storage value, expose `.value()`,
+and bind to the ABI kind encoded in their name. Existing natural C++ scalar
+bindings remain source-compatible; markers are the deterministic choice for
+platform-dependent alias collisions.
+
+### 3.2 Current value surface
 
 `wio_values.h` mirrors stable Wio value semantics without pretending that C++
 templates are a binary ABI:
@@ -175,7 +209,14 @@ catalog advertises one.
 
 Use `wio::sdk::features()`, `feature_info(...)`, or `find_feature(...)` to
 inspect that distinction programmatically. The authoritative human-readable
-matrix is [`WIO_SDK_0_13_PARITY_MATRIX.md`](./WIO_SDK_0_13_PARITY_MATRIX.md).
+matrix is [`WIO_SDK_0_14_PARITY_MATRIX.md`](./WIO_SDK_0_14_PARITY_MATRIX.md).
+
+From v0.14 onward every catalog row also has an explicit `FeatureSupport`
+state: `Supported`, `Partial`, or `Deferred`. `FeatureSurface` continues to say
+*where* a feature works; the support state says whether the advertised surface
+is complete or intentionally bounded. In particular, the newly bridged stable
+values advertise `DynamicField`, while pool identity, generic instantiation,
+interfaces, `Box`, `Any`, and async tasks remain visibly partial.
 
 ---
 
@@ -212,7 +253,7 @@ int main()
 - validates the SDK descriptor version and the full host-visible ABI descriptor contract
 - invokes `@ModuleLoad` automatically when present
 
-Generated 0.13 modules also publish their product version and descriptor size.
+Generated 0.14 modules also publish their product version and descriptor size.
 Hosts can take an owned inspection snapshot:
 
 ```cpp
@@ -587,6 +628,8 @@ runtime reflection rather than compile-time knowledge.
 - `WioDynamicDict`
 - `WioDynamicTree`
 - `WioDynamicFunction`
+- `WioDynamicTypedValue` for the v0.14 Option/Result/unit, tuple, queue/set,
+  span, and byte-buffer bridge families
 
 Example:
 
@@ -607,6 +650,23 @@ state.field("callback").set_dynamic(
         {
             return value * 3;
         })));
+```
+
+Portable v0.14 values retain their exact host representation behind a checked
+typed wrapper:
+
+```cpp
+using Count = wio::sdk::WioOption<std::int32_t>;
+
+auto value = state.field("selected").get_dynamic();
+if (value.is_typed() && value.as_typed().can_access_as<Count>())
+{
+    auto count = value.as_typed().get_as<Count>();
+    (void)count;
+}
+
+state.field("selected").set_dynamic(
+    wio::sdk::WioDynamicValue::typed(Count::some(14)));
 ```
 
 Enum/flagset dynamic example:
@@ -654,6 +714,168 @@ The key design boundary here is:
   converts them
 - the host can still fall back to the underlying scalar representation through
   `scalar_value()` / `as<T>()` on `WioEnum` and `WioFlagset`
+
+### Typed `Option` fields in v0.14
+
+The v0.14 value bridge begins with `std::Option<T>`. A C++ host uses
+`WioOption<T>`; the generated module converts the representation instead of
+exposing Wio's internal reference-counted `Option` object:
+
+```cpp
+auto state = module.load_object("Sdk14Options").create();
+auto selected = state.field("selected");
+
+auto value = selected.get_as<WioOption<std::int32_t>>();
+selected.set_as(WioOption<std::int32_t>::some(42));
+selected.set_as(WioOption<std::int32_t>::none());
+```
+
+Nested options preserve every level:
+
+```cpp
+using Nested = WioOption<WioOption<std::int32_t>>;
+auto value = state.field("nested").get_as<Nested>();
+```
+
+The initial bridge supports primitive, `string`, `text`, and recursively nested
+`Option` payloads. Unsupported payloads are rejected while compiling the Wio
+module, so they cannot degrade into a host-side `not callable` surprise.
+
+`std::Result<T>` uses the existing `WioResult<T>` host value in the same way:
+
+```cpp
+using HostResult = WioResult<std::int32_t>;
+auto calculation = state.field("calculation");
+
+calculation.set_as(HostResult::ok(84));
+calculation.set_as(HostResult::error({
+    WioResultDomain::Custom,
+    701,
+    -9001,
+    "host calculation failed"
+}));
+```
+
+The bridge preserves the success value and the complete Wio error record:
+domain, portable code, native code, and message. `std::UnitResult` maps to
+`WioUnitResult`, with `WioUnit` represented by the dedicated `UNIT` type
+descriptor rather than pretending it is an exported component handle.
+
+Arrays, fixed arrays, `Dict`, and `Tree` apply the same conversion recursively.
+The host uses its normal SDK/C++ container surface while every nested Wio value
+keeps its semantics:
+
+```cpp
+using Choice = WioOption<std::int32_t>;
+using Outcome = WioResult<std::int32_t>;
+
+auto choices = state.field("choices").get_as<std::vector<Choice>>();
+auto fixed = state.field("fixed").get_as<std::array<Outcome, 2>>();
+auto lookup = state.field("lookup").get_as<
+    std::unordered_map<std::string, WioOption<WioU64>>
+>();
+```
+
+Conversion is recursive in both directions. A nested category without a stable
+bridge is rejected in semantic analysis instead of exporting a raw generated
+C++ template type that the host cannot name safely.
+
+Queue and set fields use their semantic SDK mirrors rather than exposing their
+private Wio storage:
+
+```cpp
+using Work = WioQueue<WioOption<std::int32_t>>;
+using Tags = WioUnorderedSet<std::string>;
+using Levels = WioOrderedSet<std::int32_t>;
+
+auto work = state.field("work").get_as<Work>();
+state.field("tags").set_as(Tags{"host", "sdk"});
+```
+
+Queue order and ordered-set ordering are preserved. Unordered sets preserve
+membership without promising iteration order.
+
+`std::Tuple<...>` fields also cross the generated bridge as
+`wio::sdk::WioTuple<...>` (an SDK spelling for `std::tuple`). Every tuple slot
+is checked against the published generic argument descriptor and converted
+recursively, so mixed values remain strongly typed:
+
+```cpp
+using Snapshot = WioTuple<
+    WioOption<std::int32_t>,
+    WioResult<std::string>,
+    WioU64
+>;
+
+Snapshot snapshot = object.field("snapshot").get_as<Snapshot>();
+object.field("snapshot").set_as(Snapshot{
+    WioOption<std::int32_t>::none(),
+    WioResult<std::string>::ok("updated"),
+    WioU64{14}
+});
+```
+
+Tuple arity and every element type participate in `can_access_as<T>()`.
+Unsupported nested values are rejected by Wio analysis instead of reaching a
+C++ template or erased-payload failure.
+
+Wio's `std::Span` is deliberately a checked `(start, count)` token; it does not
+own or retain the array it was created from. Exported span fields therefore use
+`WioSpanRange`, while `WioSpan<T>` remains the host's borrowed memory view:
+
+```cpp
+auto values = object.field("values").get_as<std::vector<std::int32_t>>();
+auto range = object.field("window").get_as<WioSpanRange>();
+WioSpan<const std::int32_t> window(values.data(), values.size(), range);
+```
+
+The host must keep `values` alive while `window` is used. Applying a range to a
+host span clamps it to the source bounds, matching `std::span::Make` and
+`std::span::Slice`. The SDK does not disguise an exported range token as a
+borrow into memory owned by another module.
+
+`std::ByteBuffer` uses the owned `WioByteBuffer` bridge. Reads and writes copy
+the byte content across the module boundary and retain both reserved capacity
+and cursor position:
+
+```cpp
+auto payload = object.field("payload").get_as<WioByteBuffer>();
+payload.write_u32_le(0x12345678u);
+payload.rewind();
+object.field("payload").set_as(std::move(payload));
+```
+
+No Wio object pointer or private buffer layout crosses the ABI. Pools remain a
+separate ownership facility: their generation handles are meaningful only to
+the pool instance that issued them and are not flattened into an owned buffer.
+
+### Concrete const-generic metadata in v0.14
+
+ABI descriptor version `8` adds a dedicated `CONST_VALUE` descriptor. Generic
+arguments now distinguish a type argument from a compile-time value and expose
+both the value's declared type and its canonical payload:
+
+```cpp
+auto blockType = object.field("block").type(); // SizedValue<i32, 4>
+auto extent = blockType.generic_argument(1);
+
+if (extent.is_const_value() &&
+    extent.const_value_type().abi_type() == WIO_ABI_USIZE) {
+    std::cout << extent.const_value(); // "4"
+}
+```
+
+Integer, `string`, and `text` const arguments retain distinct value-type
+descriptors. Empty strings are represented by a non-null, zero-length payload,
+so they cannot be confused with missing metadata. Stable IDs continue to hash
+an unambiguous canonical displayed identity, including both the declared
+const-value type and its concrete value.
+
+User-defined generic object/component fields require an explicitly exported
+concrete specialization. An unspecialized instance is rejected during Wio
+analysis because the host would otherwise receive metadata for a type absent
+from the module's concrete type table. This keeps the failure at the source
+declaration instead of deferring it to module loading.
 
 ---
 
@@ -731,7 +953,7 @@ rather than as obscure backend-only failures.
 
 ---
 
-## 12. Official v0.13 Boundary
+## 12. Official v0.14 Boundary
 
 For the current SDK version, the public and documented boundary is:
 
@@ -747,8 +969,8 @@ For the current SDK version, the public and documented boundary is:
 - `WioDynamicValue` and the current dynamic container wrappers as the runtime
   reflection payload family
 - generation-aware stale-wrapper diagnostics for reload-sensitive wrappers
-- ABI descriptor version `7`, module product/version inspection, stable type
-  IDs, generic arguments, and Unicode text dynamic fields
+- ABI descriptor version `8`, module product/version inspection, stable type
+  IDs, concrete type/const arguments, and supported nested dynamic fields
 
 The following should be treated as stable with explicit caveats:
 
@@ -758,7 +980,7 @@ The following should be treated as stable with explicit caveats:
   deeper host-side reflection growth beyond that should still be treated as
   future-facing
 
-The following should not currently be read as part of the stable v0.13 SDK
+The following should not currently be read as part of the stable v0.14 SDK
 contract:
 
 - compiler-internal AST/parser/sema/codegen APIs
@@ -766,13 +988,12 @@ contract:
 - automatic semantic reconciliation of stale object/component wrappers across
   reload generations
 - `ref` / `view` field export behavior as a public host ABI promise
-- direct binary exchange for Option/Result/tuple/queue/set/span/Box/any host
-  mirrors; their 0.13 contract is host semantics plus metadata unless the
-  feature catalog reports a dynamic or direct-call surface
+- direct binary exchange for partial/deferred catalog entries such as
+  interface, Box, any, async task, pool identity, and retained attributes
 - retained typed-attribute metadata, non-blocking task control, and the future
   application/system host lifecycle ABI
 
-This is the implemented v0.13 baseline, not the final v1 parity claim. The
+This is the implemented v0.14 value-parity baseline, not the final v1 parity claim. The
 required path to full host-observable language/runtime parity is maintained in
 [`WIO_SDK_EVOLUTION_PLAN.md`](./WIO_SDK_EVOLUTION_PLAN.md).
 
@@ -781,6 +1002,6 @@ required path to full host-observable language/runtime parity is maintained in
 ## 13. See Also
 
 - [`WIO_PROJECT_SYSTEM.md`](./WIO_PROJECT_SYSTEM.md)
-- [`WIO_SDK_0_13_PARITY_MATRIX.md`](./WIO_SDK_0_13_PARITY_MATRIX.md)
+- [`WIO_SDK_0_14_PARITY_MATRIX.md`](./WIO_SDK_0_14_PARITY_MATRIX.md)
 - [`examples/static_cmake_consumer/README.md`](../examples/static_cmake_consumer/README.md)
 - [`tests/native/sdk_exported_complex_fields_host.cpp`](../tests/native/sdk_exported_complex_fields_host.cpp)

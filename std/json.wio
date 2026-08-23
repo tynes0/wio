@@ -35,6 +35,7 @@ realm std {
             public booleanValue: bool;
             public integerText: string;
             public numberValue: f64;
+            public numberText: string;
             public stringValue: string;
             public arrayValue: Value[];
             public objectValue: Dict<string, Value>;
@@ -56,7 +57,14 @@ realm std {
                 return fallback;
             }
             public fn NumberOr(fallback: f64) -> f64 {
-                if (self.IsNumber()) { return self.numberValue; }
+                if (not self.IsNumber()) { return fallback; }
+                if (self.numberText == "") { return self.numberValue; }
+                let parsed = convert::ParseF64(self.numberText);
+                if (parsed.IsOk()) { return parsed.Value(); }
+                return fallback;
+            }
+            public fn NumberTextOr(fallback: string) -> string {
+                if (self.IsNumber()) { return self.numberText; }
                 return fallback;
             }
             public fn IntegerTextOr(fallback: string) -> string {
@@ -69,6 +77,69 @@ realm std {
                         std::ResultDomain::custom, 3, "JSON value is not an integer."));
                 }
                 return convert::ParseI64(self.integerText);
+            }
+            public fn I8() -> std::Result<i8> {
+                if (not self.IsInteger()) {
+                    return std::Err<i8>(std::MakeResultError(
+                        std::ResultDomain::custom, 3, "JSON value is not an integer."));
+                }
+                return convert::ParseI8(self.integerText);
+            }
+            public fn I16() -> std::Result<i16> {
+                if (not self.IsInteger()) {
+                    return std::Err<i16>(std::MakeResultError(
+                        std::ResultDomain::custom, 3, "JSON value is not an integer."));
+                }
+                return convert::ParseI16(self.integerText);
+            }
+            public fn I32() -> std::Result<i32> {
+                if (not self.IsInteger()) {
+                    return std::Err<i32>(std::MakeResultError(
+                        std::ResultDomain::custom, 3, "JSON value is not an integer."));
+                }
+                return convert::ParseI32(self.integerText);
+            }
+            public fn U8() -> std::Result<u8> {
+                if (not self.IsInteger()) {
+                    return std::Err<u8>(std::MakeResultError(
+                        std::ResultDomain::custom, 3, "JSON value is not an integer."));
+                }
+                return convert::ParseU8(self.integerText);
+            }
+            public fn U16() -> std::Result<u16> {
+                if (not self.IsInteger()) {
+                    return std::Err<u16>(std::MakeResultError(
+                        std::ResultDomain::custom, 3, "JSON value is not an integer."));
+                }
+                return convert::ParseU16(self.integerText);
+            }
+            public fn U32() -> std::Result<u32> {
+                if (not self.IsInteger()) {
+                    return std::Err<u32>(std::MakeResultError(
+                        std::ResultDomain::custom, 3, "JSON value is not an integer."));
+                }
+                return convert::ParseU32(self.integerText);
+            }
+            public fn U64() -> std::Result<u64> {
+                if (not self.IsInteger()) {
+                    return std::Err<u64>(std::MakeResultError(
+                        std::ResultDomain::custom, 3, "JSON value is not an integer."));
+                }
+                return convert::ParseU64(self.integerText);
+            }
+            public fn ISize() -> std::Result<isize> {
+                if (not self.IsInteger()) {
+                    return std::Err<isize>(std::MakeResultError(
+                        std::ResultDomain::custom, 3, "JSON value is not an integer."));
+                }
+                return convert::ParseISize(self.integerText);
+            }
+            public fn USize() -> std::Result<usize> {
+                if (not self.IsInteger()) {
+                    return std::Err<usize>(std::MakeResultError(
+                        std::ResultDomain::custom, 3, "JSON value is not an integer."));
+                }
+                return convert::ParseUSize(self.integerText);
             }
             public fn StringOr(fallback: string) -> string {
                 if (self.IsString()) { return self.stringValue; }
@@ -104,6 +175,14 @@ realm std {
             mut result = Value();
             result.kind = Kind::number;
             result.numberValue = value;
+            result.numberText = std::ToString<f64>(value);
+            return result;
+        }
+
+        fn NumberTextValue(value: string) -> Value {
+            mut result = Value();
+            result.kind = Kind::number;
+            result.numberText = value;
             return result;
         }
 
@@ -112,6 +191,22 @@ realm std {
             result.kind = Kind::integer;
             result.integerText = value;
             return result;
+        }
+
+        fn IntegerValue(value: i32) -> Value {
+            return IntegerValue(std::ToString<i32>(value));
+        }
+
+        fn IntegerValue(value: i64) -> Value {
+            return IntegerValue(std::ToString<i64>(value));
+        }
+
+        fn IntegerValue(value: u32) -> Value {
+            return IntegerValue(std::ToString<u32>(value));
+        }
+
+        fn IntegerValue(value: u64) -> Value {
+            return IntegerValue(std::ToString<u64>(value));
         }
 
         fn DefaultParseOptions() -> ParseOptions {
@@ -227,12 +322,7 @@ realm std {
                 if (serialization::IsJsonInteger(token)) {
                     return IntegerValue(token);
                 }
-                let parsed = convert::ParseF64(token);
-                if (parsed.IsError()) {
-                    self.Fail("Invalid number.");
-                    return NullValue();
-                }
-                return NumberValue(parsed.Value());
+                return NumberTextValue(token);
             }
 
             private fn ParseArrayValue(depth: usize) -> Value {
@@ -364,6 +454,20 @@ realm std {
 
         fn IsValid(value: string) -> bool { return Parse(value).IsOk(); }
 
+        fn Encode<T>(
+            value: T,
+            codec: serialization::Codec<T, Value>
+        ) -> std::Result<Value> {
+            return serialization::EncodeWith<T, Value>(value, codec);
+        }
+
+        fn Decode<T>(
+            value: Value,
+            codec: serialization::Codec<T, Value>
+        ) -> std::Result<T> {
+            return serialization::DecodeWith<T, Value>(value, codec);
+        }
+
         fn Indent(depth: usize, width: usize) -> string {
             mut result = "";
             mut count = 0usize;
@@ -378,7 +482,17 @@ realm std {
             if (value.IsNull()) { return "null"; }
             if (value.IsBool()) { return match (value.booleanValue) { true: "true"; assumed: "false"; }; }
             if (value.IsInteger()) { return value.integerText; }
-            if (value.IsNumber()) { return std::ToString<f64>(value.numberValue); }
+            if (value.IsNumber()) {
+                let encoded = match (value.numberText == "") {
+                    true: std::ToString<f64>(value.numberValue);
+                    assumed: value.numberText;
+                };
+                if (serialization::IsValidJsonNumber(encoded) and
+                    not serialization::IsJsonInteger(encoded)) {
+                    return encoded;
+                }
+                return "null";
+            }
             if (value.IsString()) { return serialization::QuoteJson(value.stringValue); }
             if (value.IsArray()) {
                 if (value.arrayValue.Empty()) { return "[]"; }
@@ -442,9 +556,9 @@ realm std {
                     if (next.IsNone()) { return std::None<Value>(); }
                     current = next.Value();
                 } else if (current.IsArray()) {
-                    let parsedIndex = convert::ParseU64(segment);
+                    let parsedIndex = convert::ParseUSize(segment);
                     if (parsedIndex.IsError()) { return std::None<Value>(); }
-                    let next = current.At(parsedIndex.Value() fit usize);
+                    let next = current.At(parsedIndex.Value());
                     if (next.IsNone()) { return std::None<Value>(); }
                     current = next.Value();
                 } else {

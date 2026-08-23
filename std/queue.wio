@@ -25,7 +25,11 @@ realm std {
             }
 
             public fn Reserve(capacity: usize) {
-                self.values.Reserve(self.head + capacity);
+                if (self.head > 0usize) {
+                    self.values = self.values.Slice(self.head);
+                    self.head = 0usize;
+                }
+                self.values.Reserve(capacity);
             }
 
             public fn ShrinkToFit() {
@@ -81,7 +85,7 @@ realm std {
 
                 let value = self.values[self.head];
                 self.head += 1usize;
-                if (self.head >= 32usize and self.head * 2usize >= self.values.Count()) {
+                if (self.head >= 32usize and self.head >= self.values.Count() - self.head) {
                     self.values = self.values.Slice(self.head);
                     self.head = 0usize;
                 }

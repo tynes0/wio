@@ -1,0 +1,44 @@
+use std::assert as assert;
+use std::console as console;
+use std::json as json;
+
+fn Entry() -> i32 {
+    let document = json::Parse(
+        "{\"i8max\":127,\"i8overflow\":128,\"u64max\":18446744073709551615," +
+        "\"negative\":-1,\"huge\":1.234567890123456789e+9999}"
+    );
+    assert::Expect(document.IsOk(), "valid JSON numbers do not depend on f64 range");
+
+    let root = document.Value();
+    assert::ExpectEqual(root.Get("i8max").Value().I8().Value(), 127i8, "i8 maximum");
+    assert::Expect(root.Get("i8overflow").Value().I8().IsError(), "i8 overflow is rejected");
+    assert::ExpectEqual(
+        root.Get("u64max").Value().U64().Value(),
+        18446744073709551615u64,
+        "u64 maximum"
+    );
+    assert::Expect(root.Get("negative").Value().U64().IsError(), "negative unsigned is rejected");
+
+    let huge = root.Get("huge").Value();
+    assert::Expect(huge.IsNumber(), "exponent token is a number");
+    assert::ExpectEqual(
+        huge.NumberTextOr(""),
+        "1.234567890123456789e+9999",
+        "number token remains exact"
+    );
+    assert::ExpectEqual(huge.NumberOr(42.0f64), 42.0f64, "out-of-range f64 uses fallback");
+    assert::ExpectEqual(
+        json::Write(root),
+        "{\"huge\":1.234567890123456789e+9999,\"i8max\":127," +
+        "\"i8overflow\":128,\"negative\":-1,\"u64max\":18446744073709551615}",
+        "write preserves exact numeric tokens"
+    );
+
+    mut invalidNumber = json::Value();
+    invalidNumber.kind = json::Kind::number;
+    invalidNumber.numberText = "nan";
+    assert::ExpectEqual(json::Write(invalidNumber), "null", "writer never emits non-JSON numbers");
+
+    console::PrintLine!("std-json-numeric-bounds-ok");
+    return 0;
+}

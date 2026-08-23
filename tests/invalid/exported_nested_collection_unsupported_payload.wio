@@ -1,0 +1,10 @@
+use std::option;
+
+interface IWorker {
+    fn Run() -> i32;
+}
+
+@Export
+object BadNestedCollection {
+    public workers: std::Option<IWorker>[];
+}

@@ -1,0 +1,10 @@
+use std::tuple;
+
+interface IWorker {
+    fn Run();
+}
+
+@Export
+object BadTupleProfile {
+    public worker: std::Tuple<i32, IWorker>;
+}

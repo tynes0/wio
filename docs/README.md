@@ -103,7 +103,7 @@ Use these when the question is about:
 
 - [Standard library](./WIO_STD.md)
 - [Host SDK](./WIO_SDK.md)
-- [SDK 0.13 parity matrix](./WIO_SDK_0_13_PARITY_MATRIX.md)
+- [SDK 0.14 parity matrix](./WIO_SDK_0_14_PARITY_MATRIX.md)
 - [SDK evolution and v1 parity plan](./WIO_SDK_EVOLUTION_PLAN.md)
 
 Use these when the question is about:
