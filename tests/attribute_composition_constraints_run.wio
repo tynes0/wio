@@ -2,7 +2,7 @@ use std::assert as assert;
 use std::console as console;
 use std::reflect as reflect;
 
-attribute entity(name: string) for component retain runtime;
+attribute entity(name: string, version: i32 = 1) for component retain runtime;
 attribute audited() for component retain runtime;
 attribute export_marker() for component retain compile;
 
@@ -28,8 +28,18 @@ component CommandPayload {
 fn Entry() -> i32 {
     let attributes = reflect::TypeAttributes<User>();
     assert::ExpectEqual(attributes.Count(), 2usize, "composed runtime attribute count");
-    assert::ExpectEqual(attributes[0usize], "entity(users)", "composed argument substitution");
+    assert::ExpectEqual(attributes[0usize], "entity(users,1)", "composed argument substitution and default");
     assert::ExpectEqual(attributes[1usize], "audited", "second composed attribute");
+
+    let descriptors = reflect::TypeAttributeInfo<User>();
+    assert::ExpectEqual(descriptors.Count(), 2usize, "typed descriptor count");
+    assert::ExpectEqual(descriptors[0usize].name, "entity", "descriptor name");
+    assert::Expect(descriptors[0usize].stableTypeId != 0u64, "stable attribute type id");
+    assert::ExpectEqual(descriptors[0usize].origin, "composed", "composition origin");
+    assert::ExpectEqual(descriptors[0usize].arguments.Count(), 2usize, "normalized argument descriptors");
+    assert::ExpectEqual(descriptors[0usize].arguments[0usize].name, "name", "argument name");
+    assert::ExpectEqual(descriptors[0usize].arguments[0usize].value, "users", "argument value");
+    assert::Expect(descriptors[0usize].arguments[1usize].usedDefault, "default provenance");
     console::PrintLine("attribute-composition-constraints-ok");
     return 0;
 }

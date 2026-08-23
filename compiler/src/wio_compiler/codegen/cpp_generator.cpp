@@ -5828,6 +5828,15 @@ namespace wio::codegen
             std::vector<std::string> methodAccess;
             std::vector<std::string> baseTypes;
             std::vector<std::string> typeAttributes;
+            std::vector<std::string> typeAttributeNames;
+            std::vector<std::string> typeAttributeRetentions;
+            std::vector<std::string> typeAttributeOrigins;
+            std::vector<std::uint64_t> typeAttributeStableIds;
+            std::vector<std::string> typeAttributeArgumentNames;
+            std::vector<std::string> typeAttributeArgumentTypes;
+            std::vector<std::string> typeAttributeArgumentValues;
+            std::vector<std::uint8_t> typeAttributeArgumentUsedDefaults;
+            std::vector<size_t> typeAttributeArgumentOffsets{0};
             std::vector<std::string> fieldAttributeNames;
             std::vector<size_t> fieldAttributeOffsets{0};
 
@@ -5852,7 +5861,58 @@ namespace wio::codegen
             for (const auto& attribute : declaration.attributes)
             {
                 auto name = reflectedAttributeName(attribute);
-                if (!name.empty()) typeAttributes.push_back(std::move(name));
+                if (name.empty())
+                    continue;
+                typeAttributes.push_back(std::move(name));
+                typeAttributeNames.push_back(attribute->qualifiedName);
+                typeAttributeRetentions.push_back("runtime");
+                switch (attribute->origin)
+                {
+                case AttributeOrigin::Direct: typeAttributeOrigins.push_back("direct"); break;
+                case AttributeOrigin::Inherited: typeAttributeOrigins.push_back("inherited"); break;
+                case AttributeOrigin::Scoped: typeAttributeOrigins.push_back("scoped"); break;
+                case AttributeOrigin::Composed: typeAttributeOrigins.push_back("composed"); break;
+                case AttributeOrigin::Generated: typeAttributeOrigins.push_back("generated"); break;
+                case AttributeOrigin::Compiler: typeAttributeOrigins.push_back("compiler"); break;
+                }
+
+                std::uint64_t stableId = 14695981039346656037ull;
+                for (const unsigned char byte : attribute->qualifiedName)
+                {
+                    stableId ^= byte;
+                    stableId *= 1099511628211ull;
+                }
+                typeAttributeStableIds.push_back(stableId);
+
+                for (size_t argumentIndex = 0; argumentIndex < attribute->args.size(); ++argumentIndex)
+                {
+                    const Token& argument = attribute->args[argumentIndex];
+                    typeAttributeArgumentNames.push_back(
+                        argumentIndex < attribute->argumentNames.size()
+                            ? attribute->argumentNames[argumentIndex]
+                            : std::string{});
+                    std::string argumentType = "unknown";
+                    if (argument.type == TokenType::stringLiteral)
+                        argumentType = argument.isUnicodeString ? "text" : "string";
+                    else if (argument.type == TokenType::integerLiteral)
+                        argumentType = "integer";
+                    else if (argument.type == TokenType::floatLiteral)
+                        argumentType = "float";
+                    else if (argument.type == TokenType::byteLiteral)
+                        argumentType = "byte";
+                    else if (argument.type == TokenType::kwTrue || argument.type == TokenType::kwFalse)
+                        argumentType = "bool";
+                    else if (argument.type == TokenType::identifier)
+                        argumentType = "symbol";
+                    typeAttributeArgumentTypes.push_back(std::move(argumentType));
+                    typeAttributeArgumentValues.push_back(argument.value);
+                    typeAttributeArgumentUsedDefaults.push_back(
+                        argumentIndex < attribute->argumentUsedDefaults.size() &&
+                        attribute->argumentUsedDefaults[argumentIndex]
+                            ? static_cast<std::uint8_t>(1)
+                            : static_cast<std::uint8_t>(0));
+                }
+                typeAttributeArgumentOffsets.push_back(typeAttributeArgumentValues.size());
             }
 
             auto addMember = [&](const auto& member, const bool objectDefault)
@@ -6137,6 +6197,36 @@ namespace wio::codegen
             emitStringViewArray("MethodAccess", methodAccess);
             emitStringViewArray("BaseTypes", baseTypes);
             emitStringViewArray("TypeAttributes", typeAttributes);
+            emitStringViewArray("TypeAttributeNames", typeAttributeNames);
+            emitStringViewArray("TypeAttributeRetentions", typeAttributeRetentions);
+            emitStringViewArray("TypeAttributeOrigins", typeAttributeOrigins);
+            emitStringViewArray("TypeAttributeArgumentNames", typeAttributeArgumentNames);
+            emitStringViewArray("TypeAttributeArgumentTypes", typeAttributeArgumentTypes);
+            emitStringViewArray("TypeAttributeArgumentValues", typeAttributeArgumentValues);
+            emit("static constexpr std::array<std::uint64_t, " +
+                 std::to_string(typeAttributeStableIds.size()) + "> TypeAttributeStableIds{ ");
+            for (size_t index = 0; index < typeAttributeStableIds.size(); ++index)
+            {
+                if (index > 0) emit(", ");
+                emit(std::to_string(typeAttributeStableIds[index]) + "ull");
+            }
+            emitLine(" };");
+            emit("static constexpr std::array<std::uint8_t, " +
+                 std::to_string(typeAttributeArgumentUsedDefaults.size()) + "> TypeAttributeArgumentUsedDefaults{ ");
+            for (size_t index = 0; index < typeAttributeArgumentUsedDefaults.size(); ++index)
+            {
+                if (index > 0) emit(", ");
+                emit(std::to_string(typeAttributeArgumentUsedDefaults[index]));
+            }
+            emitLine(" };");
+            emit("static constexpr std::array<std::size_t, " +
+                 std::to_string(typeAttributeArgumentOffsets.size()) + "> TypeAttributeArgumentOffsets{ ");
+            for (size_t index = 0; index < typeAttributeArgumentOffsets.size(); ++index)
+            {
+                if (index > 0) emit(", ");
+                emit(std::to_string(typeAttributeArgumentOffsets[index]));
+            }
+            emitLine(" };");
             emitStringViewArray("FieldAttributeNames", fieldAttributeNames);
             emit("static constexpr std::array<std::size_t, " +
                  std::to_string(fieldAttributeOffsets.size()) + "> FieldAttributeOffsets{ ");

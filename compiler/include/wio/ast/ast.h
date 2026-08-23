@@ -105,6 +105,15 @@ namespace wio
         ModuleRestoreState
     );
 
+    FrenumClassInNamespace(wio, AttributeOrigin, uint8_t,
+        Direct,
+        Inherited,
+        Scoped,
+        Composed,
+        Generated,
+        Compiler
+    );
+
     FrenumClassInNamespace(wio, AccessModifier, uint8_t,
         Public,
         Private,
@@ -808,6 +817,8 @@ namespace wio
         // against the user-defined attribute declaration during analysis and
         // then normalized into declaration order together with args/typeArgs.
         std::vector<std::string> argumentNames;
+        // Aligned with args after semantic normalization.
+        std::vector<bool> argumentUsedDefaults;
         // Where clauses may place more than one conjunctive constraint in a
         // generic-parameter slot. Offsets has parameter-count + 1 entries and
         // indexes the flattened args/typeArgs vectors. Plain @Apply keeps this
@@ -815,6 +826,8 @@ namespace wio
         std::vector<size_t> constraintGroupOffsets;
         bool conjunctiveConstraintGroups = false;
         bool runtimeRetained = false;
+        AttributeOrigin origin = AttributeOrigin::Direct;
+        std::string originParent;
 
         AttributeStatement(Attribute _attribute, std::vector<Token> _args,
             std::vector<NodePtr<TypeSpecifier>> _typeArgs = {},

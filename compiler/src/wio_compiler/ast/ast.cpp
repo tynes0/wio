@@ -262,7 +262,7 @@ namespace wio
         std::string _qualifiedName, std::vector<std::string> _argumentNames)
         : Statement(_loc), attribute(_attribute), qualifiedName(std::move(_qualifiedName)),
           args(std::move(_args)), typeArgs(std::move(_typeArgs)),
-          argumentNames(std::move(_argumentNames))
+          argumentNames(std::move(_argumentNames)), argumentUsedDefaults(args.size(), false)
     {
     }
 

@@ -231,6 +231,78 @@ namespace wio::runtime
     }
 
     template <typename T>
+    [[nodiscard]] inline std::vector<std::string> ReflectedTypeAttributeNames()
+    {
+        if constexpr (requires { TypeReflection<T>::TypeAttributeNames; })
+            return { TypeReflection<T>::TypeAttributeNames.begin(), TypeReflection<T>::TypeAttributeNames.end() };
+        return {};
+    }
+
+    template <typename T>
+    [[nodiscard]] inline std::vector<std::uint64_t> ReflectedTypeAttributeStableIds()
+    {
+        if constexpr (requires { TypeReflection<T>::TypeAttributeStableIds; })
+            return { TypeReflection<T>::TypeAttributeStableIds.begin(), TypeReflection<T>::TypeAttributeStableIds.end() };
+        return {};
+    }
+
+    template <typename T>
+    [[nodiscard]] inline std::vector<std::string> ReflectedTypeAttributeRetentions()
+    {
+        if constexpr (requires { TypeReflection<T>::TypeAttributeRetentions; })
+            return { TypeReflection<T>::TypeAttributeRetentions.begin(), TypeReflection<T>::TypeAttributeRetentions.end() };
+        return {};
+    }
+
+    template <typename T>
+    [[nodiscard]] inline std::vector<std::string> ReflectedTypeAttributeOrigins()
+    {
+        if constexpr (requires { TypeReflection<T>::TypeAttributeOrigins; })
+            return { TypeReflection<T>::TypeAttributeOrigins.begin(), TypeReflection<T>::TypeAttributeOrigins.end() };
+        return {};
+    }
+
+    template <typename T>
+    [[nodiscard]] inline std::vector<std::string> ReflectedTypeAttributeArgumentNames()
+    {
+        if constexpr (requires { TypeReflection<T>::TypeAttributeArgumentNames; })
+            return { TypeReflection<T>::TypeAttributeArgumentNames.begin(), TypeReflection<T>::TypeAttributeArgumentNames.end() };
+        return {};
+    }
+
+    template <typename T>
+    [[nodiscard]] inline std::vector<std::string> ReflectedTypeAttributeArgumentTypes()
+    {
+        if constexpr (requires { TypeReflection<T>::TypeAttributeArgumentTypes; })
+            return { TypeReflection<T>::TypeAttributeArgumentTypes.begin(), TypeReflection<T>::TypeAttributeArgumentTypes.end() };
+        return {};
+    }
+
+    template <typename T>
+    [[nodiscard]] inline std::vector<std::string> ReflectedTypeAttributeArgumentValues()
+    {
+        if constexpr (requires { TypeReflection<T>::TypeAttributeArgumentValues; })
+            return { TypeReflection<T>::TypeAttributeArgumentValues.begin(), TypeReflection<T>::TypeAttributeArgumentValues.end() };
+        return {};
+    }
+
+    template <typename T>
+    [[nodiscard]] inline std::vector<std::uint8_t> ReflectedTypeAttributeArgumentUsedDefaults()
+    {
+        if constexpr (requires { TypeReflection<T>::TypeAttributeArgumentUsedDefaults; })
+            return { TypeReflection<T>::TypeAttributeArgumentUsedDefaults.begin(), TypeReflection<T>::TypeAttributeArgumentUsedDefaults.end() };
+        return {};
+    }
+
+    template <typename T>
+    [[nodiscard]] inline std::vector<std::size_t> ReflectedTypeAttributeArgumentOffsets()
+    {
+        if constexpr (requires { TypeReflection<T>::TypeAttributeArgumentOffsets; })
+            return { TypeReflection<T>::TypeAttributeArgumentOffsets.begin(), TypeReflection<T>::TypeAttributeArgumentOffsets.end() };
+        return {};
+    }
+
+    template <typename T>
     [[nodiscard]] inline std::vector<std::string> ReflectedFieldAttributeNames()
     {
         if constexpr (requires { TypeReflection<T>::FieldAttributeNames; })

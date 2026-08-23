@@ -5384,6 +5384,15 @@ namespace wio::sema
                    cppNameArg->value == "wio::runtime::ReflectedGenericParameterNames" ||
                    cppNameArg->value == "wio::runtime::ReflectedGenericArguments" ||
                    cppNameArg->value == "wio::runtime::ReflectedTypeAttributes" ||
+                   cppNameArg->value == "wio::runtime::ReflectedTypeAttributeNames" ||
+                   cppNameArg->value == "wio::runtime::ReflectedTypeAttributeStableIds" ||
+                   cppNameArg->value == "wio::runtime::ReflectedTypeAttributeRetentions" ||
+                   cppNameArg->value == "wio::runtime::ReflectedTypeAttributeOrigins" ||
+                   cppNameArg->value == "wio::runtime::ReflectedTypeAttributeArgumentNames" ||
+                   cppNameArg->value == "wio::runtime::ReflectedTypeAttributeArgumentTypes" ||
+                   cppNameArg->value == "wio::runtime::ReflectedTypeAttributeArgumentValues" ||
+                   cppNameArg->value == "wio::runtime::ReflectedTypeAttributeArgumentUsedDefaults" ||
+                   cppNameArg->value == "wio::runtime::ReflectedTypeAttributeArgumentOffsets" ||
                    cppNameArg->value == "wio::runtime::ReflectedFieldAttributeNames" ||
                    cppNameArg->value == "wio::runtime::ReflectedFieldAttributeOffsets" ||
                    cppNameArg->value == "wio::runtime::ReflectedFieldCount" ||
@@ -14274,10 +14283,12 @@ namespace wio::sema
                 std::vector<Token> normalizedArguments;
                 std::vector<NodePtr<TypeSpecifier>> normalizedTypeArguments;
                 std::vector<std::string> normalizedArgumentNames;
+                std::vector<bool> normalizedUsedDefaults;
                 const size_t normalizedCount = assignedSources.size();
                 normalizedArguments.reserve(normalizedCount);
                 normalizedTypeArguments.reserve(normalizedCount);
                 normalizedArgumentNames.reserve(normalizedCount);
+                normalizedUsedDefaults.reserve(normalizedCount);
                 for (size_t parameterIndex = 0; parameterIndex < normalizedCount; ++parameterIndex)
                 {
                     if (assignedSources[parameterIndex].has_value())
@@ -14285,6 +14296,7 @@ namespace wio::sema
                         const size_t sourceIndex = assignedSources[parameterIndex].value();
                         normalizedArguments.push_back(std::move(attribute->args[sourceIndex]));
                         normalizedTypeArguments.push_back(std::move(attribute->typeArgs[sourceIndex]));
+                        normalizedUsedDefaults.push_back(false);
                     }
                     else if (parameterIndex < symbol->attributeParameterDefaults.size() &&
                              symbol->attributeParameterDefaults[parameterIndex].isValid())
@@ -14293,6 +14305,7 @@ namespace wio::sema
                         defaultValue.loc = attribute->location();
                         normalizedArguments.push_back(std::move(defaultValue));
                         normalizedTypeArguments.emplace_back(nullptr);
+                        normalizedUsedDefaults.push_back(true);
                     }
                     else
                     {
@@ -14311,6 +14324,7 @@ namespace wio::sema
                 attribute->args = std::move(normalizedArguments);
                 attribute->typeArgs = std::move(normalizedTypeArguments);
                 attribute->argumentNames = std::move(normalizedArgumentNames);
+                attribute->argumentUsedDefaults = std::move(normalizedUsedDefaults);
             }
 
             const bool targetAllowed = !validateTarget || std::ranges::find(
@@ -14399,7 +14413,24 @@ namespace wio::sema
                 defaultValue.loc = attribute->location();
                 attribute->args.push_back(std::move(defaultValue));
                 attribute->typeArgs.emplace_back(nullptr);
-                attribute->argumentNames.emplace_back();
+                attribute->argumentNames.push_back(
+                    parameterIndex < symbol->attributeParameterNames.size()
+                        ? symbol->attributeParameterNames[parameterIndex]
+                        : std::string{});
+                attribute->argumentUsedDefaults.push_back(true);
+            }
+
+            if (attribute->argumentUsedDefaults.size() < attribute->args.size())
+                attribute->argumentUsedDefaults.resize(attribute->args.size(), false);
+            if (attribute->argumentNames.size() < attribute->args.size())
+                attribute->argumentNames.resize(attribute->args.size());
+            for (size_t parameterIndex = 0;
+                 parameterIndex < attribute->argumentNames.size() &&
+                 parameterIndex < symbol->attributeParameterNames.size();
+                 ++parameterIndex)
+            {
+                if (attribute->argumentNames[parameterIndex].empty())
+                    attribute->argumentNames[parameterIndex] = symbol->attributeParameterNames[parameterIndex];
             }
 
             for (size_t index = 0; index < attribute->args.size(); ++index)
@@ -14495,6 +14526,8 @@ namespace wio::sema
                         attribute->location(),
                         composedTemplate->qualifiedName,
                         composedTemplate->argumentNames);
+                    expanded->origin = AttributeOrigin::Composed;
+                    expanded->originParent = attribute->qualifiedName;
                     std::vector<const Symbol*> expandedChain = chain;
                     if (composedSymbol && composedSymbol->kind == SymbolKind::Attribute)
                         expandedChain.push_back(composedSymbol.Get());
@@ -14607,7 +14640,20 @@ namespace wio::sema
                 return existing.Get() == active.Get();
             });
             if (!alreadyApplied)
-                attributes.push_back(active);
+            {
+                auto scoped = makeNodePtr<AttributeStatement>(
+                    active->attribute,
+                    active->args,
+                    active->typeArgs,
+                    active->location(),
+                    active->qualifiedName,
+                    active->argumentNames);
+                scoped->argumentUsedDefaults = active->argumentUsedDefaults;
+                scoped->runtimeRetained = active->runtimeRetained;
+                scoped->origin = AttributeOrigin::Scoped;
+                scoped->originParent = active->qualifiedName;
+                attributes.push_back(std::move(scoped));
+            }
         }
     }
 
