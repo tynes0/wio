@@ -69,6 +69,7 @@ These documents answer practical workflow questions such as:
 - [Async and multithreading evolution plan](./WIO_ASYNC_EVOLUTION_PLAN.md)
 - [Language reference](./WIO_LANGUAGE_DRAFT.md)
 - [Language evolution plan](./WIO_LANGUAGE_EVOLUTION_PLAN.md)
+- [Wio 0.15 attribute system plan](./WIO_ATTRIBUTE_SYSTEM_PLAN.md)
 - [Reference and view lifetimes](./REFERENCE_LIFETIMES.md)
 - [Runtime type model](./WIO_RUNTIME_TYPE_MODEL.md)
 

@@ -17,8 +17,9 @@ Candidate focus:
 
 - extension properties and static extension functions;
 - import-scoped extension visibility and richer conflict selection;
-- controlled derives and typed guard/contract attributes;
-- attribute-aware documentation, formatting, and migration tooling;
+- additional processor libraries and policy ergonomics beyond the frozen
+  metadata/validation/derive/behavioral attribute system;
+- advanced attribute-aware documentation and ecosystem integrations;
 - deprecation attributes, editions, and compiler-assisted migrations;
 - further generic diagnostics without changing frozen compatibility rules;
 - richer `wio doc` output and stable API URLs.
@@ -108,7 +109,8 @@ and may require a new language edition or major version:
 - generalized implicit user-defined conversions;
 - user-defined `operator->`;
 - a broader compile-time metaprogramming model beyond the frozen meta wave;
-- behavioral attributes beyond bounded typed guards/contracts;
+- unrestricted token/AST macros or call-site rewriting beyond the bounded,
+  typed Wio 0.15 behavioral processor model;
 - an independent Wio IR, interpreter, or LLVM backend, but only if measurements
   show a concrete diagnostics, tooling, compile-time, or portability benefit.
 

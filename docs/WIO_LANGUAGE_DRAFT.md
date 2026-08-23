@@ -2977,6 +2977,13 @@ contract.
 
 ## 20. Attributes
 
+The postfix `with` spelling documented in this pre-0.15 draft is superseded by
+the Wio 0.15 `[Attribute]` design. During implementation, `@Name(...)` and
+postfix `with` remain compatibility input, while generated and formatted source
+uses the declaration-leading bracket form. See
+[`WIO_ATTRIBUTE_SYSTEM_PLAN.md`](./WIO_ATTRIBUTE_SYSTEM_PLAN.md) for the
+authoritative syntax, processor, reflection, and migration contract.
+
 ### 20.1 General Syntax
 
 Postfix `with` is the canonical attribute application syntax. `using` activates
