@@ -2034,6 +2034,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "SDK 0.13 parity: version=0.13.0 text-codepoints=10 generic=std::Option<i32>"
     )
 
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_014_option_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_option_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_option_host.cpp"
+        "SDK 0.14 Option: selected=7 nested=9 empty-roundtrip=ok"
+    )
+
     add_wio_shared_reload_interop_test(
         wio_test_module_reload_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/module_reload.wio"
@@ -5098,6 +5105,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_exported_object_non_abi_field
         "${CMAKE_SOURCE_DIR}/tests/invalid/exported_object_non_abi_field.wio"
         "@Export object 'BadProfile' exposes public field 'worker' with type 'IWorker' that is not yet SDK-exportable\\."
+    )
+
+    add_wio_failure_test(
+        wio_invalid_exported_option_unsupported_payload
+        "${CMAKE_SOURCE_DIR}/tests/invalid/exported_option_unsupported_payload.wio"
+        "@Export object 'BadOptionalProfile' exposes public field 'worker' with type 'Option<IWorker>' that is not yet SDK-exportable\\."
     )
 
     add_wio_failure_test(

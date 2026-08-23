@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 
 #include "wio_version.h"
@@ -51,6 +52,52 @@ enum WioAbiType : std::uint32_t
     WIO_ABI_F32,
     WIO_ABI_F64
 };
+
+namespace wio::sdk
+{
+    // Carries Wio's semantic integer identity when the host C++ ABI aliases
+    // distinct language types (for example u64 and usize on 64-bit targets).
+    template <typename TStorage, WioAbiType TAbiType>
+    class WioAbiInteger
+    {
+        static_assert(std::is_integral_v<TStorage>, "WioAbiInteger storage must be an integral C++ type.");
+        static_assert(TAbiType == WIO_ABI_UCHAR || TAbiType == WIO_ABI_BYTE ||
+                      TAbiType == WIO_ABI_I8 || TAbiType == WIO_ABI_I16 ||
+                      TAbiType == WIO_ABI_I32 || TAbiType == WIO_ABI_I64 ||
+                      TAbiType == WIO_ABI_U8 || TAbiType == WIO_ABI_U16 ||
+                      TAbiType == WIO_ABI_U32 || TAbiType == WIO_ABI_U64 ||
+                      TAbiType == WIO_ABI_ISIZE || TAbiType == WIO_ABI_USIZE,
+                      "WioAbiInteger requires an integer Wio ABI kind.");
+
+    public:
+        using storage_type = TStorage;
+        static constexpr WioAbiType abi_type = TAbiType;
+
+        constexpr WioAbiInteger() noexcept = default;
+        constexpr WioAbiInteger(const TStorage value) noexcept : value_(value) {}
+
+        [[nodiscard]] constexpr TStorage value() const noexcept { return value_; }
+        [[nodiscard]] constexpr explicit operator TStorage() const noexcept { return value_; }
+
+        friend constexpr bool operator==(const WioAbiInteger&, const WioAbiInteger&) noexcept = default;
+
+    private:
+        TStorage value_{};
+    };
+
+    using WioUChar = WioAbiInteger<unsigned char, WIO_ABI_UCHAR>;
+    using WioByte = WioAbiInteger<std::uint8_t, WIO_ABI_BYTE>;
+    using WioI8 = WioAbiInteger<std::int8_t, WIO_ABI_I8>;
+    using WioI16 = WioAbiInteger<std::int16_t, WIO_ABI_I16>;
+    using WioI32 = WioAbiInteger<std::int32_t, WIO_ABI_I32>;
+    using WioI64 = WioAbiInteger<std::int64_t, WIO_ABI_I64>;
+    using WioU8 = WioAbiInteger<std::uint8_t, WIO_ABI_U8>;
+    using WioU16 = WioAbiInteger<std::uint16_t, WIO_ABI_U16>;
+    using WioU32 = WioAbiInteger<std::uint32_t, WIO_ABI_U32>;
+    using WioU64 = WioAbiInteger<std::uint64_t, WIO_ABI_U64>;
+    using WioISize = WioAbiInteger<std::intptr_t, WIO_ABI_ISIZE>;
+    using WioUSize = WioAbiInteger<std::uintptr_t, WIO_ABI_USIZE>;
+}
 
 union WioValuePayload
 {

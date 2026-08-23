@@ -1,0 +1,29 @@
+use std::option as option;
+
+@Export
+object Sdk14Options {
+    public selected: std::Option<i32>;
+    public nested: std::Option<std::Option<i32> >;
+    public wide: std::Option<u64>;
+
+    public OnConstruct() {
+        self.selected = option::Some<i32>(14);
+        self.nested = option::Some<std::Option<i32> >(option::Some<i32>(28));
+        self.wide = option::Some<u64>(14000000000u64);
+    }
+
+    public fn SelectedOr(fallback: i32) -> i32 {
+        return self.selected.ValueOr(fallback);
+    }
+
+    public fn NestedOr(fallback: i32) -> i32 {
+        if (self.nested.IsNone()) {
+            return fallback;
+        }
+        return self.nested.Value().ValueOr(fallback);
+    }
+
+    public fn WideOr(fallback: u64) -> u64 {
+        return self.wide.ValueOr(fallback);
+    }
+}

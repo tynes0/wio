@@ -588,6 +588,44 @@ namespace wio::codegen
             return type;
         }
 
+        Ref<sema::StructType> getStdValueStructType(const Ref<sema::Type>& type,
+                                                    const std::string_view expectedName)
+        {
+            Ref<sema::Type> resolvedType = unwrapAliasType(type);
+            if (!resolvedType || resolvedType->kind() != sema::TypeKind::Struct)
+                return nullptr;
+
+            auto structType = resolvedType.AsFast<sema::StructType>();
+            if (!structType || structType->name != expectedName ||
+                !(structType->scopePath == "std" || structType->scopePath.starts_with("std::")))
+            {
+                return nullptr;
+            }
+
+            return structType;
+        }
+
+        bool isSdkOptionBridgeValueType(const Ref<sema::Type>& type)
+        {
+            Ref<sema::Type> resolvedType = unwrapAliasType(type);
+            if (!resolvedType)
+                return false;
+
+            if (resolvedType->kind() == sema::TypeKind::Primitive)
+            {
+                const std::string& name = resolvedType.AsFast<sema::PrimitiveType>()->name;
+                return name != "void" && name != "object" && name != "any" && name != "opaque";
+            }
+
+            if (auto optionType = getStdValueStructType(resolvedType, "Option");
+                optionType && optionType->genericArguments.size() == 1)
+            {
+                return isSdkOptionBridgeValueType(optionType->genericArguments.front());
+            }
+
+            return false;
+        }
+
         Ref<sema::Type> instantiateGenericStructType(const Ref<sema::StructType>& structType,
                                                      const std::vector<Ref<sema::Type>>& explicitTypeArguments);
 
@@ -2393,8 +2431,11 @@ namespace wio::codegen
 
                     const bool isTextField = resolvedFieldType && resolvedFieldType->kind() == sema::TypeKind::Primitive &&
                         resolvedFieldType.AsFast<sema::PrimitiveType>()->name == "text";
+                    auto optionFieldType = getStdValueStructType(resolvedFieldType, "Option");
+                    const bool isOptionField = optionFieldType && optionFieldType->genericArguments.size() == 1 &&
+                        isSdkOptionBridgeValueType(optionFieldType->genericArguments.front());
                     const bool needsDynamicBridge = resolvedFieldType &&
-                        (isTextField ||
+                        (isTextField || isOptionField ||
                          resolvedFieldType->kind() == sema::TypeKind::Array ||
                          resolvedFieldType->kind() == sema::TypeKind::Dictionary ||
                          resolvedFieldType->kind() == sema::TypeKind::Function);
@@ -2926,6 +2967,152 @@ namespace wio::codegen
             return name;
         }
 
+        std::optional<std::string> getSdkDynamicBridgeCppType(const Ref<sema::Type>& type)
+        {
+            Ref<sema::Type> resolvedType = unwrapAliasType(type);
+            if (!resolvedType)
+                return std::nullopt;
+
+            if (resolvedType->kind() == sema::TypeKind::Primitive)
+            {
+                const std::string& name = resolvedType.AsFast<sema::PrimitiveType>()->name;
+                if (name == "void" || name == "object" || name == "any" || name == "opaque")
+                    return std::nullopt;
+                if (name == "text")
+                    return "std::string";
+                if (name == "uchar") return "wio::sdk::WioUChar";
+                if (name == "byte") return "wio::sdk::WioByte";
+                if (name == "u8") return "wio::sdk::WioU8";
+                if (name == "i64") return "wio::sdk::WioI64";
+                if (name == "u64") return "wio::sdk::WioU64";
+                if (name == "isize") return "wio::sdk::WioISize";
+                if (name == "usize") return "wio::sdk::WioUSize";
+                return toCppType(resolvedType);
+            }
+
+            if (auto optionType = getStdValueStructType(resolvedType, "Option");
+                optionType && optionType->genericArguments.size() == 1)
+            {
+                auto valueType = getSdkDynamicBridgeCppType(optionType->genericArguments.front());
+                if (!valueType.has_value())
+                    return std::nullopt;
+                return "wio::sdk::WioOption<" + *valueType + ">";
+            }
+
+            return std::nullopt;
+        }
+
+        std::optional<std::string> makeSdkDynamicToHostExpression(const std::string& expression,
+                                                                  const Ref<sema::Type>& type,
+                                                                  const std::size_t depth = 0)
+        {
+            Ref<sema::Type> resolvedType = unwrapAliasType(type);
+            if (!resolvedType)
+                return std::nullopt;
+
+            if (resolvedType->kind() == sema::TypeKind::Primitive)
+            {
+                const std::string& name = resolvedType.AsFast<sema::PrimitiveType>()->name;
+                if (name == "text")
+                    return "(" + expression + ").Utf8()";
+                if (name == "uchar") return "wio::sdk::WioUChar(" + expression + ")";
+                if (name == "byte") return "wio::sdk::WioByte(" + expression + ")";
+                if (name == "u8") return "wio::sdk::WioU8(" + expression + ")";
+                if (name == "i64") return "wio::sdk::WioI64(" + expression + ")";
+                if (name == "u64") return "wio::sdk::WioU64(" + expression + ")";
+                if (name == "isize") return "wio::sdk::WioISize(" + expression + ")";
+                if (name == "usize") return "wio::sdk::WioUSize(" + expression + ")";
+                if (getSdkDynamicBridgeCppType(resolvedType).has_value())
+                    return expression;
+                return std::nullopt;
+            }
+
+            if (auto optionType = getStdValueStructType(resolvedType, "Option");
+                optionType && optionType->genericArguments.size() == 1)
+            {
+                const Ref<sema::Type>& valueType = optionType->genericArguments.front();
+                auto hostType = getSdkDynamicBridgeCppType(valueType);
+                const std::string variableName = "_wio_option_" + std::to_string(depth);
+                auto convertedValue = makeSdkDynamicToHostExpression(
+                    variableName + "->_WF_Value()",
+                    valueType,
+                    depth + 1
+                );
+                if (!hostType.has_value() || !convertedValue.has_value())
+                    return std::nullopt;
+
+                return common::formatString(
+                    "([&]() -> wio::sdk::WioOption<{}> {{ auto {} = {}; "
+                    "if (!{} || !{}->_WF_IsSome()) return wio::sdk::WioOption<{}>::none(); "
+                    "return wio::sdk::WioOption<{}>::some({}); }}())",
+                    *hostType,
+                    variableName,
+                    expression,
+                    variableName,
+                    variableName,
+                    *hostType,
+                    *hostType,
+                    *convertedValue
+                );
+            }
+
+            return std::nullopt;
+        }
+
+        std::optional<std::string> makeSdkDynamicFromHostExpression(const std::string& expression,
+                                                                    const Ref<sema::Type>& type,
+                                                                    const std::size_t depth = 0)
+        {
+            Ref<sema::Type> resolvedType = unwrapAliasType(type);
+            if (!resolvedType)
+                return std::nullopt;
+
+            if (resolvedType->kind() == sema::TypeKind::Primitive)
+            {
+                const std::string& name = resolvedType.AsFast<sema::PrimitiveType>()->name;
+                if (name == "text")
+                    return "wio::runtime::Text::FromUtf8(" + expression + ")";
+                if (name == "uchar" || name == "byte" || name == "u8" ||
+                    name == "i64" || name == "u64" || name == "isize" || name == "usize")
+                {
+                    return "static_cast<" + toCppType(resolvedType) + ">((" + expression + ").value())";
+                }
+                if (getSdkDynamicBridgeCppType(resolvedType).has_value())
+                    return expression;
+                return std::nullopt;
+            }
+
+            if (auto optionType = getStdValueStructType(resolvedType, "Option");
+                optionType && optionType->genericArguments.size() == 1)
+            {
+                const Ref<sema::Type>& valueType = optionType->genericArguments.front();
+                const std::string variableName = "_wio_option_" + std::to_string(depth);
+                auto convertedValue = makeSdkDynamicFromHostExpression(
+                    variableName + ".value()",
+                    valueType,
+                    depth + 1
+                );
+                if (!convertedValue.has_value())
+                    return std::nullopt;
+
+                const std::string cppStructType = mangleStructTypeName(optionType);
+                return common::formatString(
+                    "([&]() -> wio::runtime::Ref<{}> {{ const auto& {} = {}; "
+                    "if ({}.is_none()) return wio::runtime::Ref<{}>::Create(); "
+                    "return wio::runtime::Ref<{}>::Create({}); }}())",
+                    cppStructType,
+                    variableName,
+                    expression,
+                    variableName,
+                    cppStructType,
+                    cppStructType,
+                    *convertedValue
+                );
+            }
+
+            return std::nullopt;
+        }
+
         std::string mangleInterfaceTypeName(const Ref<sema::StructType>& type)
         {
             if (!type)
@@ -3338,6 +3525,7 @@ namespace wio::codegen
         emitHeaderLine("#include <intrinsics.h>");
         emitHeaderLine("#include <meta.h>");
         emitHeaderLine("#include <module_api.h>");
+        emitHeaderLine("#include <wio_values.h>");
         emitHeaderLine("#include <ref.h>");
         emitHeaderLine("#include <std_async.h>");
         emitHeaderLine("#include <text.h>");
@@ -4248,6 +4436,13 @@ namespace wio::codegen
                     Ref<sema::Type> dynamicFieldType = unwrapAliasType(field.fieldType);
                     const bool isTextField = dynamicFieldType && dynamicFieldType->kind() == sema::TypeKind::Primitive &&
                         dynamicFieldType.AsFast<sema::PrimitiveType>()->name == "text";
+                    const bool isOptionField = getStdValueStructType(dynamicFieldType, "Option") != nullptr;
+                    const auto optionPayloadType = isOptionField
+                        ? getSdkDynamicBridgeCppType(dynamicFieldType)
+                        : std::optional<std::string>{};
+                    const auto optionGetterExpression = isOptionField
+                        ? makeSdkDynamicToHostExpression("instance->" + field.memberCppName, dynamicFieldType)
+                        : std::optional<std::string>{};
                     emitLine(
                         "static WioErasedValue* " + *field.dynamicGetterSymbol + "(std::uintptr_t handle)"
                     );
@@ -4261,6 +4456,14 @@ namespace wio::codegen
                             std::string("return new WioErasedValueModel<std::string>(") +
                             "&WIO_TYPE_DESCRIPTOR_" + std::to_string(descriptorIndex) +
                             ", instance->" + field.memberCppName + ".Utf8());"
+                        );
+                    }
+                    else if (isOptionField && optionPayloadType.has_value() && optionGetterExpression.has_value())
+                    {
+                        emitLine(
+                            "return new WioErasedValueModel<" + *optionPayloadType + ">(" +
+                            "&WIO_TYPE_DESCRIPTOR_" + std::to_string(descriptorIndex) +
+                            ", " + *optionGetterExpression + ");"
                         );
                     }
                     else
@@ -4287,6 +4490,8 @@ namespace wio::codegen
                         emitLine("if (instance == nullptr || value == nullptr) return WIO_INVOKE_BAD_ARGUMENTS;");
                         if (isTextField)
                             emitLine("auto* typedValue = dynamic_cast<const WioErasedValueModel<std::string>*>(value);");
+                        else if (isOptionField && optionPayloadType.has_value())
+                            emitLine("auto* typedValue = dynamic_cast<const WioErasedValueModel<" + *optionPayloadType + ">*>(value);");
                         else
                             emitLine(
                                 "auto* typedValue = dynamic_cast<const WioErasedValueModel<" + field.memberCppTypeName + ">*>(value);"
@@ -4294,6 +4499,14 @@ namespace wio::codegen
                         emitLine("if (typedValue == nullptr) return WIO_INVOKE_TYPE_MISMATCH;");
                         if (isTextField)
                             emitLine("instance->" + field.memberCppName + " = wio::runtime::Text::FromUtf8(typedValue->value);");
+                        else if (isOptionField)
+                        {
+                            const auto setterExpression = makeSdkDynamicFromHostExpression("typedValue->value", dynamicFieldType);
+                            if (setterExpression.has_value())
+                                emitLine("instance->" + field.memberCppName + " = " + *setterExpression + ";");
+                            else
+                                emitLine("return WIO_INVOKE_TYPE_MISMATCH;");
+                        }
                         else
                             emitLine("instance->" + field.memberCppName + " = typedValue->value;");
                         emitLine("return WIO_INVOKE_OK;");

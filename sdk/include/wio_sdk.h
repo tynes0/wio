@@ -68,46 +68,6 @@ namespace wio
 
 namespace wio::sdk
 {
-    template <typename TStorage, WioAbiType TAbiType>
-    class WioAbiInteger
-    {
-        static_assert(std::is_integral_v<TStorage>, "WioAbiInteger storage must be an integral C++ type.");
-        static_assert(TAbiType == WIO_ABI_UCHAR ||
-                      TAbiType == WIO_ABI_I8 || TAbiType == WIO_ABI_I16 ||
-                      TAbiType == WIO_ABI_I32 || TAbiType == WIO_ABI_I64 ||
-                      TAbiType == WIO_ABI_U8 || TAbiType == WIO_ABI_U16 ||
-                      TAbiType == WIO_ABI_U32 || TAbiType == WIO_ABI_U64 ||
-                      TAbiType == WIO_ABI_ISIZE || TAbiType == WIO_ABI_USIZE,
-                      "WioAbiInteger requires an integer Wio ABI kind.");
-
-    public:
-        using storage_type = TStorage;
-        static constexpr WioAbiType abi_type = TAbiType;
-
-        constexpr WioAbiInteger() noexcept = default;
-        constexpr WioAbiInteger(const TStorage value) noexcept : value_(value) {}
-
-        [[nodiscard]] constexpr TStorage value() const noexcept { return value_; }
-        [[nodiscard]] constexpr explicit operator TStorage() const noexcept { return value_; }
-
-        friend constexpr bool operator==(const WioAbiInteger&, const WioAbiInteger&) noexcept = default;
-
-    private:
-        TStorage value_{};
-    };
-
-    using WioUChar = WioAbiInteger<unsigned char, WIO_ABI_UCHAR>;
-    using WioI8 = WioAbiInteger<std::int8_t, WIO_ABI_I8>;
-    using WioI16 = WioAbiInteger<std::int16_t, WIO_ABI_I16>;
-    using WioI32 = WioAbiInteger<std::int32_t, WIO_ABI_I32>;
-    using WioI64 = WioAbiInteger<std::int64_t, WIO_ABI_I64>;
-    using WioU8 = WioAbiInteger<std::uint8_t, WIO_ABI_U8>;
-    using WioU16 = WioAbiInteger<std::uint16_t, WIO_ABI_U16>;
-    using WioU32 = WioAbiInteger<std::uint32_t, WIO_ABI_U32>;
-    using WioU64 = WioAbiInteger<std::uint64_t, WIO_ABI_U64>;
-    using WioISize = WioAbiInteger<std::intptr_t, WIO_ABI_ISIZE>;
-    using WioUSize = WioAbiInteger<std::uintptr_t, WIO_ABI_USIZE>;
-
     enum class FieldAccess
     {
         Unknown,
@@ -1591,6 +1551,17 @@ namespace wio::sdk
         };
 
         template <typename T>
+        struct IsWioOption : std::false_type
+        {
+        };
+
+        template <typename TValue>
+        struct IsWioOption<WioOption<TValue>> : std::true_type
+        {
+            using Value = TValue;
+        };
+
+        template <typename T>
         struct IsStdUnorderedMap : std::false_type
         {
         };
@@ -1783,6 +1754,10 @@ namespace wio::sdk
                         << "; " << IsStdArray<U>::Extent << "]";
                 return message.str();
             }
+            else if constexpr (IsWioOption<U>::value)
+            {
+                return "Option<" + hostFieldTypeName<typename IsWioOption<U>::Value>() + ">";
+            }
             else if constexpr (IsStdUnorderedMap<U>::value)
             {
                 return "Dict<" + hostFieldTypeName<typename IsStdUnorderedMap<U>::Key>()
@@ -1872,6 +1847,12 @@ namespace wio::sdk
                     type.has_element_type() &&
                     matchesTypeDescriptor<typename IsStdArray<U>::Element>(type.element_type());
             }
+            else if constexpr (IsWioOption<U>::value)
+            {
+                return type.is_option() &&
+                    type.generic_argument_count() == 1u &&
+                    matchesTypeDescriptor<typename IsWioOption<U>::Value>(type.generic_argument(0u));
+            }
             else if constexpr (IsStdUnorderedMap<U>::value)
             {
                 return type.is_dict() &&
@@ -1950,6 +1931,8 @@ namespace wio::sdk
                 const auto raw = value.value();
                 if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_UCHAR)
                     result.value.v_uchar = static_cast<unsigned char>(raw);
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_BYTE)
+                    result.value.v_byte = static_cast<std::uint8_t>(raw);
                 else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_I8)
                     result.value.v_i8 = static_cast<std::int8_t>(raw);
                 else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_I16)
@@ -2057,6 +2040,8 @@ namespace wio::sdk
                 using Storage = typename IsExplicitAbiInteger<U>::Storage;
                 if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_UCHAR)
                     return U(static_cast<Storage>(value.value.v_uchar));
+                else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_BYTE)
+                    return U(static_cast<Storage>(value.value.v_byte));
                 else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_I8)
                     return U(static_cast<Storage>(value.value.v_i8));
                 else if constexpr (IsExplicitAbiInteger<U>::AbiType == WIO_ABI_I16)
@@ -3218,7 +3203,7 @@ namespace wio::sdk
                             validateExactExportContract(fieldEntry.getterExport, context, "Field getter", fieldEntry.fieldName, WIO_ABI_USIZE, 1u, fieldGetterParameters, true, false);
                         }
                         else if (fieldType.is_string() || fieldType.is_text() || fieldType.is_dynamic_array() || fieldType.is_static_array() ||
-                                 fieldType.is_dict() || fieldType.is_tree() || fieldType.is_function())
+                                 fieldType.is_dict() || fieldType.is_tree() || fieldType.is_function() || fieldType.is_option())
                         {
                             validateExactExportContract(fieldEntry.getterExport, context, "Field getter", fieldEntry.fieldName, WIO_ABI_UNKNOWN, 1u, fieldGetterParameters, false, true);
                         }
@@ -3235,14 +3220,14 @@ namespace wio::sdk
                             validateExactExportContract(fieldEntry.setterExport, context, "Field setter", fieldEntry.fieldName, WIO_ABI_VOID, 2u, fieldSetterHandleParameters, true, false);
                         }
                         else if (fieldType.is_string() || fieldType.is_text() || fieldType.is_dynamic_array() || fieldType.is_static_array() ||
-                                 fieldType.is_dict() || fieldType.is_tree() || fieldType.is_function())
+                                 fieldType.is_dict() || fieldType.is_tree() || fieldType.is_function() || fieldType.is_option())
                         {
                             validateExactExportContract(fieldEntry.setterExport, context, "Field setter", fieldEntry.fieldName, WIO_ABI_VOID, 2u, fieldSetterOpaqueParameters, false, true);
                         }
                     }
 
                     if (fieldType.is_text() || fieldType.is_dynamic_array() || fieldType.is_static_array() || fieldType.is_dict() ||
-                        fieldType.is_tree() || fieldType.is_function())
+                        fieldType.is_tree() || fieldType.is_function() || fieldType.is_option())
                     {
                         if ((fieldEntry.flags & WIO_MODULE_FIELD_READABLE) != 0u && fieldEntry.dynamicGetter == nullptr)
                         {
@@ -3579,6 +3564,20 @@ namespace wio::sdk
                 }
             }
 
+            if (fieldEntry->dynamicGetter != nullptr)
+            {
+                std::unique_ptr<WioErasedValue> erasedValue(fieldEntry->dynamicGetter(handle));
+                const auto* typedValue = dynamic_cast<const WioErasedValueModel<Decay<T>>*>(erasedValue.get());
+                if (typedValue != nullptr)
+                    return typedValue->value;
+
+                std::ostringstream message;
+                message << "Wio SDK dynamic getter payload mismatch for field '" << fieldName
+                        << "' on exported type '"
+                        << (typeEntry && typeEntry->logicalName ? typeEntry->logicalName : "<unknown>") << "'.";
+                throw Error(ErrorCode::SignatureMismatch, message.str());
+            }
+
             if (fieldEntry->getterExport->rawFunction == nullptr)
             {
                 std::ostringstream message;
@@ -3629,6 +3628,21 @@ namespace wio::sdk
                     }
                     return;
                 }
+            }
+
+            if (fieldEntry->dynamicSetter != nullptr)
+            {
+                WioErasedValueModel<Decay<T>> erasedValue(fieldEntry->typeDescriptor, Decay<T>(std::forward<T>(value)));
+                const std::int32_t status = fieldEntry->dynamicSetter(handle, &erasedValue);
+                if (status == WIO_INVOKE_OK)
+                    return;
+
+                std::ostringstream message;
+                message << "Wio SDK failed to write dynamic field '" << fieldName << "' on exported type '"
+                        << (typeEntry && typeEntry->logicalName ? typeEntry->logicalName : "<unknown>")
+                        << "': " << invokeStatusName(status) << '.';
+                throw Error(status == WIO_INVOKE_TYPE_MISMATCH ? ErrorCode::SignatureMismatch : ErrorCode::InvokeFailed,
+                            message.str());
             }
 
             if (fieldEntry->setterExport->rawFunction == nullptr)

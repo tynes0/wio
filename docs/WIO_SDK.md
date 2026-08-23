@@ -166,7 +166,7 @@ resize(WioUSize{4096u});
 
 The complete explicit integer set is:
 
-- `WioUChar`
+- `WioUChar`, `WioByte`
 - `WioI8`, `WioI16`, `WioI32`, `WioI64`
 - `WioU8`, `WioU16`, `WioU32`, `WioU64`
 - `WioISize`, `WioUSize`
@@ -688,6 +688,32 @@ The key design boundary here is:
   converts them
 - the host can still fall back to the underlying scalar representation through
   `scalar_value()` / `as<T>()` on `WioEnum` and `WioFlagset`
+
+### Typed `Option` fields in v0.14
+
+The v0.14 value bridge begins with `std::Option<T>`. A C++ host uses
+`WioOption<T>`; the generated module converts the representation instead of
+exposing Wio's internal reference-counted `Option` object:
+
+```cpp
+auto state = module.load_object("Sdk14Options").create();
+auto selected = state.field("selected");
+
+auto value = selected.get_as<WioOption<std::int32_t>>();
+selected.set_as(WioOption<std::int32_t>::some(42));
+selected.set_as(WioOption<std::int32_t>::none());
+```
+
+Nested options preserve every level:
+
+```cpp
+using Nested = WioOption<WioOption<std::int32_t>>;
+auto value = state.field("nested").get_as<Nested>();
+```
+
+The initial bridge supports primitive, `string`, `text`, and recursively nested
+`Option` payloads. Unsupported payloads are rejected while compiling the Wio
+module, so they cannot degrade into a host-side `not callable` surprise.
 
 ---
 

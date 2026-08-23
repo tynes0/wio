@@ -6060,6 +6060,35 @@ namespace wio::sema
             return typeName != "string" && typeName != "object";
         }
 
+        bool isSdkOptionBridgeValueType(const Ref<Type>& type)
+        {
+            Ref<Type> current = type;
+            while (current && current->kind() == TypeKind::Alias)
+                current = current.AsFast<AliasType>()->aliasedType;
+
+            if (!current)
+                return false;
+
+            if (current->kind() == TypeKind::Primitive)
+            {
+                const std::string typeName = current->toString();
+                return typeName != "void" && typeName != "object" && typeName != "any" && typeName != "opaque";
+            }
+
+            if (current->kind() != TypeKind::Struct)
+                return false;
+
+            auto structType = current.AsFast<StructType>();
+            if (!structType || structType->name != "Option" ||
+                !(structType->scopePath == "std" || structType->scopePath.starts_with("std::")) ||
+                structType->genericArguments.size() != 1)
+            {
+                return false;
+            }
+
+            return isSdkOptionBridgeValueType(structType->genericArguments.front());
+        }
+
         bool isSdkExportableFieldType(const Ref<Type>& type)
         {
             Ref<Type> current = type;
@@ -6107,7 +6136,17 @@ namespace wio::sema
             case TypeKind::Struct:
             {
                 auto structType = current.AsFast<StructType>();
-                return structType && !structType->isInterface;
+                if (!structType || structType->isInterface)
+                    return false;
+
+                if (structType->name == "Option" &&
+                    (structType->scopePath == "std" || structType->scopePath.starts_with("std::")))
+                {
+                    return structType->genericArguments.size() == 1 &&
+                        isSdkOptionBridgeValueType(structType->genericArguments.front());
+                }
+
+                return true;
             }
             default:
                 return false;

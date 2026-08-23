@@ -11,17 +11,20 @@ int main()
 
     static_assert(WioU8::abi_type == WIO_ABI_U8);
     static_assert(WioUChar::abi_type == WIO_ABI_UCHAR);
+    static_assert(WioByte::abi_type == WIO_ABI_BYTE);
     static_assert(WioI64::abi_type == WIO_ABI_I64);
     static_assert(WioISize::abi_type == WIO_ABI_ISIZE);
     static_assert(WioU64::abi_type == WIO_ABI_U64);
     static_assert(WioUSize::abi_type == WIO_ABI_USIZE);
     static_assert(!std::is_same_v<WioU64, WioUSize>);
     static_assert(!std::is_same_v<WioU8, WioUChar>);
+    static_assert(!std::is_same_v<WioU8, WioByte>);
 
     const WioValue fixed64 = detail::toWioValue(WioU64{0xfedcba9876543210ull});
     const WioValue pointer64 = detail::toWioValue(WioUSize{static_cast<std::uintptr_t>(0x1234u)});
     const WioValue fixed8 = detail::toWioValue(WioU8{0xabu});
     const WioValue character8 = detail::toWioValue(WioUChar{static_cast<unsigned char>('W')});
+    const WioValue byte8 = detail::toWioValue(WioByte{0x5au});
     const WioValue fixedSigned = detail::toWioValue(WioI64{-42});
     const WioValue pointerSigned = detail::toWioValue(WioISize{static_cast<std::intptr_t>(-7)});
 
@@ -29,6 +32,7 @@ int main()
     assert(pointer64.type == WIO_ABI_USIZE && pointer64.value.v_usize == static_cast<std::uintptr_t>(0x1234u));
     assert(fixed8.type == WIO_ABI_U8 && fixed8.value.v_u8 == 0xabu);
     assert(character8.type == WIO_ABI_UCHAR && character8.value.v_uchar == static_cast<unsigned char>('W'));
+    assert(byte8.type == WIO_ABI_BYTE && byte8.value.v_byte == 0x5au);
     assert(fixedSigned.type == WIO_ABI_I64 && fixedSigned.value.v_i64 == -42);
     assert(pointerSigned.type == WIO_ABI_ISIZE && pointerSigned.value.v_isize == static_cast<std::intptr_t>(-7));
 
@@ -36,6 +40,7 @@ int main()
     assert(detail::fromWioValue<WioUSize>(pointer64).value() == static_cast<std::uintptr_t>(0x1234u));
     assert(detail::fromWioValue<WioU8>(fixed8).value() == 0xabu);
     assert(detail::fromWioValue<WioUChar>(character8).value() == static_cast<unsigned char>('W'));
+    assert(detail::fromWioValue<WioByte>(byte8).value() == 0x5au);
     assert(detail::fromWioValue<WioI64>(fixedSigned).value() == -42);
     assert(detail::fromWioValue<WioISize>(pointerSigned).value() == static_cast<std::intptr_t>(-7));
 
@@ -43,6 +48,7 @@ int main()
     assert(detail::hostFieldTypeName<WioUSize>() == "usize");
     assert(detail::hostFieldTypeName<WioU8>() == "u8");
     assert(detail::hostFieldTypeName<WioUChar>() == "uchar");
+    assert(detail::hostFieldTypeName<WioByte>() == "byte");
 
     WioModuleTypeDescriptor u64Descriptor{};
     u64Descriptor.displayName = "u64";
