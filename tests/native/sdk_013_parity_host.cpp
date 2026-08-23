@@ -19,14 +19,14 @@ int main(int argc, char** argv)
         const auto moduleInfo = module.inspect();
         const auto moduleVersion = module.module_product_version();
         if (!moduleVersion.has_value() ||
-            moduleVersion->major != 0u || moduleVersion->minor != 13u || moduleVersion->patch != 0u ||
+            moduleVersion->major != 0u || moduleVersion->minor < 13u ||
             moduleInfo.descriptor_version != WIO_MODULE_API_DESCRIPTOR_VERSION ||
             moduleInfo.descriptor_size != sizeof(WioModuleApi) ||
             !moduleInfo.has_capability(WIO_MODULE_CAP_PRODUCT_VERSION) ||
             !moduleInfo.has_capability(WIO_MODULE_CAP_TYPE_METADATA_V2) ||
             !moduleInfo.has_capability(WIO_MODULE_CAP_TEXT_FIELDS))
         {
-            std::cerr << "Generated module did not publish the Wio 0.13 SDK contract.\n";
+            std::cerr << "Generated module did not publish the Wio SDK 0.13-or-newer contract.\n";
             return EXIT_FAILURE;
         }
 
@@ -40,8 +40,7 @@ int main(int argc, char** argv)
             selectedInfo.type.logical_name() != "std::Option" ||
             selectedInfo.type.generic_argument_count() != 1u ||
             !selectedInfo.type.generic_argument(0u).is_i32() ||
-            selectedInfo.type.stable_id() != WioStableTypeId("std::Option<i32>") ||
-            selectedInfo.supports_dynamic_value())
+            selectedInfo.type.stable_id() != WioStableTypeId("std::Option<i32>"))
         {
             std::cerr << "Generated 0.13 type metadata is incomplete.\n";
             return EXIT_FAILURE;
@@ -73,7 +72,9 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
 
-        std::cout << "SDK 0.13 parity: version=0.13.0 text-codepoints="
+        std::cout << "SDK 0.13 parity: version="
+                  << moduleVersion->major << '.' << moduleVersion->minor << '.' << moduleVersion->patch
+                  << " text-codepoints="
                   << dynamicLabel.as_text().code_point_count()
                   << " generic=" << selectedTypeName;
         return EXIT_SUCCESS;

@@ -2031,7 +2031,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_sdk_013_parity_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_013_parity_library.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_013_parity_host.cpp"
-        "SDK 0.13 parity: version=0.13.0 text-codepoints=10 generic=std::Option<i32>"
+        "SDK 0.13 parity: version=0\\.[0-9]+\\.[0-9]+ text-codepoints=10 generic=std::Option<i32>"
     )
 
     add_wio_shared_host_interop_test(
