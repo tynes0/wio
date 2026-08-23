@@ -14123,15 +14123,19 @@ namespace wio::sema
     }
 
     void SemanticAnalyzer::validateAttributeApplications(
-        const std::vector<NodePtr<AttributeStatement>>& attributes,
+        std::vector<NodePtr<AttributeStatement>>& attributes,
         std::string_view target,
         bool validateTarget)
     {
         std::unordered_map<const Symbol*, size_t> applicationCounts;
         std::unordered_map<std::string, const Symbol*> conflictOwners;
+        std::unordered_map<const AttributeStatement*, std::vector<const Symbol*>> compositionChains;
 
-        for (const auto& attribute : attributes)
+        for (size_t attributeIndex = 0; attributeIndex < attributes.size(); ++attributeIndex)
         {
+            // Composition appends to the same vector. Keep an owning copy so
+            // vector reallocation cannot invalidate the current application.
+            const auto attribute = attributes[attributeIndex];
             if (!attribute || attribute->attribute != Attribute::Unknown)
                 continue;
 
@@ -14432,6 +14436,157 @@ namespace wio::sema
                     );
                 }
             }
+
+            if (!symbol->attributeComposition.empty())
+            {
+                std::vector<const Symbol*> chain;
+                if (const auto chainIt = compositionChains.find(attribute.Get()); chainIt != compositionChains.end())
+                    chain = chainIt->second;
+                else
+                    chain.push_back(symbol.Get());
+
+                for (const auto& composedTemplate : symbol->attributeComposition)
+                {
+                    if (!composedTemplate)
+                        continue;
+
+                    Ref<Symbol> composedSymbol;
+                    if (composedTemplate->attribute == Attribute::Unknown)
+                        composedSymbol = resolveQualifiedSymbol(currentScope_, composedTemplate->qualifiedName);
+                    if (composedSymbol && composedSymbol->kind == SymbolKind::Attribute &&
+                        std::ranges::find(chain, composedSymbol.Get()) != chain.end())
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            attribute->location(),
+                            "Attribute composition cycle detected while expanding '{}' through '{}'.",
+                            attribute->qualifiedName,
+                            composedTemplate->qualifiedName);
+                        continue;
+                    }
+
+                    std::vector<Token> composedArguments = composedTemplate->args;
+                    std::vector<NodePtr<TypeSpecifier>> composedTypeArguments = composedTemplate->typeArgs;
+                    for (size_t argumentIndex = 0; argumentIndex < composedArguments.size(); ++argumentIndex)
+                    {
+                        if (composedArguments[argumentIndex].type != TokenType::identifier)
+                            continue;
+                        const auto parameter = std::ranges::find(
+                            symbol->attributeParameterNames,
+                            composedArguments[argumentIndex].value);
+                        if (parameter == symbol->attributeParameterNames.end())
+                            continue;
+                        const size_t parameterIndex = static_cast<size_t>(
+                            std::distance(symbol->attributeParameterNames.begin(), parameter));
+                        if (parameterIndex >= attribute->args.size())
+                            continue;
+                        composedArguments[argumentIndex] = attribute->args[parameterIndex];
+                        composedArguments[argumentIndex].loc = attribute->location();
+                        if (argumentIndex < composedTypeArguments.size() &&
+                            parameterIndex < attribute->typeArgs.size())
+                        {
+                            composedTypeArguments[argumentIndex] = attribute->typeArgs[parameterIndex];
+                        }
+                    }
+
+                    auto expanded = makeNodePtr<AttributeStatement>(
+                        composedTemplate->attribute,
+                        std::move(composedArguments),
+                        std::move(composedTypeArguments),
+                        attribute->location(),
+                        composedTemplate->qualifiedName,
+                        composedTemplate->argumentNames);
+                    std::vector<const Symbol*> expandedChain = chain;
+                    if (composedSymbol && composedSymbol->kind == SymbolKind::Attribute)
+                        expandedChain.push_back(composedSymbol.Get());
+                    compositionChains.emplace(expanded.Get(), std::move(expandedChain));
+                    attributes.push_back(std::move(expanded));
+                }
+            }
+        }
+
+        auto nameTail = [](std::string_view name)
+        {
+            const size_t separator = name.rfind("::");
+            return std::string(separator == std::string_view::npos ? name : name.substr(separator + 2));
+        };
+        auto applicationMatches = [&](const NodePtr<AttributeStatement>& application,
+                                      std::string_view requiredName)
+        {
+            if (!application)
+                return false;
+            if (application->qualifiedName == requiredName ||
+                nameTail(application->qualifiedName) == nameTail(requiredName))
+                return true;
+            if (application->attribute != Attribute::Unknown)
+            {
+                const std::string builtInName = std::string(frenum::to_string_view(application->attribute));
+                return builtInName == requiredName || nameTail(builtInName) == nameTail(requiredName);
+            }
+            return false;
+        };
+        auto hasEffectiveAttribute = [&](std::string_view requiredName)
+        {
+            return std::ranges::any_of(attributes, [&](const auto& application)
+            {
+                return applicationMatches(application, requiredName);
+            });
+        };
+
+        for (const auto& attribute : attributes)
+        {
+            if (!attribute || attribute->attribute != Attribute::Unknown)
+                continue;
+            Ref<Symbol> symbol = resolveQualifiedSymbol(currentScope_, attribute->qualifiedName);
+            if (!symbol || symbol->kind != SymbolKind::Attribute)
+                continue;
+
+            const size_t count = applicationCounts[symbol.Get()];
+            if (symbol->attributeHasExplicitCardinality &&
+                (count < symbol->attributeCardinalityMin || count > symbol->attributeCardinalityMax))
+            {
+                WIO_LOG_ADD_ERROR(
+                    attribute->location(),
+                    "Attribute '{}' requires cardinality {}..{}, but the effective declaration has {} application(s).",
+                    attribute->qualifiedName,
+                    symbol->attributeCardinalityMin,
+                    symbol->attributeCardinalityMax,
+                    count);
+            }
+
+            for (const std::string& required : symbol->attributeRequiredAttributes)
+            {
+                if (!hasEffectiveAttribute(required))
+                    WIO_LOG_ADD_ERROR(attribute->location(), "Attribute '{}' requires attribute '{}'.", attribute->qualifiedName, required);
+            }
+            if (!symbol->attributeRequiredAnyAttributes.empty() &&
+                !std::ranges::any_of(symbol->attributeRequiredAnyAttributes, hasEffectiveAttribute))
+            {
+                WIO_LOG_ADD_ERROR(attribute->location(), "Attribute '{}' requires at least one compatible attribute from its RequiresAny policy.", attribute->qualifiedName);
+            }
+            for (const std::string& conflict : symbol->attributeConflictingAttributes)
+            {
+                if (hasEffectiveAttribute(conflict))
+                    WIO_LOG_ADD_ERROR(attribute->location(), "Attribute '{}' conflicts with attribute '{}'.", attribute->qualifiedName, conflict);
+            }
+            if (!symbol->attributeOnlyWithAttributes.empty())
+            {
+                for (const auto& other : attributes)
+                {
+                    if (!other || other.Get() == attribute.Get() || applicationMatches(other, attribute->qualifiedName))
+                        continue;
+                    const bool allowed = std::ranges::any_of(
+                        symbol->attributeOnlyWithAttributes,
+                        [&](const std::string& allowedName) { return applicationMatches(other, allowedName); });
+                    if (!allowed)
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            other->location(),
+                            "Attribute '{}' is not permitted alongside '{}' by its OnlyWith policy.",
+                            other->qualifiedName,
+                            attribute->qualifiedName);
+                    }
+                }
+            }
         }
     }
 
@@ -14565,10 +14720,22 @@ namespace wio::sema
             symbol->attributeTargets = node.targets;
             symbol->attributeRetention = node.retention;
             symbol->attributeConflictGroups = node.conflictGroups;
+            symbol->attributeComposition = node.composedAttributes;
+            symbol->attributeRequiredAttributes = node.requiredAttributes;
+            symbol->attributeRequiredAnyAttributes = node.requiredAnyAttributes;
+            symbol->attributeConflictingAttributes = node.conflictingAttributes;
+            symbol->attributeOnlyWithAttributes = node.onlyWithAttributes;
+            symbol->attributeBeforeAttributes = node.beforeAttributes;
+            symbol->attributeAfterAttributes = node.afterAttributes;
+            symbol->attributeImpliedAttributes = node.impliedAttributes;
+            symbol->attributeProcessorTypes = node.processorTypes;
             symbol->attributeParameterNames = std::move(names);
             symbol->attributeParameterTypes = std::move(parameterTypes);
             symbol->attributeParameterHasDefault = std::move(hasDefaults);
             symbol->attributeParameterDefaults = std::move(defaults);
+            symbol->attributeCardinalityMin = node.cardinalityMin;
+            symbol->attributeCardinalityMax = node.cardinalityMax;
+            symbol->attributeHasExplicitCardinality = node.hasExplicitCardinality;
             symbol->attributeRepeatable = node.repeatable;
             symbol->attributeInherited = node.inherited;
             symbol->attributeScoped = node.scoped;

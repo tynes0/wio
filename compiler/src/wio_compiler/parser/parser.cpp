@@ -1285,11 +1285,7 @@ namespace wio
             if (match(TokenType::kwType))
                 return parseTypeAliasDeclaration(std::move(attributes));
             if (match(TokenType::kwAttribute))
-            {
-                if (!attributes.empty())
-                    utError("Attribute declarations cannot currently carry attributes.", attributes.front()->location());
-                return parseAttributeDeclaration();
-            }
+                return parseAttributeDeclaration(std::move(attributes));
             if (match(TokenType::kwApplication))
             {
                 if (!attributes.empty())
@@ -1570,7 +1566,9 @@ namespace wio
                         utError("Positional attribute arguments cannot follow named arguments.", peek().loc);
                     }
 
-                    if (canStartAttributeTypeArgument(peek()))
+                    const bool standaloneTargetKeyword = peek().type == TokenType::kwFn &&
+                        peek(1).type != TokenType::leftParen;
+                    if (canStartAttributeTypeArgument(peek()) && !standaloneTargetKeyword)
                     {
                         const size_t typeStartIndex = currentTokenIndex_;
                         auto parsedType = parseGenericArgument();
@@ -1743,7 +1741,8 @@ namespace wio
             utError("A declaration may contain only one postfix 'with' clause.", peek().loc);
     }
 
-    NodePtr<AttributeDeclaration> Parser::parseAttributeDeclaration()
+    NodePtr<AttributeDeclaration> Parser::parseAttributeDeclaration(
+        std::vector<NodePtr<AttributeStatement>> metaAttributes)
     {
         Token startTok = consume(TokenType::kwAttribute);
         auto name = makeNodePtr<Identifier>(consumeIdentifier());
@@ -1826,9 +1825,78 @@ namespace wio
 
         std::vector<std::string> retention;
         std::vector<std::string> conflictGroups;
+        std::vector<std::string> requiredAttributes;
+        std::vector<std::string> requiredAnyAttributes;
+        std::vector<std::string> conflictingAttributes;
+        std::vector<std::string> onlyWithAttributes;
+        std::vector<std::string> beforeAttributes;
+        std::vector<std::string> afterAttributes;
+        std::vector<std::string> impliedAttributes;
+        std::vector<std::string> processorTypes;
+        size_t cardinalityMin = 0;
+        size_t cardinalityMax = 1;
+        bool hasExplicitCardinality = false;
         bool repeatable = false;
         bool inherited = false;
         bool scoped = false;
+
+        auto policyTail = [](const std::string& qualifiedName)
+        {
+            const size_t separator = qualifiedName.rfind("::");
+            return separator == std::string::npos
+                ? qualifiedName
+                : qualifiedName.substr(separator + 2);
+        };
+        auto appendPolicyNames = [&](const NodePtr<AttributeStatement>& policy,
+                                     std::vector<std::string>& destination)
+        {
+            if (policy->args.empty())
+                utError("Attribute policy '" + policy->qualifiedName + "' requires at least one argument.", policy->location());
+            for (const Token& argument : policy->args)
+                destination.push_back(argument.value);
+        };
+
+        for (const auto& policy : metaAttributes)
+        {
+            const std::string policyName = policyTail(policy->qualifiedName);
+            if (policyName == "Targets") appendPolicyNames(policy, targets);
+            else if (policyName == "Source") retention.push_back("source");
+            else if (policyName == "Compile") retention.push_back("compile");
+            else if (policyName == "Runtime") retention.push_back("runtime");
+            else if (policyName == "Repeatable") repeatable = true;
+            else if (policyName == "Inherited") inherited = true;
+            else if (policyName == "Scoped") scoped = true;
+            else if (policyName == "Requires") appendPolicyNames(policy, requiredAttributes);
+            else if (policyName == "RequiresAny") appendPolicyNames(policy, requiredAnyAttributes);
+            else if (policyName == "Conflicts") appendPolicyNames(policy, conflictingAttributes);
+            else if (policyName == "OnlyWith") appendPolicyNames(policy, onlyWithAttributes);
+            else if (policyName == "Before") appendPolicyNames(policy, beforeAttributes);
+            else if (policyName == "After") appendPolicyNames(policy, afterAttributes);
+            else if (policyName == "Implies") appendPolicyNames(policy, impliedAttributes);
+            else if (policyName == "Processor") appendPolicyNames(policy, processorTypes);
+            else if (policyName == "Exclusive")
+            {
+                if (policy->args.size() != 1)
+                    utError("Attribute policy 'Exclusive' expects exactly one group.", policy->location());
+                conflictGroups.push_back(policy->args.front().value);
+            }
+            else if (policyName == "Cardinality")
+            {
+                if (policy->args.empty() || policy->args.size() > 2)
+                    utError("Attribute policy 'Cardinality' expects one or two integer arguments.", policy->location());
+                for (const Token& argument : policy->args)
+                    if (argument.type != TokenType::integerLiteral)
+                        utError("Attribute policy 'Cardinality' accepts only integer literals.", argument.loc);
+                cardinalityMin = traits::IntegerTraits<size_t>::IntegerResultCastedAs(getInteger(policy->args.front().value));
+                cardinalityMax = policy->args.size() == 1
+                    ? cardinalityMin
+                    : traits::IntegerTraits<size_t>::IntegerResultCastedAs(getInteger(policy->args[1].value));
+                if (cardinalityMin > cardinalityMax)
+                    utError("Attribute cardinality minimum cannot exceed its maximum.", policy->location());
+                hasExplicitCardinality = true;
+                repeatable = cardinalityMax > 1;
+            }
+        }
 
         if (!compactDeclaration && match(TokenType::kwFor, true))
         {
@@ -1836,13 +1904,23 @@ namespace wio
             while (match(TokenType::opBitOr, true))
                 targets.push_back(consumePolicyWord().value);
         }
-        else if (!compactDeclaration)
+        else if (!compactDeclaration && targets.empty())
         {
-            utError("Attribute declarations require a 'for' target clause.", startTok.loc);
+            utError("Attribute declarations require a 'for' target clause or [attribute::Targets(...)].", startTok.loc);
         }
 
+        std::vector<NodePtr<AttributeStatement>> composedAttributes;
         while (!match(TokenType::semicolon))
         {
+            if (match(TokenType::identifier, "compose", true))
+            {
+                if (!composedAttributes.empty())
+                    utError("An attribute declaration may contain only one compose clause.", previous().loc);
+                if (!match(TokenType::leftBracket))
+                    utError("Expected an attribute list after 'compose'.", peek().loc);
+                parseBracketAttributeList(composedAttributes);
+                continue;
+            }
             if (match(TokenType::kwWith))
             {
                 std::vector<NodePtr<AttributeStatement>> policies;
@@ -1932,10 +2010,24 @@ namespace wio
         if (retention.empty())
             retention.push_back("compile");
 
-        return makeNodePtr<AttributeDeclaration>(
+        auto declaration = makeNodePtr<AttributeDeclaration>(
             std::move(name), std::move(parameters), std::move(targets),
             std::move(retention), std::move(conflictGroups),
             repeatable, inherited, scoped, startTok.loc);
+        declaration->metaAttributes = std::move(metaAttributes);
+        declaration->composedAttributes = std::move(composedAttributes);
+        declaration->requiredAttributes = std::move(requiredAttributes);
+        declaration->requiredAnyAttributes = std::move(requiredAnyAttributes);
+        declaration->conflictingAttributes = std::move(conflictingAttributes);
+        declaration->onlyWithAttributes = std::move(onlyWithAttributes);
+        declaration->beforeAttributes = std::move(beforeAttributes);
+        declaration->afterAttributes = std::move(afterAttributes);
+        declaration->impliedAttributes = std::move(impliedAttributes);
+        declaration->processorTypes = std::move(processorTypes);
+        declaration->cardinalityMin = cardinalityMin;
+        declaration->cardinalityMax = cardinalityMax;
+        declaration->hasExplicitCardinality = hasExplicitCardinality;
+        return declaration;
     }
 
     NodePtr<Statement> Parser::parseApplicationDeclaration()

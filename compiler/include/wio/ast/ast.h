@@ -828,11 +828,27 @@ namespace wio
     {
         WIO_STMT_NODE_BODY(AttributeDeclaration)
 
+        // Meta-attributes are retained on the declaration so tooling can
+        // inspect the source contract instead of reverse engineering the
+        // normalized policy fields below.
+        std::vector<NodePtr<AttributeStatement>> metaAttributes;
         NodePtr<Identifier> name;
         std::vector<Parameter> parameters;
         std::vector<std::string> targets;
         std::vector<std::string> retention;
         std::vector<std::string> conflictGroups;
+        std::vector<NodePtr<AttributeStatement>> composedAttributes;
+        std::vector<std::string> requiredAttributes;
+        std::vector<std::string> requiredAnyAttributes;
+        std::vector<std::string> conflictingAttributes;
+        std::vector<std::string> onlyWithAttributes;
+        std::vector<std::string> beforeAttributes;
+        std::vector<std::string> afterAttributes;
+        std::vector<std::string> impliedAttributes;
+        std::vector<std::string> processorTypes;
+        size_t cardinalityMin = 0;
+        size_t cardinalityMax = 1;
+        bool hasExplicitCardinality = false;
         bool repeatable = false;
         bool inherited = false;
         bool scoped = false;

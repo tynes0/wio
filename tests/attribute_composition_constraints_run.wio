@@ -1,0 +1,35 @@
+use std::assert as assert;
+use std::console as console;
+use std::reflect as reflect;
+
+attribute entity(name: string) for component retain runtime;
+attribute audited() for component retain runtime;
+attribute export_marker() for component retain compile;
+
+[attribute::Targets(component)]
+attribute Model(name: string)
+    compose [entity(name), audited];
+
+[attribute::Targets(component)]
+[attribute::Requires(export_marker)]
+[attribute::OnlyWith(export_marker)]
+attribute command_model();
+
+[Model("users")]
+component User {
+    id: u64;
+}
+
+[export_marker, command_model]
+component CommandPayload {
+    id: u64;
+}
+
+fn Entry() -> i32 {
+    let attributes = reflect::TypeAttributes<User>();
+    assert::ExpectEqual(attributes.Count(), 2usize, "composed runtime attribute count");
+    assert::ExpectEqual(attributes[0usize], "entity(users)", "composed argument substitution");
+    assert::ExpectEqual(attributes[1usize], "audited", "second composed attribute");
+    console::PrintLine("attribute-composition-constraints-ok");
+    return 0;
+}

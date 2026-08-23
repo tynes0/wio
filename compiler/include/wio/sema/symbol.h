@@ -49,12 +49,24 @@ namespace wio::sema
         std::vector<std::string> attributeTargets;
         std::vector<std::string> attributeRetention;
         std::vector<std::string> attributeConflictGroups;
+        std::vector<NodePtr<AttributeStatement>> attributeComposition;
+        std::vector<std::string> attributeRequiredAttributes;
+        std::vector<std::string> attributeRequiredAnyAttributes;
+        std::vector<std::string> attributeConflictingAttributes;
+        std::vector<std::string> attributeOnlyWithAttributes;
+        std::vector<std::string> attributeBeforeAttributes;
+        std::vector<std::string> attributeAfterAttributes;
+        std::vector<std::string> attributeImpliedAttributes;
+        std::vector<std::string> attributeProcessorTypes;
         std::vector<std::string> attributeParameterNames;
         std::vector<Ref<Type>> attributeParameterTypes;
         std::vector<bool> attributeParameterHasDefault;
         // Aligned with attributeParameterNames. Invalid tokens represent
         // required parameters or defaults that could not be folded.
         std::vector<Token> attributeParameterDefaults;
+        size_t attributeCardinalityMin = 0;
+        size_t attributeCardinalityMax = 1;
+        bool attributeHasExplicitCardinality = false;
         bool attributeRepeatable = false;
         bool attributeInherited = false;
         bool attributeScoped = false;

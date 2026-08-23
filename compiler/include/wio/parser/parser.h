@@ -70,7 +70,7 @@ namespace wio
                                     bool acceptBracketSyntax = true);
         [[nodiscard]] bool bracketAttributeListPrecedesDeclaration() const;
         void parseWithAttributeClause(std::vector<NodePtr<AttributeStatement>>& attributes);
-        NodePtr<AttributeDeclaration> parseAttributeDeclaration();
+        NodePtr<AttributeDeclaration> parseAttributeDeclaration(std::vector<NodePtr<AttributeStatement>> metaAttributes = {});
         NodePtr<Statement> parseApplicationDeclaration();
         NodePtr<Statement> parseSystemDeclaration();
         NodePtr<VariableDeclaration> parseVariableDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);

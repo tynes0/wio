@@ -95,7 +95,7 @@ namespace wio::sema
         [[nodiscard]] GenericConstraintCapabilities resolveGenericConstraintCapabilities(const Ref<Type>& type) const;
         [[nodiscard]] bool allowsNumericSemantics(const Ref<Type>& type) const;
         [[nodiscard]] bool allowsIntegerSemantics(const Ref<Type>& type) const;
-        void validateAttributeApplications(const std::vector<NodePtr<AttributeStatement>>& attributes,
+        void validateAttributeApplications(std::vector<NodePtr<AttributeStatement>>& attributes,
                                            std::string_view target,
                                            bool validateTarget = true);
         void applyActiveScopedAttributes(std::vector<NodePtr<AttributeStatement>>& attributes,

@@ -3360,6 +3360,14 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
     set_tests_properties(wio_test_attribute_bracket_syntax_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
 
+    add_wio_output_test(
+        wio_test_attribute_composition_constraints_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_composition_constraints_run.wio"
+        "attribute-composition-constraints-ok"
+        --run
+    )
+    set_tests_properties(wio_test_attribute_composition_constraints_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
     add_wio_failure_test(
         wio_invalid_attribute_bracket_empty
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_bracket_empty.wio"
@@ -3370,9 +3378,27 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_bracket_trailing_comma.wio"
         "Expected an attribute after ','"
     )
+    add_wio_failure_test(
+        wio_invalid_attribute_requires_missing
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_requires_missing.wio"
+        "requires attribute 'export_marker'"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_named_conflict
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_named_conflict.wio"
+        "conflicts with attribute 'cached'"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_composition_cycle
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_composition_cycle.wio"
+        "Attribute composition cycle detected"
+    )
     set_tests_properties(
         wio_invalid_attribute_bracket_empty
         wio_invalid_attribute_bracket_trailing_comma
+        wio_invalid_attribute_requires_missing
+        wio_invalid_attribute_named_conflict
+        wio_invalid_attribute_composition_cycle
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 
