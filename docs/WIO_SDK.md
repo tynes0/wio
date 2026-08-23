@@ -735,6 +735,25 @@ domain, portable code, native code, and message. `std::UnitResult` maps to
 `WioUnitResult`, with `WioUnit` represented by the dedicated `UNIT` type
 descriptor rather than pretending it is an exported component handle.
 
+Arrays, fixed arrays, `Dict`, and `Tree` apply the same conversion recursively.
+The host uses its normal SDK/C++ container surface while every nested Wio value
+keeps its semantics:
+
+```cpp
+using Choice = WioOption<std::int32_t>;
+using Outcome = WioResult<std::int32_t>;
+
+auto choices = state.field("choices").get_as<std::vector<Choice>>();
+auto fixed = state.field("fixed").get_as<std::array<Outcome, 2>>();
+auto lookup = state.field("lookup").get_as<
+    std::unordered_map<std::string, WioOption<WioU64>>
+>();
+```
+
+Conversion is recursive in both directions. A nested category without a stable
+bridge is rejected in semantic analysis instead of exporting a raw generated
+C++ template type that the host cannot name safely.
+
 ---
 
 ## 10. Hot Reload

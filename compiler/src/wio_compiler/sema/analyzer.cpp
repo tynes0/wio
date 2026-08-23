@@ -6075,6 +6075,20 @@ namespace wio::sema
                 return typeName != "void" && typeName != "object" && typeName != "any" && typeName != "opaque";
             }
 
+            if (current->kind() == TypeKind::Array)
+            {
+                auto arrayType = current.AsFast<ArrayType>();
+                return arrayType && isSdkValueBridgeType(arrayType->elementType);
+            }
+
+            if (current->kind() == TypeKind::Dictionary)
+            {
+                auto dictionaryType = current.AsFast<DictionaryType>();
+                return dictionaryType &&
+                    isSdkValueBridgeType(dictionaryType->keyType) &&
+                    isSdkValueBridgeType(dictionaryType->valueType);
+            }
+
             if (current->kind() != TypeKind::Struct)
                 return false;
 
@@ -6117,14 +6131,14 @@ namespace wio::sema
             case TypeKind::Array:
             {
                 auto arrayType = current.AsFast<ArrayType>();
-                return arrayType && isSdkExportableFieldType(arrayType->elementType);
+                return arrayType && isSdkValueBridgeType(arrayType->elementType);
             }
             case TypeKind::Dictionary:
             {
                 auto dictType = current.AsFast<DictionaryType>();
                 return dictType &&
-                    isSdkExportableFieldType(dictType->keyType) &&
-                    isSdkExportableFieldType(dictType->valueType);
+                    isSdkValueBridgeType(dictType->keyType) &&
+                    isSdkValueBridgeType(dictType->valueType);
             }
             case TypeKind::Function:
             {

@@ -617,6 +617,20 @@ namespace wio::codegen
                 return name != "void" && name != "object" && name != "any" && name != "opaque";
             }
 
+            if (resolvedType->kind() == sema::TypeKind::Array)
+            {
+                auto arrayType = resolvedType.AsFast<sema::ArrayType>();
+                return arrayType && isSdkValueBridgeType(arrayType->elementType);
+            }
+
+            if (resolvedType->kind() == sema::TypeKind::Dictionary)
+            {
+                auto dictionaryType = resolvedType.AsFast<sema::DictionaryType>();
+                return dictionaryType &&
+                    isSdkValueBridgeType(dictionaryType->keyType) &&
+                    isSdkValueBridgeType(dictionaryType->valueType);
+            }
+
             if (auto unitType = getStdValueStructType(resolvedType, "ResultUnit"); unitType)
                 return unitType->genericArguments.empty();
 
@@ -3000,6 +3014,32 @@ namespace wio::codegen
                 return toCppType(resolvedType);
             }
 
+            if (resolvedType->kind() == sema::TypeKind::Array)
+            {
+                auto arrayType = resolvedType.AsFast<sema::ArrayType>();
+                auto elementType = arrayType ? getSdkDynamicBridgeCppType(arrayType->elementType) : std::nullopt;
+                if (!arrayType || !elementType.has_value())
+                    return std::nullopt;
+
+                if (arrayType->arrayKind == sema::ArrayType::ArrayKind::Static)
+                {
+                    return "std::array<" + *elementType + ", " + std::to_string(arrayType->size) + ">";
+                }
+                return "std::vector<" + *elementType + ">";
+            }
+
+            if (resolvedType->kind() == sema::TypeKind::Dictionary)
+            {
+                auto dictionaryType = resolvedType.AsFast<sema::DictionaryType>();
+                auto keyType = dictionaryType ? getSdkDynamicBridgeCppType(dictionaryType->keyType) : std::nullopt;
+                auto valueType = dictionaryType ? getSdkDynamicBridgeCppType(dictionaryType->valueType) : std::nullopt;
+                if (!dictionaryType || !keyType.has_value() || !valueType.has_value())
+                    return std::nullopt;
+
+                return std::string(dictionaryType->isOrdered ? "std::map<" : "std::unordered_map<") +
+                    *keyType + ", " + *valueType + ">";
+            }
+
             if (auto optionType = getStdValueStructType(resolvedType, "Option");
                 optionType && optionType->genericArguments.size() == 1)
             {
@@ -3047,6 +3087,95 @@ namespace wio::codegen
                 if (getSdkDynamicBridgeCppType(resolvedType).has_value())
                     return expression;
                 return std::nullopt;
+            }
+
+            if (resolvedType->kind() == sema::TypeKind::Array)
+            {
+                auto arrayType = resolvedType.AsFast<sema::ArrayType>();
+                auto hostType = getSdkDynamicBridgeCppType(resolvedType);
+                if (!arrayType || !hostType.has_value())
+                    return std::nullopt;
+
+                const std::string sourceName = "_wio_array_" + std::to_string(depth);
+                const std::string itemExpression = arrayType->arrayKind == sema::ArrayType::ArrayKind::Static
+                    ? sourceName + "[_wio_index]"
+                    : "_wio_item_" + std::to_string(depth);
+                auto convertedItem = makeSdkDynamicToHostExpression(itemExpression, arrayType->elementType, depth + 1);
+                if (!convertedItem.has_value())
+                    return std::nullopt;
+
+                if (arrayType->arrayKind == sema::ArrayType::ArrayKind::Static)
+                {
+                    std::string initializers;
+                    for (std::size_t index = 0; index < arrayType->size; ++index)
+                    {
+                        auto indexedValue = makeSdkDynamicToHostExpression(
+                            sourceName + "[" + std::to_string(index) + "]",
+                            arrayType->elementType,
+                            depth + 1
+                        );
+                        if (!indexedValue.has_value())
+                            return std::nullopt;
+                        if (!initializers.empty())
+                            initializers += ", ";
+                        initializers += *indexedValue;
+                    }
+
+                    return common::formatString(
+                        "([&]() -> {} {{ const auto& {} = {}; return {}{{{}}}; }}())",
+                        *hostType,
+                        sourceName,
+                        expression,
+                        *hostType,
+                        initializers
+                    );
+                }
+
+                const std::string itemName = "_wio_item_" + std::to_string(depth);
+                return common::formatString(
+                    "([&]() -> {} {{ const auto& {} = {}; {} _wio_output; "
+                    "_wio_output.reserve({}.size()); for (const auto& {} : {}) "
+                    "_wio_output.push_back({}); return _wio_output; }}())",
+                    *hostType,
+                    sourceName,
+                    expression,
+                    *hostType,
+                    sourceName,
+                    itemName,
+                    sourceName,
+                    *convertedItem
+                );
+            }
+
+            if (resolvedType->kind() == sema::TypeKind::Dictionary)
+            {
+                auto dictionaryType = resolvedType.AsFast<sema::DictionaryType>();
+                auto hostType = getSdkDynamicBridgeCppType(resolvedType);
+                if (!dictionaryType || !hostType.has_value())
+                    return std::nullopt;
+
+                const std::string sourceName = "_wio_dictionary_" + std::to_string(depth);
+                const std::string keyName = "_wio_key_" + std::to_string(depth);
+                const std::string valueName = "_wio_value_" + std::to_string(depth);
+                auto convertedKey = makeSdkDynamicToHostExpression(keyName, dictionaryType->keyType, depth + 1);
+                auto convertedValue = makeSdkDynamicToHostExpression(valueName, dictionaryType->valueType, depth + 1);
+                if (!convertedKey.has_value() || !convertedValue.has_value())
+                    return std::nullopt;
+
+                return common::formatString(
+                    "([&]() -> {} {{ const auto& {} = {}; {} _wio_output; "
+                    "for (const auto& [{}, {}] : {}) _wio_output.emplace({}, {}); "
+                    "return _wio_output; }}())",
+                    *hostType,
+                    sourceName,
+                    expression,
+                    *hostType,
+                    keyName,
+                    valueName,
+                    sourceName,
+                    *convertedKey,
+                    *convertedValue
+                );
             }
 
             if (auto optionType = getStdValueStructType(resolvedType, "Option");
@@ -3144,6 +3273,83 @@ namespace wio::codegen
                 if (getSdkDynamicBridgeCppType(resolvedType).has_value())
                     return expression;
                 return std::nullopt;
+            }
+
+            if (resolvedType->kind() == sema::TypeKind::Array)
+            {
+                auto arrayType = resolvedType.AsFast<sema::ArrayType>();
+                if (!arrayType)
+                    return std::nullopt;
+
+                const std::string sourceName = "_wio_host_array_" + std::to_string(depth);
+                const std::string itemName = "_wio_host_item_" + std::to_string(depth);
+                const std::string itemExpression = arrayType->arrayKind == sema::ArrayType::ArrayKind::Static
+                    ? sourceName + "[_wio_index]"
+                    : itemName;
+                auto convertedItem = makeSdkDynamicFromHostExpression(itemExpression, arrayType->elementType, depth + 1);
+                if (!convertedItem.has_value())
+                    return std::nullopt;
+
+                const std::string cppType = toCppType(resolvedType);
+                if (arrayType->arrayKind == sema::ArrayType::ArrayKind::Static)
+                {
+                    return common::formatString(
+                        "([&]() -> {} {{ const auto& {} = {}; {} _wio_output{{}}; "
+                        "for (std::size_t _wio_index = 0; _wio_index < {}; ++_wio_index) "
+                        "_wio_output[_wio_index] = {}; return _wio_output; }}())",
+                        cppType,
+                        sourceName,
+                        expression,
+                        cppType,
+                        arrayType->size,
+                        *convertedItem
+                    );
+                }
+
+                return common::formatString(
+                    "([&]() -> {} {{ const auto& {} = {}; {} _wio_output; "
+                    "_wio_output.reserve({}.size()); for (const auto& {} : {}) "
+                    "_wio_output.push_back({}); return _wio_output; }}())",
+                    cppType,
+                    sourceName,
+                    expression,
+                    cppType,
+                    sourceName,
+                    itemName,
+                    sourceName,
+                    *convertedItem
+                );
+            }
+
+            if (resolvedType->kind() == sema::TypeKind::Dictionary)
+            {
+                auto dictionaryType = resolvedType.AsFast<sema::DictionaryType>();
+                if (!dictionaryType)
+                    return std::nullopt;
+
+                const std::string sourceName = "_wio_host_dictionary_" + std::to_string(depth);
+                const std::string keyName = "_wio_host_key_" + std::to_string(depth);
+                const std::string valueName = "_wio_host_value_" + std::to_string(depth);
+                auto convertedKey = makeSdkDynamicFromHostExpression(keyName, dictionaryType->keyType, depth + 1);
+                auto convertedValue = makeSdkDynamicFromHostExpression(valueName, dictionaryType->valueType, depth + 1);
+                if (!convertedKey.has_value() || !convertedValue.has_value())
+                    return std::nullopt;
+
+                const std::string cppType = toCppType(resolvedType);
+                return common::formatString(
+                    "([&]() -> {} {{ const auto& {} = {}; {} _wio_output; "
+                    "for (const auto& [{}, {}] : {}) _wio_output.emplace({}, {}); "
+                    "return _wio_output; }}())",
+                    cppType,
+                    sourceName,
+                    expression,
+                    cppType,
+                    keyName,
+                    valueName,
+                    sourceName,
+                    *convertedKey,
+                    *convertedValue
+                );
             }
 
             if (auto optionType = getStdValueStructType(resolvedType, "Option");
@@ -4546,11 +4752,13 @@ namespace wio::codegen
                     const bool isOptionField = getStdValueStructType(dynamicFieldType, "Option") != nullptr;
                     const bool isResultField = getStdValueStructType(dynamicFieldType, "Result") != nullptr;
                     const bool isUnitField = getStdValueStructType(dynamicFieldType, "ResultUnit") != nullptr;
-                    const bool isAlgebraicField = isOptionField || isResultField || isUnitField;
-                    const auto algebraicPayloadType = isAlgebraicField
+                    const bool isPortableBridgeField = isOptionField || isResultField || isUnitField ||
+                        (dynamicFieldType && (dynamicFieldType->kind() == sema::TypeKind::Array ||
+                                              dynamicFieldType->kind() == sema::TypeKind::Dictionary));
+                    const auto portablePayloadType = isPortableBridgeField
                         ? getSdkDynamicBridgeCppType(dynamicFieldType)
                         : std::optional<std::string>{};
-                    const auto algebraicGetterExpression = isAlgebraicField
+                    const auto portableGetterExpression = isPortableBridgeField
                         ? makeSdkDynamicToHostExpression("instance->" + field.memberCppName, dynamicFieldType)
                         : std::optional<std::string>{};
                     emitLine(
@@ -4568,12 +4776,12 @@ namespace wio::codegen
                             ", instance->" + field.memberCppName + ".Utf8());"
                         );
                     }
-                    else if (isAlgebraicField && algebraicPayloadType.has_value() && algebraicGetterExpression.has_value())
+                    else if (isPortableBridgeField && portablePayloadType.has_value() && portableGetterExpression.has_value())
                     {
                         emitLine(
-                            "return new WioErasedValueModel<" + *algebraicPayloadType + ">(" +
+                            "return new WioErasedValueModel<" + *portablePayloadType + ">(" +
                             "&WIO_TYPE_DESCRIPTOR_" + std::to_string(descriptorIndex) +
-                            ", " + *algebraicGetterExpression + ");"
+                            ", " + *portableGetterExpression + ");"
                         );
                     }
                     else
@@ -4600,8 +4808,8 @@ namespace wio::codegen
                         emitLine("if (instance == nullptr || value == nullptr) return WIO_INVOKE_BAD_ARGUMENTS;");
                         if (isTextField)
                             emitLine("auto* typedValue = dynamic_cast<const WioErasedValueModel<std::string>*>(value);");
-                        else if (isAlgebraicField && algebraicPayloadType.has_value())
-                            emitLine("auto* typedValue = dynamic_cast<const WioErasedValueModel<" + *algebraicPayloadType + ">*>(value);");
+                        else if (isPortableBridgeField && portablePayloadType.has_value())
+                            emitLine("auto* typedValue = dynamic_cast<const WioErasedValueModel<" + *portablePayloadType + ">*>(value);");
                         else
                             emitLine(
                                 "auto* typedValue = dynamic_cast<const WioErasedValueModel<" + field.memberCppTypeName + ">*>(value);"
@@ -4609,7 +4817,7 @@ namespace wio::codegen
                         emitLine("if (typedValue == nullptr) return WIO_INVOKE_TYPE_MISMATCH;");
                         if (isTextField)
                             emitLine("instance->" + field.memberCppName + " = wio::runtime::Text::FromUtf8(typedValue->value);");
-                        else if (isAlgebraicField)
+                        else if (isPortableBridgeField)
                         {
                             const auto setterExpression = makeSdkDynamicFromHostExpression("typedValue->value", dynamicFieldType);
                             if (setterExpression.has_value())

@@ -1,0 +1,26 @@
+use std::option as option;
+use std::result as result;
+
+@Export
+object Sdk14NestedCollections {
+    public choices: std::Option<i32>[];
+    public fixed: [std::Result<i32>; 2];
+    public lookup: Dict<string, std::Option<u64> >;
+    public ordered: Tree<string, std::Result<i32> >;
+
+    public OnConstruct() {
+        self.choices = [option::Some<i32>(1), option::None<i32>(), option::Some<i32>(3)];
+        self.fixed = [
+            result::Ok<i32>(4),
+            result::Err<i32>(result::MakeError(std::ResultDomain::custom, 405, -5i64, "fixed failure"))
+        ];
+        self.lookup = {
+            "wide": option::Some<u64>(14000000000u64),
+            "missing": option::None<u64>()
+        };
+        self.ordered = {<
+            "first": result::Ok<i32>(7),
+            "second": result::Err<i32>(result::MakeError(std::ResultDomain::io, 408, 8i64, "ordered failure"))
+        >};
+    }
+}
