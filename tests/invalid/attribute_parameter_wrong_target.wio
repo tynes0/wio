@@ -1,0 +1,7 @@
+attribute field_only() for field retain compile;
+
+fn Invalid([field_only] value: i32) -> i32 {
+    return value;
+}
+
+fn Entry() -> i32 { return 0; }

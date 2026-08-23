@@ -3384,6 +3384,14 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
     set_tests_properties(wio_test_attribute_processor_contract_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
 
+    add_wio_output_test(
+        wio_test_attribute_parameter_enum_case_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_parameter_enum_case_run.wio"
+        "attribute-parameter-enum-case-ok"
+        --run
+    )
+    set_tests_properties(wio_test_attribute_parameter_enum_case_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
     add_wio_failure_test(
         wio_invalid_attribute_bracket_empty
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_bracket_empty.wio"
@@ -3419,6 +3427,11 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_ordering_cycle.wio"
         "Attribute processor ordering cycle detected"
     )
+    add_wio_failure_test(
+        wio_invalid_attribute_parameter_wrong_target
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_parameter_wrong_target.wio"
+        "cannot target 'parameter'"
+    )
     set_tests_properties(
         wio_invalid_attribute_bracket_empty
         wio_invalid_attribute_bracket_trailing_comma
@@ -3427,6 +3440,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_attribute_composition_cycle
         wio_invalid_attribute_processor_wrong_phase
         wio_invalid_attribute_ordering_cycle
+        wio_invalid_attribute_parameter_wrong_target
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 

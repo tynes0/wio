@@ -692,6 +692,7 @@ namespace wio
 
     struct Parameter
     {
+        std::vector<NodePtrUnchecked<AttributeStatement>> attributes;
         NodePtr<Identifier> name;
         NodePtr<TypeSpecifier> type;
         NodePtr<Expression> defaultValue;
@@ -1049,6 +1050,7 @@ namespace wio
     {
         NodePtr<Identifier> name;
         NodePtr<Expression> value;
+        std::vector<NodePtr<AttributeStatement>> attributes;
     };
 
     struct EnumDeclaration : Statement

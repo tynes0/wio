@@ -2727,6 +2727,8 @@ namespace wio
         std::vector<Parameter> parameters;
         if (!match(TokenType::rightParen))
         {
+            std::vector<NodePtr<AttributeStatement>> parameterAttributes;
+            parseLeadingAttributes(parameterAttributes);
             NodePtr<Identifier> paramName = makeNodePtr<Identifier>(consumeIdentifier());
             NodePtr<TypeSpecifier> paramType = nullptr;
             NodePtr<Expression> defaultValue = nullptr;
@@ -2742,11 +2744,14 @@ namespace wio
                 defaultValue = parseExpression();
 
             parameters.emplace_back(std::move(paramName), std::move(paramType), std::move(defaultValue), isParameterPack);
+            parameters.back().attributes = std::move(parameterAttributes);
 
             while (match(TokenType::comma, true))
             {
                 expectElementAfterComma(TokenType::rightParen, "function parameter");
 
+                std::vector<NodePtr<AttributeStatement>> nextParameterAttributes;
+                parseLeadingAttributes(nextParameterAttributes);
                 NodePtr<Identifier> nextParamName = makeNodePtr<Identifier>(consumeIdentifier());
                 NodePtr<TypeSpecifier> nextParamType = nullptr;
                 NodePtr<Expression> nextDefaultValue = nullptr;
@@ -2762,6 +2767,7 @@ namespace wio
                     nextDefaultValue = parseExpression();
 
                 parameters.emplace_back(std::move(nextParamName), std::move(nextParamType), std::move(nextDefaultValue), nextIsParameterPack);
+                parameters.back().attributes = std::move(nextParameterAttributes);
             }
         }
         consume(TokenType::rightParen);
@@ -3126,13 +3132,19 @@ namespace wio
         
         while (peek().isValid() && !match(TokenType::rightBrace))
         {
+            std::vector<NodePtr<AttributeStatement>> memberAttributes;
+            parseLeadingAttributes(memberAttributes);
             NodePtr<Identifier> memberName = makeNodePtr<Identifier>(consumeIdentifier());
             NodePtr<Expression> value = nullptr;
             
             if (match(TokenType::opAssign, true))
                 value = parseExpression();
             
-            members.emplace_back(std::move(memberName), std::move(value));
+            members.push_back(EnumMember{
+                .name = std::move(memberName),
+                .value = std::move(value),
+                .attributes = std::move(memberAttributes)
+            });
             match(TokenType::comma, true);
         }
         consume(TokenType::rightBrace);
@@ -3151,13 +3163,19 @@ namespace wio
         
         while (peek().isValid() && !match(TokenType::rightBrace))
         {
+            std::vector<NodePtr<AttributeStatement>> memberAttributes;
+            parseLeadingAttributes(memberAttributes);
             NodePtr<Identifier> memberName = makeNodePtr<Identifier>(consumeIdentifier());
             NodePtr<Expression> value = nullptr;
             
             if (match(TokenType::opAssign, true))
                 value = parseExpression();
             
-            members.emplace_back(std::move(memberName), std::move(value));
+            members.push_back(EnumMember{
+                .name = std::move(memberName),
+                .value = std::move(value),
+                .attributes = std::move(memberAttributes)
+            });
             match(TokenType::comma, true);
         }
         consume(TokenType::rightBrace);

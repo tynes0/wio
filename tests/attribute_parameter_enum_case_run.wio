@@ -1,0 +1,22 @@
+use std::assert as assert;
+use std::console as console;
+
+attribute range(min: i32, max: i32) for parameter retain compile;
+attribute legacy(message: string) for enum_case retain compile;
+
+enum Mode {
+    online,
+    [legacy("use online")]
+    compatibility
+};
+
+fn Clamp([range(0, 10)] value: i32) -> i32 {
+    return value < 0 ? 0 : (value > 10 ? 10 : value);
+}
+
+fn Entry() -> i32 {
+    assert::ExpectEqual(Clamp(14), 10, "parameter attribute target");
+    assert::Expect(Mode::compatibility != Mode::online, "enum case attribute target");
+    console::PrintLine("attribute-parameter-enum-case-ok");
+    return 0;
+}

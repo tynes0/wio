@@ -15371,6 +15371,12 @@ namespace wio::sema
             validateAttributeApplications(
                 node.attributes,
                 currentScope_->getKind() == ScopeKind::Struct ? "method" : "fn");
+        for (auto& parameter : node.parameters)
+        {
+            applyActiveScopedAttributes(parameter.attributes, "parameter");
+            if (!isDeclarationPass_ && !isStructResolutionPass_)
+                validateAttributeApplications(parameter.attributes, "parameter");
+        }
         auto buildGenericTypeParameterScope = [&]() -> std::unordered_map<std::string, Ref<Type>>
         {
             std::unordered_map<std::string, Ref<Type>> scope;
@@ -18337,6 +18343,12 @@ namespace wio::sema
         applyActiveScopedAttributes(node.attributes, "enum");
         if (!isDeclarationPass_ && !isStructResolutionPass_)
             validateAttributeApplications(node.attributes, "enum");
+        for (auto& member : node.members)
+        {
+            applyActiveScopedAttributes(member.attributes, "enum_case");
+            if (!isDeclarationPass_ && !isStructResolutionPass_)
+                validateAttributeApplications(member.attributes, "enum_case");
+        }
         if (isDeclarationPass_)
         {
             if (hasAttribute(node.attributes, Attribute::Specialize))
@@ -18458,6 +18470,12 @@ namespace wio::sema
         applyActiveScopedAttributes(node.attributes, "flagset");
         if (!isDeclarationPass_ && !isStructResolutionPass_)
             validateAttributeApplications(node.attributes, "flagset");
+        for (auto& member : node.members)
+        {
+            applyActiveScopedAttributes(member.attributes, "enum_case");
+            if (!isDeclarationPass_ && !isStructResolutionPass_)
+                validateAttributeApplications(member.attributes, "enum_case");
+        }
         if (isDeclarationPass_) {
             if (hasAttribute(node.attributes, Attribute::Specialize))
                 WIO_LOG_ADD_ERROR(node.location(), "@Specialize is supported only on generic object and component declarations.");
