@@ -3604,6 +3604,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_std_json_numeric_bounds_run
+        "${CMAKE_SOURCE_DIR}/tests/std_json_numeric_bounds_run.wio"
+        "std-json-numeric-bounds-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_std_json_numeric_bounds_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
         wio_test_std_concurrency_foundation_run
         "${CMAKE_SOURCE_DIR}/tests/std_concurrency_foundation_run.wio"
         "std-concurrency-foundation-ok"
