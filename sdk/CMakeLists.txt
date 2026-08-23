@@ -42,6 +42,15 @@ if(BUILD_TESTING)
         NAME wio_sdk_014_abi_markers
         COMMAND wio_sdk_014_abi_markers_test
     )
+
+    add_executable(wio_sdk_014_feature_inventory_test
+        "${CMAKE_SOURCE_DIR}/tests/sdk_014_feature_inventory_test.cpp"
+    )
+    target_link_libraries(wio_sdk_014_feature_inventory_test PRIVATE wio_sdk)
+    add_test(
+        NAME wio_sdk_014_feature_inventory
+        COMMAND wio_sdk_014_feature_inventory_test
+    )
 endif()
 
 install(DIRECTORY "${WIO_SDK_INCLUDE_DIR}/"

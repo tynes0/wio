@@ -211,6 +211,13 @@ Use `wio::sdk::features()`, `feature_info(...)`, or `find_feature(...)` to
 inspect that distinction programmatically. The authoritative human-readable
 matrix is [`WIO_SDK_0_13_PARITY_MATRIX.md`](./WIO_SDK_0_13_PARITY_MATRIX.md).
 
+From v0.14 onward every catalog row also has an explicit `FeatureSupport`
+state: `Supported`, `Partial`, or `Deferred`. `FeatureSurface` continues to say
+*where* a feature works; the support state says whether the advertised surface
+is complete or intentionally bounded. In particular, the newly bridged stable
+values advertise `DynamicField`, while pool identity, generic instantiation,
+interfaces, `Box`, `Any`, and async tasks remain visibly partial.
+
 ---
 
 ## 4. Loading Modules
