@@ -1,5 +1,6 @@
 use std::result as result;
 use std::option as option;
+use std::numeric as numeric;
 
 realm std {
     realm span {
@@ -11,7 +12,7 @@ realm std {
         }
 
         fn End(source: Span) -> usize {
-            return source.start + source.count;
+            return numeric::SaturatingAdd(source.start, source.count);
         }
 
         fn Empty(source: Span) -> bool {
@@ -48,7 +49,7 @@ realm std {
                 result.count = 0usize;
                 return result;
             }
-            result.start = source.start + start;
+            result.start = numeric::SaturatingAdd(source.start, start);
             let available = source.count - start;
             result.count = count;
             if (result.count > available) {
@@ -58,14 +59,16 @@ realm std {
         }
 
         fn At<T>(values: view T[], source: Span, index: usize) -> T {
-            if (index >= source.count or source.start + index >= values.Count()) {
+            if (index >= source.count or source.start >= values.Count() or
+                index >= values.Count() - source.start) {
                 std::Panic("span::At index is out of range.");
             }
             return values[source.start + index];
         }
 
         fn TryAt<T>(values: view T[], source: Span, index: usize, value: ref T) -> bool {
-            if (index >= source.count or source.start + index >= values.Count()) {
+            if (index >= source.count or source.start >= values.Count() or
+                index >= values.Count() - source.start) {
                 return false;
             }
             value = values[source.start + index];
@@ -73,7 +76,8 @@ realm std {
         }
 
         fn Get<T>(values: view T[], source: Span, index: usize) -> std::Option<T> {
-            if (index >= source.count or source.start + index >= values.Count()) {
+            if (index >= source.count or source.start >= values.Count() or
+                index >= values.Count() - source.start) {
                 return std::None<T>();
             }
             return std::Some<T>(values[source.start + index]);
@@ -94,7 +98,8 @@ realm std {
 
         fn Contains<T>(values: view T[], source: Span, target: T) -> bool {
             mut index = 0usize;
-            while (index < source.count and source.start + index < values.Count()) {
+            while (index < source.count and source.start < values.Count() and
+                   index < values.Count() - source.start) {
                 if (values[source.start + index] == target) {
                     return true;
                 }
@@ -105,7 +110,8 @@ realm std {
 
         fn Fill<T>(values: ref T[], source: Span, value: T) {
             mut index = 0usize;
-            while (index < source.count and source.start + index < values.Count()) {
+            while (index < source.count and source.start < values.Count() and
+                   index < values.Count() - source.start) {
                 values[source.start + index] = value;
                 index += 1usize;
             }
@@ -113,7 +119,7 @@ realm std {
 
         extension SpanMethods for Span {
             public view fn End() -> usize {
-                return self.start + self.count;
+                return span::End(deref self);
             }
 
             public view fn Empty() -> bool {

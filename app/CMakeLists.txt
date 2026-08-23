@@ -3584,6 +3584,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_std_container_invariants_014_run
+        "${CMAKE_SOURCE_DIR}/tests/std_container_invariants_014_run.wio"
+        "std-container-invariants-014-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_std_container_invariants_014_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
         wio_test_std_platform_conformance_vectors_run
         "${CMAKE_SOURCE_DIR}/tests/std_platform_conformance_vectors_run.wio"
         "std-platform-conformance-vectors-ok"
