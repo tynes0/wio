@@ -1,0 +1,66 @@
+use std::assert as assert;
+use std::console as console;
+use std::json as json;
+use std::serialization as serialization;
+
+component Profile {
+    id: u64;
+    name: string;
+}
+
+fn EncodeProfile(value: Profile) -> std::Result<json::Value> {
+    mut fields: Dict<string, json::Value> = {};
+    fields.Set("id", json::IntegerValue(value.id));
+    fields.Set("name", json::StringValue(value.name));
+    return std::Ok(json::ObjectValue(fields));
+}
+
+fn DecodeProfile(value: json::Value) -> std::Result<Profile> {
+    if (not value.IsObject()) {
+        return std::Err<Profile>(std::MakeResultError(
+            std::ResultDomain::custom, 10, "Profile must be a JSON object."
+        ));
+    }
+    let idField = value.Get("id");
+    let nameField = value.Get("name");
+    if (idField.IsNone() or nameField.IsNone() or not nameField.Value().IsString()) {
+        return std::Err<Profile>(std::MakeResultError(
+            std::ResultDomain::custom, 11, "Profile fields are missing or invalid."
+        ));
+    }
+    let id = idField.Value().U64();
+    if (id.IsError()) {
+        return std::Err<Profile>(id.ErrorValue());
+    }
+    mut profile = Profile();
+    profile.id = id.Value();
+    profile.name = nameField.Value().StringOr("");
+    return std::Ok(profile);
+}
+
+fn Entry() -> i32 {
+    mut profile = Profile();
+    profile.id = 18446744073709551615u64;
+    profile.name = "Ada";
+    let codec = serialization::MakeCodec<Profile, json::Value>(EncodeProfile, DecodeProfile);
+
+    let encoded = json::Encode<Profile>(profile, codec);
+    assert::Expect(encoded.IsOk(), "user codec encodes a component");
+    assert::ExpectEqual(
+        json::Write(encoded.Value()),
+        "{\"id\":18446744073709551615,\"name\":\"Ada\"}",
+        "codec uses exact JSON integer values"
+    );
+
+    let decoded = json::Decode<Profile>(encoded.Value(), codec);
+    assert::Expect(decoded.IsOk(), "user codec decodes a component");
+    assert::ExpectEqual(decoded.Value().id, profile.id, "decoded id");
+    assert::ExpectEqual(decoded.Value().name, profile.name, "decoded name");
+
+    let invalid = json::Decode<Profile>(json::StringValue("wrong"), codec);
+    assert::Expect(invalid.IsError(), "codec reports structured decode errors");
+    assert::ExpectEqual(invalid.ErrorValue().code, 10, "decode error code is preserved");
+
+    console::PrintLine!("std-serialization-codec-ok");
+    return 0;
+}

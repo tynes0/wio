@@ -3626,6 +3626,23 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_std_serialization_codec_run
+        "${CMAKE_SOURCE_DIR}/tests/std_serialization_codec_run.wio"
+        "std-serialization-codec-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_std_serialization_codec_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_std_serialization_codec_type_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/std_serialization_codec_type_mismatch.wio"
+        "No matching overload for 'Encode' with arguments"
+    )
+
+    add_wio_output_test(
         wio_test_std_concurrency_foundation_run
         "${CMAKE_SOURCE_DIR}/tests/std_concurrency_foundation_run.wio"
         "std-concurrency-foundation-ok"

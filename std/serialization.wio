@@ -19,6 +19,51 @@ realm std {
         fn IsJsonInteger(value: string) -> bool
             with native, cpp::name(wio::runtime::std_serialization::JsonNumberIsInteger);
 
+        // A format-neutral serialization capability. A codec carries two
+        // statically typed functions; the same value may therefore have
+        // multiple codecs without relying on global registration.
+        object Codec<TValue, TWire> {
+            private encoder: fn(TValue) -> std::Result<TWire>;
+            private decoder: fn(TWire) -> std::Result<TValue>;
+
+            OnConstruct(
+                encoder: fn(TValue) -> std::Result<TWire>,
+                decoder: fn(TWire) -> std::Result<TValue>
+            ) {
+                self.encoder = encoder;
+                self.decoder = decoder;
+            }
+
+            public fn Encode(value: TValue) -> std::Result<TWire> {
+                return self.encoder(value);
+            }
+
+            public fn Decode(value: TWire) -> std::Result<TValue> {
+                return self.decoder(value);
+            }
+        }
+
+        fn MakeCodec<TValue, TWire>(
+            encoder: fn(TValue) -> std::Result<TWire>,
+            decoder: fn(TWire) -> std::Result<TValue>
+        ) -> Codec<TValue, TWire> {
+            return Codec<TValue, TWire>(encoder, decoder);
+        }
+
+        fn EncodeWith<TValue, TWire>(
+            value: TValue,
+            codec: Codec<TValue, TWire>
+        ) -> std::Result<TWire> {
+            return codec.Encode(value);
+        }
+
+        fn DecodeWith<TValue, TWire>(
+            value: TWire,
+            codec: Codec<TValue, TWire>
+        ) -> std::Result<TValue> {
+            return codec.Decode(value);
+        }
+
         fn ToJson(value: string) -> string { return QuoteJson(value); }
         fn ToJson(value: bool) -> string {
             if (value) { return "true"; }

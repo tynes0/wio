@@ -1,0 +1,16 @@
+use std::json as json;
+use std::serialization as serialization;
+
+fn EncodeInteger(value: i32) -> std::Result<json::Value> {
+    return std::Ok(json::IntegerValue(value));
+}
+
+fn DecodeInteger(value: json::Value) -> std::Result<i32> {
+    return value.I32();
+}
+
+fn Entry() -> i32 {
+    let codec = serialization::MakeCodec<i32, json::Value>(EncodeInteger, DecodeInteger);
+    let invalid = json::Encode<string>("not-an-integer", codec);
+    return 0;
+}

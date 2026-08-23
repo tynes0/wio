@@ -193,6 +193,22 @@ realm std {
             return result;
         }
 
+        fn IntegerValue(value: i32) -> Value {
+            return IntegerValue(std::ToString<i32>(value));
+        }
+
+        fn IntegerValue(value: i64) -> Value {
+            return IntegerValue(std::ToString<i64>(value));
+        }
+
+        fn IntegerValue(value: u32) -> Value {
+            return IntegerValue(std::ToString<u32>(value));
+        }
+
+        fn IntegerValue(value: u64) -> Value {
+            return IntegerValue(std::ToString<u64>(value));
+        }
+
         fn DefaultParseOptions() -> ParseOptions {
             mut options = ParseOptions();
             options.maxDepth = 128usize;
@@ -437,6 +453,20 @@ realm std {
         }
 
         fn IsValid(value: string) -> bool { return Parse(value).IsOk(); }
+
+        fn Encode<T>(
+            value: T,
+            codec: serialization::Codec<T, Value>
+        ) -> std::Result<Value> {
+            return serialization::EncodeWith<T, Value>(value, codec);
+        }
+
+        fn Decode<T>(
+            value: Value,
+            codec: serialization::Codec<T, Value>
+        ) -> std::Result<T> {
+            return serialization::DecodeWith<T, Value>(value, codec);
+        }
 
         fn Indent(depth: usize, width: usize) -> string {
             mut result = "";
