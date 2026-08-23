@@ -25,6 +25,14 @@ realm std {
         @CppName(wio::runtime::std_random::Mt19937NextBounded)
         fn MtNextBounded(state: ref u32[], index: ref usize, maxExclusive: u32) -> u32;
 
+        @Native
+        @CppName(wio::runtime::std_random::Mt19937NextI32)
+        fn MtNextI32(
+            state: ref u32[],
+            index: ref usize,
+            minInclusive: i32,
+            maxExclusive: i32) -> i32;
+
         object Mt19937 {
             private state: u32[];
             private index: usize;
@@ -58,10 +66,7 @@ realm std {
             }
 
             public fn NextI32(minInclusive: i32, maxExclusive: i32) -> i32 {
-                if (maxExclusive <= minInclusive) {
-                    return minInclusive;
-                }
-                return minInclusive + (self.NextU32((maxExclusive - minInclusive) fit u32) fit i32);
+                return MtNextI32(ref self.state, ref self.index, minInclusive, maxExclusive);
             }
         }
 

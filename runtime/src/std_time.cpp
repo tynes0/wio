@@ -3,6 +3,7 @@
 #include <chrono>
 #include <ctime>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <thread>
 #include <vector>
@@ -42,6 +43,59 @@ namespace wio::runtime::std_time
         {
             const std::int64_t remainder = value % 1000;
             return remainder < 0 ? value - (1000 + remainder) : value - remainder;
+        }
+
+        std::int64_t floorDivide(const std::int64_t value, const std::int64_t divisor) noexcept
+        {
+            const std::int64_t quotient = value / divisor;
+            return value % divisor < 0 ? quotient - 1 : quotient;
+        }
+
+        std::int64_t daysFromCivil(
+            std::int64_t year,
+            const std::uint32_t month,
+            const std::uint32_t day) noexcept
+        {
+            year -= month <= 2u ? 1 : 0;
+            const std::int64_t era = (year >= 0 ? year : year - 399) / 400;
+            const auto yearOfEra = static_cast<std::uint32_t>(year - era * 400);
+            const std::int64_t adjustedMonth = static_cast<std::int64_t>(month) + (month > 2u ? -3 : 9);
+            const auto dayOfYear = static_cast<std::uint32_t>(
+                (153 * adjustedMonth + 2) / 5 + static_cast<std::int64_t>(day) - 1);
+            const auto dayOfEra = yearOfEra * 365u + yearOfEra / 4u - yearOfEra / 100u + dayOfYear;
+            return era * 146097 + static_cast<std::int64_t>(dayOfEra) - 719468;
+        }
+
+        bool civilFromDays(
+            std::int64_t days,
+            std::int32_t& year,
+            std::int32_t& month,
+            std::int32_t& day,
+            std::int32_t& yearDay) noexcept
+        {
+            const std::int64_t serialDays = days;
+            days += 719468;
+            const std::int64_t era = (days >= 0 ? days : days - 146096) / 146097;
+            const auto dayOfEra = static_cast<std::uint32_t>(days - era * 146097);
+            const auto yearOfEra = static_cast<std::uint32_t>(
+                (dayOfEra - dayOfEra / 1460u + dayOfEra / 36524u - dayOfEra / 146096u) / 365u);
+            std::int64_t resolvedYear = static_cast<std::int64_t>(yearOfEra) + era * 400;
+            const auto dayOfYear = dayOfEra - (365u * yearOfEra + yearOfEra / 4u - yearOfEra / 100u);
+            const auto monthPrime = static_cast<std::uint32_t>((5u * dayOfYear + 2u) / 153u);
+            const auto resolvedDay = dayOfYear - (153u * monthPrime + 2u) / 5u + 1u;
+            const auto resolvedMonth = monthPrime < 10u ? monthPrime + 3u : monthPrime - 9u;
+            resolvedYear += resolvedMonth <= 2u ? 1 : 0;
+            if (resolvedYear < (std::numeric_limits<std::int32_t>::min)() ||
+                resolvedYear > (std::numeric_limits<std::int32_t>::max)())
+                return false;
+
+            year = static_cast<std::int32_t>(resolvedYear);
+            month = static_cast<std::int32_t>(resolvedMonth);
+            day = static_cast<std::int32_t>(resolvedDay);
+            yearDay = static_cast<std::int32_t>(
+                serialDays -
+                daysFromCivil(resolvedYear, 1u, 1u) + 1);
+            return true;
         }
     }
 
@@ -109,6 +163,23 @@ namespace wio::runtime::std_time
         std::int32_t& weekDay,
         std::int32_t& yearDay) noexcept
     {
+        if (!local)
+        {
+            const std::int64_t totalSeconds = floorDivide(unixMilliseconds, 1000);
+            const std::int64_t days = floorDivide(totalSeconds, 86400);
+            const std::int64_t secondOfDay = totalSeconds - days * 86400;
+            if (!civilFromDays(days, year, month, day, yearDay))
+                return false;
+            hour = static_cast<std::int32_t>(secondOfDay / 3600);
+            minute = static_cast<std::int32_t>((secondOfDay % 3600) / 60);
+            second = static_cast<std::int32_t>(secondOfDay % 60);
+            millisecond = static_cast<std::int32_t>(unixMilliseconds - totalSeconds * 1000);
+            std::int64_t normalizedWeekDay = (days + 4) % 7;
+            if (normalizedWeekDay < 0) normalizedWeekDay += 7;
+            weekDay = static_cast<std::int32_t>(normalizedWeekDay);
+            return true;
+        }
+
         const std::int64_t floored = floorMilliseconds(unixMilliseconds);
         const std::time_t seconds = static_cast<std::time_t>(floored / 1000);
         std::tm value{};
@@ -142,9 +213,31 @@ namespace wio::runtime::std_time
             day < 1 || day > DaysInMonth(year, month) ||
             hour < 0 || hour > 23 ||
             minute < 0 || minute > 59 ||
-            second < 0 || second > 60 ||
+            second < 0 || second > 59 ||
             millisecond < 0 || millisecond > 999)
             return false;
+
+        if (!local)
+        {
+            const std::int64_t days = daysFromCivil(
+                static_cast<std::int64_t>(year),
+                static_cast<std::uint32_t>(month),
+                static_cast<std::uint32_t>(day));
+            constexpr std::int64_t MillisecondsPerDay = 86400000;
+            const std::int64_t minDays = (std::numeric_limits<std::int64_t>::min)() / MillisecondsPerDay;
+            const std::int64_t maxDays = (std::numeric_limits<std::int64_t>::max)() / MillisecondsPerDay;
+            if (days < minDays || days > maxDays)
+                return false;
+            const std::int64_t timeOfDay =
+                static_cast<std::int64_t>(hour) * 3600000 +
+                static_cast<std::int64_t>(minute) * 60000 +
+                static_cast<std::int64_t>(second) * 1000 + millisecond;
+            const std::int64_t base = days * MillisecondsPerDay;
+            if (base > (std::numeric_limits<std::int64_t>::max)() - timeOfDay)
+                return false;
+            result = base + timeOfDay;
+            return true;
+        }
 
         std::tm value{};
         value.tm_year = year - 1900;

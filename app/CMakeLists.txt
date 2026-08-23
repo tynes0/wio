@@ -3582,6 +3582,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "std-unicode-normalization-ok"
         --run
     )
+
+    add_wio_output_test(
+        wio_test_std_platform_conformance_vectors_run
+        "${CMAKE_SOURCE_DIR}/tests/std_platform_conformance_vectors_run.wio"
+        "std-platform-conformance-vectors-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_std_platform_conformance_vectors_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
     set_tests_properties(
         wio_test_std_unicode_normalization_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
