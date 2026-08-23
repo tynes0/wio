@@ -17659,10 +17659,62 @@ namespace wio::sema
                             {
                                 if (auto lockedScope = baseType->structScope.Lock(); lockedScope)
                                 {
-                                    if (lockedScope->resolveLocally(funcName))
+                                    auto baseMember = lockedScope->resolveLocally(funcName);
+                                    if (baseMember)
                                     {
-                                        isOverride = true; 
-                                        break;
+                                        std::vector<Ref<Symbol>> candidates;
+                                        if (baseMember->kind == SymbolKind::FunctionGroup)
+                                            candidates = baseMember->overloads;
+                                        else if (baseMember->kind == SymbolKind::Function)
+                                            candidates.push_back(baseMember);
+
+                                        auto genericOwner = baseType->genericPrimaryType.Lock();
+                                        const auto& parameterNames = genericOwner
+                                            ? genericOwner->genericParameterNames
+                                            : baseType->genericParameterNames;
+                                        const bool hasParameterPack = genericOwner
+                                            ? genericOwner->hasGenericParameterPack
+                                            : baseType->hasGenericParameterPack;
+                                        const auto bindings = buildExtendedGenericBindings(
+                                            parameterNames,
+                                            hasParameterPack,
+                                            baseType->genericArguments
+                                        );
+                                        auto memberFunctionType = memberSym && memberSym->type
+                                            ? memberSym->type.AsFast<FunctionType>()
+                                            : nullptr;
+
+                                        for (const auto& candidate : candidates)
+                                        {
+                                            auto candidateType = candidate && candidate->type
+                                                ? candidate->type.AsFast<FunctionType>()
+                                                : nullptr;
+                                            auto instantiatedCandidate = candidateType
+                                                ? instantiateGenericType(candidateType, bindings).AsFast<FunctionType>()
+                                                : nullptr;
+                                            if (!memberFunctionType || !instantiatedCandidate ||
+                                                memberFunctionType->paramTypes.size() != instantiatedCandidate->paramTypes.size())
+                                                continue;
+
+                                            bool signatureMatches = isExactType(
+                                                memberFunctionType->returnType,
+                                                instantiatedCandidate->returnType
+                                            );
+                                            for (size_t parameterIndex = 0;
+                                                 signatureMatches && parameterIndex < memberFunctionType->paramTypes.size();
+                                                 ++parameterIndex)
+                                            {
+                                                signatureMatches = isExactType(
+                                                    memberFunctionType->paramTypes[parameterIndex],
+                                                    instantiatedCandidate->paramTypes[parameterIndex]
+                                                );
+                                            }
+                                            if (!signatureMatches)
+                                                continue;
+
+                                            isOverride = true;
+                                            memberSym->overriddenSymbols.emplace_back(candidate);
+                                        }
                                     }
                                 }
                             }

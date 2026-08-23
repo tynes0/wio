@@ -3636,6 +3636,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 
+    add_wio_output_test(
+        wio_test_generic_interface_parameter_override_run
+        "${CMAKE_SOURCE_DIR}/tests/generic_interface_parameter_override_run.wio"
+        "generic-interface-parameter-override-ok"
+        --run
+    )
+    set_tests_properties(
+        wio_test_generic_interface_parameter_override_run
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
     add_wio_failure_test(
         wio_invalid_std_serialization_codec_type_mismatch
         "${CMAKE_SOURCE_DIR}/tests/invalid/std_serialization_codec_type_mismatch.wio"

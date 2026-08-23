@@ -10033,6 +10033,57 @@ namespace wio::codegen
 
         emitDefaultArgumentWrappers();
 
+        if (!isEmittingPrototypes_ && !currentClassName_.empty() && sym &&
+            !sym->overriddenSymbols.empty() && node.genericParameters.empty())
+        {
+            const std::string implementationName = Mangler::mangleFunction(funcName, funcType->paramTypes);
+            std::unordered_set<std::string> emittedBridgeNames;
+            for (const auto& overriddenWeak : sym->overriddenSymbols)
+            {
+                auto overridden = overriddenWeak.Lock();
+                auto overriddenType = overridden && overridden->type
+                    ? overridden->type.AsFast<sema::FunctionType>()
+                    : nullptr;
+                if (!overriddenType)
+                    continue;
+
+                const std::string bridgeName = Mangler::mangleFunction(funcName, overriddenType->paramTypes);
+                if (bridgeName == implementationName || !emittedBridgeNames.insert(bridgeName).second)
+                    continue;
+
+                emitGeneratedDirective();
+                EMIT_TABS();
+                emit("virtual " + returnType + " " + bridgeName + "(");
+                for (size_t parameterIndex = 0; parameterIndex < node.parameters.size(); ++parameterIndex)
+                {
+                    auto& parameter = node.parameters[parameterIndex];
+                    emit(common::formatString(
+                        "{} {}",
+                        toCppType(parameter.name->refType.Lock()),
+                        sanitizeCppIdentifier(parameter.name->token.value)
+                    ));
+                    if (parameterIndex + 1 < node.parameters.size())
+                        emit(", ");
+                }
+                emitLine(") override");
+                emitLine("{");
+                indent();
+                EMIT_TABS();
+                if (funcType->returnType && !funcType->returnType->isVoid())
+                    emit("return ");
+                emit(implementationName + "(");
+                for (size_t parameterIndex = 0; parameterIndex < node.parameters.size(); ++parameterIndex)
+                {
+                    emit(sanitizeCppIdentifier(node.parameters[parameterIndex].name->token.value));
+                    if (parameterIndex + 1 < node.parameters.size())
+                        emit(", ");
+                }
+                emitLine(");");
+                dedent();
+                emitLine("}");
+            }
+        }
+
         if (emitsExportWrapper && !isEmittingPrototypes_ && currentClassName_.empty() && node.body)
         {
             emitGeneratedDirective();

@@ -1,0 +1,29 @@
+use std::assert as assert;
+use std::console as console;
+
+interface Mapper<T> {
+    fn Map(value: T) -> T;
+}
+
+@From(Mapper<i32>)
+object Doubler {
+    public fn Map(value: i32) -> i32 {
+        return value * 2;
+    }
+}
+
+fn MapThroughInterface(mapper: view Mapper<i32>, value: i32) -> i32 {
+    return mapper.Map(value);
+}
+
+fn Entry() -> i32 {
+    let mapper = Doubler();
+    assert::ExpectEqual(mapper.Map(6), 12, "direct generic-interface implementation call");
+    assert::ExpectEqual(
+        MapThroughInterface(mapper, 7),
+        14,
+        "generic interface parameter dispatch"
+    );
+    console::PrintLine!("generic-interface-parameter-override-ok");
+    return 0;
+}
