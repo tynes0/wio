@@ -134,7 +134,7 @@ powerful, inspectable attribute system before application hosting expands.
 Required scope:
 
 - canonical declaration-leading `[Attribute]` syntax, grouped/stacked lists,
-  qualified names, named arguments, and scoped `use [Attribute];` activation;
+  qualified names, named arguments, and the existing scoped `using` activation;
 - one normalized typed model for built-ins and user declarations, including
   target policy, defaults, retention, repetition, inheritance, conflicts, and
   folded structural arguments;

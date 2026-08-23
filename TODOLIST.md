@@ -79,8 +79,9 @@ here does not by itself mean that v1 cannot ship.
 12. [~] Replace the legacy annotation surface with typed, user-extensible
     attributes before expanding application/system hosting. The accepted
     canonical spelling is declaration-leading `[Attribute]`, with stacked or
-    grouped lists and `use [Attribute];` for attributes that opt into lexical
-    activation. Postfix `with` and `@Attribute(...)` are legacy migration input,
+    grouped lists. Existing `using cpp::header(...)`-style lexical activation
+    remains canonical; `use` stays reserved for module imports. Postfix `with`
+    and `@Attribute(...)` are legacy migration input,
     not the final surface. Typed arguments/defaults, target policies, retention,
     repetition, inheritance, conflicts, named arguments, folded scalar/string/
     text defaults, and runtime type/field reflection are partially implemented.

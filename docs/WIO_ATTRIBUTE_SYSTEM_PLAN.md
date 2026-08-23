@@ -70,11 +70,12 @@ enum NetworkMode {
 }
 ```
 
-Lexical activation keeps the existing `use` shape but applies a bracketed
-attribute rather than overloading import syntax with an annotation sigil:
+Lexical activation deliberately keeps the existing `using` grammar. Brackets
+mean "attach to this target"; `using` means "activate in this lexical scope".
+`use` remains exclusively a module-import construct:
 
 ```wio
-use [CppHeader("raylib.h")];
+using cpp::header("raylib.h");
 
 [Native, CppName("Vector2")]
 component Vector2 {
@@ -87,7 +88,7 @@ A bounded activation block is also allowed for attributes that opt into
 scoping:
 
 ```wio
-use [CppHeader("raylib.h")] {
+using cpp::header("raylib.h") {
     [Native, CppName("Vector2")]
     component Vector2 {
         x: f32;
@@ -248,15 +249,129 @@ silently treated as cancellation-safe asynchronous cleanup.
 
 ## 6. Reflection, SDK, and tooling
 
-Reflection and the host SDK expose:
+The current `string[]` reflection surface is migration-only. It flattens an
+application such as `[Route(method: Get, path: "/health")]` into display text,
+which loses argument types, defaults, stable identity, origin, and processor
+information. Wio 0.15 replaces that representation with two complementary
+layers.
 
-- stable attribute type identity;
+### 6.1 Typed queries
+
+Code that knows the attribute type uses generic queries and receives the actual
+normalized attribute value:
+
+```wio
+let type = reflect::Describe<User>();
+
+if (type.Has<Serializable>()) {
+    let serializable = type.Attribute<Serializable>().Value();
+    console::PrintLine!(serializable.format);
+}
+
+let method = type.Method("GetUser").Value();
+let route = method.Attribute<http::Route>().Value();
+console::PrintLine!($"${route.method} ${route.path}");
+```
+
+The returned value contains all declared parameters after named arguments and
+defaults have been normalized. There is no string parsing and a wrong query
+type is rejected or returns `None`, depending on whether the target is known at
+compile time.
+
+### 6.2 Erased inspection
+
+Editors, serializers, debuggers, generic frameworks, and hosts that do not know
+the attribute type use descriptors:
+
+```wio
+component AttributeArgumentInfo {
+    name: string;
+    typeName: string;
+    stableTypeId: u64;
+    value: any;
+    usedDefault: bool;
+}
+
+component AttributeInfo {
+    name: string;
+    stableTypeId: u64;
+    retention: AttributeRetention;
+    purpose: AttributePurpose;
+    origin: AttributeOrigin;
+    arguments: AttributeArgumentInfo[];
+}
+```
+
+The exact storage type may use the existing checked dynamic-value machinery at
+ABI boundaries, but its semantic requirements are fixed. `AttributeOrigin`
+distinguishes direct, inherited, scoped, derived/generated, and compiler-
+synthesized applications. Target descriptors exist for types, fields, methods,
+parameters, return values, generic parameters, enum cases, and handlers.
+
+Retention is enforced rather than merely reported:
+
+- source-retained applications are available to source tooling only;
+- compile-retained applications are available to validation/derive/behavioral
+  processors and compiler inspection output but are not emitted as ordinary
+  runtime user reflection;
+- runtime-retained applications are emitted into module metadata and can be
+  queried from Wio and the C++ SDK.
+
+Behavior that survives lowering keeps a compact execution descriptor for stack
+traces, diagnostics, and pipeline inspection even when its user metadata is
+compile-retained. That descriptor does not expose arbitrary executable memory
+or permit reflection to run a processor again.
+
+### 6.3 Behavioral pipeline reflection
+
+Methods expose their effective behavioral pipeline separately from metadata:
+
+```wio
+let method = reflect::Describe<Controller>()
+    .Method("Update")
+    .Value();
+
+for (behavior in method.Behaviors()) {
+    console::PrintLine!(
+        $"${behavior.phase}: ${behavior.processorName}"
+    );
+}
+```
+
+Each entry records phase, stable processor identity, explicit order/dependency,
+declared effects, source attribute, and whether it may skip/proceed/transform.
+It is read-only metadata; reflection cannot reorder or mutate the compiled
+pipeline.
+
+### 6.4 C++ SDK view
+
+The C++ SDK receives owned inspection snapshots analogous to `Module::inspect()`:
+
+```cpp
+auto type = module.load_object("Controller").info();
+auto method = type.method("Update");
+
+for (const auto& applied : method.attributes()) {
+    std::cout << applied.name() << '\n';
+    if (auto path = applied.argument("path"))
+        std::cout << path->get_as<wio::sdk::WioText>();
+}
+```
+
+Descriptors use stable IDs and checked typed/dynamic values; they never expose
+Wio's internal C++ layout. Snapshots own names and argument values, while any
+live target/invocation handle remains module-generation-bound and becomes stale
+after reload.
+
+Reflection and the host SDK therefore expose:
+
+- stable attribute type identity and declaration information;
 - declared and effective typed arguments;
 - source/compile/runtime retention;
 - target and propagation policy;
 - processor purpose and declared effects;
 - generated declarations and their source application;
-- deterministic behavioral pipeline order.
+- deterministic behavioral pipeline order and declared effects.
 
 The compiler and editor provide:
 
@@ -277,9 +392,10 @@ and editor snippets emit `[Name(...)]`.
 Migration examples:
 
 - `@Native` or `with native` -> `[Native]`;
-- `@CppHeader("x.h")` or `with cpp::header("x.h")` -> `[CppHeader("x.h")]`;
-- `use @CppHeader("x.h")` or `using cpp::header("x.h")` ->
-  `use [CppHeader("x.h")];`;
+- declaration-level `@CppHeader("x.h")` or `with cpp::header("x.h")` ->
+  `[CppHeader("x.h")]`;
+- `use @CppHeader("x.h")` -> `using cpp::header("x.h");`; existing canonical
+  `using cpp::header("x.h")` source does not migrate;
 - `@CppName("Foo")` -> `[CppName("Foo")]`;
 - `@Export` -> `[Export]`;
 - `@Deprecated("...")` -> `[Deprecated("...")]`;
@@ -294,8 +410,8 @@ the source spelling used during the compatibility window.
 
 ## 8. Delivery order and release gate
 
-1. Parse `[Attribute]`, grouped lists, target positions, and scoped `use` while
-   preserving legacy input.
+1. Parse `[Attribute]`, grouped lists, and all target positions while preserving
+   legacy input and the existing scoped `using` grammar.
 2. Normalize built-ins and user attributes into one typed AST/model.
 3. Complete target, argument, default, repetition, inheritance, scope,
    conflict, retention, and constant-evaluation diagnostics.

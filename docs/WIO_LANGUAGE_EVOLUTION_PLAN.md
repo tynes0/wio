@@ -343,8 +343,8 @@ schedule grammar because it defines a static dependency edge.
 
 > **Superseded syntax note:** the earlier postfix `with`/`using` spelling in
 > this historical design section is no longer the accepted source surface.
-> Wio 0.15 standardizes declaration-leading `[Attribute]` and scoped
-> `use [Attribute];`. The authoritative syntax, behavioral processor, safety,
+> Wio 0.15 standardizes declaration-leading `[Attribute]` while preserving the
+> existing scoped `using` grammar. The authoritative syntax, behavioral processor, safety,
 > reflection, tooling, and migration contract is
 > [`WIO_ATTRIBUTE_SYSTEM_PLAN.md`](./WIO_ATTRIBUTE_SYSTEM_PLAN.md). The material
 > below remains only as rationale for the typed/capability-bounded model until
