@@ -19,7 +19,7 @@ the color theme.
 
 ## Play
 
-With Wio 0.13 installed, open this directory and run:
+With Wio 0.14 installed, open this directory and run:
 
 ```powershell
 wio project run
@@ -88,5 +88,5 @@ Wio-owned best score is retained. The current reference result begins with:
 MiniWio Flappy: mode=headless frames=720
 ```
 
-The adapter uses the SDK surface shared by Wio 0.12 and 0.13, while the
-recommended installed toolchain for this example is Wio 0.13.0.
+The adapter uses the SDK surface shared by Wio 0.12 through 0.14, while the
+recommended installed toolchain for this example is Wio 0.14.0.
