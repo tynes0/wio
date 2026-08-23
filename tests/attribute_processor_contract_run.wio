@@ -1,0 +1,19 @@
+use std::attribute as attr;
+use std::console as console;
+
+[From(attr::PreProcessor)]
+object AliveGuardProcessor {}
+
+[attribute::Targets(fn)]
+[attribute::Processor(AliveGuardProcessor)]
+attribute AliveGuard();
+
+[AliveGuard]
+fn ProtectedWork() -> i32 {
+    return 42;
+}
+
+fn Entry() -> i32 {
+    console::PrintLine("attribute-processor-contract-ok");
+    return ProtectedWork() == 42 ? 0 : 1;
+}

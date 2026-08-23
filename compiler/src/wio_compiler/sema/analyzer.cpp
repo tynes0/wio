@@ -14621,6 +14621,68 @@ namespace wio::sema
                 }
             }
         }
+
+        std::unordered_map<std::string, std::vector<std::string>> orderingEdges;
+        for (const auto& attribute : attributes)
+        {
+            if (!attribute || attribute->attribute != Attribute::Unknown)
+                continue;
+            Ref<Symbol> symbol = resolveQualifiedSymbol(currentScope_, attribute->qualifiedName);
+            if (!symbol || symbol->kind != SymbolKind::Attribute)
+                continue;
+            const std::string sourceName = nameTail(attribute->qualifiedName);
+            for (const std::string& before : symbol->attributeBeforeAttributes)
+                if (hasEffectiveAttribute(before))
+                    orderingEdges[sourceName].push_back(nameTail(before));
+            for (const std::string& after : symbol->attributeAfterAttributes)
+                if (hasEffectiveAttribute(after))
+                    orderingEdges[nameTail(after)].push_back(sourceName);
+        }
+
+        enum class OrderingVisit : std::uint8_t { None, Active, Complete };
+        std::unordered_map<std::string, OrderingVisit> orderingVisits;
+        std::vector<std::string> orderingPath;
+        std::function<bool(const std::string&)> visitOrdering = [&](const std::string& name)
+        {
+            OrderingVisit& state = orderingVisits[name];
+            if (state == OrderingVisit::Complete)
+                return false;
+            if (state == OrderingVisit::Active)
+            {
+                std::string cycle;
+                const auto start = std::ranges::find(orderingPath, name);
+                for (auto it = start; it != orderingPath.end(); ++it)
+                {
+                    if (!cycle.empty()) cycle += " -> ";
+                    cycle += *it;
+                }
+                if (!cycle.empty()) cycle += " -> ";
+                cycle += name;
+                WIO_LOG_ADD_ERROR(
+                    attributes.empty() ? common::Location::invalid() : attributes.front()->location(),
+                    "Attribute processor ordering cycle detected: {}.",
+                    cycle);
+                return true;
+            }
+
+            state = OrderingVisit::Active;
+            orderingPath.push_back(name);
+            bool foundCycle = false;
+            if (const auto edge = orderingEdges.find(name); edge != orderingEdges.end())
+            {
+                for (const std::string& destination : edge->second)
+                    foundCycle = visitOrdering(destination) || foundCycle;
+            }
+            orderingPath.pop_back();
+            state = OrderingVisit::Complete;
+            return foundCycle;
+        };
+        for (const auto& [name, destinations] : orderingEdges)
+        {
+            WIO_UNUSED(destinations);
+            if (visitOrdering(name))
+                break;
+        }
     }
 
     void SemanticAnalyzer::applyActiveScopedAttributes(
@@ -14835,6 +14897,54 @@ namespace wio::sema
                     );
                 }
             }
+        }
+
+        Ref<Symbol> attributeSymbol = node.name ? node.name->referencedSymbol.Lock() : nullptr;
+        if (!attributeSymbol)
+            return;
+
+        attributeSymbol->attributeProcessorPhases.clear();
+        for (const std::string& processorName : node.processorTypes)
+        {
+            Ref<Symbol> processorSymbol = resolveQualifiedSymbol(currentScope_, processorName);
+            Ref<Type> processorType = processorSymbol ? unwrapAliasType(processorSymbol->type) : nullptr;
+            if (!processorSymbol || processorSymbol->kind != SymbolKind::Struct ||
+                !processorType || processorType->kind() != TypeKind::Struct)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Attribute processor '{}' must name an object implementing one phase interface.",
+                    processorName);
+                continue;
+            }
+
+            std::unordered_set<std::string> phases;
+            std::unordered_set<const Type*> visitedTypes;
+            std::function<void(const Ref<Type>&)> collectPhases = [&](const Ref<Type>& candidate)
+            {
+                Ref<Type> resolved = unwrapAliasType(candidate);
+                if (!resolved || resolved->kind() != TypeKind::Struct || !visitedTypes.insert(resolved.Get()).second)
+                    return;
+                auto structure = resolved.AsFast<StructType>();
+                const std::string& typeName = structure->name;
+                if (typeName == "PreProcessor") phases.insert("pre");
+                else if (typeName == "PostProcessor") phases.insert("post");
+                else if (typeName == "FinallyProcessor") phases.insert("finally");
+                else if (typeName == "AroundProcessor") phases.insert("around");
+                for (const auto& base : structure->baseTypes)
+                    collectPhases(base);
+            };
+            collectPhases(processorType);
+
+            if (phases.size() != 1)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Attribute processor '{}' must implement exactly one of PreProcessor, PostProcessor, FinallyProcessor, or AroundProcessor.",
+                    processorName);
+                continue;
+            }
+            attributeSymbol->attributeProcessorPhases.push_back(*phases.begin());
         }
     }
     

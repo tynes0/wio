@@ -1,0 +1,7 @@
+object PlainProcessor {}
+
+[attribute::Targets(fn)]
+[attribute::Processor(PlainProcessor)]
+attribute InvalidProcessor();
+
+fn Entry() -> i32 { return 0; }

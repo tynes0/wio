@@ -58,6 +58,7 @@ namespace wio::sema
         std::vector<std::string> attributeAfterAttributes;
         std::vector<std::string> attributeImpliedAttributes;
         std::vector<std::string> attributeProcessorTypes;
+        std::vector<std::string> attributeProcessorPhases;
         std::vector<std::string> attributeParameterNames;
         std::vector<Ref<Type>> attributeParameterTypes;
         std::vector<bool> attributeParameterHasDefault;

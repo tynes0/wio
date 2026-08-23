@@ -1,0 +1,14 @@
+[attribute::Targets(component)]
+[attribute::Before(Second)]
+attribute First();
+
+[attribute::Targets(component)]
+[attribute::Before(First)]
+attribute Second();
+
+[First, Second]
+component InvalidOrder {
+    value: i32;
+}
+
+fn Entry() -> i32 { return 0; }
