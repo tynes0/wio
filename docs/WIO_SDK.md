@@ -793,6 +793,21 @@ Tuple arity and every element type participate in `can_access_as<T>()`.
 Unsupported nested values are rejected by Wio analysis instead of reaching a
 C++ template or erased-payload failure.
 
+Wio's `std::Span` is deliberately a checked `(start, count)` token; it does not
+own or retain the array it was created from. Exported span fields therefore use
+`WioSpanRange`, while `WioSpan<T>` remains the host's borrowed memory view:
+
+```cpp
+auto values = object.field("values").get_as<std::vector<std::int32_t>>();
+auto range = object.field("window").get_as<WioSpanRange>();
+WioSpan<const std::int32_t> window(values.data(), values.size(), range);
+```
+
+The host must keep `values` alive while `window` is used. Applying a range to a
+host span clamps it to the source bounds, matching `std::span::Make` and
+`std::span::Slice`. The SDK does not disguise an exported range token as a
+borrow into memory owned by another module.
+
 ---
 
 ## 10. Hot Reload

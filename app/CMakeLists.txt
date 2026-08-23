@@ -2069,6 +2069,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "SDK 0.14 tuple: selected=none error=730 revision=9000000000"
     )
 
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_014_span_range_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_span_range_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_span_range_host.cpp"
+        "SDK 0.14 span: start=2 count=2 values=30-40"
+    )
+
     add_wio_shared_reload_interop_test(
         wio_test_module_reload_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/module_reload.wio"
