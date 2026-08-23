@@ -1,13 +1,13 @@
 # Wio SDK Evolution Plan
 
-Status: pre-v1 parity plan for Wio `v0.13.0` and later. The current stable SDK contract
+Status: pre-v1 parity plan for Wio `v0.14.0` and later. The current stable SDK contract
 remains in [`WIO_SDK.md`](./WIO_SDK.md); this document tracks the work required
 before Wio `1.0.0`.
 
 ## 1. Product and version rule
 
 The SDK is part of the Wio product, not an independently aging compatibility
-sample. Starting with the next release, the published SDK product version must
+sample. Starting with Wio 0.13, the published SDK product version must
 match the compiler, runtime, standard library, CLI, package, and VS Code
 extension version.
 
@@ -135,6 +135,21 @@ Still open before slice 1/2 can be called fully closed:
 - retained typed-attribute metadata and its capability/version rules;
 - interface, Box, any, and move-only resource adapters where metadata alone is
   insufficient for real host invocation.
+
+### 4.2 Progress after the 0.14 value-parity sprint
+
+Wio 0.14 closes the stable value portion of slices 1 and 2:
+
+- ABI descriptor v8 publishes concrete const-value descriptors;
+- Option, Result/unit, tuple, arrays/maps, queue, sets, span ranges,
+  ByteBuffer, and nested combinations have dynamic field bridges;
+- the feature catalog distinguishes Supported, Partial, and Deferred entries;
+- unsupported public shapes and unspecialized user generics fail in analysis;
+- [`WIO_SDK_0_14_PARITY_MATRIX.md`](./WIO_SDK_0_14_PARITY_MATRIX.md) is the
+  normative release inventory.
+
+Remaining Partial/Deferred entries are ownership, invocation, retained
+metadata, async, and application-host work scheduled from v0.15 onward.
 
 After the parity baseline lands, each Wio release updates the SDK in the same
 release PR and package. A release cannot be called complete when it adds a

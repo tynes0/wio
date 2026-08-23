@@ -1,7 +1,7 @@
 # Wio Host SDK
 
 This document defines the current public C++ host and embedding surface for Wio.
-It is the SDK contract shipped with Wio v0.13 and the baseline of the planned
+It is the SDK contract shipped with Wio v0.14 and the baseline of the planned
 Wio v1 host integration layer. The pre-v1 parity and synchronized-version plan
 is tracked in [`WIO_SDK_EVOLUTION_PLAN.md`](./WIO_SDK_EVOLUTION_PLAN.md).
 
@@ -28,10 +28,10 @@ The SDK product version is available without loading a module:
 
 ```cpp
 static_assert(WIO_SDK_VERSION_MAJOR == 0);
-static_assert(WIO_SDK_VERSION_MINOR == 13);
+static_assert(WIO_SDK_VERSION_MINOR == 14);
 static_assert(wio::sdk::product_version.patch == 0);
 
-std::cout << wio::sdk::product_version_string; // 0.13.0
+std::cout << wio::sdk::product_version_string; // 0.14.0
 ```
 
 `WIO_MODULE_API_DESCRIPTOR_VERSION` remains an independent low-level ABI
@@ -209,7 +209,7 @@ catalog advertises one.
 
 Use `wio::sdk::features()`, `feature_info(...)`, or `find_feature(...)` to
 inspect that distinction programmatically. The authoritative human-readable
-matrix is [`WIO_SDK_0_13_PARITY_MATRIX.md`](./WIO_SDK_0_13_PARITY_MATRIX.md).
+matrix is [`WIO_SDK_0_14_PARITY_MATRIX.md`](./WIO_SDK_0_14_PARITY_MATRIX.md).
 
 From v0.14 onward every catalog row also has an explicit `FeatureSupport`
 state: `Supported`, `Partial`, or `Deferred`. `FeatureSurface` continues to say
@@ -253,7 +253,7 @@ int main()
 - validates the SDK descriptor version and the full host-visible ABI descriptor contract
 - invokes `@ModuleLoad` automatically when present
 
-Generated 0.13 modules also publish their product version and descriptor size.
+Generated 0.14 modules also publish their product version and descriptor size.
 Hosts can take an owned inspection snapshot:
 
 ```cpp
@@ -628,6 +628,8 @@ runtime reflection rather than compile-time knowledge.
 - `WioDynamicDict`
 - `WioDynamicTree`
 - `WioDynamicFunction`
+- `WioDynamicTypedValue` for the v0.14 Option/Result/unit, tuple, queue/set,
+  span, and byte-buffer bridge families
 
 Example:
 
@@ -648,6 +650,23 @@ state.field("callback").set_dynamic(
         {
             return value * 3;
         })));
+```
+
+Portable v0.14 values retain their exact host representation behind a checked
+typed wrapper:
+
+```cpp
+using Count = wio::sdk::WioOption<std::int32_t>;
+
+auto value = state.field("selected").get_dynamic();
+if (value.is_typed() && value.as_typed().can_access_as<Count>())
+{
+    auto count = value.as_typed().get_as<Count>();
+    (void)count;
+}
+
+state.field("selected").set_dynamic(
+    wio::sdk::WioDynamicValue::typed(Count::some(14)));
 ```
 
 Enum/flagset dynamic example:
@@ -934,7 +953,7 @@ rather than as obscure backend-only failures.
 
 ---
 
-## 12. Official v0.13 Boundary
+## 12. Official v0.14 Boundary
 
 For the current SDK version, the public and documented boundary is:
 
@@ -950,8 +969,8 @@ For the current SDK version, the public and documented boundary is:
 - `WioDynamicValue` and the current dynamic container wrappers as the runtime
   reflection payload family
 - generation-aware stale-wrapper diagnostics for reload-sensitive wrappers
-- ABI descriptor version `7`, module product/version inspection, stable type
-  IDs, generic arguments, and Unicode text dynamic fields
+- ABI descriptor version `8`, module product/version inspection, stable type
+  IDs, concrete type/const arguments, and supported nested dynamic fields
 
 The following should be treated as stable with explicit caveats:
 
@@ -961,7 +980,7 @@ The following should be treated as stable with explicit caveats:
   deeper host-side reflection growth beyond that should still be treated as
   future-facing
 
-The following should not currently be read as part of the stable v0.13 SDK
+The following should not currently be read as part of the stable v0.14 SDK
 contract:
 
 - compiler-internal AST/parser/sema/codegen APIs
@@ -969,13 +988,12 @@ contract:
 - automatic semantic reconciliation of stale object/component wrappers across
   reload generations
 - `ref` / `view` field export behavior as a public host ABI promise
-- direct binary exchange for Option/Result/tuple/queue/set/span/Box/any host
-  mirrors; their 0.13 contract is host semantics plus metadata unless the
-  feature catalog reports a dynamic or direct-call surface
+- direct binary exchange for partial/deferred catalog entries such as
+  interface, Box, any, async task, pool identity, and retained attributes
 - retained typed-attribute metadata, non-blocking task control, and the future
   application/system host lifecycle ABI
 
-This is the implemented v0.13 baseline, not the final v1 parity claim. The
+This is the implemented v0.14 value-parity baseline, not the final v1 parity claim. The
 required path to full host-observable language/runtime parity is maintained in
 [`WIO_SDK_EVOLUTION_PLAN.md`](./WIO_SDK_EVOLUTION_PLAN.md).
 
@@ -984,6 +1002,6 @@ required path to full host-observable language/runtime parity is maintained in
 ## 13. See Also
 
 - [`WIO_PROJECT_SYSTEM.md`](./WIO_PROJECT_SYSTEM.md)
-- [`WIO_SDK_0_13_PARITY_MATRIX.md`](./WIO_SDK_0_13_PARITY_MATRIX.md)
+- [`WIO_SDK_0_14_PARITY_MATRIX.md`](./WIO_SDK_0_14_PARITY_MATRIX.md)
 - [`examples/static_cmake_consumer/README.md`](../examples/static_cmake_consumer/README.md)
 - [`tests/native/sdk_exported_complex_fields_host.cpp`](../tests/native/sdk_exported_complex_fields_host.cpp)
