@@ -3368,6 +3368,14 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
     set_tests_properties(wio_test_attribute_composition_constraints_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
 
+    add_wio_output_test(
+        wio_test_std_attribute_contracts_run
+        "${CMAKE_SOURCE_DIR}/tests/std_attribute_contracts_run.wio"
+        "std-attribute-contracts-ok"
+        --run
+    )
+    set_tests_properties(wio_test_std_attribute_contracts_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
     add_wio_failure_test(
         wio_invalid_attribute_bracket_empty
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_bracket_empty.wio"

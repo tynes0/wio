@@ -1,0 +1,10 @@
+use std::attribute as attr;
+use std::assert as assert;
+use std::console as console;
+
+fn Entry() -> i32 {
+    assert::Expect(attr::Target::method == attr::Target::method, "attribute target contract");
+    assert::Expect(attr::Phase::around == attr::Phase::around, "processor phase contract");
+    console::PrintLine("std-attribute-contracts-ok");
+    return 0;
+}

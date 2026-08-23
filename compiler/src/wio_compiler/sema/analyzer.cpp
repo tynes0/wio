@@ -14650,7 +14650,9 @@ namespace wio::sema
             static const std::unordered_set<std::string> supportedTargets = {
                 "fn", "method", "component", "object", "interface", "type",
                 "field", "variable", "parameter", "generic_parameter",
-                "enum", "flagset", "flag", "enum_case", "extension", "realm"
+                "enum", "flagset", "flag", "enum_case", "extension", "realm",
+                "attribute", "module", "import_scope", "constructor",
+                "application", "system", "handler", "generated"
             };
             static const std::unordered_set<std::string> supportedRetention = {
                 "source", "compile", "runtime"
