@@ -26,12 +26,31 @@ int main(int argc, char** argv)
         if (!selected.can_access_as<IntOption>() ||
             !nested.can_access_as<NestedOption>() ||
             !wide.can_access_as<WideOption>() ||
-            selected.supports_dynamic_value() ||
+            !selected.supports_dynamic_value() ||
             selected.get_as<IntOption>().value_or(0) != 14 ||
             nested.get_as<NestedOption>().value().value_or(0) != 28 ||
             wide.get_as<WideOption>().value().value() != 14000000000ull)
         {
             std::cerr << "Initial Option values did not cross the SDK bridge.\n";
+            return EXIT_FAILURE;
+        }
+
+        auto dynamicSelected = selected.get_dynamic();
+        auto dynamicNested = nested.get_dynamic();
+        if (!dynamicSelected.is_typed() ||
+            !dynamicSelected.as_typed().can_access_as<IntOption>() ||
+            dynamicSelected.as_typed().get_as<IntOption>().value_or(0) != 14 ||
+            !dynamicNested.is_typed() ||
+            dynamicNested.as_typed().get_as<NestedOption>().value().value_or(0) != 28)
+        {
+            std::cerr << "Dynamic Option values did not preserve their host representation.\n";
+            return EXIT_FAILURE;
+        }
+
+        selected.set_dynamic(wio::sdk::WioDynamicValue::typed(IntOption::some(15)));
+        if (state.method<std::int32_t(std::int32_t)>("SelectedOr")(0) != 15)
+        {
+            std::cerr << "Dynamic Option assignment did not cross the SDK bridge.\n";
             return EXIT_FAILURE;
         }
 

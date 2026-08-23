@@ -5223,6 +5223,59 @@ namespace wio::sdk
         std::unique_ptr<WioErasedValue> value_{};
     };
 
+    class WioDynamicTypedValue
+    {
+    public:
+        WioDynamicTypedValue() = default;
+        WioDynamicTypedValue(const WioDynamicTypedValue&) = delete;
+        WioDynamicTypedValue& operator=(const WioDynamicTypedValue&) = delete;
+        WioDynamicTypedValue(WioDynamicTypedValue&&) noexcept = default;
+        WioDynamicTypedValue& operator=(WioDynamicTypedValue&&) noexcept = default;
+
+        template <typename T>
+        explicit WioDynamicTypedValue(T value)
+            : value_(std::make_unique<WioErasedValueModel<detail::Decay<T>>>(nullptr, std::move(value)))
+        {
+        }
+
+        [[nodiscard]] TypeDescriptorView type() const noexcept
+        {
+            return type_;
+        }
+
+        template <typename T>
+        [[nodiscard]] bool can_access_as() const noexcept
+        {
+            return dynamic_cast<const WioErasedValueModel<detail::Decay<T>>*>(value_.get()) != nullptr;
+        }
+
+        template <typename T>
+        [[nodiscard]] T get_as() const
+        {
+            const auto* typedValue = dynamic_cast<const WioErasedValueModel<detail::Decay<T>>*>(value_.get());
+            if (typedValue == nullptr)
+                throw Error(ErrorCode::SignatureMismatch, "Wio SDK dynamic typed value has a different host representation.");
+            return typedValue->value;
+        }
+
+    private:
+        friend class WioDynamicValue;
+        friend class WioFieldAccessor;
+
+        WioDynamicTypedValue(TypeDescriptorView type, std::unique_ptr<WioErasedValue> value) noexcept
+            : type_(type), value_(std::move(value))
+        {
+        }
+
+        [[nodiscard]] const WioErasedValue* raw_erased() const noexcept
+        {
+            return value_.get();
+        }
+
+        TypeDescriptorView type_{};
+        std::unique_ptr<WioErasedValue> value_{};
+    };
+
     enum class WioDynamicValueKind
     {
         Empty,
@@ -5237,7 +5290,8 @@ namespace wio::sdk
         StaticArray,
         Dict,
         Tree,
-        Function
+        Function,
+        Typed
     };
 
     class WioDynamicValue
@@ -5341,10 +5395,21 @@ namespace wio::sdk
         {
         }
 
+        explicit WioDynamicValue(WioDynamicTypedValue value)
+            : value_(std::move(value))
+        {
+        }
+
         template <typename TReturn, typename... TArgs>
         explicit WioDynamicValue(std::function<TReturn(TArgs...)> value)
             : value_(WioDynamicFunction(std::move(value)))
         {
+        }
+
+        template <typename T>
+        [[nodiscard]] static WioDynamicValue typed(T value)
+        {
+            return WioDynamicValue(WioDynamicTypedValue(std::move(value)));
         }
 
         [[nodiscard]] WioDynamicValueKind kind() const noexcept
@@ -5373,6 +5438,8 @@ namespace wio::sdk
                 return WioDynamicValueKind::Tree;
             if (std::holds_alternative<WioDynamicFunction>(value_))
                 return WioDynamicValueKind::Function;
+            if (std::holds_alternative<WioDynamicTypedValue>(value_))
+                return WioDynamicValueKind::Typed;
             return WioDynamicValueKind::Empty;
         }
 
@@ -5439,6 +5506,11 @@ namespace wio::sdk
         [[nodiscard]] bool is_function() const noexcept
         {
             return kind() == WioDynamicValueKind::Function;
+        }
+
+        [[nodiscard]] bool is_typed() const noexcept
+        {
+            return kind() == WioDynamicValueKind::Typed;
         }
 
         [[nodiscard]] const WioValue& as_scalar_value() const
@@ -5608,6 +5680,20 @@ namespace wio::sdk
             return std::get<WioDynamicFunction>(std::move(value_));
         }
 
+        [[nodiscard]] const WioDynamicTypedValue& as_typed() const
+        {
+            if (!is_typed())
+                throw Error(ErrorCode::SignatureMismatch, "Wio SDK dynamic value does not hold a typed value.");
+            return std::get<WioDynamicTypedValue>(value_);
+        }
+
+        [[nodiscard]] WioDynamicTypedValue take_typed() &&
+        {
+            if (!is_typed())
+                throw Error(ErrorCode::SignatureMismatch, "Wio SDK dynamic value does not hold a typed value.");
+            return std::get<WioDynamicTypedValue>(std::move(value_));
+        }
+
     private:
         std::variant<
             std::monostate,
@@ -5622,7 +5708,8 @@ namespace wio::sdk
             WioDynamicStaticArray,
             WioDynamicDict,
             WioDynamicTree,
-            WioDynamicFunction> value_{};
+            WioDynamicFunction,
+            WioDynamicTypedValue> value_{};
     };
 
     class WioObjectType
@@ -6116,6 +6203,30 @@ namespace wio::sdk
             return WioDynamicValue(WioDynamicFunction(type(), std::move(erasedValue)));
         }
 
+        if (info_.type.is_option() || info_.type.is_result() || info_.type.is_tuple() || info_.type.is_queue() ||
+            info_.type.is_unordered_set() || info_.type.is_ordered_set() || info_.type.is_span() ||
+            info_.type.is_byte_buffer() || info_.type.is_unit())
+        {
+            if (fieldEntry_ == nullptr || fieldEntry_->dynamicGetter == nullptr)
+            {
+                std::ostringstream message;
+                message << "Wio SDK field '" << name() << "' on exported type '"
+                        << (type_ && type_->logicalName ? type_->logicalName : "<unknown>")
+                        << "' does not expose a dynamic getter bridge.";
+                throw Error(ErrorCode::SignatureMismatch, message.str());
+            }
+
+            std::unique_ptr<WioErasedValue> erasedValue(fieldEntry_->dynamicGetter(handle_));
+            if (!erasedValue)
+            {
+                std::ostringstream message;
+                message << "Wio SDK failed to read dynamic field '" << name() << "' from exported type '"
+                        << (type_ && type_->logicalName ? type_->logicalName : "<unknown>") << "'.";
+                throw Error(ErrorCode::InvokeFailed, message.str());
+            }
+            return WioDynamicValue(WioDynamicTypedValue(type(), std::move(erasedValue)));
+        }
+
         std::ostringstream message;
         message << "Wio SDK dynamic field access is not yet supported for field '" << name()
                 << "' with exported type '" << detail::descriptorDisplayName(type()) << "'.";
@@ -6161,6 +6272,7 @@ namespace wio::sdk
         case WioDynamicValueKind::Dict:
         case WioDynamicValueKind::Tree:
         case WioDynamicValueKind::Function:
+        case WioDynamicValueKind::Typed:
         {
             if (fieldEntry_ == nullptr || fieldEntry_->dynamicSetter == nullptr)
             {
@@ -6188,6 +6300,9 @@ namespace wio::sdk
                 break;
             case WioDynamicValueKind::Function:
                 erasedValue = value.as_dynamic_function().raw_erased();
+                break;
+            case WioDynamicValueKind::Typed:
+                erasedValue = value.as_typed().raw_erased();
                 break;
             default:
                 break;
