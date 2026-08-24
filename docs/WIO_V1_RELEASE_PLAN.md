@@ -105,7 +105,8 @@ positive test, negative test, and generated-C++ validation where applicable.
 Goal: make stable Wio values behave consistently inside Wio and across the host
 boundary.
 
-Status: implemented on `releases/v0.14.0`; release qualification pending.
+Status: released as `v0.14.0`; Windows, Ubuntu, and sanitizer qualification
+passed.
 
 Required scope:
 
@@ -125,7 +126,50 @@ Exit gate: every stable value category has round-trip C ABI and C++ SDK tests,
 or a documented compile-time rejection. No exported field path reports a
 runtime “not yet supported” error.
 
-### v0.15.0 - Ownership, Callbacks, Async, and Application Hosting
+### v0.15.0 - Typed and Behavioral Attributes
+
+Goal: replace the parallel built-in/user annotation mechanisms with one
+powerful, inspectable attribute system before application hosting expands.
+
+Status: **frozen for release on 2026-08-25**. The method-only checked-derive
+boundary and the rejection of async `around` are intentional 0.15 limits, not
+silent partial implementations.
+
+Required scope:
+
+- canonical declaration-leading `[Attribute]` syntax, grouped/stacked lists,
+  qualified names, named arguments, and the existing scoped `using` activation;
+- one normalized typed model for built-ins and user declarations, including
+  target policy, defaults, retention, repetition, inheritance, conflicts, and
+  folded structural arguments;
+- deterministic validation and checked derive processors without unrestricted
+  token or AST mutation;
+- separate typed pre, post, finally, and around processor interfaces, including
+  entry guards, result mapping, guaranteed exit, explicit ordering, and effect
+  declarations;
+- user attributes composed from existing attributes, with normalized target,
+  requirement, allow-list, conflict, exclusivity, cardinality, and ordering
+  constraints;
+- declarations for every compiler-known attribute and processor interface in
+  `std::attribute`, including native/export and their compatibility rules;
+- callback receiver-liveness contracts, including wrappers whose native peer
+  has already been destroyed;
+- sync/async phase, ownership, cancellation, thread-affinity, and ABI rules for
+  every behavioral processor;
+- runtime reflection and C++ SDK metadata for normalized applications and
+  behavioral pipelines;
+- formatter, migration, inspection, documentation, and editor support, with
+  all maintained source/generated examples emitting bracket syntax.
+
+Exit gate: built-in attributes no longer use a privileged parallel path;
+metadata, validation, derive, and behavioral examples pass on Windows and
+Ubuntu; expansions are deterministic and visible to diagnostics/tooling; and
+ordinary project source needs neither `@Name(...)` nor postfix `with`.
+
+The normative delivery contract is
+[`WIO_ATTRIBUTE_SYSTEM_PLAN.md`](./WIO_ATTRIBUTE_SYSTEM_PLAN.md).
+
+### v0.16.0 - Ownership, Callbacks, Async, and Application Hosting
 
 Goal: freeze how real applications and native hosts own work and state.
 
@@ -146,7 +190,7 @@ Exit gate: console, desktop/event-loop, game-loop, service/tool, and native-host
 acceptance scenarios prove that waiting is explicit, frame polling never blocks
 implicitly, cancellation is observable, and shutdown does not leak work.
 
-### v0.16.0 - Reflection, Reload, ABI, and Platforms
+### v0.17.0 - Reflection, Reload, ABI, and Platforms
 
 Goal: make metadata and binary integration dependable outside the compiler's
 own test process.
@@ -167,7 +211,7 @@ Exit gate: SDK consumers built independently from the compiler agree on layout,
 calling convention, ownership, reflection, and reload behavior across the
 supported release matrix.
 
-### v0.17.0 - Packages and Release Engineering
+### v0.18.0 - Packages and Release Engineering
 
 Goal: make a Wio dependency installable and a Wio release reproducible.
 
@@ -187,7 +231,7 @@ Required scope:
 Exit gate: a clean machine can restore, build, test, package, install, upgrade,
 and uninstall a pinned project without relying on the source checkout.
 
-### v0.18.0 - Developer Experience and Product Closure
+### v0.19.0 - Developer Experience and Product Closure
 
 Goal: remove the daily workflow gaps that would make a stable language feel
 unfinished.
@@ -246,10 +290,11 @@ post-v1 work.
 | --- | --- |
 | Normative language/std contract matches implementation | `v0.13.0` onward |
 | Stable value SDK round trips | `v0.14.0` |
-| Ownership/callback/async/application host acceptance | `v0.15.0` |
-| Reflection/reload/ABI/platform matrix | `v0.16.0` |
-| Reproducible package and installed-toolchain workflow | `v0.17.0` |
-| Formatter, diagnostics, language service, templates, docs alignment | `v0.18.0` |
+| Typed metadata/validation/derive/behavioral attributes | `v0.15.0` |
+| Ownership/callback/async/application host acceptance | `v0.16.0` |
+| Reflection/reload/ABI/platform matrix | `v0.17.0` |
+| Reproducible package and installed-toolchain workflow | `v0.18.0` |
+| Formatter, diagnostics, language service, templates, docs alignment | `v0.19.0` |
 | Real-world portfolio, compatibility and migration sign-off | beta/RC |
 | Signed, checksummed, provenance-backed release artifacts | RC/stable |
 
@@ -269,14 +314,14 @@ v1 core and a post-v1 expansion:
 
 | Backlog area | Pre-v1 routing | Post-v1 remainder |
 | --- | --- | --- |
-| Language 1, 3, 13, 15, 17 | `v0.13`-`v0.16` | value kinds beyond frozen v1 |
+| Language 1, 3, 13, 15, 17 | `v0.13`-`v0.17` | value kinds beyond frozen v1 |
 | Language 5, 6, 7, 8, 12, 14 | current behavior hardens pre-v1 | advanced meta, ADTs, extension properties, behavioral interception, parallel scheduler |
 | Std 1, 3-6, 8 | correctness and stable contracts in `v0.14`-`v0.15` | streaming codecs, schema/patch expansion, time zones, advanced regex backend, streams |
 | Std 7, 9, 10 | portable stable foundations qualify pre-v1 | TLS/HTTP/WebSocket, broad OS GUI services, databases/archives/TOML |
-| Native/SDK 1-8 | minimal package ecosystem and complete stable SDK/ABI in `v0.14`-`v0.17` | larger package catalog and importer convenience surface |
-| CLI 1-4, 7-12 | stable daily/release workflow in `v0.17`-`v0.18` | richer generated-doc portal features |
+| Native/SDK 1-8 | minimal package ecosystem and complete stable SDK/ABI in `v0.14`-`v0.18` | larger package catalog and importer convenience surface |
+| CLI 1-4, 7-12 | stable daily/release workflow in `v0.18`-`v0.19` | richer generated-doc portal features |
 | CLI 5-6, 8 | correctness-critical cache/test pieces pre-v1 | REPL and advanced incremental/test UX |
-| Editor 1, 3, 5 | baseline in `v0.18` | advanced language-service and templates |
+| Editor 1, 3, 5 | baseline in `v0.19` | advanced language-service and templates |
 | Editor 2, 4, 6 | not a v1 gate | debugger, package intelligence, advanced refactors |
 | Performance 1, 4, 5-7 | release baselines and supported-platform safety pre-v1 | deeper optimization and broader matrices |
 | Performance 2, 3, 8 | not a v1 gate | compile/runtime optimization and independent backend research |

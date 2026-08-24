@@ -1,0 +1,21 @@
+use std::attribute as attr;
+
+[From(attr::AroundProcessor)]
+object TwiceAround {
+    public fn Around(proceed: fn()) {
+        proceed();
+        proceed();
+    }
+}
+
+[attribute::Targets(fn)]
+[attribute::Processor(TwiceAround)]
+attribute Twice();
+
+[Twice]
+fn Work() {}
+
+fn Entry() -> i32 {
+    Work();
+    return 0;
+}

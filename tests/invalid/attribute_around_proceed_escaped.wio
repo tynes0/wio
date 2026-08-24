@@ -1,0 +1,24 @@
+use std::attribute as attr;
+
+fn Noop() {}
+mut EscapedProceed: fn() = Noop;
+
+[From(attr::AroundProcessor)]
+object EscapingAround {
+    public fn Around(proceed: fn()) {
+        EscapedProceed = proceed;
+    }
+}
+
+[attribute::Targets(fn)]
+[attribute::Processor(EscapingAround)]
+attribute Escaping();
+
+[Escaping]
+fn Work() {}
+
+fn Entry() -> i32 {
+    Work();
+    EscapedProceed();
+    return 0;
+}

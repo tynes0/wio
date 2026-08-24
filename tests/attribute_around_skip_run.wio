@@ -1,0 +1,25 @@
+use std::attribute as attr;
+use std::console as console;
+
+mut BodyRan: bool = false;
+
+[From(attr::AroundProcessor)]
+object SkipAround {
+    public fn Around(proceed: fn()) {
+        // Unit around processors may intentionally provide a replacement by
+        // not invoking Proceed.
+    }
+}
+
+[attribute::Targets(fn)]
+[attribute::Processor(SkipAround)]
+attribute Skipped();
+
+[Skipped]
+fn Work() { BodyRan = true; }
+
+fn Entry() -> i32 {
+    Work();
+    console::PrintLine("attribute-around-skip-ok");
+    return BodyRan ? 1 : 0;
+}

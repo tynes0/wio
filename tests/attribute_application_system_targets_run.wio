@@ -1,0 +1,37 @@
+use std::assert as assert;
+use std::console as console;
+
+attribute app_marker() for application retain compile;
+attribute system_marker() for system retain compile;
+attribute handler_marker() for handler retain compile;
+attribute state_marker() for field retain compile;
+
+[system_marker]
+system TickSystem {
+    [state_marker]
+    mut ticks: i32 = 0;
+
+    [handler_marker]
+    on update { self.ticks += 1; }
+}
+
+[app_marker]
+application AttributeApp {
+    system tick: TickSystem;
+
+    [state_marker]
+    mut frames: i32 = 0;
+
+    [handler_marker]
+    on update {
+        self.frames += 1;
+        self.Exit(0);
+    }
+
+    [handler_marker]
+    on close {
+        assert::ExpectEqual(self.frames, 1, "application attribute target");
+        assert::ExpectEqual(self.tick.ticks, 1, "system attribute target");
+        console::PrintLine("attribute-application-system-targets-ok");
+    }
+}

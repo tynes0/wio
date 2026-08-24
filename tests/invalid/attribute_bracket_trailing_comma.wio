@@ -1,0 +1,10 @@
+attribute marker() for component retain compile;
+
+[marker,]
+component TrailingAttribute {
+    value: i32;
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

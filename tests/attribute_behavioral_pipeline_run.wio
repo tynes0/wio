@@ -1,0 +1,38 @@
+use std::attribute as attr;
+use std::console as console;
+
+mut Trace: string = "";
+
+[From(attr::PreProcessor)]
+object TracePre {
+    public fn Before() { Trace += "pre>"; }
+}
+
+[From(attr::PostProcessor)]
+object TracePost {
+    public fn After() { Trace += "post>"; }
+}
+
+[From(attr::FinallyProcessor)]
+object TraceFinally {
+    public fn Finally() { Trace += "finally"; }
+}
+
+[attribute::Targets(fn)]
+[attribute::Processor(TracePre)]
+[attribute::Processor(TracePost)]
+[attribute::Processor(TraceFinally)]
+attribute Traced();
+
+[Traced]
+fn Work(useEarlyReturn: bool) -> i32 {
+    Trace += "body>";
+    if (useEarlyReturn) { return 42; }
+    return 7;
+}
+
+fn Entry() -> i32 {
+    let value = Work(true);
+    console::PrintLine(Trace);
+    return value == 42 and Trace == "pre>body>post>finally" ? 0 : 1;
+}

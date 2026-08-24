@@ -2977,21 +2977,32 @@ contract.
 
 ## 20. Attributes
 
+The postfix `with` spelling documented in this pre-0.15 draft is superseded by
+the Wio 0.15 `[Attribute]` design. During implementation, `@Name(...)` and
+postfix `with` remain compatibility input, while generated and formatted source
+uses the declaration-leading bracket form. Existing lexical `using` activation
+remains canonical. See
+[`WIO_ATTRIBUTE_SYSTEM_PLAN.md`](./WIO_ATTRIBUTE_SYSTEM_PLAN.md) for the
+authoritative syntax, processor, reflection, and migration contract.
+
 ### 20.1 General Syntax
 
-Postfix `with` is the canonical attribute application syntax. `using` activates
-attributes that opt into lexical scoping. Legacy `@Name(...)` remains accepted
-only as compatibility input during the edition migration.
+Declaration-leading brackets are canonical. `using` activates attributes that
+opt into lexical scoping. Legacy `@Name(...)` and postfix `with` remain only as
+compatibility input during the edition migration.
 
 Examples:
 
 ```wio
-component User with derive::json {
-    name: string with json::name("displayName");
+[derive::json]
+component User {
+    [json::name("displayName")]
+    name: string;
 }
 
 using cpp::header("widget.h");
-fn Draw(widget: view Widget) with native, cpp::name("DrawWidget");
+[Native, CppName("DrawWidget")]
+fn Draw(widget: view Widget);
 ```
 
 Attributes may appear before:
@@ -3012,23 +3023,24 @@ Omitted trailing defaults are materialized, so reflected metadata describes
 the complete effective application rather than only the written arguments.
 
 ```wio
-attribute route(fn)(method: string, path: string = "/")
-    with attribute::runtime, attribute::repeatable;
+attribute Route(method: string, path: string = "/")
+    for fn retain runtime repeatable;
 
-fn Health() with route(path: "/health", method: "GET") {}
+[Route(path: "/health", method: "GET")]
+fn Health() {}
 ```
 
-The compact declaration form places the target set after the attribute name.
-Policies reuse postfix attributes instead of adding contextual policy keywords:
+The compact declaration form places target and retention policy after the
+attribute signature. Namespaced meta-attributes provide composition and the
+less common compatibility policies:
 
-- `attribute::source`, `attribute::compile`, or `attribute::runtime`;
-- `attribute::repeatable`;
-- `attribute::inherited`;
-- `attribute::scoped`;
-- `attribute::conflict("group")`.
+- `[attribute::Requires(...)]` and `[attribute::RequiresAny(...)]`;
+- `[attribute::Conflicts(...)]` and `[attribute::OnlyWith(...)]`;
+- `[attribute::Exclusive("group")]` and `[attribute::Cardinality(...)]`;
+- `[attribute::Before(...)]` and `[attribute::After(...)]`.
 
-The older `for fn retain runtime repeatable` declaration form remains accepted
-during the compatibility window.
+The `for fn retain runtime repeatable` declaration form is canonical for the
+common declaration policy.
 
 #### Current argument-expression boundary
 
@@ -3038,38 +3050,38 @@ current compiler reliably supports:
 - scalar, `string`, and `text` literals for typed user-defined attributes,
 - evaluable `const` identifiers of those types; their folded values, not their
   source names, enter runtime metadata,
-- plain identifiers such as `@Trust(Foo)`,
-- plain type names such as `@Type(u32)`,
-- type-like generic forms such as `@Apply(traits::IsInteger<T>)`,
-- and interop instantiation forms such as `@Instantiate(i32, bool)`.
+- plain identifiers such as `[Trust(Foo)]`,
+- plain type names such as `[Type(u32)]`,
+- type-like generic forms such as `[Apply(traits::IsInteger<T>)]`,
+- and interop instantiation forms such as `[Instantiate(i32, bool)]`.
 
 Reliable legacy/built-in examples:
 
 ```wio
-@From(Entity)
-@Default(public)
-@Type(u32)
-@Trust(Foo)
+[From(Entity)]
+[Default(public)]
+[Type(u32)]
+[Trust(Foo)]
 use std::traits as traits;
 
-@Apply(traits::IsInteger<T>)
-@Instantiate(traits::IsNumeric<T>)
+[Apply(traits::IsInteger<T>)]
+[Instantiate(traits::IsNumeric<T>)]
 ```
 
 Not part of the current attribute-argument contract:
 
 ```wio
-@From(ns::Entity)
-@Something(1 + 2)
+[From(ns::Entity)]
+[Something(1 + 2)]
 ```
 
-Built-in compiler attributes currently remain positional. Named arguments are
-reserved for typed user-defined attributes, whose parameter metadata makes
-ordering and diagnostics deterministic. Typed `string` and `text` parameters
+Compiler-known structural attributes remain positional where their public
+declaration has no named parameter model. User attributes support named
+arguments with deterministic ordering and diagnostics. Typed `string` and `text` parameters
 remain distinct: Unicode `u"..."` values do not silently become byte strings,
 and plain string literals do not silently become Unicode text.
 
-### 20.3 `@ReadOnly`
+### 20.3 `[ReadOnly]`
 
 Marks a member as externally immutable.
 
@@ -3077,20 +3089,20 @@ Example:
 
 ```wio
 object Player {
-    @ReadOnly
+    [ReadOnly]
     public id: i32;
 }
 ```
 
-### 20.4 `@From(...)`
+### 20.4 `[From(...)]`
 
 Defines inheritance sources.
 
 Examples:
 
 ```wio
-@From(Entity)
-@From(IDamageable)
+[From(Entity)]
+[From(IDamageable)]
 object Boss {
 }
 ```
@@ -3100,14 +3112,14 @@ Rules:
 - at most one object base,
 - any number of interface bases,
 - component bases are rejected,
-- components may not use `@From(...)`,
+- components may not use `[From(...)]`,
 - final object bases are rejected.
 
-### 20.5 `@Default(...)`
+### 20.5 `[Default(...)]`
 
 Changes declaration-local default member access.
 
-`@Default(...)` accepts exactly one access modifier:
+`[Default(...)]` accepts exactly one access modifier:
 
 - `public`
 - `private`
@@ -3129,7 +3141,7 @@ component PackedState {
 }
 ```
 
-### 20.6 `@GenerateCtors`
+### 20.6 `[GenerateCtors]`
 
 Requests constructor generation.
 
@@ -3153,10 +3165,10 @@ object Entity {
 
 Intended and current practical behavior:
 
-- If no constructor is written and `@NoDefaultCtor` is absent, constructors are
+- If no constructor is written and `[NoDefaultCtor]` is absent, constructors are
   auto-generated.
 - If at least one constructor is written, implicit default generation stops.
-- If `@GenerateCtors` is present, the compiler generates any missing standard
+- If `[GenerateCtors]` is present, the compiler generates any missing standard
   constructor forms.
 - If the user already provided one form, only the missing forms are generated.
 
@@ -3165,7 +3177,7 @@ Intended and current practical behavior:
 The current compiler recognizes a member constructor by comparing parameter types
 against member field types in declaration order.
 
-### 20.8 `@NoDefaultCtor`
+### 20.8 `[NoDefaultCtor]`
 
 Disables implicit constructor generation when no constructor is written.
 
@@ -3178,7 +3190,7 @@ object Handle {
 }
 ```
 
-### 20.9 `@Trust(...)`
+### 20.9 `[Trust(...)]`
 
 Semantics:
 
@@ -3196,11 +3208,11 @@ object SaveData {
 
 Rules:
 
-- `@Trust(...)` expects object/component/interface type names,
+- `[Trust(...)]` expects object/component/interface type names,
 - trusted access is checked by semantic analysis,
 - trusted types may access private/protected members of the trusting type.
 
-### 20.10 `@Final`
+### 20.10 `[Final]`
 
 Rules:
 
@@ -3215,7 +3227,7 @@ object FinalBoss {
 }
 ```
 
-### 20.11 `@Type(...)`
+### 20.11 `[Type(...)]`
 
 Used to select the underlying type of:
 
@@ -3238,10 +3250,10 @@ flagset Bits {
 }
 ```
 
-### 20.12 `@Instantiate(...)`
+### 20.12 `[Instantiate(...)]`
 
-`@Instantiate(...)` is the current explicit-instantiation surface for generic
-`@Native` and generic `@Export` functions.
+`[Instantiate(...)]` is the current explicit-instantiation surface for generic
+`[Native]` and generic `[Export]` functions.
 
 Examples:
 
@@ -3258,12 +3270,12 @@ fn DoubleValue<T>(value: T) -> T;
 
 Current rules:
 
-- `@Instantiate(...)` is valid only on generic functions.
-- Today it is supported only together with `@Native` or `@Export`.
+- `[Instantiate(...)]` is valid only on generic functions.
+- Today it is supported only together with `[Native]` or `[Export]`.
 - Each attribute must provide one argument per non-defaulted fixed generic
   parameter. Omitted trailing fixed parameters are filled from their declared
   defaults before the concrete instantiation list is materialized.
-- On generic pack functions, extra trailing `@Instantiate(...)` arguments map to
+- On generic pack functions, extra trailing `[Instantiate(...)]` arguments map to
   concrete pack element types.
 - Each argument may be:
   - a fully concrete type such as `i32` or `string`,
@@ -3307,9 +3319,9 @@ fn PickLeft<T, U>(left: T, right: U) -> T;
 fn CountExport<Args...>(args: Args...) -> i32;
 ```
 
-### 20.13 `@Apply(...)`
+### 20.13 `[Apply(...)]`
 
-`@Apply(...)` is the current generic-constraint attribute surface.
+`[Apply(...)]` is the current generic-constraint attribute surface.
 
 The readable `where` syntax lowers to the same constraint model:
 
@@ -3353,7 +3365,7 @@ object NumberBox<T> {
 
 Current rules:
 
-- `@Apply(...)` is valid only on generic declarations.
+- `[Apply(...)]` is valid only on generic declarations.
 - Each attribute must provide exactly one argument per generic parameter.
 - Each argument may be:
   - a fully concrete type such as `string`,
@@ -3369,12 +3381,12 @@ Current rules:
 - Multiple predicates for one parameter are joined with `+` and are
   conjunctive, as in `where T: traits::IsInteger + traits::IsSigned`.
 - On generic pack declarations, the trailing pack slot should be written in pack
-  position, for example `@Apply(traits::IsInteger<Args...>)`.
+  position, for example `[Apply(traits::IsInteger<Args...>)]`.
 
 Constraint semantics today:
 
-- entries inside one `@Apply(...)` are combined positionally,
-- multiple `@Apply(...)` attributes behave as alternative allowed constraint
+- entries inside one `[Apply(...)]` are combined positionally,
+- multiple `[Apply(...)]` attributes behave as alternative allowed constraint
   rows,
 - `true` means "this slot imposes no additional restriction",
 - `false` means that constraint row can never match.

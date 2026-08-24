@@ -1,0 +1,40 @@
+use std::assert as assert;
+use std::attribute as attr;
+use std::console as console;
+
+interface Named {
+    fn Name() -> string;
+}
+
+[From(attr::DeriveProcessor<Named>)]
+object NamedDerive {
+    [std::attribute::DeriveMember("Describe")]
+    public fn Build(receiver: view Named, prefix: string) -> string {
+        return prefix + receiver.Name();
+    }
+}
+
+[attribute::Targets(object)]
+[attribute::Processor(NamedDerive)]
+attribute Described();
+
+[From(Named)]
+[Described]
+object User {
+    public name: string;
+
+    OnConstruct(name: string) {
+        self.name = name;
+    }
+
+    public fn Name() -> string {
+        return self.name;
+    }
+}
+
+fn Entry() -> i32 {
+    let user = User("Ada");
+    assert::ExpectEqual(user.Describe("user:"), "user:Ada", "typed derive receiver");
+    console::PrintLine("attribute-checked-derive-typed-receiver-ok");
+    return 0;
+}

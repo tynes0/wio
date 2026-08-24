@@ -1,0 +1,5 @@
+fn Entry() -> i32 {
+    [std::attribute::Native]
+    let value: i32 = 1;
+    return value;
+}

@@ -11,7 +11,7 @@
 int main()
 {
     static_assert(WIO_SDK_VERSION_MAJOR == 0);
-    static_assert(WIO_SDK_VERSION_MINOR == 14);
+    static_assert(WIO_SDK_VERSION_MINOR == 15);
     static_assert(WIO_SDK_VERSION_PATCH == 0);
     static_assert(wio::sdk::product_version.major == WIO_SDK_VERSION_MAJOR);
     static_assert(wio::sdk::product_version.minor == WIO_SDK_VERSION_MINOR);
@@ -25,7 +25,7 @@ int main()
         return 1;
     }
 
-    if (WIO_MODULE_API_DESCRIPTOR_VERSION != 8u)
+    if (WIO_MODULE_API_DESCRIPTOR_VERSION != 9u)
     {
         std::cerr << "Unexpected module ABI descriptor version.\n";
         return 2;

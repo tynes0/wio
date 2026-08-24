@@ -1,0 +1,24 @@
+use std::attribute as attr;
+
+[From(attr::PreProcessor)]
+object AuditProcessor {
+    public fn Before() {}
+}
+
+attribute Label(value: string) for object retain runtime;
+attribute Important() for field retain runtime;
+
+[attribute::Processor(AuditProcessor)]
+attribute Audited() for method retain runtime;
+
+[Export]
+[Label("profile")]
+object Profile {
+    [Important]
+    public value: i32;
+
+    public OnConstruct() { self.value = 15; }
+
+    [Audited]
+    public fn Read() -> i32 { return self.value; }
+}

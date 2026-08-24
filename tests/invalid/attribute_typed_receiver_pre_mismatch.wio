@@ -1,0 +1,18 @@
+use std::attribute as attr;
+
+interface Alive { fn IsAlive() -> bool; }
+
+[From(attr::PreProcessor)]
+object AliveGuard {
+    public fn Before(receiver: view Alive) {}
+}
+
+[attribute::Processor(AliveGuard)]
+attribute CallbackMethod() for method;
+
+object Unrelated {
+    [CallbackMethod]
+    public fn Notify() {}
+}
+
+fn Entry() -> i32 { return 0; }

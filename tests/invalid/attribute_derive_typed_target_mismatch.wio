@@ -1,0 +1,22 @@
+use std::attribute as attr;
+
+interface Named {
+    fn Name() -> string;
+}
+
+[From(attr::DeriveProcessor<Named>)]
+object NamedDerive {
+    [std::attribute::DeriveMember("Describe")]
+    public fn Build(receiver: view Named) -> string {
+        return receiver.Name();
+    }
+}
+
+[attribute::Targets(object)]
+[attribute::Processor(NamedDerive)]
+attribute Described();
+
+[Described]
+object Unnamed {}
+
+fn Entry() -> i32 { return 0; }

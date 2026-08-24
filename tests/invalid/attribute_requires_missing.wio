@@ -1,0 +1,12 @@
+attribute export_marker() for component retain compile;
+
+[attribute::Targets(component)]
+[attribute::Requires(export_marker)]
+attribute command_model();
+
+[command_model]
+component MissingRequirement {
+    value: i32;
+}
+
+fn Entry() -> i32 { return 0; }

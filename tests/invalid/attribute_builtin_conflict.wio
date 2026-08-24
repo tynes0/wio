@@ -1,0 +1,4 @@
+[std::attribute::Native, std::attribute::Export]
+fn ImpossibleBridge() -> i32;
+
+fn Entry() -> i32 { return 0; }

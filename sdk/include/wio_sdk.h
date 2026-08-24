@@ -3103,6 +3103,30 @@ namespace wio::sdk
 
             if (hasCapability(api, WIO_MODULE_CAP_TYPE_METADATA_V2) && api->descriptorSize < sizeof(WioModuleApi))
                 throwInvalidApiDescriptor(context, "type-metadata-v2 capability requires a complete WioModuleApi descriptorSize.");
+            if (hasCapability(api, WIO_MODULE_CAP_ATTRIBUTE_METADATA_V1) && api->descriptorSize < sizeof(WioModuleApi))
+                throwInvalidApiDescriptor(context, "attribute-metadata-v1 capability requires a complete WioModuleApi descriptorSize.");
+
+            auto validateAttributes = [&](const WioModuleAttributeDescriptor* attributes,
+                                          const std::uint32_t count,
+                                          const std::string_view owner)
+            {
+                if (count > 0u && attributes == nullptr)
+                    throwInvalidApiDescriptor(context, std::string(owner) + " has a non-zero attributeCount but null attributes.");
+                for (std::uint32_t index = 0u; index < count; ++index)
+                {
+                    const auto& attribute = attributes[index];
+                    if (!hasText(attribute.canonicalName) || attribute.argumentText == nullptr)
+                        throwInvalidApiDescriptor(context, std::string(owner) + " has an incomplete attribute descriptor.");
+                    if (attribute.processorCount > 0u && attribute.processors == nullptr)
+                        throwInvalidApiDescriptor(context, std::string(owner) + " has a null attribute processor table.");
+                    for (std::uint32_t processorIndex = 0u; processorIndex < attribute.processorCount; ++processorIndex)
+                    {
+                        const auto& processor = attribute.processors[processorIndex];
+                        if (!hasText(processor.canonicalTypeName) || processor.hookMode == nullptr)
+                            throwInvalidApiDescriptor(context, std::string(owner) + " has an incomplete attribute processor descriptor.");
+                    }
+                }
+            };
 
             validateCapabilityContract(api, WIO_MODULE_CAP_API_VERSION, reinterpret_cast<const void*>(api->apiVersion), "@ModuleApiVersion", context);
             validateCapabilityContract(api, WIO_MODULE_CAP_LOAD, reinterpret_cast<const void*>(api->load), "@ModuleLoad", context);
@@ -3112,7 +3136,11 @@ namespace wio::sdk
             validateCapabilityContract(api, WIO_MODULE_CAP_RESTORE_STATE, reinterpret_cast<const void*>(api->restoreState), "@ModuleRestoreState", context);
 
             for (std::uint32_t exportIndex = 0; exportIndex < api->exportCount; ++exportIndex)
+            {
                 validateExportEntryShape(api->exports[exportIndex], context);
+                if (hasCapability(api, WIO_MODULE_CAP_ATTRIBUTE_METADATA_V1))
+                    validateAttributes(api->exports[exportIndex].attributes, api->exports[exportIndex].attributeCount, "An export");
+            }
 
             std::unordered_set<std::string> commandNames;
             for (std::uint32_t commandIndex = 0; commandIndex < api->commandCount; ++commandIndex)
@@ -3153,6 +3181,14 @@ namespace wio::sdk
             for (std::uint32_t typeIndex = 0; typeIndex < api->typeCount; ++typeIndex)
             {
                 const WioModuleType& typeEntry = api->types[typeIndex];
+                if (hasCapability(api, WIO_MODULE_CAP_ATTRIBUTE_METADATA_V1))
+                {
+                    validateAttributes(typeEntry.attributes, typeEntry.attributeCount, "A type");
+                    for (std::uint32_t fieldIndex = 0; fieldIndex < typeEntry.fieldCount; ++fieldIndex)
+                        validateAttributes(typeEntry.fields[fieldIndex].attributes, typeEntry.fields[fieldIndex].attributeCount, "A field");
+                    for (std::uint32_t methodIndex = 0; methodIndex < typeEntry.methodCount; ++methodIndex)
+                        validateAttributes(typeEntry.methods[methodIndex].attributes, typeEntry.methods[methodIndex].attributeCount, "A method");
+                }
                 if (!hasText(typeEntry.logicalName) || !hasText(typeEntry.symbolName))
                     throwInvalidApiDescriptor(context, "An exported type entry is missing logicalName or symbolName.");
 

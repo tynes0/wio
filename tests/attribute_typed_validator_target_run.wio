@@ -1,0 +1,27 @@
+use std::attribute as attr;
+use std::console as console;
+
+interface Named {
+    fn Name() -> string;
+}
+
+[From(attr::Validator<Named>)]
+object NamedValidator {
+    public fn Validate() -> bool { return true; }
+}
+
+[attribute::Targets(object)]
+[attribute::Processor(NamedValidator)]
+attribute RequiresName();
+
+[From(Named)]
+[RequiresName]
+object User {
+    public fn Name() -> string { return "Ada"; }
+}
+
+fn Entry() -> i32 {
+    let user = User();
+    console::PrintLine("attribute-typed-validator-target-ok");
+    return user.Name() == "Ada" ? 0 : 1;
+}

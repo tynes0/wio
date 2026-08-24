@@ -38,7 +38,7 @@ namespace
 
         constexpr std::string_view toolingCommands[]{
             "help", "run", "build", "test", "file", "project", "bind",
-            "env", "package", "perf", "dev"
+            "env", "package", "perf", "migrate", "dev"
         };
         for (const std::string_view candidate : toolingCommands)
         {

@@ -1,7 +1,7 @@
 # Wio Host SDK
 
 This document defines the current public C++ host and embedding surface for Wio.
-It is the SDK contract shipped with Wio v0.14 and the baseline of the planned
+It is the SDK contract shipped with Wio v0.15 and the baseline of the planned
 Wio v1 host integration layer. The pre-v1 parity and synchronized-version plan
 is tracked in [`WIO_SDK_EVOLUTION_PLAN.md`](./WIO_SDK_EVOLUTION_PLAN.md).
 
@@ -28,10 +28,10 @@ The SDK product version is available without loading a module:
 
 ```cpp
 static_assert(WIO_SDK_VERSION_MAJOR == 0);
-static_assert(WIO_SDK_VERSION_MINOR == 14);
+static_assert(WIO_SDK_VERSION_MINOR == 15);
 static_assert(wio::sdk::product_version.patch == 0);
 
-std::cout << wio::sdk::product_version_string; // 0.14.0
+std::cout << wio::sdk::product_version_string; // 0.15.0
 ```
 
 `WIO_MODULE_API_DESCRIPTOR_VERSION` remains an independent low-level ABI
@@ -953,7 +953,32 @@ rather than as obscure backend-only failures.
 
 ---
 
-## 12. Official v0.14 Boundary
+## 12. Official v0.15 Boundary
+
+Module ABI descriptor v9 preserves the v0.14 value bridge and adds retained
+typed-attribute metadata. A generated module advertises
+`WIO_MODULE_CAP_ATTRIBUTE_METADATA_V1` only when at least one exported
+function, type, field, or method carries a runtime-retained attribute.
+
+```cpp
+const WioModuleType* type = WioFindModuleType(api, "Profile");
+const auto* label = WioFindModuleAttribute(
+    type->attributes,
+    type->attributeCount,
+    "Label");
+
+for (std::uint32_t i = 0; i < label->processorCount; ++i) {
+    const auto& processor = label->processors[i];
+    // canonicalTypeName, phase, hookMode, and deterministic order
+}
+```
+
+The same `attributeCount`/`attributes` pair appears on `WioModuleExport`,
+`WioModuleType`, `WioModuleField`, and `WioModuleMethod`. Each descriptor
+contains canonical identity, normalized argument text, direct/composed/scoped
+origin, and its ordered behavioral processor records.
+
+### Preserved v0.14 value boundary
 
 For the current SDK version, the public and documented boundary is:
 
@@ -969,8 +994,10 @@ For the current SDK version, the public and documented boundary is:
 - `WioDynamicValue` and the current dynamic container wrappers as the runtime
   reflection payload family
 - generation-aware stale-wrapper diagnostics for reload-sensitive wrappers
-- ABI descriptor version `8`, module product/version inspection, stable type
+- ABI descriptor version `9`, module product/version inspection, stable type
   IDs, concrete type/const arguments, and supported nested dynamic fields
+- runtime-retained typed-attribute descriptors on exports, types, fields, and
+  methods, including ordered behavioral processor metadata
 
 The following should be treated as stable with explicit caveats:
 
@@ -980,7 +1007,7 @@ The following should be treated as stable with explicit caveats:
   deeper host-side reflection growth beyond that should still be treated as
   future-facing
 
-The following should not currently be read as part of the stable v0.14 SDK
+The following should not currently be read as part of the stable v0.15 SDK
 contract:
 
 - compiler-internal AST/parser/sema/codegen APIs
@@ -989,12 +1016,13 @@ contract:
   reload generations
 - `ref` / `view` field export behavior as a public host ABI promise
 - direct binary exchange for partial/deferred catalog entries such as
-  interface, Box, any, async task, pool identity, and retained attributes
-- retained typed-attribute metadata, non-blocking task control, and the future
-  application/system host lifecycle ABI
+  interface, Box, any, async task, and pool identity
+- non-blocking task control and the future application/system host lifecycle
+  ABI
 
-This is the implemented v0.14 value-parity baseline, not the final v1 parity claim. The
-required path to full host-observable language/runtime parity is maintained in
+This is the implemented v0.15 typed-metadata baseline layered on the v0.14
+value bridge, not the final v1 parity claim. The required path to full
+host-observable language/runtime parity is maintained in
 [`WIO_SDK_EVOLUTION_PLAN.md`](./WIO_SDK_EVOLUTION_PLAN.md).
 
 ---

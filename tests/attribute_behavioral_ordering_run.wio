@@ -1,0 +1,29 @@
+use std::attribute as attr;
+use std::console as console;
+
+mut Trace: string = "";
+
+[From(attr::PreProcessor)]
+object FirstPre { public fn Before() { Trace += "first>"; } }
+
+[From(attr::PreProcessor)]
+object SecondPre { public fn Before() { Trace += "second>"; } }
+
+[attribute::Targets(fn)]
+[attribute::Before(Second)]
+[attribute::Processor(FirstPre)]
+attribute First();
+
+[attribute::Targets(fn)]
+[attribute::Processor(SecondPre)]
+attribute Second();
+
+// Source order is intentionally the opposite of processor order.
+[Second, First]
+fn Work() { Trace += "body"; }
+
+fn Entry() -> i32 {
+    Work();
+    console::PrintLine(Trace);
+    return Trace == "first>second>body" ? 0 : 1;
+}

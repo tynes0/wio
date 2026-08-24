@@ -1,0 +1,178 @@
+// Public compile-time contracts for Wio attributes. The compiler bootstraps
+// these declarations by stable identity; this module intentionally contains
+// no runtime implementation.
+realm std {
+    realm attribute {
+        enum Target {
+            module,
+            import_scope,
+            type,
+            function,
+            method,
+            constructor,
+            component,
+            object,
+            interface,
+            extension,
+            field,
+            variable,
+            parameter,
+            generic_parameter,
+            enum_type,
+            enum_case,
+            flagset,
+            flag,
+            realm,
+            application,
+            system,
+            handler,
+            generated
+        };
+
+        enum Retention {
+            source,
+            compile,
+            runtime
+        };
+
+        enum Purpose {
+            metadata,
+            validation,
+            derive,
+            behavior
+        };
+
+        enum Phase {
+            pre,
+            post,
+            finally,
+            around
+        };
+
+        // Capability interfaces. Validator processors expose a parameterless
+        // `Validate() -> bool` whose body must fold at compile time and may
+        // expose `Diagnostic() -> string` for a stable rejection message.
+        // The synchronous behavioral checkpoint binds `Before()`, `After()`,
+        // and `Finally()` hooks. A pre hook may accept `receiver: any` on an
+        // object method and may return bool to guard a unit-returning target.
+        // Unit-returning sync functions also support `Around(proceed: fn())`;
+        // Proceed may be used zero or one time and cannot escape the
+        // invocation. DeriveProcessor may expose bounded checked methods with
+        // [DeriveMember]; concrete and generic component/object targets receive
+        // a hidden `any` receiver or an immutable view of the processor's typed
+        // target contract. Post processors may observe a typed result, finally
+        // processors may observe a success flag, and synchronous around
+        // processors may map or replace a typed result. Async functions support
+        // pre/post/finally; async around is intentionally rejected because a
+        // single Proceed cannot safely model arbitrary suspension/cancellation.
+        interface Validator<TTarget> {}
+        interface DeriveProcessor<TTarget> {}
+        interface PreProcessor {}
+        interface PostProcessor {}
+        interface FinallyProcessor {}
+        interface AroundProcessor {}
+
+        // Foundational declaration policies.
+        attribute Targets(values: string[]) for attribute retain compile;
+        attribute Source() for attribute retain compile;
+        attribute Compile() for attribute retain compile;
+        attribute Runtime() for attribute retain compile;
+        attribute Repeatable() for attribute retain compile;
+        attribute Inherited() for attribute retain compile;
+        attribute Scoped() for attribute retain compile;
+        attribute Requires(values: string[]) for attribute retain compile;
+        attribute RequiresAny(values: string[]) for attribute retain compile;
+        attribute Conflicts(values: string[]) for attribute retain compile;
+        attribute OnlyWith(values: string[]) for attribute retain compile;
+        attribute Exclusive(group: string) for attribute retain compile repeatable;
+        attribute Cardinality(min: usize = 0usize, max: usize = 1usize) for attribute retain compile;
+        attribute Before(values: string[]) for attribute retain compile;
+        attribute After(values: string[]) for attribute retain compile;
+        attribute Implies(values: string[]) for attribute retain compile;
+        attribute Processor(processorType: string) for attribute retain compile repeatable;
+        // Marks a public DeriveProcessor method as a checked generated member.
+        // Its first explicit parameter is the hidden target receiver (`any` or
+        // an immutable view of DeriveProcessor<TTarget>); remaining parameters
+        // form the public method surface. The optional name overrides the
+        // exposed member name.
+        attribute DeriveMember(name: string = "") for method retain compile;
+
+        // Compiler-supported language attributes. Their declarations are the
+        // public contract; lowering remains compiler-owned and ABI-stable.
+        [Targets("field", "variable")]
+        attribute ReadOnly();
+
+        [Targets("method", "constructor")]
+        attribute Default();
+
+        [Targets("component", "object")]
+        attribute NoDefaultCtor();
+
+        [Targets("component", "object")]
+        attribute GenerateCtors();
+
+        [Targets("method")]
+        attribute From(sourceType: string);
+
+        [Targets("fn", "method")]
+        attribute Trust();
+
+        [Targets("object", "component", "interface", "method")]
+        attribute Final();
+
+        [Targets("enum", "flagset")]
+        attribute Type(underlyingType: string);
+
+        [Targets("fn", "method", "component", "object", "interface", "enum", "flagset")]
+        [Conflicts("Export")]
+        attribute Native();
+
+        [Targets("fn", "method", "component", "object", "interface", "enum", "flagset")]
+        attribute CppHeader(path: string);
+
+        [Targets("fn", "method", "component", "object", "interface", "enum", "flagset")]
+        [RequiresAny("Native", "Export")]
+        attribute CppName(name: string);
+
+        [Targets("object", "component", "fn", "method")]
+        attribute Instantiate(typeArguments: string[]);
+
+        [Targets("object", "component")]
+        attribute Specialize(typeArguments: string[]);
+
+        [Targets("object", "component", "fn", "method")]
+        attribute Apply(constraints: string[]);
+
+        [Targets("fn", "method", "component", "object")]
+        [Conflicts("Native")]
+        attribute Export();
+
+        [Targets("fn")]
+        [Requires("Export")]
+        [Conflicts("Event")]
+        attribute Command(name: string);
+
+        [Targets("fn")]
+        [Requires("Export")]
+        [Conflicts("Command")]
+        attribute Event(name: string);
+
+        [Targets("fn")]
+        attribute ModuleApiVersion();
+
+        [Targets("fn")]
+        attribute ModuleLoad();
+
+        [Targets("fn")]
+        attribute ModuleUpdate();
+
+        [Targets("fn")]
+        attribute ModuleUnload();
+
+        [Targets("fn")]
+        attribute ModuleSaveState();
+
+        [Targets("fn")]
+        attribute ModuleRestoreState();
+    }
+}

@@ -1,0 +1,13 @@
+use std::attribute as attr;
+
+[From(attr::DeriveProcessor<any>)]
+object EmptyDerive {}
+
+[attribute::Targets(component)]
+[attribute::Processor(EmptyDerive)]
+attribute Derived();
+
+[Derived]
+component Value { number: i32; }
+
+fn Entry() -> i32 { return 0; }

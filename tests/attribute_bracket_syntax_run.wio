@@ -1,0 +1,42 @@
+use std::assert as assert;
+use std::console as console;
+use std::reflect as reflect;
+
+attribute entity(name: string) for component retain runtime;
+attribute column(name: string) for field retain runtime;
+attribute indexed() for field retain runtime;
+attribute compile_only() for component retain compile;
+
+[entity(name: "users")]
+[compile_only]
+component User {
+    [column("user_id"), indexed]
+    public id: u64;
+
+    public name: string;
+}
+
+[entity("sessions"), compile_only]
+component Session {
+    [column(name: "session_id")]
+    id: u64;
+}
+
+fn Entry() -> i32 {
+    let userAttributes = reflect::TypeAttributes<User>();
+    assert::ExpectEqual(userAttributes.Count(), 1usize, "stacked runtime attribute count");
+    assert::ExpectEqual(userAttributes[0usize], "entity(users)", "stacked attribute value");
+
+    let idAttributes = reflect::FieldAttributes<User>("id");
+    assert::ExpectEqual(idAttributes.Count(), 2usize, "grouped field attribute count");
+    assert::ExpectEqual(idAttributes[0usize], "column(user_id)", "grouped first attribute");
+    assert::ExpectEqual(idAttributes[1usize], "indexed", "grouped second attribute");
+
+    let sessionAttributes = reflect::TypeAttributes<Session>();
+    assert::ExpectEqual(sessionAttributes.Count(), 1usize, "grouped type attribute count");
+    assert::ExpectEqual(sessionAttributes[0usize], "entity(sessions)", "grouped type attribute value");
+    assert::ExpectEqual(reflect::FieldAttributes<Session>("id")[0usize], "column(session_id)", "named argument in bracket list");
+
+    console::PrintLine("attribute-bracket-syntax-ok");
+    return 0;
+}

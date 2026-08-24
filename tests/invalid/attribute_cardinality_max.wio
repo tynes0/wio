@@ -1,0 +1,10 @@
+[attribute::Targets(component)]
+[attribute::Cardinality(0, 2)]
+attribute tag(value: string);
+
+[tag("a"), tag("b"), tag("c")]
+component TooManyTags {
+    value: i32;
+}
+
+fn Entry() -> i32 { return 0; }

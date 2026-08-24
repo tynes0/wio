@@ -1,0 +1,14 @@
+use std::attribute as attr;
+
+fn RuntimeDecision() -> bool { return true; }
+
+[From(attr::Validator<any>)]
+object RuntimeValidator {
+    public fn Validate() -> bool { return RuntimeDecision(); }
+}
+
+[attribute::Targets(fn)]
+[attribute::Processor(RuntimeValidator)]
+attribute InvalidValidator();
+
+fn Entry() -> i32 { return 0; }

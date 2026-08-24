@@ -1,0 +1,178 @@
+use common;
+use std::console as console;
+use std::fs as fs;
+use std::path as path;
+use std::result as result;
+
+realm SelfHostedMigrate {
+    fn Help() -> string {
+        return "Wio source migration\n\n" +
+            "Usage:\n" +
+            "  wio migrate attributes [PATH] --check\n" +
+            "  wio migrate attributes [PATH] --write\n\n" +
+            "Converts legacy @Attribute(...) syntax to [Attribute(...)].\n" +
+            "Strings and comments are never rewritten. PATH defaults to the current directory.\n";
+    }
+
+    fn IsNameStart(value: char) -> bool {
+        return (value >= 'a' and value <= 'z') or
+            (value >= 'A' and value <= 'Z') or value == '_';
+    }
+
+    fn IsNamePart(value: char) -> bool {
+        return IsNameStart(value) or (value >= '0' and value <= '9') or
+            value == ':' or value == '.';
+    }
+
+    fn AttributeEnd(source: string, start: usize) -> usize {
+        if (start + 1usize >= source.Count() or not IsNameStart(source[start + 1usize])) {
+            return start;
+        }
+        mut index = start + 2usize;
+        while (index < source.Count() and IsNamePart(source[index])) { index += 1usize; }
+        if (index >= source.Count() or source[index] != '(') { return index; }
+
+        mut depth = 0usize;
+        mut quote: char = '"';
+        mut quoted = false;
+        mut escaped = false;
+        while (index < source.Count()) {
+            let current = source[index];
+            if (quoted) {
+                if (escaped) { escaped = false; }
+                else if (current == '\\') { escaped = true; }
+                else if (current == quote) { quoted = false; }
+            }
+            else if (current == '"' or current == '\'') { quote = current; quoted = true; }
+            else if (current == '(') { depth += 1usize; }
+            else if (current == ')') {
+                depth -= 1usize;
+                if (depth == 0usize) { return index + 1usize; }
+            }
+            index += 1usize;
+        }
+        return start;
+    }
+
+    fn Rewrite(source: string) -> string {
+        mut output = "";
+        mut index = 0usize;
+        mut quote: char = '"';
+        mut quoted = false;
+        mut escaped = false;
+        mut lineComment = false;
+        mut blockComment = false;
+        while (index < source.Count()) {
+            let current = source[index];
+            let next = index + 1usize < source.Count() ? source[index + 1usize] : '\n';
+
+            if (lineComment) {
+                output.Append(source.Slice(index, 1usize));
+                if (current == '\n') { lineComment = false; }
+                index += 1usize;
+                continue;
+            }
+            if (blockComment) {
+                output.Append(source.Slice(index, 1usize));
+                if (current == '*' and next == '/') {
+                    output.Append("/");
+                    index += 2usize;
+                    blockComment = false;
+                } else { index += 1usize; }
+                continue;
+            }
+            if (quoted) {
+                output.Append(source.Slice(index, 1usize));
+                if (escaped) { escaped = false; }
+                else if (current == '\\') { escaped = true; }
+                else if (current == quote) { quoted = false; }
+                index += 1usize;
+                continue;
+            }
+            if (current == '/' and next == '/') {
+                output.Append("//"); index += 2usize; lineComment = true; continue;
+            }
+            if (current == '/' and next == '*') {
+                output.Append("/*"); index += 2usize; blockComment = true; continue;
+            }
+            if (current == '"' or current == '\'') {
+                quote = current;
+                quoted = true;
+                output.Append(source.Slice(index, 1usize));
+                index += 1usize;
+                continue;
+            }
+            if (current == '@') {
+                let end = AttributeEnd(source, index);
+                if (end > index) {
+                    output.Append("[");
+                    output.Append(source.Slice(index + 1usize, end - index - 1usize));
+                    output.Append("]");
+                    index = end;
+                    continue;
+                }
+            }
+            output.Append(source.Slice(index, 1usize));
+            index += 1usize;
+        }
+        return output;
+    }
+
+    fn Files(target: string) -> string[] {
+        if (fs::IsFile(target)) {
+            if (path::Extension(target) == ".wio") { return [target]; }
+            return [];
+        }
+        if (not fs::IsDirectory(target)) { return []; }
+        mut files: string[] = [];
+        for file in fs::ListFilesRecursiveRaw(target) {
+            if (path::Extension(file) == ".wio" and not file.Contains("/.wio-build/") and
+                not file.Contains("\\.wio-build\\")) { files.Push(file); }
+        }
+        return files;
+    }
+
+    fn Execute(args: string[]) -> std::Result<i32> {
+        if (args.Count() < 3usize or args[2usize] == "--help" or args[2usize] == "-h") {
+            console::Print(Help());
+            return std::Ok<i32>(0);
+        }
+        if (args[2usize] != "attributes") {
+            return SelfHostedCli::Failure<i32>($"Unknown migration: ${args[2usize]}");
+        }
+        if (SelfHostedCli::Has(args, "--help") or SelfHostedCli::Has(args, "-h")) {
+            console::Print(Help());
+            return std::Ok<i32>(0);
+        }
+        let write = SelfHostedCli::Has(args, "--write");
+        let check = SelfHostedCli::Has(args, "--check");
+        if (write == check) {
+            return SelfHostedCli::Failure<i32>("Choose exactly one of --check or --write.");
+        }
+        mut target = fs::CurrentPathRaw();
+        if (args.Count() >= 4usize and not args[3usize].StartsWith("-")) { target = path::AbsoluteRaw(args[3usize]); }
+        if (not fs::Exists(target)) { return SelfHostedCli::Failure<i32>($"Migration path does not exist: ${target}"); }
+
+        mut changed = 0usize;
+        for file in Files(target) {
+            let source = fs::ReadTextRaw(file);
+            let rewritten = Rewrite(source);
+            if (rewritten == source) { continue; }
+            changed += 1usize;
+            console::PrintLine!(file);
+            if (write and not fs::TryWriteTextEnsured(file, rewritten)) {
+                return SelfHostedCli::Failure<i32>($"Could not rewrite: ${file}");
+            }
+        }
+        if (changed == 0usize) {
+            console::PrintLine!("Attribute syntax is current.");
+            return std::Ok<i32>(0);
+        }
+        if (check) {
+            console::PrintLine!($"${changed} file(s) require attribute migration.");
+            return std::Ok<i32>(1);
+        }
+        console::PrintLine!($"Migrated ${changed} file(s).");
+        return std::Ok<i32>(0);
+    }
+}

@@ -10,6 +10,57 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## v0.15 attribute foundation sprint
+
+- [x] Declaration-leading `[Attribute]` syntax supports stacked and grouped
+      lists while preserving legacy input and canonical `using` activation.
+- [x] Bracket attributes retain target identity on ordinary declarations,
+      members, parameters, enum/flagset cases, applications, systems,
+      lifecycle handlers, and application/system fields.
+- [x] User attributes compose other attributes with compile-time parameter
+      substitution, default materialization, recursive expansion, and cycle
+      diagnostics.
+- [x] Effective-set contracts cover targets, requires, requires-any,
+      conflicts, only-with allow lists, exclusive groups, cardinality, and
+      before/after ordering cycles.
+- [x] `std::attribute` publishes processor phases, meta-attribute policies,
+      and declarations for the current compiler attributes.
+- [x] Processor declarations are checked against exactly one validation,
+      derive, pre, post, finally, or around capability interface.
+- [x] Built-ins and user attributes share stable contract identities for
+      target, requirement, and conflict matching.
+- [x] Bounded validators execute at compile time with constant diagnostics;
+      synchronous pre, post, and exactly-once finally hooks execute on Wio
+      function bodies with explicit diagnostics for still-closed edge cases.
+- [x] Behavioral processors honor topological `Before`/`After` dependencies;
+      source order is deterministic for unrelated processors and exit hooks
+      unwind in reverse order.
+- [x] Unit synchronous around hooks own a guarded zero-or-one `Proceed`;
+      duplicate calls and use after the around invocation are rejected without
+      exposing mutable AST or token rewriting.
+- [x] Typed synchronous around hooks map or replace exact return values;
+      post processors observe typed results, finally processors observe normal
+      versus exceptional completion, and pre/post/finally hooks execute inside
+      async coroutine frames. Async around is explicitly rejected.
+- [x] Object-method pre processors may receive the current receiver as `any`;
+      boolean pre guards can skip unit-returning methods, while receiver use on
+      free functions and result-bearing guards fail during analysis.
+- [x] Method reflection exposes behavioral processors in effective execution
+      order, including attribute identity, processor type, phase, hook, and
+      invocation mode; `Describe<T>()` includes the same pipeline per method.
+- [x] Bounded checked derives expose marked processor methods as real members
+      on concrete and generic component/object targets. Every concrete generic
+      instantiation inherits its generic primary declaration surface.
+      Calls receive the target through a hidden `any` receiver or an immutable
+      typed contract view from `DeriveProcessor<TTarget>` and use an isolated
+      default-constructed processor. Incompatible targets, unsafe method
+      shapes, conflicts, and ambiguous derives fail during analysis instead of
+      becoming silent metadata.
+- [x] Runtime type reflection exposes structured attribute descriptors with
+      stable FNV-1a identity, retention, origin, normalized arguments, and
+      default provenance while retaining the legacy string view.
+- [x] The focused processor foundation matrix passes 29/29 new tests.
+
 ## v0.13 language coherence and SDK parity sprint
 
 - [x] The normative Wio 0.13 coherence specification freezes first-class
@@ -733,3 +784,18 @@ here as historical evidence rather than active work:
 - [x] Unicode normalization, exact JSON numbers, typed serialization codecs,
       bounded regex records, deterministic vectors, and container invariants
       landed with focused conformance tests.
+
+## v0.15 Typed and Behavioral Attributes
+
+- [x] Declaration-leading `[Attribute]` applications, composition, retention,
+      target/require/conflict/cardinality policies, and deterministic ordering
+      became the canonical typed model for built-ins and user attributes.
+- [x] Compile-time validators, checked method derives, typed receiver guards,
+      typed post/finally/around hooks, coroutine pre/post/finally execution, and
+      explicit rejection of unsupported async around behavior were frozen.
+- [x] Runtime reflection exposes normalized attribute applications and method
+      pipelines; module ABI v9 exposes retained type/field/method/export
+      descriptors to C++ hosts.
+- [x] `wio migrate attributes --check|--write` converts legacy `@` syntax while
+      preserving strings and comments, and compiler lowering resolves built-ins
+      through their canonical typed identities.

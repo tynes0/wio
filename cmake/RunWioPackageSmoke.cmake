@@ -78,12 +78,14 @@ set(required_files
     "${package_root}/docs/WIO_SDK_0_14_PARITY_MATRIX.md"
     "${package_root}/docs/WIO_SDK_EVOLUTION_PLAN.md"
     "${package_root}/docs/WIO_0_14_RELEASE_NOTES.md"
+    "${package_root}/docs/WIO_0_15_RELEASE_NOTES.md"
     "${package_root}/docs/WIO_V1_RELEASE_PLAN.md"
     "${package_root}/docs/WIO_V1_FREEZE.md"
     "${package_root}/docs/spec/WIO_LANGUAGE_SPEC_0_8.md"
     "${package_root}/docs/spec/WIO_LANGUAGE_SPEC_0_9.md"
     "${package_root}/docs/spec/WIO_LANGUAGE_SPEC_0_10.md"
     "${package_root}/docs/spec/WIO_LANGUAGE_SPEC_0_11.md"
+    "${package_root}/docs/spec/WIO_LANGUAGE_SPEC_0_15.md"
     "${package_root}/docs/spec/WIO_STD_SPEC_0_11.md"
 )
 

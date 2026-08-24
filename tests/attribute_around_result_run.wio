@@ -1,0 +1,47 @@
+use std::assert as assert;
+use std::attribute as attr;
+use std::console as console;
+
+mut BodyCalls: i32 = 0;
+
+[From(attr::AroundProcessor)]
+object IncrementAround {
+    public fn Around(proceed: fn() -> i32) -> i32 {
+        return proceed() + 1;
+    }
+}
+
+[From(attr::AroundProcessor)]
+object FallbackAround {
+    public fn Around(proceed: fn() -> i32) -> i32 {
+        return 99;
+    }
+}
+
+[attribute::Targets(fn)]
+[attribute::Processor(IncrementAround)]
+attribute Incremented();
+
+[attribute::Targets(fn)]
+[attribute::Processor(FallbackAround)]
+attribute Replaced();
+
+[Incremented]
+fn IncrementedWork() -> i32 {
+    BodyCalls += 1;
+    return 41;
+}
+
+[Replaced]
+fn ReplacedWork() -> i32 {
+    BodyCalls += 1;
+    return 1;
+}
+
+fn Entry() -> i32 {
+    assert::ExpectEqual(IncrementedWork(), 42, "typed around result mapping");
+    assert::ExpectEqual(ReplacedWork(), 99, "typed around fallback");
+    assert::ExpectEqual(BodyCalls, 1, "fallback around skips original body");
+    console::PrintLine("attribute-around-result-ok");
+    return 0;
+}

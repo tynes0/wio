@@ -65,10 +65,14 @@ namespace wio
         NodePtr<Statement> parseBlockStatement();
         NodePtr<Statement> parseAsyncScopeStatement();
         NodePtr<AttributeStatement> parseAttributeStatement(bool legacyAtSyntax = true);
+        void parseBracketAttributeList(std::vector<NodePtr<AttributeStatement>>& attributes);
+        void parseLeadingAttributes(std::vector<NodePtr<AttributeStatement>>& attributes,
+                                    bool acceptBracketSyntax = true);
+        [[nodiscard]] bool bracketAttributeListPrecedesDeclaration() const;
         void parseWithAttributeClause(std::vector<NodePtr<AttributeStatement>>& attributes);
-        NodePtr<AttributeDeclaration> parseAttributeDeclaration();
-        NodePtr<Statement> parseApplicationDeclaration();
-        NodePtr<Statement> parseSystemDeclaration();
+        NodePtr<AttributeDeclaration> parseAttributeDeclaration(std::vector<NodePtr<AttributeStatement>> metaAttributes = {});
+        NodePtr<Statement> parseApplicationDeclaration(std::vector<NodePtr<AttributeStatement>> attributes = {});
+        NodePtr<Statement> parseSystemDeclaration(std::vector<NodePtr<AttributeStatement>> attributes = {});
         NodePtr<VariableDeclaration> parseVariableDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
         NodePtr<TypeAliasDeclaration> parseTypeAliasDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);
         NodePtr<FunctionDeclaration> parseFunctionDeclaration(std::vector<NodePtr<AttributeStatement>> attributes, bool isLifecycle = false, bool isStructMethod = false, bool isAsync = false);

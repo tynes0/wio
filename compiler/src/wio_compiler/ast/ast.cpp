@@ -1,5 +1,6 @@
 ﻿#include "wio/ast/ast.h"
 #include "wio/sema/type.h"
+#include "wio/ast/attribute_contract.h"
 // NOLINTNEXTLINE(CppUnusedIncludeDirective)
 #include "wio/sema/symbol.h" 
 
@@ -261,8 +262,11 @@ namespace wio
         std::vector<NodePtr<TypeSpecifier>> _typeArgs, common::Location _loc,
         std::string _qualifiedName, std::vector<std::string> _argumentNames)
         : Statement(_loc), attribute(_attribute), qualifiedName(std::move(_qualifiedName)),
+          canonicalName(_attribute == Attribute::Unknown
+              ? qualifiedName
+              : std::string(canonicalBuiltinAttributeName(_attribute))),
           args(std::move(_args)), typeArgs(std::move(_typeArgs)),
-          argumentNames(std::move(_argumentNames))
+          argumentNames(std::move(_argumentNames)), argumentUsedDefaults(args.size(), false)
     {
     }
 

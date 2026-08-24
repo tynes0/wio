@@ -1,5 +1,7 @@
 #include "compiler.h"
 
+#include "wio/ast/attribute_contract.h"
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -1967,7 +1969,7 @@ namespace wio
         {
             return std::ranges::any_of(attributes, [attribute](const NodePtr<AttributeStatement>& stmt)
             {
-                return stmt && stmt->attribute == attribute;
+                return stmt && matchesBuiltinAttribute(*stmt, attribute);
             });
         }
 
@@ -1975,7 +1977,7 @@ namespace wio
         {
             for (const auto& attribute : attributes)
             {
-                if (!attribute || attribute->attribute != Attribute::CppHeader)
+                if (!attribute || !matchesBuiltinAttribute(*attribute, Attribute::CppHeader))
                     continue;
 
                 if (attribute->args.size() == 1 && attribute->args.front().type == TokenType::stringLiteral)

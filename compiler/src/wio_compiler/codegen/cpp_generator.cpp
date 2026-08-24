@@ -1,5 +1,6 @@
 ﻿#include "wio/codegen/cpp_generator.h"
 
+#include "wio/ast/attribute_contract.h"
 #include "wio/common/filesystem/filesystem.h"
 #include "wio/common/operator_overload.h"
 #include "wio/common/utility.h"
@@ -1901,7 +1902,7 @@ namespace wio::codegen
         {
             std::vector<std::string> bases;
             for (const auto& attr : attributes)
-                if (attr->attribute == Attribute::From)
+                if (attr && matchesBuiltinAttribute(*attr, Attribute::From))
                     for (const auto& arg : attr->args)
                         if (arg.type == TokenType::identifier)
                             bases.push_back(arg.value);
@@ -1910,13 +1911,16 @@ namespace wio::codegen
 
         bool hasAttribute(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
         {
-            return std::ranges::any_of(attributes, [targetAttr](const auto& attr) { return attr->attribute == targetAttr; });
+            return std::ranges::any_of(attributes, [targetAttr](const auto& attr)
+            {
+                return attr && matchesBuiltinAttribute(*attr, targetAttr);
+            });
         }
 
         std::vector<Token> getAttributeArgs(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
         {
             for (const auto& attr : attributes) {
-                if (attr->attribute == targetAttr) return attr->args;
+                if (attr && matchesBuiltinAttribute(*attr, targetAttr)) return attr->args;
             }
             return {};
         }
@@ -1925,7 +1929,7 @@ namespace wio::codegen
         {
             for (const auto& attr : attributes)
             {
-                if (attr->attribute == targetAttr && attr->args.size() == 1)
+                if (attr && matchesBuiltinAttribute(*attr, targetAttr) && attr->args.size() == 1)
                     return attr->args.front();
             }
 
@@ -2078,6 +2082,7 @@ namespace wio::codegen
 
         struct ExportedFieldInfo
         {
+            const VariableDeclaration* declaration = nullptr;
             std::string fieldName;
             Ref<sema::Type> fieldType = nullptr;
             bool isReadOnly = false;
@@ -2093,6 +2098,7 @@ namespace wio::codegen
 
         struct ExportedMethodInfo
         {
+            const FunctionDeclaration* declaration = nullptr;
             std::string methodName;
             size_t exportIndex = 0;
         };
@@ -2104,6 +2110,7 @@ namespace wio::codegen
 
         struct ExportedTypeInfo
         {
+            const std::vector<NodePtr<AttributeStatement>>* attributes = nullptr;
             std::string logicalName;
             std::string symbolName;
             std::string cppTypeName;
@@ -2481,6 +2488,7 @@ namespace wio::codegen
                     }
 
                     ExportedFieldInfo fieldInfo;
+                    fieldInfo.declaration = &variableDecl;
                     fieldInfo.fieldName = fieldName;
                     fieldInfo.fieldType = fieldType;
                     fieldInfo.isReadOnly = variableSymbol && variableSymbol->flags.get_isReadOnly();
@@ -2608,6 +2616,7 @@ namespace wio::codegen
                         return;
 
                     ExportedFunctionInfo methodExport;
+                    methodExport.declaration = &functionDecl;
                     methodExport.functionType = typeContext.getOrCreateFunctionType(functionType->returnType, exportedParameterTypes).AsFast<sema::FunctionType>();
                     methodExport.logicalName = typeInfo.logicalName + "." + functionName;
                     methodExport.symbolName = common::formatString("WioMethod__{}__{}__{}", typeInfo.symbolName, functionName, Mangler::mangleFunction(functionName, functionType->paramTypes));
@@ -2617,6 +2626,7 @@ namespace wio::codegen
                     methodExport.ownerIsObject = true;
 
                     ExportedMethodInfo methodInfo;
+                    methodInfo.declaration = &functionDecl;
                     methodInfo.methodName = functionName;
                     methodInfo.exportIndex = exportedFunctions.size();
                     exportedFunctions.push_back(std::move(methodExport));
@@ -2665,6 +2675,7 @@ namespace wio::codegen
                         continue;
 
                     ExportedTypeInfo typeInfo;
+                    typeInfo.attributes = &componentDecl->attributes;
                     typeInfo.logicalName = componentType->scopePath.empty()
                         ? componentType->name
                         : common::formatString("{}::{}", componentType->scopePath, componentType->name);
@@ -2772,6 +2783,7 @@ namespace wio::codegen
                     continue;
 
                 ExportedTypeInfo typeInfo;
+                typeInfo.attributes = &objectDecl->attributes;
                 typeInfo.logicalName = objectType->scopePath.empty()
                     ? objectType->name
                     : common::formatString("{}::{}", objectType->scopePath, objectType->name);
@@ -4104,6 +4116,7 @@ namespace wio::codegen
         emitHeaderLine("#include <iostream>");
         emitHeaderLine("#include <functional>");
         emitHeaderLine("#include <map>");
+        emitHeaderLine("#include <memory>");
         emitHeaderLine("#include <stdexcept>");
         emitHeaderLine("#include <unordered_map>");
         emitHeaderLine();
@@ -4190,7 +4203,115 @@ namespace wio::codegen
         capabilities |= (1u << 6); // product version
         capabilities |= (1u << 7); // type metadata v2
         capabilities |= (1u << 8); // Unicode text dynamic fields
+        auto hasRetainedAttributes = [](const std::vector<NodePtr<AttributeStatement>>* attributes)
+        {
+            return attributes && std::ranges::any_of(*attributes, [](const auto& attribute)
+            {
+                return attribute && attribute->runtimeRetained;
+            });
+        };
+        bool hasRetainedAttributeMetadata = false;
+        for (const auto& exportedFunction : exportedFunctions)
+            hasRetainedAttributeMetadata = hasRetainedAttributeMetadata ||
+                (exportedFunction.declaration && hasRetainedAttributes(&exportedFunction.declaration->attributes));
+        for (const auto& exportedType : exportedTypes)
+        {
+            hasRetainedAttributeMetadata = hasRetainedAttributeMetadata || hasRetainedAttributes(exportedType.attributes);
+            for (const auto& field : exportedType.fields)
+                hasRetainedAttributeMetadata = hasRetainedAttributeMetadata ||
+                    (field.declaration && hasRetainedAttributes(&field.declaration->attributes));
+            for (const auto& method : exportedType.methods)
+                hasRetainedAttributeMetadata = hasRetainedAttributeMetadata ||
+                    (method.declaration && hasRetainedAttributes(&method.declaration->attributes));
+        }
+        if (hasRetainedAttributeMetadata) capabilities |= (1u << 9); // retained attribute metadata v1
         std::uint32_t stateSchemaVersion = (lifecycleFunctions.saveState || lifecycleFunctions.restoreState) ? 1u : 0u;
+
+        struct SdkAttributeTable
+        {
+            size_t count = 0;
+            std::string expression = "nullptr";
+        };
+        auto emitSdkAttributeTable = [&](const std::string& tableName,
+                                         const std::vector<NodePtr<AttributeStatement>>* attributes)
+            -> SdkAttributeTable
+        {
+            std::vector<const AttributeStatement*> retained;
+            if (attributes)
+            {
+                for (const auto& attribute : *attributes)
+                    if (attribute && attribute->runtimeRetained)
+                        retained.push_back(attribute.Get());
+            }
+            if (retained.empty())
+                return {};
+
+            auto phaseExpression = [](const std::string& phase)
+            {
+                if (phase == "validation") return std::string("WIO_MODULE_ATTRIBUTE_PHASE_VALIDATION");
+                if (phase == "pre") return std::string("WIO_MODULE_ATTRIBUTE_PHASE_PRE");
+                if (phase == "post") return std::string("WIO_MODULE_ATTRIBUTE_PHASE_POST");
+                if (phase == "finally") return std::string("WIO_MODULE_ATTRIBUTE_PHASE_FINALLY");
+                if (phase == "around") return std::string("WIO_MODULE_ATTRIBUTE_PHASE_AROUND");
+                if (phase == "derive") return std::string("WIO_MODULE_ATTRIBUTE_PHASE_DERIVE");
+                return std::string("WIO_MODULE_ATTRIBUTE_PHASE_UNKNOWN");
+            };
+            for (size_t attributeIndex = 0; attributeIndex < retained.size(); ++attributeIndex)
+            {
+                const auto* attribute = retained[attributeIndex];
+                if (attribute->processorBindings.empty())
+                    continue;
+                emitLine("static const WioModuleAttributeProcessorDescriptor " + tableName +
+                         "_PROCESSORS_" + std::to_string(attributeIndex) + "[] =");
+                emitLine("{");
+                indent();
+                for (size_t processorIndex = 0; processorIndex < attribute->processorBindings.size(); ++processorIndex)
+                {
+                    const auto& processor = attribute->processorBindings[processorIndex];
+                    const std::string suffix = processorIndex + 1 < attribute->processorBindings.size() ? "," : "";
+                    emitLine("{ \"" + common::wioStringToEscapedCppString(processor.canonicalTypeName) +
+                             "\", " + phaseExpression(processor.phase) + ", \"" +
+                             common::wioStringToEscapedCppString(processor.hookMode) + "\", " +
+                             std::to_string(processorIndex) + "u }" + suffix);
+                }
+                dedent();
+                emitLine("};");
+            }
+
+            emitLine("static const WioModuleAttributeDescriptor " + tableName + "[] =");
+            emitLine("{");
+            indent();
+            for (size_t attributeIndex = 0; attributeIndex < retained.size(); ++attributeIndex)
+            {
+                const auto* attribute = retained[attributeIndex];
+                std::string arguments;
+                for (size_t argumentIndex = 0; argumentIndex < attribute->args.size(); ++argumentIndex)
+                {
+                    if (argumentIndex > 0) arguments += ", ";
+                    if (argumentIndex < attribute->argumentNames.size() && !attribute->argumentNames[argumentIndex].empty())
+                        arguments += attribute->argumentNames[argumentIndex] + "=";
+                    arguments += attribute->args[argumentIndex].value;
+                }
+                const std::string origin = attribute->origin == AttributeOrigin::Composed
+                    ? "WIO_MODULE_ATTRIBUTE_COMPOSED"
+                    : (attribute->origin == AttributeOrigin::Scoped
+                        ? "WIO_MODULE_ATTRIBUTE_SCOPED"
+                        : "WIO_MODULE_ATTRIBUTE_DIRECT");
+                const std::string processorExpression = attribute->processorBindings.empty()
+                    ? "nullptr"
+                    : tableName + "_PROCESSORS_" + std::to_string(attributeIndex);
+                const std::string stableName = attribute->canonicalName.empty()
+                    ? attribute->qualifiedName
+                    : attribute->canonicalName;
+                const std::string suffix = attributeIndex + 1 < retained.size() ? "," : "";
+                emitLine("{ \"" + common::wioStringToEscapedCppString(stableName) + "\", \"" +
+                         common::wioStringToEscapedCppString(arguments) + "\", " + origin + ", " +
+                         std::to_string(attribute->processorBindings.size()) + "u, " + processorExpression + " }" + suffix);
+            }
+            dedent();
+            emitLine("};");
+            return { retained.size(), tableName };
+        };
 
         auto isInvokeCompatibleExport = [&](const ExportedFunctionInfo& exportInfo) -> bool
         {
@@ -4520,6 +4641,16 @@ namespace wio::codegen
             }
         }
 
+        std::vector<SdkAttributeTable> exportAttributeTables;
+        exportAttributeTables.reserve(exportedFunctions.size());
+        for (size_t exportIndex = 0; exportIndex < exportedFunctions.size(); ++exportIndex)
+        {
+            const auto* declaration = exportedFunctions[exportIndex].declaration;
+            exportAttributeTables.push_back(emitSdkAttributeTable(
+                "WIO_MODULE_EXPORT_ATTRIBUTES_" + std::to_string(exportIndex),
+                declaration ? &declaration->attributes : nullptr));
+        }
+
         if (!exportedFunctions.empty())
         {
             emitLine("static const WioModuleExport WIO_MODULE_EXPORTS[] =");
@@ -4536,9 +4667,10 @@ namespace wio::codegen
                     ? "nullptr"
                     : ("WIO_EXPORT_PARAM_TYPES_" + std::to_string(i));
                 std::string suffix = (i + 1 < exportedFunctions.size()) ? "," : "";
+                const auto& attributeTable = exportAttributeTables[i];
 
                 emitLine(common::formatString(
-                    R"({{ "{}", "{}", {}, {}u, {}, {}, reinterpret_cast<const void*>(&{}) }}{})",
+                    R"({{ "{}", "{}", {}, {}u, {}, {}, reinterpret_cast<const void*>(&{}), {}u, {} }}{})",
                     common::wioStringToEscapedCppString(exportInfo.logicalName),
                     common::wioStringToEscapedCppString(exportInfo.symbolName),
                     getAbiTypeEnumName(exportFunctionType->returnType),
@@ -4546,6 +4678,8 @@ namespace wio::codegen
                     paramTypesExpr,
                     invokeExpr,
                     exportInfo.symbolName,
+                    attributeTable.count,
+                    attributeTable.expression,
                     suffix
                 ));
             }
@@ -5170,9 +5304,33 @@ namespace wio::codegen
                 }
             }
 
+            std::vector<SdkAttributeTable> typeAttributeTables;
+            typeAttributeTables.reserve(exportedTypes.size());
             for (size_t typeIndex = 0; typeIndex < exportedTypes.size(); ++typeIndex)
             {
             const auto& exportedType = exportedTypes[typeIndex];
+            const auto typeAttributeTable = emitSdkAttributeTable(
+                "WIO_MODULE_TYPE_ATTRIBUTES_" + std::to_string(typeIndex),
+                exportedType.attributes);
+            typeAttributeTables.push_back(typeAttributeTable);
+            std::vector<SdkAttributeTable> fieldAttributeTables;
+            fieldAttributeTables.reserve(exportedType.fields.size());
+            for (size_t fieldIndex = 0; fieldIndex < exportedType.fields.size(); ++fieldIndex)
+            {
+                const auto* declaration = exportedType.fields[fieldIndex].declaration;
+                fieldAttributeTables.push_back(emitSdkAttributeTable(
+                    "WIO_MODULE_TYPE_FIELD_ATTRIBUTES_" + std::to_string(typeIndex) + "_" + std::to_string(fieldIndex),
+                    declaration ? &declaration->attributes : nullptr));
+            }
+            std::vector<SdkAttributeTable> methodAttributeTables;
+            methodAttributeTables.reserve(exportedType.methods.size());
+            for (size_t methodIndex = 0; methodIndex < exportedType.methods.size(); ++methodIndex)
+            {
+                const auto* declaration = exportedType.methods[methodIndex].declaration;
+                methodAttributeTables.push_back(emitSdkAttributeTable(
+                    "WIO_MODULE_TYPE_METHOD_ATTRIBUTES_" + std::to_string(typeIndex) + "_" + std::to_string(methodIndex),
+                    declaration ? &declaration->attributes : nullptr));
+            }
 
             if (!exportedType.constructors.empty())
             {
@@ -5217,6 +5375,7 @@ namespace wio::codegen
                     const std::string typeDescriptorExpr = field.fieldType
                         ? ("&WIO_TYPE_DESCRIPTOR_" + std::to_string(ensureTypeDescriptor(field.fieldType)))
                         : "nullptr";
+                    const auto& attributeTable = fieldAttributeTables[fieldIndex];
 
                     emitLine(
                         "{ \"" + common::wioStringToEscapedCppString(field.fieldName) +
@@ -5224,7 +5383,8 @@ namespace wio::codegen
                         ", " + typeDescriptorExpr +
                         ", " + std::to_string(flags) + "u, " + accessModifierExpr +
                         ", &WIO_MODULE_EXPORTS[" + std::to_string(field.getterExportIndex) +
-                        "], " + setterExportExpr + ", " + dynamicGetterExpr + ", " + dynamicSetterExpr + " }" + suffix
+                        "], " + setterExportExpr + ", " + dynamicGetterExpr + ", " + dynamicSetterExpr +
+                        ", " + std::to_string(attributeTable.count) + "u, " + attributeTable.expression + " }" + suffix
                     );
                 }
                 dedent();
@@ -5239,10 +5399,12 @@ namespace wio::codegen
                 for (size_t methodIndex = 0; methodIndex < exportedType.methods.size(); ++methodIndex)
                 {
                     const auto& method = exportedType.methods[methodIndex];
+                    const auto& attributeTable = methodAttributeTables[methodIndex];
                     const std::string suffix = (methodIndex + 1 < exportedType.methods.size()) ? "," : "";
                     emitLine(
                         "{ \"" + common::wioStringToEscapedCppString(method.methodName) +
-                        "\", &WIO_MODULE_EXPORTS[" + std::to_string(method.exportIndex) + "] }" + suffix
+                        "\", &WIO_MODULE_EXPORTS[" + std::to_string(method.exportIndex) + "], " +
+                        std::to_string(attributeTable.count) + "u, " + attributeTable.expression + " }" + suffix
                     );
                 }
                 dedent();
@@ -5272,6 +5434,7 @@ namespace wio::codegen
                 const std::string methodArrayExpr = exportedType.methods.empty()
                     ? "nullptr"
                     : ("WIO_MODULE_TYPE_METHODS_" + std::to_string(typeIndex));
+                const auto& typeAttributeTable = typeAttributeTables[typeIndex];
 
                 emitLine(
                     "{ \"" + common::wioStringToEscapedCppString(exportedType.logicalName) +
@@ -5281,7 +5444,8 @@ namespace wio::codegen
                     ", &WIO_MODULE_EXPORTS[" + std::to_string(exportedType.destroyExportIndex) +
                     "], " + std::to_string(exportedType.constructors.size()) + "u, " + constructorArrayExpr +
                     ", " + std::to_string(exportedType.fields.size()) + "u, " + fieldArrayExpr +
-                    ", " + std::to_string(exportedType.methods.size()) + "u, " + methodArrayExpr + " }" + suffix
+                    ", " + std::to_string(exportedType.methods.size()) + "u, " + methodArrayExpr +
+                    ", " + std::to_string(typeAttributeTable.count) + "u, " + typeAttributeTable.expression + " }" + suffix
                 );
             }
             dedent();
@@ -5826,8 +5990,23 @@ namespace wio::codegen
             std::vector<std::string> methodNames;
             std::vector<std::string> methodSignatures;
             std::vector<std::string> methodAccess;
+            std::vector<std::string> methodBehaviorAttributeNames;
+            std::vector<std::string> methodBehaviorProcessorTypes;
+            std::vector<std::string> methodBehaviorPhases;
+            std::vector<std::string> methodBehaviorHooks;
+            std::vector<std::string> methodBehaviorModes;
+            std::vector<size_t> methodBehaviorOffsets{0};
             std::vector<std::string> baseTypes;
             std::vector<std::string> typeAttributes;
+            std::vector<std::string> typeAttributeNames;
+            std::vector<std::string> typeAttributeRetentions;
+            std::vector<std::string> typeAttributeOrigins;
+            std::vector<std::uint64_t> typeAttributeStableIds;
+            std::vector<std::string> typeAttributeArgumentNames;
+            std::vector<std::string> typeAttributeArgumentTypes;
+            std::vector<std::string> typeAttributeArgumentValues;
+            std::vector<std::uint8_t> typeAttributeArgumentUsedDefaults;
+            std::vector<size_t> typeAttributeArgumentOffsets{0};
             std::vector<std::string> fieldAttributeNames;
             std::vector<size_t> fieldAttributeOffsets{0};
 
@@ -5852,7 +6031,61 @@ namespace wio::codegen
             for (const auto& attribute : declaration.attributes)
             {
                 auto name = reflectedAttributeName(attribute);
-                if (!name.empty()) typeAttributes.push_back(std::move(name));
+                if (name.empty())
+                    continue;
+                typeAttributes.push_back(std::move(name));
+                typeAttributeNames.push_back(attribute->qualifiedName);
+                typeAttributeRetentions.push_back("runtime");
+                switch (attribute->origin)
+                {
+                case AttributeOrigin::Direct: typeAttributeOrigins.push_back("direct"); break;
+                case AttributeOrigin::Inherited: typeAttributeOrigins.push_back("inherited"); break;
+                case AttributeOrigin::Scoped: typeAttributeOrigins.push_back("scoped"); break;
+                case AttributeOrigin::Composed: typeAttributeOrigins.push_back("composed"); break;
+                case AttributeOrigin::Generated: typeAttributeOrigins.push_back("generated"); break;
+                case AttributeOrigin::Compiler: typeAttributeOrigins.push_back("compiler"); break;
+                }
+
+                std::uint64_t stableId = 14695981039346656037ull;
+                const std::string& stableAttributeName = attribute->canonicalName.empty()
+                    ? attribute->qualifiedName
+                    : attribute->canonicalName;
+                for (const unsigned char byte : stableAttributeName)
+                {
+                    stableId ^= byte;
+                    stableId *= 1099511628211ull;
+                }
+                typeAttributeStableIds.push_back(stableId);
+
+                for (size_t argumentIndex = 0; argumentIndex < attribute->args.size(); ++argumentIndex)
+                {
+                    const Token& argument = attribute->args[argumentIndex];
+                    typeAttributeArgumentNames.push_back(
+                        argumentIndex < attribute->argumentNames.size()
+                            ? attribute->argumentNames[argumentIndex]
+                            : std::string{});
+                    std::string argumentType = "unknown";
+                    if (argument.type == TokenType::stringLiteral)
+                        argumentType = argument.isUnicodeString ? "text" : "string";
+                    else if (argument.type == TokenType::integerLiteral)
+                        argumentType = "integer";
+                    else if (argument.type == TokenType::floatLiteral)
+                        argumentType = "float";
+                    else if (argument.type == TokenType::byteLiteral)
+                        argumentType = "byte";
+                    else if (argument.type == TokenType::kwTrue || argument.type == TokenType::kwFalse)
+                        argumentType = "bool";
+                    else if (argument.type == TokenType::identifier)
+                        argumentType = "symbol";
+                    typeAttributeArgumentTypes.push_back(std::move(argumentType));
+                    typeAttributeArgumentValues.push_back(argument.value);
+                    typeAttributeArgumentUsedDefaults.push_back(
+                        argumentIndex < attribute->argumentUsedDefaults.size() &&
+                        attribute->argumentUsedDefaults[argumentIndex]
+                            ? static_cast<std::uint8_t>(1)
+                            : static_cast<std::uint8_t>(0));
+                }
+                typeAttributeArgumentOffsets.push_back(typeAttributeArgumentValues.size());
             }
 
             auto addMember = [&](const auto& member, const bool objectDefault)
@@ -5891,6 +6124,42 @@ namespace wio::codegen
                     signature += ") -> " + std::string(returnType ? returnType->toString() : "void");
                     methodSignatures.push_back(std::move(signature));
                     methodAccess.push_back(accessName(member.access, objectDefault));
+
+                    std::vector<const AttributeStatement*> orderedAttributes;
+                    orderedAttributes.reserve(function->attributes.size());
+                    for (const auto& attribute : function->attributes)
+                    {
+                        if (attribute)
+                            orderedAttributes.push_back(attribute.Get());
+                    }
+                    std::ranges::stable_sort(
+                        orderedAttributes,
+                        {},
+                        &AttributeStatement::processorOrder);
+                    for (const auto* attribute : orderedAttributes)
+                    {
+                        for (const auto& processor : attribute->processorBindings)
+                        {
+                            if ((processor.phase != "pre" && processor.phase != "post" &&
+                                 processor.phase != "finally" && processor.phase != "around") ||
+                                processor.cppTypeName.empty() || processor.hookCppName.empty())
+                            {
+                                continue;
+                            }
+                            methodBehaviorAttributeNames.push_back(
+                                attribute->canonicalName.empty()
+                                    ? attribute->qualifiedName
+                                    : attribute->canonicalName);
+                            methodBehaviorProcessorTypes.push_back(processor.canonicalTypeName);
+                            methodBehaviorPhases.push_back(processor.phase);
+                            methodBehaviorHooks.push_back(
+                                processor.phase == "pre" ? "Before" :
+                                processor.phase == "post" ? "After" :
+                                processor.phase == "finally" ? "Finally" : "Around");
+                            methodBehaviorModes.push_back(processor.hookMode);
+                        }
+                    }
+                    methodBehaviorOffsets.push_back(methodBehaviorPhases.size());
                 }
             };
 
@@ -5921,6 +6190,7 @@ namespace wio::codegen
                     signature += ") -> " + std::string(returnType ? returnType->toString() : "void");
                     methodSignatures.push_back(std::move(signature));
                     methodAccess.push_back("public");
+                    methodBehaviorOffsets.push_back(methodBehaviorPhases.size());
                 }
             }
 
@@ -6135,8 +6405,51 @@ namespace wio::codegen
             emitStringViewArray("MethodNames", methodNames);
             emitStringViewArray("MethodSignatures", methodSignatures);
             emitStringViewArray("MethodAccess", methodAccess);
+            emitStringViewArray("MethodBehaviorAttributeNames", methodBehaviorAttributeNames);
+            emitStringViewArray("MethodBehaviorProcessorTypes", methodBehaviorProcessorTypes);
+            emitStringViewArray("MethodBehaviorPhases", methodBehaviorPhases);
+            emitStringViewArray("MethodBehaviorHooks", methodBehaviorHooks);
+            emitStringViewArray("MethodBehaviorModes", methodBehaviorModes);
+            emit("static constexpr std::array<std::size_t, " +
+                 std::to_string(methodBehaviorOffsets.size()) + "> MethodBehaviorOffsets{ ");
+            for (size_t index = 0; index < methodBehaviorOffsets.size(); ++index)
+            {
+                if (index > 0) emit(", ");
+                emit(std::to_string(methodBehaviorOffsets[index]));
+            }
+            emitLine(" };");
             emitStringViewArray("BaseTypes", baseTypes);
             emitStringViewArray("TypeAttributes", typeAttributes);
+            emitStringViewArray("TypeAttributeNames", typeAttributeNames);
+            emitStringViewArray("TypeAttributeRetentions", typeAttributeRetentions);
+            emitStringViewArray("TypeAttributeOrigins", typeAttributeOrigins);
+            emitStringViewArray("TypeAttributeArgumentNames", typeAttributeArgumentNames);
+            emitStringViewArray("TypeAttributeArgumentTypes", typeAttributeArgumentTypes);
+            emitStringViewArray("TypeAttributeArgumentValues", typeAttributeArgumentValues);
+            emit("static constexpr std::array<std::uint64_t, " +
+                 std::to_string(typeAttributeStableIds.size()) + "> TypeAttributeStableIds{ ");
+            for (size_t index = 0; index < typeAttributeStableIds.size(); ++index)
+            {
+                if (index > 0) emit(", ");
+                emit(std::to_string(typeAttributeStableIds[index]) + "ull");
+            }
+            emitLine(" };");
+            emit("static constexpr std::array<std::uint8_t, " +
+                 std::to_string(typeAttributeArgumentUsedDefaults.size()) + "> TypeAttributeArgumentUsedDefaults{ ");
+            for (size_t index = 0; index < typeAttributeArgumentUsedDefaults.size(); ++index)
+            {
+                if (index > 0) emit(", ");
+                emit(std::to_string(typeAttributeArgumentUsedDefaults[index]));
+            }
+            emitLine(" };");
+            emit("static constexpr std::array<std::size_t, " +
+                 std::to_string(typeAttributeArgumentOffsets.size()) + "> TypeAttributeArgumentOffsets{ ");
+            for (size_t index = 0; index < typeAttributeArgumentOffsets.size(); ++index)
+            {
+                if (index > 0) emit(", ");
+                emit(std::to_string(typeAttributeArgumentOffsets[index]));
+            }
+            emitLine(" };");
             emitStringViewArray("FieldAttributeNames", fieldAttributeNames);
             emit("static constexpr std::array<std::size_t, " +
                  std::to_string(fieldAttributeOffsets.size()) + "> FieldAttributeOffsets{ ");
@@ -8432,7 +8745,17 @@ namespace wio::codegen
                 }
             }
 
-            emit(Mangler::mangleFunction(calleeSym->name, mangledFunctionType->paramTypes, scopePath));
+            if (calleeSym->flags.get_isDerived())
+            {
+                emit("wio::runtime::Ref<" + calleeSym->derivedProcessorCppType + ">::Create()->");
+                emit(Mangler::mangleFunction(
+                    extensionImplementation->name,
+                    mangledFunctionType->paramTypes));
+            }
+            else
+            {
+                emit(Mangler::mangleFunction(calleeSym->name, mangledFunctionType->paramTypes, scopePath));
+            }
         }
         else
         {
@@ -8536,6 +8859,11 @@ namespace wio::codegen
         emit(" {\n");
         indent();
 
+        const auto enclosingPostProcessors = currentBehavioralPostProcessors_;
+        const auto enclosingFinallyProcessors = currentBehavioralFinallyProcessors_;
+        currentBehavioralPostProcessors_.clear();
+        currentBehavioralFinallyProcessors_.clear();
+
         if (node.body->is<ExpressionStatement>())
         {
             EMIT_TABS();
@@ -8549,6 +8877,9 @@ namespace wio::codegen
             for (auto& stmt : block->statements)
                 stmt->accept(*this);
         }
+
+        currentBehavioralPostProcessors_ = enclosingPostProcessors;
+        currentBehavioralFinallyProcessors_ = enclosingFinallyProcessors;
 
         dedent();
         EMIT_TABS(); emit("}");
@@ -9073,6 +9404,54 @@ namespace wio::codegen
         bool isExported = isExportedFunction(node);
         bool hasModuleLifecycleExport = getModuleLifecycleAttribute(node).has_value();
         bool emitsExportWrapper = isExported || hasModuleLifecycleExport;
+
+        struct BehavioralProcessorInstance
+        {
+            std::string phase;
+            std::string cppTypeName;
+            std::string hookCppName;
+            std::string hookMode;
+            Ref<sema::Type> hookValueType;
+            std::string variableName;
+            std::string finalizedFlagName;
+        };
+        std::vector<BehavioralProcessorInstance> behavioralProcessors;
+        if (!isEmittingPrototypes_ && node.body && !isNative)
+        {
+            std::vector<const AttributeStatement*> orderedAttributes;
+            orderedAttributes.reserve(node.attributes.size());
+            for (const auto& attribute : node.attributes)
+                if (attribute)
+                    orderedAttributes.push_back(attribute.Get());
+            std::ranges::stable_sort(
+                orderedAttributes,
+                {},
+                &AttributeStatement::processorOrder);
+            for (const auto* attribute : orderedAttributes)
+            {
+                for (const auto& processor : attribute->processorBindings)
+                {
+                    if ((processor.phase != "pre" && processor.phase != "post" &&
+                         processor.phase != "finally" && processor.phase != "around") ||
+                        processor.cppTypeName.empty() || processor.hookCppName.empty())
+                    {
+                        continue;
+                    }
+                    if (node.isAsync && processor.phase == "around")
+                        continue;
+                    const size_t index = behavioralProcessors.size();
+                    behavioralProcessors.push_back(BehavioralProcessorInstance{
+                        .phase = processor.phase,
+                        .cppTypeName = processor.cppTypeName,
+                        .hookCppName = processor.hookCppName,
+                        .hookMode = processor.hookMode,
+                        .hookValueType = processor.hookValueType.Lock(),
+                        .variableName = "_wio_attribute_processor_" + std::to_string(index),
+                        .finalizedFlagName = "_wio_attribute_finalized_" + std::to_string(index)
+                    });
+                }
+            }
+        }
 
         if (funcName == "Entry" && !node.isAsync &&
             node.genericParameters.empty() &&
@@ -9933,18 +10312,189 @@ namespace wio::codegen
         {
             auto emitFunctionBody = [&]()
             {
-                if (!(node.isAsync && currentClassIsObject_ && node.body->is<BlockStatement>()))
+                if (behavioralProcessors.empty() &&
+                    !(node.isAsync && currentClassIsObject_ && node.body->is<BlockStatement>()))
                 {
                     node.body->accept(*this);
                     return;
                 }
 
-                auto block = node.body->as<BlockStatement>();
+                auto* block = node.body->as<BlockStatement>();
                 emitLine("{");
                 indent();
-                emitLine("auto _wio_async_self_guard = wio::runtime::Ref<" + currentClassName_ + ">(this);");
-                for (auto& statement : block->statements)
-                    statement->accept(*this);
+                if (node.isAsync && currentClassIsObject_)
+                    emitLine("auto _wio_async_self_guard = wio::runtime::Ref<" + currentClassName_ + ">(this);");
+
+                for (const auto& processor : behavioralProcessors)
+                {
+                    emitLine("auto " + processor.variableName + " = wio::runtime::Ref<" +
+                             processor.cppTypeName + ">::Create();");
+                    if (processor.phase == "finally")
+                        emitLine("bool " + processor.finalizedFlagName + " = false;");
+                }
+
+                const bool hasFinallyProcessor = std::ranges::any_of(
+                    behavioralProcessors,
+                    [](const BehavioralProcessorInstance& processor) { return processor.phase == "finally"; });
+                const bool hasAroundProcessor = std::ranges::any_of(
+                    behavioralProcessors,
+                    [](const BehavioralProcessorInstance& processor) { return processor.phase == "around"; });
+                if (hasAroundProcessor)
+                {
+                    emitLine("auto _wio_attribute_core = [&]()" +
+                             std::string(currentFunctionReturnType_ && !currentFunctionReturnType_->isVoid()
+                                 ? " -> " + toCppType(currentFunctionReturnType_)
+                                 : ""));
+                    emitLine("{");
+                    indent();
+                }
+                if (hasFinallyProcessor)
+                {
+                    emitLine("try");
+                    emitLine("{");
+                    indent();
+                }
+
+                for (const auto& processor : behavioralProcessors)
+                {
+                    if (processor.phase == "pre")
+                    {
+                        std::string arguments;
+                        if (processor.hookMode.starts_with("receiver_any"))
+                        {
+                            arguments = "wio::runtime::Any::FromObject<" + currentClassName_ +
+                                ">(wio::runtime::Ref<" + currentClassName_ + ">(this))";
+                        }
+                        else if (processor.hookMode.starts_with("receiver_typed"))
+                        {
+                            arguments = "static_cast<" + toCppType(processor.hookValueType) + ">(this)";
+                        }
+                        const std::string invocation = processor.variableName + "->" +
+                            processor.hookCppName + "(" + arguments + ")";
+                        if (processor.hookMode.ends_with("_guard"))
+                            emitLine("if (!(" + invocation + ")) " +
+                                     std::string(node.isAsync ? "co_return;" : "return;"));
+                        else
+                            emitLine(invocation + ";");
+                    }
+                }
+
+                const auto previousPostProcessors = currentBehavioralPostProcessors_;
+                const auto previousFinallyProcessors = currentBehavioralFinallyProcessors_;
+                currentBehavioralPostProcessors_.clear();
+                currentBehavioralFinallyProcessors_.clear();
+                for (auto processor = behavioralProcessors.rbegin(); processor != behavioralProcessors.rend(); ++processor)
+                {
+                    if (processor->phase == "post")
+                        currentBehavioralPostProcessors_.push_back(
+                            processor->variableName + "->" + processor->hookCppName +
+                            (processor->hookMode == "result" ? "({result});" : "();"));
+                    else if (processor->phase == "finally")
+                    {
+                        currentBehavioralFinallyProcessors_.push_back(
+                            "if (!" + processor->finalizedFlagName + ") { " + processor->finalizedFlagName +
+                            " = true; " + processor->variableName + "->" + processor->hookCppName +
+                            (processor->hookMode == "outcome_bool" ? "(true); }" : "(); }"));
+                    }
+                }
+
+                if (block)
+                {
+                    for (auto& statement : block->statements)
+                        statement->accept(*this);
+                }
+                else
+                {
+                    node.body->accept(*this);
+                }
+
+                if (currentFunctionReturnType_ && currentFunctionReturnType_->isVoid())
+                {
+                    for (const std::string& invocation : currentBehavioralPostProcessors_)
+                        emitLine(invocation);
+                    for (const std::string& invocation : currentBehavioralFinallyProcessors_)
+                        emitLine(invocation);
+                }
+
+                currentBehavioralPostProcessors_ = previousPostProcessors;
+                currentBehavioralFinallyProcessors_ = previousFinallyProcessors;
+
+                if (hasFinallyProcessor)
+                {
+                    dedent();
+                    emitLine("}");
+                    emitLine("catch (...)");
+                    emitLine("{");
+                    indent();
+                    for (auto processor = behavioralProcessors.rbegin(); processor != behavioralProcessors.rend(); ++processor)
+                    {
+                        if (processor->phase == "finally")
+                        {
+                            emitLine("if (!" + processor->finalizedFlagName + ") { " + processor->finalizedFlagName +
+                                     " = true; " + processor->variableName + "->" + processor->hookCppName +
+                                     (processor->hookMode == "outcome_bool" ? "(false); }" : "(); }"));
+                        }
+                    }
+                    emitLine("throw;");
+                    dedent();
+                    emitLine("}");
+                }
+
+                if (hasAroundProcessor)
+                {
+                    dedent();
+                    emitLine("};");
+                    std::string nextProceed = "_wio_attribute_core";
+                    size_t aroundIndex = 0;
+                    for (auto processor = behavioralProcessors.rbegin(); processor != behavioralProcessors.rend(); ++processor)
+                    {
+                        if (processor->phase != "around")
+                            continue;
+                        const std::string wrapperName = "_wio_attribute_around_" + std::to_string(aroundIndex);
+                        const std::string stateName = "_wio_attribute_proceed_state_" + std::to_string(aroundIndex);
+                        const bool returnsResult = processor->hookMode == "proceed_result";
+                        const std::string aroundResultType = returnsResult
+                            ? toCppType(currentFunctionReturnType_)
+                            : std::string("void");
+                        emitLine("auto " + wrapperName + " = [&]()" +
+                                 (returnsResult ? " -> " + aroundResultType : ""));
+                        emitLine("{");
+                        indent();
+                        emitLine("auto " + stateName + " = std::make_shared<std::pair<bool, bool>>(true, false);");
+                        emitLine("try");
+                        emitLine("{");
+                        indent();
+                        emitLine(std::string(returnsResult ? "return " : "") +
+                                 processor->variableName + "->" + processor->hookCppName +
+                                 "(std::function<" + aroundResultType + "()>([&, " + stateName + "]()" +
+                                 (returnsResult ? " -> " + aroundResultType : ""));
+                        emitLine("{");
+                        indent();
+                        emitLine("if (!" + stateName + "->first) throw wio::runtime::RuntimeException(\"Attribute Proceed escaped its Around invocation.\");");
+                        emitLine("if (" + stateName + "->second) throw wio::runtime::RuntimeException(\"Attribute Proceed may be invoked at most once.\");");
+                        emitLine(stateName + "->second = true;");
+                        emitLine(std::string(returnsResult ? "return " : "") + nextProceed + "();");
+                        dedent();
+                        emitLine("}));");
+                        dedent();
+                        emitLine("}");
+                        emitLine("catch (...)");
+                        emitLine("{");
+                        indent();
+                        emitLine(stateName + "->first = false;");
+                        emitLine("throw;");
+                        dedent();
+                        emitLine("}");
+                        emitLine(stateName + "->first = false;");
+                        dedent();
+                        emitLine("};");
+                        nextProceed = wrapperName;
+                        ++aroundIndex;
+                    }
+                    emitLine(std::string(currentFunctionReturnType_ && !currentFunctionReturnType_->isVoid()
+                        ? "return "
+                        : "") + nextProceed + "();");
+                }
                 dedent();
                 emitLine("}");
             };
@@ -11411,8 +11961,34 @@ namespace wio::codegen
     void CppGenerator::visit(ReturnStatement& node)
     {
         emitSourceDirective(node.location());
+        const bool hasBehavioralExit = !currentBehavioralPostProcessors_.empty() ||
+                                       !currentBehavioralFinallyProcessors_.empty();
+        if (node.value && hasBehavioralExit)
+        {
+            const std::string resultName = "_wio_attribute_return_" + std::to_string(behavioralReturnCounter_++);
+            EMIT_TABS();
+            buffer_ << "auto " << resultName << " = ";
+            emitExpressionWithExpectedType(node.value, currentFunctionReturnType_, false);
+            buffer_ << ";\n";
+            for (std::string invocation : currentBehavioralPostProcessors_)
+            {
+                if (const size_t marker = invocation.find("{result}"); marker != std::string::npos)
+                    invocation.replace(marker, std::string("{result}").size(), resultName);
+                emitLine(invocation);
+            }
+            for (const std::string& invocation : currentBehavioralFinallyProcessors_)
+                emitLine(invocation);
+            EMIT_TABS();
+            buffer_ << (currentFunctionIsAsync_ ? "co_return " : "return ") << resultName << ";\n";
+            return;
+        }
+
+        for (const std::string& invocation : currentBehavioralPostProcessors_)
+            emitLine(invocation);
+        for (const std::string& invocation : currentBehavioralFinallyProcessors_)
+            emitLine(invocation);
+
         EMIT_TABS();
-        
         buffer_ << (currentFunctionIsAsync_ ? "co_return" : "return");
         if (node.value)
         {

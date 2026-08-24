@@ -76,31 +76,6 @@ here does not by itself mean that v1 cannot ship.
    conflict resolution, import-scoped visibility, documentation generation,
    reflection metadata, and editor completion.
 
-12. [~] Replace the legacy annotation surface with typed, user-extensible
-    attributes before implementing application/system syntax. The accepted
-    direction uses postfix `with` for target attachment and `using` for scoped
-    activation, for example `fn Foo() with native, cpp::name("Foo");` and
-    `using cpp::header("foo.h");`. Add lowercase realm-scoped names, typed
-    arguments/defaults, target policies, retention, repetition, inheritance,
-    conflicts, named arguments, folded scalar/string/text defaults, and runtime
-    type/field reflection are implemented. Add controlled derives,
-    formatter/LSP/docs support, and automated
-    edition-aware migration from `@Attribute(...)`. Add bounded, typed
-    behavioral attributes for entry guards, pre/postconditions, guaranteed
-    exit hooks, and eventually `around` interception. This includes
-    user-defined receiver-liveness guards for callbacks whose native peer may
-    have been destroyed while the Wio wrapper remains alive. Effects must be
-    type-checked, ordered explicitly, visible to tooling, and preserve
-    signatures, evaluation order, thread/cancellation semantics, and ABI.
-    Begin with guards/contracts; do not expose unrestricted token/AST or
-    arbitrary call-site mutation. Keep the declaration surface small: safe
-    defaults should replace most policy keywords, uncommon policies should
-    reuse `with`, and behavioral processors should be ordinary typed
-    functions/interfaces rather than a growing list of magic words such as
-    `retain`, `repeatable`, `scoped`, `affects`, and `returning`. Typed
-    applications now fold scalar, `string`, and `text` const references and
-    materialize trailing defaults into runtime-reflection metadata.
-
 13. [~] Complete a language-coherence pass before broad surface expansion.
     The first 0.11 stabilization slice aligned scoped attributes, pipelines,
     pattern bindings/reachability, and application lifecycle invariants across

@@ -105,6 +105,15 @@ namespace wio
         ModuleRestoreState
     );
 
+    FrenumClassInNamespace(wio, AttributeOrigin, uint8_t,
+        Direct,
+        Inherited,
+        Scoped,
+        Composed,
+        Generated,
+        Compiler
+    );
+
     FrenumClassInNamespace(wio, AccessModifier, uint8_t,
         Public,
         Private,
@@ -683,6 +692,7 @@ namespace wio
 
     struct Parameter
     {
+        std::vector<NodePtrUnchecked<AttributeStatement>> attributes;
         NodePtr<Identifier> name;
         NodePtr<TypeSpecifier> type;
         NodePtr<Expression> defaultValue;
@@ -802,12 +812,17 @@ namespace wio
         // current analyzer/codegen while new and user-defined attributes keep
         // their realm-qualified identity here.
         std::string qualifiedName;
+        // Stable semantic identity. Built-ins use std::attribute::<Name>;
+        // user attributes bind to their declaration identity during analysis.
+        std::string canonicalName;
         std::vector<Token> args;
         std::vector<NodePtr<TypeSpecifier>> typeArgs;
         // Empty entries are positional arguments. Named entries are resolved
         // against the user-defined attribute declaration during analysis and
         // then normalized into declaration order together with args/typeArgs.
         std::vector<std::string> argumentNames;
+        // Aligned with args after semantic normalization.
+        std::vector<bool> argumentUsedDefaults;
         // Where clauses may place more than one conjunctive constraint in a
         // generic-parameter slot. Offsets has parameter-count + 1 entries and
         // indexes the flattened args/typeArgs vectors. Plain @Apply keeps this
@@ -815,6 +830,21 @@ namespace wio
         std::vector<size_t> constraintGroupOffsets;
         bool conjunctiveConstraintGroups = false;
         bool runtimeRetained = false;
+        AttributeOrigin origin = AttributeOrigin::Direct;
+        std::string originParent;
+        struct ProcessorBinding
+        {
+            std::string canonicalTypeName;
+            std::string cppTypeName;
+            std::string phase;
+            std::string hookCppName;
+            std::string hookMode;
+            WeakRef<sema::Type> hookValueType;
+        };
+        // Effective, declaration-ordered processors bound by semantic
+        // analysis. Code generation never re-resolves attribute names.
+        std::vector<ProcessorBinding> processorBindings;
+        size_t processorOrder = 0;
 
         AttributeStatement(Attribute _attribute, std::vector<Token> _args,
             std::vector<NodePtr<TypeSpecifier>> _typeArgs = {},
@@ -828,11 +858,27 @@ namespace wio
     {
         WIO_STMT_NODE_BODY(AttributeDeclaration)
 
+        // Meta-attributes are retained on the declaration so tooling can
+        // inspect the source contract instead of reverse engineering the
+        // normalized policy fields below.
+        std::vector<NodePtr<AttributeStatement>> metaAttributes;
         NodePtr<Identifier> name;
         std::vector<Parameter> parameters;
         std::vector<std::string> targets;
         std::vector<std::string> retention;
         std::vector<std::string> conflictGroups;
+        std::vector<NodePtr<AttributeStatement>> composedAttributes;
+        std::vector<std::string> requiredAttributes;
+        std::vector<std::string> requiredAnyAttributes;
+        std::vector<std::string> conflictingAttributes;
+        std::vector<std::string> onlyWithAttributes;
+        std::vector<std::string> beforeAttributes;
+        std::vector<std::string> afterAttributes;
+        std::vector<std::string> impliedAttributes;
+        std::vector<std::string> processorTypes;
+        size_t cardinalityMin = 0;
+        size_t cardinalityMax = 1;
+        bool hasExplicitCardinality = false;
         bool repeatable = false;
         bool inherited = false;
         bool scoped = false;
@@ -917,6 +963,7 @@ namespace wio
         bool isAsync = false;
         bool isApplicationEntry = false;
         std::string applicationName;
+        std::string attributeTargetOverride;
 
         FunctionDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
             std::vector<NodePtr<Identifier>> _genericParameters, bool _hasGenericParameterPack, std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType, NodePtr<Expression> _whenCondition,
@@ -958,6 +1005,7 @@ namespace wio
         std::vector<NodePtr<Identifier>> genericParameters;
         bool hasGenericParameterPack = false;
         std::vector<ComponentMember> members;
+        std::string attributeTargetOverride;
 
         ComponentDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
             std::vector<NodePtr<Identifier>> _genericParameters,
@@ -1020,6 +1068,7 @@ namespace wio
     {
         NodePtr<Identifier> name;
         NodePtr<Expression> value;
+        std::vector<NodePtr<AttributeStatement>> attributes;
     };
 
     struct EnumDeclaration : Statement

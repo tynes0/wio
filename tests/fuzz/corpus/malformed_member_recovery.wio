@@ -1,0 +1,7 @@
+object Box{
+    public value: T;
+}
+
+fn Broken, U(valalue: Box<T>) -> U {
+    returnurn value;
+}

@@ -12,6 +12,7 @@ set(WIO_SELFHOST_PACKAGE_COMMANDS_SOURCE "${CMAKE_SOURCE_DIR}/cli/package_comman
 set(WIO_SELFHOST_FILE_COMMANDS_SOURCE "${CMAKE_SOURCE_DIR}/cli/file_commands.wio")
 set(WIO_SELFHOST_DEV_COMMANDS_SOURCE "${CMAKE_SOURCE_DIR}/cli/dev_commands.wio")
 set(WIO_SELFHOST_PERF_COMMANDS_SOURCE "${CMAKE_SOURCE_DIR}/cli/perf_commands.wio")
+set(WIO_SELFHOST_MIGRATE_COMMANDS_SOURCE "${CMAKE_SOURCE_DIR}/cli/migrate_commands.wio")
 set(WIO_SELFHOST_ARGONAUT_SOURCE "${CMAKE_SOURCE_DIR}/cli/vendor/argonaut.wio")
 
 source_group("tests" FILES ${WIO_TEST_FILES})
@@ -63,6 +64,7 @@ if(EXISTS "${WIO_SELFHOST_CLI_SOURCE}" AND EXISTS "${WIO_SELFHOST_ARGONAUT_SOURC
         "${WIO_SELFHOST_FILE_COMMANDS_SOURCE}"
         "${WIO_SELFHOST_DEV_COMMANDS_SOURCE}"
         "${WIO_SELFHOST_PERF_COMMANDS_SOURCE}"
+        "${WIO_SELFHOST_MIGRATE_COMMANDS_SOURCE}"
         "${WIO_SELFHOST_ARGONAUT_SOURCE}"
     )
     if(CMAKE_CONFIGURATION_TYPES)
@@ -378,6 +380,23 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
             ${test_name}
             PROPERTIES
                 WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        )
+    endfunction()
+
+    function(add_wio_runtime_failure_test test_name source_file expected_output)
+        add_test(
+            NAME ${test_name}
+            COMMAND
+                ${CMAKE_COMMAND}
+                -DWIO_EXE=$<TARGET_FILE:wio_app>
+                -DWIO_SOURCE=${source_file}
+                -DWIO_EXPECT=${expected_output}
+                "-DWIO_ARGS=--run"
+                -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExpectFailure.cmake"
+        )
+        set_tests_properties(
+            ${test_name}
+            PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         )
     endfunction()
 
@@ -777,6 +796,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_test(
+        NAME wio_test_attribute_migration_smoke
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DWIO_SCRATCH_ROOT=${CMAKE_BINARY_DIR}/attribute-migration-smoke
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioAttributeMigrationSmoke.cmake"
+    )
+    set_tests_properties(
+        wio_test_attribute_migration_smoke
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
         NAME wio_test_self_hosted_cli_smoke
         COMMAND
             ${CMAKE_COMMAND}
@@ -970,7 +1003,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
             ${CMAKE_COMMAND}
             -DWIO_EXE=$<TARGET_FILE:wio_app>
             -DEXAMPLE_ROOT=${CMAKE_SOURCE_DIR}/examples/telemetry_pipeline
-            -DWIO_EXPECT=Telemetry\ pipeline:\ Wio\ 0.14.0
+            -DWIO_EXPECT=Telemetry\ pipeline:\ Wio\ 0.15.0
             -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExampleProject.cmake"
     )
     set_tests_properties(
@@ -2087,7 +2120,14 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_sdk_014_const_generic_metadata_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_const_generic_metadata_library.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_const_generic_metadata_host.cpp"
-        "SDK 0.14 const metadata: abi=8 block=4 label=sdk empty=ok"
+        "SDK 0.14 const metadata: abi=9 block=4 label=sdk empty=ok"
+    )
+
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_015_attribute_metadata_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_015_attribute_metadata_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_015_attribute_metadata_host.cpp"
+        "SDK 0.15 attributes: abi=9 type=Label field=Important method=Audited phase=pre"
     )
 
     add_wio_shared_reload_interop_test(
@@ -3350,6 +3390,371 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/attribute_runtime_reflection_run.wio"
         "attribute-runtime-reflection-ok"
         --run
+    )
+
+    add_wio_output_test(
+        wio_test_attribute_bracket_syntax_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_bracket_syntax_run.wio"
+        "attribute-bracket-syntax-ok"
+        --run
+    )
+    set_tests_properties(wio_test_attribute_bracket_syntax_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
+    add_wio_output_test(
+        wio_test_attribute_composition_constraints_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_composition_constraints_run.wio"
+        "attribute-composition-constraints-ok"
+        --run
+    )
+    set_tests_properties(wio_test_attribute_composition_constraints_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
+    add_wio_output_test(
+        wio_test_std_attribute_contracts_run
+        "${CMAKE_SOURCE_DIR}/tests/std_attribute_contracts_run.wio"
+        "std-attribute-contracts-ok"
+        --run
+    )
+    set_tests_properties(wio_test_std_attribute_contracts_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
+    add_wio_output_test(
+        wio_test_attribute_processor_contract_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_processor_contract_run.wio"
+        "attribute-processor-contract-ok"
+        --run
+    )
+    set_tests_properties(wio_test_attribute_processor_contract_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
+    add_wio_output_test(
+        wio_test_attribute_compile_time_validator_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_compile_time_validator_run.wio"
+        "attribute-compile-time-validator-ok"
+        --run
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_compile_time_validator_rejects
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_compile_time_validator_rejects.wio"
+        "callback target is not safe"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_compile_time_validator_runtime_result
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_compile_time_validator_runtime_result.wio"
+        "must fold to a compile-time bool"
+    )
+    add_wio_output_test(
+        wio_test_attribute_typed_validator_target_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_typed_validator_target_run.wio"
+        "attribute-typed-validator-target-ok"
+        --run
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_typed_validator_target_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_typed_validator_target_mismatch.wio"
+        "requires a target compatible with 'Named'"
+    )
+    set_tests_properties(
+        wio_test_attribute_compile_time_validator_run
+        wio_invalid_attribute_compile_time_validator_rejects
+        wio_invalid_attribute_compile_time_validator_runtime_result
+        wio_test_attribute_typed_validator_target_run
+        wio_invalid_attribute_typed_validator_target_mismatch
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
+        wio_test_attribute_behavioral_pipeline_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_behavioral_pipeline_run.wio"
+        "pre>body>post>finally"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_attribute_typed_receiver_pre_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_typed_receiver_pre_run.wio"
+        "attribute-typed-receiver-pre-ok"
+        --run
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_typed_receiver_pre_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_typed_receiver_pre_mismatch.wio"
+        "requires an object method target compatible with 'Alive'"
+    )
+    add_wio_output_test(
+        wio_test_attribute_behavioral_ordering_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_behavioral_ordering_run.wio"
+        "first>second>body"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_attribute_around_pipeline_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_around_pipeline_run.wio"
+        "around>pre>body>post>around-exit"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_attribute_around_skip_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_around_skip_run.wio"
+        "attribute-around-skip-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_attribute_around_result_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_around_result_run.wio"
+        "attribute-around-result-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_attribute_receiver_guard_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_receiver_guard_run.wio"
+        "attribute-receiver-guard-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_attribute_behavioral_reflection_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_behavioral_reflection_run.wio"
+        "attribute-behavioral-reflection-ok"
+        --run
+    )
+    add_wio_runtime_failure_test(
+        wio_invalid_attribute_around_proceed_twice
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_around_proceed_twice.wio"
+        "Attribute Proceed may be invoked at most once"
+    )
+    add_wio_runtime_failure_test(
+        wio_invalid_attribute_around_proceed_escaped
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_around_proceed_escaped.wio"
+        "Attribute Proceed escaped its Around invocation"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_behavioral_missing_hook
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_behavioral_missing_hook.wio"
+        "post processor 'BrokenPost' must declare"
+    )
+    add_wio_output_test(
+        wio_test_attribute_behavioral_async_result_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_behavioral_async_result_run.wio"
+        "attribute-behavioral-async-result-ok"
+        --run
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_post_result_type_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_post_result_type_mismatch.wio"
+        "expects result type 'string'"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_behavioral_non_callable_target
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_behavioral_non_callable_target.wio"
+        "can target only functions or methods"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_receiver_guard_free_function
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_receiver_guard_free_function.wio"
+        "requires an object method target"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_boolean_guard_non_unit
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_boolean_guard_non_unit.wio"
+        "can skip only a unit-returning function or method"
+    )
+    add_wio_output_test(
+        wio_test_attribute_checked_derive_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_checked_derive_run.wio"
+        "attribute-checked-derive-ok"
+        --run
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_derive_requires_member
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_derive_requires_member.wio"
+        "must expose at least one method"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_derive_member_requires_any_receiver
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_derive_member_requires_any_receiver.wio"
+        "first parameter is 'any'"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_derive_wrong_target
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_derive_wrong_target.wio"
+        "can target only components or objects"
+    )
+    add_wio_output_test(
+        wio_test_attribute_checked_derive_generic_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_checked_derive_generic_run.wio"
+        "attribute-checked-derive-generic-ok"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_attribute_checked_derive_typed_receiver_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_checked_derive_typed_receiver_run.wio"
+        "attribute-checked-derive-typed-receiver-ok"
+        --run
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_derive_typed_target_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_derive_typed_target_mismatch.wio"
+        "requires a target compatible with 'Named'"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_derive_processor_requires_default_constructor
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_derive_processor_requires_default_constructor.wio"
+        "must be default constructible"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_derive_member_default_parameter
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_derive_member_default_parameter.wio"
+        "public parameters have no defaults or packs"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_around_requires_proceed_contract
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_around_requires_proceed_contract.wio"
+        "expects result type 'void'"
+    )
+    set_tests_properties(
+        wio_test_attribute_behavioral_pipeline_run
+        wio_test_attribute_typed_receiver_pre_run
+        wio_invalid_attribute_typed_receiver_pre_mismatch
+        wio_test_attribute_behavioral_ordering_run
+        wio_test_attribute_around_pipeline_run
+        wio_test_attribute_around_skip_run
+        wio_test_attribute_around_result_run
+        wio_test_attribute_receiver_guard_run
+        wio_test_attribute_behavioral_reflection_run
+        wio_invalid_attribute_around_proceed_twice
+        wio_invalid_attribute_around_proceed_escaped
+        wio_invalid_attribute_behavioral_missing_hook
+        wio_test_attribute_behavioral_async_result_run
+        wio_invalid_attribute_post_result_type_mismatch
+        wio_invalid_attribute_behavioral_non_callable_target
+        wio_invalid_attribute_receiver_guard_free_function
+        wio_invalid_attribute_boolean_guard_non_unit
+        wio_test_attribute_checked_derive_run
+        wio_invalid_attribute_derive_requires_member
+        wio_invalid_attribute_derive_member_requires_any_receiver
+        wio_invalid_attribute_derive_wrong_target
+        wio_test_attribute_checked_derive_generic_run
+        wio_test_attribute_checked_derive_typed_receiver_run
+        wio_invalid_attribute_derive_typed_target_mismatch
+        wio_invalid_attribute_derive_processor_requires_default_constructor
+        wio_invalid_attribute_derive_member_default_parameter
+        wio_invalid_attribute_around_requires_proceed_contract
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
+        wio_test_attribute_parameter_enum_case_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_parameter_enum_case_run.wio"
+        "attribute-parameter-enum-case-ok"
+        --run
+    )
+    set_tests_properties(wio_test_attribute_parameter_enum_case_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
+    add_wio_output_test(
+        wio_test_attribute_application_system_targets_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_application_system_targets_run.wio"
+        "attribute-application-system-targets-ok"
+        --run
+    )
+    set_tests_properties(wio_test_attribute_application_system_targets_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
+    add_wio_success_test(
+        wio_test_attribute_builtin_contract_unification
+        "${CMAKE_SOURCE_DIR}/tests/attribute_builtin_contract_unification.wio"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_builtin_requires_any_missing
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_builtin_requires_any_missing.wio"
+        "requires at least one compatible attribute"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_builtin_conflict
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_builtin_conflict.wio"
+        "conflicts with attribute 'std::attribute::Export'"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_builtin_wrong_target
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_builtin_wrong_target.wio"
+        "cannot target 'variable'"
+    )
+    set_tests_properties(
+        wio_test_attribute_builtin_contract_unification
+        wio_invalid_attribute_builtin_requires_any_missing
+        wio_invalid_attribute_builtin_conflict
+        wio_invalid_attribute_builtin_wrong_target
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_failure_test(
+        wio_invalid_attribute_bracket_empty
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_bracket_empty.wio"
+        "An attribute list cannot be empty"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_bracket_trailing_comma
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_bracket_trailing_comma.wio"
+        "Expected an attribute after ','"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_requires_missing
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_requires_missing.wio"
+        "requires attribute 'export_marker'"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_named_conflict
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_named_conflict.wio"
+        "conflicts with attribute 'cached'"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_composition_cycle
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_composition_cycle.wio"
+        "Attribute composition cycle detected"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_processor_wrong_phase
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_processor_wrong_phase.wio"
+        "must implement exactly one of Validator, DeriveProcessor, PreProcessor, PostProcessor, FinallyProcessor, or AroundProcessor"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_ordering_cycle
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_ordering_cycle.wio"
+        "Attribute processor ordering cycle detected"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_parameter_wrong_target
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_parameter_wrong_target.wio"
+        "cannot target 'parameter'"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_requires_any_missing
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_requires_any_missing.wio"
+        "requires at least one compatible attribute"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_only_with_violation
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_only_with_violation.wio"
+        "is not permitted alongside 'command_model'"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_exclusive_group
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_exclusive_group.wio"
+        "through conflict group 'storage'"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_cardinality_max
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_cardinality_max.wio"
+        "requires cardinality 0..2"
+    )
+    set_tests_properties(
+        wio_invalid_attribute_bracket_empty
+        wio_invalid_attribute_bracket_trailing_comma
+        wio_invalid_attribute_requires_missing
+        wio_invalid_attribute_named_conflict
+        wio_invalid_attribute_composition_cycle
+        wio_invalid_attribute_processor_wrong_phase
+        wio_invalid_attribute_ordering_cycle
+        wio_invalid_attribute_parameter_wrong_target
+        wio_invalid_attribute_requires_any_missing
+        wio_invalid_attribute_only_with_violation
+        wio_invalid_attribute_exclusive_group
+        wio_invalid_attribute_cardinality_max
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 
     add_wio_output_test(

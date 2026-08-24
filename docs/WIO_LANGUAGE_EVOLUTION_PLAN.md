@@ -341,6 +341,15 @@ schedule grammar because it defines a static dependency edge.
 
 ## 3. Attribute Syntax Modernization
 
+> **Superseded syntax note:** the earlier postfix `with`/`using` spelling in
+> this historical design section is no longer the accepted source surface.
+> Wio 0.15 standardizes declaration-leading `[Attribute]` while preserving the
+> existing scoped `using` grammar. The authoritative syntax, behavioral processor, safety,
+> reflection, tooling, and migration contract is
+> [`WIO_ATTRIBUTE_SYSTEM_PLAN.md`](./WIO_ATTRIBUTE_SYSTEM_PLAN.md). The material
+> below remains only as rationale for the typed/capability-bounded model until
+> the broader evolution document is rewritten during implementation.
+
 The attribute overhaul is a prerequisite for the application/system runtime,
 not merely a spelling cleanup. Wio should have typed user-defined attributes
 that are actively consumed by reflection, tooling, serialization, native

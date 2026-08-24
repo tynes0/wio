@@ -1,0 +1,41 @@
+use std::assert as assert;
+use std::attribute as attr;
+use std::console as console;
+
+[From(attr::DeriveProcessor<any>)]
+object GenericTargetDerive {
+    [std::attribute::DeriveMember("Describe")]
+    public fn Build(receiver: any, label: string) -> string {
+        return label + "<generic>";
+    }
+}
+
+[attribute::Targets(component, object)]
+[attribute::Processor(GenericTargetDerive)]
+attribute Derived();
+
+[Derived]
+component Box<T> {
+    public value: T;
+}
+
+[Derived]
+object Holder<T> {
+    public value: T;
+
+    OnConstruct(value: T) {
+        self.value = value;
+    }
+}
+
+fn Entry() -> i32 {
+    let number = Box<i32>(42);
+    let text = Box<string>("wio");
+    let holder = Holder<bool>(true);
+
+    assert::ExpectEqual(number.Describe("number:"), "number:<generic>", "generic component derive");
+    assert::ExpectEqual(text.Describe("text:"), "text:<generic>", "second generic instantiation derive");
+    assert::ExpectEqual(holder.Describe("holder:"), "holder:<generic>", "generic object derive");
+    console::PrintLine("attribute-checked-derive-generic-ok");
+    return 0;
+}

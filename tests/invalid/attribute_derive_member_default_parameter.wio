@@ -1,0 +1,18 @@
+use std::attribute as attr;
+
+[From(attr::DeriveProcessor<any>)]
+object DefaultParameterDerive {
+    [std::attribute::DeriveMember("Describe")]
+    public fn Build(receiver: any, prefix: string = "value:") -> string {
+        return prefix;
+    }
+}
+
+[attribute::Targets(object)]
+[attribute::Processor(DefaultParameterDerive)]
+attribute Derived();
+
+[Derived]
+object Value {}
+
+fn Entry() -> i32 { return 0; }

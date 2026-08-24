@@ -20,6 +20,8 @@ Useful reference docs:
 - [Interop guide](docs/WIO_INTEROP_GUIDE.md)
 - [Host SDK](docs/WIO_SDK.md)
 - [SDK 0.14 parity matrix](docs/WIO_SDK_0_14_PARITY_MATRIX.md)
+- [Wio 0.15 typed attribute specification](docs/spec/WIO_LANGUAGE_SPEC_0_15.md)
+- [Wio 0.15 release notes](docs/WIO_0_15_RELEASE_NOTES.md)
 - [Examples guide](docs/WIO_EXAMPLES.md)
 - [Troubleshooting](docs/WIO_TROUBLESHOOTING.md)
 - [FAQ](docs/WIO_FAQ.md)

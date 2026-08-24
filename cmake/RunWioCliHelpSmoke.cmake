@@ -37,6 +37,7 @@ set(commands
     "env|--help"
     "package|--help"
     "perf|--help"
+    "migrate|--help"
 )
 
 foreach(command_spec IN LISTS commands)
@@ -70,7 +71,7 @@ foreach(command_spec IN LISTS commands)
     endif()
 endforeach()
 
-set(bare_command_groups file project bind env perf)
+set(bare_command_groups file project bind env perf migrate)
 foreach(command_group IN LISTS bare_command_groups)
     execute_process(
         COMMAND "${WIO_EXE}" "${command_group}"
@@ -97,6 +98,7 @@ set(command_help_specs
     "bind|new|--help"
     "env|status|--help"
     "perf|smoke|--help"
+    "migrate|attributes|--help"
 )
 
 foreach(command_spec IN LISTS command_help_specs)
