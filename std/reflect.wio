@@ -27,10 +27,19 @@ realm std {
             access: string;
         }
 
+        component BehavioralProcessorInfo {
+            attributeName: string;
+            processorType: string;
+            phase: string;
+            hook: string;
+            mode: string;
+        }
+
         component MethodInfo {
             name: string;
             signature: string;
             access: string;
+            behavioralPipeline: BehavioralProcessorInfo[];
         }
 
         component TypeInfo {
@@ -107,6 +116,24 @@ realm std {
         @Native
         @CppName(wio::runtime::ReflectedMethodAccess)
         fn MethodAccess<T>() -> string[];
+
+        [Native, CppName(wio::runtime::ReflectedMethodBehaviorAttributeNames)]
+        fn MethodBehaviorAttributeNamesNative<T>() -> string[];
+
+        [Native, CppName(wio::runtime::ReflectedMethodBehaviorProcessorTypes)]
+        fn MethodBehaviorProcessorTypesNative<T>() -> string[];
+
+        [Native, CppName(wio::runtime::ReflectedMethodBehaviorPhases)]
+        fn MethodBehaviorPhasesNative<T>() -> string[];
+
+        [Native, CppName(wio::runtime::ReflectedMethodBehaviorHooks)]
+        fn MethodBehaviorHooksNative<T>() -> string[];
+
+        [Native, CppName(wio::runtime::ReflectedMethodBehaviorModes)]
+        fn MethodBehaviorModesNative<T>() -> string[];
+
+        [Native, CppName(wio::runtime::ReflectedMethodBehaviorOffsets)]
+        fn MethodBehaviorOffsetsNative<T>() -> usize[];
 
         @Native
         @CppName(wio::runtime::ReflectedBaseTypes)
@@ -210,6 +237,37 @@ realm std {
             return [];
         }
 
+        fn MethodBehavioralPipeline<T>(methodName: string) -> BehavioralProcessorInfo[] {
+            let methods = MethodNames<T>();
+            let attributeNames = MethodBehaviorAttributeNamesNative<T>();
+            let processorTypes = MethodBehaviorProcessorTypesNative<T>();
+            let phases = MethodBehaviorPhasesNative<T>();
+            let hooks = MethodBehaviorHooksNative<T>();
+            let modes = MethodBehaviorModesNative<T>();
+            let offsets = MethodBehaviorOffsetsNative<T>();
+
+            mut methodIndex = 0usize;
+            while (methodIndex < methods.Count()) {
+                if (methods[methodIndex] == methodName and offsets.Count() > methodIndex + 1usize) {
+                    mut result: BehavioralProcessorInfo[] = [];
+                    mut cursor = offsets[methodIndex];
+                    while (cursor < offsets[methodIndex + 1usize]) {
+                        mut processor = BehavioralProcessorInfo();
+                        processor.attributeName = attributeNames[cursor];
+                        processor.processorType = processorTypes[cursor];
+                        processor.phase = phases[cursor];
+                        processor.hook = hooks[cursor];
+                        processor.mode = modes[cursor];
+                        result.Push(processor);
+                        cursor += 1usize;
+                    }
+                    return result;
+                }
+                methodIndex += 1usize;
+            }
+            return [];
+        }
+
         fn Describe<T>() -> TypeInfo {
             mut result = TypeInfo();
             result.name = TypeName<T>();
@@ -242,6 +300,7 @@ realm std {
                 method.name = methodNames[methodIndex];
                 method.signature = methodSignatures[methodIndex];
                 method.access = methodAccess[methodIndex];
+                method.behavioralPipeline = MethodBehavioralPipeline<T>(method.name);
                 result.methods.Push(method);
                 methodIndex += 1usize;
             }

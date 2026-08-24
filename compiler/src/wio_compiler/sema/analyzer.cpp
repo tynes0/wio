@@ -5381,6 +5381,12 @@ namespace wio::sema
                    cppNameArg->value == "wio::runtime::ReflectedMethodNames" ||
                    cppNameArg->value == "wio::runtime::ReflectedMethodSignatures" ||
                    cppNameArg->value == "wio::runtime::ReflectedMethodAccess" ||
+                   cppNameArg->value == "wio::runtime::ReflectedMethodBehaviorAttributeNames" ||
+                   cppNameArg->value == "wio::runtime::ReflectedMethodBehaviorProcessorTypes" ||
+                   cppNameArg->value == "wio::runtime::ReflectedMethodBehaviorPhases" ||
+                   cppNameArg->value == "wio::runtime::ReflectedMethodBehaviorHooks" ||
+                   cppNameArg->value == "wio::runtime::ReflectedMethodBehaviorModes" ||
+                   cppNameArg->value == "wio::runtime::ReflectedMethodBehaviorOffsets" ||
                    cppNameArg->value == "wio::runtime::ReflectedBaseTypes" ||
                    cppNameArg->value == "wio::runtime::ReflectedGenericParameterNames" ||
                    cppNameArg->value == "wio::runtime::ReflectedGenericArguments" ||

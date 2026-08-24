@@ -25,14 +25,15 @@ Implemented foundation checkpoint:
   order as the stable tie-breaker and reverse-order exit unwinding;
 - unit-returning synchronous `Around(proceed: fn())` lowering with zero-or-one
   Proceed, runtime duplicate-call protection, and escaped-capability rejection;
+- method-level behavioral pipeline reflection exposing effective attribute,
+  processor type, phase, hook, and mode in deterministic execution order;
 - structured runtime type-attribute descriptors with stable IDs, origin,
   normalized argument metadata, and default provenance.
 
 Still open: target-aware validator contexts, checked declaration derives,
 typed argument/result hook contexts, statically typed receiver contexts,
-typed-result around and async
-behavioral lowering, the final removal of enum-only built-in lowering paths,
-behavioral pipeline reflection, C++ SDK descriptors, source
+typed-result around and async behavioral lowering, the final removal of
+enum-only built-in lowering paths, C++ SDK pipeline descriptors, source
 migration/formatting, editor/web support, and Windows/Linux release
 qualification.
 

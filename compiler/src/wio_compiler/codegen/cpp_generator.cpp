@@ -5827,6 +5827,12 @@ namespace wio::codegen
             std::vector<std::string> methodNames;
             std::vector<std::string> methodSignatures;
             std::vector<std::string> methodAccess;
+            std::vector<std::string> methodBehaviorAttributeNames;
+            std::vector<std::string> methodBehaviorProcessorTypes;
+            std::vector<std::string> methodBehaviorPhases;
+            std::vector<std::string> methodBehaviorHooks;
+            std::vector<std::string> methodBehaviorModes;
+            std::vector<size_t> methodBehaviorOffsets{0};
             std::vector<std::string> baseTypes;
             std::vector<std::string> typeAttributes;
             std::vector<std::string> typeAttributeNames;
@@ -5955,6 +5961,42 @@ namespace wio::codegen
                     signature += ") -> " + std::string(returnType ? returnType->toString() : "void");
                     methodSignatures.push_back(std::move(signature));
                     methodAccess.push_back(accessName(member.access, objectDefault));
+
+                    std::vector<const AttributeStatement*> orderedAttributes;
+                    orderedAttributes.reserve(function->attributes.size());
+                    for (const auto& attribute : function->attributes)
+                    {
+                        if (attribute)
+                            orderedAttributes.push_back(attribute.Get());
+                    }
+                    std::ranges::stable_sort(
+                        orderedAttributes,
+                        {},
+                        &AttributeStatement::processorOrder);
+                    for (const auto* attribute : orderedAttributes)
+                    {
+                        for (const auto& processor : attribute->processorBindings)
+                        {
+                            if ((processor.phase != "pre" && processor.phase != "post" &&
+                                 processor.phase != "finally" && processor.phase != "around") ||
+                                processor.cppTypeName.empty() || processor.hookCppName.empty())
+                            {
+                                continue;
+                            }
+                            methodBehaviorAttributeNames.push_back(
+                                attribute->canonicalName.empty()
+                                    ? attribute->qualifiedName
+                                    : attribute->canonicalName);
+                            methodBehaviorProcessorTypes.push_back(processor.canonicalTypeName);
+                            methodBehaviorPhases.push_back(processor.phase);
+                            methodBehaviorHooks.push_back(
+                                processor.phase == "pre" ? "Before" :
+                                processor.phase == "post" ? "After" :
+                                processor.phase == "finally" ? "Finally" : "Around");
+                            methodBehaviorModes.push_back(processor.hookMode);
+                        }
+                    }
+                    methodBehaviorOffsets.push_back(methodBehaviorPhases.size());
                 }
             };
 
@@ -5985,6 +6027,7 @@ namespace wio::codegen
                     signature += ") -> " + std::string(returnType ? returnType->toString() : "void");
                     methodSignatures.push_back(std::move(signature));
                     methodAccess.push_back("public");
+                    methodBehaviorOffsets.push_back(methodBehaviorPhases.size());
                 }
             }
 
@@ -6199,6 +6242,19 @@ namespace wio::codegen
             emitStringViewArray("MethodNames", methodNames);
             emitStringViewArray("MethodSignatures", methodSignatures);
             emitStringViewArray("MethodAccess", methodAccess);
+            emitStringViewArray("MethodBehaviorAttributeNames", methodBehaviorAttributeNames);
+            emitStringViewArray("MethodBehaviorProcessorTypes", methodBehaviorProcessorTypes);
+            emitStringViewArray("MethodBehaviorPhases", methodBehaviorPhases);
+            emitStringViewArray("MethodBehaviorHooks", methodBehaviorHooks);
+            emitStringViewArray("MethodBehaviorModes", methodBehaviorModes);
+            emit("static constexpr std::array<std::size_t, " +
+                 std::to_string(methodBehaviorOffsets.size()) + "> MethodBehaviorOffsets{ ");
+            for (size_t index = 0; index < methodBehaviorOffsets.size(); ++index)
+            {
+                if (index > 0) emit(", ");
+                emit(std::to_string(methodBehaviorOffsets[index]));
+            }
+            emitLine(" };");
             emitStringViewArray("BaseTypes", baseTypes);
             emitStringViewArray("TypeAttributes", typeAttributes);
             emitStringViewArray("TypeAttributeNames", typeAttributeNames);

@@ -189,6 +189,54 @@ namespace wio::runtime
     }
 
     template <typename T>
+    [[nodiscard]] inline std::vector<std::string> ReflectedMethodBehaviorAttributeNames()
+    {
+        if constexpr (requires { TypeReflection<T>::MethodBehaviorAttributeNames; })
+            return { TypeReflection<T>::MethodBehaviorAttributeNames.begin(), TypeReflection<T>::MethodBehaviorAttributeNames.end() };
+        return {};
+    }
+
+    template <typename T>
+    [[nodiscard]] inline std::vector<std::string> ReflectedMethodBehaviorProcessorTypes()
+    {
+        if constexpr (requires { TypeReflection<T>::MethodBehaviorProcessorTypes; })
+            return { TypeReflection<T>::MethodBehaviorProcessorTypes.begin(), TypeReflection<T>::MethodBehaviorProcessorTypes.end() };
+        return {};
+    }
+
+    template <typename T>
+    [[nodiscard]] inline std::vector<std::string> ReflectedMethodBehaviorPhases()
+    {
+        if constexpr (requires { TypeReflection<T>::MethodBehaviorPhases; })
+            return { TypeReflection<T>::MethodBehaviorPhases.begin(), TypeReflection<T>::MethodBehaviorPhases.end() };
+        return {};
+    }
+
+    template <typename T>
+    [[nodiscard]] inline std::vector<std::string> ReflectedMethodBehaviorHooks()
+    {
+        if constexpr (requires { TypeReflection<T>::MethodBehaviorHooks; })
+            return { TypeReflection<T>::MethodBehaviorHooks.begin(), TypeReflection<T>::MethodBehaviorHooks.end() };
+        return {};
+    }
+
+    template <typename T>
+    [[nodiscard]] inline std::vector<std::string> ReflectedMethodBehaviorModes()
+    {
+        if constexpr (requires { TypeReflection<T>::MethodBehaviorModes; })
+            return { TypeReflection<T>::MethodBehaviorModes.begin(), TypeReflection<T>::MethodBehaviorModes.end() };
+        return {};
+    }
+
+    template <typename T>
+    [[nodiscard]] inline std::vector<std::size_t> ReflectedMethodBehaviorOffsets()
+    {
+        if constexpr (requires { TypeReflection<T>::MethodBehaviorOffsets; })
+            return { TypeReflection<T>::MethodBehaviorOffsets.begin(), TypeReflection<T>::MethodBehaviorOffsets.end() };
+        return { 0u };
+    }
+
+    template <typename T>
     [[nodiscard]] inline std::vector<std::string> ReflectedBaseTypes()
     {
         return { TypeReflection<T>::BaseTypes.begin(), TypeReflection<T>::BaseTypes.end() };

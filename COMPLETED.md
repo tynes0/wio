@@ -41,12 +41,15 @@ Notes:
 - [x] Object-method pre processors may receive the current receiver as `any`;
       boolean pre guards can skip unit-returning methods, while receiver use on
       free functions and result-bearing guards fail during analysis.
+- [x] Method reflection exposes behavioral processors in effective execution
+      order, including attribute identity, processor type, phase, hook, and
+      invocation mode; `Describe<T>()` includes the same pipeline per method.
 - [x] Unsupported processor/target combinations and not-yet-enabled derive
       execution are diagnosed instead of being accepted as silent metadata.
 - [x] Runtime type reflection exposes structured attribute descriptors with
       stable FNV-1a identity, retention, origin, normalized arguments, and
       default provenance while retaining the legacy string view.
-- [x] The focused foundation matrix passes 21/21 new tests.
+- [x] The focused foundation matrix passes 22/22 new tests.
 
 ## v0.13 language coherence and SDK parity sprint
 

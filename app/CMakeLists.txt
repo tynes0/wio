@@ -3454,6 +3454,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "attribute-receiver-guard-ok"
         --run
     )
+    add_wio_output_test(
+        wio_test_attribute_behavioral_reflection_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_behavioral_reflection_run.wio"
+        "attribute-behavioral-reflection-ok"
+        --run
+    )
     add_wio_runtime_failure_test(
         wio_invalid_attribute_around_proceed_twice
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_around_proceed_twice.wio"
@@ -3505,6 +3511,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_attribute_around_pipeline_run
         wio_test_attribute_around_skip_run
         wio_test_attribute_receiver_guard_run
+        wio_test_attribute_behavioral_reflection_run
         wio_invalid_attribute_around_proceed_twice
         wio_invalid_attribute_around_proceed_escaped
         wio_invalid_attribute_behavioral_missing_hook

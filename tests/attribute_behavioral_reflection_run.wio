@@ -1,0 +1,44 @@
+use std::assert as assert;
+use std::attribute as attr;
+use std::console as console;
+use std::reflect as reflect;
+
+[From(attr::PreProcessor)]
+object AuditEntryProcessor {
+    public fn Before() {}
+}
+
+[From(attr::FinallyProcessor)]
+object AuditExitProcessor {
+    public fn Finally() {}
+}
+
+[attribute::Targets(method)]
+[attribute::Processor(AuditEntryProcessor)]
+[attribute::Processor(AuditExitProcessor)]
+attribute Audited();
+
+object Controller {
+    [Audited]
+    public fn Run() {}
+
+    public fn Plain() {}
+}
+
+fn Entry() -> i32 {
+    let pipeline = reflect::MethodBehavioralPipeline<Controller>("Run");
+    assert::ExpectEqual(pipeline.Count(), 2usize, "Run pipeline processor count");
+    assert::ExpectEqual(pipeline[0usize].attributeName, "Audited", "pipeline attribute identity");
+    assert::ExpectEqual(pipeline[0usize].processorType, "AuditEntryProcessor", "pre processor identity");
+    assert::ExpectEqual(pipeline[0usize].phase, "pre", "pre phase");
+    assert::ExpectEqual(pipeline[0usize].hook, "Before", "pre hook");
+    assert::ExpectEqual(pipeline[0usize].mode, "no_args", "pre mode");
+    assert::ExpectEqual(pipeline[1usize].processorType, "AuditExitProcessor", "finally processor identity");
+    assert::ExpectEqual(pipeline[1usize].phase, "finally", "finally phase");
+    assert::ExpectEqual(reflect::MethodBehavioralPipeline<Controller>("Plain").Count(), 0usize, "plain method pipeline");
+
+    let description = reflect::Describe<Controller>();
+    assert::ExpectEqual(description.methods[0usize].behavioralPipeline.Count(), 2usize, "Describe includes pipeline");
+    console::PrintLine("attribute-behavioral-reflection-ok");
+    return 0;
+}
