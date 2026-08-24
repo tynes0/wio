@@ -15042,7 +15042,24 @@ namespace wio::sema
                 continue;
             const bool alreadyApplied = std::ranges::any_of(attributes, [&](const auto& existing)
             {
-                return existing.Get() == active.Get();
+                if (!existing)
+                    return false;
+
+                // Declarations are visited by several semantic passes. A
+                // scoped application is materialized into the declaration on
+                // the first visit, so pointer identity cannot recognize it on
+                // later visits. The source location identifies the original
+                // `using` application while still allowing a nested, distinct
+                // application of the same non-repeatable attribute to be
+                // diagnosed normally.
+                const auto& existingLocation = existing->location();
+                const auto& activeLocation = active->location();
+                return existing->origin == AttributeOrigin::Scoped &&
+                    existing->qualifiedName == active->qualifiedName &&
+                    existing->originParent == active->qualifiedName &&
+                    existingLocation.file == activeLocation.file &&
+                    existingLocation.line == activeLocation.line &&
+                    existingLocation.column == activeLocation.column;
             });
             if (!alreadyApplied)
             {

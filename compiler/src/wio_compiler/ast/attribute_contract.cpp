@@ -17,6 +17,7 @@ namespace wio
         constexpr std::array fieldTargets{"field"sv, "variable"sv};
         constexpr std::array functionOnlyTargets{"fn"sv};
         constexpr std::array instantiateTargets{"object"sv, "component"sv, "fn"sv, "method"sv};
+        constexpr std::array applyTargets{"type"sv, "interface"sv, "object"sv, "component"sv, "fn"sv, "method"sv};
         constexpr std::array nativeOrExport{"std::attribute::Native"sv, "std::attribute::Export"sv};
         constexpr std::array nativeConflict{"std::attribute::Native"sv};
         constexpr std::array exportConflict{"std::attribute::Export"sv};
@@ -29,7 +30,7 @@ namespace wio
             BuiltinAttributeContract{Attribute::Default, "std::attribute::Default", objectInterfaceTargets, none, none, none, false},
             BuiltinAttributeContract{Attribute::NoDefaultCtor, "std::attribute::NoDefaultCtor", objectTargets, none, none, none, false},
             BuiltinAttributeContract{Attribute::GenerateCtors, "std::attribute::GenerateCtors", objectTargets, none, none, none, false},
-            BuiltinAttributeContract{Attribute::From, "std::attribute::From", objectTargets, none, none, none, false},
+            BuiltinAttributeContract{Attribute::From, "std::attribute::From", objectTargets, none, none, none, true},
             BuiltinAttributeContract{Attribute::Trust, "std::attribute::Trust", objectTargets, none, none, none, false},
             BuiltinAttributeContract{Attribute::Final, "std::attribute::Final", objectInterfaceTargets, none, none, none, false},
             BuiltinAttributeContract{Attribute::Type, "std::attribute::Type", enumTargets, none, none, none, false},
@@ -38,7 +39,7 @@ namespace wio
             BuiltinAttributeContract{Attribute::CppName, "std::attribute::CppName", nativeTargets, none, nativeOrExport, none, false},
             BuiltinAttributeContract{Attribute::Instantiate, "std::attribute::Instantiate", instantiateTargets, none, none, none, true},
             BuiltinAttributeContract{Attribute::Specialize, "std::attribute::Specialize", objectTargets, none, none, none, false},
-            BuiltinAttributeContract{Attribute::Apply, "std::attribute::Apply", instantiateTargets, none, none, none, true},
+            BuiltinAttributeContract{Attribute::Apply, "std::attribute::Apply", applyTargets, none, none, none, true},
             BuiltinAttributeContract{Attribute::Export, "std::attribute::Export", instantiateTargets, none, none, nativeConflict, false},
             BuiltinAttributeContract{Attribute::Command, "std::attribute::Command", functionOnlyTargets, exportRequired, none, eventConflict, false},
             BuiltinAttributeContract{Attribute::Event, "std::attribute::Event", functionOnlyTargets, exportRequired, none, commandConflict, false},
