@@ -13,6 +13,7 @@ The stable `v1` command families are:
 - `wio env`
 - `wio package`
 - `wio perf`
+- `wio migrate`
 
 For the broader build and manifest model, see
 [`WIO_PROJECT_SYSTEM.md`](./WIO_PROJECT_SYSTEM.md).
@@ -37,6 +38,7 @@ wio bind import ...
 wio env setup ...
 wio package ...
 wio perf smoke ...
+wio migrate attributes . --check
 ```
 
 ### 1.2 Direct File / Compiler Mode
@@ -65,7 +67,7 @@ wio bind --version
 
 - `wio help <command> [subcommand]` routes to command-specific help
 - a bare command group such as `wio file`, `wio bind`, `wio env`,
-  `wio project`, or `wio perf` prints its group help successfully
+  `wio project`, `wio perf`, or `wio migrate` prints its group help successfully
 - `--help`, `-h`, and `help` are accepted help forms
 - `--version`, `-v`, and `version` are accepted version forms
 - close misspellings produce a concrete suggestion at both top-level and
@@ -454,7 +456,23 @@ full profiler.
 
 ---
 
-## 10. Stable Compatibility Reading
+## 10. `wio migrate`
+
+Wio 0.15 ships a source-aware legacy attribute migration:
+
+```powershell
+wio migrate attributes . --check
+wio migrate attributes . --write
+```
+
+`--check` lists `.wio` files that need migration and exits with `1` when it
+finds any. `--write` replaces legacy `@Name`/`@Name(...)` applications with
+bracket syntax. Strings, line comments, block comments, and `.wio-build`
+directories are preserved. A file path may be supplied instead of a directory.
+
+---
+
+## 11. Stable Compatibility Reading
 
 For `v1`, this is the intended CLI reading:
 
@@ -472,9 +490,9 @@ That means:
 
 ---
 
-## 11. Common Workflows
+## 12. Common Workflows
 
-### 11.1 Build The Toolchain From Source
+### 12.1 Build The Toolchain From Source
 
 ```powershell
 cmake -S . -B build
@@ -482,14 +500,14 @@ cmake --build build --config Debug
 wio build --build-dir build --config Debug --configure
 ```
 
-### 11.2 Check Or Run A Single File
+### 12.2 Check Or Run A Single File
 
 ```powershell
 wio file check .\playground\main.wio
 wio file run .\playground\main.wio
 ```
 
-### 11.3 Create And Run A Project
+### 12.3 Create And Run A Project
 
 ```powershell
 wio project new MyGame --output-dir C:\Projects --template wio-app
@@ -498,19 +516,19 @@ wio project build
 wio project run -- player-one "--safe mode"
 ```
 
-### 11.4 Generate A Binding
+### 12.4 Generate A Binding
 
 ```powershell
 wio bind import --header .\tests\native\binding_import_smoke.h --realm binding_import_smoke --output .\build\generated\binding_import_smoke.wio
 ```
 
-### 11.5 Stage A Package
+### 12.5 Stage A Package
 
 ```powershell
 wio package --build-dir build --config Debug --output-dir .\artifacts\packages
 ```
 
-### 11.6 Inspect Performance Smoke
+### 12.6 Inspect Performance Smoke
 
 ```powershell
 wio perf smoke --iterations 1

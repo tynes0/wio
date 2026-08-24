@@ -131,6 +131,10 @@ runtime “not yet supported” error.
 Goal: replace the parallel built-in/user annotation mechanisms with one
 powerful, inspectable attribute system before application hosting expands.
 
+Status: **frozen for release on 2026-08-25**. The method-only checked-derive
+boundary and the rejection of async `around` are intentional 0.15 limits, not
+silent partial implementations.
+
 Required scope:
 
 - canonical declaration-leading `[Attribute]` syntax, grouped/stacked lists,

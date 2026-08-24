@@ -76,49 +76,6 @@ here does not by itself mean that v1 cannot ship.
    conflict resolution, import-scoped visibility, documentation generation,
    reflection metadata, and editor completion.
 
-12. [~] Replace the legacy annotation surface with typed, user-extensible
-    attributes before expanding application/system hosting. The accepted
-    canonical spelling is declaration-leading `[Attribute]`, with stacked or
-    grouped lists. Existing `using cpp::header(...)`-style lexical activation
-    remains canonical; `use` stays reserved for module imports. Postfix `with`
-    and `@Attribute(...)` are legacy migration input,
-    not the final surface. Typed arguments/defaults, target policies, retention,
-    repetition, inheritance, conflicts, named arguments, folded scalar/string/
-    text defaults, and runtime type/field reflection are partially implemented.
-    The 0.15 foundation adds canonical bracket parsing across ordinary,
-    parameter, enum-case, application, system, handler, and field targets;
-    recursive composition with argument substitution; effective-set target,
-    require/require-any/conflict/only-with/exclusive/cardinality/order checks;
-    the public `std::attribute` catalog; strict pre/post/finally/around phase
-    identity; structured runtime type-attribute descriptors with stable
-    identity, origin, normalized arguments, and default provenance; executable
-    compile-time validators; ordered synchronous pre/post/finally/around
-    lowering; receiver-aware guards; behavioral reflection; and bounded
-    checked derive methods on concrete and generic component/object targets,
-    including primary-declaration surface inheritance by concrete
-    instantiations and immutable typed receiver contracts. Continue with richer
-    checked builders, typed argument processor contexts, formatter/LSP support,
-    C++
-    SDK metadata, automated edition-aware migration, and removal of remaining
-    privileged built-in lowering paths. The bounded behavioral model includes
-    entry guards, pre/postconditions, guaranteed exit hooks, and `around`
-    interception. This includes
-    user-defined receiver-liveness guards for callbacks whose native peer may
-    have been destroyed while the Wio wrapper remains alive. Effects must be
-    type-checked, ordered explicitly, visible to tooling, and preserve
-    signatures, evaluation order, thread/cancellation semantics, and ABI.
-    Begin with guards/contracts; do not expose unrestricted token/AST or
-    arbitrary call-site mutation. Keep the grammar small: safe defaults should
-    replace most policy keywords, uncommon policies should be namespaced
-    meta-attributes, and behavioral processors should be ordinary typed
-    functions/interfaces. Typed applications already fold scalar, `string`,
-    and `text` const references and materialize trailing defaults into runtime-
-    reflection metadata. The normative delivery plan is
-    `docs/WIO_ATTRIBUTE_SYSTEM_PLAN.md`. Pre, post, finally, around, validator,
-    and derive processors are separate interfaces with checked executable
-    slices. Compiler built-ins must stop retaining a privileged lowering path
-    before this item can close.
-
 13. [~] Complete a language-coherence pass before broad surface expansion.
     The first 0.11 stabilization slice aligned scoped attributes, pipelines,
     pattern bindings/reachability, and application lifecycle invariants across

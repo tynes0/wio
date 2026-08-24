@@ -9411,6 +9411,7 @@ namespace wio::codegen
             std::string cppTypeName;
             std::string hookCppName;
             std::string hookMode;
+            Ref<sema::Type> hookValueType;
             std::string variableName;
             std::string finalizedFlagName;
         };
@@ -9444,6 +9445,7 @@ namespace wio::codegen
                         .cppTypeName = processor.cppTypeName,
                         .hookCppName = processor.hookCppName,
                         .hookMode = processor.hookMode,
+                        .hookValueType = processor.hookValueType.Lock(),
                         .variableName = "_wio_attribute_processor_" + std::to_string(index),
                         .finalizedFlagName = "_wio_attribute_finalized_" + std::to_string(index)
                     });
@@ -10362,6 +10364,10 @@ namespace wio::codegen
                         {
                             arguments = "wio::runtime::Any::FromObject<" + currentClassName_ +
                                 ">(wio::runtime::Ref<" + currentClassName_ + ">(this))";
+                        }
+                        else if (processor.hookMode.starts_with("receiver_typed"))
+                        {
+                            arguments = "static_cast<" + toCppType(processor.hookValueType) + ">(this)";
                         }
                         const std::string invocation = processor.variableName + "->" +
                             processor.hookCppName + "(" + arguments + ")";

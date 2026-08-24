@@ -1,0 +1,38 @@
+use std::assert as assert;
+use std::attribute as attr;
+use std::console as console;
+
+interface Alive {
+    fn IsAlive() -> bool;
+}
+
+[From(attr::PreProcessor)]
+object AliveGuard {
+    public fn Before(receiver: view Alive) -> bool { return receiver.IsAlive(); }
+}
+
+[attribute::Processor(AliveGuard)]
+attribute CallbackMethod() for method;
+
+[From(Alive)]
+object Controller {
+    public alive: bool;
+    public calls: i32;
+
+    public OnConstruct(alive: bool) { self.alive = alive; self.calls = 0; }
+    public fn IsAlive() -> bool { return self.alive; }
+
+    [CallbackMethod]
+    public fn Notify() { self.calls += 1; }
+}
+
+fn Entry() -> i32 {
+    let live = Controller(true);
+    live.Notify();
+    let dead = Controller(false);
+    dead.Notify();
+    assert::ExpectEqual(live.calls, 1, "live callback executes");
+    assert::ExpectEqual(dead.calls, 0, "dead callback is skipped");
+    console::PrintLine("attribute-typed-receiver-pre-ok");
+    return 0;
+}

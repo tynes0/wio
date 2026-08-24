@@ -63,6 +63,7 @@ These documents answer practical workflow questions such as:
 - [Wio 0.10 const generics and native components specification](./spec/WIO_LANGUAGE_SPEC_0_10.md)
 - [Wio 0.11 language and standard-library foundation specification](./spec/WIO_LANGUAGE_SPEC_0_11.md)
 - [Wio 0.13 coherence and Unicode specification](./spec/WIO_LANGUAGE_SPEC_0_13.md)
+- [Wio 0.15 typed attribute specification](./spec/WIO_LANGUAGE_SPEC_0_15.md)
 - [Wio v1 language coherence candidate specification](./spec/WIO_LANGUAGE_SPEC_V1_COHERENCE.md)
 - [Wio standard library contract 0.11](./spec/WIO_STD_SPEC_0_11.md)
 - [Async and coroutine model](./WIO_ASYNC_MODEL.md)
@@ -120,6 +121,7 @@ Use these when the question is about:
 
 ## 4. Release, Quality, And Compatibility
 
+- [Wio 0.15 release notes](./WIO_0_15_RELEASE_NOTES.md)
 - [v1 freeze snapshot](./WIO_V1_FREEZE.md)
 - [v1 release plan](./WIO_V1_RELEASE_PLAN.md)
 - [Post-v1 roadmap](./WIO_POST_V1_ROADMAP.md)

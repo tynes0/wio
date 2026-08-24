@@ -989,7 +989,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
             ${CMAKE_COMMAND}
             -DWIO_EXE=$<TARGET_FILE:wio_app>
             -DEXAMPLE_ROOT=${CMAKE_SOURCE_DIR}/examples/telemetry_pipeline
-            -DWIO_EXPECT=Telemetry\ pipeline:\ Wio\ 0.14.0
+            -DWIO_EXPECT=Telemetry\ pipeline:\ Wio\ 0.15.0
             -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExampleProject.cmake"
     )
     set_tests_properties(
@@ -3453,6 +3453,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         --run
     )
     add_wio_output_test(
+        wio_test_attribute_typed_receiver_pre_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_typed_receiver_pre_run.wio"
+        "attribute-typed-receiver-pre-ok"
+        --run
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_typed_receiver_pre_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_typed_receiver_pre_mismatch.wio"
+        "requires an object method target compatible with 'Alive'"
+    )
+    add_wio_output_test(
         wio_test_attribute_behavioral_ordering_run
         "${CMAKE_SOURCE_DIR}/tests/attribute_behavioral_ordering_run.wio"
         "first>second>body"
@@ -3584,6 +3595,8 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
     set_tests_properties(
         wio_test_attribute_behavioral_pipeline_run
+        wio_test_attribute_typed_receiver_pre_run
+        wio_invalid_attribute_typed_receiver_pre_mismatch
         wio_test_attribute_behavioral_ordering_run
         wio_test_attribute_around_pipeline_run
         wio_test_attribute_around_skip_run

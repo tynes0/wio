@@ -784,3 +784,18 @@ here as historical evidence rather than active work:
 - [x] Unicode normalization, exact JSON numbers, typed serialization codecs,
       bounded regex records, deterministic vectors, and container invariants
       landed with focused conformance tests.
+
+## v0.15 Typed and Behavioral Attributes
+
+- [x] Declaration-leading `[Attribute]` applications, composition, retention,
+      target/require/conflict/cardinality policies, and deterministic ordering
+      became the canonical typed model for built-ins and user attributes.
+- [x] Compile-time validators, checked method derives, typed receiver guards,
+      typed post/finally/around hooks, coroutine pre/post/finally execution, and
+      explicit rejection of unsupported async around behavior were frozen.
+- [x] Runtime reflection exposes normalized attribute applications and method
+      pipelines; module ABI v9 exposes retained type/field/method/export
+      descriptors to C++ hosts.
+- [x] `wio migrate attributes --check|--write` converts legacy `@` syntax while
+      preserving strings and comments, and compiler lowering resolves built-ins
+      through their canonical typed identities.

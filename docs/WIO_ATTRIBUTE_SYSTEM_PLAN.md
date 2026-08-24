@@ -1,7 +1,7 @@
 # Wio Attribute System Plan
 
-Status: accepted design direction for Wio 0.15; foundation implementation is
-in progress on `releases/v0.15.0`.
+Status: frozen Wio 0.15 delivery contract. The implementation is complete on
+`releases/v0.15.0`; changes after this point are compatibility/correctness fixes.
 
 Implemented foundation checkpoint:
 
@@ -14,7 +14,7 @@ Implemented foundation checkpoint:
 - stable `std::attribute::*` identities shared by built-ins and user policy
   matching;
 - bounded compile-time `Validator<TTarget>` execution with optional constant
-  diagnostics;
+  diagnostics and target compatibility for typed component/object validators;
 - executable synchronous `PreProcessor.Before()`, `PostProcessor.After()`, and
   `FinallyProcessor.Finally()` hooks with callee-side lowering, reverse exit
   ordering, successful-return evaluation before post hooks, and exactly-once
@@ -24,6 +24,8 @@ Implemented foundation checkpoint:
   bodies where hooks execute on the coroutine's executor;
 - receiver-aware object-method pre hooks through `Before(receiver: any)`, with
   a boolean unit-return guard for callback-liveness and precondition patterns;
+- statically typed callback receivers through `Before(receiver: view T)`, with
+  target compatibility checked before lowering;
 - deterministic topological processor order from `Before`/`After`, with source
   order as the stable tie-breaker and reverse-order exit unwinding;
 - unit-returning synchronous `Around(proceed: fn())` lowering with zero-or-one
@@ -39,13 +41,21 @@ Implemented foundation checkpoint:
   through an isolated default-constructed processor instance;
 - structured runtime type-attribute descriptors with stable IDs, origin,
   normalized argument metadata, and default provenance.
+- ABI v9 C++ SDK descriptors for retained attributes on exported types, fields,
+  methods, and functions, including origin, normalized arguments, and ordered
+  behavioral processor phases;
+- `wio migrate attributes PATH --check|--write`, with comment/string-safe
+  conversion from legacy `@Name(...)` source to bracket applications;
+- canonical built-in matching shared by semantic analysis, native-header
+  discovery, and C++ lowering rather than enum-only helper paths.
 
-Still open: target-aware validator contexts, derived fields/properties and
-richer checked builders, typed argument contexts, statically typed pre-receiver
-contexts, the final removal of enum-only built-in lowering paths, C++ SDK
-pipeline descriptors, source migration/formatting, editor support, and
-Windows/Linux release qualification. Async around is deliberately outside the
-0.15 contract; it is rejected rather than accepted as a silent no-op.
+The frozen 0.15 generation boundary is method-only: derive processors cannot
+inject fields, properties, layout, constructors, or arbitrary AST. Richer
+builders and full call-argument context objects are deferred because they need
+an explicit layout/effect ABI. Async around is also outside the 0.15 contract;
+it is rejected rather than accepted as a silent no-op. Editor completion and a
+general formatter continue through the compiler language-service train; the
+shipped bracket grammar and migration command are the 0.15 tooling baseline.
 
 No processor capability is accepted as a silent no-op: behavioral processors
 on non-callable targets and malformed or unsupported derive applications are

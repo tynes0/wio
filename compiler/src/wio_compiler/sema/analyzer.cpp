@@ -15651,9 +15651,20 @@ namespace wio::sema
                     Ref<Type> receiverType = hookType->paramTypes.empty()
                         ? nullptr
                         : unwrapAliasType(hookType->paramTypes.front());
-                    validHook = receiverType && receiverType->kind() == TypeKind::Primitive &&
-                                receiverType.AsFast<PrimitiveType>()->name == "any";
-                    hookMode = "receiver_any";
+                    const bool receiverIsAny = receiverType && receiverType->kind() == TypeKind::Primitive &&
+                        receiverType.AsFast<PrimitiveType>()->name == "any";
+                    const auto receiverReference = receiverType && receiverType->kind() == TypeKind::Reference
+                        ? receiverType.AsFast<ReferenceType>()
+                        : nullptr;
+                    Ref<Type> typedReceiverTarget = receiverReference
+                        ? unwrapAliasType(receiverReference->referredType)
+                        : nullptr;
+                    const bool receiverIsTypedView = receiverReference && !receiverReference->isMutable &&
+                        typedReceiverTarget && typedReceiverTarget->kind() == TypeKind::Struct;
+                    validHook = receiverIsAny || receiverIsTypedView;
+                    hookMode = receiverIsAny ? "receiver_any" : "receiver_typed";
+                    if (receiverIsTypedView)
+                        attributeSymbol->attributeProcessorHookValueTypes.back() = receiverType;
                 }
                 else if (validHook && phase == "post" && hook->parameters.size() == 1)
                 {
@@ -15685,7 +15696,7 @@ namespace wio::sema
                     {
                         WIO_LOG_ADD_ERROR(
                             node.location(),
-                            "pre processor '{}' must declare 'fn Before()', 'fn Before() -> bool', 'fn Before(receiver: any)', or 'fn Before(receiver: any) -> bool'.",
+                            "pre processor '{}' must declare Before with no arguments, receiver: any, or an immutable typed receiver view; it may return bool only as a unit-target guard.",
                             processorName);
                     }
                     else
@@ -16335,6 +16346,27 @@ namespace wio::sema
                             attribute->location(),
                             "Receiver-aware pre processor '{}' requires an object method target.",
                             processor.canonicalTypeName);
+                    }
+                    if (processor.hookMode.starts_with("receiver_typed"))
+                    {
+                        Ref<Type> hookReceiver = unwrapAliasType(processor.hookValueType.Lock());
+                        auto receiverReference = hookReceiver && hookReceiver->kind() == TypeKind::Reference
+                            ? hookReceiver.AsFast<ReferenceType>()
+                            : nullptr;
+                        Ref<Type> requiredTarget = receiverReference
+                            ? unwrapAliasType(receiverReference->referredType)
+                            : nullptr;
+                        if (attributeTarget != "method" || !currentStructType_ ||
+                            currentStructType_->kind() != TypeKind::Struct ||
+                            !currentStructType_.AsFast<StructType>()->isObject || !requiredTarget ||
+                            !isTypeDerivedFrom(currentStructType_, requiredTarget))
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                attribute->location(),
+                                "Typed receiver pre processor '{}' requires an object method target compatible with '{}'.",
+                                processor.canonicalTypeName,
+                                requiredTarget ? requiredTarget->toString() : "<unknown>");
+                        }
                     }
                     if (processor.hookMode.ends_with("_guard") &&
                         (!attributedResultType || !attributedResultType->isVoid()))
