@@ -2934,6 +2934,7 @@ namespace wio
                 match(TokenType::comma, true);
                 match(TokenType::semicolon, true); 
 
+                const common::Location memberLocation = memberName->location();
                 auto varDecl =
                     makeNodePtr<VariableDeclaration>(
                         std::move(memberAttrs),
@@ -2942,7 +2943,7 @@ namespace wio
                         std::move(memberType),
                         std::move(init),
                         isPackField,
-                        memberName->location()
+                        memberLocation
                     );
 
                 members.push_back(ComponentMember{
@@ -3092,6 +3093,7 @@ namespace wio
                 match(TokenType::comma, true);
                 match(TokenType::semicolon, true);
 
+                const common::Location memberLocation = memberName->location();
                 auto varDecl =
                     makeNodePtr<VariableDeclaration>(
                         std::move(memberAttrs),
@@ -3100,7 +3102,7 @@ namespace wio
                         std::move(memberType),
                         std::move(init),
                         isPackField,
-                        memberName->location()
+                        memberLocation
                     );
 
                 members.push_back(ObjectMember{
