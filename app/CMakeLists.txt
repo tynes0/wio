@@ -3385,6 +3385,29 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     set_tests_properties(wio_test_attribute_processor_contract_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
 
     add_wio_output_test(
+        wio_test_attribute_compile_time_validator_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_compile_time_validator_run.wio"
+        "attribute-compile-time-validator-ok"
+        --run
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_compile_time_validator_rejects
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_compile_time_validator_rejects.wio"
+        "callback target is not safe"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_compile_time_validator_runtime_result
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_compile_time_validator_runtime_result.wio"
+        "must fold to a compile-time bool"
+    )
+    set_tests_properties(
+        wio_test_attribute_compile_time_validator_run
+        wio_invalid_attribute_compile_time_validator_rejects
+        wio_invalid_attribute_compile_time_validator_runtime_result
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
         wio_test_attribute_parameter_enum_case_run
         "${CMAKE_SOURCE_DIR}/tests/attribute_parameter_enum_case_run.wio"
         "attribute-parameter-enum-case-ok"
@@ -3455,7 +3478,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_attribute_processor_wrong_phase
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_processor_wrong_phase.wio"
-        "must implement exactly one of PreProcessor, PostProcessor, FinallyProcessor, or AroundProcessor"
+        "must implement exactly one of Validator, DeriveProcessor, PreProcessor, PostProcessor, FinallyProcessor, or AroundProcessor"
     )
     add_wio_failure_test(
         wio_invalid_attribute_ordering_cycle

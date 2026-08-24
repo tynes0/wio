@@ -49,8 +49,11 @@ realm std {
             around
         };
 
-        // Capability marker interfaces. Concrete processor context/builders
-        // will grow behind these stable phase-specific identities.
+        // Capability interfaces. Validator processors expose a parameterless
+        // `Validate() -> bool` whose body must fold at compile time and may
+        // expose `Diagnostic() -> string` for a stable rejection message.
+        // Behavioral contexts/builders grow behind the stable phase-specific
+        // identities below.
         interface Validator<TTarget> {}
         interface DeriveProcessor<TTarget> {}
         interface PreProcessor {}

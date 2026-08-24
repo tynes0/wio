@@ -1,0 +1,19 @@
+use std::attribute as attr;
+use std::console as console;
+
+[From(attr::Validator<i32>)]
+object AcceptValidator {
+    public fn Validate() -> bool { return true; }
+}
+
+[attribute::Targets(fn)]
+[attribute::Processor(AcceptValidator)]
+attribute Accepted();
+
+[Accepted]
+fn Work() -> i32 { return 42; }
+
+fn Entry() -> i32 {
+    console::PrintLine("attribute-compile-time-validator-ok");
+    return Work() == 42 ? 0 : 1;
+}

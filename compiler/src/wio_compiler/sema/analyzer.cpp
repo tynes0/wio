@@ -14213,6 +14213,30 @@ namespace wio::sema
             attribute->runtimeRetained = std::ranges::find(
                 symbol->attributeRetention, std::string("runtime")) != symbol->attributeRetention.end();
 
+            for (size_t processorIndex = 0;
+                 processorIndex < symbol->attributeProcessorPhases.size();
+                 ++processorIndex)
+            {
+                if (symbol->attributeProcessorPhases[processorIndex] != "validation" ||
+                    processorIndex >= symbol->attributeProcessorValidationResults.size() ||
+                    symbol->attributeProcessorValidationResults[processorIndex] != 0)
+                {
+                    continue;
+                }
+
+                const std::string processorName = processorIndex < symbol->attributeProcessorTypes.size()
+                    ? symbol->attributeProcessorTypes[processorIndex]
+                    : std::string("<validator>");
+                const std::string diagnostic = processorIndex < symbol->attributeProcessorDiagnostics.size() &&
+                                               !symbol->attributeProcessorDiagnostics[processorIndex].empty()
+                    ? symbol->attributeProcessorDiagnostics[processorIndex]
+                    : common::formatString(
+                        "Attribute validator '{}' rejected application of '{}'.",
+                        processorName,
+                        attribute->canonicalName);
+                WIO_LOG_ADD_ERROR(attribute->location(), "{}", diagnostic);
+            }
+
             // Attribute applications are compile-time metadata. Resolve const
             // identifiers to their folded scalar value before named-argument
             // ordering and type validation so metadata never retains a source
@@ -14995,6 +15019,8 @@ namespace wio::sema
             return;
 
         attributeSymbol->attributeProcessorPhases.clear();
+        attributeSymbol->attributeProcessorValidationResults.clear();
+        attributeSymbol->attributeProcessorDiagnostics.clear();
         for (const std::string& processorName : node.processorTypes)
         {
             Ref<Symbol> processorSymbol = resolveQualifiedSymbol(currentScope_, processorName);
@@ -15018,7 +15044,9 @@ namespace wio::sema
                     return;
                 auto structure = resolved.AsFast<StructType>();
                 const std::string& typeName = structure->name;
-                if (typeName == "PreProcessor") phases.insert("pre");
+                if (typeName == "Validator") phases.insert("validation");
+                else if (typeName == "DeriveProcessor") phases.insert("derive");
+                else if (typeName == "PreProcessor") phases.insert("pre");
                 else if (typeName == "PostProcessor") phases.insert("post");
                 else if (typeName == "FinallyProcessor") phases.insert("finally");
                 else if (typeName == "AroundProcessor") phases.insert("around");
@@ -15031,11 +15059,98 @@ namespace wio::sema
             {
                 WIO_LOG_ADD_ERROR(
                     node.location(),
-                    "Attribute processor '{}' must implement exactly one of PreProcessor, PostProcessor, FinallyProcessor, or AroundProcessor.",
+                    "Attribute processor '{}' must implement exactly one of Validator, DeriveProcessor, PreProcessor, PostProcessor, FinallyProcessor, or AroundProcessor.",
                     processorName);
                 continue;
             }
-            attributeSymbol->attributeProcessorPhases.push_back(*phases.begin());
+
+            const std::string phase = *phases.begin();
+            attributeSymbol->attributeProcessorPhases.push_back(phase);
+            attributeSymbol->attributeProcessorValidationResults.push_back(-1);
+            attributeSymbol->attributeProcessorDiagnostics.emplace_back();
+
+            if (phase != "validation")
+                continue;
+
+            auto findProcessorMethod = [&](std::string_view methodName) -> const FunctionDeclaration*
+            {
+                if (!processorSymbol->innerScope)
+                    return nullptr;
+                Ref<Symbol> method = processorSymbol->innerScope->resolveLocally(std::string(methodName));
+                if (!method)
+                    return nullptr;
+                if (method->kind == SymbolKind::FunctionGroup && !method->overloads.empty())
+                    method = method->overloads.front();
+                const auto declaration = functionDeclarationsBySymbol_.find(method.Get());
+                return declaration == functionDeclarationsBySymbol_.end() ? nullptr : declaration->second;
+            };
+            auto getSingleReturn = [](const FunctionDeclaration* function) -> const ReturnStatement*
+            {
+                if (!function || !function->body)
+                    return nullptr;
+                if (const auto* directReturn = function->body->as<ReturnStatement>())
+                    return directReturn;
+                const auto* block = function->body->as<BlockStatement>();
+                if (!block || block->statements.size() != 1 || !block->statements.front())
+                    return nullptr;
+                return block->statements.front()->as<ReturnStatement>();
+            };
+
+            const FunctionDeclaration* validateMethod = findProcessorMethod("Validate");
+            const ReturnStatement* validateReturn = getSingleReturn(validateMethod);
+            if (!validateMethod || !validateReturn || !validateReturn->value ||
+                !validateMethod->parameters.empty())
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Validator '{}' must declare parameterless 'fn Validate() -> bool' with one compile-time return expression.",
+                    processorName);
+                continue;
+            }
+
+            std::unordered_set<const Symbol*> activeSymbols;
+            const auto foldedValidation = tryEvaluateStaticAttributeConstant(
+                validateReturn->value,
+                variableDeclarationsBySymbol_,
+                activeSymbols);
+            if (!foldedValidation ||
+                (foldedValidation->type != TokenType::kwTrue && foldedValidation->type != TokenType::kwFalse))
+            {
+                WIO_LOG_ADD_ERROR(
+                    validateReturn->location(),
+                    "Validator '{}.Validate' must fold to a compile-time bool.",
+                    processorName);
+                continue;
+            }
+            attributeSymbol->attributeProcessorValidationResults.back() =
+                foldedValidation->type == TokenType::kwTrue ? 1 : 0;
+
+            if (const FunctionDeclaration* diagnosticMethod = findProcessorMethod("Diagnostic"))
+            {
+                const ReturnStatement* diagnosticReturn = getSingleReturn(diagnosticMethod);
+                if (!diagnosticReturn || !diagnosticReturn->value || !diagnosticMethod->parameters.empty())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        diagnosticMethod->location(),
+                        "Validator '{}.Diagnostic' must be parameterless and return one compile-time string expression.",
+                        processorName);
+                    continue;
+                }
+                activeSymbols.clear();
+                const auto foldedDiagnostic = tryEvaluateStaticAttributeConstant(
+                    diagnosticReturn->value,
+                    variableDeclarationsBySymbol_,
+                    activeSymbols);
+                if (!foldedDiagnostic || foldedDiagnostic->type != TokenType::stringLiteral || foldedDiagnostic->isUnicodeString)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        diagnosticReturn->location(),
+                        "Validator '{}.Diagnostic' must fold to a compile-time string.",
+                        processorName);
+                    continue;
+                }
+                attributeSymbol->attributeProcessorDiagnostics.back() = foldedDiagnostic->value;
+            }
         }
     }
     

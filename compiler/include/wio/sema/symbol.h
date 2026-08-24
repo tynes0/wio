@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -62,6 +63,11 @@ namespace wio::sema
         std::vector<std::string> attributeImpliedAttributes;
         std::vector<std::string> attributeProcessorTypes;
         std::vector<std::string> attributeProcessorPhases;
+        // Aligned with processor phases. -1 means non-validator, 0 rejects,
+        // and 1 accepts. Validator bodies are evaluated by the compiler and
+        // are never emitted or executed at runtime.
+        std::vector<std::int8_t> attributeProcessorValidationResults;
+        std::vector<std::string> attributeProcessorDiagnostics;
         std::vector<std::string> attributeParameterNames;
         std::vector<Ref<Type>> attributeParameterTypes;
         std::vector<bool> attributeParameterHasDefault;

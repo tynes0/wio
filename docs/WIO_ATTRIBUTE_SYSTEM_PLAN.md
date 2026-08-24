@@ -11,12 +11,17 @@ Implemented foundation checkpoint:
 - effective-set target, requirement, conflict, allow-list, exclusivity,
   cardinality, and ordering validation;
 - `std::attribute` declarations and strict processor phase-interface checks;
+- stable `std::attribute::*` identities shared by built-ins and user policy
+  matching;
+- bounded compile-time `Validator<TTarget>` execution with optional constant
+  diagnostics;
 - structured runtime type-attribute descriptors with stable IDs, origin,
   normalized argument metadata, and default provenance.
 
-Still open: executable validator/derive and behavioral lowering, built-in
-symbol-model unification, behavioral pipeline reflection, C++ SDK descriptors,
-source migration/formatting, editor/web support, and Windows/Linux release
+Still open: target-aware validator contexts, checked declaration derives,
+behavioral lowering, the final removal of enum-only built-in lowering paths,
+behavioral pipeline reflection, C++ SDK descriptors, source
+migration/formatting, editor/web support, and Windows/Linux release
 qualification.
 
 This document supersedes the earlier postfix `with` attribute proposal. The

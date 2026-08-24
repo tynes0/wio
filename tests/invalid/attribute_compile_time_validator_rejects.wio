@@ -1,0 +1,16 @@
+use std::attribute as attr;
+
+[From(attr::Validator<i32>)]
+object RejectValidator {
+    public fn Validate() -> bool { return false; }
+    public fn Diagnostic() -> string { return "callback target is not safe"; }
+}
+
+[attribute::Targets(fn)]
+[attribute::Processor(RejectValidator)]
+attribute Rejected();
+
+[Rejected]
+fn UnsafeCallback() {}
+
+fn Entry() -> i32 { return 0; }
