@@ -14209,6 +14209,21 @@ namespace wio::sema
                 continue;
             }
             attribute->canonicalName = symbol->attributeCanonicalName;
+            attribute->processorBindings.clear();
+            for (size_t processorIndex = 0;
+                 processorIndex < symbol->attributeProcessorPhases.size();
+                 ++processorIndex)
+            {
+                attribute->processorBindings.push_back(AttributeStatement::ProcessorBinding{
+                    .canonicalTypeName = processorIndex < symbol->attributeProcessorCanonicalTypes.size()
+                        ? symbol->attributeProcessorCanonicalTypes[processorIndex]
+                        : std::string{},
+                    .cppTypeName = processorIndex < symbol->attributeProcessorCppTypes.size()
+                        ? symbol->attributeProcessorCppTypes[processorIndex]
+                        : std::string{},
+                    .phase = symbol->attributeProcessorPhases[processorIndex]
+                });
+            }
 
             attribute->runtimeRetained = std::ranges::find(
                 symbol->attributeRetention, std::string("runtime")) != symbol->attributeRetention.end();
@@ -15019,6 +15034,8 @@ namespace wio::sema
             return;
 
         attributeSymbol->attributeProcessorPhases.clear();
+        attributeSymbol->attributeProcessorCanonicalTypes.clear();
+        attributeSymbol->attributeProcessorCppTypes.clear();
         attributeSymbol->attributeProcessorValidationResults.clear();
         attributeSymbol->attributeProcessorDiagnostics.clear();
         for (const std::string& processorName : node.processorTypes)
@@ -15026,7 +15043,8 @@ namespace wio::sema
             Ref<Symbol> processorSymbol = resolveQualifiedSymbol(currentScope_, processorName);
             Ref<Type> processorType = processorSymbol ? unwrapAliasType(processorSymbol->type) : nullptr;
             if (!processorSymbol || processorSymbol->kind != SymbolKind::Struct ||
-                !processorType || processorType->kind() != TypeKind::Struct)
+                !processorType || processorType->kind() != TypeKind::Struct ||
+                !processorType.AsFast<StructType>()->isObject)
             {
                 WIO_LOG_ADD_ERROR(
                     node.location(),
@@ -15066,11 +15084,14 @@ namespace wio::sema
 
             const std::string phase = *phases.begin();
             attributeSymbol->attributeProcessorPhases.push_back(phase);
+            attributeSymbol->attributeProcessorCanonicalTypes.push_back(
+                processorSymbol->scopePath.empty()
+                    ? processorSymbol->name
+                    : processorSymbol->scopePath + "::" + processorSymbol->name);
+            attributeSymbol->attributeProcessorCppTypes.push_back(
+                codegen::Mangler::mangleStruct(processorSymbol->name, processorSymbol->scopePath));
             attributeSymbol->attributeProcessorValidationResults.push_back(-1);
             attributeSymbol->attributeProcessorDiagnostics.emplace_back();
-
-            if (phase != "validation")
-                continue;
 
             auto findProcessorMethod = [&](std::string_view methodName) -> const FunctionDeclaration*
             {
@@ -15084,6 +15105,31 @@ namespace wio::sema
                 const auto declaration = functionDeclarationsBySymbol_.find(method.Get());
                 return declaration == functionDeclarationsBySymbol_.end() ? nullptr : declaration->second;
             };
+
+            if (phase == "pre" || phase == "post" || phase == "finally")
+            {
+                const std::string_view methodName = phase == "pre"
+                    ? std::string_view("Before")
+                    : (phase == "post" ? std::string_view("After") : std::string_view("Finally"));
+                const FunctionDeclaration* hook = findProcessorMethod(methodName);
+                Ref<Symbol> hookSymbol = hook && hook->name ? hook->name->referencedSymbol.Lock() : nullptr;
+                Ref<FunctionType> hookType = hookSymbol ? hookSymbol->type.AsFast<FunctionType>() : nullptr;
+                if (!hook || !hookType || !hook->parameters.empty() ||
+                    !hookType->returnType || !hookType->returnType->isVoid())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "{} processor '{}' must declare parameterless 'fn {}()'.",
+                        phase,
+                        processorName,
+                        methodName);
+                }
+                continue;
+            }
+
+            if (phase != "validation")
+                continue;
+
             auto getSingleReturn = [](const FunctionDeclaration* function) -> const ReturnStatement*
             {
                 if (!function || !function->body)
@@ -15577,9 +15623,65 @@ namespace wio::sema
             node.attributes,
             attributeTarget);
         if (!isDeclarationPass_ && !isStructResolutionPass_)
+        {
             validateAttributeApplications(
                 node.attributes,
                 attributeTarget);
+            const bool hasBehavioralProcessor = std::ranges::any_of(
+                node.attributes,
+                [](const NodePtr<AttributeStatement>& attribute)
+                {
+                    return attribute && std::ranges::any_of(
+                        attribute->processorBindings,
+                        [](const AttributeStatement::ProcessorBinding& processor)
+                        {
+                            return processor.phase == "pre" || processor.phase == "post" ||
+                                   processor.phase == "finally" || processor.phase == "around";
+                        });
+                });
+            if (hasBehavioralProcessor && node.isAsync)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Behavioral attribute processors on async functions require the async processor contract and are not available in this checkpoint.");
+            }
+            if (hasBehavioralProcessor && (!node.body || hasAttribute(node.attributes, Attribute::Native)))
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Behavioral attribute processors require a Wio function body and cannot wrap a native declaration.");
+            }
+            if (hasBehavioralProcessor && node.name && node.name->token.value == "Entry" &&
+                currentScope_->getKind() != ScopeKind::Struct)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Behavioral attribute processors cannot target Entry in this checkpoint; wrap an ordinary startup function instead.");
+            }
+            if (hasBehavioralProcessor && node.whenCondition)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "Behavioral attribute processors cannot be combined with a function 'when' guard in this checkpoint.");
+            }
+            const bool hasAroundProcessor = std::ranges::any_of(
+                node.attributes,
+                [](const NodePtr<AttributeStatement>& attribute)
+                {
+                    return attribute && std::ranges::any_of(
+                        attribute->processorBindings,
+                        [](const AttributeStatement::ProcessorBinding& processor)
+                        {
+                            return processor.phase == "around";
+                        });
+                });
+            if (hasAroundProcessor)
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.location(),
+                    "AroundProcessor requires the typed single-Proceed contract; use pre/post/finally until that contract is enabled.");
+            }
+        }
         for (auto& parameter : node.parameters)
         {
             applyActiveScopedAttributes(parameter.attributes, "parameter");

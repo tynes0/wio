@@ -832,6 +832,15 @@ namespace wio
         bool runtimeRetained = false;
         AttributeOrigin origin = AttributeOrigin::Direct;
         std::string originParent;
+        struct ProcessorBinding
+        {
+            std::string canonicalTypeName;
+            std::string cppTypeName;
+            std::string phase;
+        };
+        // Effective, declaration-ordered processors bound by semantic
+        // analysis. Code generation never re-resolves attribute names.
+        std::vector<ProcessorBinding> processorBindings;
 
         AttributeStatement(Attribute _attribute, std::vector<Token> _args,
             std::vector<NodePtr<TypeSpecifier>> _typeArgs = {},

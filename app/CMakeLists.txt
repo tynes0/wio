@@ -3408,6 +3408,35 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_attribute_behavioral_pipeline_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_behavioral_pipeline_run.wio"
+        "pre>body>post>finally"
+        --run
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_behavioral_missing_hook
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_behavioral_missing_hook.wio"
+        "post processor 'BrokenPost' must declare parameterless"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_behavioral_async_not_frozen
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_behavioral_async_not_frozen.wio"
+        "Behavioral attribute processors on async functions require the async processor contract"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_around_requires_proceed_contract
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_around_requires_proceed_contract.wio"
+        "AroundProcessor requires the typed single-Proceed contract"
+    )
+    set_tests_properties(
+        wio_test_attribute_behavioral_pipeline_run
+        wio_invalid_attribute_behavioral_missing_hook
+        wio_invalid_attribute_behavioral_async_not_frozen
+        wio_invalid_attribute_around_requires_proceed_contract
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
+    add_wio_output_test(
         wio_test_attribute_parameter_enum_case_run
         "${CMAKE_SOURCE_DIR}/tests/attribute_parameter_enum_case_run.wio"
         "attribute-parameter-enum-case-ok"

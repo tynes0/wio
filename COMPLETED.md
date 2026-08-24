@@ -25,8 +25,13 @@ Notes:
       before/after ordering cycles.
 - [x] `std::attribute` publishes processor phases, meta-attribute policies,
       and declarations for the current compiler attributes.
-- [x] Processor declarations are checked against exactly one of the pre,
-      post, finally, or around phase interfaces.
+- [x] Processor declarations are checked against exactly one validation,
+      derive, pre, post, finally, or around capability interface.
+- [x] Built-ins and user attributes share stable contract identities for
+      target, requirement, and conflict matching.
+- [x] Bounded validators execute at compile time with constant diagnostics;
+      synchronous pre, post, and exactly-once finally hooks execute on Wio
+      function bodies with explicit diagnostics for still-closed edge cases.
 - [x] Runtime type reflection exposes structured attribute descriptors with
       stable FNV-1a identity, retention, origin, normalized arguments, and
       default provenance while retaining the legacy string view.

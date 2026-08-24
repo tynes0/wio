@@ -2,7 +2,9 @@ use std::attribute as attr;
 use std::console as console;
 
 [From(attr::PreProcessor)]
-object AliveGuardProcessor {}
+object AliveGuardProcessor {
+    public fn Before() {}
+}
 
 [attribute::Targets(fn)]
 [attribute::Processor(AliveGuardProcessor)]

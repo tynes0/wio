@@ -1,0 +1,15 @@
+use std::attribute as attr;
+
+[From(attr::PreProcessor)]
+object AsyncPre {
+    public fn Before() {}
+}
+
+[attribute::Targets(fn)]
+[attribute::Processor(AsyncPre)]
+attribute Guarded();
+
+[Guarded]
+async fn Work() -> i32 { return 1; }
+
+fn Entry() -> i32 { return 0; }

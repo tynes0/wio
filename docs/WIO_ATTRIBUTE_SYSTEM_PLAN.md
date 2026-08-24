@@ -15,10 +15,15 @@ Implemented foundation checkpoint:
   matching;
 - bounded compile-time `Validator<TTarget>` execution with optional constant
   diagnostics;
+- executable synchronous `PreProcessor.Before()`, `PostProcessor.After()`, and
+  `FinallyProcessor.Finally()` hooks with callee-side lowering, reverse exit
+  ordering, successful-return evaluation before post hooks, and exactly-once
+  finalization on normal/exceptional exits;
 - structured runtime type-attribute descriptors with stable IDs, origin,
   normalized argument metadata, and default provenance.
 
 Still open: target-aware validator contexts, checked declaration derives,
+typed receiver/argument/result hook contexts, single-Proceed around and async
 behavioral lowering, the final removal of enum-only built-in lowering paths,
 behavioral pipeline reflection, C++ SDK descriptors, source
 migration/formatting, editor/web support, and Windows/Linux release

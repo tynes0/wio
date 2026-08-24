@@ -63,6 +63,8 @@ namespace wio::sema
         std::vector<std::string> attributeImpliedAttributes;
         std::vector<std::string> attributeProcessorTypes;
         std::vector<std::string> attributeProcessorPhases;
+        std::vector<std::string> attributeProcessorCanonicalTypes;
+        std::vector<std::string> attributeProcessorCppTypes;
         // Aligned with processor phases. -1 means non-validator, 0 rejects,
         // and 1 accepts. Validator bodies are evaluated by the compiler and
         // are never emitted or executed at runtime.

@@ -32,6 +32,9 @@ namespace wio::codegen
         bool currentExtensionMethod_ = false;
         Ref<sema::Type> currentFunctionReturnType_;
         bool currentFunctionIsAsync_ = false;
+        std::vector<std::string> currentBehavioralPostProcessors_;
+        std::vector<std::string> currentBehavioralFinallyProcessors_;
+        std::size_t behavioralReturnCounter_ = 0;
         std::unordered_map<const sema::Symbol*, const VariableDeclaration*> variableDeclarationsBySymbol_;
 
         void emitStatements(const std::vector<NodePtr<Statement>>& statements);

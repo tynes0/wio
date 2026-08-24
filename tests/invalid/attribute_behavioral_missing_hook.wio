@@ -1,0 +1,10 @@
+use std::attribute as attr;
+
+[From(attr::PostProcessor)]
+object BrokenPost {}
+
+[attribute::Targets(fn)]
+[attribute::Processor(BrokenPost)]
+attribute Broken();
+
+fn Entry() -> i32 { return 0; }

@@ -8629,6 +8629,11 @@ namespace wio::codegen
         emit(" {\n");
         indent();
 
+        const auto enclosingPostProcessors = currentBehavioralPostProcessors_;
+        const auto enclosingFinallyProcessors = currentBehavioralFinallyProcessors_;
+        currentBehavioralPostProcessors_.clear();
+        currentBehavioralFinallyProcessors_.clear();
+
         if (node.body->is<ExpressionStatement>())
         {
             EMIT_TABS();
@@ -8642,6 +8647,9 @@ namespace wio::codegen
             for (auto& stmt : block->statements)
                 stmt->accept(*this);
         }
+
+        currentBehavioralPostProcessors_ = enclosingPostProcessors;
+        currentBehavioralFinallyProcessors_ = enclosingFinallyProcessors;
 
         dedent();
         EMIT_TABS(); emit("}");
@@ -9166,6 +9174,38 @@ namespace wio::codegen
         bool isExported = isExportedFunction(node);
         bool hasModuleLifecycleExport = getModuleLifecycleAttribute(node).has_value();
         bool emitsExportWrapper = isExported || hasModuleLifecycleExport;
+
+        struct BehavioralProcessorInstance
+        {
+            std::string phase;
+            std::string cppTypeName;
+            std::string variableName;
+            std::string finalizedFlagName;
+        };
+        std::vector<BehavioralProcessorInstance> behavioralProcessors;
+        if (!isEmittingPrototypes_ && !node.isAsync && node.body && !isNative)
+        {
+            for (const auto& attribute : node.attributes)
+            {
+                if (!attribute)
+                    continue;
+                for (const auto& processor : attribute->processorBindings)
+                {
+                    if ((processor.phase != "pre" && processor.phase != "post" && processor.phase != "finally") ||
+                        processor.cppTypeName.empty())
+                    {
+                        continue;
+                    }
+                    const size_t index = behavioralProcessors.size();
+                    behavioralProcessors.push_back(BehavioralProcessorInstance{
+                        .phase = processor.phase,
+                        .cppTypeName = processor.cppTypeName,
+                        .variableName = "_wio_attribute_processor_" + std::to_string(index),
+                        .finalizedFlagName = "_wio_attribute_finalized_" + std::to_string(index)
+                    });
+                }
+            }
+        }
 
         if (funcName == "Entry" && !node.isAsync &&
             node.genericParameters.empty() &&
@@ -10026,18 +10066,99 @@ namespace wio::codegen
         {
             auto emitFunctionBody = [&]()
             {
-                if (!(node.isAsync && currentClassIsObject_ && node.body->is<BlockStatement>()))
+                if (behavioralProcessors.empty() &&
+                    !(node.isAsync && currentClassIsObject_ && node.body->is<BlockStatement>()))
                 {
                     node.body->accept(*this);
                     return;
                 }
 
-                auto block = node.body->as<BlockStatement>();
+                auto* block = node.body->as<BlockStatement>();
                 emitLine("{");
                 indent();
-                emitLine("auto _wio_async_self_guard = wio::runtime::Ref<" + currentClassName_ + ">(this);");
-                for (auto& statement : block->statements)
-                    statement->accept(*this);
+                if (node.isAsync && currentClassIsObject_)
+                    emitLine("auto _wio_async_self_guard = wio::runtime::Ref<" + currentClassName_ + ">(this);");
+
+                for (const auto& processor : behavioralProcessors)
+                {
+                    emitLine("auto " + processor.variableName + " = wio::runtime::Ref<" +
+                             processor.cppTypeName + ">::Create();");
+                    if (processor.phase == "finally")
+                        emitLine("bool " + processor.finalizedFlagName + " = false;");
+                }
+
+                const bool hasFinallyProcessor = std::ranges::any_of(
+                    behavioralProcessors,
+                    [](const BehavioralProcessorInstance& processor) { return processor.phase == "finally"; });
+                if (hasFinallyProcessor)
+                {
+                    emitLine("try");
+                    emitLine("{");
+                    indent();
+                }
+
+                for (const auto& processor : behavioralProcessors)
+                {
+                    if (processor.phase == "pre")
+                        emitLine(processor.variableName + "->_WF_Before();");
+                }
+
+                const auto previousPostProcessors = currentBehavioralPostProcessors_;
+                const auto previousFinallyProcessors = currentBehavioralFinallyProcessors_;
+                currentBehavioralPostProcessors_.clear();
+                currentBehavioralFinallyProcessors_.clear();
+                for (auto processor = behavioralProcessors.rbegin(); processor != behavioralProcessors.rend(); ++processor)
+                {
+                    if (processor->phase == "post")
+                        currentBehavioralPostProcessors_.push_back(processor->variableName + "->_WF_After();");
+                    else if (processor->phase == "finally")
+                    {
+                        currentBehavioralFinallyProcessors_.push_back(
+                            "if (!" + processor->finalizedFlagName + ") { " + processor->finalizedFlagName +
+                            " = true; " + processor->variableName + "->_WF_Finally(); }");
+                    }
+                }
+
+                if (block)
+                {
+                    for (auto& statement : block->statements)
+                        statement->accept(*this);
+                }
+                else
+                {
+                    node.body->accept(*this);
+                }
+
+                if (currentFunctionReturnType_ && currentFunctionReturnType_->isVoid())
+                {
+                    for (const std::string& invocation : currentBehavioralPostProcessors_)
+                        emitLine(invocation);
+                    for (const std::string& invocation : currentBehavioralFinallyProcessors_)
+                        emitLine(invocation);
+                }
+
+                currentBehavioralPostProcessors_ = previousPostProcessors;
+                currentBehavioralFinallyProcessors_ = previousFinallyProcessors;
+
+                if (hasFinallyProcessor)
+                {
+                    dedent();
+                    emitLine("}");
+                    emitLine("catch (...)");
+                    emitLine("{");
+                    indent();
+                    for (auto processor = behavioralProcessors.rbegin(); processor != behavioralProcessors.rend(); ++processor)
+                    {
+                        if (processor->phase == "finally")
+                        {
+                            emitLine("if (!" + processor->finalizedFlagName + ") { " + processor->finalizedFlagName +
+                                     " = true; " + processor->variableName + "->_WF_Finally(); }");
+                        }
+                    }
+                    emitLine("throw;");
+                    dedent();
+                    emitLine("}");
+                }
                 dedent();
                 emitLine("}");
             };
@@ -11504,8 +11625,30 @@ namespace wio::codegen
     void CppGenerator::visit(ReturnStatement& node)
     {
         emitSourceDirective(node.location());
+        const bool hasBehavioralExit = !currentBehavioralPostProcessors_.empty() ||
+                                       !currentBehavioralFinallyProcessors_.empty();
+        if (node.value && hasBehavioralExit && !currentFunctionIsAsync_)
+        {
+            const std::string resultName = "_wio_attribute_return_" + std::to_string(behavioralReturnCounter_++);
+            EMIT_TABS();
+            buffer_ << "auto " << resultName << " = ";
+            emitExpressionWithExpectedType(node.value, currentFunctionReturnType_, false);
+            buffer_ << ";\n";
+            for (const std::string& invocation : currentBehavioralPostProcessors_)
+                emitLine(invocation);
+            for (const std::string& invocation : currentBehavioralFinallyProcessors_)
+                emitLine(invocation);
+            EMIT_TABS();
+            buffer_ << "return " << resultName << ";\n";
+            return;
+        }
+
+        for (const std::string& invocation : currentBehavioralPostProcessors_)
+            emitLine(invocation);
+        for (const std::string& invocation : currentBehavioralFinallyProcessors_)
+            emitLine(invocation);
+
         EMIT_TABS();
-        
         buffer_ << (currentFunctionIsAsync_ ? "co_return" : "return");
         if (node.value)
         {
