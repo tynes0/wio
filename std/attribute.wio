@@ -53,9 +53,10 @@ realm std {
         // `Validate() -> bool` whose body must fold at compile time and may
         // expose `Diagnostic() -> string` for a stable rejection message.
         // The first synchronous behavioral checkpoint binds parameterless
-        // `Before()`, `After()`, and `Finally()` hooks. Around and async
-        // processors remain closed until their typed context/Proceed contracts
-        // are enabled; the compiler diagnoses attempts to apply them.
+        // `Before()`, `After()`, and `Finally()` hooks. Unit-returning sync
+        // functions also support `Around(proceed: fn())`; Proceed may be used
+        // zero or one time and cannot escape the invocation. Typed-result and
+        // async processors remain closed until their context contracts land.
         interface Validator<TTarget> {}
         interface DeriveProcessor<TTarget> {}
         interface PreProcessor {}

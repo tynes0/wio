@@ -381,6 +381,23 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         )
     endfunction()
 
+    function(add_wio_runtime_failure_test test_name source_file expected_output)
+        add_test(
+            NAME ${test_name}
+            COMMAND
+                ${CMAKE_COMMAND}
+                -DWIO_EXE=$<TARGET_FILE:wio_app>
+                -DWIO_SOURCE=${source_file}
+                -DWIO_EXPECT=${expected_output}
+                "-DWIO_ARGS=--run"
+                -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExpectFailure.cmake"
+        )
+        set_tests_properties(
+            ${test_name}
+            PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        )
+    endfunction()
+
     function(add_wio_failure_test_clean test_name source_file expected_output rejected_output)
         set(wio_failure_args --dry-run ${ARGN})
         list(JOIN wio_failure_args ";" wio_failure_args_serialized)
@@ -3419,6 +3436,28 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "first>second>body"
         --run
     )
+    add_wio_output_test(
+        wio_test_attribute_around_pipeline_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_around_pipeline_run.wio"
+        "around>pre>body>post>around-exit"
+        --run
+    )
+    add_wio_output_test(
+        wio_test_attribute_around_skip_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_around_skip_run.wio"
+        "attribute-around-skip-ok"
+        --run
+    )
+    add_wio_runtime_failure_test(
+        wio_invalid_attribute_around_proceed_twice
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_around_proceed_twice.wio"
+        "Attribute Proceed may be invoked at most once"
+    )
+    add_wio_runtime_failure_test(
+        wio_invalid_attribute_around_proceed_escaped
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_around_proceed_escaped.wio"
+        "Attribute Proceed escaped its Around invocation"
+    )
     add_wio_failure_test(
         wio_invalid_attribute_behavioral_missing_hook
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_behavioral_missing_hook.wio"
@@ -3432,11 +3471,15 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_attribute_around_requires_proceed_contract
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_around_requires_proceed_contract.wio"
-        "AroundProcessor requires the typed single-Proceed contract"
+        "AroundProcessor currently requires a unit-returning function"
     )
     set_tests_properties(
         wio_test_attribute_behavioral_pipeline_run
         wio_test_attribute_behavioral_ordering_run
+        wio_test_attribute_around_pipeline_run
+        wio_test_attribute_around_skip_run
+        wio_invalid_attribute_around_proceed_twice
+        wio_invalid_attribute_around_proceed_escaped
         wio_invalid_attribute_behavioral_missing_hook
         wio_invalid_attribute_behavioral_async_not_frozen
         wio_invalid_attribute_around_requires_proceed_contract

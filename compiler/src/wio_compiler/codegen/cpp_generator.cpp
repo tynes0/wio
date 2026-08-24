@@ -4104,6 +4104,7 @@ namespace wio::codegen
         emitHeaderLine("#include <iostream>");
         emitHeaderLine("#include <functional>");
         emitHeaderLine("#include <map>");
+        emitHeaderLine("#include <memory>");
         emitHeaderLine("#include <stdexcept>");
         emitHeaderLine("#include <unordered_map>");
         emitHeaderLine();
@@ -9179,6 +9180,7 @@ namespace wio::codegen
         {
             std::string phase;
             std::string cppTypeName;
+            std::string hookCppName;
             std::string variableName;
             std::string finalizedFlagName;
         };
@@ -9198,8 +9200,9 @@ namespace wio::codegen
             {
                 for (const auto& processor : attribute->processorBindings)
                 {
-                    if ((processor.phase != "pre" && processor.phase != "post" && processor.phase != "finally") ||
-                        processor.cppTypeName.empty())
+                    if ((processor.phase != "pre" && processor.phase != "post" &&
+                         processor.phase != "finally" && processor.phase != "around") ||
+                        processor.cppTypeName.empty() || processor.hookCppName.empty())
                     {
                         continue;
                     }
@@ -9207,6 +9210,7 @@ namespace wio::codegen
                     behavioralProcessors.push_back(BehavioralProcessorInstance{
                         .phase = processor.phase,
                         .cppTypeName = processor.cppTypeName,
+                        .hookCppName = processor.hookCppName,
                         .variableName = "_wio_attribute_processor_" + std::to_string(index),
                         .finalizedFlagName = "_wio_attribute_finalized_" + std::to_string(index)
                     });
@@ -10097,6 +10101,15 @@ namespace wio::codegen
                 const bool hasFinallyProcessor = std::ranges::any_of(
                     behavioralProcessors,
                     [](const BehavioralProcessorInstance& processor) { return processor.phase == "finally"; });
+                const bool hasAroundProcessor = std::ranges::any_of(
+                    behavioralProcessors,
+                    [](const BehavioralProcessorInstance& processor) { return processor.phase == "around"; });
+                if (hasAroundProcessor)
+                {
+                    emitLine("auto _wio_attribute_core = [&]()");
+                    emitLine("{");
+                    indent();
+                }
                 if (hasFinallyProcessor)
                 {
                     emitLine("try");
@@ -10107,7 +10120,7 @@ namespace wio::codegen
                 for (const auto& processor : behavioralProcessors)
                 {
                     if (processor.phase == "pre")
-                        emitLine(processor.variableName + "->_WF_Before();");
+                        emitLine(processor.variableName + "->" + processor.hookCppName + "();");
                 }
 
                 const auto previousPostProcessors = currentBehavioralPostProcessors_;
@@ -10117,12 +10130,13 @@ namespace wio::codegen
                 for (auto processor = behavioralProcessors.rbegin(); processor != behavioralProcessors.rend(); ++processor)
                 {
                     if (processor->phase == "post")
-                        currentBehavioralPostProcessors_.push_back(processor->variableName + "->_WF_After();");
+                        currentBehavioralPostProcessors_.push_back(
+                            processor->variableName + "->" + processor->hookCppName + "();");
                     else if (processor->phase == "finally")
                     {
                         currentBehavioralFinallyProcessors_.push_back(
                             "if (!" + processor->finalizedFlagName + ") { " + processor->finalizedFlagName +
-                            " = true; " + processor->variableName + "->_WF_Finally(); }");
+                            " = true; " + processor->variableName + "->" + processor->hookCppName + "(); }");
                     }
                 }
 
@@ -10159,12 +10173,59 @@ namespace wio::codegen
                         if (processor->phase == "finally")
                         {
                             emitLine("if (!" + processor->finalizedFlagName + ") { " + processor->finalizedFlagName +
-                                     " = true; " + processor->variableName + "->_WF_Finally(); }");
+                                     " = true; " + processor->variableName + "->" + processor->hookCppName + "(); }");
                         }
                     }
                     emitLine("throw;");
                     dedent();
                     emitLine("}");
+                }
+
+                if (hasAroundProcessor)
+                {
+                    dedent();
+                    emitLine("};");
+                    std::string nextProceed = "_wio_attribute_core";
+                    size_t aroundIndex = 0;
+                    for (auto processor = behavioralProcessors.rbegin(); processor != behavioralProcessors.rend(); ++processor)
+                    {
+                        if (processor->phase != "around")
+                            continue;
+                        const std::string wrapperName = "_wio_attribute_around_" + std::to_string(aroundIndex);
+                        const std::string stateName = "_wio_attribute_proceed_state_" + std::to_string(aroundIndex);
+                        emitLine("auto " + wrapperName + " = [&]()");
+                        emitLine("{");
+                        indent();
+                        emitLine("auto " + stateName + " = std::make_shared<std::pair<bool, bool>>(true, false);");
+                        emitLine("try");
+                        emitLine("{");
+                        indent();
+                        emitLine(processor->variableName + "->" + processor->hookCppName +
+                                 "(std::function<void()>([&, " + stateName + "]()");
+                        emitLine("{");
+                        indent();
+                        emitLine("if (!" + stateName + "->first) throw wio::runtime::RuntimeException(\"Attribute Proceed escaped its Around invocation.\");");
+                        emitLine("if (" + stateName + "->second) throw wio::runtime::RuntimeException(\"Attribute Proceed may be invoked at most once.\");");
+                        emitLine(stateName + "->second = true;");
+                        emitLine(nextProceed + "();");
+                        dedent();
+                        emitLine("}));");
+                        dedent();
+                        emitLine("}");
+                        emitLine("catch (...)");
+                        emitLine("{");
+                        indent();
+                        emitLine(stateName + "->first = false;");
+                        emitLine("throw;");
+                        dedent();
+                        emitLine("}");
+                        emitLine(stateName + "->first = false;");
+                        dedent();
+                        emitLine("};");
+                        nextProceed = wrapperName;
+                        ++aroundIndex;
+                    }
+                    emitLine(nextProceed + "();");
                 }
                 dedent();
                 emitLine("}");

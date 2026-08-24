@@ -14221,7 +14221,10 @@ namespace wio::sema
                     .cppTypeName = processorIndex < symbol->attributeProcessorCppTypes.size()
                         ? symbol->attributeProcessorCppTypes[processorIndex]
                         : std::string{},
-                    .phase = symbol->attributeProcessorPhases[processorIndex]
+                    .phase = symbol->attributeProcessorPhases[processorIndex],
+                    .hookCppName = processorIndex < symbol->attributeProcessorHookCppNames.size()
+                        ? symbol->attributeProcessorHookCppNames[processorIndex]
+                        : std::string{}
                 });
             }
 
@@ -15119,6 +15122,7 @@ namespace wio::sema
         attributeSymbol->attributeProcessorPhases.clear();
         attributeSymbol->attributeProcessorCanonicalTypes.clear();
         attributeSymbol->attributeProcessorCppTypes.clear();
+        attributeSymbol->attributeProcessorHookCppNames.clear();
         attributeSymbol->attributeProcessorValidationResults.clear();
         attributeSymbol->attributeProcessorDiagnostics.clear();
         for (const std::string& processorName : node.processorTypes)
@@ -15173,6 +15177,7 @@ namespace wio::sema
                     : processorSymbol->scopePath + "::" + processorSymbol->name);
             attributeSymbol->attributeProcessorCppTypes.push_back(
                 codegen::Mangler::mangleStruct(processorSymbol->name, processorSymbol->scopePath));
+            attributeSymbol->attributeProcessorHookCppNames.emplace_back();
             attributeSymbol->attributeProcessorValidationResults.push_back(-1);
             attributeSymbol->attributeProcessorDiagnostics.emplace_back();
 
@@ -15206,6 +15211,42 @@ namespace wio::sema
                         phase,
                         processorName,
                         methodName);
+                }
+                else
+                {
+                    attributeSymbol->attributeProcessorHookCppNames.back() =
+                        codegen::Mangler::mangleFunction(
+                            std::string(methodName),
+                            hookType->paramTypes);
+                }
+                continue;
+            }
+
+            if (phase == "around")
+            {
+                const FunctionDeclaration* hook = findProcessorMethod("Around");
+                Ref<Symbol> hookSymbol = hook && hook->name ? hook->name->referencedSymbol.Lock() : nullptr;
+                Ref<FunctionType> hookType = hookSymbol ? hookSymbol->type.AsFast<FunctionType>() : nullptr;
+                Ref<Type> proceedType = hookType && hookType->paramTypes.size() == 1
+                    ? unwrapAliasType(hookType->paramTypes.front())
+                    : nullptr;
+                Ref<FunctionType> proceedFunction = proceedType && proceedType->kind() == TypeKind::Function
+                    ? proceedType.AsFast<FunctionType>()
+                    : nullptr;
+                if (!hook || !hookType || hook->parameters.size() != 1 ||
+                    !hookType->returnType || !hookType->returnType->isVoid() ||
+                    !proceedFunction || !proceedFunction->paramTypes.empty() ||
+                    !proceedFunction->returnType || !proceedFunction->returnType->isVoid())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        node.location(),
+                        "around processor '{}' must declare 'fn Around(proceed: fn())'.",
+                        processorName);
+                }
+                else
+                {
+                    attributeSymbol->attributeProcessorHookCppNames.back() =
+                        codegen::Mangler::mangleFunction("Around", hookType->paramTypes);
                 }
                 continue;
             }
@@ -15758,11 +15799,17 @@ namespace wio::sema
                             return processor.phase == "around";
                         });
                 });
-            if (hasAroundProcessor)
+            Ref<Symbol> attributedFunctionSymbol = node.name ? node.name->referencedSymbol.Lock() : nullptr;
+            Ref<FunctionType> attributedFunctionType = attributedFunctionSymbol
+                ? attributedFunctionSymbol->type.AsFast<FunctionType>()
+                : nullptr;
+            if (hasAroundProcessor &&
+                (!attributedFunctionType || !attributedFunctionType->returnType ||
+                 !attributedFunctionType->returnType->isVoid()))
             {
                 WIO_LOG_ADD_ERROR(
                     node.location(),
-                    "AroundProcessor requires the typed single-Proceed contract; use pre/post/finally until that contract is enabled.");
+                    "AroundProcessor currently requires a unit-returning function; typed result Proceed is not enabled yet.");
             }
         }
         for (auto& parameter : node.parameters)

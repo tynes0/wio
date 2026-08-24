@@ -21,11 +21,13 @@ Implemented foundation checkpoint:
   finalization on normal/exceptional exits;
 - deterministic topological processor order from `Before`/`After`, with source
   order as the stable tie-breaker and reverse-order exit unwinding;
+- unit-returning synchronous `Around(proceed: fn())` lowering with zero-or-one
+  Proceed, runtime duplicate-call protection, and escaped-capability rejection;
 - structured runtime type-attribute descriptors with stable IDs, origin,
   normalized argument metadata, and default provenance.
 
 Still open: target-aware validator contexts, checked declaration derives,
-typed receiver/argument/result hook contexts, single-Proceed around and async
+typed receiver/argument/result hook contexts, typed-result around and async
 behavioral lowering, the final removal of enum-only built-in lowering paths,
 behavioral pipeline reflection, C++ SDK descriptors, source
 migration/formatting, editor/web support, and Windows/Linux release

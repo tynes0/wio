@@ -1,0 +1,34 @@
+use std::attribute as attr;
+use std::console as console;
+
+mut Trace: string = "";
+
+[From(attr::AroundProcessor)]
+object TraceAround {
+    public fn Around(proceed: fn()) {
+        Trace += "around>";
+        proceed();
+        Trace += "around-exit";
+    }
+}
+
+[From(attr::PreProcessor)]
+object TracePre { public fn Before() { Trace += "pre>"; } }
+
+[From(attr::PostProcessor)]
+object TracePost { public fn After() { Trace += "post>"; } }
+
+[attribute::Targets(fn)]
+[attribute::Processor(TraceAround)]
+[attribute::Processor(TracePre)]
+[attribute::Processor(TracePost)]
+attribute Wrapped();
+
+[Wrapped]
+fn Work() { Trace += "body>"; }
+
+fn Entry() -> i32 {
+    Work();
+    console::PrintLine(Trace);
+    return Trace == "around>pre>body>post>around-exit" ? 0 : 1;
+}

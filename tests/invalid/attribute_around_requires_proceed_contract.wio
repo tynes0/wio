@@ -1,13 +1,15 @@
 use std::attribute as attr;
 
 [From(attr::AroundProcessor)]
-object IncompleteAround {}
+object IncompleteAround {
+    public fn Around(proceed: fn()) { proceed(); }
+}
 
 [attribute::Targets(fn)]
 [attribute::Processor(IncompleteAround)]
 attribute Wrapped();
 
 [Wrapped]
-fn Work() {}
+fn Work() -> i32 { return 1; }
 
 fn Entry() -> i32 { return 0; }
