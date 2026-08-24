@@ -1,0 +1,16 @@
+use std::attribute as attr;
+
+[From(attr::DeriveProcessor<any>)]
+object InvalidDerive {
+    [std::attribute::DeriveMember]
+    public fn Build(receiver: i32) -> string { return "invalid"; }
+}
+
+[attribute::Targets(component)]
+[attribute::Processor(InvalidDerive)]
+attribute Derived();
+
+[Derived]
+component Value { number: i32; }
+
+fn Entry() -> i32 { return 0; }

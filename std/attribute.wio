@@ -57,8 +57,10 @@ realm std {
         // object method and may return bool to guard a unit-returning target.
         // Unit-returning sync functions also support `Around(proceed: fn())`;
         // Proceed may be used zero or one time and cannot escape the
-        // invocation. Typed-result and async processors remain closed until
-        // their context contracts land.
+        // invocation. DeriveProcessor may expose bounded checked methods with
+        // [DeriveMember]; concrete component/object targets receive a hidden
+        // `any` receiver. Typed-result, typed/generic derive contexts, and
+        // async processors remain closed until their context contracts land.
         interface Validator<TTarget> {}
         interface DeriveProcessor<TTarget> {}
         interface PreProcessor {}
@@ -84,6 +86,11 @@ realm std {
         attribute After(values: string[]) for attribute retain compile;
         attribute Implies(values: string[]) for attribute retain compile;
         attribute Processor(processorType: string) for attribute retain compile repeatable;
+        // Marks a public DeriveProcessor method as a checked generated member.
+        // Its first explicit parameter is the hidden target receiver (`any` in
+        // the initial bounded model); remaining parameters form the public
+        // method surface. The optional name overrides the exposed member name.
+        attribute DeriveMember(name: string = "") for method retain compile;
 
         // Compiler-supported language attributes. Their declarations are the
         // public contract; lowering remains compiler-owned and ABI-stable.

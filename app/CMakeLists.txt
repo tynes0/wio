@@ -3495,10 +3495,41 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_boolean_guard_non_unit.wio"
         "can skip only a unit-returning function or method"
     )
+    add_wio_output_test(
+        wio_test_attribute_checked_derive_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_checked_derive_run.wio"
+        "attribute-checked-derive-ok"
+        --run
+    )
     add_wio_failure_test(
-        wio_invalid_attribute_derive_builder_not_enabled
-        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_derive_builder_not_enabled.wio"
-        "requires the checked declaration-builder contract"
+        wio_invalid_attribute_derive_requires_member
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_derive_requires_member.wio"
+        "must expose at least one method"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_derive_member_requires_any_receiver
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_derive_member_requires_any_receiver.wio"
+        "first parameter is 'any'"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_derive_wrong_target
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_derive_wrong_target.wio"
+        "can target only components or objects"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_derive_generic_target
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_derive_generic_target.wio"
+        "require typed target specialization"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_derive_processor_requires_default_constructor
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_derive_processor_requires_default_constructor.wio"
+        "must be default constructible"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_derive_member_default_parameter
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_derive_member_default_parameter.wio"
+        "public parameters have no defaults or packs"
     )
     add_wio_failure_test(
         wio_invalid_attribute_around_requires_proceed_contract
@@ -3519,7 +3550,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_attribute_behavioral_non_callable_target
         wio_invalid_attribute_receiver_guard_free_function
         wio_invalid_attribute_boolean_guard_non_unit
-        wio_invalid_attribute_derive_builder_not_enabled
+        wio_test_attribute_checked_derive_run
+        wio_invalid_attribute_derive_requires_member
+        wio_invalid_attribute_derive_member_requires_any_receiver
+        wio_invalid_attribute_derive_wrong_target
+        wio_invalid_attribute_derive_generic_target
+        wio_invalid_attribute_derive_processor_requires_default_constructor
+        wio_invalid_attribute_derive_member_default_parameter
         wio_invalid_attribute_around_requires_proceed_contract
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )

@@ -8582,7 +8582,17 @@ namespace wio::codegen
                 }
             }
 
-            emit(Mangler::mangleFunction(calleeSym->name, mangledFunctionType->paramTypes, scopePath));
+            if (calleeSym->flags.get_isDerived())
+            {
+                emit("wio::runtime::Ref<" + calleeSym->derivedProcessorCppType + ">::Create()->");
+                emit(Mangler::mangleFunction(
+                    extensionImplementation->name,
+                    mangledFunctionType->paramTypes));
+            }
+            else
+            {
+                emit(Mangler::mangleFunction(calleeSym->name, mangledFunctionType->paramTypes, scopePath));
+            }
         }
         else
         {

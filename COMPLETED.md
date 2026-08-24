@@ -44,12 +44,15 @@ Notes:
 - [x] Method reflection exposes behavioral processors in effective execution
       order, including attribute identity, processor type, phase, hook, and
       invocation mode; `Describe<T>()` includes the same pipeline per method.
-- [x] Unsupported processor/target combinations and not-yet-enabled derive
-      execution are diagnosed instead of being accepted as silent metadata.
+- [x] Bounded checked derives expose marked processor methods as real members
+      on concrete component/object targets. Calls receive the target through a
+      hidden `any` receiver and use an isolated default-constructed processor;
+      generic targets, unsafe method shapes, conflicts, and ambiguous derives
+      fail during analysis instead of becoming silent metadata.
 - [x] Runtime type reflection exposes structured attribute descriptors with
       stable FNV-1a identity, retention, origin, normalized arguments, and
       default provenance while retaining the legacy string view.
-- [x] The focused foundation matrix passes 22/22 new tests.
+- [x] The focused processor foundation matrix passes 25/25 new tests.
 
 ## v0.13 language coherence and SDK parity sprint
 

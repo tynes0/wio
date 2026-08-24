@@ -70,6 +70,8 @@ namespace wio::sema
         uint32_t loopDepth_ = 0;
         bool isDeclarationPass_ = true;
         bool isStructResolutionPass_ = false;
+        bool isAttributeContractPass_ = false;
+        bool isDeriveExpansionPass_ = false;
         bool seenModuleApiVersion_ = false;
         bool seenModuleLoad_ = false;
         bool seenModuleUpdate_ = false;
@@ -100,6 +102,9 @@ namespace wio::sema
                                            bool validateTarget = true);
         void applyActiveScopedAttributes(std::vector<NodePtr<AttributeStatement>>& attributes,
                                          std::string_view target);
+        void registerDerivedMethods(std::vector<NodePtr<AttributeStatement>>& attributes,
+                                    const Ref<Type>& targetType,
+                                    std::string_view target);
 
         std::unordered_set<std::string> validatedGenericFunctionBodyKeys_;
         std::unordered_set<std::string> validatingGenericFunctionBodyKeys_;

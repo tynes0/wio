@@ -7203,6 +7203,35 @@ namespace wio::sema
         }
         
         isStructResolutionPass_ = false;
+
+        // Freeze processor contracts after all type/member signatures exist,
+        // then register checked derive members before ordinary bodies resolve
+        // member access. Both passes are declaration-order independent.
+        isAttributeContractPass_ = true;
+        for (auto& stmt : node.statements)
+        {
+            if (stmt->is<AttributeDeclaration>() ||
+                stmt->is<DeclarationGroup>() ||
+                stmt->is<RealmDeclaration>())
+            {
+                stmt->accept(*this);
+            }
+        }
+        isAttributeContractPass_ = false;
+
+        isDeriveExpansionPass_ = true;
+        for (auto& stmt : node.statements)
+        {
+            if (stmt->is<ComponentDeclaration>() ||
+                stmt->is<ObjectDeclaration>() ||
+                stmt->is<DeclarationGroup>() ||
+                stmt->is<RealmDeclaration>())
+            {
+                stmt->accept(*this);
+            }
+        }
+        isDeriveExpansionPass_ = false;
+
         activeScopedAttributes_.clear();
         for (auto& stmt : node.statements)
             stmt->accept(*this);
@@ -10695,9 +10724,12 @@ namespace wio::sema
                             extensionSymbol->definitionLoc);
                         callableSymbol->scopePath = extensionSymbol->scopePath;
                         callableSymbol->flags.set_isExtension(true);
+                        if (extensionSymbol->flags.get_isDerived())
+                            callableSymbol->flags.set_isDerived(true);
                         callableSymbol->extensionTargetType = extensionSymbol->extensionTargetType;
                         callableSymbol->extensionMemberName = extensionSymbol->extensionMemberName;
                         callableSymbol->extensionImplementation = extensionSymbol;
+                        callableSymbol->derivedProcessorCppType = extensionSymbol->derivedProcessorCppType;
                         callableSymbol->genericParameterNames = extensionSymbol->genericParameterNames;
                         callableSymbol->genericParameterTypes = extensionSymbol->genericParameterTypes;
                         callableSymbol->genericParameterDefaults = extensionSymbol->genericParameterDefaults;
@@ -11419,7 +11451,12 @@ namespace wio::sema
                                                        const Ref<FunctionType>& functionType) -> size_t
         {
             if (const auto* functionDeclaration = getFunctionDeclarationForSymbol(symbol))
-                return getRequiredArgumentCountForDeclaration(functionDeclaration, functionType);
+            {
+                size_t requiredCount = getRequiredArgumentCountForDeclaration(functionDeclaration, functionType);
+                if (symbol && symbol->flags.get_isDerived() && requiredCount > 0)
+                    --requiredCount;
+                return requiredCount;
+            }
 
             if (functionType && functionType->hasParameterPack)
                 return functionType->paramTypes.empty() ? 0 : functionType->paramTypes.size() - 1;
@@ -14135,7 +14172,26 @@ namespace wio::sema
     void SemanticAnalyzer::visit(DeclarationGroup& node)
     {
         for (auto& declaration : node.declarations)
-            if (declaration) declaration->accept(*this);
+        {
+            if (!declaration)
+                continue;
+            if (isAttributeContractPass_ &&
+                !declaration->is<AttributeDeclaration>() &&
+                !declaration->is<DeclarationGroup>() &&
+                !declaration->is<RealmDeclaration>())
+            {
+                continue;
+            }
+            if (isDeriveExpansionPass_ &&
+                !declaration->is<ComponentDeclaration>() &&
+                !declaration->is<ObjectDeclaration>() &&
+                !declaration->is<DeclarationGroup>() &&
+                !declaration->is<RealmDeclaration>())
+            {
+                continue;
+            }
+            declaration->accept(*this);
+        }
     }
 
     void SemanticAnalyzer::validateAttributeApplications(
@@ -14250,10 +14306,14 @@ namespace wio::sema
                 }
                 if (processor.phase == "derive")
                 {
-                    WIO_LOG_ADD_ERROR(
-                        attribute->location(),
-                        "DeriveProcessor '{}' requires the checked declaration-builder contract, which is not enabled yet.",
-                        processor.canonicalTypeName);
+                    if (target != "component" && target != "object")
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            attribute->location(),
+                            "DeriveProcessor '{}' can target only components or objects, not '{}'.",
+                            processor.canonicalTypeName,
+                            target);
+                    }
                 }
             }
 
@@ -14955,6 +15015,251 @@ namespace wio::sema
         }
     }
 
+    void SemanticAnalyzer::registerDerivedMethods(
+        std::vector<NodePtr<AttributeStatement>>& attributes,
+        const Ref<Type>& targetType,
+        std::string_view target)
+    {
+        Ref<Type> resolvedTarget = unwrapAliasType(targetType);
+        if (!resolvedTarget || resolvedTarget->kind() != TypeKind::Struct)
+            return;
+
+        auto targetStruct = resolvedTarget.AsFast<StructType>();
+        if (!targetStruct || (target != "component" && target != "object"))
+            return;
+
+        auto findDeriveMemberMarker = [&](const FunctionDeclaration* declaration)
+            -> const AttributeStatement*
+        {
+            if (!declaration)
+                return nullptr;
+            for (const auto& application : declaration->attributes)
+            {
+                if (!application || application->attribute != Attribute::Unknown)
+                    continue;
+                std::string canonicalName = application->canonicalName;
+                if (canonicalName.empty())
+                {
+                    Ref<Symbol> marker = resolveQualifiedSymbol(currentScope_, application->qualifiedName);
+                    if (marker && marker->kind == SymbolKind::Attribute)
+                        canonicalName = marker->attributeCanonicalName;
+                }
+                if (canonicalName == "std::attribute::DeriveMember")
+                    return application.Get();
+            }
+            return nullptr;
+        };
+
+        std::vector<std::pair<const AttributeStatement*, Ref<Symbol>>> effectiveAttributes;
+        std::function<void(const AttributeStatement*, const Ref<Symbol>&, std::unordered_set<const Symbol*>&)>
+            collectEffectiveAttribute =
+                [&](const AttributeStatement* sourceApplication,
+                    const Ref<Symbol>& symbol,
+                    std::unordered_set<const Symbol*>& active)
+                {
+                    if (!sourceApplication || !symbol || symbol->kind != SymbolKind::Attribute)
+                        return;
+                    if (!active.insert(symbol.Get()).second)
+                        return;
+
+                    effectiveAttributes.emplace_back(sourceApplication, symbol);
+                    for (const auto& composed : symbol->attributeComposition)
+                    {
+                        if (!composed || composed->attribute != Attribute::Unknown)
+                            continue;
+                        Ref<Symbol> composedSymbol = resolveQualifiedSymbol(currentScope_, composed->qualifiedName);
+                        collectEffectiveAttribute(sourceApplication, composedSymbol, active);
+                    }
+                    active.erase(symbol.Get());
+                };
+
+        for (const auto& application : attributes)
+        {
+            if (!application || application->attribute != Attribute::Unknown)
+                continue;
+
+            Ref<Symbol> attributeSymbol = resolveQualifiedSymbol(currentScope_, application->qualifiedName);
+            if (!attributeSymbol || attributeSymbol->kind != SymbolKind::Attribute)
+                continue;
+
+            std::unordered_set<const Symbol*> active;
+            collectEffectiveAttribute(application.Get(), attributeSymbol, active);
+        }
+
+        for (const auto& [application, attributeSymbol] : effectiveAttributes)
+        {
+            for (size_t processorIndex = 0;
+                 processorIndex < attributeSymbol->attributeProcessorPhases.size();
+                 ++processorIndex)
+            {
+                if (attributeSymbol->attributeProcessorPhases[processorIndex] != "derive")
+                    continue;
+
+                const std::string processorName =
+                    processorIndex < attributeSymbol->attributeProcessorCanonicalTypes.size()
+                        ? attributeSymbol->attributeProcessorCanonicalTypes[processorIndex]
+                        : std::string{};
+                Ref<Symbol> processorSymbol = resolveQualifiedSymbol(currentScope_, processorName);
+                if (!processorSymbol || !processorSymbol->innerScope)
+                    continue;
+
+                if (!targetStruct->genericParameterNames.empty())
+                {
+                    WIO_LOG_ADD_ERROR(
+                        application->location(),
+                        "Checked derive members on generic target '{}' require typed target specialization and are not enabled yet.",
+                        resolvedTarget->toString());
+                    continue;
+                }
+
+                bool hasDefaultConstructor = true;
+                if (Ref<Symbol> constructors = processorSymbol->innerScope->resolveLocally("OnConstruct"))
+                {
+                    hasDefaultConstructor = false;
+                    std::vector<Ref<Symbol>> constructorCandidates;
+                    if (constructors->kind == SymbolKind::FunctionGroup)
+                        constructorCandidates = constructors->overloads;
+                    else if (constructors->kind == SymbolKind::Function)
+                        constructorCandidates.push_back(constructors);
+                    for (const Ref<Symbol>& constructor : constructorCandidates)
+                    {
+                        Ref<FunctionType> constructorType = constructor && constructor->type
+                            ? constructor->type.AsFast<FunctionType>()
+                            : nullptr;
+                        if (constructorType && constructorType->paramTypes.empty())
+                        {
+                            hasDefaultConstructor = true;
+                            break;
+                        }
+                    }
+                }
+                if (!hasDefaultConstructor)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        application->location(),
+                        "DeriveProcessor '{}' must be default constructible because each derived call owns an isolated processor instance.",
+                        processorName);
+                    continue;
+                }
+
+                const std::string processorCppType =
+                    processorIndex < attributeSymbol->attributeProcessorCppTypes.size()
+                        ? attributeSymbol->attributeProcessorCppTypes[processorIndex]
+                        : std::string{};
+
+                bool sawDerivedMember = false;
+                for (const auto& [_, member] : processorSymbol->innerScope->getSymbols())
+                {
+                    std::vector<Ref<Symbol>> candidates;
+                    if (member && member->kind == SymbolKind::FunctionGroup)
+                        candidates = member->overloads;
+                    else if (member && member->kind == SymbolKind::Function)
+                        candidates.push_back(member);
+
+                    for (const Ref<Symbol>& methodSymbol : candidates)
+                    {
+                        auto declarationIt = functionDeclarationsBySymbol_.find(methodSymbol.Get());
+                        const FunctionDeclaration* declaration =
+                            declarationIt == functionDeclarationsBySymbol_.end()
+                                ? nullptr
+                                : declarationIt->second;
+                        const AttributeStatement* marker = findDeriveMemberMarker(declaration);
+                        if (!marker)
+                            continue;
+                        sawDerivedMember = true;
+
+                        Ref<FunctionType> methodType = methodSymbol && methodSymbol->type
+                            ? methodSymbol->type.AsFast<FunctionType>()
+                            : nullptr;
+                        Ref<Type> receiverType = methodType && !methodType->paramTypes.empty()
+                            ? unwrapAliasType(methodType->paramTypes.front())
+                            : nullptr;
+                        const bool receiverIsAny = receiverType &&
+                            receiverType->kind() == TypeKind::Primitive &&
+                            receiverType.AsFast<PrimitiveType>()->name == "any";
+                        const bool hasDefaultedPublicParameter = declaration &&
+                            std::ranges::any_of(
+                                declaration->parameters | std::views::drop(1),
+                                [](const Parameter& parameter)
+                                {
+                                    return parameter.defaultValue != nullptr;
+                                });
+                        if (!declaration || !methodType || !receiverIsAny ||
+                            !methodSymbol->flags.get_isPublic() || declaration->isAsync ||
+                            !declaration->genericParameters.empty() ||
+                            methodType->hasParameterPack || hasDefaultedPublicParameter ||
+                            hasAttribute(declaration->attributes, Attribute::Native))
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                marker->location(),
+                                "Derived member '{}.{}' must be a public, synchronous, non-generic Wio method whose first parameter is 'any' and whose public parameters have no defaults or packs.",
+                                processorName,
+                                methodSymbol ? methodSymbol->name : std::string("<unknown>"));
+                            continue;
+                        }
+
+                        std::string exposedName = methodSymbol->name;
+                        if (!marker->args.empty() && !marker->args.front().value.empty())
+                            exposedName = marker->args.front().value;
+
+                        if (exposedName == "OnConstruct" ||
+                            common::isOperatorOverloadName(exposedName))
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                marker->location(),
+                                "Derived member '{}' cannot define constructors or operators.",
+                                exposedName);
+                            continue;
+                        }
+
+                        if (auto scope = targetStruct->structScope.Lock();
+                            scope && scope->resolveLocally(exposedName))
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                application->location(),
+                                "Derived member '{}' conflicts with an existing member on '{}'.",
+                                exposedName,
+                                resolvedTarget->toString());
+                            continue;
+                        }
+
+                        auto& methods = extensionMethods_[resolvedTarget.Get()];
+                        if (methods.contains(exposedName))
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                application->location(),
+                                "Derived member '{}' is ambiguous for '{}'.",
+                                exposedName,
+                                resolvedTarget->toString());
+                            continue;
+                        }
+
+                        Ref<Symbol> derived = createSymbol(
+                            methodSymbol->name,
+                            methodType,
+                            SymbolKind::Function,
+                            application->location());
+                        derived->scopePath = methodSymbol->scopePath;
+                        derived->flags.set_isExtension(true);
+                        derived->flags.set_isDerived(true);
+                        derived->extensionTargetType = resolvedTarget;
+                        derived->extensionMemberName = exposedName;
+                        derived->extensionImplementation = methodSymbol;
+                        derived->derivedProcessorCppType = processorCppType;
+                        methods.emplace(exposedName, std::move(derived));
+                    }
+                }
+                if (!sawDerivedMember)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        application->location(),
+                        "DeriveProcessor '{}' must expose at least one method with [std::attribute::DeriveMember].",
+                        processorName);
+                }
+            }
+        }
+    }
+
     void SemanticAnalyzer::visit(UsingAttributeStatement& node)
     {
         if (!node.attribute) return;
@@ -15100,52 +15405,58 @@ namespace wio::sema
             return;
         }
 
-        for (size_t index = 0; index < node.parameters.size(); ++index)
+        if (!isAttributeContractPass_)
         {
-            auto& parameter = node.parameters[index];
-            if (!parameter.defaultValue)
-                continue;
-
-            parameter.defaultValue->accept(*this);
-            Ref<Type> actualType = parameter.defaultValue->refType.Lock();
-            Ref<Type> expectedType = parameter.type ? parameter.type->refType.Lock() : nullptr;
-            if (expectedType && actualType &&
-                !expectedType->isUnknown() && !actualType->isUnknown() &&
-                !isAssignmentLikeCompatible(expectedType, actualType))
+            for (size_t index = 0; index < node.parameters.size(); ++index)
             {
-                WIO_LOG_ADD_ERROR(
-                    parameter.defaultValue->location(),
-                    "Default value for attribute parameter '{}' must be '{}', got '{}'.",
-                    parameter.name ? parameter.name->token.value : std::to_string(index),
-                    expectedType->toString(),
-                    actualType->toString()
-                );
-            }
+                auto& parameter = node.parameters[index];
+                if (!parameter.defaultValue)
+                    continue;
 
-            Ref<Symbol> symbol = node.name ? node.name->referencedSymbol.Lock() : nullptr;
-            if (symbol && index < symbol->attributeParameterDefaults.size())
-            {
-                std::unordered_set<const Symbol*> activeSymbols;
-                if (auto folded = tryEvaluateStaticAttributeConstant(
-                        parameter.defaultValue,
-                        variableDeclarationsBySymbol_,
-                        activeSymbols))
-                {
-                    symbol->attributeParameterDefaults[index] = std::move(*folded);
-                }
-                else
+                parameter.defaultValue->accept(*this);
+                Ref<Type> actualType = parameter.defaultValue->refType.Lock();
+                Ref<Type> expectedType = parameter.type ? parameter.type->refType.Lock() : nullptr;
+                if (expectedType && actualType &&
+                    !expectedType->isUnknown() && !actualType->isUnknown() &&
+                    !isAssignmentLikeCompatible(expectedType, actualType))
                 {
                     WIO_LOG_ADD_ERROR(
                         parameter.defaultValue->location(),
-                        "Default value for attribute parameter '{}' must be a compile-time scalar, string, or text expression.",
-                        parameter.name ? parameter.name->token.value : std::to_string(index)
+                        "Default value for attribute parameter '{}' must be '{}', got '{}'.",
+                        parameter.name ? parameter.name->token.value : std::to_string(index),
+                        expectedType->toString(),
+                        actualType->toString()
                     );
+                }
+
+                Ref<Symbol> symbol = node.name ? node.name->referencedSymbol.Lock() : nullptr;
+                if (symbol && index < symbol->attributeParameterDefaults.size())
+                {
+                    std::unordered_set<const Symbol*> activeSymbols;
+                    if (auto folded = tryEvaluateStaticAttributeConstant(
+                            parameter.defaultValue,
+                            variableDeclarationsBySymbol_,
+                            activeSymbols))
+                    {
+                        symbol->attributeParameterDefaults[index] = std::move(*folded);
+                    }
+                    else
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            parameter.defaultValue->location(),
+                            "Default value for attribute parameter '{}' must be a compile-time scalar, string, or text expression.",
+                            parameter.name ? parameter.name->token.value : std::to_string(index)
+                        );
+                    }
                 }
             }
         }
 
         Ref<Symbol> attributeSymbol = node.name ? node.name->referencedSymbol.Lock() : nullptr;
         if (!attributeSymbol)
+            return;
+
+        if (!isAttributeContractPass_ && !attributeSymbol->attributeProcessorPhases.empty())
             return;
 
         attributeSymbol->attributeProcessorPhases.clear();
@@ -17205,7 +17516,26 @@ namespace wio::sema
 
         for (auto& statement : node.statements)
         {
-            if (isStructResolutionPass_)
+            if (isAttributeContractPass_)
+            {
+                if (statement->is<AttributeDeclaration>() ||
+                    statement->is<DeclarationGroup>() ||
+                    statement->is<RealmDeclaration>())
+                {
+                    statement->accept(*this);
+                }
+            }
+            else if (isDeriveExpansionPass_)
+            {
+                if (statement->is<ComponentDeclaration>() ||
+                    statement->is<ObjectDeclaration>() ||
+                    statement->is<DeclarationGroup>() ||
+                    statement->is<RealmDeclaration>())
+                {
+                    statement->accept(*this);
+                }
+            }
+            else if (isStructResolutionPass_)
             {
                 if (statement->is<ComponentDeclaration>() ||
                     statement->is<ExtensionDeclaration>() ||
@@ -17436,6 +17766,12 @@ namespace wio::sema
         const std::string attributeTarget = node.attributeTargetOverride.empty()
             ? "component"
             : node.attributeTargetOverride;
+        if (isDeriveExpansionPass_)
+        {
+            Ref<Symbol> symbol = node.name ? node.name->referencedSymbol.Lock() : nullptr;
+            registerDerivedMethods(node.attributes, symbol ? symbol->type : nullptr, attributeTarget);
+            return;
+        }
         applyActiveScopedAttributes(node.attributes, attributeTarget);
         if (!isDeclarationPass_ && !isStructResolutionPass_)
             validateAttributeApplications(node.attributes, attributeTarget);
@@ -18072,6 +18408,12 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(ObjectDeclaration& node)
     {
+        if (isDeriveExpansionPass_)
+        {
+            Ref<Symbol> symbol = node.name ? node.name->referencedSymbol.Lock() : nullptr;
+            registerDerivedMethods(node.attributes, symbol ? symbol->type : nullptr, "object");
+            return;
+        }
         applyActiveScopedAttributes(node.attributes, "object");
         if (!isDeclarationPass_ && !isStructResolutionPass_)
             validateAttributeApplications(node.attributes, "object");

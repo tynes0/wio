@@ -27,19 +27,23 @@ Implemented foundation checkpoint:
   Proceed, runtime duplicate-call protection, and escaped-capability rejection;
 - method-level behavioral pipeline reflection exposing effective attribute,
   processor type, phase, hook, and mode in deterministic execution order;
+- bounded checked derives for concrete component/object targets: a public Wio
+  processor method marked `[std::attribute::DeriveMember]` becomes a typed
+  member surface, receives the target as a hidden `any` receiver, and executes
+  through an isolated default-constructed processor instance;
 - structured runtime type-attribute descriptors with stable IDs, origin,
   normalized argument metadata, and default provenance.
 
-Still open: target-aware validator contexts, checked declaration derives,
-typed argument/result hook contexts, statically typed receiver contexts,
-typed-result around and async behavioral lowering, the final removal of
-enum-only built-in lowering paths, C++ SDK pipeline descriptors, source
-migration/formatting, editor/web support, and Windows/Linux release
-qualification.
+Still open: target-aware validator contexts, typed/generic derive targets,
+derived fields/properties and richer checked builders, typed argument/result
+hook contexts, statically typed receiver contexts, typed-result around and
+async behavioral lowering, the final removal of enum-only built-in lowering
+paths, C++ SDK pipeline descriptors, source migration/formatting, editor/web
+support, and Windows/Linux release qualification.
 
 No processor capability is accepted as a silent no-op: behavioral processors
-on non-callable targets and derive applications before the checked builder is
-available are explicit compile-time errors.
+on non-callable targets and malformed or unsupported derive applications are
+explicit compile-time errors.
 
 This document supersedes the earlier postfix `with` attribute proposal. The
 canonical source spelling is a declaration-leading bracket list:
@@ -255,6 +259,38 @@ implementation feedback, but the semantic rules are fixed:
   function values all enter through the same callee-side contract;
 - processor expansion is deterministic, cycle-checked, cacheable, and
   inspectable.
+
+The first checked derive slice intentionally adds methods rather than exposing
+mutable syntax trees or source generation:
+
+```wio
+[From(attribute::DeriveProcessor<any>)]
+object DescribeDerive {
+    [std::attribute::DeriveMember("Describe")]
+    public fn Build(receiver: any, prefix: string) -> string {
+        return prefix + "<derived>";
+    }
+}
+
+[attribute::Targets(object)]
+[attribute::Processor(DescribeDerive)]
+attribute Described();
+
+[Described]
+object User {}
+
+let user = User();
+let label = user.Describe("user:");
+```
+
+The target must currently be a concrete, non-generic component or object. A
+derived method is public, synchronous, non-generic Wio code; its first explicit
+parameter is `any`, and its remaining public parameters cannot use defaults or
+packs. The processor must be default constructible. Constructors, operators,
+native methods, name conflicts, ambiguous derives, and unsupported target
+shapes are rejected during analysis. These bounds keep derive deterministic
+and type-checked while typed target specialization and richer builders remain
+future extensions.
 
 The behavioral layer contains four independent interfaces:
 

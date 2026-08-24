@@ -1,0 +1,16 @@
+use std::attribute as attr;
+
+[From(attr::DeriveProcessor<any>)]
+object FunctionDerive {
+    [std::attribute::DeriveMember]
+    public fn Build(receiver: any) -> string { return "generated"; }
+}
+
+[attribute::Targets(fn)]
+[attribute::Processor(FunctionDerive)]
+attribute Derived();
+
+[Derived]
+fn Work() {}
+
+fn Entry() -> i32 { return 0; }

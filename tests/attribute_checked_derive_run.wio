@@ -1,0 +1,56 @@
+use std::assert as assert;
+use std::attribute as attr;
+use std::console as console;
+
+interface Named {
+    fn Name() -> string;
+}
+
+[From(attr::DeriveProcessor<any>)]
+object DescribeDerive {
+    [std::attribute::DeriveMember("Describe")]
+    public fn Build(receiver: any, prefix: string) -> string {
+        if (receiver is Named) {
+            let named = receiver fit Named;
+            return prefix + named.Name();
+        }
+        return prefix + "<unnamed>";
+    }
+}
+
+[attribute::Targets(object)]
+[attribute::Processor(DescribeDerive)]
+attribute Described();
+
+[attribute::Targets(object)]
+attribute Labeled()
+    compose [Described];
+
+[From(Named)]
+[Described]
+object User {
+    public name: string;
+
+    OnConstruct(value: string) { self.name = value; }
+
+    public fn Name() -> string { return self.name; }
+}
+
+[From(Named)]
+[Labeled]
+object Team {
+    public name: string;
+
+    OnConstruct(value: string) { self.name = value; }
+
+    public fn Name() -> string { return self.name; }
+}
+
+fn Entry() -> i32 {
+    let user = User("Ada");
+    assert::ExpectEqual(user.Describe("user:"), "user:Ada", "checked derive member dispatch");
+    let team = Team("Compiler");
+    assert::ExpectEqual(team.Describe("team:"), "team:Compiler", "composed checked derive dispatch");
+    console::PrintLine("attribute-checked-derive-ok");
+    return 0;
+}

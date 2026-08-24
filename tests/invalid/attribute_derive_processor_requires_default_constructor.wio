@@ -1,0 +1,18 @@
+use std::attribute as attr;
+
+[From(attr::DeriveProcessor<any>)]
+object StatefulDerive {
+    OnConstruct(prefix: string) {}
+
+    [std::attribute::DeriveMember("Describe")]
+    public fn Build(receiver: any) -> string { return "derived"; }
+}
+
+[attribute::Targets(object)]
+[attribute::Processor(StatefulDerive)]
+attribute Derived();
+
+[Derived]
+object Value {}
+
+fn Entry() -> i32 { return 0; }

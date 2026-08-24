@@ -90,14 +90,17 @@ here does not by itself mean that v1 cannot ship.
     recursive composition with argument substitution; effective-set target,
     require/require-any/conflict/only-with/exclusive/cardinality/order checks;
     the public `std::attribute` catalog; strict pre/post/finally/around phase
-    identity; and structured runtime type-attribute descriptors with stable
-    identity, origin, normalized arguments, and default provenance. Unify
-    compiler built-ins with user attributes in the same resolved symbol model;
-    then add executable validation/derive processors, behavioral lowering,
-    formatter/LSP/docs support, C++ SDK metadata, and automated edition-aware
-    migration. Add bounded, typed
-    behavioral attributes for entry guards, pre/postconditions, guaranteed
-    exit hooks, and eventually `around` interception. This includes
+    identity; structured runtime type-attribute descriptors with stable
+    identity, origin, normalized arguments, and default provenance; executable
+    compile-time validators; ordered synchronous pre/post/finally/around
+    lowering; receiver-aware guards; behavioral reflection; and bounded
+    checked derive methods on concrete component/object targets. Continue with
+    typed/generic derive contexts and richer checked builders, typed argument/
+    result processor contexts, async behavior, formatter/LSP/web support, C++
+    SDK metadata, automated edition-aware migration, and removal of remaining
+    privileged built-in lowering paths. The bounded behavioral model includes
+    entry guards, pre/postconditions, guaranteed exit hooks, and `around`
+    interception. This includes
     user-defined receiver-liveness guards for callbacks whose native peer may
     have been destroyed while the Wio wrapper remains alive. Effects must be
     type-checked, ordered explicitly, visible to tooling, and preserve
@@ -109,10 +112,10 @@ here does not by itself mean that v1 cannot ship.
     functions/interfaces. Typed applications already fold scalar, `string`,
     and `text` const references and materialize trailing defaults into runtime-
     reflection metadata. The normative delivery plan is
-    `docs/WIO_ATTRIBUTE_SYSTEM_PLAN.md`. Pre, post, finally, and around
-    processors are separate interfaces. The declarations and compatibility
-    vocabulary now exist in `std::attribute`, but compiler built-ins must stop
-    retaining a privileged lowering path before this item can close.
+    `docs/WIO_ATTRIBUTE_SYSTEM_PLAN.md`. Pre, post, finally, around, validator,
+    and derive processors are separate interfaces with checked executable
+    slices. Compiler built-ins must stop retaining a privileged lowering path
+    before this item can close.
 
 13. [~] Complete a language-coherence pass before broad surface expansion.
     The first 0.11 stabilization slice aligned scoped attributes, pipelines,

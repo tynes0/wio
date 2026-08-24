@@ -1,0 +1,16 @@
+use std::attribute as attr;
+
+[From(attr::DeriveProcessor<any>)]
+object GenericTargetDerive {
+    [std::attribute::DeriveMember("Describe")]
+    public fn Build(receiver: any) -> string { return "derived"; }
+}
+
+[attribute::Targets(component)]
+[attribute::Processor(GenericTargetDerive)]
+attribute Derived();
+
+[Derived]
+component Box<T> { value: T; }
+
+fn Entry() -> i32 { return 0; }
