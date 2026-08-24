@@ -15157,6 +15157,25 @@ namespace wio::sema
                     processorIndex < attributeSymbol->attributeProcessorCppTypes.size()
                         ? attributeSymbol->attributeProcessorCppTypes[processorIndex]
                         : std::string{};
+                Ref<Type> processorTargetType =
+                    processorIndex < attributeSymbol->attributeProcessorTargetTypes.size()
+                        ? unwrapAliasType(attributeSymbol->attributeProcessorTargetTypes[processorIndex])
+                        : nullptr;
+                const bool processorTargetIsAny = processorTargetType &&
+                    processorTargetType->kind() == TypeKind::Primitive &&
+                    processorTargetType.AsFast<PrimitiveType>()->name == "any";
+                if (processorTargetType && !processorTargetIsAny &&
+                    !isTypeDerivedFrom(resolvedTarget, processorTargetType))
+                {
+                    WIO_LOG_ADD_ERROR(
+                        application->location(),
+                        "DeriveProcessor '{}' requires a target compatible with '{}', but attribute '{}' is applied to '{}'.",
+                        processorName,
+                        processorTargetType->toString(),
+                        attributeSymbol->attributeCanonicalName,
+                        resolvedTarget->toString());
+                    continue;
+                }
 
                 bool sawDerivedMember = false;
                 for (const auto& [_, member] : processorSymbol->innerScope->getSymbols())
@@ -15188,6 +15207,15 @@ namespace wio::sema
                         const bool receiverIsAny = receiverType &&
                             receiverType->kind() == TypeKind::Primitive &&
                             receiverType.AsFast<PrimitiveType>()->name == "any";
+                        const auto receiverReference = receiverType && receiverType->kind() == TypeKind::Reference
+                            ? receiverType.AsFast<ReferenceType>()
+                            : nullptr;
+                        Ref<Type> typedReceiverTarget = receiverReference
+                            ? unwrapAliasType(receiverReference->referredType)
+                            : nullptr;
+                        const bool receiverMatchesTargetContract = processorTargetType &&
+                            !processorTargetIsAny && receiverReference && !receiverReference->isMutable &&
+                            typedReceiverTarget && typedReceiverTarget->isCompatibleWith(processorTargetType);
                         const bool hasDefaultedPublicParameter = declaration &&
                             std::ranges::any_of(
                                 declaration->parameters | std::views::drop(1),
@@ -15195,7 +15223,8 @@ namespace wio::sema
                                 {
                                     return parameter.defaultValue != nullptr;
                                 });
-                        if (!declaration || !methodType || !receiverIsAny ||
+                        if (!declaration || !methodType ||
+                            (!receiverIsAny && !receiverMatchesTargetContract) ||
                             !methodSymbol->flags.get_isPublic() || declaration->isAsync ||
                             !declaration->genericParameters.empty() ||
                             methodType->hasParameterPack || hasDefaultedPublicParameter ||
@@ -15203,7 +15232,7 @@ namespace wio::sema
                         {
                             WIO_LOG_ADD_ERROR(
                                 marker->location(),
-                                "Derived member '{}.{}' must be a public, synchronous, non-generic Wio method whose first parameter is 'any' and whose public parameters have no defaults or packs.",
+                                "Derived member '{}.{}' must be a public, synchronous, non-generic Wio method whose first parameter is 'any' or an immutable view of its DeriveProcessor target contract, and whose public parameters have no defaults or packs.",
                                 processorName,
                                 methodSymbol ? methodSymbol->name : std::string("<unknown>"));
                             continue;
@@ -15471,6 +15500,7 @@ namespace wio::sema
             return;
 
         attributeSymbol->attributeProcessorPhases.clear();
+        attributeSymbol->attributeProcessorTargetTypes.clear();
         attributeSymbol->attributeProcessorCanonicalTypes.clear();
         attributeSymbol->attributeProcessorCppTypes.clear();
         attributeSymbol->attributeProcessorHookCppNames.clear();
@@ -15493,6 +15523,7 @@ namespace wio::sema
             }
 
             std::unordered_set<std::string> phases;
+            Ref<Type> processorTargetType = nullptr;
             std::unordered_set<const Type*> visitedTypes;
             std::function<void(const Ref<Type>&)> collectPhases = [&](const Ref<Type>& candidate)
             {
@@ -15501,8 +15532,12 @@ namespace wio::sema
                     return;
                 auto structure = resolved.AsFast<StructType>();
                 const std::string& typeName = structure->name;
-                if (typeName == "Validator") phases.insert("validation");
-                else if (typeName == "DeriveProcessor") phases.insert("derive");
+                if (typeName == "Validator" || typeName == "DeriveProcessor")
+                {
+                    phases.insert(typeName == "Validator" ? "validation" : "derive");
+                    if (!structure->genericArguments.empty())
+                        processorTargetType = structure->genericArguments.front();
+                }
                 else if (typeName == "PreProcessor") phases.insert("pre");
                 else if (typeName == "PostProcessor") phases.insert("post");
                 else if (typeName == "FinallyProcessor") phases.insert("finally");
@@ -15523,6 +15558,7 @@ namespace wio::sema
 
             const std::string phase = *phases.begin();
             attributeSymbol->attributeProcessorPhases.push_back(phase);
+            attributeSymbol->attributeProcessorTargetTypes.push_back(processorTargetType);
             attributeSymbol->attributeProcessorCanonicalTypes.push_back(
                 processorSymbol->scopePath.empty()
                     ? processorSymbol->name

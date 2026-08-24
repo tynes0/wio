@@ -47,14 +47,15 @@ Notes:
 - [x] Bounded checked derives expose marked processor methods as real members
       on concrete and generic component/object targets. Every concrete generic
       instantiation inherits its generic primary declaration surface.
-      Calls receive the target through a hidden `any` receiver and use an
-      isolated default-constructed processor; unsafe method shapes, conflicts,
-      and ambiguous derives fail during analysis instead of becoming silent
-      metadata.
+      Calls receive the target through a hidden `any` receiver or an immutable
+      typed contract view from `DeriveProcessor<TTarget>` and use an isolated
+      default-constructed processor. Incompatible targets, unsafe method
+      shapes, conflicts, and ambiguous derives fail during analysis instead of
+      becoming silent metadata.
 - [x] Runtime type reflection exposes structured attribute descriptors with
       stable FNV-1a identity, retention, origin, normalized arguments, and
       default provenance while retaining the legacy string view.
-- [x] The focused processor foundation matrix passes 25/25 new tests.
+- [x] The focused processor foundation matrix passes 27/27 new tests.
 
 ## v0.13 language coherence and SDK parity sprint
 

@@ -59,9 +59,9 @@ realm std {
         // Proceed may be used zero or one time and cannot escape the
         // invocation. DeriveProcessor may expose bounded checked methods with
         // [DeriveMember]; concrete and generic component/object targets receive
-        // a hidden `any` receiver. Typed-result, statically typed derive
-        // contexts, and async processors remain closed until their contracts
-        // land.
+        // a hidden `any` receiver or an immutable view of the processor's typed
+        // target contract. Typed-result and async processors remain closed
+        // until their contracts land.
         interface Validator<TTarget> {}
         interface DeriveProcessor<TTarget> {}
         interface PreProcessor {}
@@ -88,9 +88,10 @@ realm std {
         attribute Implies(values: string[]) for attribute retain compile;
         attribute Processor(processorType: string) for attribute retain compile repeatable;
         // Marks a public DeriveProcessor method as a checked generated member.
-        // Its first explicit parameter is the hidden target receiver (`any` in
-        // the initial bounded model); remaining parameters form the public
-        // method surface. The optional name overrides the exposed member name.
+        // Its first explicit parameter is the hidden target receiver (`any` or
+        // an immutable view of DeriveProcessor<TTarget>); remaining parameters
+        // form the public method surface. The optional name overrides the
+        // exposed member name.
         attribute DeriveMember(name: string = "") for method retain compile;
 
         // Compiler-supported language attributes. Their declarations are the

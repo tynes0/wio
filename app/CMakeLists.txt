@@ -3522,6 +3522,17 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "attribute-checked-derive-generic-ok"
         --run
     )
+    add_wio_output_test(
+        wio_test_attribute_checked_derive_typed_receiver_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_checked_derive_typed_receiver_run.wio"
+        "attribute-checked-derive-typed-receiver-ok"
+        --run
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_derive_typed_target_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_derive_typed_target_mismatch.wio"
+        "requires a target compatible with 'Named'"
+    )
     add_wio_failure_test(
         wio_invalid_attribute_derive_processor_requires_default_constructor
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_derive_processor_requires_default_constructor.wio"
@@ -3556,6 +3567,8 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_attribute_derive_member_requires_any_receiver
         wio_invalid_attribute_derive_wrong_target
         wio_test_attribute_checked_derive_generic_run
+        wio_test_attribute_checked_derive_typed_receiver_run
+        wio_invalid_attribute_derive_typed_target_mismatch
         wio_invalid_attribute_derive_processor_requires_default_constructor
         wio_invalid_attribute_derive_member_default_parameter
         wio_invalid_attribute_around_requires_proceed_contract

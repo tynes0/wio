@@ -96,7 +96,7 @@ here does not by itself mean that v1 cannot ship.
     lowering; receiver-aware guards; behavioral reflection; and bounded
     checked derive methods on concrete and generic component/object targets,
     including primary-declaration surface inheritance by concrete
-    instantiations. Continue with statically typed derive contexts and richer
+    instantiations and immutable typed receiver contracts. Continue with richer
     checked builders, typed argument/result processor contexts, async behavior,
     formatter/LSP/web support, C++
     SDK metadata, automated edition-aware migration, and removal of remaining

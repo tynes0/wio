@@ -64,6 +64,9 @@ namespace wio::sema
         std::vector<std::string> attributeImpliedAttributes;
         std::vector<std::string> attributeProcessorTypes;
         std::vector<std::string> attributeProcessorPhases;
+        // Aligned with processor phases. Validator/derive interfaces may bind
+        // a target contract; null means the phase has no target type.
+        std::vector<Ref<Type>> attributeProcessorTargetTypes;
         std::vector<std::string> attributeProcessorCanonicalTypes;
         std::vector<std::string> attributeProcessorCppTypes;
         std::vector<std::string> attributeProcessorHookCppNames;

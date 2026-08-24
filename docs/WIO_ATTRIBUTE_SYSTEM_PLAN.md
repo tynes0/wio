@@ -29,13 +29,14 @@ Implemented foundation checkpoint:
   processor type, phase, hook, and mode in deterministic execution order;
 - bounded checked derives for concrete and generic component/object targets: a
   public Wio processor method marked `[std::attribute::DeriveMember]` becomes a
-  typed member surface, receives the target as a hidden `any` receiver, and
-  executes through an isolated default-constructed processor instance;
+  typed member surface, receives the target as a hidden `any` receiver or an
+  immutable view of its `DeriveProcessor<TTarget>` contract, and executes
+  through an isolated default-constructed processor instance;
 - structured runtime type-attribute descriptors with stable IDs, origin,
   normalized argument metadata, and default provenance.
 
-Still open: target-aware validator contexts, statically typed derive contexts,
-derived fields/properties and richer checked builders, typed argument/result
+Still open: target-aware validator contexts, derived fields/properties and
+richer checked builders, typed argument/result
 hook contexts, statically typed receiver contexts, typed-result around and
 async behavioral lowering, the final removal of enum-only built-in lowering
 paths, C++ SDK pipeline descriptors, source migration/formatting, editor/web
@@ -287,13 +288,15 @@ The target may be a concrete or generic component/object. A concrete generic
 instantiation inherits checked derives from its generic primary declaration
 surface, so one derive applies consistently to `Box<i32>` and
 `Box<string>` without regenerating unchecked source. A derived method is
-public, synchronous, non-generic Wio code; its first explicit parameter is
-currently `any`, and its remaining public parameters cannot use defaults or
-packs. The processor must be default constructible. Constructors, operators,
-native methods, name conflicts, ambiguous derives, and unsupported target
-shapes are rejected during analysis. These bounds keep derive deterministic
-and type-checked while statically typed target contexts and richer builders
-remain future extensions.
+public, synchronous, non-generic Wio code. Its first explicit parameter is
+either `any` or an immutable `view` of the `DeriveProcessor<TTarget>` contract.
+A typed contract is checked against every target before member registration,
+so `DeriveProcessor<Named>` can derive only objects implementing `Named`.
+Remaining public parameters cannot use defaults or packs. The processor must
+be default constructible. Constructors, operators, native methods, name
+conflicts, ambiguous derives, and unsupported target shapes are rejected during
+analysis. These bounds keep derive deterministic and type-checked while richer
+builders remain future extensions.
 
 The behavioral layer contains four independent interfaces:
 
