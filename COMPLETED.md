@@ -32,6 +32,9 @@ Notes:
 - [x] Bounded validators execute at compile time with constant diagnostics;
       synchronous pre, post, and exactly-once finally hooks execute on Wio
       function bodies with explicit diagnostics for still-closed edge cases.
+- [x] Behavioral processors honor topological `Before`/`After` dependencies;
+      source order is deterministic for unrelated processors and exit hooks
+      unwind in reverse order.
 - [x] Runtime type reflection exposes structured attribute descriptors with
       stable FNV-1a identity, retention, origin, normalized arguments, and
       default provenance while retaining the legacy string view.

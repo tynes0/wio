@@ -3413,6 +3413,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "pre>body>post>finally"
         --run
     )
+    add_wio_output_test(
+        wio_test_attribute_behavioral_ordering_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_behavioral_ordering_run.wio"
+        "first>second>body"
+        --run
+    )
     add_wio_failure_test(
         wio_invalid_attribute_behavioral_missing_hook
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_behavioral_missing_hook.wio"
@@ -3430,6 +3436,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
     set_tests_properties(
         wio_test_attribute_behavioral_pipeline_run
+        wio_test_attribute_behavioral_ordering_run
         wio_invalid_attribute_behavioral_missing_hook
         wio_invalid_attribute_behavioral_async_not_frozen
         wio_invalid_attribute_around_requires_proceed_contract

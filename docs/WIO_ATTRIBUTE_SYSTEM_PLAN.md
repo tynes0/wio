@@ -19,6 +19,8 @@ Implemented foundation checkpoint:
   `FinallyProcessor.Finally()` hooks with callee-side lowering, reverse exit
   ordering, successful-return evaluation before post hooks, and exactly-once
   finalization on normal/exceptional exits;
+- deterministic topological processor order from `Before`/`After`, with source
+  order as the stable tie-breaker and reverse-order exit unwinding;
 - structured runtime type-attribute descriptors with stable IDs, origin,
   normalized argument metadata, and default provenance.
 

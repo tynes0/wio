@@ -9185,10 +9185,17 @@ namespace wio::codegen
         std::vector<BehavioralProcessorInstance> behavioralProcessors;
         if (!isEmittingPrototypes_ && !node.isAsync && node.body && !isNative)
         {
+            std::vector<const AttributeStatement*> orderedAttributes;
+            orderedAttributes.reserve(node.attributes.size());
             for (const auto& attribute : node.attributes)
+                if (attribute)
+                    orderedAttributes.push_back(attribute.Get());
+            std::ranges::stable_sort(
+                orderedAttributes,
+                {},
+                &AttributeStatement::processorOrder);
+            for (const auto* attribute : orderedAttributes)
             {
-                if (!attribute)
-                    continue;
                 for (const auto& processor : attribute->processorBindings)
                 {
                     if ((processor.phase != "pre" && processor.phase != "post" && processor.phase != "finally") ||

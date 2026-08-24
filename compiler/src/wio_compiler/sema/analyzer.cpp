@@ -14804,6 +14804,89 @@ namespace wio::sema
             if (visitOrdering(name))
                 break;
         }
+
+        // Materialize one deterministic order for codegen/tooling. Source
+        // order breaks ties; Before/After contributes graph edges. Exit hooks
+        // reverse this order when they unwind.
+        std::vector<std::string> orderedNames;
+        std::unordered_map<std::string, size_t> firstSeen;
+        for (const auto& attribute : attributes)
+        {
+            if (!attribute || attribute->processorBindings.empty())
+                continue;
+            const std::string name = nameTail(
+                attribute->canonicalName.empty() ? attribute->qualifiedName : attribute->canonicalName);
+            if (!firstSeen.contains(name))
+            {
+                firstSeen.emplace(name, firstSeen.size());
+                orderedNames.push_back(name);
+            }
+        }
+
+        std::unordered_map<std::string, size_t> indegrees;
+        for (const std::string& name : orderedNames)
+            indegrees[name] = 0;
+        for (const auto& [source, destinations] : orderingEdges)
+        {
+            indegrees.try_emplace(source, 0);
+            for (const std::string& destination : destinations)
+            {
+                indegrees.try_emplace(destination, 0);
+                ++indegrees[destination];
+            }
+        }
+
+        std::vector<std::string> ready;
+        for (const auto& [name, degree] : indegrees)
+            if (degree == 0)
+                ready.push_back(name);
+        auto sourceRank = [&](const std::string& name)
+        {
+            const auto found = firstSeen.find(name);
+            return found == firstSeen.end() ? firstSeen.size() : found->second;
+        };
+        std::ranges::sort(ready, [&](const std::string& left, const std::string& right)
+        {
+            return sourceRank(left) < sourceRank(right);
+        });
+
+        std::vector<std::string> topologicalOrder;
+        while (!ready.empty())
+        {
+            std::string source = ready.front();
+            ready.erase(ready.begin());
+            topologicalOrder.push_back(source);
+            if (const auto edge = orderingEdges.find(source); edge != orderingEdges.end())
+            {
+                for (const std::string& destination : edge->second)
+                {
+                    auto degree = indegrees.find(destination);
+                    if (degree == indegrees.end() || degree->second == 0 || --degree->second != 0)
+                        continue;
+                    ready.push_back(destination);
+                    std::ranges::sort(ready, [&](const std::string& left, const std::string& right)
+                    {
+                        return sourceRank(left) < sourceRank(right);
+                    });
+                }
+            }
+        }
+
+        std::unordered_map<std::string, size_t> processorRanks;
+        for (size_t index = 0; index < topologicalOrder.size(); ++index)
+            processorRanks[topologicalOrder[index]] = index;
+        for (size_t sourceIndex = 0; sourceIndex < attributes.size(); ++sourceIndex)
+        {
+            const auto& attribute = attributes[sourceIndex];
+            if (!attribute)
+                continue;
+            const std::string name = nameTail(
+                attribute->canonicalName.empty() ? attribute->qualifiedName : attribute->canonicalName);
+            const auto rank = processorRanks.find(name);
+            attribute->processorOrder = rank == processorRanks.end()
+                ? sourceIndex
+                : rank->second;
+        }
     }
 
     void SemanticAnalyzer::applyActiveScopedAttributes(

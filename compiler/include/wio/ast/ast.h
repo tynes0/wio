@@ -841,6 +841,7 @@ namespace wio
         // Effective, declaration-ordered processors bound by semantic
         // analysis. Code generation never re-resolves attribute names.
         std::vector<ProcessorBinding> processorBindings;
+        size_t processorOrder = 0;
 
         AttributeStatement(Attribute _attribute, std::vector<Token> _args,
             std::vector<NodePtr<TypeSpecifier>> _typeArgs = {},
