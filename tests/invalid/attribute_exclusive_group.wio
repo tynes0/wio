@@ -1,0 +1,14 @@
+[attribute::Targets(component)]
+[attribute::Exclusive("storage")]
+attribute cached();
+
+[attribute::Targets(component)]
+[attribute::Exclusive("storage")]
+attribute live();
+
+[cached, live]
+component InvalidStorageMode {
+    value: i32;
+}
+
+fn Entry() -> i32 { return 0; }

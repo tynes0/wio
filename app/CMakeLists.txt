@@ -3432,6 +3432,26 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_parameter_wrong_target.wio"
         "cannot target 'parameter'"
     )
+    add_wio_failure_test(
+        wio_invalid_attribute_requires_any_missing
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_requires_any_missing.wio"
+        "requires at least one compatible attribute"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_only_with_violation
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_only_with_violation.wio"
+        "is not permitted alongside 'command_model'"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_exclusive_group
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_exclusive_group.wio"
+        "through conflict group 'storage'"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_cardinality_max
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_cardinality_max.wio"
+        "requires cardinality 0..2"
+    )
     set_tests_properties(
         wio_invalid_attribute_bracket_empty
         wio_invalid_attribute_bracket_trailing_comma
@@ -3441,6 +3461,10 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_attribute_processor_wrong_phase
         wio_invalid_attribute_ordering_cycle
         wio_invalid_attribute_parameter_wrong_target
+        wio_invalid_attribute_requires_any_missing
+        wio_invalid_attribute_only_with_violation
+        wio_invalid_attribute_exclusive_group
+        wio_invalid_attribute_cardinality_max
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 
