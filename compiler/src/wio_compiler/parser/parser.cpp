@@ -1287,17 +1287,9 @@ namespace wio
             if (match(TokenType::kwAttribute))
                 return parseAttributeDeclaration(std::move(attributes));
             if (match(TokenType::kwApplication))
-            {
-                if (!attributes.empty())
-                    utError("Application attributes must use the postfix 'with' clause.", attributes.front()->location());
-                return parseApplicationDeclaration();
-            }
+                return parseApplicationDeclaration(std::move(attributes));
             if (match(TokenType::kwSystem))
-            {
-                if (!attributes.empty())
-                    utError("System attributes must use the postfix 'with' clause.", attributes.front()->location());
-                return parseSystemDeclaration();
-            }
+                return parseSystemDeclaration(std::move(attributes));
             if (match(TokenType::kwFn))
                 return parseFunctionDeclaration(std::move(attributes));
             if (match(TokenType::kwAsync))
@@ -2030,14 +2022,14 @@ namespace wio
         return declaration;
     }
 
-    NodePtr<Statement> Parser::parseApplicationDeclaration()
+    NodePtr<Statement> Parser::parseApplicationDeclaration(
+        std::vector<NodePtr<AttributeStatement>> applicationAttributes)
     {
         const Token startToken = consume(TokenType::kwApplication);
         requiresAsyncModule_ = true;
         auto applicationName = makeNodePtr<Identifier>(consumeIdentifier());
         const Token applicationNameToken = applicationName->token;
 
-        std::vector<NodePtr<AttributeStatement>> applicationAttributes;
         parseWithAttributeClause(applicationAttributes);
         consume(TokenType::leftBrace);
 
@@ -2086,6 +2078,8 @@ namespace wio
         std::vector<std::string> ownedSystems;
         while (peek().isValid() && !match(TokenType::rightBrace))
         {
+            std::vector<NodePtr<AttributeStatement>> memberAttributes;
+            parseLeadingAttributes(memberAttributes);
             if (peek().type == TokenType::identifier && peek().value == "on")
             {
                 advance();
@@ -2104,10 +2098,12 @@ namespace wio
                 auto body = parseBlockStatement();
                 std::string methodName = lifecycle.value == "start" ? "Start" :
                     (lifecycle.value == "update" ? "Update" : "Close");
-                handlers.emplace(lifecycle.value, makeNodePtr<FunctionDeclaration>(
-                    std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier(methodName),
+                auto handler = makeNodePtr<FunctionDeclaration>(
+                    std::move(memberAttributes), makeIdentifier(methodName),
                     std::vector<NodePtr<Identifier>>{}, false, std::vector<Parameter>{}, nullptr,
-                    nullptr, nullptr, std::move(body), lifecycle.loc));
+                    nullptr, nullptr, std::move(body), lifecycle.loc);
+                handler->attributeTargetOverride = "handler";
+                handlers.emplace(lifecycle.value, std::move(handler));
                 continue;
             }
 
@@ -2139,7 +2135,7 @@ namespace wio
             fields.push_back(ComponentMember{
                 .attributes = {}, .access = AccessModifier::Public,
                 .declaration = makeNodePtr<VariableDeclaration>(
-                    std::vector<NodePtr<AttributeStatement>>{}, mutability, std::move(name),
+                    std::move(memberAttributes), mutability, std::move(name),
                     std::move(type), std::move(initializer), false, startToken.loc)
             });
             WIO_UNUSED(applicationOwned);
@@ -2166,6 +2162,7 @@ namespace wio
         auto component = makeNodePtr<ComponentDeclaration>(
             std::move(applicationAttributes), std::move(applicationName),
             std::vector<NodePtr<Identifier>>{}, false, std::move(fields), startToken.loc);
+        component->attributeTargetOverride = "application";
 
         auto addReceiver = [&](NodePtr<FunctionDeclaration>& method)
         {
@@ -2323,12 +2320,12 @@ namespace wio
         return makeNodePtr<DeclarationGroup>(std::move(declarations), startToken.loc);
     }
 
-    NodePtr<Statement> Parser::parseSystemDeclaration()
+    NodePtr<Statement> Parser::parseSystemDeclaration(
+        std::vector<NodePtr<AttributeStatement>> attributes)
     {
         const Token startToken = consume(TokenType::kwSystem);
         auto systemName = makeNodePtr<Identifier>(consumeIdentifier());
         const Token systemNameToken = systemName->token;
-        std::vector<NodePtr<AttributeStatement>> attributes;
         parseWithAttributeClause(attributes);
         consume(TokenType::leftBrace);
 
@@ -2341,6 +2338,8 @@ namespace wio
         std::unordered_map<std::string, NodePtr<FunctionDeclaration>> handlers;
         while (peek().isValid() && !match(TokenType::rightBrace))
         {
+            std::vector<NodePtr<AttributeStatement>> memberAttributes;
+            parseLeadingAttributes(memberAttributes);
             if (peek().type == TokenType::identifier && peek().value == "on")
             {
                 advance();
@@ -2358,10 +2357,12 @@ namespace wio
                 auto body = parseBlockStatement();
                 const std::string methodName = lifecycle.value == "start" ? "Start" :
                     (lifecycle.value == "update" ? "Update" : "Close");
-                handlers.emplace(lifecycle.value, makeNodePtr<FunctionDeclaration>(
-                    std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier(methodName),
+                auto handler = makeNodePtr<FunctionDeclaration>(
+                    std::move(memberAttributes), makeIdentifier(methodName),
                     std::vector<NodePtr<Identifier>>{}, false, std::vector<Parameter>{}, nullptr,
-                    nullptr, nullptr, std::move(body), lifecycle.loc));
+                    nullptr, nullptr, std::move(body), lifecycle.loc);
+                handler->attributeTargetOverride = "handler";
+                handlers.emplace(lifecycle.value, std::move(handler));
                 continue;
             }
 
@@ -2380,7 +2381,7 @@ namespace wio
             fields.push_back(ComponentMember{
                 .attributes = {}, .access = AccessModifier::Public,
                 .declaration = makeNodePtr<VariableDeclaration>(
-                    std::vector<NodePtr<AttributeStatement>>{}, mutability, std::move(name),
+                    std::move(memberAttributes), mutability, std::move(name),
                     std::move(type), std::move(initializer), false, startToken.loc)
             });
         }
@@ -2389,6 +2390,7 @@ namespace wio
         auto component = makeNodePtr<ComponentDeclaration>(
             std::move(attributes), std::move(systemName),
             std::vector<NodePtr<Identifier>>{}, false, std::move(fields), startToken.loc);
+        component->attributeTargetOverride = "system";
 
         auto addReceiver = [&](NodePtr<FunctionDeclaration>& method)
         {

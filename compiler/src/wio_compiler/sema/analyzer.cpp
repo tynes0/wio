@@ -15364,13 +15364,16 @@ namespace wio::sema
     
     void SemanticAnalyzer::visit(FunctionDeclaration& node)
     {
+        const std::string attributeTarget = !node.attributeTargetOverride.empty()
+            ? node.attributeTargetOverride
+            : (currentScope_->getKind() == ScopeKind::Struct ? "method" : "fn");
         applyActiveScopedAttributes(
             node.attributes,
-            currentScope_->getKind() == ScopeKind::Struct ? "method" : "fn");
+            attributeTarget);
         if (!isDeclarationPass_ && !isStructResolutionPass_)
             validateAttributeApplications(
                 node.attributes,
-                currentScope_->getKind() == ScopeKind::Struct ? "method" : "fn");
+                attributeTarget);
         for (auto& parameter : node.parameters)
         {
             applyActiveScopedAttributes(parameter.attributes, "parameter");
@@ -16895,9 +16898,12 @@ namespace wio::sema
 
     void SemanticAnalyzer::visit(ComponentDeclaration& node)
     {
-        applyActiveScopedAttributes(node.attributes, "component");
+        const std::string attributeTarget = node.attributeTargetOverride.empty()
+            ? "component"
+            : node.attributeTargetOverride;
+        applyActiveScopedAttributes(node.attributes, attributeTarget);
         if (!isDeclarationPass_ && !isStructResolutionPass_)
-            validateAttributeApplications(node.attributes, "component");
+            validateAttributeApplications(node.attributes, attributeTarget);
         const bool isExplicitSpecialization = hasAttribute(node.attributes, Attribute::Specialize);
 
         auto buildGenericTypeParameterScope = [&]() -> std::unordered_map<std::string, Ref<Type>>

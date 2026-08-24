@@ -947,6 +947,7 @@ namespace wio
         bool isAsync = false;
         bool isApplicationEntry = false;
         std::string applicationName;
+        std::string attributeTargetOverride;
 
         FunctionDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
             std::vector<NodePtr<Identifier>> _genericParameters, bool _hasGenericParameterPack, std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType, NodePtr<Expression> _whenCondition,
@@ -988,6 +989,7 @@ namespace wio
         std::vector<NodePtr<Identifier>> genericParameters;
         bool hasGenericParameterPack = false;
         std::vector<ComponentMember> members;
+        std::string attributeTargetOverride;
 
         ComponentDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
             std::vector<NodePtr<Identifier>> _genericParameters,
