@@ -3449,6 +3449,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         --run
     )
     add_wio_output_test(
+        wio_test_attribute_around_result_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_around_result_run.wio"
+        "attribute-around-result-ok"
+        --run
+    )
+    add_wio_output_test(
         wio_test_attribute_receiver_guard_run
         "${CMAKE_SOURCE_DIR}/tests/attribute_receiver_guard_run.wio"
         "attribute-receiver-guard-ok"
@@ -3473,12 +3479,18 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_attribute_behavioral_missing_hook
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_behavioral_missing_hook.wio"
-        "post processor 'BrokenPost' must declare parameterless"
+        "post processor 'BrokenPost' must declare"
+    )
+    add_wio_output_test(
+        wio_test_attribute_behavioral_async_result_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_behavioral_async_result_run.wio"
+        "attribute-behavioral-async-result-ok"
+        --run
     )
     add_wio_failure_test(
-        wio_invalid_attribute_behavioral_async_not_frozen
-        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_behavioral_async_not_frozen.wio"
-        "Behavioral attribute processors on async functions require the async processor contract"
+        wio_invalid_attribute_post_result_type_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_post_result_type_mismatch.wio"
+        "expects result type 'string'"
     )
     add_wio_failure_test(
         wio_invalid_attribute_behavioral_non_callable_target
@@ -3546,19 +3558,21 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(
         wio_invalid_attribute_around_requires_proceed_contract
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_around_requires_proceed_contract.wio"
-        "AroundProcessor currently requires a unit-returning function"
+        "expects result type 'void'"
     )
     set_tests_properties(
         wio_test_attribute_behavioral_pipeline_run
         wio_test_attribute_behavioral_ordering_run
         wio_test_attribute_around_pipeline_run
         wio_test_attribute_around_skip_run
+        wio_test_attribute_around_result_run
         wio_test_attribute_receiver_guard_run
         wio_test_attribute_behavioral_reflection_run
         wio_invalid_attribute_around_proceed_twice
         wio_invalid_attribute_around_proceed_escaped
         wio_invalid_attribute_behavioral_missing_hook
-        wio_invalid_attribute_behavioral_async_not_frozen
+        wio_test_attribute_behavioral_async_result_run
+        wio_invalid_attribute_post_result_type_mismatch
         wio_invalid_attribute_behavioral_non_callable_target
         wio_invalid_attribute_receiver_guard_free_function
         wio_invalid_attribute_boolean_guard_non_unit

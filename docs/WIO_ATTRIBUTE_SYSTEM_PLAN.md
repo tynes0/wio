@@ -19,12 +19,17 @@ Implemented foundation checkpoint:
   `FinallyProcessor.Finally()` hooks with callee-side lowering, reverse exit
   ordering, successful-return evaluation before post hooks, and exactly-once
   finalization on normal/exceptional exits;
+- typed `PostProcessor.After(result: T)` observation and
+  `FinallyProcessor.Finally(succeeded: bool)` outcomes, including coroutine
+  bodies where hooks execute on the coroutine's executor;
 - receiver-aware object-method pre hooks through `Before(receiver: any)`, with
   a boolean unit-return guard for callback-liveness and precondition patterns;
 - deterministic topological processor order from `Before`/`After`, with source
   order as the stable tie-breaker and reverse-order exit unwinding;
 - unit-returning synchronous `Around(proceed: fn())` lowering with zero-or-one
   Proceed, runtime duplicate-call protection, and escaped-capability rejection;
+- typed synchronous `Around(proceed: fn() -> T) -> T` result mapping and
+  type-correct replacement without invoking the original body;
 - method-level behavioral pipeline reflection exposing effective attribute,
   processor type, phase, hook, and mode in deterministic execution order;
 - bounded checked derives for concrete and generic component/object targets: a
@@ -36,11 +41,11 @@ Implemented foundation checkpoint:
   normalized argument metadata, and default provenance.
 
 Still open: target-aware validator contexts, derived fields/properties and
-richer checked builders, typed argument/result
-hook contexts, statically typed receiver contexts, typed-result around and
-async behavioral lowering, the final removal of enum-only built-in lowering
-paths, C++ SDK pipeline descriptors, source migration/formatting, editor/web
-support, and Windows/Linux release qualification.
+richer checked builders, typed argument contexts, statically typed pre-receiver
+contexts, the final removal of enum-only built-in lowering paths, C++ SDK
+pipeline descriptors, source migration/formatting, editor support, and
+Windows/Linux release qualification. Async around is deliberately outside the
+0.15 contract; it is rejected rather than accepted as a silent no-op.
 
 No processor capability is accepted as a silent no-op: behavioral processors
 on non-callable targets and malformed or unsupported derive applications are
@@ -302,10 +307,27 @@ The behavioral layer contains four independent interfaces:
 
 - `attribute::PreProcessor` for entry guards and preconditions;
 - `attribute::PostProcessor` for successful-return postconditions and
-  type-compatible result mapping;
+  typed result observation;
 - `attribute::FinallyProcessor` for guaranteed exit/finalization;
 - `attribute::AroundProcessor` for typed interception that may invoke the
   original body exactly once or produce a valid replacement outcome.
+
+Synchronous around hooks use the target's exact result type:
+
+```wio
+object ClampScore : attribute::AroundProcessor {
+    public fn Around(proceed: fn() -> i32) -> i32 {
+        return std::numeric::Clamp(proceed(), 0, 100);
+    }
+}
+```
+
+Pre/post/finally processors are valid on async Wio functions and execute inside
+the coroutine frame. Post receives the eventual result—not an uninitialized
+placeholder—and finally receives `true` for normal completion and `false` for
+an exception. Async around remains a compile-time error because preserving a
+single-call `Proceed` capability across suspension requires a different owned
+capability contract.
 
 An attribute may attach more than one processor, for example a transaction may
 use a pre processor to open state, a post processor to commit, and a finally

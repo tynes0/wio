@@ -1,0 +1,15 @@
+use std::attribute as attr;
+
+[From(attr::PostProcessor)]
+object StringPost {
+    public fn After(result: string) {}
+}
+
+[attribute::Targets(fn)]
+[attribute::Processor(StringPost)]
+attribute Observed();
+
+[Observed]
+fn Number() -> i32 { return 42; }
+
+fn Entry() -> i32 { return 0; }

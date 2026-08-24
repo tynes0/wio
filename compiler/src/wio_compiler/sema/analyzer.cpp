@@ -14309,7 +14309,10 @@ namespace wio::sema
                         : std::string{},
                     .hookMode = processorIndex < symbol->attributeProcessorHookModes.size()
                         ? symbol->attributeProcessorHookModes[processorIndex]
-                        : std::string{}
+                        : std::string{},
+                    .hookValueType = processorIndex < symbol->attributeProcessorHookValueTypes.size()
+                        ? symbol->attributeProcessorHookValueTypes[processorIndex]
+                        : nullptr
                 });
             }
             for (const auto& processor : attribute->processorBindings)
@@ -15505,6 +15508,7 @@ namespace wio::sema
         attributeSymbol->attributeProcessorCppTypes.clear();
         attributeSymbol->attributeProcessorHookCppNames.clear();
         attributeSymbol->attributeProcessorHookModes.clear();
+        attributeSymbol->attributeProcessorHookValueTypes.clear();
         attributeSymbol->attributeProcessorValidationResults.clear();
         attributeSymbol->attributeProcessorDiagnostics.clear();
         for (const std::string& processorName : node.processorTypes)
@@ -15567,6 +15571,7 @@ namespace wio::sema
                 codegen::Mangler::mangleStruct(processorSymbol->name, processorSymbol->scopePath));
             attributeSymbol->attributeProcessorHookCppNames.emplace_back();
             attributeSymbol->attributeProcessorHookModes.emplace_back();
+            attributeSymbol->attributeProcessorHookValueTypes.emplace_back();
             attributeSymbol->attributeProcessorValidationResults.push_back(-1);
             attributeSymbol->attributeProcessorDiagnostics.emplace_back();
 
@@ -15602,6 +15607,17 @@ namespace wio::sema
                                 receiverType.AsFast<PrimitiveType>()->name == "any";
                     hookMode = "receiver_any";
                 }
+                else if (validHook && phase == "post" && hook->parameters.size() == 1)
+                {
+                    attributeSymbol->attributeProcessorHookValueTypes.back() = hookType->paramTypes.front();
+                    hookMode = "result";
+                }
+                else if (validHook && phase == "finally" && hook->parameters.size() == 1)
+                {
+                    Ref<Type> outcomeType = unwrapAliasType(hookType->paramTypes.front());
+                    validHook = outcomeType == Compiler::get().getTypeContext().getBool();
+                    hookMode = "outcome_bool";
+                }
                 else if (validHook && !hook->parameters.empty())
                 {
                     validHook = false;
@@ -15626,12 +15642,20 @@ namespace wio::sema
                     }
                     else
                     {
-                        WIO_LOG_ADD_ERROR(
-                            node.location(),
-                            "{} processor '{}' must declare parameterless 'fn {}()'.",
-                            phase,
-                            processorName,
-                            methodName);
+                        if (phase == "post")
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                node.location(),
+                                "post processor '{}' must declare 'fn After()' or 'fn After(result: T)'.",
+                                processorName);
+                        }
+                        else
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                node.location(),
+                                "finally processor '{}' must declare 'fn Finally()' or 'fn Finally(succeeded: bool)'.",
+                                processorName);
+                        }
                     }
                 }
                 else
@@ -15659,20 +15683,23 @@ namespace wio::sema
                     ? proceedType.AsFast<FunctionType>()
                     : nullptr;
                 if (!hook || !hookType || hook->parameters.size() != 1 ||
-                    !hookType->returnType || !hookType->returnType->isVoid() ||
+                    !hookType->returnType ||
                     !proceedFunction || !proceedFunction->paramTypes.empty() ||
-                    !proceedFunction->returnType || !proceedFunction->returnType->isVoid())
+                    !proceedFunction->returnType ||
+                    !hookType->returnType->isCompatibleWith(proceedFunction->returnType))
                 {
                     WIO_LOG_ADD_ERROR(
                         node.location(),
-                        "around processor '{}' must declare 'fn Around(proceed: fn())'.",
+                        "around processor '{}' must declare 'fn Around(proceed: fn() -> T) -> T' (unit T may omit the return spelling).",
                         processorName);
                 }
                 else
                 {
                     attributeSymbol->attributeProcessorHookCppNames.back() =
                         codegen::Mangler::mangleFunction("Around", hookType->paramTypes);
-                    attributeSymbol->attributeProcessorHookModes.back() = "proceed";
+                    attributeSymbol->attributeProcessorHookValueTypes.back() = proceedFunction->returnType;
+                    attributeSymbol->attributeProcessorHookModes.back() =
+                        proceedFunction->returnType->isVoid() ? "proceed" : "proceed_result";
                 }
                 continue;
             }
@@ -16189,12 +16216,6 @@ namespace wio::sema
                                    processor.phase == "finally" || processor.phase == "around";
                         });
                 });
-            if (hasBehavioralProcessor && node.isAsync)
-            {
-                WIO_LOG_ADD_ERROR(
-                    node.location(),
-                    "Behavioral attribute processors on async functions require the async processor contract and are not available in this checkpoint.");
-            }
             if (hasBehavioralProcessor && (!node.body || hasAttribute(node.attributes, Attribute::Native)))
             {
                 WIO_LOG_ADD_ERROR(
@@ -16229,12 +16250,32 @@ namespace wio::sema
             Ref<FunctionType> attributedFunctionType = attributedFunctionSymbol
                 ? attributedFunctionSymbol->type.AsFast<FunctionType>()
                 : nullptr;
+            Ref<Type> attributedResultType = attributedFunctionType
+                ? unwrapAliasType(attributedFunctionType->returnType)
+                : nullptr;
+            if (node.isAsync && attributedResultType && attributedResultType->kind() == TypeKind::AsyncTask)
+                attributedResultType = unwrapAliasType(attributedResultType.AsFast<AsyncTaskType>()->valueType);
             for (const auto& attribute : node.attributes)
             {
                 if (!attribute)
                     continue;
                 for (const auto& processor : attribute->processorBindings)
                 {
+                    if (processor.phase == "post" && processor.hookMode == "result")
+                    {
+                        Ref<Type> hookResultType = unwrapAliasType(processor.hookValueType.Lock());
+                        if (!attributedResultType || attributedResultType->isVoid() || !hookResultType ||
+                            !attributedResultType->isCompatibleWith(hookResultType))
+                        {
+                            WIO_LOG_ADD_ERROR(
+                                attribute->location(),
+                                "Post processor '{}' expects result type '{}', but target '{}' returns '{}'.",
+                                processor.canonicalTypeName,
+                                hookResultType ? hookResultType->toString() : "<unknown>",
+                                node.name ? node.name->token.value : "<anonymous>",
+                                attributedResultType ? attributedResultType->toString() : "<unknown>");
+                        }
+                    }
                     if (processor.phase != "pre")
                         continue;
                     if (processor.hookMode.starts_with("receiver_any") &&
@@ -16248,8 +16289,7 @@ namespace wio::sema
                             processor.canonicalTypeName);
                     }
                     if (processor.hookMode.ends_with("_guard") &&
-                        (!attributedFunctionType || !attributedFunctionType->returnType ||
-                         !attributedFunctionType->returnType->isVoid()))
+                        (!attributedResultType || !attributedResultType->isVoid()))
                     {
                         WIO_LOG_ADD_ERROR(
                             attribute->location(),
@@ -16258,13 +16298,33 @@ namespace wio::sema
                     }
                 }
             }
-            if (hasAroundProcessor &&
-                (!attributedFunctionType || !attributedFunctionType->returnType ||
-                 !attributedFunctionType->returnType->isVoid()))
+            for (const auto& attribute : node.attributes)
+            {
+                if (!attribute)
+                    continue;
+                for (const auto& processor : attribute->processorBindings)
+                {
+                    if (processor.phase != "around")
+                        continue;
+                    Ref<Type> aroundResultType = unwrapAliasType(processor.hookValueType.Lock());
+                    if (!attributedResultType || !aroundResultType ||
+                        !attributedResultType->isCompatibleWith(aroundResultType))
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            attribute->location(),
+                            "Around processor '{}' expects result type '{}', but target '{}' returns '{}'.",
+                            processor.canonicalTypeName,
+                            aroundResultType ? aroundResultType->toString() : "<unknown>",
+                            node.name ? node.name->token.value : "<anonymous>",
+                            attributedResultType ? attributedResultType->toString() : "<unknown>");
+                    }
+                }
+            }
+            if (hasAroundProcessor && node.isAsync)
             {
                 WIO_LOG_ADD_ERROR(
                     node.location(),
-                    "AroundProcessor currently requires a unit-returning function; typed result Proceed is not enabled yet.");
+                    "AroundProcessor on async functions is not available; use pre/post/finally processors so cancellation and suspension remain explicit.");
             }
         }
         for (auto& parameter : node.parameters)

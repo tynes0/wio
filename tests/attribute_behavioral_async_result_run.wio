@@ -1,0 +1,51 @@
+use std::assert as assert;
+use std::attribute as attr;
+use std::console as console;
+use std::async as futures;
+
+mut Trace: string = "";
+mut Observed: i32 = 0;
+mut Succeeded: bool = false;
+
+[From(attr::PreProcessor)]
+object AsyncPre {
+    public fn Before() { Trace += "pre>"; }
+}
+
+[From(attr::PostProcessor)]
+object AsyncPost {
+    public fn After(result: i32) {
+        Observed = result;
+        Trace += "post>";
+    }
+}
+
+[From(attr::FinallyProcessor)]
+object AsyncFinally {
+    public fn Finally(succeeded: bool) {
+        Succeeded = succeeded;
+        Trace += "finally";
+    }
+}
+
+[attribute::Targets(fn)]
+[attribute::Processor(AsyncPre)]
+[attribute::Processor(AsyncPost)]
+[attribute::Processor(AsyncFinally)]
+attribute ObservedAsync();
+
+[ObservedAsync]
+async fn Work() -> i32 {
+    Trace += "body>";
+    return 42;
+}
+
+fn Entry() -> i32 {
+    let result = futures::BlockOn<i32>(Work());
+    assert::ExpectEqual(result, 42, "async behavioral result");
+    assert::ExpectEqual(Observed, 42, "typed post result");
+    assert::Expect(Succeeded, "finally success outcome");
+    assert::ExpectEqual(Trace, "pre>body>post>finally", "async behavioral phase order");
+    console::PrintLine("attribute-behavioral-async-result-ok");
+    return 0;
+}

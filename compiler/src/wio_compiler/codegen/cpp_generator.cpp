@@ -9252,7 +9252,7 @@ namespace wio::codegen
             std::string finalizedFlagName;
         };
         std::vector<BehavioralProcessorInstance> behavioralProcessors;
-        if (!isEmittingPrototypes_ && !node.isAsync && node.body && !isNative)
+        if (!isEmittingPrototypes_ && node.body && !isNative)
         {
             std::vector<const AttributeStatement*> orderedAttributes;
             orderedAttributes.reserve(node.attributes.size());
@@ -9273,6 +9273,8 @@ namespace wio::codegen
                     {
                         continue;
                     }
+                    if (node.isAsync && processor.phase == "around")
+                        continue;
                     const size_t index = behavioralProcessors.size();
                     behavioralProcessors.push_back(BehavioralProcessorInstance{
                         .phase = processor.phase,
@@ -10174,7 +10176,10 @@ namespace wio::codegen
                     [](const BehavioralProcessorInstance& processor) { return processor.phase == "around"; });
                 if (hasAroundProcessor)
                 {
-                    emitLine("auto _wio_attribute_core = [&]()");
+                    emitLine("auto _wio_attribute_core = [&]()" +
+                             std::string(currentFunctionReturnType_ && !currentFunctionReturnType_->isVoid()
+                                 ? " -> " + toCppType(currentFunctionReturnType_)
+                                 : ""));
                     emitLine("{");
                     indent();
                 }
@@ -10198,7 +10203,8 @@ namespace wio::codegen
                         const std::string invocation = processor.variableName + "->" +
                             processor.hookCppName + "(" + arguments + ")";
                         if (processor.hookMode.ends_with("_guard"))
-                            emitLine("if (!(" + invocation + ")) return;");
+                            emitLine("if (!(" + invocation + ")) " +
+                                     std::string(node.isAsync ? "co_return;" : "return;"));
                         else
                             emitLine(invocation + ";");
                     }
@@ -10212,12 +10218,14 @@ namespace wio::codegen
                 {
                     if (processor->phase == "post")
                         currentBehavioralPostProcessors_.push_back(
-                            processor->variableName + "->" + processor->hookCppName + "();");
+                            processor->variableName + "->" + processor->hookCppName +
+                            (processor->hookMode == "result" ? "({result});" : "();"));
                     else if (processor->phase == "finally")
                     {
                         currentBehavioralFinallyProcessors_.push_back(
                             "if (!" + processor->finalizedFlagName + ") { " + processor->finalizedFlagName +
-                            " = true; " + processor->variableName + "->" + processor->hookCppName + "(); }");
+                            " = true; " + processor->variableName + "->" + processor->hookCppName +
+                            (processor->hookMode == "outcome_bool" ? "(true); }" : "(); }"));
                     }
                 }
 
@@ -10254,7 +10262,8 @@ namespace wio::codegen
                         if (processor->phase == "finally")
                         {
                             emitLine("if (!" + processor->finalizedFlagName + ") { " + processor->finalizedFlagName +
-                                     " = true; " + processor->variableName + "->" + processor->hookCppName + "(); }");
+                                     " = true; " + processor->variableName + "->" + processor->hookCppName +
+                                     (processor->hookMode == "outcome_bool" ? "(false); }" : "(); }"));
                         }
                     }
                     emitLine("throw;");
@@ -10274,21 +10283,28 @@ namespace wio::codegen
                             continue;
                         const std::string wrapperName = "_wio_attribute_around_" + std::to_string(aroundIndex);
                         const std::string stateName = "_wio_attribute_proceed_state_" + std::to_string(aroundIndex);
-                        emitLine("auto " + wrapperName + " = [&]()");
+                        const bool returnsResult = processor->hookMode == "proceed_result";
+                        const std::string aroundResultType = returnsResult
+                            ? toCppType(currentFunctionReturnType_)
+                            : std::string("void");
+                        emitLine("auto " + wrapperName + " = [&]()" +
+                                 (returnsResult ? " -> " + aroundResultType : ""));
                         emitLine("{");
                         indent();
                         emitLine("auto " + stateName + " = std::make_shared<std::pair<bool, bool>>(true, false);");
                         emitLine("try");
                         emitLine("{");
                         indent();
-                        emitLine(processor->variableName + "->" + processor->hookCppName +
-                                 "(std::function<void()>([&, " + stateName + "]()");
+                        emitLine(std::string(returnsResult ? "return " : "") +
+                                 processor->variableName + "->" + processor->hookCppName +
+                                 "(std::function<" + aroundResultType + "()>([&, " + stateName + "]()" +
+                                 (returnsResult ? " -> " + aroundResultType : ""));
                         emitLine("{");
                         indent();
                         emitLine("if (!" + stateName + "->first) throw wio::runtime::RuntimeException(\"Attribute Proceed escaped its Around invocation.\");");
                         emitLine("if (" + stateName + "->second) throw wio::runtime::RuntimeException(\"Attribute Proceed may be invoked at most once.\");");
                         emitLine(stateName + "->second = true;");
-                        emitLine(nextProceed + "();");
+                        emitLine(std::string(returnsResult ? "return " : "") + nextProceed + "();");
                         dedent();
                         emitLine("}));");
                         dedent();
@@ -10306,7 +10322,9 @@ namespace wio::codegen
                         nextProceed = wrapperName;
                         ++aroundIndex;
                     }
-                    emitLine(nextProceed + "();");
+                    emitLine(std::string(currentFunctionReturnType_ && !currentFunctionReturnType_->isVoid()
+                        ? "return "
+                        : "") + nextProceed + "();");
                 }
                 dedent();
                 emitLine("}");
@@ -11776,19 +11794,23 @@ namespace wio::codegen
         emitSourceDirective(node.location());
         const bool hasBehavioralExit = !currentBehavioralPostProcessors_.empty() ||
                                        !currentBehavioralFinallyProcessors_.empty();
-        if (node.value && hasBehavioralExit && !currentFunctionIsAsync_)
+        if (node.value && hasBehavioralExit)
         {
             const std::string resultName = "_wio_attribute_return_" + std::to_string(behavioralReturnCounter_++);
             EMIT_TABS();
             buffer_ << "auto " << resultName << " = ";
             emitExpressionWithExpectedType(node.value, currentFunctionReturnType_, false);
             buffer_ << ";\n";
-            for (const std::string& invocation : currentBehavioralPostProcessors_)
+            for (std::string invocation : currentBehavioralPostProcessors_)
+            {
+                if (const size_t marker = invocation.find("{result}"); marker != std::string::npos)
+                    invocation.replace(marker, std::string("{result}").size(), resultName);
                 emitLine(invocation);
+            }
             for (const std::string& invocation : currentBehavioralFinallyProcessors_)
                 emitLine(invocation);
             EMIT_TABS();
-            buffer_ << "return " << resultName << ";\n";
+            buffer_ << (currentFunctionIsAsync_ ? "co_return " : "return ") << resultName << ";\n";
             return;
         }
 

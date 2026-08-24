@@ -60,8 +60,11 @@ realm std {
         // invocation. DeriveProcessor may expose bounded checked methods with
         // [DeriveMember]; concrete and generic component/object targets receive
         // a hidden `any` receiver or an immutable view of the processor's typed
-        // target contract. Typed-result and async processors remain closed
-        // until their contracts land.
+        // target contract. Post processors may observe a typed result, finally
+        // processors may observe a success flag, and synchronous around
+        // processors may map or replace a typed result. Async functions support
+        // pre/post/finally; async around is intentionally rejected because a
+        // single Proceed cannot safely model arbitrary suspension/cancellation.
         interface Validator<TTarget> {}
         interface DeriveProcessor<TTarget> {}
         interface PreProcessor {}

@@ -97,8 +97,8 @@ here does not by itself mean that v1 cannot ship.
     checked derive methods on concrete and generic component/object targets,
     including primary-declaration surface inheritance by concrete
     instantiations and immutable typed receiver contracts. Continue with richer
-    checked builders, typed argument/result processor contexts, async behavior,
-    formatter/LSP/web support, C++
+    checked builders, typed argument processor contexts, formatter/LSP support,
+    C++
     SDK metadata, automated edition-aware migration, and removal of remaining
     privileged built-in lowering paths. The bounded behavioral model includes
     entry guards, pre/postconditions, guaranteed exit hooks, and `around`

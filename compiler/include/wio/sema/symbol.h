@@ -71,6 +71,7 @@ namespace wio::sema
         std::vector<std::string> attributeProcessorCppTypes;
         std::vector<std::string> attributeProcessorHookCppNames;
         std::vector<std::string> attributeProcessorHookModes;
+        std::vector<Ref<Type>> attributeProcessorHookValueTypes;
         // Aligned with processor phases. -1 means non-validator, 0 rejects,
         // and 1 accepts. Validator bodies are evaluated by the compiler and
         // are never emitted or executed at runtime.
