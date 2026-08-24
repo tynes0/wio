@@ -140,6 +140,10 @@ realm SelfHostedMigrate {
         if (args[2usize] != "attributes") {
             return SelfHostedCli::Failure<i32>($"Unknown migration: ${args[2usize]}");
         }
+        if (SelfHostedCli::Has(args, "--help") or SelfHostedCli::Has(args, "-h")) {
+            console::Print(Help());
+            return std::Ok<i32>(0);
+        }
         let write = SelfHostedCli::Has(args, "--write");
         let check = SelfHostedCli::Has(args, "--check");
         if (write == check) {
