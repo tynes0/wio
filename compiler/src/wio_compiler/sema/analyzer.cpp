@@ -1,6 +1,7 @@
 ﻿#include "wio/sema/analyzer.h"
 
 #include <array>
+#include "wio/ast/attribute_contract.h"
 #include <cctype>
 #include <functional>
 #include <limits>
@@ -14137,8 +14138,57 @@ namespace wio::sema
         bool validateTarget)
     {
         std::unordered_map<const Symbol*, size_t> applicationCounts;
+        std::unordered_map<Attribute, size_t> builtinApplicationCounts;
         std::unordered_map<std::string, const Symbol*> conflictOwners;
         std::unordered_map<const AttributeStatement*, std::vector<const Symbol*>> compositionChains;
+
+        // Bind every application to a stable identity before expanding user
+        // composition. Built-ins and user declarations deliberately share the
+        // validation passes below; the enum is no longer their identity.
+        for (const auto& application : attributes)
+        {
+            if (!application)
+                continue;
+
+            if (application->attribute != Attribute::Unknown)
+            {
+                const auto* contract = getBuiltinAttributeContract(application->attribute);
+                if (!contract)
+                    continue;
+                application->canonicalName = std::string(contract->canonicalName);
+
+                if (validateTarget &&
+                    std::ranges::find(contract->targets, std::string_view(target)) == contract->targets.end())
+                {
+                    std::string allowedTargets;
+                    for (const std::string_view allowed : contract->targets)
+                    {
+                        if (!allowedTargets.empty()) allowedTargets += " | ";
+                        allowedTargets += allowed;
+                    }
+                    WIO_LOG_ADD_ERROR(
+                        application->location(),
+                        "Attribute '{}' cannot target '{}'. Allowed targets: {}.",
+                        contract->canonicalName,
+                        target,
+                        allowedTargets);
+                }
+
+                const size_t count = ++builtinApplicationCounts[application->attribute];
+                if (count > 1 && !contract->repeatable)
+                {
+                    WIO_LOG_ADD_ERROR(
+                        application->location(),
+                        "Attribute '{}' is not repeatable on the same declaration.",
+                        contract->canonicalName);
+                }
+                continue;
+            }
+
+            Ref<Symbol> symbol = resolveQualifiedSymbol(currentScope_, application->qualifiedName);
+            if (symbol && symbol->kind == SymbolKind::Attribute)
+                application->canonicalName = symbol->attributeCanonicalName;
+        }
 
         for (size_t attributeIndex = 0; attributeIndex < attributes.size(); ++attributeIndex)
         {
@@ -14158,6 +14208,7 @@ namespace wio::sema
                 );
                 continue;
             }
+            attribute->canonicalName = symbol->attributeCanonicalName;
 
             attribute->runtimeRetained = std::ranges::find(
                 symbol->attributeRetention, std::string("runtime")) != symbol->attributeRetention.end();
@@ -14547,12 +14598,15 @@ namespace wio::sema
         {
             if (!application)
                 return false;
+            if (application->canonicalName == requiredName ||
+                nameTail(application->canonicalName) == nameTail(requiredName))
+                return true;
             if (application->qualifiedName == requiredName ||
                 nameTail(application->qualifiedName) == nameTail(requiredName))
                 return true;
             if (application->attribute != Attribute::Unknown)
             {
-                const std::string builtInName = std::string(frenum::to_string_view(application->attribute));
+                const std::string builtInName = std::string(canonicalBuiltinAttributeName(application->attribute));
                 return builtInName == requiredName || nameTail(builtInName) == nameTail(requiredName);
             }
             return false;
@@ -14564,6 +14618,34 @@ namespace wio::sema
                 return applicationMatches(application, requiredName);
             });
         };
+
+        for (const auto& attribute : attributes)
+        {
+            if (!attribute || attribute->attribute == Attribute::Unknown)
+                continue;
+            const auto* contract = getBuiltinAttributeContract(attribute->attribute);
+            if (!contract)
+                continue;
+
+            for (const std::string_view required : contract->requiredAttributes)
+            {
+                if (!hasEffectiveAttribute(required))
+                    WIO_LOG_ADD_ERROR(attribute->location(), "Attribute '{}' requires attribute '{}'.", contract->canonicalName, required);
+            }
+            if (!contract->requiredAnyAttributes.empty() &&
+                !std::ranges::any_of(contract->requiredAnyAttributes, hasEffectiveAttribute))
+            {
+                WIO_LOG_ADD_ERROR(
+                    attribute->location(),
+                    "Attribute '{}' requires at least one compatible attribute from its RequiresAny policy.",
+                    contract->canonicalName);
+            }
+            for (const std::string_view conflict : contract->conflictingAttributes)
+            {
+                if (hasEffectiveAttribute(conflict))
+                    WIO_LOG_ADD_ERROR(attribute->location(), "Attribute '{}' conflicts with attribute '{}'.", contract->canonicalName, conflict);
+            }
+        }
 
         for (const auto& attribute : attributes)
         {
@@ -14827,6 +14909,15 @@ namespace wio::sema
                 SymbolKind::Attribute,
                 node.location()
             );
+            for (const std::string& realm : currentNamespacePath_)
+            {
+                if (!symbol->attributeCanonicalName.empty())
+                    symbol->attributeCanonicalName += "::";
+                symbol->attributeCanonicalName += realm;
+            }
+            if (!symbol->attributeCanonicalName.empty())
+                symbol->attributeCanonicalName += "::";
+            symbol->attributeCanonicalName += node.name->token.value;
             symbol->attributeTargets = node.targets;
             symbol->attributeRetention = node.retention;
             symbol->attributeConflictGroups = node.conflictGroups;

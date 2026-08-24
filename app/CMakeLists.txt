@@ -3400,6 +3400,33 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
     set_tests_properties(wio_test_attribute_application_system_targets_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
 
+    add_wio_success_test(
+        wio_test_attribute_builtin_contract_unification
+        "${CMAKE_SOURCE_DIR}/tests/attribute_builtin_contract_unification.wio"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_builtin_requires_any_missing
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_builtin_requires_any_missing.wio"
+        "requires at least one compatible attribute"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_builtin_conflict
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_builtin_conflict.wio"
+        "conflicts with attribute 'std::attribute::Export'"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_builtin_wrong_target
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_builtin_wrong_target.wio"
+        "cannot target 'variable'"
+    )
+    set_tests_properties(
+        wio_test_attribute_builtin_contract_unification
+        wio_invalid_attribute_builtin_requires_any_missing
+        wio_invalid_attribute_builtin_conflict
+        wio_invalid_attribute_builtin_wrong_target
+        PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+    )
+
     add_wio_failure_test(
         wio_invalid_attribute_bracket_empty
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_bracket_empty.wio"

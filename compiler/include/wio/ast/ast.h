@@ -812,6 +812,9 @@ namespace wio
         // current analyzer/codegen while new and user-defined attributes keep
         // their realm-qualified identity here.
         std::string qualifiedName;
+        // Stable semantic identity. Built-ins use std::attribute::<Name>;
+        // user attributes bind to their declaration identity during analysis.
+        std::string canonicalName;
         std::vector<Token> args;
         std::vector<NodePtr<TypeSpecifier>> typeArgs;
         // Empty entries are positional arguments. Named entries are resolved

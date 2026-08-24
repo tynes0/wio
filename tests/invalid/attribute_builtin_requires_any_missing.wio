@@ -1,0 +1,4 @@
+[std::attribute::CppName(MissingNativeContract)]
+fn BrokenBridge() -> i32;
+
+fn Entry() -> i32 { return 0; }

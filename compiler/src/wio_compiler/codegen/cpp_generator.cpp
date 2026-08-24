@@ -5877,7 +5877,10 @@ namespace wio::codegen
                 }
 
                 std::uint64_t stableId = 14695981039346656037ull;
-                for (const unsigned char byte : attribute->qualifiedName)
+                const std::string& stableAttributeName = attribute->canonicalName.empty()
+                    ? attribute->qualifiedName
+                    : attribute->canonicalName;
+                for (const unsigned char byte : stableAttributeName)
                 {
                     stableId ^= byte;
                     stableId *= 1099511628211ull;

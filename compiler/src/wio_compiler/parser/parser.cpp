@@ -1,6 +1,7 @@
 #include "wio/parser/parser.h"
 
 #include "wio/common/exception.h"
+#include "wio/ast/attribute_contract.h"
 #include "wio/common/operator_overload.h"
 #include "wio/common/utility.h"
 #include "wio/common/logger.h"
@@ -46,8 +47,8 @@ namespace wio
 
         std::optional<Attribute> resolveAttributeName(std::string_view name)
         {
-            if (auto legacy = frenum::cast<Attribute>(name); legacy.has_value())
-                return legacy;
+            if (auto builtin = resolveBuiltinAttribute(name); builtin.has_value())
+                return builtin;
 
             if (name == "readonly") return Attribute::ReadOnly;
             if (name == "default") return Attribute::Default;

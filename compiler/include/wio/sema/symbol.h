@@ -47,6 +47,9 @@ namespace wio::sema
         std::vector<WeakRef<Symbol>> overriddenSymbols;
 
         std::vector<std::string> attributeTargets;
+        // Realm-qualified source identity used by reflection and policy
+        // matching. Unlike scopePath this is never C++-mangled.
+        std::string attributeCanonicalName;
         std::vector<std::string> attributeRetention;
         std::vector<std::string> attributeConflictGroups;
         std::vector<NodePtr<AttributeStatement>> attributeComposition;

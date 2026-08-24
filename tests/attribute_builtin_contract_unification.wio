@@ -1,0 +1,10 @@
+[attribute::Targets(fn)]
+[attribute::Requires("std::attribute::Native")]
+attribute NativeContract();
+
+[std::attribute::Native, NativeContract]
+fn NativeBridge() -> i32;
+
+fn Entry() -> i32 {
+    return 0;
+}
