@@ -33,6 +33,10 @@ behavioral pipeline reflection, C++ SDK descriptors, source
 migration/formatting, editor/web support, and Windows/Linux release
 qualification.
 
+No processor capability is accepted as a silent no-op: behavioral processors
+on non-callable targets and derive applications before the checked builder is
+available are explicit compile-time errors.
+
 This document supersedes the earlier postfix `with` attribute proposal. The
 canonical source spelling is a declaration-leading bracket list:
 

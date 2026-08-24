@@ -38,6 +38,8 @@ Notes:
 - [x] Unit synchronous around hooks own a guarded zero-or-one `Proceed`;
       duplicate calls and use after the around invocation are rejected without
       exposing mutable AST or token rewriting.
+- [x] Unsupported processor/target combinations and not-yet-enabled derive
+      execution are diagnosed instead of being accepted as silent metadata.
 - [x] Runtime type reflection exposes structured attribute descriptors with
       stable FNV-1a identity, retention, origin, normalized arguments, and
       default provenance while retaining the legacy string view.

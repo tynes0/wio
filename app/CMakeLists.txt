@@ -3469,6 +3469,16 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "Behavioral attribute processors on async functions require the async processor contract"
     )
     add_wio_failure_test(
+        wio_invalid_attribute_behavioral_non_callable_target
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_behavioral_non_callable_target.wio"
+        "can target only functions or methods"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_derive_builder_not_enabled
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_derive_builder_not_enabled.wio"
+        "requires the checked declaration-builder contract"
+    )
+    add_wio_failure_test(
         wio_invalid_attribute_around_requires_proceed_contract
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_around_requires_proceed_contract.wio"
         "AroundProcessor currently requires a unit-returning function"
@@ -3482,6 +3492,8 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_attribute_around_proceed_escaped
         wio_invalid_attribute_behavioral_missing_hook
         wio_invalid_attribute_behavioral_async_not_frozen
+        wio_invalid_attribute_behavioral_non_callable_target
+        wio_invalid_attribute_derive_builder_not_enabled
         wio_invalid_attribute_around_requires_proceed_contract
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )

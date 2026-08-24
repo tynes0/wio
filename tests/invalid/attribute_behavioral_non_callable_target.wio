@@ -1,0 +1,13 @@
+use std::attribute as attr;
+
+[From(attr::PreProcessor)]
+object ComponentPre { public fn Before() {} }
+
+[attribute::Targets(component)]
+[attribute::Processor(ComponentPre)]
+attribute InvalidComponentBehavior();
+
+[InvalidComponentBehavior]
+component Value { number: i32; }
+
+fn Entry() -> i32 { return 0; }

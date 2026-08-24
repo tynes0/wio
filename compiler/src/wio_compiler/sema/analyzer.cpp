@@ -14227,6 +14227,26 @@ namespace wio::sema
                         : std::string{}
                 });
             }
+            for (const auto& processor : attribute->processorBindings)
+            {
+                if ((processor.phase == "pre" || processor.phase == "post" ||
+                     processor.phase == "finally" || processor.phase == "around") &&
+                    target != "fn" && target != "method")
+                {
+                    WIO_LOG_ADD_ERROR(
+                        attribute->location(),
+                        "Behavioral attribute processor '{}' can target only functions or methods, not '{}'.",
+                        processor.canonicalTypeName,
+                        target);
+                }
+                if (processor.phase == "derive")
+                {
+                    WIO_LOG_ADD_ERROR(
+                        attribute->location(),
+                        "DeriveProcessor '{}' requires the checked declaration-builder contract, which is not enabled yet.",
+                        processor.canonicalTypeName);
+                }
+            }
 
             attribute->runtimeRetained = std::ranges::find(
                 symbol->attributeRetention, std::string("runtime")) != symbol->attributeRetention.end();
