@@ -58,9 +58,10 @@ realm std {
         // Unit-returning sync functions also support `Around(proceed: fn())`;
         // Proceed may be used zero or one time and cannot escape the
         // invocation. DeriveProcessor may expose bounded checked methods with
-        // [DeriveMember]; concrete component/object targets receive a hidden
-        // `any` receiver. Typed-result, typed/generic derive contexts, and
-        // async processors remain closed until their context contracts land.
+        // [DeriveMember]; concrete and generic component/object targets receive
+        // a hidden `any` receiver. Typed-result, statically typed derive
+        // contexts, and async processors remain closed until their contracts
+        // land.
         interface Validator<TTarget> {}
         interface DeriveProcessor<TTarget> {}
         interface PreProcessor {}

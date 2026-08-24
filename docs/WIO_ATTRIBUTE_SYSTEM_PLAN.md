@@ -27,14 +27,14 @@ Implemented foundation checkpoint:
   Proceed, runtime duplicate-call protection, and escaped-capability rejection;
 - method-level behavioral pipeline reflection exposing effective attribute,
   processor type, phase, hook, and mode in deterministic execution order;
-- bounded checked derives for concrete component/object targets: a public Wio
-  processor method marked `[std::attribute::DeriveMember]` becomes a typed
-  member surface, receives the target as a hidden `any` receiver, and executes
-  through an isolated default-constructed processor instance;
+- bounded checked derives for concrete and generic component/object targets: a
+  public Wio processor method marked `[std::attribute::DeriveMember]` becomes a
+  typed member surface, receives the target as a hidden `any` receiver, and
+  executes through an isolated default-constructed processor instance;
 - structured runtime type-attribute descriptors with stable IDs, origin,
   normalized argument metadata, and default provenance.
 
-Still open: target-aware validator contexts, typed/generic derive targets,
+Still open: target-aware validator contexts, statically typed derive contexts,
 derived fields/properties and richer checked builders, typed argument/result
 hook contexts, statically typed receiver contexts, typed-result around and
 async behavioral lowering, the final removal of enum-only built-in lowering
@@ -283,14 +283,17 @@ let user = User();
 let label = user.Describe("user:");
 ```
 
-The target must currently be a concrete, non-generic component or object. A
-derived method is public, synchronous, non-generic Wio code; its first explicit
-parameter is `any`, and its remaining public parameters cannot use defaults or
+The target may be a concrete or generic component/object. A concrete generic
+instantiation inherits checked derives from its generic primary declaration
+surface, so one derive applies consistently to `Box<i32>` and
+`Box<string>` without regenerating unchecked source. A derived method is
+public, synchronous, non-generic Wio code; its first explicit parameter is
+currently `any`, and its remaining public parameters cannot use defaults or
 packs. The processor must be default constructible. Constructors, operators,
 native methods, name conflicts, ambiguous derives, and unsupported target
 shapes are rejected during analysis. These bounds keep derive deterministic
-and type-checked while typed target specialization and richer builders remain
-future extensions.
+and type-checked while statically typed target contexts and richer builders
+remain future extensions.
 
 The behavioral layer contains four independent interfaces:
 

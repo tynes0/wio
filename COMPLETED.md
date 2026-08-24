@@ -45,10 +45,12 @@ Notes:
       order, including attribute identity, processor type, phase, hook, and
       invocation mode; `Describe<T>()` includes the same pipeline per method.
 - [x] Bounded checked derives expose marked processor methods as real members
-      on concrete component/object targets. Calls receive the target through a
-      hidden `any` receiver and use an isolated default-constructed processor;
-      generic targets, unsafe method shapes, conflicts, and ambiguous derives
-      fail during analysis instead of becoming silent metadata.
+      on concrete and generic component/object targets. Every concrete generic
+      instantiation inherits its generic primary declaration surface.
+      Calls receive the target through a hidden `any` receiver and use an
+      isolated default-constructed processor; unsafe method shapes, conflicts,
+      and ambiguous derives fail during analysis instead of becoming silent
+      metadata.
 - [x] Runtime type reflection exposes structured attribute descriptors with
       stable FNV-1a identity, retention, origin, normalized arguments, and
       default provenance while retaining the legacy string view.

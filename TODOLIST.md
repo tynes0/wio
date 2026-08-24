@@ -94,9 +94,11 @@ here does not by itself mean that v1 cannot ship.
     identity, origin, normalized arguments, and default provenance; executable
     compile-time validators; ordered synchronous pre/post/finally/around
     lowering; receiver-aware guards; behavioral reflection; and bounded
-    checked derive methods on concrete component/object targets. Continue with
-    typed/generic derive contexts and richer checked builders, typed argument/
-    result processor contexts, async behavior, formatter/LSP/web support, C++
+    checked derive methods on concrete and generic component/object targets,
+    including primary-declaration surface inheritance by concrete
+    instantiations. Continue with statically typed derive contexts and richer
+    checked builders, typed argument/result processor contexts, async behavior,
+    formatter/LSP/web support, C++
     SDK metadata, automated edition-aware migration, and removal of remaining
     privileged built-in lowering paths. The bounded behavioral model includes
     entry guards, pre/postconditions, guaranteed exit hooks, and `around`

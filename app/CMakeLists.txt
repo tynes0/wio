@@ -3516,10 +3516,11 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_derive_wrong_target.wio"
         "can target only components or objects"
     )
-    add_wio_failure_test(
-        wio_invalid_attribute_derive_generic_target
-        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_derive_generic_target.wio"
-        "require typed target specialization"
+    add_wio_output_test(
+        wio_test_attribute_checked_derive_generic_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_checked_derive_generic_run.wio"
+        "attribute-checked-derive-generic-ok"
+        --run
     )
     add_wio_failure_test(
         wio_invalid_attribute_derive_processor_requires_default_constructor
@@ -3554,7 +3555,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_attribute_derive_requires_member
         wio_invalid_attribute_derive_member_requires_any_receiver
         wio_invalid_attribute_derive_wrong_target
-        wio_invalid_attribute_derive_generic_target
+        wio_test_attribute_checked_derive_generic_run
         wio_invalid_attribute_derive_processor_requires_default_constructor
         wio_invalid_attribute_derive_member_default_parameter
         wio_invalid_attribute_around_requires_proceed_contract

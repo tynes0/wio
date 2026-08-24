@@ -10692,13 +10692,34 @@ namespace wio::sema
     
         if (!foundMember && actualStructType)
         {
-            auto typeMethods = extensionMethods_.find(actualStructType.Get());
-            if (typeMethods != extensionMethods_.end())
+            auto findExtensionMethod = [&](const Ref<Type>& receiverType) -> Ref<Symbol>
             {
-                auto method = typeMethods->second.find(node.member->token.value);
-                if (method != typeMethods->second.end())
+                auto receiverStruct = receiverType ? receiverType.AsFast<StructType>() : nullptr;
+                if (!receiverStruct)
+                    return nullptr;
+
+                auto findDirect = [&](const Type* candidate) -> Ref<Symbol>
                 {
-                    Ref<Symbol> extensionSymbol = method->second;
+                    auto typeMethods = extensionMethods_.find(candidate);
+                    if (typeMethods == extensionMethods_.end())
+                        return nullptr;
+                    auto method = typeMethods->second.find(node.member->token.value);
+                    return method == typeMethods->second.end() ? nullptr : method->second;
+                };
+
+                if (Ref<Symbol> exact = findDirect(receiverStruct.Get()))
+                    return exact;
+
+                // Instantiated generic types are distinct semantic type nodes.
+                // Extensions and checked derives declared on the generic
+                // primary remain part of every concrete instantiation.
+                if (Ref<StructType> primary = receiverStruct->genericPrimaryType.Lock())
+                    return findDirect(primary.Get());
+                return nullptr;
+            };
+
+            if (Ref<Symbol> extensionSymbol = findExtensionMethod(actualStructType))
+            {
                     auto fullType = extensionSymbol->type.AsFast<FunctionType>();
                     if (fullType && !fullType->paramTypes.empty())
                     {
@@ -10747,7 +10768,6 @@ namespace wio::sema
                         node.member->refType = visibleType;
                         return;
                     }
-                }
             }
         }
 
@@ -15102,15 +15122,6 @@ namespace wio::sema
                 Ref<Symbol> processorSymbol = resolveQualifiedSymbol(currentScope_, processorName);
                 if (!processorSymbol || !processorSymbol->innerScope)
                     continue;
-
-                if (!targetStruct->genericParameterNames.empty())
-                {
-                    WIO_LOG_ADD_ERROR(
-                        application->location(),
-                        "Checked derive members on generic target '{}' require typed target specialization and are not enabled yet.",
-                        resolvedTarget->toString());
-                    continue;
-                }
 
                 bool hasDefaultConstructor = true;
                 if (Ref<Symbol> constructors = processorSymbol->innerScope->resolveLocally("OnConstruct"))
