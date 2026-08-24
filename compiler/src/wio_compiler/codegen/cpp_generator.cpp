@@ -1,5 +1,6 @@
 ﻿#include "wio/codegen/cpp_generator.h"
 
+#include "wio/ast/attribute_contract.h"
 #include "wio/common/filesystem/filesystem.h"
 #include "wio/common/operator_overload.h"
 #include "wio/common/utility.h"
@@ -1901,7 +1902,7 @@ namespace wio::codegen
         {
             std::vector<std::string> bases;
             for (const auto& attr : attributes)
-                if (attr->attribute == Attribute::From)
+                if (attr && matchesBuiltinAttribute(*attr, Attribute::From))
                     for (const auto& arg : attr->args)
                         if (arg.type == TokenType::identifier)
                             bases.push_back(arg.value);
@@ -1910,13 +1911,16 @@ namespace wio::codegen
 
         bool hasAttribute(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
         {
-            return std::ranges::any_of(attributes, [targetAttr](const auto& attr) { return attr->attribute == targetAttr; });
+            return std::ranges::any_of(attributes, [targetAttr](const auto& attr)
+            {
+                return attr && matchesBuiltinAttribute(*attr, targetAttr);
+            });
         }
 
         std::vector<Token> getAttributeArgs(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
         {
             for (const auto& attr : attributes) {
-                if (attr->attribute == targetAttr) return attr->args;
+                if (attr && matchesBuiltinAttribute(*attr, targetAttr)) return attr->args;
             }
             return {};
         }
@@ -1925,7 +1929,7 @@ namespace wio::codegen
         {
             for (const auto& attr : attributes)
             {
-                if (attr->attribute == targetAttr && attr->args.size() == 1)
+                if (attr && matchesBuiltinAttribute(*attr, targetAttr) && attr->args.size() == 1)
                     return attr->args.front();
             }
 
@@ -2078,6 +2082,7 @@ namespace wio::codegen
 
         struct ExportedFieldInfo
         {
+            const VariableDeclaration* declaration = nullptr;
             std::string fieldName;
             Ref<sema::Type> fieldType = nullptr;
             bool isReadOnly = false;
@@ -2093,6 +2098,7 @@ namespace wio::codegen
 
         struct ExportedMethodInfo
         {
+            const FunctionDeclaration* declaration = nullptr;
             std::string methodName;
             size_t exportIndex = 0;
         };
@@ -2104,6 +2110,7 @@ namespace wio::codegen
 
         struct ExportedTypeInfo
         {
+            const std::vector<NodePtr<AttributeStatement>>* attributes = nullptr;
             std::string logicalName;
             std::string symbolName;
             std::string cppTypeName;
@@ -2481,6 +2488,7 @@ namespace wio::codegen
                     }
 
                     ExportedFieldInfo fieldInfo;
+                    fieldInfo.declaration = &variableDecl;
                     fieldInfo.fieldName = fieldName;
                     fieldInfo.fieldType = fieldType;
                     fieldInfo.isReadOnly = variableSymbol && variableSymbol->flags.get_isReadOnly();
@@ -2608,6 +2616,7 @@ namespace wio::codegen
                         return;
 
                     ExportedFunctionInfo methodExport;
+                    methodExport.declaration = &functionDecl;
                     methodExport.functionType = typeContext.getOrCreateFunctionType(functionType->returnType, exportedParameterTypes).AsFast<sema::FunctionType>();
                     methodExport.logicalName = typeInfo.logicalName + "." + functionName;
                     methodExport.symbolName = common::formatString("WioMethod__{}__{}__{}", typeInfo.symbolName, functionName, Mangler::mangleFunction(functionName, functionType->paramTypes));
@@ -2617,6 +2626,7 @@ namespace wio::codegen
                     methodExport.ownerIsObject = true;
 
                     ExportedMethodInfo methodInfo;
+                    methodInfo.declaration = &functionDecl;
                     methodInfo.methodName = functionName;
                     methodInfo.exportIndex = exportedFunctions.size();
                     exportedFunctions.push_back(std::move(methodExport));
@@ -2665,6 +2675,7 @@ namespace wio::codegen
                         continue;
 
                     ExportedTypeInfo typeInfo;
+                    typeInfo.attributes = &componentDecl->attributes;
                     typeInfo.logicalName = componentType->scopePath.empty()
                         ? componentType->name
                         : common::formatString("{}::{}", componentType->scopePath, componentType->name);
@@ -2772,6 +2783,7 @@ namespace wio::codegen
                     continue;
 
                 ExportedTypeInfo typeInfo;
+                typeInfo.attributes = &objectDecl->attributes;
                 typeInfo.logicalName = objectType->scopePath.empty()
                     ? objectType->name
                     : common::formatString("{}::{}", objectType->scopePath, objectType->name);
@@ -4191,7 +4203,115 @@ namespace wio::codegen
         capabilities |= (1u << 6); // product version
         capabilities |= (1u << 7); // type metadata v2
         capabilities |= (1u << 8); // Unicode text dynamic fields
+        auto hasRetainedAttributes = [](const std::vector<NodePtr<AttributeStatement>>* attributes)
+        {
+            return attributes && std::ranges::any_of(*attributes, [](const auto& attribute)
+            {
+                return attribute && attribute->runtimeRetained;
+            });
+        };
+        bool hasRetainedAttributeMetadata = false;
+        for (const auto& exportedFunction : exportedFunctions)
+            hasRetainedAttributeMetadata = hasRetainedAttributeMetadata ||
+                (exportedFunction.declaration && hasRetainedAttributes(&exportedFunction.declaration->attributes));
+        for (const auto& exportedType : exportedTypes)
+        {
+            hasRetainedAttributeMetadata = hasRetainedAttributeMetadata || hasRetainedAttributes(exportedType.attributes);
+            for (const auto& field : exportedType.fields)
+                hasRetainedAttributeMetadata = hasRetainedAttributeMetadata ||
+                    (field.declaration && hasRetainedAttributes(&field.declaration->attributes));
+            for (const auto& method : exportedType.methods)
+                hasRetainedAttributeMetadata = hasRetainedAttributeMetadata ||
+                    (method.declaration && hasRetainedAttributes(&method.declaration->attributes));
+        }
+        if (hasRetainedAttributeMetadata) capabilities |= (1u << 9); // retained attribute metadata v1
         std::uint32_t stateSchemaVersion = (lifecycleFunctions.saveState || lifecycleFunctions.restoreState) ? 1u : 0u;
+
+        struct SdkAttributeTable
+        {
+            size_t count = 0;
+            std::string expression = "nullptr";
+        };
+        auto emitSdkAttributeTable = [&](const std::string& tableName,
+                                         const std::vector<NodePtr<AttributeStatement>>* attributes)
+            -> SdkAttributeTable
+        {
+            std::vector<const AttributeStatement*> retained;
+            if (attributes)
+            {
+                for (const auto& attribute : *attributes)
+                    if (attribute && attribute->runtimeRetained)
+                        retained.push_back(attribute.Get());
+            }
+            if (retained.empty())
+                return {};
+
+            auto phaseExpression = [](const std::string& phase)
+            {
+                if (phase == "validation") return std::string("WIO_MODULE_ATTRIBUTE_PHASE_VALIDATION");
+                if (phase == "pre") return std::string("WIO_MODULE_ATTRIBUTE_PHASE_PRE");
+                if (phase == "post") return std::string("WIO_MODULE_ATTRIBUTE_PHASE_POST");
+                if (phase == "finally") return std::string("WIO_MODULE_ATTRIBUTE_PHASE_FINALLY");
+                if (phase == "around") return std::string("WIO_MODULE_ATTRIBUTE_PHASE_AROUND");
+                if (phase == "derive") return std::string("WIO_MODULE_ATTRIBUTE_PHASE_DERIVE");
+                return std::string("WIO_MODULE_ATTRIBUTE_PHASE_UNKNOWN");
+            };
+            for (size_t attributeIndex = 0; attributeIndex < retained.size(); ++attributeIndex)
+            {
+                const auto* attribute = retained[attributeIndex];
+                if (attribute->processorBindings.empty())
+                    continue;
+                emitLine("static const WioModuleAttributeProcessorDescriptor " + tableName +
+                         "_PROCESSORS_" + std::to_string(attributeIndex) + "[] =");
+                emitLine("{");
+                indent();
+                for (size_t processorIndex = 0; processorIndex < attribute->processorBindings.size(); ++processorIndex)
+                {
+                    const auto& processor = attribute->processorBindings[processorIndex];
+                    const std::string suffix = processorIndex + 1 < attribute->processorBindings.size() ? "," : "";
+                    emitLine("{ \"" + common::wioStringToEscapedCppString(processor.canonicalTypeName) +
+                             "\", " + phaseExpression(processor.phase) + ", \"" +
+                             common::wioStringToEscapedCppString(processor.hookMode) + "\", " +
+                             std::to_string(processorIndex) + "u }" + suffix);
+                }
+                dedent();
+                emitLine("};");
+            }
+
+            emitLine("static const WioModuleAttributeDescriptor " + tableName + "[] =");
+            emitLine("{");
+            indent();
+            for (size_t attributeIndex = 0; attributeIndex < retained.size(); ++attributeIndex)
+            {
+                const auto* attribute = retained[attributeIndex];
+                std::string arguments;
+                for (size_t argumentIndex = 0; argumentIndex < attribute->args.size(); ++argumentIndex)
+                {
+                    if (argumentIndex > 0) arguments += ", ";
+                    if (argumentIndex < attribute->argumentNames.size() && !attribute->argumentNames[argumentIndex].empty())
+                        arguments += attribute->argumentNames[argumentIndex] + "=";
+                    arguments += attribute->args[argumentIndex].value;
+                }
+                const std::string origin = attribute->origin == AttributeOrigin::Composed
+                    ? "WIO_MODULE_ATTRIBUTE_COMPOSED"
+                    : (attribute->origin == AttributeOrigin::Scoped
+                        ? "WIO_MODULE_ATTRIBUTE_SCOPED"
+                        : "WIO_MODULE_ATTRIBUTE_DIRECT");
+                const std::string processorExpression = attribute->processorBindings.empty()
+                    ? "nullptr"
+                    : tableName + "_PROCESSORS_" + std::to_string(attributeIndex);
+                const std::string stableName = attribute->canonicalName.empty()
+                    ? attribute->qualifiedName
+                    : attribute->canonicalName;
+                const std::string suffix = attributeIndex + 1 < retained.size() ? "," : "";
+                emitLine("{ \"" + common::wioStringToEscapedCppString(stableName) + "\", \"" +
+                         common::wioStringToEscapedCppString(arguments) + "\", " + origin + ", " +
+                         std::to_string(attribute->processorBindings.size()) + "u, " + processorExpression + " }" + suffix);
+            }
+            dedent();
+            emitLine("};");
+            return { retained.size(), tableName };
+        };
 
         auto isInvokeCompatibleExport = [&](const ExportedFunctionInfo& exportInfo) -> bool
         {
@@ -4521,6 +4641,16 @@ namespace wio::codegen
             }
         }
 
+        std::vector<SdkAttributeTable> exportAttributeTables;
+        exportAttributeTables.reserve(exportedFunctions.size());
+        for (size_t exportIndex = 0; exportIndex < exportedFunctions.size(); ++exportIndex)
+        {
+            const auto* declaration = exportedFunctions[exportIndex].declaration;
+            exportAttributeTables.push_back(emitSdkAttributeTable(
+                "WIO_MODULE_EXPORT_ATTRIBUTES_" + std::to_string(exportIndex),
+                declaration ? &declaration->attributes : nullptr));
+        }
+
         if (!exportedFunctions.empty())
         {
             emitLine("static const WioModuleExport WIO_MODULE_EXPORTS[] =");
@@ -4537,9 +4667,10 @@ namespace wio::codegen
                     ? "nullptr"
                     : ("WIO_EXPORT_PARAM_TYPES_" + std::to_string(i));
                 std::string suffix = (i + 1 < exportedFunctions.size()) ? "," : "";
+                const auto& attributeTable = exportAttributeTables[i];
 
                 emitLine(common::formatString(
-                    R"({{ "{}", "{}", {}, {}u, {}, {}, reinterpret_cast<const void*>(&{}) }}{})",
+                    R"({{ "{}", "{}", {}, {}u, {}, {}, reinterpret_cast<const void*>(&{}), {}u, {} }}{})",
                     common::wioStringToEscapedCppString(exportInfo.logicalName),
                     common::wioStringToEscapedCppString(exportInfo.symbolName),
                     getAbiTypeEnumName(exportFunctionType->returnType),
@@ -4547,6 +4678,8 @@ namespace wio::codegen
                     paramTypesExpr,
                     invokeExpr,
                     exportInfo.symbolName,
+                    attributeTable.count,
+                    attributeTable.expression,
                     suffix
                 ));
             }
@@ -5171,9 +5304,33 @@ namespace wio::codegen
                 }
             }
 
+            std::vector<SdkAttributeTable> typeAttributeTables;
+            typeAttributeTables.reserve(exportedTypes.size());
             for (size_t typeIndex = 0; typeIndex < exportedTypes.size(); ++typeIndex)
             {
             const auto& exportedType = exportedTypes[typeIndex];
+            const auto typeAttributeTable = emitSdkAttributeTable(
+                "WIO_MODULE_TYPE_ATTRIBUTES_" + std::to_string(typeIndex),
+                exportedType.attributes);
+            typeAttributeTables.push_back(typeAttributeTable);
+            std::vector<SdkAttributeTable> fieldAttributeTables;
+            fieldAttributeTables.reserve(exportedType.fields.size());
+            for (size_t fieldIndex = 0; fieldIndex < exportedType.fields.size(); ++fieldIndex)
+            {
+                const auto* declaration = exportedType.fields[fieldIndex].declaration;
+                fieldAttributeTables.push_back(emitSdkAttributeTable(
+                    "WIO_MODULE_TYPE_FIELD_ATTRIBUTES_" + std::to_string(typeIndex) + "_" + std::to_string(fieldIndex),
+                    declaration ? &declaration->attributes : nullptr));
+            }
+            std::vector<SdkAttributeTable> methodAttributeTables;
+            methodAttributeTables.reserve(exportedType.methods.size());
+            for (size_t methodIndex = 0; methodIndex < exportedType.methods.size(); ++methodIndex)
+            {
+                const auto* declaration = exportedType.methods[methodIndex].declaration;
+                methodAttributeTables.push_back(emitSdkAttributeTable(
+                    "WIO_MODULE_TYPE_METHOD_ATTRIBUTES_" + std::to_string(typeIndex) + "_" + std::to_string(methodIndex),
+                    declaration ? &declaration->attributes : nullptr));
+            }
 
             if (!exportedType.constructors.empty())
             {
@@ -5218,6 +5375,7 @@ namespace wio::codegen
                     const std::string typeDescriptorExpr = field.fieldType
                         ? ("&WIO_TYPE_DESCRIPTOR_" + std::to_string(ensureTypeDescriptor(field.fieldType)))
                         : "nullptr";
+                    const auto& attributeTable = fieldAttributeTables[fieldIndex];
 
                     emitLine(
                         "{ \"" + common::wioStringToEscapedCppString(field.fieldName) +
@@ -5225,7 +5383,8 @@ namespace wio::codegen
                         ", " + typeDescriptorExpr +
                         ", " + std::to_string(flags) + "u, " + accessModifierExpr +
                         ", &WIO_MODULE_EXPORTS[" + std::to_string(field.getterExportIndex) +
-                        "], " + setterExportExpr + ", " + dynamicGetterExpr + ", " + dynamicSetterExpr + " }" + suffix
+                        "], " + setterExportExpr + ", " + dynamicGetterExpr + ", " + dynamicSetterExpr +
+                        ", " + std::to_string(attributeTable.count) + "u, " + attributeTable.expression + " }" + suffix
                     );
                 }
                 dedent();
@@ -5240,10 +5399,12 @@ namespace wio::codegen
                 for (size_t methodIndex = 0; methodIndex < exportedType.methods.size(); ++methodIndex)
                 {
                     const auto& method = exportedType.methods[methodIndex];
+                    const auto& attributeTable = methodAttributeTables[methodIndex];
                     const std::string suffix = (methodIndex + 1 < exportedType.methods.size()) ? "," : "";
                     emitLine(
                         "{ \"" + common::wioStringToEscapedCppString(method.methodName) +
-                        "\", &WIO_MODULE_EXPORTS[" + std::to_string(method.exportIndex) + "] }" + suffix
+                        "\", &WIO_MODULE_EXPORTS[" + std::to_string(method.exportIndex) + "], " +
+                        std::to_string(attributeTable.count) + "u, " + attributeTable.expression + " }" + suffix
                     );
                 }
                 dedent();
@@ -5273,6 +5434,7 @@ namespace wio::codegen
                 const std::string methodArrayExpr = exportedType.methods.empty()
                     ? "nullptr"
                     : ("WIO_MODULE_TYPE_METHODS_" + std::to_string(typeIndex));
+                const auto& typeAttributeTable = typeAttributeTables[typeIndex];
 
                 emitLine(
                     "{ \"" + common::wioStringToEscapedCppString(exportedType.logicalName) +
@@ -5282,7 +5444,8 @@ namespace wio::codegen
                     ", &WIO_MODULE_EXPORTS[" + std::to_string(exportedType.destroyExportIndex) +
                     "], " + std::to_string(exportedType.constructors.size()) + "u, " + constructorArrayExpr +
                     ", " + std::to_string(exportedType.fields.size()) + "u, " + fieldArrayExpr +
-                    ", " + std::to_string(exportedType.methods.size()) + "u, " + methodArrayExpr + " }" + suffix
+                    ", " + std::to_string(exportedType.methods.size()) + "u, " + methodArrayExpr +
+                    ", " + std::to_string(typeAttributeTable.count) + "u, " + typeAttributeTable.expression + " }" + suffix
                 );
             }
             dedent();

@@ -32,6 +32,7 @@ realm SelfHostedGlobal {
             "  wio env doctor       [--wio-root DIR] [--backend-smoke]\n",
             "  wio package          [--build-dir DIR] [--config CFG] [--output-dir DIR] [--version-suffix TAG] [--generator NAME] [--no-zip] [--clean]\n",
             "  wio perf smoke       [--iterations N] [--scratch-dir DIR] [--keep-scratch]\n",
+            "  wio migrate attributes [PATH] --check|--write\n",
             "\n",
             "Alias forms:\n",
             "\n",
@@ -85,7 +86,7 @@ realm SelfHostedGlobal {
         mut message = $"Unknown Wio command: ${command}";
         let suggestion = SelfHostedCli::Suggest(
             command,
-            ["help", "run", "build", "test", "file", "project", "bind", "env", "package", "perf", "dev"]
+            ["help", "run", "build", "test", "file", "project", "bind", "env", "package", "perf", "migrate", "dev"]
         );
         if (suggestion != "") {
             message.Append($"\nDid you mean 'wio ${suggestion}'?");

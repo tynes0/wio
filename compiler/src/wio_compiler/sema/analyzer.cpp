@@ -4619,7 +4619,10 @@ namespace wio::sema
 
         bool hasAttribute(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
         {
-            return std::ranges::any_of(attributes, [targetAttr](const auto& attr) { return attr->attribute == targetAttr; });
+            return std::ranges::any_of(attributes, [targetAttr](const auto& attr)
+            {
+                return attr && matchesBuiltinAttribute(*attr, targetAttr);
+            });
         }
 
         std::string getStructIdentityKey(const Ref<StructType>& structType)
@@ -4729,7 +4732,7 @@ namespace wio::sema
             std::vector<const AttributeStatement*> matches;
             for (const auto& attr : attributes)
             {
-                if (attr && attr->attribute == targetAttr)
+                if (attr && matchesBuiltinAttribute(*attr, targetAttr))
                     matches.push_back(attr.Get());
             }
 
@@ -4740,7 +4743,7 @@ namespace wio::sema
         {
             std::vector<Token> allArgs;
             for (const auto& attr : attributes) {
-                if (attr->attribute == targetAttr)
+                if (attr && matchesBuiltinAttribute(*attr, targetAttr))
                 {
                     allArgs.insert(allArgs.end(), attr->args.begin(), attr->args.end());
                 }
@@ -14339,6 +14342,27 @@ namespace wio::sema
                     }
                 }
             }
+            for (size_t processorIndex = 0;
+                 processorIndex < symbol->attributeProcessorPhases.size();
+                 ++processorIndex)
+            {
+                if (symbol->attributeProcessorPhases[processorIndex] != "validation" ||
+                    processorIndex >= symbol->attributeProcessorTargetTypes.size())
+                    continue;
+
+                Ref<Type> validatorTarget = unwrapAliasType(symbol->attributeProcessorTargetTypes[processorIndex]);
+                const bool targetIsAny = validatorTarget &&
+                    validatorTarget->kind() == TypeKind::Primitive &&
+                    validatorTarget.AsFast<PrimitiveType>()->name == "any";
+                if (validatorTarget && !targetIsAny && target != "component" && target != "object")
+                {
+                    WIO_LOG_ADD_ERROR(
+                        attribute->location(),
+                        "Typed Validator<{}> can target only components or objects; use Validator<any> for '{}'.",
+                        validatorTarget->toString(),
+                        target);
+                }
+            }
 
             attribute->runtimeRetained = std::ranges::find(
                 symbol->attributeRetention, std::string("runtime")) != symbol->attributeRetention.end();
@@ -15115,6 +15139,30 @@ namespace wio::sema
                  processorIndex < attributeSymbol->attributeProcessorPhases.size();
                  ++processorIndex)
             {
+                if (attributeSymbol->attributeProcessorPhases[processorIndex] == "validation")
+                {
+                    Ref<Type> validatorTarget =
+                        processorIndex < attributeSymbol->attributeProcessorTargetTypes.size()
+                            ? unwrapAliasType(attributeSymbol->attributeProcessorTargetTypes[processorIndex])
+                            : nullptr;
+                    const bool validatorTargetIsAny = validatorTarget &&
+                        validatorTarget->kind() == TypeKind::Primitive &&
+                        validatorTarget.AsFast<PrimitiveType>()->name == "any";
+                    if (validatorTarget && !validatorTargetIsAny &&
+                        !isTypeDerivedFrom(resolvedTarget, validatorTarget))
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            application->location(),
+                            "Validator '{}' requires a target compatible with '{}', but attribute '{}' is applied to '{}'.",
+                            processorIndex < attributeSymbol->attributeProcessorCanonicalTypes.size()
+                                ? attributeSymbol->attributeProcessorCanonicalTypes[processorIndex]
+                                : std::string("<validator>"),
+                            validatorTarget->toString(),
+                            attributeSymbol->attributeCanonicalName,
+                            resolvedTarget->toString());
+                    }
+                    continue;
+                }
                 if (attributeSymbol->attributeProcessorPhases[processorIndex] != "derive")
                     continue;
 

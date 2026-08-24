@@ -35,7 +35,8 @@ int main()
     assert(feature_info(Feature::GenericInstantiation)->is_partial());
     assert(feature_info(Feature::GenericInstantiation)->supports(FeatureSurface::TypeMetadata));
     assert(!feature_info(Feature::GenericInstantiation)->supports(FeatureSurface::DynamicField));
-    assert(feature_info(Feature::TypedAttributes)->is_deferred());
+    assert(feature_info(Feature::TypedAttributes)->is_supported());
+    assert(feature_info(Feature::TypedAttributes)->supports(FeatureSurface::TypeMetadata));
     assert(feature_info(Feature::ApplicationHost)->is_deferred());
     assert(feature_info(Feature::BytePool)->is_partial());
     assert(find_feature("byte-buffer") == Feature::ByteBuffer);

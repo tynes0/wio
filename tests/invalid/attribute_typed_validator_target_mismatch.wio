@@ -1,0 +1,19 @@
+use std::attribute as attr;
+
+interface Named {
+    fn Name() -> string;
+}
+
+[From(attr::Validator<Named>)]
+object NamedValidator {
+    public fn Validate() -> bool { return true; }
+}
+
+[attribute::Targets(object)]
+[attribute::Processor(NamedValidator)]
+attribute RequiresName();
+
+[RequiresName]
+object Unnamed {}
+
+fn Entry() -> i32 { return 0; }

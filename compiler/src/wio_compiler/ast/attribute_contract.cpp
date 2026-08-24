@@ -102,4 +102,13 @@ namespace wio
         const auto* contract = getBuiltinAttributeContract(attribute);
         return contract ? contract->canonicalName : std::string_view{};
     }
+
+    bool matchesBuiltinAttribute(const AttributeStatement& statement, const Attribute attribute)
+    {
+        if (statement.attribute == attribute)
+            return true;
+
+        const auto canonicalName = canonicalBuiltinAttributeName(attribute);
+        return !canonicalName.empty() && statement.canonicalName == canonicalName;
+    }
 }

@@ -10,6 +10,7 @@ use package_commands;
 use file_commands;
 use dev_commands;
 use perf_commands;
+use migrate_commands;
 use std::console as console;
 use std::result as result;
 
@@ -213,6 +214,10 @@ fn Entry(args: string[]) -> i32 {
 
     if (cliArgs.Count() >= 2usize and cliArgs[1usize] == "perf") {
         return ExitResult(SelfHostedPerf::Execute(cliArgs));
+    }
+
+    if (cliArgs.Count() >= 2usize and cliArgs[1usize] == "migrate") {
+        return ExitResult(SelfHostedMigrate::Execute(cliArgs));
     }
 
     if (cliArgs.Count() >= 2usize and cliArgs[1usize] == "env") {

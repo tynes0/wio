@@ -12,6 +12,7 @@ set(WIO_SELFHOST_PACKAGE_COMMANDS_SOURCE "${CMAKE_SOURCE_DIR}/cli/package_comman
 set(WIO_SELFHOST_FILE_COMMANDS_SOURCE "${CMAKE_SOURCE_DIR}/cli/file_commands.wio")
 set(WIO_SELFHOST_DEV_COMMANDS_SOURCE "${CMAKE_SOURCE_DIR}/cli/dev_commands.wio")
 set(WIO_SELFHOST_PERF_COMMANDS_SOURCE "${CMAKE_SOURCE_DIR}/cli/perf_commands.wio")
+set(WIO_SELFHOST_MIGRATE_COMMANDS_SOURCE "${CMAKE_SOURCE_DIR}/cli/migrate_commands.wio")
 set(WIO_SELFHOST_ARGONAUT_SOURCE "${CMAKE_SOURCE_DIR}/cli/vendor/argonaut.wio")
 
 source_group("tests" FILES ${WIO_TEST_FILES})
@@ -63,6 +64,7 @@ if(EXISTS "${WIO_SELFHOST_CLI_SOURCE}" AND EXISTS "${WIO_SELFHOST_ARGONAUT_SOURC
         "${WIO_SELFHOST_FILE_COMMANDS_SOURCE}"
         "${WIO_SELFHOST_DEV_COMMANDS_SOURCE}"
         "${WIO_SELFHOST_PERF_COMMANDS_SOURCE}"
+        "${WIO_SELFHOST_MIGRATE_COMMANDS_SOURCE}"
         "${WIO_SELFHOST_ARGONAUT_SOURCE}"
     )
     if(CMAKE_CONFIGURATION_TYPES)
@@ -2104,7 +2106,14 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_sdk_014_const_generic_metadata_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_const_generic_metadata_library.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_const_generic_metadata_host.cpp"
-        "SDK 0.14 const metadata: abi=8 block=4 label=sdk empty=ok"
+        "SDK 0.14 const metadata: abi=9 block=4 label=sdk empty=ok"
+    )
+
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_015_attribute_metadata_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_015_attribute_metadata_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_015_attribute_metadata_host.cpp"
+        "SDK 0.15 attributes: abi=9 type=Label field=Important method=Audited phase=pre"
     )
 
     add_wio_shared_reload_interop_test(
@@ -3417,10 +3426,23 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_compile_time_validator_runtime_result.wio"
         "must fold to a compile-time bool"
     )
+    add_wio_output_test(
+        wio_test_attribute_typed_validator_target_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_typed_validator_target_run.wio"
+        "attribute-typed-validator-target-ok"
+        --run
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_typed_validator_target_mismatch
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_typed_validator_target_mismatch.wio"
+        "requires a target compatible with 'Named'"
+    )
     set_tests_properties(
         wio_test_attribute_compile_time_validator_run
         wio_invalid_attribute_compile_time_validator_rejects
         wio_invalid_attribute_compile_time_validator_runtime_result
+        wio_test_attribute_typed_validator_target_run
+        wio_invalid_attribute_typed_validator_target_mismatch
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"
     )
 

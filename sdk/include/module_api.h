@@ -9,7 +9,7 @@
 
 #include "wio_version.h"
 
-inline constexpr std::uint32_t WIO_MODULE_API_DESCRIPTOR_VERSION = 8u;
+inline constexpr std::uint32_t WIO_MODULE_API_DESCRIPTOR_VERSION = 9u;
 
 enum WioModuleCapability : std::uint32_t
 {
@@ -21,7 +21,8 @@ enum WioModuleCapability : std::uint32_t
     WIO_MODULE_CAP_RESTORE_STATE = 1u << 5,
     WIO_MODULE_CAP_PRODUCT_VERSION = 1u << 6,
     WIO_MODULE_CAP_TYPE_METADATA_V2 = 1u << 7,
-    WIO_MODULE_CAP_TEXT_FIELDS = 1u << 8
+    WIO_MODULE_CAP_TEXT_FIELDS = 1u << 8,
+    WIO_MODULE_CAP_ATTRIBUTE_METADATA_V1 = 1u << 9
 };
 
 struct WioModuleProductVersion
@@ -184,6 +185,41 @@ enum WioInvokeStatus : std::int32_t
 
 using WioModuleInvokeFn = std::int32_t(*)(const WioValue* args, std::uint32_t argCount, WioValue* outResult);
 
+enum WioModuleAttributeOrigin : std::uint32_t
+{
+    WIO_MODULE_ATTRIBUTE_DIRECT = 0u,
+    WIO_MODULE_ATTRIBUTE_COMPOSED = 1u,
+    WIO_MODULE_ATTRIBUTE_SCOPED = 2u
+};
+
+enum WioModuleAttributeProcessorPhase : std::uint32_t
+{
+    WIO_MODULE_ATTRIBUTE_PHASE_UNKNOWN = 0u,
+    WIO_MODULE_ATTRIBUTE_PHASE_VALIDATION = 1u,
+    WIO_MODULE_ATTRIBUTE_PHASE_PRE = 2u,
+    WIO_MODULE_ATTRIBUTE_PHASE_POST = 3u,
+    WIO_MODULE_ATTRIBUTE_PHASE_FINALLY = 4u,
+    WIO_MODULE_ATTRIBUTE_PHASE_AROUND = 5u,
+    WIO_MODULE_ATTRIBUTE_PHASE_DERIVE = 6u
+};
+
+struct WioModuleAttributeProcessorDescriptor
+{
+    const char* canonicalTypeName;
+    WioModuleAttributeProcessorPhase phase;
+    const char* hookMode;
+    std::uint32_t order;
+};
+
+struct WioModuleAttributeDescriptor
+{
+    const char* canonicalName;
+    const char* argumentText;
+    WioModuleAttributeOrigin origin;
+    std::uint32_t processorCount;
+    const WioModuleAttributeProcessorDescriptor* processors;
+};
+
 struct WioModuleExport
 {
     const char* logicalName;
@@ -193,6 +229,8 @@ struct WioModuleExport
     const WioAbiType* parameterTypes;
     WioModuleInvokeFn invoke;
     const void* rawFunction;
+    std::uint32_t attributeCount;
+    const WioModuleAttributeDescriptor* attributes;
 };
 
 struct WioModuleCommand
@@ -340,12 +378,16 @@ struct WioModuleField
     const WioModuleExport* setterExport;
     WioModuleFieldDynamicGetFn dynamicGetter;
     WioModuleFieldDynamicSetFn dynamicSetter;
+    std::uint32_t attributeCount;
+    const WioModuleAttributeDescriptor* attributes;
 };
 
 struct WioModuleMethod
 {
     const char* methodName;
     const WioModuleExport* exportEntry;
+    std::uint32_t attributeCount;
+    const WioModuleAttributeDescriptor* attributes;
 };
 
 struct WioModuleConstructor
@@ -366,6 +408,8 @@ struct WioModuleType
     const WioModuleField* fields;
     std::uint32_t methodCount;
     const WioModuleMethod* methods;
+    std::uint32_t attributeCount;
+    const WioModuleAttributeDescriptor* attributes;
 };
 
 struct WioModuleApi
@@ -393,6 +437,22 @@ struct WioModuleApi
 };
 
 using WioModuleGetApiFn = const WioModuleApi*(*)();
+
+inline const WioModuleAttributeDescriptor* WioFindModuleAttribute(
+    const WioModuleAttributeDescriptor* attributes,
+    const std::uint32_t attributeCount,
+    const char* canonicalName)
+{
+    if (attributes == nullptr || canonicalName == nullptr)
+        return nullptr;
+    for (std::uint32_t index = 0; index < attributeCount; ++index)
+    {
+        if (attributes[index].canonicalName != nullptr &&
+            std::strcmp(attributes[index].canonicalName, canonicalName) == 0)
+            return &attributes[index];
+    }
+    return nullptr;
+}
 
 inline const WioModuleExport* WioFindModuleExport(const WioModuleApi* api, const char* logicalName)
 {

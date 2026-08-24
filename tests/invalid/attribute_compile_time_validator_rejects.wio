@@ -1,6 +1,6 @@
 use std::attribute as attr;
 
-[From(attr::Validator<i32>)]
+[From(attr::Validator<any>)]
 object RejectValidator {
     public fn Validate() -> bool { return false; }
     public fn Diagnostic() -> string { return "callback target is not safe"; }

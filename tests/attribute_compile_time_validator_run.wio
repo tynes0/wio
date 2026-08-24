@@ -1,7 +1,7 @@
 use std::attribute as attr;
 use std::console as console;
 
-[From(attr::Validator<i32>)]
+[From(attr::Validator<any>)]
 object AcceptValidator {
     public fn Validate() -> bool { return true; }
 }

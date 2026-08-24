@@ -25,4 +25,5 @@ namespace wio
     const BuiltinAttributeContract* getBuiltinAttributeContract(Attribute attribute);
     std::optional<Attribute> resolveBuiltinAttribute(std::string_view name);
     std::string_view canonicalBuiltinAttributeName(Attribute attribute);
+    bool matchesBuiltinAttribute(const AttributeStatement& statement, Attribute attribute);
 }

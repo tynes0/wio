@@ -121,7 +121,7 @@ namespace wio::sdk
         { Feature::Box, "Box", FeatureSurface::HostValue | FeatureSurface::TypeMetadata | FeatureSurface::OwnershipContract, FeatureSupport::Partial, "Host ownership value exists; a general module payload bridge is deferred." },
         { Feature::Any, "any", FeatureSurface::HostValue | FeatureSurface::TypeMetadata, FeatureSupport::Partial, "Runtime type identity is preserved; cross-module payloads require an adapter." },
         { Feature::GenericInstantiation, "generic-instantiation", FeatureSurface::TypeMetadata, FeatureSupport::Partial, "ABI v8 describes concrete type and const values; only exported specializations are host-addressable." },
-        { Feature::TypedAttributes, "typed-attributes", FeatureSurface::None, FeatureSupport::Deferred, "Retained host metadata is reserved for the attribute ABI milestone." },
+        { Feature::TypedAttributes, "typed-attributes", FeatureSurface::TypeMetadata, FeatureSupport::Supported, "ABI v9 exposes canonical retained attributes, arguments, origins, and ordered processor pipelines." },
         { Feature::AsyncTask, "async-task", FeatureSurface::TypeMetadata | FeatureSurface::OwnershipContract, FeatureSupport::Partial, "Task identity is visible; non-blocking host control lands with the async ABI capability." },
         { Feature::ApplicationHost, "application-host", FeatureSurface::None, FeatureSupport::Deferred, "Reserved for the application/system host ABI milestone." },
         { Feature::HotReload, "hot-reload", FeatureSurface::OwnershipContract | FeatureSurface::ReloadAware, FeatureSupport::Supported, "Top-level bindings reacquire generations; instance wrappers fail stale." }

@@ -16,9 +16,9 @@ int main(int argc, char** argv)
     {
         auto module = wio::sdk::Module::load(argv[1]);
         const auto info = module.inspect();
-        if (info.descriptor_version != 8u)
+        if (info.descriptor_version != WIO_MODULE_API_DESCRIPTOR_VERSION)
         {
-            std::cerr << "Const-generic metadata requires ABI descriptor version 8.\n";
+            std::cerr << "Const-generic metadata requires the current ABI descriptor.\n";
             return EXIT_FAILURE;
         }
 

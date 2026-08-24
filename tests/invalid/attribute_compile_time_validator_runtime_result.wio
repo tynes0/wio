@@ -2,7 +2,7 @@ use std::attribute as attr;
 
 fn RuntimeDecision() -> bool { return true; }
 
-[From(attr::Validator<i32>)]
+[From(attr::Validator<any>)]
 object RuntimeValidator {
     public fn Validate() -> bool { return RuntimeDecision(); }
 }
