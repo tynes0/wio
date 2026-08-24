@@ -994,8 +994,10 @@ For the current SDK version, the public and documented boundary is:
 - `WioDynamicValue` and the current dynamic container wrappers as the runtime
   reflection payload family
 - generation-aware stale-wrapper diagnostics for reload-sensitive wrappers
-- ABI descriptor version `8`, module product/version inspection, stable type
+- ABI descriptor version `9`, module product/version inspection, stable type
   IDs, concrete type/const arguments, and supported nested dynamic fields
+- runtime-retained typed-attribute descriptors on exports, types, fields, and
+  methods, including ordered behavioral processor metadata
 
 The following should be treated as stable with explicit caveats:
 
@@ -1005,7 +1007,7 @@ The following should be treated as stable with explicit caveats:
   deeper host-side reflection growth beyond that should still be treated as
   future-facing
 
-The following should not currently be read as part of the stable v0.14 SDK
+The following should not currently be read as part of the stable v0.15 SDK
 contract:
 
 - compiler-internal AST/parser/sema/codegen APIs
@@ -1014,12 +1016,13 @@ contract:
   reload generations
 - `ref` / `view` field export behavior as a public host ABI promise
 - direct binary exchange for partial/deferred catalog entries such as
-  interface, Box, any, async task, pool identity, and retained attributes
-- retained typed-attribute metadata, non-blocking task control, and the future
-  application/system host lifecycle ABI
+  interface, Box, any, async task, and pool identity
+- non-blocking task control and the future application/system host lifecycle
+  ABI
 
-This is the implemented v0.14 value-parity baseline, not the final v1 parity claim. The
-required path to full host-observable language/runtime parity is maintained in
+This is the implemented v0.15 typed-metadata baseline layered on the v0.14
+value bridge, not the final v1 parity claim. The required path to full
+host-observable language/runtime parity is maintained in
 [`WIO_SDK_EVOLUTION_PLAN.md`](./WIO_SDK_EVOLUTION_PLAN.md).
 
 ---
