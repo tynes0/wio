@@ -1,0 +1,15 @@
+use std::attribute as attr;
+
+[From(attr::PreProcessor)]
+object ReceiverGuard {
+    public fn Before(receiver: any) -> bool { return true; }
+}
+
+[attribute::Targets(fn)]
+[attribute::Processor(ReceiverGuard)]
+attribute InvalidReceiverGuard();
+
+[InvalidReceiverGuard]
+fn Work() {}
+
+fn Entry() -> i32 { return 0; }

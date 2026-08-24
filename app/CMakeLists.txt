@@ -3448,6 +3448,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "attribute-around-skip-ok"
         --run
     )
+    add_wio_output_test(
+        wio_test_attribute_receiver_guard_run
+        "${CMAKE_SOURCE_DIR}/tests/attribute_receiver_guard_run.wio"
+        "attribute-receiver-guard-ok"
+        --run
+    )
     add_wio_runtime_failure_test(
         wio_invalid_attribute_around_proceed_twice
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_around_proceed_twice.wio"
@@ -3474,6 +3480,16 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "can target only functions or methods"
     )
     add_wio_failure_test(
+        wio_invalid_attribute_receiver_guard_free_function
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_receiver_guard_free_function.wio"
+        "requires an object method target"
+    )
+    add_wio_failure_test(
+        wio_invalid_attribute_boolean_guard_non_unit
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_boolean_guard_non_unit.wio"
+        "can skip only a unit-returning function or method"
+    )
+    add_wio_failure_test(
         wio_invalid_attribute_derive_builder_not_enabled
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_derive_builder_not_enabled.wio"
         "requires the checked declaration-builder contract"
@@ -3488,11 +3504,14 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_attribute_behavioral_ordering_run
         wio_test_attribute_around_pipeline_run
         wio_test_attribute_around_skip_run
+        wio_test_attribute_receiver_guard_run
         wio_invalid_attribute_around_proceed_twice
         wio_invalid_attribute_around_proceed_escaped
         wio_invalid_attribute_behavioral_missing_hook
         wio_invalid_attribute_behavioral_async_not_frozen
         wio_invalid_attribute_behavioral_non_callable_target
+        wio_invalid_attribute_receiver_guard_free_function
+        wio_invalid_attribute_boolean_guard_non_unit
         wio_invalid_attribute_derive_builder_not_enabled
         wio_invalid_attribute_around_requires_proceed_contract
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}"

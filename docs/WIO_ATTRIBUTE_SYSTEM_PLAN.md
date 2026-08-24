@@ -19,6 +19,8 @@ Implemented foundation checkpoint:
   `FinallyProcessor.Finally()` hooks with callee-side lowering, reverse exit
   ordering, successful-return evaluation before post hooks, and exactly-once
   finalization on normal/exceptional exits;
+- receiver-aware object-method pre hooks through `Before(receiver: any)`, with
+  a boolean unit-return guard for callback-liveness and precondition patterns;
 - deterministic topological processor order from `Before`/`After`, with source
   order as the stable tie-breaker and reverse-order exit unwinding;
 - unit-returning synchronous `Around(proceed: fn())` lowering with zero-or-one
@@ -27,7 +29,8 @@ Implemented foundation checkpoint:
   normalized argument metadata, and default provenance.
 
 Still open: target-aware validator contexts, checked declaration derives,
-typed receiver/argument/result hook contexts, typed-result around and async
+typed argument/result hook contexts, statically typed receiver contexts,
+typed-result around and async
 behavioral lowering, the final removal of enum-only built-in lowering paths,
 behavioral pipeline reflection, C++ SDK descriptors, source
 migration/formatting, editor/web support, and Windows/Linux release

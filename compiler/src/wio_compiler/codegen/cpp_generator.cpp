@@ -9181,6 +9181,7 @@ namespace wio::codegen
             std::string phase;
             std::string cppTypeName;
             std::string hookCppName;
+            std::string hookMode;
             std::string variableName;
             std::string finalizedFlagName;
         };
@@ -9211,6 +9212,7 @@ namespace wio::codegen
                         .phase = processor.phase,
                         .cppTypeName = processor.cppTypeName,
                         .hookCppName = processor.hookCppName,
+                        .hookMode = processor.hookMode,
                         .variableName = "_wio_attribute_processor_" + std::to_string(index),
                         .finalizedFlagName = "_wio_attribute_finalized_" + std::to_string(index)
                     });
@@ -10120,7 +10122,20 @@ namespace wio::codegen
                 for (const auto& processor : behavioralProcessors)
                 {
                     if (processor.phase == "pre")
-                        emitLine(processor.variableName + "->" + processor.hookCppName + "();");
+                    {
+                        std::string arguments;
+                        if (processor.hookMode.starts_with("receiver_any"))
+                        {
+                            arguments = "wio::runtime::Any::FromObject<" + currentClassName_ +
+                                ">(wio::runtime::Ref<" + currentClassName_ + ">(this))";
+                        }
+                        const std::string invocation = processor.variableName + "->" +
+                            processor.hookCppName + "(" + arguments + ")";
+                        if (processor.hookMode.ends_with("_guard"))
+                            emitLine("if (!(" + invocation + ")) return;");
+                        else
+                            emitLine(invocation + ";");
+                    }
                 }
 
                 const auto previousPostProcessors = currentBehavioralPostProcessors_;

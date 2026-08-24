@@ -38,12 +38,15 @@ Notes:
 - [x] Unit synchronous around hooks own a guarded zero-or-one `Proceed`;
       duplicate calls and use after the around invocation are rejected without
       exposing mutable AST or token rewriting.
+- [x] Object-method pre processors may receive the current receiver as `any`;
+      boolean pre guards can skip unit-returning methods, while receiver use on
+      free functions and result-bearing guards fail during analysis.
 - [x] Unsupported processor/target combinations and not-yet-enabled derive
       execution are diagnosed instead of being accepted as silent metadata.
 - [x] Runtime type reflection exposes structured attribute descriptors with
       stable FNV-1a identity, retention, origin, normalized arguments, and
       default provenance while retaining the legacy string view.
-- [x] The focused foundation matrix passes 18/18 new tests.
+- [x] The focused foundation matrix passes 21/21 new tests.
 
 ## v0.13 language coherence and SDK parity sprint
 

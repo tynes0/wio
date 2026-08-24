@@ -14224,6 +14224,9 @@ namespace wio::sema
                     .phase = symbol->attributeProcessorPhases[processorIndex],
                     .hookCppName = processorIndex < symbol->attributeProcessorHookCppNames.size()
                         ? symbol->attributeProcessorHookCppNames[processorIndex]
+                        : std::string{},
+                    .hookMode = processorIndex < symbol->attributeProcessorHookModes.size()
+                        ? symbol->attributeProcessorHookModes[processorIndex]
                         : std::string{}
                 });
             }
@@ -15143,6 +15146,7 @@ namespace wio::sema
         attributeSymbol->attributeProcessorCanonicalTypes.clear();
         attributeSymbol->attributeProcessorCppTypes.clear();
         attributeSymbol->attributeProcessorHookCppNames.clear();
+        attributeSymbol->attributeProcessorHookModes.clear();
         attributeSymbol->attributeProcessorValidationResults.clear();
         attributeSymbol->attributeProcessorDiagnostics.clear();
         for (const std::string& processorName : node.processorTypes)
@@ -15198,6 +15202,7 @@ namespace wio::sema
             attributeSymbol->attributeProcessorCppTypes.push_back(
                 codegen::Mangler::mangleStruct(processorSymbol->name, processorSymbol->scopePath));
             attributeSymbol->attributeProcessorHookCppNames.emplace_back();
+            attributeSymbol->attributeProcessorHookModes.emplace_back();
             attributeSymbol->attributeProcessorValidationResults.push_back(-1);
             attributeSymbol->attributeProcessorDiagnostics.emplace_back();
 
@@ -15222,15 +15227,48 @@ namespace wio::sema
                 const FunctionDeclaration* hook = findProcessorMethod(methodName);
                 Ref<Symbol> hookSymbol = hook && hook->name ? hook->name->referencedSymbol.Lock() : nullptr;
                 Ref<FunctionType> hookType = hookSymbol ? hookSymbol->type.AsFast<FunctionType>() : nullptr;
-                if (!hook || !hookType || !hook->parameters.empty() ||
-                    !hookType->returnType || !hookType->returnType->isVoid())
+                bool validHook = hook && hookType && hookType->returnType;
+                std::string hookMode = "no_args";
+                if (validHook && phase == "pre" && hook->parameters.size() == 1)
                 {
-                    WIO_LOG_ADD_ERROR(
-                        node.location(),
-                        "{} processor '{}' must declare parameterless 'fn {}()'.",
-                        phase,
-                        processorName,
-                        methodName);
+                    Ref<Type> receiverType = hookType->paramTypes.empty()
+                        ? nullptr
+                        : unwrapAliasType(hookType->paramTypes.front());
+                    validHook = receiverType && receiverType->kind() == TypeKind::Primitive &&
+                                receiverType.AsFast<PrimitiveType>()->name == "any";
+                    hookMode = "receiver_any";
+                }
+                else if (validHook && !hook->parameters.empty())
+                {
+                    validHook = false;
+                }
+
+                const bool returnsVoid = validHook && hookType->returnType->isVoid();
+                const bool returnsBool = validHook &&
+                    unwrapAliasType(hookType->returnType) == Compiler::get().getTypeContext().getBool();
+                if (phase != "pre")
+                    validHook = validHook && returnsVoid;
+                else
+                    validHook = validHook && (returnsVoid || returnsBool);
+
+                if (!validHook)
+                {
+                    if (phase == "pre")
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            node.location(),
+                            "pre processor '{}' must declare 'fn Before()', 'fn Before() -> bool', 'fn Before(receiver: any)', or 'fn Before(receiver: any) -> bool'.",
+                            processorName);
+                    }
+                    else
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            node.location(),
+                            "{} processor '{}' must declare parameterless 'fn {}()'.",
+                            phase,
+                            processorName,
+                            methodName);
+                    }
                 }
                 else
                 {
@@ -15238,6 +15276,9 @@ namespace wio::sema
                         codegen::Mangler::mangleFunction(
                             std::string(methodName),
                             hookType->paramTypes);
+                    if (returnsBool)
+                        hookMode += "_guard";
+                    attributeSymbol->attributeProcessorHookModes.back() = std::move(hookMode);
                 }
                 continue;
             }
@@ -15267,6 +15308,7 @@ namespace wio::sema
                 {
                     attributeSymbol->attributeProcessorHookCppNames.back() =
                         codegen::Mangler::mangleFunction("Around", hookType->paramTypes);
+                    attributeSymbol->attributeProcessorHookModes.back() = "proceed";
                 }
                 continue;
             }
@@ -15823,6 +15865,35 @@ namespace wio::sema
             Ref<FunctionType> attributedFunctionType = attributedFunctionSymbol
                 ? attributedFunctionSymbol->type.AsFast<FunctionType>()
                 : nullptr;
+            for (const auto& attribute : node.attributes)
+            {
+                if (!attribute)
+                    continue;
+                for (const auto& processor : attribute->processorBindings)
+                {
+                    if (processor.phase != "pre")
+                        continue;
+                    if (processor.hookMode.starts_with("receiver_any") &&
+                        (attributeTarget != "method" || !currentStructType_ ||
+                         currentStructType_->kind() != TypeKind::Struct ||
+                         !currentStructType_.AsFast<StructType>()->isObject))
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            attribute->location(),
+                            "Receiver-aware pre processor '{}' requires an object method target.",
+                            processor.canonicalTypeName);
+                    }
+                    if (processor.hookMode.ends_with("_guard") &&
+                        (!attributedFunctionType || !attributedFunctionType->returnType ||
+                         !attributedFunctionType->returnType->isVoid()))
+                    {
+                        WIO_LOG_ADD_ERROR(
+                            attribute->location(),
+                            "Boolean pre guard '{}' can skip only a unit-returning function or method.",
+                            processor.canonicalTypeName);
+                    }
+                }
+            }
             if (hasAroundProcessor &&
                 (!attributedFunctionType || !attributedFunctionType->returnType ||
                  !attributedFunctionType->returnType->isVoid()))

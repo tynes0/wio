@@ -838,6 +838,7 @@ namespace wio
             std::string cppTypeName;
             std::string phase;
             std::string hookCppName;
+            std::string hookMode;
         };
         // Effective, declaration-ordered processors bound by semantic
         // analysis. Code generation never re-resolves attribute names.

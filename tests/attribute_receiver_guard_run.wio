@@ -1,0 +1,43 @@
+use std::attribute as attr;
+use std::console as console;
+
+mut Calls: i32 = 0;
+
+interface AliveTarget {
+    fn IsAlive() -> bool;
+}
+
+[From(attr::PreProcessor)]
+object AliveReceiverGuard {
+    public fn Before(receiver: any) -> bool {
+        if (receiver is AliveTarget) {
+            let target = receiver fit AliveTarget;
+            return target.IsAlive();
+        }
+        return false;
+    }
+}
+
+[attribute::Targets(method)]
+[attribute::Processor(AliveReceiverGuard)]
+attribute CallbackMethod();
+
+[From(AliveTarget)]
+object CallbackTarget {
+    public alive: bool;
+    OnConstruct(value: bool) { self.alive = value; }
+
+    public fn IsAlive() -> bool { return self.alive; }
+
+    [CallbackMethod]
+    public fn Invoke() { Calls += 1; }
+}
+
+fn Entry() -> i32 {
+    let dead = CallbackTarget(false);
+    let live = CallbackTarget(true);
+    dead.Invoke();
+    live.Invoke();
+    console::PrintLine("attribute-receiver-guard-ok");
+    return Calls == 1 ? 0 : 1;
+}

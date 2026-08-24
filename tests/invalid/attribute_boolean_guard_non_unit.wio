@@ -1,0 +1,15 @@
+use std::attribute as attr;
+
+[From(attr::PreProcessor)]
+object Guard {
+    public fn Before() -> bool { return true; }
+}
+
+[attribute::Targets(fn)]
+[attribute::Processor(Guard)]
+attribute Guarded();
+
+[Guarded]
+fn Work() -> i32 { return 1; }
+
+fn Entry() -> i32 { return 0; }
