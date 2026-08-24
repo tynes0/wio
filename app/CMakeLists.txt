@@ -796,6 +796,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_test(
+        NAME wio_test_attribute_migration_smoke
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DWIO_EXE=$<TARGET_FILE:wio_app>
+            -DWIO_SCRATCH_ROOT=${CMAKE_BINARY_DIR}/attribute-migration-smoke
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioAttributeMigrationSmoke.cmake"
+    )
+    set_tests_properties(
+        wio_test_attribute_migration_smoke
+        PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_test(
         NAME wio_test_self_hosted_cli_smoke
         COMMAND
             ${CMAKE_COMMAND}
