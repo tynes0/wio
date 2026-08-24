@@ -85,9 +85,17 @@ here does not by itself mean that v1 cannot ship.
     not the final surface. Typed arguments/defaults, target policies, retention,
     repetition, inheritance, conflicts, named arguments, folded scalar/string/
     text defaults, and runtime type/field reflection are partially implemented.
-    Unify built-ins and user attributes in one typed model; then add controlled
-    validation/derive processors, formatter/LSP/docs support, SDK metadata, and
-    automated edition-aware migration. Add bounded, typed
+    The 0.15 foundation adds canonical bracket parsing across ordinary,
+    parameter, enum-case, application, system, handler, and field targets;
+    recursive composition with argument substitution; effective-set target,
+    require/require-any/conflict/only-with/exclusive/cardinality/order checks;
+    the public `std::attribute` catalog; strict pre/post/finally/around phase
+    identity; and structured runtime type-attribute descriptors with stable
+    identity, origin, normalized arguments, and default provenance. Unify
+    compiler built-ins with user attributes in the same resolved symbol model;
+    then add executable validation/derive processors, behavioral lowering,
+    formatter/LSP/docs support, C++ SDK metadata, and automated edition-aware
+    migration. Add bounded, typed
     behavioral attributes for entry guards, pre/postconditions, guaranteed
     exit hooks, and eventually `around` interception. This includes
     user-defined receiver-liveness guards for callbacks whose native peer may
@@ -102,11 +110,9 @@ here does not by itself mean that v1 cannot ship.
     and `text` const references and materialize trailing defaults into runtime-
     reflection metadata. The normative delivery plan is
     `docs/WIO_ATTRIBUTE_SYSTEM_PLAN.md`. Pre, post, finally, and around
-    processors are separate interfaces. User attributes may compose existing
-    attributes, with normalized target/require/require-any/conflict/only-with/
-    exclusivity/cardinality/order constraints. Publish every compiler-known
-    attribute, including native/export and their limits, as declarations in
-    `std::attribute`; built-ins must not retain a separate hidden model.
+    processors are separate interfaces. The declarations and compatibility
+    vocabulary now exist in `std::attribute`, but compiler built-ins must stop
+    retaining a privileged lowering path before this item can close.
 
 13. [~] Complete a language-coherence pass before broad surface expansion.
     The first 0.11 stabilization slice aligned scoped attributes, pipelines,

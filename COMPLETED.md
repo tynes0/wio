@@ -10,6 +10,28 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## v0.15 attribute foundation sprint
+
+- [x] Declaration-leading `[Attribute]` syntax supports stacked and grouped
+      lists while preserving legacy input and canonical `using` activation.
+- [x] Bracket attributes retain target identity on ordinary declarations,
+      members, parameters, enum/flagset cases, applications, systems,
+      lifecycle handlers, and application/system fields.
+- [x] User attributes compose other attributes with compile-time parameter
+      substitution, default materialization, recursive expansion, and cycle
+      diagnostics.
+- [x] Effective-set contracts cover targets, requires, requires-any,
+      conflicts, only-with allow lists, exclusive groups, cardinality, and
+      before/after ordering cycles.
+- [x] `std::attribute` publishes processor phases, meta-attribute policies,
+      and declarations for the current compiler attributes.
+- [x] Processor declarations are checked against exactly one of the pre,
+      post, finally, or around phase interfaces.
+- [x] Runtime type reflection exposes structured attribute descriptors with
+      stable FNV-1a identity, retention, origin, normalized arguments, and
+      default provenance while retaining the legacy string view.
+- [x] The focused foundation matrix passes 18/18 new tests.
+
 ## v0.13 language coherence and SDK parity sprint
 
 - [x] The normative Wio 0.13 coherence specification freezes first-class

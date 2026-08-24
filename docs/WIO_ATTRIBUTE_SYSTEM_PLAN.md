@@ -1,6 +1,23 @@
 # Wio Attribute System Plan
 
-Status: accepted design direction for Wio 0.15.
+Status: accepted design direction for Wio 0.15; foundation implementation is
+in progress on `releases/v0.15.0`.
+
+Implemented foundation checkpoint:
+
+- declaration-leading stacked/grouped bracket applications;
+- preserved application/system/handler/parameter/enum-case target identity;
+- user composition with parameter substitution, defaults, and cycle checks;
+- effective-set target, requirement, conflict, allow-list, exclusivity,
+  cardinality, and ordering validation;
+- `std::attribute` declarations and strict processor phase-interface checks;
+- structured runtime type-attribute descriptors with stable IDs, origin,
+  normalized argument metadata, and default provenance.
+
+Still open: executable validator/derive and behavioral lowering, built-in
+symbol-model unification, behavioral pipeline reflection, C++ SDK descriptors,
+source migration/formatting, editor/web support, and Windows/Linux release
+qualification.
 
 This document supersedes the earlier postfix `with` attribute proposal. The
 canonical source spelling is a declaration-leading bracket list:
