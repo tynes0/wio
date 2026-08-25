@@ -6544,6 +6544,70 @@ namespace wio::sdk
         field(fieldName).set_component(value);
     }
 
+    class UniqueNativeResource
+    {
+    public:
+        UniqueNativeResource() noexcept = default;
+
+        explicit UniqueNativeResource(WioOwnedNativeResource resource)
+            : resource_(resource)
+        {
+            if (resource_.state != nullptr && resource_.release == nullptr)
+            {
+                resource_ = {};
+                throw Error(ErrorCode::InvalidArgument,
+                    "An owned native resource requires a release operation.");
+            }
+        }
+
+        UniqueNativeResource(const UniqueNativeResource&) = delete;
+        UniqueNativeResource& operator=(const UniqueNativeResource&) = delete;
+
+        UniqueNativeResource(UniqueNativeResource&& other) noexcept
+            : resource_(WioTakeNativeResource(&other.resource_))
+        {
+        }
+
+        UniqueNativeResource& operator=(UniqueNativeResource&& other) noexcept
+        {
+            if (this == &other)
+                return *this;
+            reset();
+            resource_ = WioTakeNativeResource(&other.resource_);
+            return *this;
+        }
+
+        ~UniqueNativeResource() { reset(); }
+
+        [[nodiscard]] explicit operator bool() const noexcept { return resource_.state != nullptr; }
+        [[nodiscard]] void* get() const noexcept { return resource_.state; }
+        [[nodiscard]] std::string_view type_name() const noexcept
+        {
+            return resource_.typeName == nullptr ? std::string_view{} : std::string_view(resource_.typeName);
+        }
+        [[nodiscard]] bool release_is_thread_safe() const noexcept
+        {
+            return (resource_.flags & WIO_NATIVE_RESOURCE_RELEASE_THREAD_SAFE) != 0u;
+        }
+        [[nodiscard]] WioBorrowedNativeResource borrow() const noexcept
+        {
+            return WioBorrowNativeResource(&resource_);
+        }
+        [[nodiscard]] WioOwnedNativeResource into_abi() noexcept
+        {
+            return WioTakeNativeResource(&resource_);
+        }
+
+        void reset(WioOwnedNativeResource replacement = {}) noexcept
+        {
+            WioReleaseNativeResource(&resource_);
+            resource_ = replacement;
+        }
+
+    private:
+        WioOwnedNativeResource resource_{};
+    };
+
     template <typename Signature>
     class HostCallback;
 

@@ -414,6 +414,61 @@ struct WioModuleType
     const WioModuleAttributeDescriptor* attributes;
 };
 
+enum WioNativeResourceFlag : std::uint32_t
+{
+    WIO_NATIVE_RESOURCE_RELEASE_THREAD_SAFE = 1u << 0
+};
+
+using WioNativeResourceReleaseFn = void(*)(void* state) noexcept;
+
+// A borrowed resource never releases `state` and is only valid while its
+// owner remains alive. typeName must point to static storage.
+struct WioBorrowedNativeResource
+{
+    void* state;
+    const char* typeName;
+    std::uint32_t flags;
+    std::uint32_t reserved;
+};
+
+// A non-empty owned resource carries exactly one ownership claim. ABI callers
+// transfer it with WioTakeNativeResource and destroy it with
+// WioReleaseNativeResource. Copying this POD does not duplicate ownership;
+// C++ callers should use wio::sdk::UniqueNativeResource.
+struct WioOwnedNativeResource
+{
+    void* state;
+    const char* typeName;
+    std::uint32_t flags;
+    std::uint32_t reserved;
+    WioNativeResourceReleaseFn release;
+};
+
+inline WioBorrowedNativeResource WioBorrowNativeResource(
+    const WioOwnedNativeResource* resource) noexcept
+{
+    if (resource == nullptr)
+        return {};
+    return {resource->state, resource->typeName, resource->flags, 0u};
+}
+
+inline WioOwnedNativeResource WioTakeNativeResource(
+    WioOwnedNativeResource* resource) noexcept
+{
+    if (resource == nullptr)
+        return {};
+    WioOwnedNativeResource result = *resource;
+    *resource = {};
+    return result;
+}
+
+inline void WioReleaseNativeResource(WioOwnedNativeResource* resource) noexcept
+{
+    WioOwnedNativeResource owned = WioTakeNativeResource(resource);
+    if (owned.state != nullptr && owned.release != nullptr)
+        owned.release(owned.state);
+}
+
 enum WioCallbackStatus : std::int32_t
 {
     WIO_CALLBACK_OK = 0,

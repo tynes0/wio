@@ -60,6 +60,15 @@ if(BUILD_TESTING)
         NAME wio_sdk_016_callback_lifetime
         COMMAND wio_sdk_016_callback_lifetime_test
     )
+
+    add_executable(wio_sdk_016_native_resource_test
+        "${CMAKE_SOURCE_DIR}/tests/sdk_016_native_resource_test.cpp"
+    )
+    target_link_libraries(wio_sdk_016_native_resource_test PRIVATE wio_sdk)
+    add_test(
+        NAME wio_sdk_016_native_resource
+        COMMAND wio_sdk_016_native_resource_test
+    )
 endif()
 
 install(DIRECTORY "${WIO_SDK_INCLUDE_DIR}/"

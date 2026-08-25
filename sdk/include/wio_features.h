@@ -44,7 +44,8 @@ namespace wio::sdk
         AsyncTask = 30u,
         ApplicationHost = 31u,
         HotReload = 32u,
-        NativeCallback = 33u
+        NativeCallback = 33u,
+        NativeResource = 34u
     };
 
     enum class FeatureSurface : std::uint32_t
@@ -126,7 +127,8 @@ namespace wio::sdk
         { Feature::AsyncTask, "async-task", FeatureSurface::HostValue | FeatureSurface::TypeMetadata | FeatureSurface::OwnershipContract | FeatureSurface::ReloadAware, FeatureSupport::Supported, "ABI v10 exposes typed scalar tasks with poll, wait, cancellation, deadline, completion callbacks, main-executor delivery, and generation-safe ownership." },
         { Feature::ApplicationHost, "application-host", FeatureSurface::OwnershipContract | FeatureSurface::ReloadAware, FeatureSupport::Supported, "ABI v10 provides host-owned state, deterministic lifecycle, explicit main pumping, thread affinity, and contained failures." },
         { Feature::HotReload, "hot-reload", FeatureSurface::OwnershipContract | FeatureSurface::ReloadAware, FeatureSupport::Supported, "Top-level bindings reacquire generations; instance wrappers fail stale." },
-        { Feature::NativeCallback, "native-callback", FeatureSurface::HostValue | FeatureSurface::DirectCallAbi | FeatureSurface::OwnershipContract, FeatureSupport::Supported, "Retainable userdata, scalar signature metadata, thread declaration, and failure containment cross the native callback boundary." }
+        { Feature::NativeCallback, "native-callback", FeatureSurface::HostValue | FeatureSurface::DirectCallAbi | FeatureSurface::OwnershipContract, FeatureSupport::Supported, "Retainable userdata, scalar signature metadata, thread declaration, and failure containment cross the native callback boundary." },
+        { Feature::NativeResource, "native-resource", FeatureSurface::HostValue | FeatureSurface::OwnershipContract, FeatureSupport::Supported, "Move-only owned handles and copyable borrowed views make native release responsibility explicit and exactly-once." }
     });
 
     [[nodiscard]] constexpr std::span<const FeatureInfo> features() noexcept
