@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -10,6 +11,7 @@
 #include <initializer_list>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <new>
 #include <optional>
 #include <sstream>
@@ -6541,6 +6543,178 @@ namespace wio::sdk
     {
         field(fieldName).set_component(value);
     }
+
+    template <typename Signature>
+    class HostCallback;
+
+    template <typename TReturn, typename... TArgs>
+    class HostCallback<TReturn(TArgs...)>
+    {
+    public:
+        explicit HostCallback(std::function<TReturn(TArgs...)> callback, const bool threadSafe = false)
+            : state_(new State(std::move(callback), threadSafe))
+        {
+            if (!state_->callback)
+            {
+                delete state_;
+                state_ = nullptr;
+                throw Error(ErrorCode::InvalidArgument, "Wio host callback cannot be empty.");
+            }
+        }
+
+        HostCallback() = default;
+        HostCallback(const HostCallback& other) noexcept : state_(other.state_) { retain_state(state_); }
+        HostCallback& operator=(const HostCallback& other) noexcept
+        {
+            if (this == &other)
+                return *this;
+            release_state(state_);
+            state_ = other.state_;
+            retain_state(state_);
+            return *this;
+        }
+        HostCallback(HostCallback&& other) noexcept : state_(std::exchange(other.state_, nullptr)) {}
+        HostCallback& operator=(HostCallback&& other) noexcept
+        {
+            if (this == &other)
+                return *this;
+            release_state(state_);
+            state_ = std::exchange(other.state_, nullptr);
+            return *this;
+        }
+        ~HostCallback() { release_state(state_); }
+
+        [[nodiscard]] explicit operator bool() const noexcept { return state_ != nullptr; }
+
+        // The returned descriptor borrows this wrapper's reference. Native
+        // code must retain it before storing it beyond the current call.
+        [[nodiscard]] WioHostCallback borrowed() const noexcept
+        {
+            static const std::array<WioAbiType, sizeof...(TArgs)> parameterTypes{
+                detail::getAbiType<TArgs>()...
+            };
+            return WioHostCallback{
+                state_,
+                detail::getAbiType<TReturn>(),
+                static_cast<std::uint32_t>(parameterTypes.size()),
+                parameterTypes.empty() ? nullptr : parameterTypes.data(),
+                static_cast<std::uint32_t>(WIO_CALLBACK_CONTAINS_FAILURES |
+                    WIO_CALLBACK_RETAINABLE_USERDATA |
+                    (state_ != nullptr && state_->threadSafe ? WIO_CALLBACK_THREAD_SAFE : 0u)),
+                &retain_abi,
+                &release_abi,
+                &invoke_abi,
+                &last_error_abi
+            };
+        }
+
+        // Returns one independently owned ABI reference. Pair it with
+        // WioReleaseHostCallback when the native registration is removed.
+        [[nodiscard]] WioHostCallback retained() const noexcept
+        {
+            WioHostCallback descriptor = borrowed();
+            WioRetainHostCallback(&descriptor);
+            return descriptor;
+        }
+
+    private:
+        struct State
+        {
+            State(std::function<TReturn(TArgs...)> value, const bool safe)
+                : callback(std::move(value)), threadSafe(safe) {}
+
+            std::atomic<std::uint64_t> references{1u};
+            std::function<TReturn(TArgs...)> callback;
+            bool threadSafe = false;
+            mutable std::mutex errorMutex{};
+            std::string lastError{};
+        };
+
+        static void retain_state(State* state) noexcept
+        {
+            if (state != nullptr)
+                state->references.fetch_add(1u, std::memory_order_relaxed);
+        }
+
+        static void release_state(State* state) noexcept
+        {
+            if (state != nullptr && state->references.fetch_sub(1u, std::memory_order_acq_rel) == 1u)
+                delete state;
+        }
+
+        static void retain_abi(void* opaque) noexcept { retain_state(static_cast<State*>(opaque)); }
+        static void release_abi(void* opaque) noexcept { release_state(static_cast<State*>(opaque)); }
+
+        template <size_t... Indices>
+        static std::int32_t invoke_values(State* state,
+                                          const WioValue* args,
+                                          WioValue* outResult,
+                                          std::index_sequence<Indices...>)
+        {
+            if constexpr (std::is_void_v<TReturn>)
+            {
+                state->callback(detail::fromWioValue<TArgs>(args[Indices])...);
+                if (outResult != nullptr)
+                    outResult->type = WIO_ABI_VOID;
+            }
+            else
+            {
+                const TReturn result = state->callback(detail::fromWioValue<TArgs>(args[Indices])...);
+                *outResult = detail::toWioValue(result);
+            }
+            return WIO_CALLBACK_OK;
+        }
+
+        static std::int32_t invoke_abi(void* opaque,
+                                       const WioValue* args,
+                                       const std::uint32_t argCount,
+                                       WioValue* outResult) noexcept
+        {
+            auto* state = static_cast<State*>(opaque);
+            if (state == nullptr || argCount != sizeof...(TArgs) || (argCount > 0u && args == nullptr))
+                return WIO_CALLBACK_BAD_ARGUMENTS;
+            if constexpr (!std::is_void_v<TReturn>)
+            {
+                if (outResult == nullptr)
+                    return WIO_CALLBACK_RESULT_REQUIRED;
+            }
+            const std::array<WioAbiType, sizeof...(TArgs)> expected{ detail::getAbiType<TArgs>()... };
+            for (size_t index = 0; index < expected.size(); ++index)
+            {
+                if (args[index].type != expected[index])
+                    return WIO_CALLBACK_TYPE_MISMATCH;
+            }
+            try
+            {
+                return invoke_values(state, args, outResult, std::index_sequence_for<TArgs...>{});
+            }
+            catch (const std::exception& error)
+            {
+                std::lock_guard lock(state->errorMutex);
+                state->lastError = error.what();
+                return WIO_CALLBACK_FAULTED;
+            }
+            catch (...)
+            {
+                std::lock_guard lock(state->errorMutex);
+                state->lastError = "unhandled non-standard callback exception";
+                return WIO_CALLBACK_FAULTED;
+            }
+        }
+
+        static const char* last_error_abi(const void* opaque) noexcept
+        {
+            const auto* state = static_cast<const State*>(opaque);
+            if (state == nullptr)
+                return "callback state is null";
+            thread_local std::string snapshot;
+            std::lock_guard lock(state->errorMutex);
+            snapshot = state->lastError;
+            return snapshot.c_str();
+        }
+
+        State* state_ = nullptr;
+    };
 
     template <typename Signature>
     auto wio_load_export(const WioModuleApi* api, std::string_view logicalName) -> typename detail::FunctionTraits<Signature>::StdFunction;

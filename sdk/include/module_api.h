@@ -414,6 +414,69 @@ struct WioModuleType
     const WioModuleAttributeDescriptor* attributes;
 };
 
+enum WioCallbackStatus : std::int32_t
+{
+    WIO_CALLBACK_OK = 0,
+    WIO_CALLBACK_BAD_ARGUMENTS = 1,
+    WIO_CALLBACK_TYPE_MISMATCH = 2,
+    WIO_CALLBACK_RESULT_REQUIRED = 3,
+    WIO_CALLBACK_FAULTED = 4
+};
+
+enum WioCallbackFlag : std::uint32_t
+{
+    WIO_CALLBACK_THREAD_SAFE = 1u << 0,
+    WIO_CALLBACK_CONTAINS_FAILURES = 1u << 1,
+    WIO_CALLBACK_RETAINABLE_USERDATA = 1u << 2
+};
+
+using WioHostCallbackRetainFn = void(*)(void* userData);
+using WioHostCallbackReleaseFn = void(*)(void* userData);
+using WioHostCallbackInvokeFn = std::int32_t(*)(void* userData,
+                                                 const WioValue* args,
+                                                 std::uint32_t argCount,
+                                                 WioValue* outResult);
+using WioHostCallbackLastErrorFn = const char*(*)(const void* userData);
+
+// `userData` is borrowed by default. Native code that stores a callback beyond
+// the current call must invoke retain(userData), and must later pair it with
+// release(userData). invoke contains host exceptions and reports them as a
+// WioCallbackStatus instead of unwinding across the ABI boundary.
+struct WioHostCallback
+{
+    void* userData;
+    WioAbiType returnType;
+    std::uint32_t parameterCount;
+    const WioAbiType* parameterTypes;
+    std::uint32_t flags;
+    WioHostCallbackRetainFn retain;
+    WioHostCallbackReleaseFn release;
+    WioHostCallbackInvokeFn invoke;
+    WioHostCallbackLastErrorFn lastError;
+};
+
+inline void WioRetainHostCallback(const WioHostCallback* callback)
+{
+    if (callback != nullptr && callback->userData != nullptr && callback->retain != nullptr)
+        callback->retain(callback->userData);
+}
+
+inline void WioReleaseHostCallback(const WioHostCallback* callback)
+{
+    if (callback != nullptr && callback->userData != nullptr && callback->release != nullptr)
+        callback->release(callback->userData);
+}
+
+inline std::int32_t WioInvokeHostCallback(const WioHostCallback* callback,
+                                          const WioValue* args,
+                                          const std::uint32_t argCount,
+                                          WioValue* outResult)
+{
+    if (callback == nullptr || callback->userData == nullptr || callback->invoke == nullptr)
+        return WIO_CALLBACK_BAD_ARGUMENTS;
+    return callback->invoke(callback->userData, args, argCount, outResult);
+}
+
 enum WioApplicationStatus : std::int32_t
 {
     WIO_APPLICATION_OK = 0,

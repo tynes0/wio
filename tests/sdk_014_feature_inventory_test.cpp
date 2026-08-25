@@ -42,6 +42,8 @@ int main()
     assert(feature_info(Feature::AsyncTask)->is_supported());
     assert(feature_info(Feature::AsyncTask)->supports(FeatureSurface::HostValue));
     assert(feature_info(Feature::AsyncTask)->supports(FeatureSurface::ReloadAware));
+    assert(feature_info(Feature::NativeCallback)->is_supported());
+    assert(feature_info(Feature::NativeCallback)->supports(FeatureSurface::OwnershipContract));
     assert(feature_info(Feature::BytePool)->is_partial());
     assert(find_feature("byte-buffer") == Feature::ByteBuffer);
 

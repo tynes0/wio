@@ -1027,7 +1027,37 @@ host-observable language/runtime parity is maintained in
 
 ---
 
-## 13. See Also
+## 13. v0.16 Preview: Applications, Tasks, and Native Callbacks
+
+ABI descriptor v10 adds host-driven applications and typed scalar async tasks.
+Waiting remains explicit: `poll()` does not block, `wait_for(...)` is the
+synchronous boundary, and main-executor completions are delivered only by an
+explicit application or async-host pump.
+
+Native callbacks use `WioHostCallback` instead of a bare userdata pointer. A
+descriptor returned by `HostCallback::borrowed()` remains valid only while its
+C++ wrapper owns it. Native code that stores the descriptor must retain and
+release it as one balanced pair:
+
+```cpp
+wio::sdk::HostCallback<std::int32_t(std::int32_t)> callback(
+    [](std::int32_t value) { return value * 2; },
+    true); // callback target is safe for concurrent native entry
+
+WioHostCallback stored = callback.retained();
+register_native_callback(stored);
+
+// When unregistering:
+WioReleaseHostCallback(&stored);
+```
+
+`WioInvokeHostCallback` validates scalar argument types and contains every C++
+exception as `WIO_CALLBACK_FAULTED`; exceptions never unwind through a C or
+module boundary. `lastError` exposes the contained diagnostic. `ref` and
+`view` remain borrowed and are not legal stored callback payloads: pass an
+owned SDK object/component handle or copy a stable value instead.
+
+## 14. See Also
 
 - [`WIO_PROJECT_SYSTEM.md`](./WIO_PROJECT_SYSTEM.md)
 - [`WIO_SDK_0_14_PARITY_MATRIX.md`](./WIO_SDK_0_14_PARITY_MATRIX.md)

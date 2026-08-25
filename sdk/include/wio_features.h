@@ -43,7 +43,8 @@ namespace wio::sdk
         TypedAttributes = 29u,
         AsyncTask = 30u,
         ApplicationHost = 31u,
-        HotReload = 32u
+        HotReload = 32u,
+        NativeCallback = 33u
     };
 
     enum class FeatureSurface : std::uint32_t
@@ -124,7 +125,8 @@ namespace wio::sdk
         { Feature::TypedAttributes, "typed-attributes", FeatureSurface::TypeMetadata, FeatureSupport::Supported, "ABI v9 exposes canonical retained attributes, arguments, origins, and ordered processor pipelines." },
         { Feature::AsyncTask, "async-task", FeatureSurface::HostValue | FeatureSurface::TypeMetadata | FeatureSurface::OwnershipContract | FeatureSurface::ReloadAware, FeatureSupport::Supported, "ABI v10 exposes typed scalar tasks with poll, wait, cancellation, deadline, completion callbacks, main-executor delivery, and generation-safe ownership." },
         { Feature::ApplicationHost, "application-host", FeatureSurface::OwnershipContract | FeatureSurface::ReloadAware, FeatureSupport::Supported, "ABI v10 provides host-owned state, deterministic lifecycle, explicit main pumping, thread affinity, and contained failures." },
-        { Feature::HotReload, "hot-reload", FeatureSurface::OwnershipContract | FeatureSurface::ReloadAware, FeatureSupport::Supported, "Top-level bindings reacquire generations; instance wrappers fail stale." }
+        { Feature::HotReload, "hot-reload", FeatureSurface::OwnershipContract | FeatureSurface::ReloadAware, FeatureSupport::Supported, "Top-level bindings reacquire generations; instance wrappers fail stale." },
+        { Feature::NativeCallback, "native-callback", FeatureSurface::HostValue | FeatureSurface::DirectCallAbi | FeatureSurface::OwnershipContract, FeatureSupport::Supported, "Retainable userdata, scalar signature metadata, thread declaration, and failure containment cross the native callback boundary." }
     });
 
     [[nodiscard]] constexpr std::span<const FeatureInfo> features() noexcept
