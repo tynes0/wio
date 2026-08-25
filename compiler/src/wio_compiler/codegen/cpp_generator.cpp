@@ -4147,6 +4147,7 @@ namespace wio::codegen
         emitHeaderLine("#include <utility>");
         emitHeaderLine("#include <vector>");
         emitHeaderLine("#include <array>");
+        emitHeaderLine("#include <chrono>");
         emitHeaderLine("#include \"format.h\"");
         emitHeaderLine("#include <iostream>");
         emitHeaderLine("#include <functional>");
@@ -5766,7 +5767,7 @@ namespace wio::codegen
             const std::string lifecyclePrefix = "_WF___extension_" + applicationName + "Lifecycle_";
             const std::string receiverSuffix = "_ref_mut_" + applicationName;
             const std::string startFunction = lifecyclePrefix + "Start" + receiverSuffix;
-            const std::string updateFunction = lifecyclePrefix + "Update" + receiverSuffix;
+            const std::string updateFunction = lifecyclePrefix + "Update" + receiverSuffix + "_f64";
             const std::string closeFunction = lifecyclePrefix + "Close" + receiverSuffix;
             const std::string exitFunction = lifecyclePrefix + "Exit" + receiverSuffix + "_i32";
 
@@ -5847,7 +5848,6 @@ namespace wio::codegen
             emitLine("static std::int32_t WioApplicationUpdate(void* storage, double deltaSeconds) noexcept");
             emitLine("{");
             indent();
-            emitLine("(void)deltaSeconds;");
             emitLine("auto* state = static_cast<WioGeneratedApplicationState*>(storage);");
             emitLine("if (state == nullptr || !state->started || state->closed) return WIO_APPLICATION_INVALID_STATE;");
             emitLine("if (!WioApplicationOnOwnerThread(state)) return WIO_APPLICATION_WRONG_THREAD;");
@@ -5857,7 +5857,7 @@ namespace wio::codegen
             emitLine("{");
             indent();
             emitLine("wio::runtime::DrainAsyncMainExecutor();");
-            emitLine(updateFunction + "(&state->application);");
+            emitLine(updateFunction + "(&state->application, deltaSeconds);");
             emitLine("wio::runtime::DrainAsyncMainExecutor();");
             emitLine("return state->application.__exitRequested ? WIO_APPLICATION_EXIT_REQUESTED : WIO_APPLICATION_OK;");
             dedent();
@@ -6099,6 +6099,88 @@ namespace wio::codegen
         if(!node.body)
         {
             throw MissedEntryBody("The Entry function must have a body.", node.location());
+        }
+
+        if (node.isApplicationEntry)
+        {
+            const std::string cppType = Mangler::mangleStruct(node.applicationName);
+            const std::string lifecyclePrefix = "_WF___extension_" + node.applicationName + "Lifecycle_";
+            const std::string receiverSuffix = "_ref_mut_" + node.applicationName;
+            const std::string startFunction = lifecyclePrefix + "Start" + receiverSuffix;
+            const std::string updateFunction = lifecyclePrefix + "Update" + receiverSuffix + "_f64";
+            const std::string closeFunction = lifecyclePrefix + "Close" + receiverSuffix;
+
+            emitGeneratedDirective();
+            emitLine();
+            emitLine("int main()");
+            emitLine("{");
+            indent();
+            emitLine(cppType + " application{};");
+            emitLine("bool applicationStarted = false;");
+            emitLine("bool applicationClosed = false;");
+            emitLine("auto closeApplication = [&]() noexcept");
+            emitLine("{");
+            indent();
+            emitLine("if (!applicationStarted || applicationClosed) return;");
+            emitLine("try");
+            emitLine("{");
+            indent();
+            emitLine("wio::runtime::DrainAsyncMainExecutor();");
+            emitLine(closeFunction + "(&application);");
+            emitLine("applicationClosed = true;");
+            emitLine("wio::runtime::DrainAsyncMainExecutor();");
+            dedent();
+            emitLine("}");
+            emitLine("catch (...) { applicationClosed = true; }");
+            dedent();
+            emitLine("};");
+            emitLine("try");
+            emitLine("{");
+            indent();
+            emitLine("wio::runtime::BindAsyncMainExecutor();");
+            emitLine(startFunction + "(&application);");
+            emitLine("applicationStarted = true;");
+            emitLine("wio::runtime::DrainAsyncMainExecutor();");
+            emitLine("auto previousFrame = std::chrono::steady_clock::now();");
+            emitLine("while (!application.__exitRequested)");
+            emitLine("{");
+            indent();
+            emitLine("const auto currentFrame = std::chrono::steady_clock::now();");
+            emitLine("const double elapsed = std::chrono::duration<double>(currentFrame - previousFrame).count();");
+            emitLine("previousFrame = currentFrame;");
+            emitLine("const double deltaSeconds = std::clamp(elapsed, 0.0, 0.25);");
+            emitLine("wio::runtime::DrainAsyncMainExecutor();");
+            emitLine(updateFunction + "(&application, deltaSeconds);");
+            emitLine("wio::runtime::DrainAsyncMainExecutor();");
+            dedent();
+            emitLine("}");
+            emitLine("closeApplication();");
+            emitLine("wio::runtime::ShutdownAsyncRuntime();");
+            emitLine("wio::runtime::DrainAsyncMainExecutor();");
+            emitLine("return application.__exitCode;");
+            dedent();
+            emitLine("}");
+            emitLine("catch (const std::exception& error)");
+            emitLine("{");
+            indent();
+            emitLine("closeApplication();");
+            emitLine("wio::runtime::ShutdownAsyncRuntime();");
+            emitLine("std::cout << \"Runtime Error: \" << error.what() << '\\n';");
+            emitLine("return 1;");
+            dedent();
+            emitLine("}");
+            emitLine("catch (...)");
+            emitLine("{");
+            indent();
+            emitLine("closeApplication();");
+            emitLine("wio::runtime::ShutdownAsyncRuntime();");
+            emitLine("std::cout << \"Runtime Error: Unknown native exception\" << '\\n';");
+            emitLine("return 1;");
+            dedent();
+            emitLine("}");
+            dedent();
+            emitLine("}");
+            return;
         }
 
         emitGeneratedDirective();

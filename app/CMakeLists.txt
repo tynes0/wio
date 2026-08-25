@@ -4175,6 +4175,21 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
     set_tests_properties(wio_test_application_stabilization_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
 
+    add_wio_output_test(
+        wio_test_application_delta_context_run
+        "${CMAKE_SOURCE_DIR}/tests/application_delta_context_run.wio"
+        "application-delta-context-ok"
+        --run
+    )
+    set_tests_properties(wio_test_application_delta_context_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
+    add_wio_failure_test(wio_invalid_application_update_delta_type
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_update_delta_type.wio"
+        "Application update delta parameter must have type f64")
+    add_wio_failure_test(wio_invalid_system_start_parameter
+        "${CMAKE_SOURCE_DIR}/tests/invalid/system_start_parameter.wio"
+        "Only system 'on update' accepts a delta parameter")
+
     add_wio_failure_test(wio_invalid_application_with_entry
         "${CMAKE_SOURCE_DIR}/tests/invalid/application_with_entry.wio"
         "cannot define both application 'Tool' and an ordinary Entry")

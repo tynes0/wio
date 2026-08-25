@@ -2,12 +2,14 @@ use std::console as console;
 
 system HostedCounter {
     mut ticks: i32;
+    mut lastDelta: f64;
 
     on start {
         self.ticks = 0;
     }
 
-    on update {
+    on update(delta: f64) {
+        self.lastDelta = delta;
         self.ticks += 1;
     }
 
@@ -19,7 +21,10 @@ system HostedCounter {
 application HostedApplication {
     system counter: HostedCounter;
 
-    on update {
+    on update(delta: f64) {
+        if (self.counter.lastDelta != delta) {
+            self.Exit(98);
+        }
         if (self.counter.ticks == 3) {
             self.Exit(17);
         }

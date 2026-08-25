@@ -2054,11 +2054,11 @@ namespace wio
         {
             return makeIdentifier("__application");
         };
-        auto makeAppCall = [&](std::string method)
+        auto makeAppCall = [&](std::string method, std::vector<NodePtr<Expression>> arguments = {})
         {
             return makeNodePtr<FunctionCallExpression>(
                 makeMember(makeAppIdentifier(), std::move(method)),
-                std::vector<NodePtr<TypeSpecifier>>{}, std::vector<NodePtr<Expression>>{},
+                std::vector<NodePtr<TypeSpecifier>>{}, std::move(arguments),
                 false, false, startToken.loc);
         };
         auto makeAsyncRuntimeCall = [&](std::string method)
@@ -2090,18 +2090,36 @@ namespace wio
                 if (handlers.contains(lifecycle.value))
                     utError("Application handler '" + lifecycle.value + "' is declared more than once.", lifecycle.loc);
 
+                std::vector<Parameter> handlerParameters;
                 if (match(TokenType::leftParen, true))
                 {
                     if (!match(TokenType::rightParen))
-                        utError("The first application runner supports parameterless lifecycle handlers.", peek().loc);
+                    {
+                        if (lifecycle.value != "update")
+                            utError("Only application 'on update' accepts a delta parameter.", peek().loc);
+                        auto parameterName = makeNodePtr<Identifier>(consumeIdentifier());
+                        consume(TokenType::opColon);
+                        if (peek().type != TokenType::kwF64)
+                            utError("Application update delta parameter must have type f64.", peek().loc);
+                        auto parameterType = parseType();
+                        handlerParameters.emplace_back(
+                            std::move(parameterName), std::move(parameterType), nullptr, false);
+                        if (match(TokenType::comma, true))
+                            utError("Application update accepts exactly one delta parameter.", peek().loc);
+                    }
                     consume(TokenType::rightParen);
+                }
+                if (lifecycle.value == "update" && handlerParameters.empty())
+                {
+                    handlerParameters.emplace_back(
+                        makeIdentifier("_wio_deltaSeconds"), makeType(TokenType::kwF64, "f64"), nullptr, false);
                 }
                 auto body = parseBlockStatement();
                 std::string methodName = lifecycle.value == "start" ? "Start" :
                     (lifecycle.value == "update" ? "Update" : "Close");
                 auto handler = makeNodePtr<FunctionDeclaration>(
                     std::move(memberAttributes), makeIdentifier(methodName),
-                    std::vector<NodePtr<Identifier>>{}, false, std::vector<Parameter>{}, nullptr,
+                    std::vector<NodePtr<Identifier>>{}, false, std::move(handlerParameters), nullptr,
                     nullptr, nullptr, std::move(body), lifecycle.loc);
                 handler->attributeTargetOverride = "handler";
                 handlers.emplace(lifecycle.value, std::move(handler));
@@ -2220,9 +2238,13 @@ namespace wio
             else
             {
                 const std::string methodName = lifecycle == "start" ? "Start" : "Close";
+                std::vector<Parameter> defaultParameters;
+                if (lifecycle == "update")
+                    defaultParameters.emplace_back(
+                        makeIdentifier("_wio_deltaSeconds"), makeType(TokenType::kwF64, "f64"), nullptr, false);
                 method = makeNodePtr<FunctionDeclaration>(
                     std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier(methodName),
-                    std::vector<NodePtr<Identifier>>{}, false, std::vector<Parameter>{}, nullptr,
+                    std::vector<NodePtr<Identifier>>{}, false, std::move(defaultParameters), nullptr,
                     nullptr, nullptr, makeNodePtr<BlockStatement>(std::vector<NodePtr<Statement>>{}, startToken.loc), startToken.loc);
             }
 
@@ -2233,9 +2255,17 @@ namespace wio
                     TokenType::opDot, startToken.loc);
                 auto methodAccess = makeNodePtr<MemberAccessExpression>(
                     std::move(systemAccess), makeIdentifier(methodName), TokenType::opDot, startToken.loc);
+                std::vector<NodePtr<Expression>> callArguments;
+                if (lifecycle == "update")
+                {
+                    const std::string deltaName = method->parameters.empty() || !method->parameters.front().name
+                        ? "_wio_deltaSeconds"
+                        : method->parameters.front().name->token.value;
+                    callArguments.push_back(makeIdentifier(deltaName));
+                }
                 auto call = makeNodePtr<FunctionCallExpression>(
                     std::move(methodAccess), std::vector<NodePtr<TypeSpecifier>>{},
-                    std::vector<NodePtr<Expression>>{}, false, false, startToken.loc);
+                    std::move(callArguments), false, false, startToken.loc);
                 return makeNodePtr<ExpressionStatement>(std::move(call), startToken.loc);
             };
             if (auto block = method->body.As<BlockStatement>(); block && !ownedSystems.empty())
@@ -2294,7 +2324,11 @@ namespace wio
         std::vector<NodePtr<Statement>> updateStatements;
         updateStatements.push_back(makeNodePtr<ExpressionStatement>(
             makeAsyncRuntimeCall("DrainMain"), startToken.loc));
-        updateStatements.push_back(makeNodePtr<ExpressionStatement>(makeAppCall("Update"), startToken.loc));
+        std::vector<NodePtr<Expression>> entryUpdateArguments;
+        entryUpdateArguments.push_back(makeNodePtr<FloatLiteral>(Token{
+            .type = TokenType::floatLiteral, .value = "0.0", .loc = startToken.loc }));
+        updateStatements.push_back(makeNodePtr<ExpressionStatement>(
+            makeAppCall("Update", std::move(entryUpdateArguments)), startToken.loc));
         updateStatements.push_back(makeNodePtr<ExpressionStatement>(
             makeAsyncRuntimeCall("DrainMain"), startToken.loc));
         auto updateBody = makeNodePtr<BlockStatement>(std::move(updateStatements), startToken.loc);
@@ -2335,6 +2369,12 @@ namespace wio
             return makeNodePtr<Identifier>(Token{
                 .type = TokenType::identifier, .value = std::move(value), .loc = startToken.loc });
         };
+        auto makeType = [&](TokenType type, std::string value)
+        {
+            Token token{ .type = type, .value = std::move(value), .loc = startToken.loc };
+            return makeNodePtr<TypeSpecifier>(std::move(token), std::vector<NodePtr<TypeSpecifier>>{},
+                nullptr, 0, false, false, false, startToken.loc);
+        };
         std::vector<ComponentMember> fields;
         std::unordered_map<std::string, NodePtr<FunctionDeclaration>> handlers;
         while (peek().isValid() && !match(TokenType::rightBrace))
@@ -2349,18 +2389,36 @@ namespace wio
                     utError("System handlers must be 'on start', 'on update', or 'on close'.", lifecycle.loc);
                 if (handlers.contains(lifecycle.value))
                     utError("System handler '" + lifecycle.value + "' is declared more than once.", lifecycle.loc);
+                std::vector<Parameter> handlerParameters;
                 if (match(TokenType::leftParen, true))
                 {
                     if (!match(TokenType::rightParen))
-                        utError("The first system scheduler supports parameterless lifecycle handlers.", peek().loc);
+                    {
+                        if (lifecycle.value != "update")
+                            utError("Only system 'on update' accepts a delta parameter.", peek().loc);
+                        auto parameterName = makeNodePtr<Identifier>(consumeIdentifier());
+                        consume(TokenType::opColon);
+                        if (peek().type != TokenType::kwF64)
+                            utError("System update delta parameter must have type f64.", peek().loc);
+                        auto parameterType = parseType();
+                        handlerParameters.emplace_back(
+                            std::move(parameterName), std::move(parameterType), nullptr, false);
+                        if (match(TokenType::comma, true))
+                            utError("System update accepts exactly one delta parameter.", peek().loc);
+                    }
                     consume(TokenType::rightParen);
+                }
+                if (lifecycle.value == "update" && handlerParameters.empty())
+                {
+                    handlerParameters.emplace_back(
+                        makeIdentifier("_wio_deltaSeconds"), makeType(TokenType::kwF64, "f64"), nullptr, false);
                 }
                 auto body = parseBlockStatement();
                 const std::string methodName = lifecycle.value == "start" ? "Start" :
                     (lifecycle.value == "update" ? "Update" : "Close");
                 auto handler = makeNodePtr<FunctionDeclaration>(
                     std::move(memberAttributes), makeIdentifier(methodName),
-                    std::vector<NodePtr<Identifier>>{}, false, std::vector<Parameter>{}, nullptr,
+                    std::vector<NodePtr<Identifier>>{}, false, std::move(handlerParameters), nullptr,
                     nullptr, nullptr, std::move(body), lifecycle.loc);
                 handler->attributeTargetOverride = "handler";
                 handlers.emplace(lifecycle.value, std::move(handler));
@@ -2419,9 +2477,13 @@ namespace wio
             {
                 const std::string methodName = lifecycle == "start" ? "Start" :
                     (lifecycle == "update" ? "Update" : "Close");
+                std::vector<Parameter> defaultParameters;
+                if (lifecycle == "update")
+                    defaultParameters.emplace_back(
+                        makeIdentifier("_wio_deltaSeconds"), makeType(TokenType::kwF64, "f64"), nullptr, false);
                 method = makeNodePtr<FunctionDeclaration>(
                     std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier(methodName),
-                    std::vector<NodePtr<Identifier>>{}, false, std::vector<Parameter>{}, nullptr,
+                    std::vector<NodePtr<Identifier>>{}, false, std::move(defaultParameters), nullptr,
                     nullptr, nullptr, makeNodePtr<BlockStatement>(std::vector<NodePtr<Statement>>{}, startToken.loc), startToken.loc);
             }
             addReceiver(method);

@@ -1,0 +1,5 @@
+application BadDelta {
+    on update(delta: i32) {
+        self.Exit(delta);
+    }
+}
