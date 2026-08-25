@@ -2151,6 +2151,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "sdk-fixed-application-ok frames=6 ticks=3 exit=23"
     )
 
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_016_application_rollback_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_016_application_rollback_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_016_application_rollback_host.cpp"
+        "rollback-ready-start[ \t\r\n]*rollback-failing-start[ \t\r\n]*rollback-ready-close[ \t\r\n]*rollback-application-close[ \t\r\n]*sdk-application-rollback-ok closed=1 restart=blocked"
+    )
+
     add_wio_shared_reload_interop_test(
         wio_test_module_reload_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/module_reload.wio"
@@ -4186,6 +4193,14 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_application_delta_context_run
         "${CMAKE_SOURCE_DIR}/tests/application_delta_context_run.wio"
         "application-delta-context-ok"
+        --run
+    )
+
+    add_wio_non_dry_failure_test_clean(
+        wio_runtime_application_start_rollback
+        "${CMAKE_SOURCE_DIR}/tests/application_start_rollback_runtime_failure.wio"
+        "exec-ready-start exec-failing-start exec-ready-close exec-application-close"
+        "exec-failing-close-unexpected|terminate called|segmentation fault"
         --run
     )
     set_tests_properties(wio_test_application_delta_context_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")

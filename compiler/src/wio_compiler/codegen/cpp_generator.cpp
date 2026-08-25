@@ -5809,6 +5809,30 @@ namespace wio::codegen
             emitLine("}");
             emitLine();
 
+            emitLine("static void WioApplicationRollbackStart(WioGeneratedApplicationState* state) noexcept");
+            emitLine("{");
+            indent();
+            emitLine("if (state == nullptr) return;");
+            emitLine("try");
+            emitLine("{");
+            indent();
+            emitLine(closeFunction + "(&state->application);");
+            emitLine("wio::runtime::DrainAsyncMainExecutor();");
+            dedent();
+            emitLine("}");
+            emitLine("catch (const std::exception& rollbackError)");
+            emitLine("{");
+            indent();
+            emitLine("state->lastError += \"; start rollback failed: \";");
+            emitLine("state->lastError += rollbackError.what();");
+            dedent();
+            emitLine("}");
+            emitLine("catch (...) { state->lastError += \"; start rollback failed with a non-standard exception\"; }");
+            emitLine("state->closed = true;");
+            dedent();
+            emitLine("}");
+            emitLine();
+
             emitLine("static std::int32_t WioApplicationStart(void* storage) noexcept");
             emitLine("{");
             indent();
@@ -5830,14 +5854,16 @@ namespace wio::codegen
             indent();
             emitLine("state->faulted = true;");
             emitLine("state->lastError = error.what();");
+            emitLine("WioApplicationRollbackStart(state);");
             emitLine("return WIO_APPLICATION_FAULTED;");
             dedent();
             emitLine("}");
             emitLine("catch (...)");
             emitLine("{");
             indent();
-            emitLine("state->faulted = true;");
             emitLine("state->lastError = \"unhandled non-standard exception\";");
+            emitLine("state->faulted = true;");
+            emitLine("WioApplicationRollbackStart(state);");
             emitLine("return WIO_APPLICATION_FAULTED;");
             dedent();
             emitLine("}");
@@ -6138,8 +6164,8 @@ namespace wio::codegen
             emitLine("{");
             indent();
             emitLine("wio::runtime::BindAsyncMainExecutor();");
-            emitLine(startFunction + "(&application);");
             emitLine("applicationStarted = true;");
+            emitLine(startFunction + "(&application);");
             emitLine("wio::runtime::DrainAsyncMainExecutor();");
             emitLine("auto previousFrame = std::chrono::steady_clock::now();");
             emitLine("while (!application.__exitRequested)");

@@ -2317,6 +2317,11 @@ namespace wio
             makeNodePtr<BoolLiteral>(Token{ .type = TokenType::kwFalse, .value = "false", .loc = startToken.loc }));
         addControlField("__exitCode", makeType(TokenType::kwI32, "i32"),
             makeNodePtr<IntegerLiteral>(Token{ .type = TokenType::integerLiteral, .value = "0", .loc = startToken.loc }));
+        for (const auto& systemName : ownedSystems)
+        {
+            addControlField("__started_" + systemName, makeType(TokenType::kwBool, "bool"),
+                makeNodePtr<BoolLiteral>(Token{ .type = TokenType::kwFalse, .value = "false", .loc = startToken.loc }));
+        }
         for (const size_t stageIndex : orderedStageIndices)
         {
             const auto& stage = scheduleStages[stageIndex];
@@ -2418,6 +2423,28 @@ namespace wio
                     std::move(callArguments), false, false, startToken.loc);
                 return makeNodePtr<ExpressionStatement>(std::move(call), startToken.loc);
             };
+            auto makeSystemStartedAssignment = [&](const std::string& systemName, const bool started)
+            {
+                return makeNodePtr<ExpressionStatement>(
+                    makeNodePtr<AssignmentExpression>(
+                        makeMember(makeNodePtr<SelfExpression>(startToken.loc), "__started_" + systemName),
+                        Token{ .type = TokenType::opAssign, .value = "=", .loc = startToken.loc },
+                        makeNodePtr<BoolLiteral>(Token{
+                            .type = started ? TokenType::kwTrue : TokenType::kwFalse,
+                            .value = started ? "true" : "false",
+                            .loc = startToken.loc })),
+                    startToken.loc);
+            };
+            auto makeSystemCloseStatement = [&](const std::string& systemName)
+            {
+                std::vector<NodePtr<Statement>> closeStatements;
+                closeStatements.push_back(makeSystemCallStatement(systemName, "Close"));
+                closeStatements.push_back(makeSystemStartedAssignment(systemName, false));
+                return makeNodePtr<IfStatement>(
+                    makeMember(makeNodePtr<SelfExpression>(startToken.loc), "__started_" + systemName),
+                    makeNodePtr<BlockStatement>(std::move(closeStatements), startToken.loc),
+                    nullptr, Token::invalid(), startToken.loc);
+            };
             if (auto block = method->body.As<BlockStatement>(); block)
             {
                 const std::string methodName = lifecycle == "start" ? "Start" :
@@ -2493,7 +2520,10 @@ namespace wio
                 else if (lifecycle == "start" && !ownedSystems.empty())
                 {
                     for (const auto& systemName : ownedSystems)
+                    {
                         block->statements.push_back(makeSystemCallStatement(systemName, methodName));
+                        block->statements.push_back(makeSystemStartedAssignment(systemName, true));
+                    }
                 }
                 else if (!ownedSystems.empty())
                 {
@@ -2501,7 +2531,7 @@ namespace wio
                     if (lifecycle == "close")
                     {
                         for (auto iterator = ownedSystems.rbegin(); iterator != ownedSystems.rend(); ++iterator)
-                            calls.push_back(makeSystemCallStatement(*iterator, methodName));
+                            calls.push_back(makeSystemCloseStatement(*iterator));
                     }
                     else
                     {

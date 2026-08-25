@@ -7197,6 +7197,8 @@ namespace wio::sdk
             if (started_ || closed_)
                 throw Error(ErrorCode::LifecycleFailed, "Wio application start() requires a fresh host state.");
             const std::int32_t status = descriptor_->start(storage_);
+            if (status == WIO_APPLICATION_FAULTED)
+                closed_ = true;
             accept_status(status, "start", true, false);
             started_ = true;
         }
