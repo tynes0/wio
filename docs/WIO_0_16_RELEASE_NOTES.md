@@ -67,6 +67,10 @@ capabilities retain their prior meaning. The new application and async host
 tables are capability-gated. Legacy attribute source may still be migrated by
 the 0.15 tooling; maintained examples use bracket attributes.
 
+Windows MinGW builds automatically use PE/COFF big-object mode for generated
+Wio translation units, so large applications and static libraries do not hit
+the classic section-count limit.
+
 The normative language delta is
 [`spec/WIO_LANGUAGE_SPEC_0_16.md`](./spec/WIO_LANGUAGE_SPEC_0_16.md). The exact
 cross-platform evidence is [`WIO_0_16_ACCEPTANCE.md`](./WIO_0_16_ACCEPTANCE.md).
