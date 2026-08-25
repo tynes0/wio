@@ -12,7 +12,7 @@ int main()
     using namespace wio::sdk;
 
     static_assert(product_version.major == 0u && product_version.minor >= 13u);
-    static_assert(feature_catalog.size() == 32u);
+    static_assert(feature_catalog.size() == static_cast<std::size_t>(Feature::NativeResource));
     static_assert(feature_info(Feature::UnicodeText)->supports(FeatureSurface::HostValue));
     static_assert(feature_info(Feature::UnicodeText)->supports(FeatureSurface::DynamicField));
     static_assert(!feature_info(Feature::ApplicationHost)->supports(FeatureSurface::HostValue));
