@@ -2080,14 +2080,22 @@ namespace wio
         std::vector<std::string> ownedSystems;
         struct ParsedApplicationStage
         {
+            struct Run
+            {
+                std::string target;
+                std::vector<NodePtr<Expression>> resourceArguments;
+                std::vector<std::string> resourceNames;
+            };
+
             std::string name;
             std::optional<std::string> after;
-            std::vector<std::string> runs;
+            std::vector<Run> runs;
             bool fixed = false;
             bool mainThread = false;
             double hz = 0.0;
         };
         std::vector<ParsedApplicationStage> scheduleStages;
+        std::unordered_set<std::string> applicationResources;
         bool hasExplicitSchedule = false;
         while (peek().isValid() && !match(TokenType::rightBrace))
         {
@@ -2159,15 +2167,41 @@ namespace wio
                             utError("Schedule stages currently accept explicit 'run target;' entries.", peek().loc);
                         advance();
                         const Token target = consumeIdentifier();
-                        std::string runTarget = target.value;
+                        ParsedApplicationStage::Run run;
+                        run.target = target.value;
                         if (match(TokenType::opDot, true))
                         {
                             const Token method = consumeIdentifier();
                             if (method.value != "update")
                                 utError("The sequential v0.16 scheduler supports only '.update' handlers.", method.loc);
                         }
+                        if (match(TokenType::leftParen, true))
+                        {
+                            if (!match(TokenType::rightParen))
+                            {
+                                while (true)
+                                {
+                                    auto argument = parseExpression();
+                                    auto* borrow = argument ? argument->as<RefExpression>() : nullptr;
+                                    auto* member = borrow && borrow->operand
+                                        ? borrow->operand->as<MemberAccessExpression>()
+                                        : nullptr;
+                                    if (!member || !member->object || !member->object->is<SelfExpression>() || !member->member)
+                                    {
+                                        utError(
+                                            "Scheduled system arguments must explicitly borrow an application resource as 'ref self.name'.",
+                                            argument ? argument->location() : target.loc);
+                                    }
+                                    run.resourceNames.push_back(member->member->token.value);
+                                    run.resourceArguments.push_back(std::move(argument));
+                                    if (!match(TokenType::comma, true))
+                                        break;
+                                }
+                                consume(TokenType::rightParen);
+                            }
+                        }
                         consume(TokenType::semicolon);
-                        stage.runs.push_back(std::move(runTarget));
+                        stage.runs.push_back(std::move(run));
                     }
                     consume(TokenType::rightBrace);
                     if (stage.fixed && stage.hz <= 0.0)
@@ -2227,6 +2261,7 @@ namespace wio
             Mutability mutability = Mutability::Mutable;
             bool applicationOwned = false;
             const bool systemOwned = peek().type == TokenType::kwSystem;
+            const bool resourceOwned = peek().type == TokenType::identifier && peek().value == "resource";
             if ((peek().type == TokenType::identifier && peek().value == "resource") ||
                 peek().type == TokenType::kwSystem)
             {
@@ -2244,6 +2279,7 @@ namespace wio
 
             auto name = makeNodePtr<Identifier>(consumeIdentifier());
             if (systemOwned) ownedSystems.push_back(name->token.value);
+            if (resourceOwned) applicationResources.insert(name->token.value);
             consume(TokenType::opColon);
             auto type = parseType();
             NodePtr<Expression> initializer = nullptr;
@@ -2270,12 +2306,24 @@ namespace wio
             {
                 if (stage.after.has_value() && !stageByName.contains(*stage.after))
                     utError("Schedule stage '" + stage.name + "' depends on unknown stage '" + *stage.after + "'.", startToken.loc);
-                for (const auto& target : stage.runs)
+                for (const auto& run : stage.runs)
                 {
-                    if (target == "self")
+                    if (run.target == "self")
+                    {
                         ++selfRunCount;
-                    if (target != "self" && std::ranges::find(ownedSystems, target) == ownedSystems.end())
-                        utError("Schedule stage '" + stage.name + "' runs unknown application system '" + target + "'.", startToken.loc);
+                        if (!run.resourceArguments.empty())
+                            utError("A scheduled 'self.update' run does not accept resource arguments.", startToken.loc);
+                    }
+                    if (run.target != "self" && std::ranges::find(ownedSystems, run.target) == ownedSystems.end())
+                        utError("Schedule stage '" + stage.name + "' runs unknown application system '" + run.target + "'.", startToken.loc);
+                    std::unordered_set<std::string> seenResources;
+                    for (const auto& resourceName : run.resourceNames)
+                    {
+                        if (!applicationResources.contains(resourceName))
+                            utError("Schedule stage '" + stage.name + "' borrows unknown application resource '" + resourceName + "'.", startToken.loc);
+                        if (!seenResources.insert(resourceName).second)
+                            utError("Schedule stage '" + stage.name + "' borrows application resource '" + resourceName + "' more than once for one run.", startToken.loc);
+                    }
                 }
             }
             if (selfRunCount > 1)
@@ -2403,7 +2451,8 @@ namespace wio
                     nullptr, nullptr, makeNodePtr<BlockStatement>(std::vector<NodePtr<Statement>>{}, startToken.loc), startToken.loc);
             }
 
-            auto makeSystemCallStatement = [&](const std::string& systemName, const std::string& methodName)
+            auto makeSystemCallStatement = [&](const std::string& systemName, const std::string& methodName,
+                                               std::vector<NodePtr<Expression>> resourceArguments = {})
             {
                 auto systemAccess = makeNodePtr<MemberAccessExpression>(
                     makeNodePtr<SelfExpression>(startToken.loc), makeIdentifier(systemName),
@@ -2418,6 +2467,8 @@ namespace wio
                         : method->parameters.front().name->token.value;
                     callArguments.push_back(makeIdentifier(deltaName));
                 }
+                for (auto& argument : resourceArguments)
+                    callArguments.push_back(std::move(argument));
                 auto call = makeNodePtr<FunctionCallExpression>(
                     std::move(methodAccess), std::vector<NodePtr<TypeSpecifier>>{},
                     std::move(callArguments), false, false, startToken.loc);
@@ -2471,11 +2522,11 @@ namespace wio
 
                     for (const size_t stageIndex : orderedStageIndices)
                     {
-                        const auto& stage = scheduleStages[stageIndex];
+                        auto& stage = scheduleStages[stageIndex];
                         std::vector<NodePtr<Statement>> stageStatements;
-                        for (const auto& target : stage.runs)
+                        for (auto& run : stage.runs)
                         {
-                            if (target == "self")
+                            if (run.target == "self")
                             {
                                 for (auto& statement : userUpdateStatements)
                                     stageStatements.push_back(std::move(statement));
@@ -2483,7 +2534,8 @@ namespace wio
                             }
                             else
                             {
-                                stageStatements.push_back(makeSystemCallStatement(target, "Update"));
+                                stageStatements.push_back(makeSystemCallStatement(
+                                    run.target, "Update", std::move(run.resourceArguments)));
                             }
                         }
 
@@ -2643,16 +2695,24 @@ namespace wio
                     if (!match(TokenType::rightParen))
                     {
                         if (lifecycle.value != "update")
-                            utError("Only system 'on update' accepts a delta parameter.", peek().loc);
-                        auto parameterName = makeNodePtr<Identifier>(consumeIdentifier());
-                        consume(TokenType::opColon);
-                        if (peek().type != TokenType::kwF64)
-                            utError("System update delta parameter must have type f64.", peek().loc);
-                        auto parameterType = parseType();
-                        handlerParameters.emplace_back(
-                            std::move(parameterName), std::move(parameterType), nullptr, false);
-                        if (match(TokenType::comma, true))
-                            utError("System update accepts exactly one delta parameter.", peek().loc);
+                            utError("Only system 'on update' accepts parameters.", peek().loc);
+                        size_t parameterIndex = 0;
+                        while (true)
+                        {
+                            auto parameterName = makeNodePtr<Identifier>(consumeIdentifier());
+                            consume(TokenType::opColon);
+                            const TokenType writtenType = peek().type;
+                            if (parameterIndex == 0 && writtenType != TokenType::kwF64)
+                                utError("The first system update parameter must have type f64.", peek().loc);
+                            if (parameterIndex > 0 && writtenType != TokenType::kwRef && writtenType != TokenType::kwView)
+                                utError("System update resource parameters must use ref or view.", peek().loc);
+                            auto parameterType = parseType();
+                            handlerParameters.emplace_back(
+                                std::move(parameterName), std::move(parameterType), nullptr, false);
+                            ++parameterIndex;
+                            if (!match(TokenType::comma, true))
+                                break;
+                        }
                     }
                     consume(TokenType::rightParen);
                 }

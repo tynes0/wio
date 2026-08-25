@@ -4213,6 +4213,14 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
     set_tests_properties(wio_test_application_schedule_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
 
+    add_wio_output_test(
+        wio_test_application_resource_schedule_run
+        "${CMAKE_SOURCE_DIR}/tests/application_resource_schedule_run.wio"
+        "application-resource-schedule-ok"
+        --run
+    )
+    set_tests_properties(wio_test_application_resource_schedule_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
     add_wio_success_test(
         wio_test_async_cancellable_io_surface_check
         "${CMAKE_SOURCE_DIR}/tests/async_cancellable_io_surface_check.wio"
@@ -4232,7 +4240,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "Application update delta parameter must have type f64")
     add_wio_failure_test(wio_invalid_system_start_parameter
         "${CMAKE_SOURCE_DIR}/tests/invalid/system_start_parameter.wio"
-        "Only system 'on update' accepts a delta parameter")
+        "Only system 'on update' accepts parameters")
     add_wio_failure_test(wio_invalid_application_schedule_cycle
         "${CMAKE_SOURCE_DIR}/tests/invalid/application_schedule_cycle.wio"
         "schedule dependencies contain a cycle")
@@ -4242,6 +4250,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(wio_invalid_application_fixed_stage_frequency
         "${CMAKE_SOURCE_DIR}/tests/invalid/application_fixed_stage_frequency.wio"
         "requires an 'at <frequency> hz' clause")
+    add_wio_failure_test(wio_invalid_application_schedule_unknown_resource
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_schedule_unknown_resource.wio"
+        "borrows unknown application resource 'world'")
+    add_wio_failure_test(wio_invalid_system_update_owned_resource_parameter
+        "${CMAKE_SOURCE_DIR}/tests/invalid/system_update_owned_resource_parameter.wio"
+        "System update resource parameters must use ref or view")
 
     add_wio_failure_test(wio_invalid_application_with_entry
         "${CMAKE_SOURCE_DIR}/tests/invalid/application_with_entry.wio"
