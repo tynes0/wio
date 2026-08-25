@@ -9,12 +9,14 @@
 #include <initializer_list>
 #include <map>
 #include <memory>
+#include <new>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <thread>
 #include <type_traits>
 #include <unordered_set>
 #include <unordered_map>
@@ -3105,6 +3107,8 @@ namespace wio::sdk
                 throwInvalidApiDescriptor(context, "type-metadata-v2 capability requires a complete WioModuleApi descriptorSize.");
             if (hasCapability(api, WIO_MODULE_CAP_ATTRIBUTE_METADATA_V1) && api->descriptorSize < sizeof(WioModuleApi))
                 throwInvalidApiDescriptor(context, "attribute-metadata-v1 capability requires a complete WioModuleApi descriptorSize.");
+            if (hasCapability(api, WIO_MODULE_CAP_APPLICATION_HOST_V1) && api->descriptorSize < sizeof(WioModuleApi))
+                throwInvalidApiDescriptor(context, "application-host-v1 capability requires a complete WioModuleApi descriptorSize.");
 
             auto validateAttributes = [&](const WioModuleAttributeDescriptor* attributes,
                                           const std::uint32_t count,
@@ -3134,6 +3138,27 @@ namespace wio::sdk
             validateCapabilityContract(api, WIO_MODULE_CAP_UNLOAD, reinterpret_cast<const void*>(api->unload), "@ModuleUnload", context);
             validateCapabilityContract(api, WIO_MODULE_CAP_SAVE_STATE, reinterpret_cast<const void*>(api->saveState), "@ModuleSaveState", context);
             validateCapabilityContract(api, WIO_MODULE_CAP_RESTORE_STATE, reinterpret_cast<const void*>(api->restoreState), "@ModuleRestoreState", context);
+            validateCapabilityContract(api, WIO_MODULE_CAP_APPLICATION_HOST_V1,
+                reinterpret_cast<const void*>(api->application), "application host", context);
+
+            if (api->application != nullptr)
+            {
+                const WioApplicationDescriptor& application = *api->application;
+                if (!hasText(application.logicalName))
+                    throwInvalidApiDescriptor(context, "Application host descriptor is missing logicalName.");
+                if (application.stateSize == 0u || application.stateAlignment < alignof(void*) ||
+                    (application.stateAlignment & (application.stateAlignment - 1u)) != 0u)
+                    throwInvalidApiDescriptor(context, "Application host descriptor has an invalid state size or alignment.");
+                if ((application.flags & WIO_APPLICATION_HOST_OWNS_STORAGE) == 0u ||
+                    (application.flags & WIO_APPLICATION_MAIN_THREAD_AFFINE) == 0u)
+                    throwInvalidApiDescriptor(context, "Application host descriptor must declare host-owned storage and main-thread affinity.");
+                if (application.construct == nullptr || application.start == nullptr ||
+                    application.update == nullptr || application.requestExit == nullptr ||
+                    application.close == nullptr || application.destroy == nullptr ||
+                    application.exitRequested == nullptr || application.exitCode == nullptr ||
+                    application.pumpMain == nullptr || application.lastError == nullptr)
+                    throwInvalidApiDescriptor(context, "Application host descriptor is missing a required operation.");
+            }
 
             for (std::uint32_t exportIndex = 0; exportIndex < api->exportCount; ++exportIndex)
             {
@@ -6516,6 +6541,7 @@ namespace wio::sdk
         std::vector<std::string> commands{};
         std::vector<std::string> event_hooks{};
         std::vector<std::string> types{};
+        std::optional<std::string> application{};
 
         [[nodiscard]] bool has_capability(const WioModuleCapability capability) const noexcept
         {
@@ -6546,8 +6572,230 @@ namespace wio::sdk
         info.types.reserve(api->typeCount);
         for (std::uint32_t index = 0u; index < api->typeCount; ++index)
             info.types.emplace_back(api->types[index].logicalName);
+        if (detail::hasCapability(api, WIO_MODULE_CAP_APPLICATION_HOST_V1) &&
+            api->application != nullptr && api->application->logicalName != nullptr)
+            info.application = api->application->logicalName;
         return info;
     }
+
+    enum class ApplicationFrameStatus
+    {
+        Running,
+        ExitRequested
+    };
+
+    class ApplicationHost
+    {
+    public:
+        ApplicationHost() = default;
+        ApplicationHost(const ApplicationHost&) = delete;
+        ApplicationHost& operator=(const ApplicationHost&) = delete;
+
+        ApplicationHost(ApplicationHost&& other) noexcept
+        {
+            *this = std::move(other);
+        }
+
+        ApplicationHost& operator=(ApplicationHost&& other) noexcept
+        {
+            if (this == &other)
+                return *this;
+            reset();
+            descriptor_ = other.descriptor_;
+            storage_ = other.storage_;
+            bindingState_ = std::move(other.bindingState_);
+            bindingGeneration_ = other.bindingGeneration_;
+            libraryLease_ = std::move(other.libraryLease_);
+            ownerThread_ = other.ownerThread_;
+            started_ = other.started_;
+            closed_ = other.closed_;
+
+            other.descriptor_ = nullptr;
+            other.storage_ = nullptr;
+            other.bindingGeneration_ = 0u;
+            other.started_ = false;
+            other.closed_ = true;
+            return *this;
+        }
+
+        ~ApplicationHost()
+        {
+            reset();
+        }
+
+        [[nodiscard]] explicit operator bool() const noexcept
+        {
+            return descriptor_ != nullptr && storage_ != nullptr;
+        }
+
+        [[nodiscard]] std::string_view name() const noexcept
+        {
+            return descriptor_ != nullptr && descriptor_->logicalName != nullptr
+                ? std::string_view(descriptor_->logicalName)
+                : std::string_view{};
+        }
+
+        [[nodiscard]] bool started() const noexcept { return started_; }
+        [[nodiscard]] bool closed() const noexcept { return closed_; }
+
+        void start()
+        {
+            require_operation("start");
+            if (started_ || closed_)
+                throw Error(ErrorCode::LifecycleFailed, "Wio application start() requires a fresh host state.");
+            const std::int32_t status = descriptor_->start(storage_);
+            accept_status(status, "start", true, false);
+            started_ = true;
+        }
+
+        [[nodiscard]] ApplicationFrameStatus update(const double deltaSeconds = 0.0)
+        {
+            require_operation("update");
+            if (!started_ || closed_)
+                throw Error(ErrorCode::LifecycleFailed, "Wio application update() requires a started, open host state.");
+            const std::int32_t status = descriptor_->update(storage_, deltaSeconds);
+            accept_status(status, "update", true, false);
+            return status == WIO_APPLICATION_EXIT_REQUESTED
+                ? ApplicationFrameStatus::ExitRequested
+                : ApplicationFrameStatus::Running;
+        }
+
+        void request_exit(const std::int32_t exitCode = 0)
+        {
+            require_operation("request_exit");
+            if (closed_)
+                throw Error(ErrorCode::LifecycleFailed, "Wio application request_exit() cannot target a closed host state.");
+            accept_status(descriptor_->requestExit(storage_, exitCode), "request_exit", true, false);
+        }
+
+        void close()
+        {
+            require_operation("close");
+            if (closed_)
+                return;
+            if (!started_)
+                throw Error(ErrorCode::LifecycleFailed, "Wio application close() requires start() to complete first.");
+            const std::int32_t status = descriptor_->close(storage_);
+            accept_status(status, "close", false, true);
+            closed_ = true;
+        }
+
+        [[nodiscard]] bool exit_requested() const
+        {
+            require_operation("exit_requested");
+            return descriptor_->exitRequested(storage_);
+        }
+
+        [[nodiscard]] std::int32_t exit_code() const
+        {
+            require_operation("exit_code");
+            return descriptor_->exitCode(storage_);
+        }
+
+        [[nodiscard]] std::uint64_t pump_main()
+        {
+            require_operation("pump_main");
+            return descriptor_->pumpMain(storage_);
+        }
+
+        [[nodiscard]] std::string last_error() const
+        {
+            if (descriptor_ == nullptr || storage_ == nullptr || descriptor_->lastError == nullptr)
+                return {};
+            const char* message = descriptor_->lastError(storage_);
+            return message != nullptr ? std::string(message) : std::string{};
+        }
+
+    private:
+        friend class Module;
+
+        ApplicationHost(const WioApplicationDescriptor* descriptor,
+                        std::shared_ptr<detail::BindingState> bindingState,
+                        const std::uint64_t bindingGeneration,
+                        std::shared_ptr<void> libraryLease)
+            : descriptor_(descriptor),
+              bindingState_(std::move(bindingState)),
+              bindingGeneration_(bindingGeneration),
+              libraryLease_(std::move(libraryLease)),
+              ownerThread_(std::this_thread::get_id())
+        {
+            if (descriptor_ == nullptr)
+                throw Error(ErrorCode::ApiUnavailable, "Wio module does not expose an application host descriptor.");
+
+            storage_ = ::operator new(
+                static_cast<std::size_t>(descriptor_->stateSize),
+                std::align_val_t(static_cast<std::size_t>(descriptor_->stateAlignment))
+            );
+            const std::int32_t status = descriptor_->construct(storage_);
+            if (status != WIO_APPLICATION_OK)
+            {
+                ::operator delete(storage_, std::align_val_t(static_cast<std::size_t>(descriptor_->stateAlignment)));
+                storage_ = nullptr;
+                throw Error(ErrorCode::LifecycleFailed, "Wio application state construction failed.");
+            }
+        }
+
+        void require_operation(const std::string_view operation) const
+        {
+            if (descriptor_ == nullptr || storage_ == nullptr)
+                throw Error(ErrorCode::LifecycleFailed, "Wio application host is empty.");
+            detail::requireLiveBinding(bindingState_, bindingGeneration_, "application", name());
+            if (ownerThread_ != std::this_thread::get_id())
+            {
+                std::ostringstream message;
+                message << "Wio application " << operation << "() must run on the thread that created the host.";
+                throw Error(ErrorCode::LifecycleFailed, message.str());
+            }
+        }
+
+        void accept_status(const std::int32_t status,
+                           const std::string_view operation,
+                           const bool allowExit,
+                           const bool allowClosed) const
+        {
+            if (status == WIO_APPLICATION_OK ||
+                (allowExit && status == WIO_APPLICATION_EXIT_REQUESTED) ||
+                (allowClosed && status == WIO_APPLICATION_ALREADY_CLOSED))
+                return;
+
+            std::ostringstream message;
+            message << "Wio application " << operation << "() failed with status " << status;
+            const std::string detail = last_error();
+            if (!detail.empty())
+                message << ": " << detail;
+            message << '.';
+            throw Error(ErrorCode::LifecycleFailed, message.str());
+        }
+
+        void reset() noexcept
+        {
+            if (descriptor_ == nullptr || storage_ == nullptr)
+                return;
+            if (started_ && !closed_ && ownerThread_ == std::this_thread::get_id())
+            {
+                try { (void)descriptor_->close(storage_); }
+                catch (...) { }
+            }
+            descriptor_->destroy(storage_);
+            ::operator delete(storage_, std::align_val_t(static_cast<std::size_t>(descriptor_->stateAlignment)));
+            descriptor_ = nullptr;
+            storage_ = nullptr;
+            bindingState_.reset();
+            libraryLease_.reset();
+            bindingGeneration_ = 0u;
+            started_ = false;
+            closed_ = true;
+        }
+
+        const WioApplicationDescriptor* descriptor_ = nullptr;
+        void* storage_ = nullptr;
+        std::shared_ptr<detail::BindingState> bindingState_{};
+        std::uint64_t bindingGeneration_ = 0u;
+        std::shared_ptr<void> libraryLease_{};
+        std::thread::id ownerThread_{};
+        bool started_ = false;
+        bool closed_ = false;
+    };
 
     class Module
     {
@@ -6738,6 +6986,30 @@ namespace wio::sdk
         [[nodiscard]] bool supports_restore_state() const noexcept
         {
             return api_ != nullptr && api_->restoreState != nullptr;
+        }
+
+        [[nodiscard]] bool supports_application() const noexcept
+        {
+            return has_capability(WIO_MODULE_CAP_APPLICATION_HOST_V1) &&
+                api_ != nullptr && api_->application != nullptr;
+        }
+
+        [[nodiscard]] ApplicationHost application() const
+        {
+            ensure_binding_live();
+            if (!started_)
+                throw Error(ErrorCode::LifecycleFailed, "Wio module must be started before creating its application host.");
+            if (!supports_application())
+                throw Error(ErrorCode::ApiUnavailable, "Wio module does not expose an application host.");
+
+            detail::LibraryHandle leaseHandle = detail::openLibrary(path_);
+            if (leaseHandle == nullptr)
+                throw Error(ErrorCode::LibraryOpenFailed, "Wio SDK could not retain the module library for an application host.");
+            auto lease = std::shared_ptr<void>(reinterpret_cast<void*>(leaseHandle), [leaseHandle](void*) noexcept
+            {
+                detail::closeLibrary(leaseHandle);
+            });
+            return ApplicationHost(api_->application, bindingState_, current_binding_generation(), std::move(lease));
         }
 
         void update(float deltaTime) const

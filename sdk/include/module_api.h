@@ -9,7 +9,7 @@
 
 #include "wio_version.h"
 
-inline constexpr std::uint32_t WIO_MODULE_API_DESCRIPTOR_VERSION = 9u;
+inline constexpr std::uint32_t WIO_MODULE_API_DESCRIPTOR_VERSION = 10u;
 
 enum WioModuleCapability : std::uint32_t
 {
@@ -22,7 +22,8 @@ enum WioModuleCapability : std::uint32_t
     WIO_MODULE_CAP_PRODUCT_VERSION = 1u << 6,
     WIO_MODULE_CAP_TYPE_METADATA_V2 = 1u << 7,
     WIO_MODULE_CAP_TEXT_FIELDS = 1u << 8,
-    WIO_MODULE_CAP_ATTRIBUTE_METADATA_V1 = 1u << 9
+    WIO_MODULE_CAP_ATTRIBUTE_METADATA_V1 = 1u << 9,
+    WIO_MODULE_CAP_APPLICATION_HOST_V1 = 1u << 10
 };
 
 struct WioModuleProductVersion
@@ -412,6 +413,57 @@ struct WioModuleType
     const WioModuleAttributeDescriptor* attributes;
 };
 
+enum WioApplicationStatus : std::int32_t
+{
+    WIO_APPLICATION_OK = 0,
+    WIO_APPLICATION_EXIT_REQUESTED = 1,
+    WIO_APPLICATION_ALREADY_CLOSED = 2,
+    WIO_APPLICATION_INVALID_STATE = 3,
+    WIO_APPLICATION_FAULTED = 4,
+    WIO_APPLICATION_WRONG_THREAD = 5
+};
+
+enum WioApplicationFlag : std::uint32_t
+{
+    WIO_APPLICATION_MAIN_THREAD_AFFINE = 1u << 0,
+    WIO_APPLICATION_HOST_OWNS_STORAGE = 1u << 1,
+    WIO_APPLICATION_NON_BLOCKING_UPDATE = 1u << 2
+};
+
+using WioApplicationConstructFn = std::int32_t(*)(void* storage);
+using WioApplicationStartFn = std::int32_t(*)(void* storage);
+using WioApplicationUpdateFn = std::int32_t(*)(void* storage, double deltaSeconds);
+using WioApplicationRequestExitFn = std::int32_t(*)(void* storage, std::int32_t exitCode);
+using WioApplicationCloseFn = std::int32_t(*)(void* storage);
+using WioApplicationDestroyFn = void(*)(void* storage);
+using WioApplicationBoolQueryFn = bool(*)(const void* storage);
+using WioApplicationExitCodeFn = std::int32_t(*)(const void* storage);
+using WioApplicationPumpMainFn = std::uint64_t(*)(void* storage);
+using WioApplicationLastErrorFn = const char*(*)(const void* storage);
+
+// The host allocates stateSize bytes with stateAlignment, then calls construct.
+// This keeps application state host-owned and prevents a hidden allocator from
+// crossing the module boundary. All operations are main-thread-affine and
+// contain Wio/native failures as WioApplicationStatus values.
+struct WioApplicationDescriptor
+{
+    const char* logicalName;
+    std::uint64_t stateSize;
+    std::uint64_t stateAlignment;
+    std::uint32_t flags;
+    std::uint32_t reserved;
+    WioApplicationConstructFn construct;
+    WioApplicationStartFn start;
+    WioApplicationUpdateFn update;
+    WioApplicationRequestExitFn requestExit;
+    WioApplicationCloseFn close;
+    WioApplicationDestroyFn destroy;
+    WioApplicationBoolQueryFn exitRequested;
+    WioApplicationExitCodeFn exitCode;
+    WioApplicationPumpMainFn pumpMain;
+    WioApplicationLastErrorFn lastError;
+};
+
 struct WioModuleApi
 {
     std::uint32_t descriptorVersion;
@@ -434,6 +486,7 @@ struct WioModuleApi
     const WioModuleType* types;
     WioModuleProductVersion productVersion;
     std::uint32_t descriptorSize;
+    const WioApplicationDescriptor* application;
 };
 
 using WioModuleGetApiFn = const WioModuleApi*(*)();

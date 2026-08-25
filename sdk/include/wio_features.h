@@ -122,8 +122,8 @@ namespace wio::sdk
         { Feature::Any, "any", FeatureSurface::HostValue | FeatureSurface::TypeMetadata, FeatureSupport::Partial, "Runtime type identity is preserved; cross-module payloads require an adapter." },
         { Feature::GenericInstantiation, "generic-instantiation", FeatureSurface::TypeMetadata, FeatureSupport::Partial, "ABI v9 retains v8 concrete type and const-value metadata; only exported specializations are host-addressable." },
         { Feature::TypedAttributes, "typed-attributes", FeatureSurface::TypeMetadata, FeatureSupport::Supported, "ABI v9 exposes canonical retained attributes, arguments, origins, and ordered processor pipelines." },
-        { Feature::AsyncTask, "async-task", FeatureSurface::TypeMetadata | FeatureSurface::OwnershipContract, FeatureSupport::Partial, "Task identity is visible; non-blocking host control lands with the async ABI capability." },
-        { Feature::ApplicationHost, "application-host", FeatureSurface::None, FeatureSupport::Deferred, "Reserved for the application/system host ABI milestone." },
+        { Feature::AsyncTask, "async-task", FeatureSurface::TypeMetadata | FeatureSurface::OwnershipContract, FeatureSupport::Partial, "Task identity is visible; typed result extraction remains staged behind the async ABI capability." },
+        { Feature::ApplicationHost, "application-host", FeatureSurface::OwnershipContract | FeatureSurface::ReloadAware, FeatureSupport::Supported, "ABI v10 provides host-owned state, deterministic lifecycle, explicit main pumping, thread affinity, and contained failures." },
         { Feature::HotReload, "hot-reload", FeatureSurface::OwnershipContract | FeatureSurface::ReloadAware, FeatureSupport::Supported, "Top-level bindings reacquire generations; instance wrappers fail stale." }
     });
 

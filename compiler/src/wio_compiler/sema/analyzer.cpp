@@ -7175,10 +7175,10 @@ namespace wio::sema
             WIO_LOG_ADD_ERROR(entrySurface.nestedApplicationLocation,
                 "An application root must be declared at module top level, not inside a realm.");
         }
-        if (entrySurface.applicationCount > 0 && Compiler::get().getBuildTarget() != BuildTarget::Executable)
+        if (entrySurface.applicationCount > 0 && Compiler::get().getBuildTarget() == BuildTarget::StaticLibrary)
         {
             WIO_LOG_ADD_ERROR(entrySurface.firstApplicationLocation,
-                "Application roots are supported only for executable build targets.");
+                "Application roots require an executable target or a shared-library target with the host application ABI.");
         }
 
         isDeclarationPass_ = true;

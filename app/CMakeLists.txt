@@ -2120,14 +2120,21 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_sdk_014_const_generic_metadata_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_const_generic_metadata_library.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_const_generic_metadata_host.cpp"
-        "SDK 0.14 const metadata: abi=9 block=4 label=sdk empty=ok"
+        "SDK 0.14 const metadata: abi=10 block=4 label=sdk empty=ok"
     )
 
     add_wio_shared_host_interop_test(
         wio_test_sdk_015_attribute_metadata_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_015_attribute_metadata_library.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_015_attribute_metadata_host.cpp"
-        "SDK 0.15 attributes: abi=9 type=Label field=Important method=Audited phase=pre"
+        "SDK 0.15 attributes: abi=10 type=Label field=Important method=Audited phase=pre"
+    )
+
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_016_application_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_016_application_host_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_016_application_host.cpp"
+        "sdk-application-host-ok frames=3 exit=17 wrong-thread=1 stale=1"
     )
 
     add_wio_shared_reload_interop_test(
