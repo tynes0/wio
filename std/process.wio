@@ -1,4 +1,5 @@
 use std::result as result;
+use std::async as futures;
 
 realm std {
     realm process {
@@ -16,7 +17,8 @@ realm std {
             pipe_failed = 4u8,
             process_closed = 5u8,
             wait_failed = 6u8,
-            terminate_failed = 7u8
+            terminate_failed = 7u8,
+            cancelled = 8u8
         };
 
         const ErrorNone: Error = Error::none;
@@ -27,6 +29,7 @@ realm std {
         const ErrorProcessClosed: Error = Error::process_closed;
         const ErrorWaitFailed: Error = Error::wait_failed;
         const ErrorTerminateFailed: Error = Error::terminate_failed;
+        const ErrorCancelled: Error = Error::cancelled;
 
         @Native
         @CppName(wio::runtime::std_process::ToString)
@@ -189,6 +192,56 @@ realm std {
 
         fn Capture(command: string, args: string[]) -> std::Result<Output> {
             return Capture(command, args, "");
+        }
+
+        async fn AwaitCancellableI32(task: futures::Task<std::Result<i32> >,
+            token: futures::CancellationToken) -> std::Result<i32> {
+            let outcome = await futures::TryWithCancellation<std::Result<i32> >(task, token);
+            if (outcome.IsNone()) {
+                return std::Err<i32>(MakeProcessResultError(
+                    Error::cancelled, 0, "process operation cancelled"));
+            }
+            return outcome.Value();
+        }
+
+        async fn AwaitCancellableOutput(task: futures::Task<std::Result<Output> >,
+            token: futures::CancellationToken) -> std::Result<Output> {
+            let outcome = await futures::TryWithCancellation<std::Result<Output> >(task, token);
+            if (outcome.IsNone()) {
+                return std::Err<Output>(MakeProcessResultError(
+                    Error::cancelled, 0, "process operation cancelled"));
+            }
+            return outcome.Value();
+        }
+
+        async fn AwaitCancellableChunk(task: futures::Task<std::Result<PipeChunk> >,
+            token: futures::CancellationToken) -> std::Result<PipeChunk> {
+            let outcome = await futures::TryWithCancellation<std::Result<PipeChunk> >(task, token);
+            if (outcome.IsNone()) {
+                return std::Err<PipeChunk>(MakeProcessResultError(
+                    Error::cancelled, 0, "process operation cancelled"));
+            }
+            return outcome.Value();
+        }
+
+        async fn AwaitCancellableString(task: futures::Task<std::Result<string> >,
+            token: futures::CancellationToken) -> std::Result<string> {
+            let outcome = await futures::TryWithCancellation<std::Result<string> >(task, token);
+            if (outcome.IsNone()) {
+                return std::Err<string>(MakeProcessResultError(
+                    Error::cancelled, 0, "process operation cancelled"));
+            }
+            return outcome.Value();
+        }
+
+        async fn AwaitCancellableSize(task: futures::Task<std::Result<usize> >,
+            token: futures::CancellationToken) -> std::Result<usize> {
+            let outcome = await futures::TryWithCancellation<std::Result<usize> >(task, token);
+            if (outcome.IsNone()) {
+                return std::Err<usize>(MakeProcessResultError(
+                    Error::cancelled, 0, "process operation cancelled"));
+            }
+            return outcome.Value();
         }
 
         object Process {
@@ -379,6 +432,38 @@ realm std {
                 if (succeeded) { return std::Ok(exitCode); }
                 return std::Err<i32>(MakeProcessResultError(error, nativeError, message));
             }
+
+            public async fn ReadStdoutAsync(maximumBytes: usize,
+                token: futures::CancellationToken) -> std::Result<PipeChunk> {
+                return await AwaitCancellableChunk(
+                    self.ReadStdoutAsync(maximumBytes), token);
+            }
+
+            public async fn ReadStderrAsync(maximumBytes: usize,
+                token: futures::CancellationToken) -> std::Result<PipeChunk> {
+                return await AwaitCancellableChunk(
+                    self.ReadStderrAsync(maximumBytes), token);
+            }
+
+            public async fn ReadAllStdoutAsync(
+                token: futures::CancellationToken) -> std::Result<string> {
+                return await AwaitCancellableString(self.ReadAllStdoutAsync(), token);
+            }
+
+            public async fn ReadAllStderrAsync(
+                token: futures::CancellationToken) -> std::Result<string> {
+                return await AwaitCancellableString(self.ReadAllStderrAsync(), token);
+            }
+
+            public async fn WriteStdinAsync(bytes: string,
+                token: futures::CancellationToken) -> std::Result<usize> {
+                return await AwaitCancellableSize(self.WriteStdinAsync(bytes), token);
+            }
+
+            public async fn WaitAsync(
+                token: futures::CancellationToken) -> std::Result<i32> {
+                return await AwaitCancellableI32(self.WaitAsync(), token);
+            }
         }
 
         fn Spawn(command: string, args: string[], workingDirectory: string) -> std::Result<Process> {
@@ -424,6 +509,28 @@ realm std {
 
         async fn CaptureAsync(command: string, args: string[]) -> std::Result<Output> {
             return await CaptureAsync(command, args, "");
+        }
+
+        async fn RunAsync(command: string, args: string[], workingDirectory: string,
+            token: futures::CancellationToken) -> std::Result<i32> {
+            return await AwaitCancellableI32(
+                RunAsync(command, args, workingDirectory), token);
+        }
+
+        async fn RunAsync(command: string, args: string[],
+            token: futures::CancellationToken) -> std::Result<i32> {
+            return await RunAsync(command, args, "", token);
+        }
+
+        async fn CaptureAsync(command: string, args: string[], workingDirectory: string,
+            token: futures::CancellationToken) -> std::Result<Output> {
+            return await AwaitCancellableOutput(
+                CaptureAsync(command, args, workingDirectory), token);
+        }
+
+        async fn CaptureAsync(command: string, args: string[],
+            token: futures::CancellationToken) -> std::Result<Output> {
+            return await CaptureAsync(command, args, "", token);
         }
     }
 }

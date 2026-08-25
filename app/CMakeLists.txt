@@ -4198,6 +4198,20 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
     set_tests_properties(wio_test_application_schedule_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
 
+    add_wio_success_test(
+        wio_test_async_cancellable_io_surface_check
+        "${CMAKE_SOURCE_DIR}/tests/async_cancellable_io_surface_check.wio"
+    )
+    set_tests_properties(wio_test_async_cancellable_io_surface_check PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
+    add_wio_output_test(
+        wio_test_async_cancellation_outcome_run
+        "${CMAKE_SOURCE_DIR}/tests/async_cancellation_outcome_run.wio"
+        "async-cancellation-outcome-ok"
+        --run
+    )
+    set_tests_properties(wio_test_async_cancellation_outcome_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
     add_wio_failure_test(wio_invalid_application_update_delta_type
         "${CMAKE_SOURCE_DIR}/tests/invalid/application_update_delta_type.wio"
         "Application update delta parameter must have type f64")

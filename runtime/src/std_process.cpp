@@ -465,6 +465,8 @@ namespace wio::runtime::std_process
             return "wait_failed";
         case ProcessError::terminate_failed:
             return "terminate_failed";
+        case ProcessError::cancelled:
+            return "cancelled";
         }
 
         return "launch_failed";

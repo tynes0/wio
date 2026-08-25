@@ -1,6 +1,6 @@
 use std::path as path;
 use std::result;
-use std::async as async;
+use std::async as futures;
 
 realm std {
     realm fs {
@@ -18,7 +18,8 @@ realm std {
             fs_permission_denied = 6,
             fs_io = 7,
             fs_unsupported = 8,
-            fs_unknown = 9
+            fs_unknown = 9,
+            fs_cancelled = 10
         };
 
         component MetadataValue {
@@ -315,6 +316,81 @@ realm std {
 
         async fn MetadataAsync(pathValue: string) -> std::Result<MetadataValue> {
             return FinishAsyncMetadata(pathValue, await MetadataAsyncNative(pathValue));
+        }
+
+        async fn AwaitCancellablePayload(task: futures::Task<string>,
+            token: futures::CancellationToken) -> std::Result<string> {
+            let outcome = await futures::TryWithCancellation<string>(task, token);
+            if (outcome.IsNone()) {
+                return Failure<string>(10, 0i64, "filesystem operation cancelled");
+            }
+            return std::Ok<string>(outcome.Value());
+        }
+
+        async fn ReadTextAsync(pathValue: string, token: futures::CancellationToken) -> std::Result<string> {
+            let payload = await AwaitCancellablePayload(ReadTextAsyncNative(pathValue), token);
+            if (payload.IsError()) { return std::Err<string>(payload.ErrorValue()); }
+            return FinishAsyncText(payload.Value());
+        }
+
+        async fn WriteTextAsync(pathValue: string, text: string, token: futures::CancellationToken) -> std::UnitResult {
+            let payload = await AwaitCancellablePayload(WriteTextAsyncNative(pathValue, text), token);
+            if (payload.IsError()) { return std::ErrUnit(payload.ErrorValue()); }
+            return FinishAsyncUnit(payload.Value());
+        }
+
+        async fn AppendTextAsync(pathValue: string, text: string, token: futures::CancellationToken) -> std::UnitResult {
+            let payload = await AwaitCancellablePayload(AppendTextAsyncNative(pathValue, text), token);
+            if (payload.IsError()) { return std::ErrUnit(payload.ErrorValue()); }
+            return FinishAsyncUnit(payload.Value());
+        }
+
+        async fn CreateDirectoriesAsync(pathValue: string, token: futures::CancellationToken) -> std::UnitResult {
+            let payload = await AwaitCancellablePayload(CreateDirectoriesAsyncNative(pathValue), token);
+            if (payload.IsError()) { return std::ErrUnit(payload.ErrorValue()); }
+            return FinishAsyncUnit(payload.Value());
+        }
+
+        async fn RemoveAsync(pathValue: string, token: futures::CancellationToken) -> std::Result<bool> {
+            let payload = await AwaitCancellablePayload(RemoveAsyncNative(pathValue), token);
+            if (payload.IsError()) { return std::Err<bool>(payload.ErrorValue()); }
+            return FinishAsyncBoolean(payload.Value());
+        }
+
+        async fn RemoveAllAsync(pathValue: string, token: futures::CancellationToken) -> std::UnitResult {
+            let payload = await AwaitCancellablePayload(RemoveAllAsyncNative(pathValue), token);
+            if (payload.IsError()) { return std::ErrUnit(payload.ErrorValue()); }
+            return FinishAsyncUnit(payload.Value());
+        }
+
+        async fn CopyFileAsync(source: string, target: string, token: futures::CancellationToken) -> std::UnitResult {
+            let payload = await AwaitCancellablePayload(CopyFileAsyncNative(source, target), token);
+            if (payload.IsError()) { return std::ErrUnit(payload.ErrorValue()); }
+            return FinishAsyncUnit(payload.Value());
+        }
+
+        async fn MoveFileAsync(source: string, target: string, token: futures::CancellationToken) -> std::UnitResult {
+            let payload = await AwaitCancellablePayload(MoveFileAsyncNative(source, target), token);
+            if (payload.IsError()) { return std::ErrUnit(payload.ErrorValue()); }
+            return FinishAsyncUnit(payload.Value());
+        }
+
+        async fn ReplaceFileAtomicAsync(source: string, target: string, token: futures::CancellationToken) -> std::UnitResult {
+            let payload = await AwaitCancellablePayload(ReplaceFileAtomicAsyncNative(source, target), token);
+            if (payload.IsError()) { return std::ErrUnit(payload.ErrorValue()); }
+            return FinishAsyncUnit(payload.Value());
+        }
+
+        async fn ListFilesRecursiveAsync(pathValue: string, token: futures::CancellationToken) -> std::Result<string[]> {
+            let payload = await AwaitCancellablePayload(ListFilesRecursiveAsyncNative(pathValue), token);
+            if (payload.IsError()) { return std::Err<string[]>(payload.ErrorValue()); }
+            return FinishAsyncTexts(payload.Value());
+        }
+
+        async fn MetadataAsync(pathValue: string, token: futures::CancellationToken) -> std::Result<MetadataValue> {
+            let payload = await AwaitCancellablePayload(MetadataAsyncNative(pathValue), token);
+            if (payload.IsError()) { return std::Err<MetadataValue>(payload.ErrorValue()); }
+            return FinishAsyncMetadata(pathValue, payload.Value());
         }
 
         fn IsMissing(path: string) -> bool { return not Exists(path); }

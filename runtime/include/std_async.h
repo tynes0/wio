@@ -952,8 +952,9 @@ namespace wio::runtime
                     auto parent = awaitingState.lock();
                     if (parent)
                     {
-                        parent->AddCancellationCallback([registration]
+                        parent->AddCancellationCallback([registration, child = state]
                         {
+                            child->Cancel();
                             registration->ResumeOnce();
                         });
                     }
@@ -1085,8 +1086,9 @@ namespace wio::runtime
                     auto parent = awaitingState.lock();
                     if (parent)
                     {
-                        parent->AddCancellationCallback([registration]
+                        parent->AddCancellationCallback([registration, child = state]
                         {
+                            child->Cancel();
                             registration->ResumeOnce();
                         });
                     }

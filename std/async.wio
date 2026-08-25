@@ -258,6 +258,52 @@ realm std {
 
         type CancellationToken = concurrency::CancellationToken;
 
+        async fn WithCancellation<T>(task: Task<T>, token: CancellationToken) -> T {
+            while (not IsReady<T>(task)) {
+                if (token.IsCancelled()) {
+                    Cancel<T>(task);
+                    return await task;
+                }
+                await Sleep(1u64);
+            }
+            return await task;
+        }
+
+        async fn WithCancellation(task: Task<void>, token: CancellationToken) {
+            while (not IsReady<void>(task)) {
+                if (token.IsCancelled()) {
+                    Cancel<void>(task);
+                    await task;
+                    return;
+                }
+                await Sleep(1u64);
+            }
+            await task;
+        }
+
+        async fn TryWithCancellation<T>(task: Task<T>, token: CancellationToken) -> std::Option<T> {
+            while (not IsReady<T>(task)) {
+                if (token.IsCancelled()) {
+                    Cancel<T>(task);
+                    return std::None<T>();
+                }
+                await Sleep(1u64);
+            }
+            return std::Some<T>(await task);
+        }
+
+        async fn TryWithCancellation(task: Task<void>, token: CancellationToken) -> bool {
+            while (not IsReady<void>(task)) {
+                if (token.IsCancelled()) {
+                    Cancel<void>(task);
+                    return false;
+                }
+                await Sleep(1u64);
+            }
+            await task;
+            return true;
+        }
+
         object CancellationSource {
             private token: CancellationToken;
 
