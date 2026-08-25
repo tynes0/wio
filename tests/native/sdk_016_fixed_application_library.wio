@@ -1,0 +1,27 @@
+system FixedSimulation {
+    mut ticks: i32;
+
+    on update(step: f64) {
+        self.ticks += 1;
+    }
+}
+
+application FixedHostedApplication {
+    system simulation: FixedSimulation;
+
+    schedule {
+        stage application after simulation {
+            run self.update;
+        }
+
+        fixed stage simulation at 10 hz on main {
+            run simulation.update;
+        }
+    }
+
+    on update(delta: f64) {
+        if (self.simulation.ticks == 3) {
+            self.Exit(23);
+        }
+    }
+}

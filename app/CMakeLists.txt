@@ -2144,6 +2144,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "sdk-async-task-ok value=42 timeout=1 cancel=1 callbacks=2 stale=1"
     )
 
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_016_fixed_application_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_016_fixed_application_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_016_fixed_application_host.cpp"
+        "sdk-fixed-application-ok frames=6 ticks=3 exit=23"
+    )
+
     add_wio_shared_reload_interop_test(
         wio_test_module_reload_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/module_reload.wio"
@@ -4183,12 +4190,29 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
     set_tests_properties(wio_test_application_delta_context_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
 
+    add_wio_output_test(
+        wio_test_application_schedule_run
+        "${CMAKE_SOURCE_DIR}/tests/application_schedule_run.wio"
+        "application-schedule-ok"
+        --run
+    )
+    set_tests_properties(wio_test_application_schedule_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
     add_wio_failure_test(wio_invalid_application_update_delta_type
         "${CMAKE_SOURCE_DIR}/tests/invalid/application_update_delta_type.wio"
         "Application update delta parameter must have type f64")
     add_wio_failure_test(wio_invalid_system_start_parameter
         "${CMAKE_SOURCE_DIR}/tests/invalid/system_start_parameter.wio"
         "Only system 'on update' accepts a delta parameter")
+    add_wio_failure_test(wio_invalid_application_schedule_cycle
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_schedule_cycle.wio"
+        "schedule dependencies contain a cycle")
+    add_wio_failure_test(wio_invalid_application_schedule_unknown_system
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_schedule_unknown_system.wio"
+        "runs unknown application system 'missing'")
+    add_wio_failure_test(wio_invalid_application_fixed_stage_frequency
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_fixed_stage_frequency.wio"
+        "requires an 'at <frequency> hz' clause")
 
     add_wio_failure_test(wio_invalid_application_with_entry
         "${CMAKE_SOURCE_DIR}/tests/invalid/application_with_entry.wio"

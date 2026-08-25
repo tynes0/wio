@@ -1,0 +1,6 @@
+application MissingFrequency {
+    schedule {
+        fixed stage simulation { run self.update; }
+    }
+    on update { self.Exit(0); }
+}

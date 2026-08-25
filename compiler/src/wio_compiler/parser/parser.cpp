@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <functional>
+#include <unordered_set>
 
 namespace wio
 {
@@ -2077,10 +2078,107 @@ namespace wio
         std::vector<ComponentMember> fields;
         std::unordered_map<std::string, NodePtr<FunctionDeclaration>> handlers;
         std::vector<std::string> ownedSystems;
+        struct ParsedApplicationStage
+        {
+            std::string name;
+            std::optional<std::string> after;
+            std::vector<std::string> runs;
+            bool fixed = false;
+            bool mainThread = false;
+            double hz = 0.0;
+        };
+        std::vector<ParsedApplicationStage> scheduleStages;
+        bool hasExplicitSchedule = false;
         while (peek().isValid() && !match(TokenType::rightBrace))
         {
             std::vector<NodePtr<AttributeStatement>> memberAttributes;
             parseLeadingAttributes(memberAttributes);
+            if (peek().type == TokenType::identifier && peek().value == "schedule")
+            {
+                if (!memberAttributes.empty())
+                    utError("Application schedule does not accept declaration attributes yet.", peek().loc);
+                if (hasExplicitSchedule)
+                    utError("An application may declare only one schedule.", peek().loc);
+                hasExplicitSchedule = true;
+                advance();
+                consume(TokenType::leftBrace);
+                std::unordered_set<std::string> stageNames;
+                while (peek().isValid() && !match(TokenType::rightBrace))
+                {
+                    ParsedApplicationStage stage;
+                    if (peek().type == TokenType::identifier && peek().value == "fixed")
+                    {
+                        stage.fixed = true;
+                        advance();
+                    }
+                    if (peek().type != TokenType::identifier || peek().value != "stage")
+                        utError("A schedule accepts 'stage' or 'fixed stage' declarations.", peek().loc);
+                    advance();
+                    const Token stageName = consumeIdentifier();
+                    stage.name = stageName.value;
+                    if (!stageNames.insert(stage.name).second)
+                        utError("Schedule stage '" + stage.name + "' is declared more than once.", stageName.loc);
+
+                    while (!match(TokenType::leftBrace))
+                    {
+                        if (peek().type == TokenType::kwAfter ||
+                            (peek().type == TokenType::identifier && peek().value == "after"))
+                        {
+                            advance();
+                            stage.after = consumeIdentifier().value;
+                            continue;
+                        }
+                        if (peek().type == TokenType::identifier && peek().value == "on")
+                        {
+                            advance();
+                            const Token affinity = consumeIdentifier();
+                            if (affinity.value != "main")
+                                utError("Schedule stage affinity must be 'on main'.", affinity.loc);
+                            stage.mainThread = true;
+                            continue;
+                        }
+                        if (peek().type == TokenType::identifier && peek().value == "at")
+                        {
+                            advance();
+                            const Token frequency = advance();
+                            if (frequency.type != TokenType::integerLiteral && frequency.type != TokenType::floatLiteral)
+                                utError("Fixed stage frequency must be a positive number followed by hz.", frequency.loc);
+                            try { stage.hz = std::stod(frequency.value); }
+                            catch (...) { utError("Fixed stage frequency is invalid.", frequency.loc); }
+                            const Token unit = consumeIdentifier();
+                            if (unit.value != "hz" || stage.hz <= 0.0)
+                                utError("Fixed stage frequency must be a positive number followed by hz.", unit.loc);
+                            continue;
+                        }
+                        utError("Unknown schedule stage clause '" + peek().value + "'.", peek().loc);
+                    }
+                    consume(TokenType::leftBrace);
+                    while (peek().isValid() && !match(TokenType::rightBrace))
+                    {
+                        if (peek().type != TokenType::identifier || peek().value != "run")
+                            utError("Schedule stages currently accept explicit 'run target;' entries.", peek().loc);
+                        advance();
+                        const Token target = consumeIdentifier();
+                        std::string runTarget = target.value;
+                        if (match(TokenType::opDot, true))
+                        {
+                            const Token method = consumeIdentifier();
+                            if (method.value != "update")
+                                utError("The sequential v0.16 scheduler supports only '.update' handlers.", method.loc);
+                        }
+                        consume(TokenType::semicolon);
+                        stage.runs.push_back(std::move(runTarget));
+                    }
+                    consume(TokenType::rightBrace);
+                    if (stage.fixed && stage.hz <= 0.0)
+                        utError("A fixed stage requires an 'at <frequency> hz' clause.", stageName.loc);
+                    if (!stage.fixed && stage.hz > 0.0)
+                        utError("Only a fixed stage may declare an update frequency.", stageName.loc);
+                    scheduleStages.push_back(std::move(stage));
+                }
+                consume(TokenType::rightBrace);
+                continue;
+            }
             if (peek().type == TokenType::identifier && peek().value == "on")
             {
                 advance();
@@ -2161,6 +2259,48 @@ namespace wio
         }
         consume(TokenType::rightBrace);
 
+        std::vector<size_t> orderedStageIndices;
+        if (hasExplicitSchedule)
+        {
+            std::unordered_map<std::string, size_t> stageByName;
+            size_t selfRunCount = 0;
+            for (size_t index = 0; index < scheduleStages.size(); ++index)
+                stageByName.emplace(scheduleStages[index].name, index);
+            for (const auto& stage : scheduleStages)
+            {
+                if (stage.after.has_value() && !stageByName.contains(*stage.after))
+                    utError("Schedule stage '" + stage.name + "' depends on unknown stage '" + *stage.after + "'.", startToken.loc);
+                for (const auto& target : stage.runs)
+                {
+                    if (target == "self")
+                        ++selfRunCount;
+                    if (target != "self" && std::ranges::find(ownedSystems, target) == ownedSystems.end())
+                        utError("Schedule stage '" + stage.name + "' runs unknown application system '" + target + "'.", startToken.loc);
+                }
+            }
+            if (selfRunCount > 1)
+                utError("An application schedule may run 'self.update' at most once per frame graph.", startToken.loc);
+
+            std::unordered_set<std::string> emittedStages;
+            while (orderedStageIndices.size() < scheduleStages.size())
+            {
+                bool progressed = false;
+                for (size_t index = 0; index < scheduleStages.size(); ++index)
+                {
+                    const auto& stage = scheduleStages[index];
+                    if (emittedStages.contains(stage.name))
+                        continue;
+                    if (stage.after.has_value() && !emittedStages.contains(*stage.after))
+                        continue;
+                    emittedStages.insert(stage.name);
+                    orderedStageIndices.push_back(index);
+                    progressed = true;
+                }
+                if (!progressed)
+                    utError("Application schedule dependencies contain a cycle.", startToken.loc);
+            }
+        }
+
         if (!handlers.contains("update"))
             utError("An application must declare exactly one 'on update' handler.", startToken.loc);
 
@@ -2177,6 +2317,16 @@ namespace wio
             makeNodePtr<BoolLiteral>(Token{ .type = TokenType::kwFalse, .value = "false", .loc = startToken.loc }));
         addControlField("__exitCode", makeType(TokenType::kwI32, "i32"),
             makeNodePtr<IntegerLiteral>(Token{ .type = TokenType::integerLiteral, .value = "0", .loc = startToken.loc }));
+        for (const size_t stageIndex : orderedStageIndices)
+        {
+            const auto& stage = scheduleStages[stageIndex];
+            if (!stage.fixed)
+                continue;
+            addControlField("__fixed_" + stage.name,
+                makeType(TokenType::kwF64, "f64"),
+                makeNodePtr<FloatLiteral>(Token{
+                    .type = TokenType::floatLiteral, .value = "0.0", .loc = startToken.loc }));
+        }
 
         auto component = makeNodePtr<ComponentDeclaration>(
             std::move(applicationAttributes), std::move(applicationName),
@@ -2268,16 +2418,84 @@ namespace wio
                     std::move(callArguments), false, false, startToken.loc);
                 return makeNodePtr<ExpressionStatement>(std::move(call), startToken.loc);
             };
-            if (auto block = method->body.As<BlockStatement>(); block && !ownedSystems.empty())
+            if (auto block = method->body.As<BlockStatement>(); block)
             {
                 const std::string methodName = lifecycle == "start" ? "Start" :
                     (lifecycle == "update" ? "Update" : "Close");
-                if (lifecycle == "start")
+                if (lifecycle == "update" && hasExplicitSchedule)
+                {
+                    std::vector<NodePtr<Statement>> userUpdateStatements = std::move(block->statements);
+                    std::vector<NodePtr<Statement>> scheduledStatements;
+                    const std::string deltaName = method->parameters.empty() || !method->parameters.front().name
+                        ? "_wio_deltaSeconds"
+                        : method->parameters.front().name->token.value;
+
+                    auto makeAccumulator = [&](const std::string& stageName) -> NodePtr<Expression>
+                    {
+                        return makeMember(makeNodePtr<SelfExpression>(startToken.loc), "__fixed_" + stageName);
+                    };
+                    auto makeStep = [&](const double hz) -> NodePtr<Expression>
+                    {
+                        return makeNodePtr<FloatLiteral>(Token{
+                            .type = TokenType::floatLiteral,
+                            .value = std::to_string(1.0 / hz),
+                            .loc = startToken.loc });
+                    };
+
+                    for (const size_t stageIndex : orderedStageIndices)
+                    {
+                        const auto& stage = scheduleStages[stageIndex];
+                        std::vector<NodePtr<Statement>> stageStatements;
+                        for (const auto& target : stage.runs)
+                        {
+                            if (target == "self")
+                            {
+                                for (auto& statement : userUpdateStatements)
+                                    stageStatements.push_back(std::move(statement));
+                                userUpdateStatements.clear();
+                            }
+                            else
+                            {
+                                stageStatements.push_back(makeSystemCallStatement(target, "Update"));
+                            }
+                        }
+
+                        if (!stage.fixed)
+                        {
+                            for (auto& statement : stageStatements)
+                                scheduledStatements.push_back(std::move(statement));
+                            continue;
+                        }
+
+                        scheduledStatements.push_back(makeNodePtr<ExpressionStatement>(
+                            makeNodePtr<AssignmentExpression>(
+                                makeAccumulator(stage.name),
+                                Token{ .type = TokenType::opPlusAssign, .value = "+=", .loc = startToken.loc },
+                                makeIdentifier(deltaName), startToken.loc),
+                            startToken.loc));
+                        stageStatements.push_back(makeNodePtr<ExpressionStatement>(
+                            makeNodePtr<AssignmentExpression>(
+                                makeAccumulator(stage.name),
+                                Token{ .type = TokenType::opMinusAssign, .value = "-=", .loc = startToken.loc },
+                                makeStep(stage.hz), startToken.loc),
+                            startToken.loc));
+                        auto fixedCondition = makeNodePtr<BinaryExpression>(
+                            makeAccumulator(stage.name),
+                            Token{ .type = TokenType::opGreaterEqual, .value = ">=", .loc = startToken.loc },
+                            makeStep(stage.hz), startToken.loc);
+                        scheduledStatements.push_back(makeNodePtr<WhileStatement>(
+                            std::move(fixedCondition),
+                            makeNodePtr<BlockStatement>(std::move(stageStatements), startToken.loc),
+                            startToken.loc));
+                    }
+                    block->statements = std::move(scheduledStatements);
+                }
+                else if (lifecycle == "start" && !ownedSystems.empty())
                 {
                     for (const auto& systemName : ownedSystems)
                         block->statements.push_back(makeSystemCallStatement(systemName, methodName));
                 }
-                else
+                else if (!ownedSystems.empty())
                 {
                     std::vector<NodePtr<Statement>> calls;
                     if (lifecycle == "close")

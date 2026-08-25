@@ -1,0 +1,38 @@
+use std::assert as assert;
+use std::console as console;
+
+mut scheduleTrace: string = "";
+
+system FirstScheduled {
+    on update(delta: f64) { scheduleTrace += "first>"; }
+}
+
+system SecondScheduled {
+    on update(delta: f64) { scheduleTrace += "second>"; }
+}
+
+application ScheduledApp {
+    system first: FirstScheduled;
+    system second: SecondScheduled;
+
+    schedule {
+        stage finish after systems on main {
+            run self.update;
+        }
+
+        stage systems {
+            run second.update;
+            run first.update;
+        }
+
+        fixed stage maintenance at 1 hz after systems on main {
+        }
+    }
+
+    on update(delta: f64) {
+        scheduleTrace += "app>";
+        assert::ExpectEqual(scheduleTrace, "second>first>app>", "schedule dependencies and run order are deterministic");
+        console::PrintLine("application-schedule-ok");
+        self.Exit(0);
+    }
+}
