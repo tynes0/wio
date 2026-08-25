@@ -2279,6 +2279,11 @@ namespace wio::codegen
                     collectExportedFunctions(realmDecl->statements, exportedFunctions);
                     continue;
                 }
+                if (const auto* group = statement->as<DeclarationGroup>())
+                {
+                    collectExportedFunctions(group->declarations, exportedFunctions);
+                    continue;
+                }
 
                 const auto* fnDecl = statement->as<FunctionDeclaration>();
                 if (!fnDecl || !isExportedFunction(*fnDecl))
@@ -4259,6 +4264,32 @@ namespace wio::codegen
         }
         if (hasRetainedAttributeMetadata) capabilities |= (1u << 9); // retained attribute metadata v1
         if (applicationEntry) capabilities |= (1u << 10); // host-driven application ABI v1
+        auto asyncResultType = [](const ExportedFunctionInfo& exportInfo) -> Ref<sema::Type>
+        {
+            if (!exportInfo.declaration || !exportInfo.declaration->isAsync || !exportInfo.functionType)
+                return nullptr;
+            Ref<sema::Type> taskType = unwrapAliasType(exportInfo.functionType->returnType);
+            return taskType && taskType->kind() == sema::TypeKind::AsyncTask
+                ? taskType.AsFast<sema::AsyncTaskType>()->valueType
+                : nullptr;
+        };
+        std::vector<size_t> asyncExportIndices;
+        for (size_t exportIndex = 0; exportIndex < exportedFunctions.size(); ++exportIndex)
+        {
+            const auto& exportInfo = exportedFunctions[exportIndex];
+            Ref<sema::Type> resultType = asyncResultType(exportInfo);
+            if (!resultType || getAbiTypeEnumName(resultType) == "WIO_ABI_UNKNOWN")
+                continue;
+            const bool parametersAreStable = std::ranges::all_of(
+                exportInfo.functionType->paramTypes,
+                [&](const Ref<sema::Type>& parameterType)
+                {
+                    return getAbiTypeEnumName(parameterType) != "WIO_ABI_UNKNOWN";
+                });
+            if (parametersAreStable)
+                asyncExportIndices.push_back(exportIndex);
+        }
+        if (!asyncExportIndices.empty()) capabilities |= (1u << 11); // async task host ABI v1
         std::uint32_t stateSchemaVersion = (lifecycleFunctions.saveState || lifecycleFunctions.restoreState) ? 1u : 0u;
 
         struct SdkAttributeTable
@@ -4350,7 +4381,7 @@ namespace wio::codegen
         auto isInvokeCompatibleExport = [&](const ExportedFunctionInfo& exportInfo) -> bool
         {
             auto exportFunctionType = exportInfo.functionType;
-            if (!exportFunctionType)
+            if (!exportFunctionType || (exportInfo.declaration && exportInfo.declaration->isAsync))
                 return false;
 
             if (getAbiTypeEnumName(exportFunctionType->returnType) == "WIO_ABI_UNKNOWN")
@@ -4675,6 +4706,211 @@ namespace wio::codegen
             }
         }
 
+        for (const size_t exportIndex : asyncExportIndices)
+        {
+            const auto& exportInfo = exportedFunctions[exportIndex];
+            const auto functionType = exportInfo.functionType;
+            const Ref<sema::Type> resultType = asyncResultType(exportInfo);
+            const std::string suffix = std::to_string(exportIndex);
+            const std::string stateType = "WioAsyncExportState_" + suffix;
+            const std::string resultCppType = toCppType(resultType);
+
+            emitLine("struct " + stateType + " final");
+            emitLine("{");
+            indent();
+            emitLine("std::atomic<std::uint64_t> references{1u};");
+            emitLine(toCppType(functionType->returnType) + " task;");
+            emitLine("mutable std::mutex errorMutex{};");
+            emitLine("mutable std::string lastError{};");
+            dedent();
+            emitLine("};");
+            emitLine();
+
+            emitLine("static void WioAsyncRetain_" + suffix + "(void* opaque) noexcept");
+            emitLine("{");
+            indent();
+            emitLine("if (auto* state = static_cast<" + stateType + "*>(opaque)) state->references.fetch_add(1u, std::memory_order_relaxed);");
+            dedent();
+            emitLine("}");
+            emitLine("static void WioAsyncRelease_" + suffix + "(void* opaque) noexcept");
+            emitLine("{");
+            indent();
+            emitLine("auto* state = static_cast<" + stateType + "*>(opaque);");
+            emitLine("if (state != nullptr && state->references.fetch_sub(1u, std::memory_order_acq_rel) == 1u) delete state;");
+            dedent();
+            emitLine("}");
+
+            emitLine("static WioAsyncTaskStatus WioAsyncStatus_" + suffix + "(const void* opaque) noexcept");
+            emitLine("{");
+            indent();
+            emitLine("const auto* state = static_cast<const " + stateType + "*>(opaque);");
+            emitLine("if (state == nullptr || !state->task.IsReady()) return WIO_ASYNC_TASK_PENDING;");
+            emitLine("if (state->task.IsCancelled()) return WIO_ASYNC_TASK_CANCELLED;");
+            emitLine("if (state->task.IsFaulted()) return WIO_ASYNC_TASK_FAULTED;");
+            emitLine("return WIO_ASYNC_TASK_READY;");
+            dedent();
+            emitLine("}");
+
+            emitLine("static void WioAsyncCancel_" + suffix + "(void* opaque) noexcept");
+            emitLine("{");
+            indent();
+            emitLine("try { if (auto* state = static_cast<" + stateType + "*>(opaque)) state->task.Cancel(); }");
+            emitLine("catch (...) { }");
+            dedent();
+            emitLine("}");
+
+            emitLine("static std::int32_t WioAsyncWaitFor_" + suffix + "(void* opaque, std::uint64_t milliseconds) noexcept");
+            emitLine("{");
+            indent();
+            emitLine("auto* state = static_cast<" + stateType + "*>(opaque);");
+            emitLine("if (state == nullptr) return WIO_ASYNC_BAD_ARGUMENTS;");
+            emitLine("try");
+            emitLine("{");
+            indent();
+            emitLine("const auto initialStatus = WioAsyncStatus_" + suffix + "(state);");
+            emitLine("if (initialStatus == WIO_ASYNC_TASK_CANCELLED) return WIO_ASYNC_CANCELLED;");
+            emitLine("if (initialStatus == WIO_ASYNC_TASK_FAULTED) return WIO_ASYNC_FAULTED;");
+            emitLine("if (!state->task.WaitFor(milliseconds)) return WIO_ASYNC_TIMED_OUT;");
+            emitLine("const auto status = WioAsyncStatus_" + suffix + "(state);");
+            emitLine("return status == WIO_ASYNC_TASK_CANCELLED ? WIO_ASYNC_CANCELLED : (status == WIO_ASYNC_TASK_FAULTED ? WIO_ASYNC_FAULTED : WIO_ASYNC_OK);");
+            dedent();
+            emitLine("}");
+            emitLine("catch (...) { return WIO_ASYNC_FAULTED; }");
+            dedent();
+            emitLine("}");
+
+            emitLine("static std::int32_t WioAsyncGetResult_" + suffix + "(void* opaque, WioValue* outResult) noexcept");
+            emitLine("{");
+            indent();
+            emitLine("auto* state = static_cast<" + stateType + "*>(opaque);");
+            emitLine("if (state == nullptr || outResult == nullptr) return WIO_ASYNC_BAD_ARGUMENTS;");
+            emitLine("const auto status = WioAsyncStatus_" + suffix + "(state);");
+            emitLine("if (status == WIO_ASYNC_TASK_PENDING) return WIO_ASYNC_NOT_READY;");
+            emitLine("if (status == WIO_ASYNC_TASK_CANCELLED) return WIO_ASYNC_CANCELLED;");
+            emitLine("if (status == WIO_ASYNC_TASK_FAULTED) return WIO_ASYNC_FAULTED;");
+            emitLine("try");
+            emitLine("{");
+            indent();
+            if (resultType->isVoid())
+            {
+                emitLine("state->task.Get();");
+                emitLine("outResult->type = WIO_ABI_VOID;");
+            }
+            else
+            {
+                emitLine("auto result = state->task.Get();");
+                emitLine("outResult->type = " + getAbiTypeEnumName(resultType) + ";");
+                emitLine("outResult->value." + getAbiValueFieldName(resultType) + " = result;");
+            }
+            emitLine("return WIO_ASYNC_OK;");
+            dedent();
+            emitLine("}");
+            emitLine("catch (const std::exception& error)");
+            emitLine("{");
+            indent();
+            emitLine("std::lock_guard lock(state->errorMutex);");
+            emitLine("state->lastError = error.what();");
+            emitLine("return state->task.IsCancelled() ? WIO_ASYNC_CANCELLED : WIO_ASYNC_FAULTED;");
+            dedent();
+            emitLine("}");
+            emitLine("catch (...) { return WIO_ASYNC_FAULTED; }");
+            dedent();
+            emitLine("}");
+
+            emitLine("static std::int32_t WioAsyncOnComplete_" + suffix + "(void* opaque, WioAsyncCompletionFn callback, void* userData, WioAsyncCompletionTarget target) noexcept");
+            emitLine("{");
+            indent();
+            emitLine("auto* state = static_cast<" + stateType + "*>(opaque);");
+            emitLine("if (state == nullptr || callback == nullptr) return WIO_ASYNC_BAD_ARGUMENTS;");
+            emitLine("if (target != WIO_ASYNC_COMPLETION_CURRENT_EXECUTOR && target != WIO_ASYNC_COMPLETION_MAIN_EXECUTOR) return WIO_ASYNC_BAD_ARGUMENTS;");
+            emitLine("WioAsyncRetain_" + suffix + "(state);");
+            emitLine("try");
+            emitLine("{");
+            indent();
+            emitLine("state->task.SharedState()->AddCompletionCallback([state, callback, userData, target]");
+            emitLine("{");
+            indent();
+            emitLine("auto deliver = [state, callback, userData]");
+            emitLine("{");
+            indent();
+            emitLine("try { callback(userData, WioAsyncStatus_" + suffix + "(state)); } catch (...) { }");
+            emitLine("WioAsyncRelease_" + suffix + "(state);");
+            dedent();
+            emitLine("};");
+            emitLine("if (target == WIO_ASYNC_COMPLETION_MAIN_EXECUTOR)");
+            emitLine("{");
+            indent();
+            emitLine("if (!wio::runtime::DefaultAsyncMainExecutor().Post(std::move(deliver))) deliver();");
+            dedent();
+            emitLine("}");
+            emitLine("else deliver();");
+            dedent();
+            emitLine("});");
+            emitLine("return WIO_ASYNC_OK;");
+            dedent();
+            emitLine("}");
+            emitLine("catch (...) { WioAsyncRelease_" + suffix + "(state); return WIO_ASYNC_FAULTED; }");
+            dedent();
+            emitLine("}");
+
+            emitLine("static const char* WioAsyncLastError_" + suffix + "(const void* opaque) noexcept");
+            emitLine("{");
+            indent();
+            emitLine("const auto* state = static_cast<const " + stateType + "*>(opaque);");
+            emitLine("if (state == nullptr) return \"async task state is null\";");
+            emitLine("std::lock_guard lock(state->errorMutex);");
+            emitLine("const std::string message = state->task.SharedState()->FailureMessage();");
+            emitLine("if (!message.empty()) state->lastError = message;");
+            emitLine("return state->lastError.c_str();");
+            dedent();
+            emitLine("}");
+
+            emitLine("static const WioAsyncTaskOps WIO_ASYNC_OPS_" + suffix + " =");
+            emitLine("{");
+            indent();
+            emitLine("&WioAsyncRetain_" + suffix + ", &WioAsyncRelease_" + suffix + ", &WioAsyncStatus_" + suffix + ",");
+            emitLine("&WioAsyncCancel_" + suffix + ", &WioAsyncWaitFor_" + suffix + ", &WioAsyncGetResult_" + suffix + ",");
+            emitLine("&WioAsyncOnComplete_" + suffix + ", &WioAsyncLastError_" + suffix);
+            dedent();
+            emitLine("};");
+
+            emitLine("static std::int32_t WioAsyncInvoke_" + suffix + "(const WioValue* args, std::uint32_t argCount, WioAsyncTaskHandle* outTask) noexcept");
+            emitLine("{");
+            indent();
+            emitLine("if (outTask == nullptr || argCount != " + std::to_string(functionType->paramTypes.size()) + "u) return WIO_ASYNC_BAD_ARGUMENTS;");
+            if (!functionType->paramTypes.empty())
+                emitLine("if (args == nullptr) return WIO_ASYNC_BAD_ARGUMENTS;");
+            for (size_t parameterIndex = 0; parameterIndex < functionType->paramTypes.size(); ++parameterIndex)
+            {
+                emitLine("if (args[" + std::to_string(parameterIndex) + "].type != " +
+                         getAbiTypeEnumName(functionType->paramTypes[parameterIndex]) + ") return WIO_ASYNC_TYPE_MISMATCH;");
+            }
+            emitLine("try");
+            emitLine("{");
+            indent();
+            std::string callExpression = exportInfo.internalSymbol;
+            if (!exportInfo.templateArguments.empty())
+                callExpression += formatTemplateArgumentList(exportInfo.templateArguments);
+            callExpression += "(";
+            for (size_t parameterIndex = 0; parameterIndex < functionType->paramTypes.size(); ++parameterIndex)
+            {
+                if (parameterIndex > 0)
+                    callExpression += ", ";
+                callExpression += "args[" + std::to_string(parameterIndex) + "].value." +
+                    getAbiValueFieldName(functionType->paramTypes[parameterIndex]);
+            }
+            callExpression += ")";
+            emitLine("auto* state = new " + stateType + "{1u, " + callExpression + "};");
+            emitLine("*outTask = { state, &WIO_ASYNC_OPS_" + suffix + ", " + getAbiTypeEnumName(resultType) + " };");
+            emitLine("return WIO_ASYNC_OK;");
+            dedent();
+            emitLine("}");
+            emitLine("catch (...) { return WIO_ASYNC_FAULTED; }");
+            dedent();
+            emitLine("}");
+            emitLine();
+        }
+
         std::vector<SdkAttributeTable> exportAttributeTables;
         exportAttributeTables.reserve(exportedFunctions.size());
         for (size_t exportIndex = 0; exportIndex < exportedFunctions.size(); ++exportIndex)
@@ -4719,6 +4955,42 @@ namespace wio::codegen
             }
             dedent();
             emitLine("};");
+        }
+
+        std::string asyncHostDescriptorExpression = "nullptr";
+        if (!asyncExportIndices.empty())
+        {
+            emitLine("static const WioModuleAsyncExport WIO_MODULE_ASYNC_EXPORTS[] =");
+            emitLine("{");
+            indent();
+            for (size_t asyncIndex = 0; asyncIndex < asyncExportIndices.size(); ++asyncIndex)
+            {
+                const size_t exportIndex = asyncExportIndices[asyncIndex];
+                const auto& exportInfo = exportedFunctions[exportIndex];
+                const Ref<sema::Type> resultType = asyncResultType(exportInfo);
+                const std::string parameterTypes = exportInfo.functionType->paramTypes.empty()
+                    ? "nullptr"
+                    : "WIO_EXPORT_PARAM_TYPES_" + std::to_string(exportIndex);
+                const std::string tableSuffix = asyncIndex + 1 < asyncExportIndices.size() ? "," : "";
+                emitLine("{ \"" + common::wioStringToEscapedCppString(exportInfo.logicalName) + "\", " +
+                         getAbiTypeEnumName(resultType) + ", " +
+                         std::to_string(exportInfo.functionType->paramTypes.size()) + "u, " + parameterTypes +
+                         ", &WioAsyncInvoke_" + std::to_string(exportIndex) + " }" + tableSuffix);
+            }
+            dedent();
+            emitLine("};");
+            emitLine("static void WioAsyncHostBindMain() noexcept { try { wio::runtime::BindAsyncMainExecutor(); } catch (...) { } }");
+            emitLine("static std::uint64_t WioAsyncHostPumpMain() noexcept { try { return wio::runtime::DrainAsyncMainExecutor(); } catch (...) { return 0u; } }");
+            emitLine("static std::uint64_t WioAsyncHostPendingMain() noexcept { return wio::runtime::AsyncMainPendingCount(); }");
+            emitLine("static void WioAsyncHostRequestShutdown() noexcept { wio::runtime::ShutdownAsyncRuntime(); }");
+            emitLine("static const WioAsyncHostDescriptor WIO_MODULE_ASYNC_HOST =");
+            emitLine("{");
+            indent();
+            emitLine("0u, 0u, &WioAsyncHostBindMain, &WioAsyncHostPumpMain,");
+            emitLine("&WioAsyncHostPendingMain, &WioAsyncHostRequestShutdown");
+            dedent();
+            emitLine("};");
+            asyncHostDescriptorExpression = "&WIO_MODULE_ASYNC_HOST";
         }
 
         std::vector<size_t> commandExportIndices;
@@ -5752,7 +6024,10 @@ namespace wio::codegen
         emitLine(exportedTypes.empty() ? "nullptr," : "WIO_MODULE_TYPES,");
         emitLine("{ WIO_SDK_VERSION_MAJOR, WIO_SDK_VERSION_MINOR, WIO_SDK_VERSION_PATCH },");
         emitLine("sizeof(WioModuleApi),");
-        emitLine(applicationDescriptorExpression);
+        emitLine(applicationDescriptorExpression + ",");
+        emitLine(std::to_string(asyncExportIndices.size()) + "u,");
+        emitLine(asyncExportIndices.empty() ? "nullptr," : "WIO_MODULE_ASYNC_EXPORTS,");
+        emitLine(asyncHostDescriptorExpression);
         dedent();
         emitLine("};");
         emitLine("return &API;");

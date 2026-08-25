@@ -1,0 +1,18 @@
+use std::async as futures;
+
+[Export]
+async fn DelayedDouble(value: i32, milliseconds: u64) -> i32 {
+    await futures::Sleep(milliseconds);
+    return value * 2;
+}
+
+[Export]
+async fn DelayedUnit(milliseconds: u64) {
+    await futures::Sleep(milliseconds);
+}
+
+[Export]
+async fn CancellableValue(milliseconds: u64) -> i32 {
+    await futures::Sleep(milliseconds);
+    return 99;
+}

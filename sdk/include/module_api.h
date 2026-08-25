@@ -23,7 +23,8 @@ enum WioModuleCapability : std::uint32_t
     WIO_MODULE_CAP_TYPE_METADATA_V2 = 1u << 7,
     WIO_MODULE_CAP_TEXT_FIELDS = 1u << 8,
     WIO_MODULE_CAP_ATTRIBUTE_METADATA_V1 = 1u << 9,
-    WIO_MODULE_CAP_APPLICATION_HOST_V1 = 1u << 10
+    WIO_MODULE_CAP_APPLICATION_HOST_V1 = 1u << 10,
+    WIO_MODULE_CAP_ASYNC_TASK_HOST_V1 = 1u << 11
 };
 
 struct WioModuleProductVersion
@@ -464,6 +465,79 @@ struct WioApplicationDescriptor
     WioApplicationLastErrorFn lastError;
 };
 
+enum WioAsyncTaskStatus : std::int32_t
+{
+    WIO_ASYNC_TASK_PENDING = 0,
+    WIO_ASYNC_TASK_READY = 1,
+    WIO_ASYNC_TASK_CANCELLED = 2,
+    WIO_ASYNC_TASK_FAULTED = 3
+};
+
+enum WioAsyncOperationStatus : std::int32_t
+{
+    WIO_ASYNC_OK = 0,
+    WIO_ASYNC_TIMED_OUT = 1,
+    WIO_ASYNC_NOT_READY = 2,
+    WIO_ASYNC_CANCELLED = 3,
+    WIO_ASYNC_FAULTED = 4,
+    WIO_ASYNC_BAD_ARGUMENTS = 5,
+    WIO_ASYNC_TYPE_MISMATCH = 6
+};
+
+enum WioAsyncCompletionTarget : std::uint32_t
+{
+    WIO_ASYNC_COMPLETION_CURRENT_EXECUTOR = 0u,
+    WIO_ASYNC_COMPLETION_MAIN_EXECUTOR = 1u
+};
+
+using WioAsyncCompletionFn = void(*)(void* userData, WioAsyncTaskStatus status);
+
+struct WioAsyncTaskOps
+{
+    void (*retain)(void* state);
+    void (*release)(void* state);
+    WioAsyncTaskStatus (*status)(const void* state);
+    void (*cancel)(void* state);
+    std::int32_t (*waitFor)(void* state, std::uint64_t milliseconds);
+    std::int32_t (*getResult)(void* state, WioValue* outResult);
+    std::int32_t (*onComplete)(void* state, WioAsyncCompletionFn callback,
+                               void* userData, WioAsyncCompletionTarget target);
+    const char* (*lastError)(const void* state);
+};
+
+// A task handle owns one reference to state. Copying it requires ops->retain;
+// every retained handle must eventually call ops->release. Completion callback
+// registrations retain state internally until their callback has returned.
+struct WioAsyncTaskHandle
+{
+    void* state;
+    const WioAsyncTaskOps* ops;
+    WioAbiType resultType;
+};
+
+using WioModuleAsyncInvokeFn = std::int32_t(*)(const WioValue* args,
+                                                std::uint32_t argCount,
+                                                WioAsyncTaskHandle* outTask);
+
+struct WioModuleAsyncExport
+{
+    const char* logicalName;
+    WioAbiType resultType;
+    std::uint32_t parameterCount;
+    const WioAbiType* parameterTypes;
+    WioModuleAsyncInvokeFn invoke;
+};
+
+struct WioAsyncHostDescriptor
+{
+    std::uint32_t flags;
+    std::uint32_t reserved;
+    void (*bindMain)();
+    std::uint64_t (*pumpMain)();
+    std::uint64_t (*pendingMain)();
+    void (*requestShutdown)();
+};
+
 struct WioModuleApi
 {
     std::uint32_t descriptorVersion;
@@ -487,6 +561,9 @@ struct WioModuleApi
     WioModuleProductVersion productVersion;
     std::uint32_t descriptorSize;
     const WioApplicationDescriptor* application;
+    std::uint32_t asyncExportCount;
+    const WioModuleAsyncExport* asyncExports;
+    const WioAsyncHostDescriptor* asyncHost;
 };
 
 using WioModuleGetApiFn = const WioModuleApi*(*)();
@@ -519,6 +596,19 @@ inline const WioModuleExport* WioFindModuleExport(const WioModuleApi* api, const
             return &exportEntry;
     }
 
+    return nullptr;
+}
+
+inline const WioModuleAsyncExport* WioFindModuleAsyncExport(const WioModuleApi* api, const char* logicalName)
+{
+    if (api == nullptr || logicalName == nullptr || api->asyncExports == nullptr)
+        return nullptr;
+    for (std::uint32_t index = 0u; index < api->asyncExportCount; ++index)
+    {
+        const WioModuleAsyncExport& entry = api->asyncExports[index];
+        if (entry.logicalName != nullptr && std::strcmp(entry.logicalName, logicalName) == 0)
+            return &entry;
+    }
     return nullptr;
 }
 

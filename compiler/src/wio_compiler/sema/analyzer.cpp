@@ -16589,8 +16589,8 @@ namespace wio::sema
             WIO_LOG_ADD_ERROR(node.location(), "{} cannot be async.", node.name->token.value);
         if (node.isAsync && isOperatorMethod)
             WIO_LOG_ADD_ERROR(node.location(), "Operator overloads cannot be async.");
-        if (node.isAsync && (isCommand || isEvent || hasModuleLifecycle || isExported))
-            WIO_LOG_ADD_ERROR(node.location(), "Async functions cannot use command, event, module-lifecycle, or export ABI attributes.");
+        if (node.isAsync && (isCommand || isEvent || hasModuleLifecycle))
+            WIO_LOG_ADD_ERROR(node.location(), "Async functions cannot use command, event, or module-lifecycle ABI attributes.");
         if (node.isAsync && isComponentMethodContext)
             WIO_LOG_ADD_ERROR(node.location(), "Stack-resident component methods cannot be async; use an async method on an owning object or pass a component value to an async function.");
         if (node.isAsync && node.isExtensionMethod)
@@ -17092,13 +17092,14 @@ namespace wio::sema
                 }
             }
 
-            if (!isCAbiSafeExportType(funcType->returnType))
+            const Ref<Type> exportedResultType = node.isAsync ? declaredResultType : funcType->returnType;
+            if (!isCAbiSafeExportType(exportedResultType))
             {
                 WIO_LOG_ADD_ERROR(
                     node.location(),
                     "@Export currently supports only primitive or void return types. '{}' returns '{}'.",
                     node.name->token.value,
-                    funcType->returnType ? funcType->returnType->toString() : "<unknown>"
+                    exportedResultType ? exportedResultType->toString() : "<unknown>"
                 );
             }
         }
@@ -17530,13 +17531,21 @@ namespace wio::sema
                         }
                     }
 
-                    if (!isCAbiSafeExportType(instantiatedFunctionType->returnType))
+                    Ref<Type> instantiatedExportResult = instantiatedFunctionType->returnType;
+                    if (node.isAsync)
+                    {
+                        Ref<Type> resolvedTask = unwrapAliasType(instantiatedExportResult);
+                        instantiatedExportResult = resolvedTask && resolvedTask->kind() == TypeKind::AsyncTask
+                            ? resolvedTask.AsFast<AsyncTaskType>()->valueType
+                            : Compiler::get().getTypeContext().getUnknown();
+                    }
+                    if (!isCAbiSafeExportType(instantiatedExportResult))
                     {
                         WIO_LOG_ADD_ERROR(
                             node.location(),
                             "@Export instantiated with '{}' produces a non-C-ABI-safe return type '{}'.",
                             instantiationSignature,
-                            instantiatedFunctionType->returnType ? instantiatedFunctionType->returnType->toString() : "<unknown>"
+                            instantiatedExportResult ? instantiatedExportResult->toString() : "<unknown>"
                         );
                     }
                 }

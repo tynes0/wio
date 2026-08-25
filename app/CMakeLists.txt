@@ -2137,6 +2137,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "sdk-application-host-ok frames=3 exit=17 wrong-thread=1 stale=1"
     )
 
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_016_async_task_host_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_016_async_task_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_016_async_task_host.cpp"
+        "sdk-async-task-ok value=42 timeout=1 cancel=1 callbacks=2 stale=1"
+    )
+
     add_wio_shared_reload_interop_test(
         wio_test_module_reload_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/module_reload.wio"
