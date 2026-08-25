@@ -31,7 +31,7 @@ static_assert(WIO_SDK_VERSION_MAJOR == 0);
 static_assert(WIO_SDK_VERSION_MINOR == 15);
 static_assert(wio::sdk::product_version.patch == 0);
 
-std::cout << wio::sdk::product_version_string; // 0.15.0
+std::cout << wio::sdk::product_version_string; // 0.16.0
 ```
 
 `WIO_MODULE_API_DESCRIPTOR_VERSION` remains an independent low-level ABI
