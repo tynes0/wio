@@ -799,3 +799,26 @@ here as historical evidence rather than active work:
 - [x] `wio migrate attributes --check|--write` converts legacy `@` syntax while
       preserving strings and comments, and compiler lowering resolves built-ins
       through their canonical typed identities.
+
+## v0.16 Ownership, Async Hosting, and Applications
+
+- [x] ABI descriptor v10 gained host-owned, main-thread-affine application
+      state with non-blocking update, explicit main pumping, contained errors,
+      stale-generation rejection, and retained module lifetime.
+- [x] Stable scalar exported async functions gained typed C++ task handles with
+      poll, explicit wait, deadlines, cancellation, completion callbacks,
+      main-executor delivery, and safe shutdown.
+- [x] Cancellation now propagates into directly awaited children;
+      `TryWithCancellation` and filesystem/process/network token overloads
+      preserve expected cancellation as ordinary Option/Result outcomes.
+- [x] `WioHostCallback` gained typed scalar signatures, retainable userdata,
+      thread declaration, and exception containment across the native boundary.
+- [x] `WioOwnedNativeResource`, `WioBorrowedNativeResource`, and the move-only
+      SDK `UniqueNativeResource` wrapper froze transferred versus borrowed
+      native ownership with exactly-once cleanup.
+- [x] Applications gained real monotonic frame deltas, deterministic explicit
+      and fixed schedules, explicit `ref`/`view` resource injection, hosted
+      headless execution, and reverse partial-start rollback.
+- [x] Console, resource/tool, desktop event-loop, fixed game-loop, service I/O,
+      callback, native-resource, and native-host scenarios entered the Windows
+      and Ubuntu release acceptance matrix.
