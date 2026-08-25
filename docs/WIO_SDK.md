@@ -1034,6 +1034,34 @@ Waiting remains explicit: `poll()` does not block, `wait_for(...)` is the
 synchronous boundary, and main-executor completions are delivered only by an
 explicit application or async-host pump.
 
+```cpp
+auto module = wio::sdk::Module::load("workspace_module.dll");
+
+auto application = module.application();
+application.start();
+while (application.update(1.0 / 60.0) ==
+       wio::sdk::ApplicationFrameStatus::Running)
+{
+    application.pump_main();
+}
+application.close();
+
+auto loadCount = module.load_async<std::int32_t(std::int32_t)>("LoadCount");
+auto task = loadCount(21);
+task.on_complete_main([](wio::sdk::AsyncTaskStatus status) {
+    // Delivered only when the host pumps the module main executor.
+});
+if (!task.wait_for(std::chrono::seconds(2)))
+    task.cancel();
+else
+    std::cout << task.get() << '\n';
+```
+
+`ApplicationHost::update` is a frame poll and never waits for future async
+work. Lifecycle entry is main-thread-affine. A partially failed start closes
+only successfully started systems in reverse order, calls application close,
+and leaves the host in a terminal closed state.
+
 Native callbacks use `WioHostCallback` instead of a bare userdata pointer. A
 descriptor returned by `HostCallback::borrowed()` remains valid only while its
 C++ wrapper owns it. Native code that stores the descriptor must retain and
@@ -1056,6 +1084,31 @@ exception as `WIO_CALLBACK_FAULTED`; exceptions never unwind through a C or
 module boundary. `lastError` exposes the contained diagnostic. `ref` and
 `view` remain borrowed and are not legal stored callback payloads: pass an
 owned SDK object/component handle or copy a stable value instead.
+
+Native pointer identity and ownership are separate. `opaque` and
+`WioBorrowedNativeResource` do not release anything. An owned native handle is
+transferred through `WioOwnedNativeResource` and normally held by the move-only
+RAII wrapper:
+
+```cpp
+wio::sdk::UniqueNativeResource texture(WioOwnedNativeResource{
+    native_texture,
+    "graphics.Texture",
+    WIO_NATIVE_RESOURCE_RELEASE_THREAD_SAFE,
+    0u,
+    &release_texture
+});
+
+use_during_call(texture.borrow());
+WioOwnedNativeResource transferred = texture.into_abi();
+register_owned_texture(WioTakeNativeResource(&transferred));
+```
+
+Every non-empty owned descriptor requires one `noexcept` release operation.
+`WioReleaseNativeResource` clears before invoking it, so repeated cleanup is
+exactly-once. A resource whose destruction is thread-affine must perform that
+dispatch inside its release function; the generic wrapper does not silently
+guess an executor.
 
 ## 14. See Also
 
