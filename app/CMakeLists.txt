@@ -4274,7 +4274,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "handler 'update' is declared more than once")
     add_wio_failure_test(wio_invalid_application_handler_parameters
         "${CMAKE_SOURCE_DIR}/tests/invalid/application_handler_parameters.wio"
-        "supports parameterless lifecycle handlers")
+        "Only application 'on update' accepts a delta parameter")
     add_wio_failure_test(wio_invalid_system_duplicate_handler
         "${CMAKE_SOURCE_DIR}/tests/invalid/system_duplicate_handler.wio"
         "System handler 'update' is declared more than once")
