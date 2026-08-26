@@ -107,6 +107,11 @@ if(EXISTS "${WIO_SELFHOST_CLI_SOURCE}" AND EXISTS "${WIO_SELFHOST_ARGONAUT_SOURC
     )
 endif()
 
+set(WIO_CLI_TEST_DEPENDENCIES wio_app)
+if(TARGET wio_selfhost_cli)
+    list(APPEND WIO_CLI_TEST_DEPENDENCIES wio_selfhost_cli)
+endif()
+
 function(add_wio_dev_target target_name source_file)
     add_custom_target(
         ${target_name}
@@ -135,7 +140,7 @@ add_custom_target(
     wio_tests
     COMMAND ${CMAKE_CTEST_COMMAND} ${wio_ctest_config_args} --output-on-failure
     COMMAND_EXPAND_LISTS
-    DEPENDS wio_app
+    DEPENDS ${WIO_CLI_TEST_DEPENDENCIES}
     WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
     USES_TERMINAL
     VERBATIM
@@ -215,7 +220,7 @@ add_custom_target(
     COMMAND ${CMAKE_COMMAND} -E env "WIO_ROOT=${CMAKE_SOURCE_DIR}"
         ${CMAKE_CTEST_COMMAND} ${wio_ctest_config_args} -R "${WIO_TRACEABILITY_TEST_REGEX}" --output-on-failure
     COMMAND_EXPAND_LISTS
-    DEPENDS wio_app
+    DEPENDS ${WIO_CLI_TEST_DEPENDENCIES}
     WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
     USES_TERMINAL
     VERBATIM
@@ -230,7 +235,7 @@ add_custom_target(
     COMMAND ${CMAKE_COMMAND} -E env "WIO_ROOT=${CMAKE_SOURCE_DIR}"
         ${CMAKE_CTEST_COMMAND} ${wio_ctest_config_args} -R "${WIO_LANGUAGE_COHERENCE_TEST_REGEX}" --output-on-failure
     COMMAND_EXPAND_LISTS
-    DEPENDS wio_app wio_async_runtime_stress
+    DEPENDS ${WIO_CLI_TEST_DEPENDENCIES} wio_async_runtime_stress
     WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
     USES_TERMINAL
     VERBATIM
@@ -241,7 +246,7 @@ add_custom_target(
     COMMAND ${CMAKE_COMMAND} -E env "WIO_ROOT=${CMAKE_SOURCE_DIR}"
         ${CMAKE_CTEST_COMMAND} ${wio_ctest_config_args} -R "${WIO_LANGUAGE_COHERENCE_TEST_REGEX}" --output-on-failure
     COMMAND_EXPAND_LISTS
-    DEPENDS wio_app
+    DEPENDS ${WIO_CLI_TEST_DEPENDENCIES}
     WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
     USES_TERMINAL
     VERBATIM
