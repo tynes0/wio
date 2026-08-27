@@ -1,0 +1,22 @@
+use std::console as console;
+
+system ReadySystem {
+    on start { console::PrintLine("rollback-ready-start"); }
+    on close { console::PrintLine("rollback-ready-close"); }
+}
+
+system FailingSystem {
+    on start {
+        console::PrintLine("rollback-failing-start");
+        std::Panic("intentional application start failure");
+    }
+    on close { console::PrintLine("rollback-failing-close-unexpected"); }
+}
+
+application RollbackApplication {
+    system ready: ReadySystem;
+    system failing: FailingSystem;
+
+    on update { self.Exit(99); }
+    on close { console::PrintLine("rollback-application-close"); }
+}

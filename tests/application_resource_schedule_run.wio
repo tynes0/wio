@@ -1,0 +1,44 @@
+use std::assert as assert;
+use std::console as console;
+
+component SharedWorld {
+    value: i32 = 0;
+}
+
+system WorldWriter {
+    on update(delta: f64, world: ref SharedWorld) {
+        if (delta >= 0.0) { world.value += 2; }
+    }
+}
+
+system WorldReader {
+    mut observed: i32 = 0;
+
+    on update(delta: f64, world: view SharedWorld) {
+        if (delta >= 0.0) { self.observed = world.value; }
+    }
+}
+
+application ResourceApplication {
+    resource world: SharedWorld;
+    system writer: WorldWriter;
+    system reader: WorldReader;
+
+    schedule {
+        stage systems on main {
+            run writer.update(ref self.world);
+            run reader.update(ref self.world);
+        }
+        stage finish after systems on main {
+            run self.update;
+        }
+    }
+
+    on update {
+        assert::ExpectEqual(self.world.value, 2, "mutable application resource injection");
+        assert::ExpectEqual(self.reader.observed, 2, "view application resource injection");
+        self.Exit(0);
+    }
+
+    on close { console::PrintLine("application-resource-schedule-ok"); }
+}

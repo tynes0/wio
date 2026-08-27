@@ -105,6 +105,7 @@ Use these when the question is about:
 
 - [Standard library](./WIO_STD.md)
 - [Host SDK](./WIO_SDK.md)
+- [Wio 0.16 language delta](./spec/WIO_LANGUAGE_SPEC_0_16.md)
 - [SDK 0.14 parity matrix](./WIO_SDK_0_14_PARITY_MATRIX.md)
 - [SDK evolution and v1 parity plan](./WIO_SDK_EVOLUTION_PLAN.md)
 
@@ -122,6 +123,8 @@ Use these when the question is about:
 ## 4. Release, Quality, And Compatibility
 
 - [Wio 0.15 release notes](./WIO_0_15_RELEASE_NOTES.md)
+- [Wio 0.16 release notes](./WIO_0_16_RELEASE_NOTES.md)
+- [Wio 0.16 acceptance matrix](./WIO_0_16_ACCEPTANCE.md)
 - [v1 freeze snapshot](./WIO_V1_FREEZE.md)
 - [v1 release plan](./WIO_V1_RELEASE_PLAN.md)
 - [Post-v1 roadmap](./WIO_POST_V1_ROADMAP.md)

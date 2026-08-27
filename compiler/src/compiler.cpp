@@ -3018,6 +3018,10 @@ namespace wio
                         std::stringstream compileCmd;
                         compileCmd << quoteCommand(backendCompiler);
                         compileCmd << " -std=c++20 -c ";
+#if defined(_WIN32)
+                        if (backendCompilerLooksGnuLike(backendCompiler))
+                            compileCmd << "-Wa,-mbig-obj ";
+#endif
                         compileCmd << quotePath(inputPath);
                         appendIncludeDirectories(compileCmd, systemIncludeDirs);
                         appendIncludeDirectories(compileCmd, includeDirs);
@@ -3067,6 +3071,14 @@ namespace wio
                     std::stringstream cmd;
                     cmd << quoteCommand(backendCompiler);
                     cmd << " -std=c++20 ";
+
+#if defined(_WIN32)
+                    // Generated Wio translation units can legitimately exceed the
+                    // classic PE/COFF section limit. MinGW's big-object mode keeps
+                    // large applications buildable without changing user code.
+                    if (backendCompilerLooksGnuLike(backendCompiler))
+                        cmd << "-Wa,-mbig-obj ";
+#endif
 
                     if (gAppData.buildTarget == BuildTarget::SharedLibrary)
                     {

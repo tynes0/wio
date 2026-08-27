@@ -255,6 +255,26 @@ on fixed(
 }
 ```
 
+The sequential v0.16 surface makes injection explicit at each scheduled run:
+
+```wio
+schedule {
+    stage update {
+        run simulation.update(ref self.input, ref self.world);
+        run self.update;
+    }
+}
+```
+
+The first system `on update` parameter is the `f64` frame delta. Every
+following parameter must be `ref` or `view`, and every scheduled argument must
+be written as `ref self.resourceName`. The handler's declared type determines
+whether that borrow is mutable or read-only. Ordinary application fields cannot
+be injected through this surface, unknown resources and duplicate arguments are
+compile-time errors, and the sequential scheduler preserves written run order.
+This explicit form is the frozen basis for later conflict-checked parallel
+groups; no hidden name- or type-based dependency injection is performed.
+
 - `view T` is shared read access;
 - `ref T` is exclusive write access;
 - two readers may run together;

@@ -1,0 +1,7 @@
+application ScheduleCycle {
+    schedule {
+        stage first after second { run self.update; }
+        stage second after first { }
+    }
+    on update { self.Exit(0); }
+}

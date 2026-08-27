@@ -1,0 +1,9 @@
+component World { value: i32; }
+system Reader {
+    on update(delta: f64, world: view World) { }
+}
+application Broken {
+    system reader: Reader;
+    schedule { stage update { run reader.update(ref self.world); } }
+    on update { self.Exit(0); }
+}

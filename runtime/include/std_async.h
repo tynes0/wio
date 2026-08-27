@@ -673,6 +673,7 @@ namespace wio::runtime
             {
                 std::vector<std::shared_ptr<AsyncContinuationRegistration>> pending;
                 std::vector<std::shared_ptr<AsyncCancellationRegistration>> pendingCancellation;
+                std::vector<std::function<void()>> pendingCompletion;
                 {
                     std::lock_guard lock(mutex);
                     if (completed)
@@ -680,12 +681,18 @@ namespace wio::runtime
                     completed = true;
                     pending.swap(continuations);
                     pendingCancellation.swap(cancellationCallbacks);
+                    pendingCompletion.swap(completionCallbacks);
                 }
                 for (const auto& registration : pendingCancellation)
                     registration->Deactivate();
                 changed.notify_all();
                 for (const auto& continuation : pending)
                     continuation->ResumeOnce();
+                for (auto& callback : pendingCompletion)
+                {
+                    try { callback(); }
+                    catch (...) { }
+                }
                 selfKeepAlive.reset();
             }
 
@@ -760,6 +767,23 @@ namespace wio::runtime
                 return registration;
             }
 
+            void AddCompletionCallback(std::function<void()> callback)
+            {
+                bool invokeImmediately = false;
+                {
+                    std::lock_guard lock(mutex);
+                    if (completed)
+                        invokeImmediately = true;
+                    else
+                        completionCallbacks.push_back(std::move(callback));
+                }
+                if (invokeImmediately)
+                {
+                    try { callback(); }
+                    catch (...) { }
+                }
+            }
+
             void Wait()
             {
                 Start();
@@ -787,6 +811,7 @@ namespace wio::runtime
             std::coroutine_handle<> handle;
             std::vector<std::shared_ptr<AsyncContinuationRegistration>> continuations;
             std::vector<std::shared_ptr<AsyncCancellationRegistration>> cancellationCallbacks;
+            std::vector<std::function<void()>> completionCallbacks;
             std::shared_ptr<AsyncTaskStateBase> selfKeepAlive;
             std::exception_ptr failure;
             std::atomic<bool> cancelled{false};
@@ -927,8 +952,9 @@ namespace wio::runtime
                     auto parent = awaitingState.lock();
                     if (parent)
                     {
-                        parent->AddCancellationCallback([registration]
+                        parent->AddCancellationCallback([registration, child = state]
                         {
+                            child->Cancel();
                             registration->ResumeOnce();
                         });
                     }
@@ -1060,8 +1086,9 @@ namespace wio::runtime
                     auto parent = awaitingState.lock();
                     if (parent)
                     {
-                        parent->AddCancellationCallback([registration]
+                        parent->AddCancellationCallback([registration, child = state]
                         {
+                            child->Cancel();
                             registration->ResumeOnce();
                         });
                     }

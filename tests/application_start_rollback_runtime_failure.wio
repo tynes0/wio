@@ -1,0 +1,22 @@
+use std::console as console;
+
+system ExecutableReady {
+    on start { console::Print("exec-ready-start "); }
+    on close { console::Print("exec-ready-close "); }
+}
+
+system ExecutableFailing {
+    on start {
+        console::Print("exec-failing-start ");
+        std::Panic("intentional executable application start failure");
+    }
+    on close { console::Print("exec-failing-close-unexpected "); }
+}
+
+application ExecutableRollback {
+    system ready: ExecutableReady;
+    system failing: ExecutableFailing;
+
+    on update { self.Exit(0); }
+    on close { console::PrintLine("exec-application-close"); }
+}

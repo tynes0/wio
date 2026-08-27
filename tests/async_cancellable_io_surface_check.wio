@@ -1,0 +1,37 @@
+use std::async as futures;
+use std::fs as fs;
+use std::net as net;
+use std::process as process;
+
+async fn FileSurface(token: futures::CancellationToken) {
+    let read = fs::ReadTextAsync("missing.txt", token);
+    let metadata = fs::MetadataAsync("missing.txt", token);
+    read.Cancel();
+    metadata.Cancel();
+}
+
+async fn ProcessSurface(child: process::Process, token: futures::CancellationToken) {
+    let args: string[] = [];
+    let run = process::RunAsync("missing-command", args, token);
+    let capture = process::CaptureAsync("missing-command", args, token);
+    let stdout = child.ReadStdoutAsync(32usize, token);
+    let stderr = child.ReadStderrAsync(32usize, token);
+    let write = child.WriteStdinAsync("ping", token);
+    let wait = child.WaitAsync(token);
+    run.Cancel(); capture.Cancel(); stdout.Cancel(); stderr.Cancel(); write.Cancel(); wait.Cancel();
+}
+
+async fn NetworkSurface(socket: net::Socket, listener: net::Listener,
+    udp: net::UdpSocket, token: futures::CancellationToken) {
+    let resolve = net::ResolveAsync("localhost", 80u16, token);
+    let connect = net::ConnectAsync("localhost", 80u16, 10u64, token);
+    let send = socket.SendAsync("ping", token);
+    let receive = socket.ReceiveAsync(32usize, token);
+    let accept = listener.AcceptAsync(token);
+    let udpSend = udp.SendToAsync("localhost", 80u16, "ping", token);
+    let datagram = udp.ReceiveFromAsync(32usize, token);
+    resolve.Cancel(); connect.Cancel(); send.Cancel(); receive.Cancel(); accept.Cancel();
+    udpSend.Cancel(); datagram.Cancel();
+}
+
+fn Entry() { }

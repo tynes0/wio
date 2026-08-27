@@ -79,6 +79,8 @@ set(required_files
     "${package_root}/docs/WIO_SDK_EVOLUTION_PLAN.md"
     "${package_root}/docs/WIO_0_14_RELEASE_NOTES.md"
     "${package_root}/docs/WIO_0_15_RELEASE_NOTES.md"
+    "${package_root}/docs/WIO_0_16_ACCEPTANCE.md"
+    "${package_root}/docs/WIO_0_16_RELEASE_NOTES.md"
     "${package_root}/docs/WIO_V1_RELEASE_PLAN.md"
     "${package_root}/docs/WIO_V1_FREEZE.md"
     "${package_root}/docs/spec/WIO_LANGUAGE_SPEC_0_8.md"
@@ -86,6 +88,7 @@ set(required_files
     "${package_root}/docs/spec/WIO_LANGUAGE_SPEC_0_10.md"
     "${package_root}/docs/spec/WIO_LANGUAGE_SPEC_0_11.md"
     "${package_root}/docs/spec/WIO_LANGUAGE_SPEC_0_15.md"
+    "${package_root}/docs/spec/WIO_LANGUAGE_SPEC_0_16.md"
     "${package_root}/docs/spec/WIO_STD_SPEC_0_11.md"
 )
 
@@ -103,6 +106,22 @@ foreach(required_file IN LISTS required_files)
         )
     endif()
 endforeach()
+
+file(READ "${package_root}/release-manifest.json" release_manifest_text)
+string(JSON manifest_abi_version ERROR_VARIABLE manifest_abi_error
+    GET "${release_manifest_text}" moduleAbiDescriptorVersion)
+if(NOT manifest_abi_error STREQUAL "NOTFOUND")
+    message(FATAL_ERROR "Packaged release manifest has no valid moduleAbiDescriptorVersion: ${manifest_abi_error}")
+endif()
+
+file(READ "${package_root}/sdk/include/module_api.h" module_api_header_text)
+string(FIND "${module_api_header_text}"
+    "WIO_MODULE_API_DESCRIPTOR_VERSION = ${manifest_abi_version}u"
+    matching_abi_version_index)
+if(matching_abi_version_index EQUAL -1)
+    message(FATAL_ERROR
+        "Packaged release manifest ABI ${manifest_abi_version} does not match sdk/include/module_api.h.")
+endif()
 
 if(NOT WIN32)
     file(READ "${package_root}/WIO_PACKAGE_INFO.json" package_info_text)

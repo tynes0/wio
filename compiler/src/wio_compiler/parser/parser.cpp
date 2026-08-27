@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <functional>
+#include <unordered_set>
 
 namespace wio
 {
@@ -2054,11 +2055,11 @@ namespace wio
         {
             return makeIdentifier("__application");
         };
-        auto makeAppCall = [&](std::string method)
+        auto makeAppCall = [&](std::string method, std::vector<NodePtr<Expression>> arguments = {})
         {
             return makeNodePtr<FunctionCallExpression>(
                 makeMember(makeAppIdentifier(), std::move(method)),
-                std::vector<NodePtr<TypeSpecifier>>{}, std::vector<NodePtr<Expression>>{},
+                std::vector<NodePtr<TypeSpecifier>>{}, std::move(arguments),
                 false, false, startToken.loc);
         };
         auto makeAsyncRuntimeCall = [&](std::string method)
@@ -2077,10 +2078,141 @@ namespace wio
         std::vector<ComponentMember> fields;
         std::unordered_map<std::string, NodePtr<FunctionDeclaration>> handlers;
         std::vector<std::string> ownedSystems;
+        struct ParsedApplicationStage
+        {
+            struct Run
+            {
+                std::string target;
+                std::vector<NodePtr<Expression>> resourceArguments;
+                std::vector<std::string> resourceNames;
+            };
+
+            std::string name;
+            std::optional<std::string> after;
+            std::vector<Run> runs;
+            bool fixed = false;
+            bool mainThread = false;
+            double hz = 0.0;
+        };
+        std::vector<ParsedApplicationStage> scheduleStages;
+        std::unordered_set<std::string> applicationResources;
+        bool hasExplicitSchedule = false;
         while (peek().isValid() && !match(TokenType::rightBrace))
         {
             std::vector<NodePtr<AttributeStatement>> memberAttributes;
             parseLeadingAttributes(memberAttributes);
+            if (peek().type == TokenType::identifier && peek().value == "schedule")
+            {
+                if (!memberAttributes.empty())
+                    utError("Application schedule does not accept declaration attributes yet.", peek().loc);
+                if (hasExplicitSchedule)
+                    utError("An application may declare only one schedule.", peek().loc);
+                hasExplicitSchedule = true;
+                advance();
+                consume(TokenType::leftBrace);
+                std::unordered_set<std::string> stageNames;
+                while (peek().isValid() && !match(TokenType::rightBrace))
+                {
+                    ParsedApplicationStage stage;
+                    if (peek().type == TokenType::identifier && peek().value == "fixed")
+                    {
+                        stage.fixed = true;
+                        advance();
+                    }
+                    if (peek().type != TokenType::identifier || peek().value != "stage")
+                        utError("A schedule accepts 'stage' or 'fixed stage' declarations.", peek().loc);
+                    advance();
+                    const Token stageName = consumeIdentifier();
+                    stage.name = stageName.value;
+                    if (!stageNames.insert(stage.name).second)
+                        utError("Schedule stage '" + stage.name + "' is declared more than once.", stageName.loc);
+
+                    while (!match(TokenType::leftBrace))
+                    {
+                        if (peek().type == TokenType::kwAfter ||
+                            (peek().type == TokenType::identifier && peek().value == "after"))
+                        {
+                            advance();
+                            stage.after = consumeIdentifier().value;
+                            continue;
+                        }
+                        if (peek().type == TokenType::identifier && peek().value == "on")
+                        {
+                            advance();
+                            const Token affinity = consumeIdentifier();
+                            if (affinity.value != "main")
+                                utError("Schedule stage affinity must be 'on main'.", affinity.loc);
+                            stage.mainThread = true;
+                            continue;
+                        }
+                        if (peek().type == TokenType::identifier && peek().value == "at")
+                        {
+                            advance();
+                            const Token frequency = advance();
+                            if (frequency.type != TokenType::integerLiteral && frequency.type != TokenType::floatLiteral)
+                                utError("Fixed stage frequency must be a positive number followed by hz.", frequency.loc);
+                            try { stage.hz = std::stod(frequency.value); }
+                            catch (...) { utError("Fixed stage frequency is invalid.", frequency.loc); }
+                            const Token unit = consumeIdentifier();
+                            if (unit.value != "hz" || stage.hz <= 0.0)
+                                utError("Fixed stage frequency must be a positive number followed by hz.", unit.loc);
+                            continue;
+                        }
+                        utError("Unknown schedule stage clause '" + peek().value + "'.", peek().loc);
+                    }
+                    consume(TokenType::leftBrace);
+                    while (peek().isValid() && !match(TokenType::rightBrace))
+                    {
+                        if (peek().type != TokenType::identifier || peek().value != "run")
+                            utError("Schedule stages currently accept explicit 'run target;' entries.", peek().loc);
+                        advance();
+                        const Token target = consumeIdentifier();
+                        ParsedApplicationStage::Run run;
+                        run.target = target.value;
+                        if (match(TokenType::opDot, true))
+                        {
+                            const Token method = consumeIdentifier();
+                            if (method.value != "update")
+                                utError("The sequential v0.16 scheduler supports only '.update' handlers.", method.loc);
+                        }
+                        if (match(TokenType::leftParen, true))
+                        {
+                            if (!match(TokenType::rightParen))
+                            {
+                                while (true)
+                                {
+                                    auto argument = parseExpression();
+                                    auto* borrow = argument ? argument->as<RefExpression>() : nullptr;
+                                    auto* member = borrow && borrow->operand
+                                        ? borrow->operand->as<MemberAccessExpression>()
+                                        : nullptr;
+                                    if (!member || !member->object || !member->object->is<SelfExpression>() || !member->member)
+                                    {
+                                        utError(
+                                            "Scheduled system arguments must explicitly borrow an application resource as 'ref self.name'.",
+                                            argument ? argument->location() : target.loc);
+                                    }
+                                    run.resourceNames.push_back(member->member->token.value);
+                                    run.resourceArguments.push_back(std::move(argument));
+                                    if (!match(TokenType::comma, true))
+                                        break;
+                                }
+                                consume(TokenType::rightParen);
+                            }
+                        }
+                        consume(TokenType::semicolon);
+                        stage.runs.push_back(std::move(run));
+                    }
+                    consume(TokenType::rightBrace);
+                    if (stage.fixed && stage.hz <= 0.0)
+                        utError("A fixed stage requires an 'at <frequency> hz' clause.", stageName.loc);
+                    if (!stage.fixed && stage.hz > 0.0)
+                        utError("Only a fixed stage may declare an update frequency.", stageName.loc);
+                    scheduleStages.push_back(std::move(stage));
+                }
+                consume(TokenType::rightBrace);
+                continue;
+            }
             if (peek().type == TokenType::identifier && peek().value == "on")
             {
                 advance();
@@ -2090,18 +2222,36 @@ namespace wio
                 if (handlers.contains(lifecycle.value))
                     utError("Application handler '" + lifecycle.value + "' is declared more than once.", lifecycle.loc);
 
+                std::vector<Parameter> handlerParameters;
                 if (match(TokenType::leftParen, true))
                 {
                     if (!match(TokenType::rightParen))
-                        utError("The first application runner supports parameterless lifecycle handlers.", peek().loc);
+                    {
+                        if (lifecycle.value != "update")
+                            utError("Only application 'on update' accepts a delta parameter.", peek().loc);
+                        auto parameterName = makeNodePtr<Identifier>(consumeIdentifier());
+                        consume(TokenType::opColon);
+                        if (peek().type != TokenType::kwF64)
+                            utError("Application update delta parameter must have type f64.", peek().loc);
+                        auto parameterType = parseType();
+                        handlerParameters.emplace_back(
+                            std::move(parameterName), std::move(parameterType), nullptr, false);
+                        if (match(TokenType::comma, true))
+                            utError("Application update accepts exactly one delta parameter.", peek().loc);
+                    }
                     consume(TokenType::rightParen);
+                }
+                if (lifecycle.value == "update" && handlerParameters.empty())
+                {
+                    handlerParameters.emplace_back(
+                        makeIdentifier("_wio_deltaSeconds"), makeType(TokenType::kwF64, "f64"), nullptr, false);
                 }
                 auto body = parseBlockStatement();
                 std::string methodName = lifecycle.value == "start" ? "Start" :
                     (lifecycle.value == "update" ? "Update" : "Close");
                 auto handler = makeNodePtr<FunctionDeclaration>(
                     std::move(memberAttributes), makeIdentifier(methodName),
-                    std::vector<NodePtr<Identifier>>{}, false, std::vector<Parameter>{}, nullptr,
+                    std::vector<NodePtr<Identifier>>{}, false, std::move(handlerParameters), nullptr,
                     nullptr, nullptr, std::move(body), lifecycle.loc);
                 handler->attributeTargetOverride = "handler";
                 handlers.emplace(lifecycle.value, std::move(handler));
@@ -2111,6 +2261,7 @@ namespace wio
             Mutability mutability = Mutability::Mutable;
             bool applicationOwned = false;
             const bool systemOwned = peek().type == TokenType::kwSystem;
+            const bool resourceOwned = peek().type == TokenType::identifier && peek().value == "resource";
             if ((peek().type == TokenType::identifier && peek().value == "resource") ||
                 peek().type == TokenType::kwSystem)
             {
@@ -2128,6 +2279,7 @@ namespace wio
 
             auto name = makeNodePtr<Identifier>(consumeIdentifier());
             if (systemOwned) ownedSystems.push_back(name->token.value);
+            if (resourceOwned) applicationResources.insert(name->token.value);
             consume(TokenType::opColon);
             auto type = parseType();
             NodePtr<Expression> initializer = nullptr;
@@ -2142,6 +2294,60 @@ namespace wio
             WIO_UNUSED(applicationOwned);
         }
         consume(TokenType::rightBrace);
+
+        std::vector<size_t> orderedStageIndices;
+        if (hasExplicitSchedule)
+        {
+            std::unordered_map<std::string, size_t> stageByName;
+            size_t selfRunCount = 0;
+            for (size_t index = 0; index < scheduleStages.size(); ++index)
+                stageByName.emplace(scheduleStages[index].name, index);
+            for (const auto& stage : scheduleStages)
+            {
+                if (stage.after.has_value() && !stageByName.contains(*stage.after))
+                    utError("Schedule stage '" + stage.name + "' depends on unknown stage '" + *stage.after + "'.", startToken.loc);
+                for (const auto& run : stage.runs)
+                {
+                    if (run.target == "self")
+                    {
+                        ++selfRunCount;
+                        if (!run.resourceArguments.empty())
+                            utError("A scheduled 'self.update' run does not accept resource arguments.", startToken.loc);
+                    }
+                    if (run.target != "self" && std::ranges::find(ownedSystems, run.target) == ownedSystems.end())
+                        utError("Schedule stage '" + stage.name + "' runs unknown application system '" + run.target + "'.", startToken.loc);
+                    std::unordered_set<std::string> seenResources;
+                    for (const auto& resourceName : run.resourceNames)
+                    {
+                        if (!applicationResources.contains(resourceName))
+                            utError("Schedule stage '" + stage.name + "' borrows unknown application resource '" + resourceName + "'.", startToken.loc);
+                        if (!seenResources.insert(resourceName).second)
+                            utError("Schedule stage '" + stage.name + "' borrows application resource '" + resourceName + "' more than once for one run.", startToken.loc);
+                    }
+                }
+            }
+            if (selfRunCount > 1)
+                utError("An application schedule may run 'self.update' at most once per frame graph.", startToken.loc);
+
+            std::unordered_set<std::string> emittedStages;
+            while (orderedStageIndices.size() < scheduleStages.size())
+            {
+                bool progressed = false;
+                for (size_t index = 0; index < scheduleStages.size(); ++index)
+                {
+                    const auto& stage = scheduleStages[index];
+                    if (emittedStages.contains(stage.name))
+                        continue;
+                    if (stage.after.has_value() && !emittedStages.contains(*stage.after))
+                        continue;
+                    emittedStages.insert(stage.name);
+                    orderedStageIndices.push_back(index);
+                    progressed = true;
+                }
+                if (!progressed)
+                    utError("Application schedule dependencies contain a cycle.", startToken.loc);
+            }
+        }
 
         if (!handlers.contains("update"))
             utError("An application must declare exactly one 'on update' handler.", startToken.loc);
@@ -2159,6 +2365,21 @@ namespace wio
             makeNodePtr<BoolLiteral>(Token{ .type = TokenType::kwFalse, .value = "false", .loc = startToken.loc }));
         addControlField("__exitCode", makeType(TokenType::kwI32, "i32"),
             makeNodePtr<IntegerLiteral>(Token{ .type = TokenType::integerLiteral, .value = "0", .loc = startToken.loc }));
+        for (const auto& systemName : ownedSystems)
+        {
+            addControlField("__started_" + systemName, makeType(TokenType::kwBool, "bool"),
+                makeNodePtr<BoolLiteral>(Token{ .type = TokenType::kwFalse, .value = "false", .loc = startToken.loc }));
+        }
+        for (const size_t stageIndex : orderedStageIndices)
+        {
+            const auto& stage = scheduleStages[stageIndex];
+            if (!stage.fixed)
+                continue;
+            addControlField("__fixed_" + stage.name,
+                makeType(TokenType::kwF64, "f64"),
+                makeNodePtr<FloatLiteral>(Token{
+                    .type = TokenType::floatLiteral, .value = "0.0", .loc = startToken.loc }));
+        }
 
         auto component = makeNodePtr<ComponentDeclaration>(
             std::move(applicationAttributes), std::move(applicationName),
@@ -2220,40 +2441,149 @@ namespace wio
             else
             {
                 const std::string methodName = lifecycle == "start" ? "Start" : "Close";
+                std::vector<Parameter> defaultParameters;
+                if (lifecycle == "update")
+                    defaultParameters.emplace_back(
+                        makeIdentifier("_wio_deltaSeconds"), makeType(TokenType::kwF64, "f64"), nullptr, false);
                 method = makeNodePtr<FunctionDeclaration>(
                     std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier(methodName),
-                    std::vector<NodePtr<Identifier>>{}, false, std::vector<Parameter>{}, nullptr,
+                    std::vector<NodePtr<Identifier>>{}, false, std::move(defaultParameters), nullptr,
                     nullptr, nullptr, makeNodePtr<BlockStatement>(std::vector<NodePtr<Statement>>{}, startToken.loc), startToken.loc);
             }
 
-            auto makeSystemCallStatement = [&](const std::string& systemName, const std::string& methodName)
+            auto makeSystemCallStatement = [&](const std::string& systemName, const std::string& methodName,
+                                               std::vector<NodePtr<Expression>> resourceArguments = {})
             {
                 auto systemAccess = makeNodePtr<MemberAccessExpression>(
                     makeNodePtr<SelfExpression>(startToken.loc), makeIdentifier(systemName),
                     TokenType::opDot, startToken.loc);
                 auto methodAccess = makeNodePtr<MemberAccessExpression>(
                     std::move(systemAccess), makeIdentifier(methodName), TokenType::opDot, startToken.loc);
+                std::vector<NodePtr<Expression>> callArguments;
+                if (lifecycle == "update")
+                {
+                    const std::string deltaName = method->parameters.empty() || !method->parameters.front().name
+                        ? "_wio_deltaSeconds"
+                        : method->parameters.front().name->token.value;
+                    callArguments.push_back(makeIdentifier(deltaName));
+                }
+                for (auto& argument : resourceArguments)
+                    callArguments.push_back(std::move(argument));
                 auto call = makeNodePtr<FunctionCallExpression>(
                     std::move(methodAccess), std::vector<NodePtr<TypeSpecifier>>{},
-                    std::vector<NodePtr<Expression>>{}, false, false, startToken.loc);
+                    std::move(callArguments), false, false, startToken.loc);
                 return makeNodePtr<ExpressionStatement>(std::move(call), startToken.loc);
             };
-            if (auto block = method->body.As<BlockStatement>(); block && !ownedSystems.empty())
+            auto makeSystemStartedAssignment = [&](const std::string& systemName, const bool started)
+            {
+                return makeNodePtr<ExpressionStatement>(
+                    makeNodePtr<AssignmentExpression>(
+                        makeMember(makeNodePtr<SelfExpression>(startToken.loc), "__started_" + systemName),
+                        Token{ .type = TokenType::opAssign, .value = "=", .loc = startToken.loc },
+                        makeNodePtr<BoolLiteral>(Token{
+                            .type = started ? TokenType::kwTrue : TokenType::kwFalse,
+                            .value = started ? "true" : "false",
+                            .loc = startToken.loc })),
+                    startToken.loc);
+            };
+            auto makeSystemCloseStatement = [&](const std::string& systemName)
+            {
+                std::vector<NodePtr<Statement>> closeStatements;
+                closeStatements.push_back(makeSystemCallStatement(systemName, "Close"));
+                closeStatements.push_back(makeSystemStartedAssignment(systemName, false));
+                return makeNodePtr<IfStatement>(
+                    makeMember(makeNodePtr<SelfExpression>(startToken.loc), "__started_" + systemName),
+                    makeNodePtr<BlockStatement>(std::move(closeStatements), startToken.loc),
+                    nullptr, Token::invalid(), startToken.loc);
+            };
+            if (auto block = method->body.As<BlockStatement>(); block)
             {
                 const std::string methodName = lifecycle == "start" ? "Start" :
                     (lifecycle == "update" ? "Update" : "Close");
-                if (lifecycle == "start")
+                if (lifecycle == "update" && hasExplicitSchedule)
+                {
+                    std::vector<NodePtr<Statement>> userUpdateStatements = std::move(block->statements);
+                    std::vector<NodePtr<Statement>> scheduledStatements;
+                    const std::string deltaName = method->parameters.empty() || !method->parameters.front().name
+                        ? "_wio_deltaSeconds"
+                        : method->parameters.front().name->token.value;
+
+                    auto makeAccumulator = [&](const std::string& stageName) -> NodePtr<Expression>
+                    {
+                        return makeMember(makeNodePtr<SelfExpression>(startToken.loc), "__fixed_" + stageName);
+                    };
+                    auto makeStep = [&](const double hz) -> NodePtr<Expression>
+                    {
+                        return makeNodePtr<FloatLiteral>(Token{
+                            .type = TokenType::floatLiteral,
+                            .value = std::to_string(1.0 / hz),
+                            .loc = startToken.loc });
+                    };
+
+                    for (const size_t stageIndex : orderedStageIndices)
+                    {
+                        auto& stage = scheduleStages[stageIndex];
+                        std::vector<NodePtr<Statement>> stageStatements;
+                        for (auto& run : stage.runs)
+                        {
+                            if (run.target == "self")
+                            {
+                                for (auto& statement : userUpdateStatements)
+                                    stageStatements.push_back(std::move(statement));
+                                userUpdateStatements.clear();
+                            }
+                            else
+                            {
+                                stageStatements.push_back(makeSystemCallStatement(
+                                    run.target, "Update", std::move(run.resourceArguments)));
+                            }
+                        }
+
+                        if (!stage.fixed)
+                        {
+                            for (auto& statement : stageStatements)
+                                scheduledStatements.push_back(std::move(statement));
+                            continue;
+                        }
+
+                        scheduledStatements.push_back(makeNodePtr<ExpressionStatement>(
+                            makeNodePtr<AssignmentExpression>(
+                                makeAccumulator(stage.name),
+                                Token{ .type = TokenType::opPlusAssign, .value = "+=", .loc = startToken.loc },
+                                makeIdentifier(deltaName), startToken.loc),
+                            startToken.loc));
+                        stageStatements.push_back(makeNodePtr<ExpressionStatement>(
+                            makeNodePtr<AssignmentExpression>(
+                                makeAccumulator(stage.name),
+                                Token{ .type = TokenType::opMinusAssign, .value = "-=", .loc = startToken.loc },
+                                makeStep(stage.hz), startToken.loc),
+                            startToken.loc));
+                        auto fixedCondition = makeNodePtr<BinaryExpression>(
+                            makeAccumulator(stage.name),
+                            Token{ .type = TokenType::opGreaterEqual, .value = ">=", .loc = startToken.loc },
+                            makeStep(stage.hz), startToken.loc);
+                        scheduledStatements.push_back(makeNodePtr<WhileStatement>(
+                            std::move(fixedCondition),
+                            makeNodePtr<BlockStatement>(std::move(stageStatements), startToken.loc),
+                            startToken.loc));
+                    }
+                    block->statements = std::move(scheduledStatements);
+                }
+                else if (lifecycle == "start" && !ownedSystems.empty())
                 {
                     for (const auto& systemName : ownedSystems)
+                    {
                         block->statements.push_back(makeSystemCallStatement(systemName, methodName));
+                        block->statements.push_back(makeSystemStartedAssignment(systemName, true));
+                    }
                 }
-                else
+                else if (!ownedSystems.empty())
                 {
                     std::vector<NodePtr<Statement>> calls;
                     if (lifecycle == "close")
                     {
                         for (auto iterator = ownedSystems.rbegin(); iterator != ownedSystems.rend(); ++iterator)
-                            calls.push_back(makeSystemCallStatement(*iterator, methodName));
+                            calls.push_back(makeSystemCloseStatement(*iterator));
                     }
                     else
                     {
@@ -2294,7 +2624,11 @@ namespace wio
         std::vector<NodePtr<Statement>> updateStatements;
         updateStatements.push_back(makeNodePtr<ExpressionStatement>(
             makeAsyncRuntimeCall("DrainMain"), startToken.loc));
-        updateStatements.push_back(makeNodePtr<ExpressionStatement>(makeAppCall("Update"), startToken.loc));
+        std::vector<NodePtr<Expression>> entryUpdateArguments;
+        entryUpdateArguments.push_back(makeNodePtr<FloatLiteral>(Token{
+            .type = TokenType::floatLiteral, .value = "0.0", .loc = startToken.loc }));
+        updateStatements.push_back(makeNodePtr<ExpressionStatement>(
+            makeAppCall("Update", std::move(entryUpdateArguments)), startToken.loc));
         updateStatements.push_back(makeNodePtr<ExpressionStatement>(
             makeAsyncRuntimeCall("DrainMain"), startToken.loc));
         auto updateBody = makeNodePtr<BlockStatement>(std::move(updateStatements), startToken.loc);
@@ -2335,6 +2669,12 @@ namespace wio
             return makeNodePtr<Identifier>(Token{
                 .type = TokenType::identifier, .value = std::move(value), .loc = startToken.loc });
         };
+        auto makeType = [&](TokenType type, std::string value)
+        {
+            Token token{ .type = type, .value = std::move(value), .loc = startToken.loc };
+            return makeNodePtr<TypeSpecifier>(std::move(token), std::vector<NodePtr<TypeSpecifier>>{},
+                nullptr, 0, false, false, false, startToken.loc);
+        };
         std::vector<ComponentMember> fields;
         std::unordered_map<std::string, NodePtr<FunctionDeclaration>> handlers;
         while (peek().isValid() && !match(TokenType::rightBrace))
@@ -2349,18 +2689,44 @@ namespace wio
                     utError("System handlers must be 'on start', 'on update', or 'on close'.", lifecycle.loc);
                 if (handlers.contains(lifecycle.value))
                     utError("System handler '" + lifecycle.value + "' is declared more than once.", lifecycle.loc);
+                std::vector<Parameter> handlerParameters;
                 if (match(TokenType::leftParen, true))
                 {
                     if (!match(TokenType::rightParen))
-                        utError("The first system scheduler supports parameterless lifecycle handlers.", peek().loc);
+                    {
+                        if (lifecycle.value != "update")
+                            utError("Only system 'on update' accepts parameters.", peek().loc);
+                        size_t parameterIndex = 0;
+                        while (true)
+                        {
+                            auto parameterName = makeNodePtr<Identifier>(consumeIdentifier());
+                            consume(TokenType::opColon);
+                            const TokenType writtenType = peek().type;
+                            if (parameterIndex == 0 && writtenType != TokenType::kwF64)
+                                utError("The first system update parameter must have type f64.", peek().loc);
+                            if (parameterIndex > 0 && writtenType != TokenType::kwRef && writtenType != TokenType::kwView)
+                                utError("System update resource parameters must use ref or view.", peek().loc);
+                            auto parameterType = parseType();
+                            handlerParameters.emplace_back(
+                                std::move(parameterName), std::move(parameterType), nullptr, false);
+                            ++parameterIndex;
+                            if (!match(TokenType::comma, true))
+                                break;
+                        }
+                    }
                     consume(TokenType::rightParen);
+                }
+                if (lifecycle.value == "update" && handlerParameters.empty())
+                {
+                    handlerParameters.emplace_back(
+                        makeIdentifier("_wio_deltaSeconds"), makeType(TokenType::kwF64, "f64"), nullptr, false);
                 }
                 auto body = parseBlockStatement();
                 const std::string methodName = lifecycle.value == "start" ? "Start" :
                     (lifecycle.value == "update" ? "Update" : "Close");
                 auto handler = makeNodePtr<FunctionDeclaration>(
                     std::move(memberAttributes), makeIdentifier(methodName),
-                    std::vector<NodePtr<Identifier>>{}, false, std::vector<Parameter>{}, nullptr,
+                    std::vector<NodePtr<Identifier>>{}, false, std::move(handlerParameters), nullptr,
                     nullptr, nullptr, std::move(body), lifecycle.loc);
                 handler->attributeTargetOverride = "handler";
                 handlers.emplace(lifecycle.value, std::move(handler));
@@ -2419,9 +2785,13 @@ namespace wio
             {
                 const std::string methodName = lifecycle == "start" ? "Start" :
                     (lifecycle == "update" ? "Update" : "Close");
+                std::vector<Parameter> defaultParameters;
+                if (lifecycle == "update")
+                    defaultParameters.emplace_back(
+                        makeIdentifier("_wio_deltaSeconds"), makeType(TokenType::kwF64, "f64"), nullptr, false);
                 method = makeNodePtr<FunctionDeclaration>(
                     std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier(methodName),
-                    std::vector<NodePtr<Identifier>>{}, false, std::vector<Parameter>{}, nullptr,
+                    std::vector<NodePtr<Identifier>>{}, false, std::move(defaultParameters), nullptr,
                     nullptr, nullptr, makeNodePtr<BlockStatement>(std::vector<NodePtr<Statement>>{}, startToken.loc), startToken.loc);
             }
             addReceiver(method);

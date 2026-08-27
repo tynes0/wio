@@ -1,0 +1,36 @@
+use std::console as console;
+
+system HostedCounter {
+    mut ticks: i32;
+    mut lastDelta: f64;
+
+    on start {
+        self.ticks = 0;
+    }
+
+    on update(delta: f64) {
+        self.lastDelta = delta;
+        self.ticks += 1;
+    }
+
+    on close {
+        console::PrintLine("hosted-system-close");
+    }
+}
+
+application HostedApplication {
+    system counter: HostedCounter;
+
+    on update(delta: f64) {
+        if (self.counter.lastDelta != delta) {
+            self.Exit(98);
+        }
+        if (self.counter.ticks == 3) {
+            self.Exit(17);
+        }
+    }
+
+    on close {
+        console::PrintLine("hosted-application-close");
+    }
+}

@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -9,12 +11,15 @@
 #include <initializer_list>
 #include <map>
 #include <memory>
+#include <mutex>
+#include <new>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <thread>
 #include <type_traits>
 #include <unordered_set>
 #include <unordered_map>
@@ -3083,6 +3088,8 @@ namespace wio::sdk
                 throwInvalidApiDescriptor(context, "eventHookCount is non-zero but eventHooks is null.");
             if (api->typeCount > 0u && api->types == nullptr)
                 throwInvalidApiDescriptor(context, "typeCount is non-zero but types is null.");
+            if (api->asyncExportCount > 0u && api->asyncExports == nullptr)
+                throwInvalidApiDescriptor(context, "asyncExportCount is non-zero but asyncExports is null.");
 
             if (hasCapability(api, WIO_MODULE_CAP_PRODUCT_VERSION))
             {
@@ -3105,6 +3112,10 @@ namespace wio::sdk
                 throwInvalidApiDescriptor(context, "type-metadata-v2 capability requires a complete WioModuleApi descriptorSize.");
             if (hasCapability(api, WIO_MODULE_CAP_ATTRIBUTE_METADATA_V1) && api->descriptorSize < sizeof(WioModuleApi))
                 throwInvalidApiDescriptor(context, "attribute-metadata-v1 capability requires a complete WioModuleApi descriptorSize.");
+            if (hasCapability(api, WIO_MODULE_CAP_APPLICATION_HOST_V1) && api->descriptorSize < sizeof(WioModuleApi))
+                throwInvalidApiDescriptor(context, "application-host-v1 capability requires a complete WioModuleApi descriptorSize.");
+            if (hasCapability(api, WIO_MODULE_CAP_ASYNC_TASK_HOST_V1) && api->descriptorSize < sizeof(WioModuleApi))
+                throwInvalidApiDescriptor(context, "async-task-host-v1 capability requires a complete WioModuleApi descriptorSize.");
 
             auto validateAttributes = [&](const WioModuleAttributeDescriptor* attributes,
                                           const std::uint32_t count,
@@ -3134,6 +3145,52 @@ namespace wio::sdk
             validateCapabilityContract(api, WIO_MODULE_CAP_UNLOAD, reinterpret_cast<const void*>(api->unload), "@ModuleUnload", context);
             validateCapabilityContract(api, WIO_MODULE_CAP_SAVE_STATE, reinterpret_cast<const void*>(api->saveState), "@ModuleSaveState", context);
             validateCapabilityContract(api, WIO_MODULE_CAP_RESTORE_STATE, reinterpret_cast<const void*>(api->restoreState), "@ModuleRestoreState", context);
+            validateCapabilityContract(api, WIO_MODULE_CAP_APPLICATION_HOST_V1,
+                reinterpret_cast<const void*>(api->application), "application host", context);
+            validateCapabilityContract(api, WIO_MODULE_CAP_ASYNC_TASK_HOST_V1,
+                reinterpret_cast<const void*>(api->asyncHost), "async task host", context);
+
+            if (api->application != nullptr)
+            {
+                const WioApplicationDescriptor& application = *api->application;
+                if (!hasText(application.logicalName))
+                    throwInvalidApiDescriptor(context, "Application host descriptor is missing logicalName.");
+                if (application.stateSize == 0u || application.stateAlignment < alignof(void*) ||
+                    (application.stateAlignment & (application.stateAlignment - 1u)) != 0u)
+                    throwInvalidApiDescriptor(context, "Application host descriptor has an invalid state size or alignment.");
+                if ((application.flags & WIO_APPLICATION_HOST_OWNS_STORAGE) == 0u ||
+                    (application.flags & WIO_APPLICATION_MAIN_THREAD_AFFINE) == 0u)
+                    throwInvalidApiDescriptor(context, "Application host descriptor must declare host-owned storage and main-thread affinity.");
+                if (application.construct == nullptr || application.start == nullptr ||
+                    application.update == nullptr || application.requestExit == nullptr ||
+                    application.close == nullptr || application.destroy == nullptr ||
+                    application.exitRequested == nullptr || application.exitCode == nullptr ||
+                    application.pumpMain == nullptr || application.lastError == nullptr)
+                    throwInvalidApiDescriptor(context, "Application host descriptor is missing a required operation.");
+            }
+
+            if (api->asyncHost != nullptr)
+            {
+                if (api->asyncHost->bindMain == nullptr || api->asyncHost->pumpMain == nullptr ||
+                    api->asyncHost->pendingMain == nullptr || api->asyncHost->requestShutdown == nullptr)
+                    throwInvalidApiDescriptor(context, "Async host descriptor is missing a required operation.");
+            }
+
+            for (std::uint32_t asyncIndex = 0u; asyncIndex < api->asyncExportCount; ++asyncIndex)
+            {
+                const WioModuleAsyncExport& asyncExport = api->asyncExports[asyncIndex];
+                if (!hasText(asyncExport.logicalName) || asyncExport.invoke == nullptr)
+                    throwInvalidApiDescriptor(context, "Async export descriptor is incomplete.");
+                if (asyncExport.resultType == WIO_ABI_UNKNOWN)
+                    throwInvalidApiDescriptor(context, "Async export result type must use a stable ABI scalar.");
+                if (asyncExport.parameterCount > 0u && asyncExport.parameterTypes == nullptr)
+                    throwInvalidApiDescriptor(context, "Async export parameterTypes is null.");
+                for (std::uint32_t parameterIndex = 0u; parameterIndex < asyncExport.parameterCount; ++parameterIndex)
+                {
+                    if (asyncExport.parameterTypes[parameterIndex] == WIO_ABI_UNKNOWN)
+                        throwInvalidApiDescriptor(context, "Async export parameter type must use a stable ABI scalar.");
+                }
+            }
 
             for (std::uint32_t exportIndex = 0; exportIndex < api->exportCount; ++exportIndex)
             {
@@ -6487,6 +6544,242 @@ namespace wio::sdk
         field(fieldName).set_component(value);
     }
 
+    class UniqueNativeResource
+    {
+    public:
+        UniqueNativeResource() noexcept = default;
+
+        explicit UniqueNativeResource(WioOwnedNativeResource resource)
+            : resource_(resource)
+        {
+            if (resource_.state != nullptr && resource_.release == nullptr)
+            {
+                resource_ = {};
+                throw Error(ErrorCode::InvalidArgument,
+                    "An owned native resource requires a release operation.");
+            }
+        }
+
+        UniqueNativeResource(const UniqueNativeResource&) = delete;
+        UniqueNativeResource& operator=(const UniqueNativeResource&) = delete;
+
+        UniqueNativeResource(UniqueNativeResource&& other) noexcept
+            : resource_(WioTakeNativeResource(&other.resource_))
+        {
+        }
+
+        UniqueNativeResource& operator=(UniqueNativeResource&& other) noexcept
+        {
+            if (this == &other)
+                return *this;
+            reset();
+            resource_ = WioTakeNativeResource(&other.resource_);
+            return *this;
+        }
+
+        ~UniqueNativeResource() { reset(); }
+
+        [[nodiscard]] explicit operator bool() const noexcept { return resource_.state != nullptr; }
+        [[nodiscard]] void* get() const noexcept { return resource_.state; }
+        [[nodiscard]] std::string_view type_name() const noexcept
+        {
+            return resource_.typeName == nullptr ? std::string_view{} : std::string_view(resource_.typeName);
+        }
+        [[nodiscard]] bool release_is_thread_safe() const noexcept
+        {
+            return (resource_.flags & WIO_NATIVE_RESOURCE_RELEASE_THREAD_SAFE) != 0u;
+        }
+        [[nodiscard]] WioBorrowedNativeResource borrow() const noexcept
+        {
+            return WioBorrowNativeResource(&resource_);
+        }
+        [[nodiscard]] WioOwnedNativeResource into_abi() noexcept
+        {
+            return WioTakeNativeResource(&resource_);
+        }
+
+        void reset(WioOwnedNativeResource replacement = {}) noexcept
+        {
+            WioReleaseNativeResource(&resource_);
+            resource_ = replacement;
+        }
+
+    private:
+        WioOwnedNativeResource resource_{};
+    };
+
+    template <typename Signature>
+    class HostCallback;
+
+    template <typename TReturn, typename... TArgs>
+    class HostCallback<TReturn(TArgs...)>
+    {
+    public:
+        explicit HostCallback(std::function<TReturn(TArgs...)> callback, const bool threadSafe = false)
+            : state_(new State(std::move(callback), threadSafe))
+        {
+            if (!state_->callback)
+            {
+                delete state_;
+                state_ = nullptr;
+                throw Error(ErrorCode::InvalidArgument, "Wio host callback cannot be empty.");
+            }
+        }
+
+        HostCallback() = default;
+        HostCallback(const HostCallback& other) noexcept : state_(other.state_) { retain_state(state_); }
+        HostCallback& operator=(const HostCallback& other) noexcept
+        {
+            if (this == &other)
+                return *this;
+            release_state(state_);
+            state_ = other.state_;
+            retain_state(state_);
+            return *this;
+        }
+        HostCallback(HostCallback&& other) noexcept : state_(std::exchange(other.state_, nullptr)) {}
+        HostCallback& operator=(HostCallback&& other) noexcept
+        {
+            if (this == &other)
+                return *this;
+            release_state(state_);
+            state_ = std::exchange(other.state_, nullptr);
+            return *this;
+        }
+        ~HostCallback() { release_state(state_); }
+
+        [[nodiscard]] explicit operator bool() const noexcept { return state_ != nullptr; }
+
+        // The returned descriptor borrows this wrapper's reference. Native
+        // code must retain it before storing it beyond the current call.
+        [[nodiscard]] WioHostCallback borrowed() const noexcept
+        {
+            static const std::array<WioAbiType, sizeof...(TArgs)> parameterTypes{
+                detail::getAbiType<TArgs>()...
+            };
+            return WioHostCallback{
+                state_,
+                detail::getAbiType<TReturn>(),
+                static_cast<std::uint32_t>(parameterTypes.size()),
+                parameterTypes.empty() ? nullptr : parameterTypes.data(),
+                static_cast<std::uint32_t>(WIO_CALLBACK_CONTAINS_FAILURES |
+                    WIO_CALLBACK_RETAINABLE_USERDATA |
+                    (state_ != nullptr && state_->threadSafe ? WIO_CALLBACK_THREAD_SAFE : 0u)),
+                &retain_abi,
+                &release_abi,
+                &invoke_abi,
+                &last_error_abi
+            };
+        }
+
+        // Returns one independently owned ABI reference. Pair it with
+        // WioReleaseHostCallback when the native registration is removed.
+        [[nodiscard]] WioHostCallback retained() const noexcept
+        {
+            WioHostCallback descriptor = borrowed();
+            WioRetainHostCallback(&descriptor);
+            return descriptor;
+        }
+
+    private:
+        struct State
+        {
+            State(std::function<TReturn(TArgs...)> value, const bool safe)
+                : callback(std::move(value)), threadSafe(safe) {}
+
+            std::atomic<std::uint64_t> references{1u};
+            std::function<TReturn(TArgs...)> callback;
+            bool threadSafe = false;
+            mutable std::mutex errorMutex{};
+            std::string lastError{};
+        };
+
+        static void retain_state(State* state) noexcept
+        {
+            if (state != nullptr)
+                state->references.fetch_add(1u, std::memory_order_relaxed);
+        }
+
+        static void release_state(State* state) noexcept
+        {
+            if (state != nullptr && state->references.fetch_sub(1u, std::memory_order_acq_rel) == 1u)
+                delete state;
+        }
+
+        static void retain_abi(void* opaque) noexcept { retain_state(static_cast<State*>(opaque)); }
+        static void release_abi(void* opaque) noexcept { release_state(static_cast<State*>(opaque)); }
+
+        template <size_t... Indices>
+        static std::int32_t invoke_values(State* state,
+                                          const WioValue* args,
+                                          WioValue* outResult,
+                                          std::index_sequence<Indices...>)
+        {
+            if constexpr (std::is_void_v<TReturn>)
+            {
+                state->callback(detail::fromWioValue<TArgs>(args[Indices])...);
+                if (outResult != nullptr)
+                    outResult->type = WIO_ABI_VOID;
+            }
+            else
+            {
+                const TReturn result = state->callback(detail::fromWioValue<TArgs>(args[Indices])...);
+                *outResult = detail::toWioValue(result);
+            }
+            return WIO_CALLBACK_OK;
+        }
+
+        static std::int32_t invoke_abi(void* opaque,
+                                       const WioValue* args,
+                                       const std::uint32_t argCount,
+                                       WioValue* outResult) noexcept
+        {
+            auto* state = static_cast<State*>(opaque);
+            if (state == nullptr || argCount != sizeof...(TArgs) || (argCount > 0u && args == nullptr))
+                return WIO_CALLBACK_BAD_ARGUMENTS;
+            if constexpr (!std::is_void_v<TReturn>)
+            {
+                if (outResult == nullptr)
+                    return WIO_CALLBACK_RESULT_REQUIRED;
+            }
+            const std::array<WioAbiType, sizeof...(TArgs)> expected{ detail::getAbiType<TArgs>()... };
+            for (size_t index = 0; index < expected.size(); ++index)
+            {
+                if (args[index].type != expected[index])
+                    return WIO_CALLBACK_TYPE_MISMATCH;
+            }
+            try
+            {
+                return invoke_values(state, args, outResult, std::index_sequence_for<TArgs...>{});
+            }
+            catch (const std::exception& error)
+            {
+                std::lock_guard lock(state->errorMutex);
+                state->lastError = error.what();
+                return WIO_CALLBACK_FAULTED;
+            }
+            catch (...)
+            {
+                std::lock_guard lock(state->errorMutex);
+                state->lastError = "unhandled non-standard callback exception";
+                return WIO_CALLBACK_FAULTED;
+            }
+        }
+
+        static const char* last_error_abi(const void* opaque) noexcept
+        {
+            const auto* state = static_cast<const State*>(opaque);
+            if (state == nullptr)
+                return "callback state is null";
+            thread_local std::string snapshot;
+            std::lock_guard lock(state->errorMutex);
+            snapshot = state->lastError;
+            return snapshot.c_str();
+        }
+
+        State* state_ = nullptr;
+    };
+
     template <typename Signature>
     auto wio_load_export(const WioModuleApi* api, std::string_view logicalName) -> typename detail::FunctionTraits<Signature>::StdFunction;
 
@@ -6516,6 +6809,8 @@ namespace wio::sdk
         std::vector<std::string> commands{};
         std::vector<std::string> event_hooks{};
         std::vector<std::string> types{};
+        std::vector<std::string> async_exports{};
+        std::optional<std::string> application{};
 
         [[nodiscard]] bool has_capability(const WioModuleCapability capability) const noexcept
         {
@@ -6546,8 +6841,516 @@ namespace wio::sdk
         info.types.reserve(api->typeCount);
         for (std::uint32_t index = 0u; index < api->typeCount; ++index)
             info.types.emplace_back(api->types[index].logicalName);
+        info.async_exports.reserve(api->asyncExportCount);
+        for (std::uint32_t index = 0u; index < api->asyncExportCount; ++index)
+            info.async_exports.emplace_back(api->asyncExports[index].logicalName);
+        if (detail::hasCapability(api, WIO_MODULE_CAP_APPLICATION_HOST_V1) &&
+            api->application != nullptr && api->application->logicalName != nullptr)
+            info.application = api->application->logicalName;
         return info;
     }
+
+    enum class AsyncTaskState
+    {
+        Pending,
+        Ready,
+        Cancelled,
+        Faulted
+    };
+
+    enum class AsyncCompletionTarget
+    {
+        CurrentExecutor,
+        MainExecutor
+    };
+
+    template <typename T>
+    class AsyncTask
+    {
+    public:
+        AsyncTask() = default;
+
+        AsyncTask(const AsyncTask& other)
+            : handle_(other.handle_),
+              bindingState_(other.bindingState_),
+              bindingGeneration_(other.bindingGeneration_),
+              libraryLease_(other.libraryLease_)
+        {
+            retain();
+        }
+
+        AsyncTask& operator=(const AsyncTask& other)
+        {
+            if (this == &other)
+                return *this;
+            reset();
+            handle_ = other.handle_;
+            bindingState_ = other.bindingState_;
+            bindingGeneration_ = other.bindingGeneration_;
+            libraryLease_ = other.libraryLease_;
+            retain();
+            return *this;
+        }
+
+        AsyncTask(AsyncTask&& other) noexcept
+        {
+            *this = std::move(other);
+        }
+
+        AsyncTask& operator=(AsyncTask&& other) noexcept
+        {
+            if (this == &other)
+                return *this;
+            reset();
+            handle_ = other.handle_;
+            bindingState_ = std::move(other.bindingState_);
+            bindingGeneration_ = other.bindingGeneration_;
+            libraryLease_ = std::move(other.libraryLease_);
+            other.handle_ = {};
+            other.bindingGeneration_ = 0u;
+            return *this;
+        }
+
+        ~AsyncTask()
+        {
+            reset();
+        }
+
+        [[nodiscard]] explicit operator bool() const noexcept
+        {
+            return handle_.state != nullptr && handle_.ops != nullptr;
+        }
+
+        [[nodiscard]] AsyncTaskState status() const
+        {
+            require_operation("status");
+            switch (handle_.ops->status(handle_.state))
+            {
+            case WIO_ASYNC_TASK_READY: return AsyncTaskState::Ready;
+            case WIO_ASYNC_TASK_CANCELLED: return AsyncTaskState::Cancelled;
+            case WIO_ASYNC_TASK_FAULTED: return AsyncTaskState::Faulted;
+            case WIO_ASYNC_TASK_PENDING:
+            default: return AsyncTaskState::Pending;
+            }
+        }
+
+        [[nodiscard]] bool ready() const { return status() != AsyncTaskState::Pending; }
+        [[nodiscard]] bool cancelled() const { return status() == AsyncTaskState::Cancelled; }
+        [[nodiscard]] bool faulted() const { return status() == AsyncTaskState::Faulted; }
+
+        void cancel()
+        {
+            require_operation("cancel");
+            handle_.ops->cancel(handle_.state);
+        }
+
+        template <typename TRep, typename TPeriod>
+        [[nodiscard]] bool wait_for(const std::chrono::duration<TRep, TPeriod>& timeout)
+        {
+            require_operation("wait_for");
+            const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(timeout);
+            const std::uint64_t count = milliseconds.count() <= 0
+                ? 0u
+                : static_cast<std::uint64_t>(milliseconds.count());
+            const std::int32_t operation = handle_.ops->waitFor(handle_.state, count);
+            if (operation == WIO_ASYNC_TIMED_OUT)
+                return false;
+            if (operation == WIO_ASYNC_CANCELLED || operation == WIO_ASYNC_FAULTED)
+                return true;
+            accept_operation(operation, "wait_for");
+            return true;
+        }
+
+        template <typename TRep, typename TPeriod>
+        [[nodiscard]] bool wait_until_or_cancel(const std::chrono::duration<TRep, TPeriod>& timeout)
+        {
+            if (wait_for(timeout))
+                return true;
+            cancel();
+            return false;
+        }
+
+        template <typename U = T>
+            requires (!std::is_void_v<U>)
+        [[nodiscard]] U get()
+        {
+            require_operation("get");
+            WioValue result{};
+            accept_operation(handle_.ops->getResult(handle_.state, &result), "get");
+            return detail::fromWioValue<U>(result);
+        }
+
+        template <typename U = T>
+            requires (std::is_void_v<U>)
+        void get()
+        {
+            require_operation("get");
+            WioValue result{};
+            accept_operation(handle_.ops->getResult(handle_.state, &result), "get");
+            if (result.type != WIO_ABI_VOID)
+                throw Error(ErrorCode::SignatureMismatch, "Wio async task returned a non-void result to a void host binding.");
+        }
+
+        template <typename U = T>
+            requires (!std::is_void_v<U>)
+        [[nodiscard]] std::optional<U> poll()
+        {
+            const AsyncTaskState current = status();
+            if (current == AsyncTaskState::Pending)
+                return std::nullopt;
+            return get<U>();
+        }
+
+        void on_complete(std::function<void(AsyncTaskState)> callback,
+                         const AsyncCompletionTarget target = AsyncCompletionTarget::CurrentExecutor)
+        {
+            require_operation("on_complete");
+            if (!callback)
+                throw Error(ErrorCode::InvalidArgument, "Wio async completion callback cannot be empty.");
+            auto* context = new CompletionContext{std::move(callback)};
+            const auto abiTarget = target == AsyncCompletionTarget::MainExecutor
+                ? WIO_ASYNC_COMPLETION_MAIN_EXECUTOR
+                : WIO_ASYNC_COMPLETION_CURRENT_EXECUTOR;
+            const std::int32_t operation = handle_.ops->onComplete(
+                handle_.state, &complete_callback, context, abiTarget);
+            if (operation != WIO_ASYNC_OK)
+            {
+                delete context;
+                accept_operation(operation, "on_complete");
+            }
+        }
+
+        [[nodiscard]] std::string last_error() const
+        {
+            if (!*this || handle_.ops->lastError == nullptr)
+                return {};
+            const char* error = handle_.ops->lastError(handle_.state);
+            return error != nullptr ? std::string(error) : std::string{};
+        }
+
+    private:
+        friend class Module;
+
+        struct CompletionContext
+        {
+            std::function<void(AsyncTaskState)> callback;
+        };
+
+        AsyncTask(WioAsyncTaskHandle handle,
+                  std::shared_ptr<detail::BindingState> bindingState,
+                  const std::uint64_t bindingGeneration,
+                  std::shared_ptr<void> libraryLease)
+            : handle_(handle),
+              bindingState_(std::move(bindingState)),
+              bindingGeneration_(bindingGeneration),
+              libraryLease_(std::move(libraryLease))
+        {
+            try
+            {
+                validate_handle();
+            }
+            catch (...)
+            {
+                if (handle_.state != nullptr && handle_.ops != nullptr && handle_.ops->release != nullptr)
+                    handle_.ops->release(handle_.state);
+                handle_ = {};
+                throw;
+            }
+        }
+
+        static void complete_callback(void* opaque, const WioAsyncTaskStatus status) noexcept
+        {
+            std::unique_ptr<CompletionContext> context(static_cast<CompletionContext*>(opaque));
+            if (!context || !context->callback)
+                return;
+            AsyncTaskState state = AsyncTaskState::Pending;
+            switch (status)
+            {
+            case WIO_ASYNC_TASK_READY: state = AsyncTaskState::Ready; break;
+            case WIO_ASYNC_TASK_CANCELLED: state = AsyncTaskState::Cancelled; break;
+            case WIO_ASYNC_TASK_FAULTED: state = AsyncTaskState::Faulted; break;
+            case WIO_ASYNC_TASK_PENDING: state = AsyncTaskState::Pending; break;
+            }
+            try { context->callback(state); }
+            catch (...) { }
+        }
+
+        void validate_handle() const
+        {
+            if (handle_.state == nullptr || handle_.ops == nullptr ||
+                handle_.ops->retain == nullptr || handle_.ops->release == nullptr ||
+                handle_.ops->status == nullptr || handle_.ops->cancel == nullptr ||
+                handle_.ops->waitFor == nullptr || handle_.ops->getResult == nullptr ||
+                handle_.ops->onComplete == nullptr || handle_.ops->lastError == nullptr)
+                throw Error(ErrorCode::InvalidApiDescriptor, "Wio async export returned an incomplete task handle.");
+            if (handle_.resultType != detail::getAbiType<T>())
+                throw Error(ErrorCode::SignatureMismatch, "Wio async task result type does not match the requested host type.");
+        }
+
+        void require_operation(const std::string_view operation) const
+        {
+            if (!*this)
+                throw Error(ErrorCode::LifecycleFailed, "Wio async task is empty.");
+            detail::requireLiveBinding(bindingState_, bindingGeneration_, "async task", operation);
+        }
+
+        void accept_operation(const std::int32_t operation, const std::string_view name) const
+        {
+            if (operation == WIO_ASYNC_OK)
+                return;
+            std::ostringstream message;
+            message << "Wio async task " << name << " failed with status " << operation;
+            const std::string detail = last_error();
+            if (!detail.empty())
+                message << ": " << detail;
+            message << '.';
+            throw Error(operation == WIO_ASYNC_TYPE_MISMATCH
+                ? ErrorCode::SignatureMismatch
+                : ErrorCode::InvokeFailed, message.str());
+        }
+
+        void retain() noexcept
+        {
+            if (*this)
+                handle_.ops->retain(handle_.state);
+        }
+
+        void reset() noexcept
+        {
+            if (*this)
+                handle_.ops->release(handle_.state);
+            handle_ = {};
+            bindingState_.reset();
+            libraryLease_.reset();
+            bindingGeneration_ = 0u;
+        }
+
+        WioAsyncTaskHandle handle_{};
+        std::shared_ptr<detail::BindingState> bindingState_{};
+        std::uint64_t bindingGeneration_ = 0u;
+        std::shared_ptr<void> libraryLease_{};
+    };
+
+    enum class ApplicationFrameStatus
+    {
+        Running,
+        ExitRequested
+    };
+
+    class ApplicationHost
+    {
+    public:
+        ApplicationHost() = default;
+        ApplicationHost(const ApplicationHost&) = delete;
+        ApplicationHost& operator=(const ApplicationHost&) = delete;
+
+        ApplicationHost(ApplicationHost&& other) noexcept
+        {
+            *this = std::move(other);
+        }
+
+        ApplicationHost& operator=(ApplicationHost&& other) noexcept
+        {
+            if (this == &other)
+                return *this;
+            reset();
+            descriptor_ = other.descriptor_;
+            storage_ = other.storage_;
+            bindingState_ = std::move(other.bindingState_);
+            bindingGeneration_ = other.bindingGeneration_;
+            libraryLease_ = std::move(other.libraryLease_);
+            ownerThread_ = other.ownerThread_;
+            started_ = other.started_;
+            closed_ = other.closed_;
+
+            other.descriptor_ = nullptr;
+            other.storage_ = nullptr;
+            other.bindingGeneration_ = 0u;
+            other.started_ = false;
+            other.closed_ = true;
+            return *this;
+        }
+
+        ~ApplicationHost()
+        {
+            reset();
+        }
+
+        [[nodiscard]] explicit operator bool() const noexcept
+        {
+            return descriptor_ != nullptr && storage_ != nullptr;
+        }
+
+        [[nodiscard]] std::string_view name() const noexcept
+        {
+            return descriptor_ != nullptr && descriptor_->logicalName != nullptr
+                ? std::string_view(descriptor_->logicalName)
+                : std::string_view{};
+        }
+
+        [[nodiscard]] bool started() const noexcept { return started_; }
+        [[nodiscard]] bool closed() const noexcept { return closed_; }
+
+        void start()
+        {
+            require_operation("start");
+            if (started_ || closed_)
+                throw Error(ErrorCode::LifecycleFailed, "Wio application start() requires a fresh host state.");
+            const std::int32_t status = descriptor_->start(storage_);
+            if (status == WIO_APPLICATION_FAULTED)
+                closed_ = true;
+            accept_status(status, "start", true, false);
+            started_ = true;
+        }
+
+        [[nodiscard]] ApplicationFrameStatus update(const double deltaSeconds = 0.0)
+        {
+            require_operation("update");
+            if (!started_ || closed_)
+                throw Error(ErrorCode::LifecycleFailed, "Wio application update() requires a started, open host state.");
+            const std::int32_t status = descriptor_->update(storage_, deltaSeconds);
+            accept_status(status, "update", true, false);
+            return status == WIO_APPLICATION_EXIT_REQUESTED
+                ? ApplicationFrameStatus::ExitRequested
+                : ApplicationFrameStatus::Running;
+        }
+
+        void request_exit(const std::int32_t exitCode = 0)
+        {
+            require_operation("request_exit");
+            if (closed_)
+                throw Error(ErrorCode::LifecycleFailed, "Wio application request_exit() cannot target a closed host state.");
+            accept_status(descriptor_->requestExit(storage_, exitCode), "request_exit", true, false);
+        }
+
+        void close()
+        {
+            require_operation("close");
+            if (closed_)
+                return;
+            if (!started_)
+                throw Error(ErrorCode::LifecycleFailed, "Wio application close() requires start() to complete first.");
+            const std::int32_t status = descriptor_->close(storage_);
+            accept_status(status, "close", false, true);
+            closed_ = true;
+        }
+
+        [[nodiscard]] bool exit_requested() const
+        {
+            require_operation("exit_requested");
+            return descriptor_->exitRequested(storage_);
+        }
+
+        [[nodiscard]] std::int32_t exit_code() const
+        {
+            require_operation("exit_code");
+            return descriptor_->exitCode(storage_);
+        }
+
+        [[nodiscard]] std::uint64_t pump_main()
+        {
+            require_operation("pump_main");
+            return descriptor_->pumpMain(storage_);
+        }
+
+        [[nodiscard]] std::string last_error() const
+        {
+            if (descriptor_ == nullptr || storage_ == nullptr || descriptor_->lastError == nullptr)
+                return {};
+            const char* message = descriptor_->lastError(storage_);
+            return message != nullptr ? std::string(message) : std::string{};
+        }
+
+    private:
+        friend class Module;
+
+        ApplicationHost(const WioApplicationDescriptor* descriptor,
+                        std::shared_ptr<detail::BindingState> bindingState,
+                        const std::uint64_t bindingGeneration,
+                        std::shared_ptr<void> libraryLease)
+            : descriptor_(descriptor),
+              bindingState_(std::move(bindingState)),
+              bindingGeneration_(bindingGeneration),
+              libraryLease_(std::move(libraryLease)),
+              ownerThread_(std::this_thread::get_id())
+        {
+            if (descriptor_ == nullptr)
+                throw Error(ErrorCode::ApiUnavailable, "Wio module does not expose an application host descriptor.");
+
+            storage_ = ::operator new(
+                static_cast<std::size_t>(descriptor_->stateSize),
+                std::align_val_t(static_cast<std::size_t>(descriptor_->stateAlignment))
+            );
+            const std::int32_t status = descriptor_->construct(storage_);
+            if (status != WIO_APPLICATION_OK)
+            {
+                ::operator delete(storage_, std::align_val_t(static_cast<std::size_t>(descriptor_->stateAlignment)));
+                storage_ = nullptr;
+                throw Error(ErrorCode::LifecycleFailed, "Wio application state construction failed.");
+            }
+        }
+
+        void require_operation(const std::string_view operation) const
+        {
+            if (descriptor_ == nullptr || storage_ == nullptr)
+                throw Error(ErrorCode::LifecycleFailed, "Wio application host is empty.");
+            detail::requireLiveBinding(bindingState_, bindingGeneration_, "application", name());
+            if (ownerThread_ != std::this_thread::get_id())
+            {
+                std::ostringstream message;
+                message << "Wio application " << operation << "() must run on the thread that created the host.";
+                throw Error(ErrorCode::LifecycleFailed, message.str());
+            }
+        }
+
+        void accept_status(const std::int32_t status,
+                           const std::string_view operation,
+                           const bool allowExit,
+                           const bool allowClosed) const
+        {
+            if (status == WIO_APPLICATION_OK ||
+                (allowExit && status == WIO_APPLICATION_EXIT_REQUESTED) ||
+                (allowClosed && status == WIO_APPLICATION_ALREADY_CLOSED))
+                return;
+
+            std::ostringstream message;
+            message << "Wio application " << operation << "() failed with status " << status;
+            const std::string detail = last_error();
+            if (!detail.empty())
+                message << ": " << detail;
+            message << '.';
+            throw Error(ErrorCode::LifecycleFailed, message.str());
+        }
+
+        void reset() noexcept
+        {
+            if (descriptor_ == nullptr || storage_ == nullptr)
+                return;
+            if (started_ && !closed_ && ownerThread_ == std::this_thread::get_id())
+            {
+                try { (void)descriptor_->close(storage_); }
+                catch (...) { }
+            }
+            descriptor_->destroy(storage_);
+            ::operator delete(storage_, std::align_val_t(static_cast<std::size_t>(descriptor_->stateAlignment)));
+            descriptor_ = nullptr;
+            storage_ = nullptr;
+            bindingState_.reset();
+            libraryLease_.reset();
+            bindingGeneration_ = 0u;
+            started_ = false;
+            closed_ = true;
+        }
+
+        const WioApplicationDescriptor* descriptor_ = nullptr;
+        void* storage_ = nullptr;
+        std::shared_ptr<detail::BindingState> bindingState_{};
+        std::uint64_t bindingGeneration_ = 0u;
+        std::shared_ptr<void> libraryLease_{};
+        std::thread::id ownerThread_{};
+        bool started_ = false;
+        bool closed_ = false;
+    };
 
     class Module
     {
@@ -6738,6 +7541,87 @@ namespace wio::sdk
         [[nodiscard]] bool supports_restore_state() const noexcept
         {
             return api_ != nullptr && api_->restoreState != nullptr;
+        }
+
+        [[nodiscard]] bool supports_application() const noexcept
+        {
+            return has_capability(WIO_MODULE_CAP_APPLICATION_HOST_V1) &&
+                api_ != nullptr && api_->application != nullptr;
+        }
+
+        [[nodiscard]] ApplicationHost application() const
+        {
+            ensure_binding_live();
+            if (!started_)
+                throw Error(ErrorCode::LifecycleFailed, "Wio module must be started before creating its application host.");
+            if (!supports_application())
+                throw Error(ErrorCode::ApiUnavailable, "Wio module does not expose an application host.");
+
+            detail::LibraryHandle leaseHandle = detail::openLibrary(path_);
+            if (leaseHandle == nullptr)
+                throw Error(ErrorCode::LibraryOpenFailed, "Wio SDK could not retain the module library for an application host.");
+            auto lease = std::shared_ptr<void>(reinterpret_cast<void*>(leaseHandle), [leaseHandle](void*) noexcept
+            {
+                detail::closeLibrary(leaseHandle);
+            });
+            return ApplicationHost(api_->application, bindingState_, current_binding_generation(), std::move(lease));
+        }
+
+        [[nodiscard]] bool supports_async() const noexcept
+        {
+            return has_capability(WIO_MODULE_CAP_ASYNC_TASK_HOST_V1) && api_ != nullptr &&
+                api_->asyncHost != nullptr && api_->asyncExportCount > 0u;
+        }
+
+        void bind_async_main() const
+        {
+            ensure_binding_live();
+            if (!supports_async())
+                throw Error(ErrorCode::ApiUnavailable, "Wio module does not expose the async task host.");
+            api_->asyncHost->bindMain();
+        }
+
+        [[nodiscard]] std::uint64_t pump_async_main() const
+        {
+            ensure_binding_live();
+            if (!supports_async())
+                throw Error(ErrorCode::ApiUnavailable, "Wio module does not expose the async task host.");
+            return api_->asyncHost->pumpMain();
+        }
+
+        [[nodiscard]] std::uint64_t pending_async_main() const
+        {
+            ensure_binding_live();
+            if (!supports_async())
+                throw Error(ErrorCode::ApiUnavailable, "Wio module does not expose the async task host.");
+            return api_->asyncHost->pendingMain();
+        }
+
+        void request_async_shutdown() const
+        {
+            ensure_binding_live();
+            if (!supports_async())
+                throw Error(ErrorCode::ApiUnavailable, "Wio module does not expose the async task host.");
+            api_->asyncHost->requestShutdown();
+        }
+
+        template <typename Signature>
+        auto load_async(std::string_view logicalName) const
+        {
+            ensure_binding_live();
+            if (!started_)
+                throw Error(ErrorCode::LifecycleFailed, "Wio module must be started before loading an async export.");
+            if (!supports_async())
+                throw Error(ErrorCode::ApiUnavailable, "Wio module does not expose async exports.");
+            const std::string ownedName(logicalName);
+            const WioModuleAsyncExport* entry = WioFindModuleAsyncExport(api_, ownedName.c_str());
+            if (entry == nullptr)
+            {
+                std::ostringstream message;
+                message << "Wio SDK could not find async export '" << ownedName << "'.";
+                throw Error(ErrorCode::ExportNotFound, message.str());
+            }
+            return bind_async_entry(entry, ownedName, std::type_identity<Signature>{});
         }
 
         void update(float deltaTime) const
@@ -6971,6 +7855,56 @@ namespace wio::sdk
         }
 
     private:
+        template <typename TReturn, typename... TArgs>
+        auto bind_async_entry(const WioModuleAsyncExport* entry,
+                              const std::string& logicalName,
+                              std::type_identity<TReturn(TArgs...)>) const
+            -> std::function<AsyncTask<TReturn>(TArgs...)>
+        {
+            const std::array<WioAbiType, sizeof...(TArgs)> expectedParameters{ detail::getAbiType<TArgs>()... };
+            if (entry->resultType != detail::getAbiType<TReturn>() ||
+                entry->parameterCount != expectedParameters.size())
+                throw Error(ErrorCode::SignatureMismatch, "Wio async export signature does not match the requested host signature.");
+            for (size_t index = 0; index < expectedParameters.size(); ++index)
+            {
+                if (entry->parameterTypes[index] != expectedParameters[index])
+                    throw Error(ErrorCode::SignatureMismatch, "Wio async export parameter type does not match the requested host signature.");
+            }
+
+            const auto bindingState = bindingState_;
+            const std::uint64_t bindingGeneration = current_binding_generation();
+            const std::filesystem::path modulePath = path_;
+            return [entry, logicalName, bindingState, bindingGeneration, modulePath](TArgs... args) -> AsyncTask<TReturn>
+            {
+                detail::requireLiveBinding(bindingState, bindingGeneration, "async export", logicalName);
+                std::array<WioValue, sizeof...(TArgs)> values{ detail::toWioValue(args)... };
+                WioAsyncTaskHandle handle{};
+                const std::int32_t operation = entry->invoke(
+                    values.empty() ? nullptr : values.data(),
+                    static_cast<std::uint32_t>(values.size()),
+                    &handle);
+                if (operation != WIO_ASYNC_OK)
+                {
+                    std::ostringstream message;
+                    message << "Wio async export '" << logicalName << "' failed to create a task with status " << operation << '.';
+                    throw Error(ErrorCode::InvokeFailed, message.str());
+                }
+
+                detail::LibraryHandle leaseHandle = detail::openLibrary(modulePath);
+                if (leaseHandle == nullptr)
+                {
+                    if (handle.state != nullptr && handle.ops != nullptr && handle.ops->release != nullptr)
+                        handle.ops->release(handle.state);
+                    throw Error(ErrorCode::LibraryOpenFailed, "Wio SDK could not retain the module library for an async task.");
+                }
+                auto lease = std::shared_ptr<void>(reinterpret_cast<void*>(leaseHandle), [leaseHandle](void*) noexcept
+                {
+                    detail::closeLibrary(leaseHandle);
+                });
+                return AsyncTask<TReturn>(handle, bindingState, bindingGeneration, std::move(lease));
+            };
+        }
+
         void ensure_binding_live() const
         {
             if (api_ == nullptr)

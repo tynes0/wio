@@ -1,0 +1,8 @@
+system BadStart {
+    on start(value: f64) { }
+}
+
+application BadStartApp {
+    system bad: BadStart;
+    on update { self.Exit(0); }
+}

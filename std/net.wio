@@ -144,6 +144,29 @@ realm std {
             return std::MakeResultError(std::ResultDomain::runtime, 1, message);
         }
 
+        async fn AwaitCancellableAddresses(task: futures::Task<std::Result<string[]> >,
+            token: futures::CancellationToken) -> std::Result<string[]> {
+            let outcome = await futures::TryWithCancellation<std::Result<string[]> >(task, token);
+            if (outcome.IsNone()) {
+                return std::Err<string[]>(NetError("network operation cancelled"));
+            }
+            return outcome.Value();
+        }
+
+        async fn AwaitCancellableSize(task: futures::Task<std::Result<usize> >,
+            token: futures::CancellationToken) -> std::Result<usize> {
+            let outcome = await futures::TryWithCancellation<std::Result<usize> >(task, token);
+            if (outcome.IsNone()) { return std::Err<usize>(NetError("network operation cancelled")); }
+            return outcome.Value();
+        }
+
+        async fn AwaitCancellableString(task: futures::Task<std::Result<string> >,
+            token: futures::CancellationToken) -> std::Result<string> {
+            let outcome = await futures::TryWithCancellation<std::Result<string> >(task, token);
+            if (outcome.IsNone()) { return std::Err<string>(NetError("network operation cancelled")); }
+            return outcome.Value();
+        }
+
         fn Resolve(host: string, port: u16) -> std::Result<string[]> {
             mut addresses: string[] = [];
             mut error = "";
@@ -157,6 +180,12 @@ realm std {
             DecodeAsyncAddresses(payload, ref succeeded, ref addresses, ref error);
             if (succeeded) { return std::Ok<string[]>(addresses); }
             return std::Err<string[]>(NetError(error));
+        }
+
+        async fn ResolveAsync(host: string, port: u16,
+            token: futures::CancellationToken) -> std::Result<string[]> {
+            return await AwaitCancellableAddresses(
+                ResolveAsync(host, port), token);
         }
 
         object Socket {
@@ -199,6 +228,16 @@ realm std {
                 if (succeeded) { return std::Ok<string>(bytes); }
                 return std::Err<string>(NetError(error));
             }
+            public async fn SendAsync(bytes: string,
+                token: futures::CancellationToken) -> std::Result<usize> {
+                return await AwaitCancellableSize(
+                    self.SendAsync(bytes), token);
+            }
+            public async fn ReceiveAsync(maximumBytes: usize,
+                token: futures::CancellationToken) -> std::Result<string> {
+                return await AwaitCancellableString(
+                    self.ReceiveAsync(maximumBytes), token);
+            }
         }
 
         fn Connect(host: string, port: u16, timeoutMilliseconds: u64) -> std::Result<Socket> {
@@ -213,6 +252,19 @@ realm std {
         async fn ConnectAsync(host: string, port: u16, timeoutMilliseconds: u64) -> std::Result<Socket> {
             let action: fn() -> std::Result<Socket> = () => Connect(host, port, timeoutMilliseconds);
             return await futures::RunBlocking<std::Result<Socket> >(action);
+        }
+
+        async fn AwaitCancellableSocket(task: futures::Task<std::Result<Socket> >,
+            token: futures::CancellationToken) -> std::Result<Socket> {
+            let outcome = await futures::TryWithCancellation<std::Result<Socket> >(task, token);
+            if (outcome.IsNone()) { return std::Err<Socket>(NetError("network operation cancelled")); }
+            return outcome.Value();
+        }
+
+        async fn ConnectAsync(host: string, port: u16, timeoutMilliseconds: u64,
+            token: futures::CancellationToken) -> std::Result<Socket> {
+            return await AwaitCancellableSocket(
+                ConnectAsync(host, port, timeoutMilliseconds), token);
         }
 
         object Listener {
@@ -248,6 +300,10 @@ realm std {
                 }
                 return std::Err<Socket>(NetError(error));
             }
+            public async fn AcceptAsync(token: futures::CancellationToken) -> std::Result<Socket> {
+                return await AwaitCancellableSocket(
+                    self.AcceptAsync(), token);
+            }
         }
 
         fn Listen(address: string, port: u16, backlog: i32) -> std::Result<Listener> {
@@ -269,6 +325,13 @@ realm std {
                 self.remoteAddress = remoteAddress;
                 self.remotePort = remotePort;
             }
+        }
+
+        async fn AwaitCancellableDatagram(task: futures::Task<std::Result<Datagram> >,
+            token: futures::CancellationToken) -> std::Result<Datagram> {
+            let outcome = await futures::TryWithCancellation<std::Result<Datagram> >(task, token);
+            if (outcome.IsNone()) { return std::Err<Datagram>(NetError("network operation cancelled")); }
+            return outcome.Value();
         }
 
         object UdpSocket {
@@ -317,6 +380,16 @@ realm std {
                 DecodeAsyncDatagram(payload, ref succeeded, ref bytes, ref address, ref port, ref error);
                 if (succeeded) { return std::Ok<Datagram>(Datagram(bytes, address, port)); }
                 return std::Err<Datagram>(NetError(error));
+            }
+            public async fn SendToAsync(host: string, port: u16, bytes: string,
+                token: futures::CancellationToken) -> std::Result<usize> {
+                return await AwaitCancellableSize(
+                    self.SendToAsync(host, port, bytes), token);
+            }
+            public async fn ReceiveFromAsync(maximumBytes: usize,
+                token: futures::CancellationToken) -> std::Result<Datagram> {
+                return await AwaitCancellableDatagram(
+                    self.ReceiveFromAsync(maximumBytes), token);
             }
         }
 

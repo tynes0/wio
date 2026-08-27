@@ -16,7 +16,8 @@ namespace wio::runtime::std_process
         pipe_failed = 4,
         process_closed = 5,
         wait_failed = 6,
-        terminate_failed = 7
+        terminate_failed = 7,
+        cancelled = 8
     };
 
     [[nodiscard]] const char* ToString(ProcessError error) noexcept;

@@ -12,7 +12,7 @@ int main(int argc, char** argv)
     {
         auto module = wio::sdk::Module::load(argv[1]);
         const WioModuleApi* api = module.raw_api();
-        if (api == nullptr || api->descriptorVersion != 9u ||
+        if (api == nullptr || api->descriptorVersion != WIO_MODULE_API_DESCRIPTOR_VERSION ||
             (api->capabilities & WIO_MODULE_CAP_ATTRIBUTE_METADATA_V1) == 0u)
             return EXIT_FAILURE;
 
@@ -35,7 +35,7 @@ int main(int argc, char** argv)
             std::string_view(audited->processors[0].hookMode) != "no_args")
             return EXIT_FAILURE;
 
-        std::cout << "SDK 0.15 attributes: abi=9 type=Label field=Important method=Audited phase=pre\n";
+        std::cout << "SDK 0.15 attributes: abi=10 type=Label field=Important method=Audited phase=pre\n";
         return EXIT_SUCCESS;
     }
     catch (const std::exception& error)

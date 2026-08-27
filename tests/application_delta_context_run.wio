@@ -1,0 +1,24 @@
+use std::assert as assert;
+use std::console as console;
+
+system DeltaProbe {
+    mut updates: i32;
+    mut lastDelta: f64;
+
+    on update(delta: f64) {
+        self.updates += 1;
+        self.lastDelta = delta;
+    }
+}
+
+application DeltaContextApp {
+    system probe: DeltaProbe;
+
+    on update(delta: f64) {
+        assert::Expect(delta >= 0.0, "application delta is monotonic and non-negative");
+        assert::ExpectEqual(self.probe.lastDelta, delta, "systems and application share one frame delta");
+        assert::ExpectEqual(self.probe.updates, 1, "system update precedes application update");
+        console::PrintLine("application-delta-context-ok");
+        self.Exit(0);
+    }
+}

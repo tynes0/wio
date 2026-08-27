@@ -1,0 +1,5 @@
+component World { value: i32; }
+system BrokenSystem {
+    on update(delta: f64, world: World) { }
+}
+fn Entry() { }

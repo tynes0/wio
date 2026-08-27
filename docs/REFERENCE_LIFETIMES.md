@@ -38,3 +38,16 @@ Consequently, an owning return type uses `return deref self;`, while a `ref` or 
 ## Native boundary
 
 Native functions may receive `ref` and `view` arguments. Those borrows are call-scoped and native code must not retain them. Native `ref`/`view` return values are rejected because Wio cannot prove the lifetime of memory owned by native code. A future explicit native-lifetime annotation can safely relax this rule; until then, return an owning value or an opaque handle.
+
+`opaque` carries pointer identity, not ownership. A native API that returns an
+owned handle should wrap it in a Wio object whose `OnDestruct` calls the native
+release function. At the stable C++ host boundary, use
+`WioOwnedNativeResource`/`wio::sdk::UniqueNativeResource`: the owned descriptor
+is transferred, never copied, while `WioBorrowedNativeResource` is a
+call-scoped view. `WioReleaseNativeResource` clears the descriptor before
+calling its release function, so repeated cleanup remains exactly-once.
+
+Native resources whose destruction is thread-affine must dispatch destruction
+inside their release function. The generic wrapper only advertises
+`WIO_NATIVE_RESOURCE_RELEASE_THREAD_SAFE`; it never silently moves destruction
+to another executor.

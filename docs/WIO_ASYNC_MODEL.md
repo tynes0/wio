@@ -1,6 +1,34 @@
 # Wio Async and Coroutine Model
 
-Status: normative Wio 0.12 async contract.
+Status: normative Wio 0.16 async contract.
+
+## 0.16 host, cancellation, and I/O contract
+
+ABI descriptor v10 exposes scalar `[Export] async fn` functions as typed task
+handles. C++ hosts can poll without blocking, wait explicitly, request
+cancellation, attach current-executor or main-executor completion callbacks,
+apply deadlines, and pump main-thread delivery. Task handles retain their
+module library and generation; stale bindings fail instead of calling unloaded
+code.
+
+Cancellation propagates down the task currently awaited by a cancelled
+coroutine. This wakes cancellation-aware timers and prevents an abandoned
+parent from leaving a private child suspended. Because `Task<T>` is a shared
+handle, cancelling that child is visible to every observer of the same task;
+code that needs independent cancellation must create independent work.
+`TryWithCancellation` turns a cancellation race into `Option::None` (or
+`false` for `Task<void>`), while `WithCancellation` preserves the task-fault
+surface for callers that want cancellation to unwind.
+
+Filesystem, process, DNS, TCP, listener, and UDP async operations have overloads
+accepting `CancellationToken`. Expected cancellation is returned as an ordinary
+module error/`Result`, never as an unhandled coroutine failure. Portable
+blocking syscalls are not forcibly killed; their result becomes unobservable,
+native leases keep storage alive, and runtime shutdown drains accepted cleanup.
+
+Application runners bind and drain the main executor at start, update, close,
+and host pump boundaries. Generated executable and host-driven loops use the
+same explicit shutdown path.
 
 The section **0.12 correctness and structure contract** records the additive
 behavior frozen by 0.12. It does not rewrite the historical 0.11 baseline.
@@ -37,10 +65,10 @@ implement the empty `std::async::Send` marker; `std::async::Sync` reserves the
 corresponding shared-access contract. Claiming either marker is an unsafe
 semantic promise by the type author, not automatic locking.
 
-Cancellation now wakes `Sleep`/`Yield` suspension promptly and prevents the
-cancelled coroutine from running beyond that boundary. Awaiter cancellation
-detaches only that awaiter from a shared child; it does not implicitly cancel
-the shared child for its other observers. Blocking native work remains
+Cancellation wakes `Sleep`/`Yield` suspension promptly and prevents the
+cancelled coroutine from running beyond that boundary. The 0.16 rule above
+supersedes the original 0.12 detach-only await behavior: cancellation now
+propagates into the directly awaited child. Blocking native work remains
 cooperative and is never forcibly killed.
 
 `ShutdownRuntime` is explicit and idempotent. It stops accepting work, drains

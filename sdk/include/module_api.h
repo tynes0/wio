@@ -9,7 +9,7 @@
 
 #include "wio_version.h"
 
-inline constexpr std::uint32_t WIO_MODULE_API_DESCRIPTOR_VERSION = 9u;
+inline constexpr std::uint32_t WIO_MODULE_API_DESCRIPTOR_VERSION = 10u;
 
 enum WioModuleCapability : std::uint32_t
 {
@@ -22,7 +22,9 @@ enum WioModuleCapability : std::uint32_t
     WIO_MODULE_CAP_PRODUCT_VERSION = 1u << 6,
     WIO_MODULE_CAP_TYPE_METADATA_V2 = 1u << 7,
     WIO_MODULE_CAP_TEXT_FIELDS = 1u << 8,
-    WIO_MODULE_CAP_ATTRIBUTE_METADATA_V1 = 1u << 9
+    WIO_MODULE_CAP_ATTRIBUTE_METADATA_V1 = 1u << 9,
+    WIO_MODULE_CAP_APPLICATION_HOST_V1 = 1u << 10,
+    WIO_MODULE_CAP_ASYNC_TASK_HOST_V1 = 1u << 11
 };
 
 struct WioModuleProductVersion
@@ -412,6 +414,248 @@ struct WioModuleType
     const WioModuleAttributeDescriptor* attributes;
 };
 
+enum WioNativeResourceFlag : std::uint32_t
+{
+    WIO_NATIVE_RESOURCE_RELEASE_THREAD_SAFE = 1u << 0
+};
+
+using WioNativeResourceReleaseFn = void(*)(void* state) noexcept;
+
+// A borrowed resource never releases `state` and is only valid while its
+// owner remains alive. typeName must point to static storage.
+struct WioBorrowedNativeResource
+{
+    void* state;
+    const char* typeName;
+    std::uint32_t flags;
+    std::uint32_t reserved;
+};
+
+// A non-empty owned resource carries exactly one ownership claim. ABI callers
+// transfer it with WioTakeNativeResource and destroy it with
+// WioReleaseNativeResource. Copying this POD does not duplicate ownership;
+// C++ callers should use wio::sdk::UniqueNativeResource.
+struct WioOwnedNativeResource
+{
+    void* state;
+    const char* typeName;
+    std::uint32_t flags;
+    std::uint32_t reserved;
+    WioNativeResourceReleaseFn release;
+};
+
+inline WioBorrowedNativeResource WioBorrowNativeResource(
+    const WioOwnedNativeResource* resource) noexcept
+{
+    if (resource == nullptr)
+        return {};
+    return {resource->state, resource->typeName, resource->flags, 0u};
+}
+
+inline WioOwnedNativeResource WioTakeNativeResource(
+    WioOwnedNativeResource* resource) noexcept
+{
+    if (resource == nullptr)
+        return {};
+    WioOwnedNativeResource result = *resource;
+    *resource = {};
+    return result;
+}
+
+inline void WioReleaseNativeResource(WioOwnedNativeResource* resource) noexcept
+{
+    WioOwnedNativeResource owned = WioTakeNativeResource(resource);
+    if (owned.state != nullptr && owned.release != nullptr)
+        owned.release(owned.state);
+}
+
+enum WioCallbackStatus : std::int32_t
+{
+    WIO_CALLBACK_OK = 0,
+    WIO_CALLBACK_BAD_ARGUMENTS = 1,
+    WIO_CALLBACK_TYPE_MISMATCH = 2,
+    WIO_CALLBACK_RESULT_REQUIRED = 3,
+    WIO_CALLBACK_FAULTED = 4
+};
+
+enum WioCallbackFlag : std::uint32_t
+{
+    WIO_CALLBACK_THREAD_SAFE = 1u << 0,
+    WIO_CALLBACK_CONTAINS_FAILURES = 1u << 1,
+    WIO_CALLBACK_RETAINABLE_USERDATA = 1u << 2
+};
+
+using WioHostCallbackRetainFn = void(*)(void* userData);
+using WioHostCallbackReleaseFn = void(*)(void* userData);
+using WioHostCallbackInvokeFn = std::int32_t(*)(void* userData,
+                                                 const WioValue* args,
+                                                 std::uint32_t argCount,
+                                                 WioValue* outResult);
+using WioHostCallbackLastErrorFn = const char*(*)(const void* userData);
+
+// `userData` is borrowed by default. Native code that stores a callback beyond
+// the current call must invoke retain(userData), and must later pair it with
+// release(userData). invoke contains host exceptions and reports them as a
+// WioCallbackStatus instead of unwinding across the ABI boundary.
+struct WioHostCallback
+{
+    void* userData;
+    WioAbiType returnType;
+    std::uint32_t parameterCount;
+    const WioAbiType* parameterTypes;
+    std::uint32_t flags;
+    WioHostCallbackRetainFn retain;
+    WioHostCallbackReleaseFn release;
+    WioHostCallbackInvokeFn invoke;
+    WioHostCallbackLastErrorFn lastError;
+};
+
+inline void WioRetainHostCallback(const WioHostCallback* callback)
+{
+    if (callback != nullptr && callback->userData != nullptr && callback->retain != nullptr)
+        callback->retain(callback->userData);
+}
+
+inline void WioReleaseHostCallback(const WioHostCallback* callback)
+{
+    if (callback != nullptr && callback->userData != nullptr && callback->release != nullptr)
+        callback->release(callback->userData);
+}
+
+inline std::int32_t WioInvokeHostCallback(const WioHostCallback* callback,
+                                          const WioValue* args,
+                                          const std::uint32_t argCount,
+                                          WioValue* outResult)
+{
+    if (callback == nullptr || callback->userData == nullptr || callback->invoke == nullptr)
+        return WIO_CALLBACK_BAD_ARGUMENTS;
+    return callback->invoke(callback->userData, args, argCount, outResult);
+}
+
+enum WioApplicationStatus : std::int32_t
+{
+    WIO_APPLICATION_OK = 0,
+    WIO_APPLICATION_EXIT_REQUESTED = 1,
+    WIO_APPLICATION_ALREADY_CLOSED = 2,
+    WIO_APPLICATION_INVALID_STATE = 3,
+    WIO_APPLICATION_FAULTED = 4,
+    WIO_APPLICATION_WRONG_THREAD = 5
+};
+
+enum WioApplicationFlag : std::uint32_t
+{
+    WIO_APPLICATION_MAIN_THREAD_AFFINE = 1u << 0,
+    WIO_APPLICATION_HOST_OWNS_STORAGE = 1u << 1,
+    WIO_APPLICATION_NON_BLOCKING_UPDATE = 1u << 2
+};
+
+using WioApplicationConstructFn = std::int32_t(*)(void* storage);
+using WioApplicationStartFn = std::int32_t(*)(void* storage);
+using WioApplicationUpdateFn = std::int32_t(*)(void* storage, double deltaSeconds);
+using WioApplicationRequestExitFn = std::int32_t(*)(void* storage, std::int32_t exitCode);
+using WioApplicationCloseFn = std::int32_t(*)(void* storage);
+using WioApplicationDestroyFn = void(*)(void* storage);
+using WioApplicationBoolQueryFn = bool(*)(const void* storage);
+using WioApplicationExitCodeFn = std::int32_t(*)(const void* storage);
+using WioApplicationPumpMainFn = std::uint64_t(*)(void* storage);
+using WioApplicationLastErrorFn = const char*(*)(const void* storage);
+
+// The host allocates stateSize bytes with stateAlignment, then calls construct.
+// This keeps application state host-owned and prevents a hidden allocator from
+// crossing the module boundary. All operations are main-thread-affine and
+// contain Wio/native failures as WioApplicationStatus values.
+struct WioApplicationDescriptor
+{
+    const char* logicalName;
+    std::uint64_t stateSize;
+    std::uint64_t stateAlignment;
+    std::uint32_t flags;
+    std::uint32_t reserved;
+    WioApplicationConstructFn construct;
+    WioApplicationStartFn start;
+    WioApplicationUpdateFn update;
+    WioApplicationRequestExitFn requestExit;
+    WioApplicationCloseFn close;
+    WioApplicationDestroyFn destroy;
+    WioApplicationBoolQueryFn exitRequested;
+    WioApplicationExitCodeFn exitCode;
+    WioApplicationPumpMainFn pumpMain;
+    WioApplicationLastErrorFn lastError;
+};
+
+enum WioAsyncTaskStatus : std::int32_t
+{
+    WIO_ASYNC_TASK_PENDING = 0,
+    WIO_ASYNC_TASK_READY = 1,
+    WIO_ASYNC_TASK_CANCELLED = 2,
+    WIO_ASYNC_TASK_FAULTED = 3
+};
+
+enum WioAsyncOperationStatus : std::int32_t
+{
+    WIO_ASYNC_OK = 0,
+    WIO_ASYNC_TIMED_OUT = 1,
+    WIO_ASYNC_NOT_READY = 2,
+    WIO_ASYNC_CANCELLED = 3,
+    WIO_ASYNC_FAULTED = 4,
+    WIO_ASYNC_BAD_ARGUMENTS = 5,
+    WIO_ASYNC_TYPE_MISMATCH = 6
+};
+
+enum WioAsyncCompletionTarget : std::uint32_t
+{
+    WIO_ASYNC_COMPLETION_CURRENT_EXECUTOR = 0u,
+    WIO_ASYNC_COMPLETION_MAIN_EXECUTOR = 1u
+};
+
+using WioAsyncCompletionFn = void(*)(void* userData, WioAsyncTaskStatus status);
+
+struct WioAsyncTaskOps
+{
+    void (*retain)(void* state);
+    void (*release)(void* state);
+    WioAsyncTaskStatus (*status)(const void* state);
+    void (*cancel)(void* state);
+    std::int32_t (*waitFor)(void* state, std::uint64_t milliseconds);
+    std::int32_t (*getResult)(void* state, WioValue* outResult);
+    std::int32_t (*onComplete)(void* state, WioAsyncCompletionFn callback,
+                               void* userData, WioAsyncCompletionTarget target);
+    const char* (*lastError)(const void* state);
+};
+
+// A task handle owns one reference to state. Copying it requires ops->retain;
+// every retained handle must eventually call ops->release. Completion callback
+// registrations retain state internally until their callback has returned.
+struct WioAsyncTaskHandle
+{
+    void* state;
+    const WioAsyncTaskOps* ops;
+    WioAbiType resultType;
+};
+
+using WioModuleAsyncInvokeFn = std::int32_t(*)(const WioValue* args,
+                                                std::uint32_t argCount,
+                                                WioAsyncTaskHandle* outTask);
+
+struct WioModuleAsyncExport
+{
+    const char* logicalName;
+    WioAbiType resultType;
+    std::uint32_t parameterCount;
+    const WioAbiType* parameterTypes;
+    WioModuleAsyncInvokeFn invoke;
+};
+
+struct WioAsyncHostDescriptor
+{
+    std::uint32_t flags;
+    std::uint32_t reserved;
+    void (*bindMain)();
+    std::uint64_t (*pumpMain)();
+    std::uint64_t (*pendingMain)();
+    void (*requestShutdown)();
+};
+
 struct WioModuleApi
 {
     std::uint32_t descriptorVersion;
@@ -434,6 +678,10 @@ struct WioModuleApi
     const WioModuleType* types;
     WioModuleProductVersion productVersion;
     std::uint32_t descriptorSize;
+    const WioApplicationDescriptor* application;
+    std::uint32_t asyncExportCount;
+    const WioModuleAsyncExport* asyncExports;
+    const WioAsyncHostDescriptor* asyncHost;
 };
 
 using WioModuleGetApiFn = const WioModuleApi*(*)();
@@ -466,6 +714,19 @@ inline const WioModuleExport* WioFindModuleExport(const WioModuleApi* api, const
             return &exportEntry;
     }
 
+    return nullptr;
+}
+
+inline const WioModuleAsyncExport* WioFindModuleAsyncExport(const WioModuleApi* api, const char* logicalName)
+{
+    if (api == nullptr || logicalName == nullptr || api->asyncExports == nullptr)
+        return nullptr;
+    for (std::uint32_t index = 0u; index < api->asyncExportCount; ++index)
+    {
+        const WioModuleAsyncExport& entry = api->asyncExports[index];
+        if (entry.logicalName != nullptr && std::strcmp(entry.logicalName, logicalName) == 0)
+            return &entry;
+    }
     return nullptr;
 }
 

@@ -1,0 +1,6 @@
+application UnknownScheduledSystem {
+    schedule {
+        stage update { run missing.update; }
+    }
+    on update { self.Exit(0); }
+}

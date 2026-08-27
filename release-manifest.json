@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
   "product": "wio",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "channel": "stable",
-  "moduleAbiDescriptorVersion": 9,
+  "moduleAbiDescriptorVersion": 10,
   "components": {
-    "compiler": "0.15.0",
-    "runtime": "0.15.0",
-    "standardLibrary": "0.15.0",
-    "cli": "0.15.0",
-    "sdk": "0.15.0",
-    "vscode": "0.15.0",
-    "documentation": "0.15.0"
+    "compiler": "0.16.0",
+    "runtime": "0.16.0",
+    "standardLibrary": "0.16.0",
+    "cli": "0.16.0",
+    "sdk": "0.16.0",
+    "vscode": "0.16.0",
+    "documentation": "0.16.0"
   }
 }

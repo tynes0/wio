@@ -1,0 +1,21 @@
+use std::assert as assert;
+use std::async as futures;
+use std::console as console;
+
+async fn SlowValue() -> i32 {
+    await futures::Sleep(5000u64);
+    return 42;
+}
+
+fn Entry() {
+    let source = futures::CancellationSource();
+    source.Cancel();
+
+    let outcome = futures::TryWithCancellation<i32>(
+        SlowValue(), source.Token()).Block();
+    assert::That(outcome.IsNone(), "cancelled task must produce a recoverable None outcome");
+    assert::That(source.IsCancelled(), "cancellation source must remain observable");
+
+    futures::ShutdownRuntime();
+    console::WriteLine("async-cancellation-outcome-ok");
+}
