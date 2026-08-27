@@ -4,6 +4,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 
 #include "wio_sdk.h"
 
@@ -48,6 +49,18 @@ int main(int argc, char** argv)
             throw std::runtime_error("deadline wait did not report its timeout");
         if (!valueTask.wait_for(2s) || valueTask.get() != 42 || retainedTask.get() != 42)
             throw std::runtime_error("typed async result contract failed");
+
+        // Task readiness is published before completion callbacks are dispatched.
+        // Give both callback registrations a bounded opportunity to publish while
+        // continuously proving that main-executor delivery remains pump-driven.
+        const auto callbackDeadline = std::chrono::steady_clock::now() + 2s;
+        while ((!workerCompletion.load() || module.pending_async_main() == 0u) &&
+               std::chrono::steady_clock::now() < callbackDeadline)
+        {
+            if (mainCompletion.load())
+                throw std::runtime_error("main completion callback ran without an explicit pump");
+            std::this_thread::yield();
+        }
         if (!workerCompletion.load())
             throw std::runtime_error("current-executor completion callback was not delivered");
         if (mainCompletion.load() || module.pending_async_main() == 0u)
