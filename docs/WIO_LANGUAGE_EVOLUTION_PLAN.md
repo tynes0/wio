@@ -88,94 +88,101 @@ An executable defines either an ordinary `Entry` function or one root
 
 ### 2.2 Simple application
 
-Proposed surface:
+Accepted v0.17 surface:
 
 ```wio
 application Editor {
-    on start {
-        Console::WriteLine("Editor started");
+    documents: DocumentStore;
+    renderer: RendererSystem;
+
+    fn Start() {
+        console::PrintLine("Editor started");
     }
 
-    on update(frame: view FrameContext) {
-        if frame.Index() >= 100 {
+    fn Update(delta: f64) {
+        self.documents.Poll(delta);
+        if self.documents.ShouldClose() {
             self.Exit(0);
         }
     }
 
-    on close(reason: view CloseReason) {
-        Console::WriteLine($"Editor closed: {reason}");
+    fn Close() {
+        console::PrintLine("Editor closed");
     }
 }
 ```
 
-When no explicit schedule exists, the compiler/runtime supplies the default
-start-update-close loop. Inline handlers are lowered to ordinary checked Wio
-functions; they do not form a separate expression language.
+Application members are ordinary fields and functions. `Start`, `Update`, and
+`Close` are conventional lifecycle names. `Update` accepts zero parameters or
+one `f64` delta in seconds; the zero-parameter form is normalized to the same
+internal signature. `Start` and `Close` are parameterless. Lifecycle functions
+are synchronous, non-generic, and return unit. Other application functions
+retain ordinary Wio generic, async, parameter, and return rules.
 
-A handler may instead bind an existing function:
+Descriptive names bind to lifecycle roles with attributes:
 
 ```wio
 application Editor {
-    on start: StartEditor;
-    on update: UpdateEditor;
+    [Start]
+    fn LoadWorkspace() { }
 
-    on close(reason: view CloseReason) {
-        SaveSettings();
-    }
+    [Update]
+    fn Frame(delta: f64) { }
+
+    [Close]
+    fn SaveWorkspace() { }
 }
 ```
 
-Both forms must share signature checking, error rules, reflection, generated
-documentation, and debugging behavior.
+Conventional names and attributes normalize to the same generated extension
+methods and host ABI. Exactly one update lifecycle is required. Duplicate or
+conflicting lifecycle roles are compile-time errors.
 
 ### 2.3 State and resources
 
-Application-local fields remain ordinary state. A `resource` is application-
-owned state that may be injected into scheduled handlers:
+Application state has one declaration form:
 
 ```wio
 application Editor {
-    resource settings: Settings;
-    resource documents: DocumentStore;
-
-    mut frame_count: u64;
+    settings: Settings;
+    documents: DocumentStore;
+    frameCount: u64;
 }
 ```
 
-Resources are not hidden globals. The application runner owns them, and test
-harnesses can substitute or inspect them.
+Fields default to mutable and default initialization when no qualifier or
+initializer is written. `mut`, `let`, and `const` remain available when the
+distinction matters. The application value owns every field; resources are not
+hidden globals. The legacy `resource name: Type;` spelling remains accepted
+for explicit v0.16 schedule injection during migration.
 
 ### 2.4 Systems
 
-A `system` is proposed as a schedule-aware specialization of Wio's component
+A `system` is a stack-resident, schedule-aware specialization of the component
 model, not a heap object hierarchy:
 
 ```wio
 system AutosaveSystem {
-    mut elapsed: f64;
+    elapsed: f64;
 
-    on start {
+    fn Start() {
         self.elapsed = 0.0;
     }
 
-    on update(
-        frame: view FrameContext,
-        documents: ref DocumentStore
-    ) {
-        self.elapsed += frame.DeltaSeconds();
+    fn Update(delta: f64) {
+        self.elapsed += delta;
         if self.elapsed >= 30.0 {
-            documents.SaveSnapshot();
             self.elapsed = 0.0;
         }
     }
 
-    on close {
-        Console::WriteLine("Autosave stopped");
-    }
+    fn ShouldSave() -> bool { return self.elapsed == 0.0; }
 }
 ```
 
-The intended lowering is:
+Systems use the same conventional lifecycle names and `[Start]`, `[Update]`,
+and `[Close]` aliases as applications. Other functions are ordinary extension
+methods on the stack value. Their lowering has:
 
 - stack-resident component-like state;
 - ordinary handler functions;
@@ -188,58 +195,61 @@ Applications explicitly own system instances:
 
 ```wio
 application Editor {
-    resource documents: DocumentStore;
-
-    system autosave: AutosaveSystem;
-    system renderer: RendererSystem;
+    documents: DocumentStore;
+    autosave: AutosaveSystem;
+    renderer: RendererSystem;
 }
 ```
+
+A field whose type is a system declared in the source module is recognized as
+an owned system without a member `system` keyword. Systems start in field
+order, update in deterministic schedule order, and close in reverse successful
+start order. The legacy `system field: Type;` spelling remains source-compatible.
+Imported-system identity must become semantic/module metadata rather than a
+parser heuristic before v1; that qualification remains open.
 
 ### 2.5 Scheduling
 
-Large applications may replace the default loop with a deterministic schedule:
+Scheduling is declaration metadata on ordinary application functions:
 
 ```wio
-schedule {
-    stage input on main {
-        run input_system.poll;
+application Editor {
+    input: InputSystem;
+    simulation: SimulationSystem;
+
+    [Fixed(60)]
+    [After(input)]
+    fn Physics(step: f64) {
+        self.simulation.Step(step);
     }
 
-    fixed stage simulation at 60hz after input {
-        run physics.fixed;
-        run gameplay.fixed;
-    }
-
-    stage update after simulation {
-        run documents.update;
-        run self.update;
-    }
-
-    stage render after update on main {
-        run renderer.render;
+    [After(Physics)]
+    [Main]
+    fn Render(delta: f64) {
+        DrawEditor(delta);
     }
 }
 ```
 
-Explicit handler selection such as `run physics.fixed` is preferred over
-choosing a handler implicitly from the stage name. Schedule dependencies form
-a directed acyclic graph; cycles are compile-time errors. Within an ordinary
-stage, declaration order is deterministic unless an explicit parallel group
-is used.
+Each scheduled function becomes a stage named after the function. Owned system
+fields become variable-step stages named after their fields. `[After(Name)]`
+adds a directed dependency edge; unknown names, duplicate stage names, and
+cycles are compile-time errors. Equal-ready stages keep source order.
 
-Small scheduled actions may use an inline body:
+- `[Fixed(hz)]` declares a positive fixed frequency and passes `1 / hz` to a
+  one-parameter stage. Its accumulator may execute zero or more steps per host
+  frame.
+- `[After(stage)]` orders a stage after another function or owned system field.
+- `[Main]` makes main-thread affinity explicit. The v0.17 sequential runner is
+  already main-thread-affine, so this is a checked forward-compatible marker.
+- `[Worker]` is reserved and rejected until `view`/`ref` conflict analysis can
+  prove that captured application state is safe to transfer.
 
-```wio
-stage update {
-    run documents.update;
-
-    run(frame: view FrameContext) {
-        if self.documents.ShouldAutosave() {
-            self.documents.Save();
-        }
-    }
-}
-```
+When any scheduling attribute is present, ordinary owned systems are inserted
+before application stages unless dependencies state otherwise, and the
+application update lifecycle remains a final variable-step stage. A scheduled
+custom `[Update]` function occupies its declared stage instead of being run a
+second time.
 
 ### 2.6 Resource access and parallel work
 
@@ -255,7 +265,8 @@ on fixed(
 }
 ```
 
-The sequential v0.16 surface makes injection explicit at each scheduled run:
+The v0.16 compatibility surface keeps resource injection explicit at each
+legacy scheduled run:
 
 ```wio
 schedule {
@@ -280,8 +291,8 @@ groups; no hidden name- or type-based dependency injection is performed.
 - two readers may run together;
 - a writer conflicts with every reader or writer of the same resource.
 
-The initial scheduler should remain sequential. Parallel execution is an
-explicit later opt-in and must be validated from these access declarations:
+The v0.17 scheduler remains sequential. Parallel execution is an explicit
+later opt-in and must be validated from these access declarations:
 
 ```wio
 stage background after update {
@@ -298,7 +309,8 @@ stable and measurable.
 
 ### 2.7 Exit and shutdown
 
-Inside an application handler, `self.Exit(code)` requests orderly shutdown.
+Inside an application lifecycle or helper function, `self.Exit(code)` requests
+orderly shutdown.
 Systems receive an explicit `ApplicationControl` resource instead of relying
 on ambient global state:
 
@@ -316,7 +328,7 @@ The proposed shutdown contract is:
 2. allow the currently executing handler/safe stage boundary to complete;
 3. begin no new frame;
 4. close successfully started systems in reverse startup order;
-5. invoke application `on close` exactly once;
+5. invoke application `Close` exactly once;
 6. destroy resources in reverse construction order;
 7. return the exit code to the host.
 
@@ -327,11 +339,16 @@ follows the same orderly shutdown path with a failure reason.
 
 ### 2.8 Runtime boundary
 
-Proposed core/contextual syntax:
+The canonical core syntax is deliberately small: `application`, `system`,
+ordinary fields/functions, and ordinary bracket attributes. Lifecycle and
+scheduling features grow through typed attributes instead of new statement
+keywords.
 
-- `application`, `system`, `resource`;
-- `on`, `schedule`, `stage`, `run`, `after`;
-- `fixed`, `parallel`, and `on main` scheduling clauses.
+The v0.16 `on`, member `resource`/`system`, and `schedule`/`stage`/`run`
+spellings remain accepted for migration and explicit resource injection. New
+examples and generated code use the canonical v0.17 surface. Removal requires
+a separately announced compatibility boundary and an automated migration for
+the safely rewritable cases.
 
 Proposed std/runtime facilities:
 
@@ -348,14 +365,14 @@ schedule grammar because it defines a static dependency edge.
 
 ### 2.9 Delivery slices
 
-1. Sequential application runner, inline/bound lifecycle handlers, exit, and
-   reverse shutdown.
-2. Stack-resident systems, resources, explicit schedule, fixed stages,
-   main-thread affinity, and headless tests.
-3. Resource access graph, diagnostics, typed host/event integration, and
-   deterministic scheduler inspection.
-4. Thread pool, explicit parallel groups, cancellation, native callback/thread
-   containment, and performance validation.
+1. **Shipped through v0.16:** sequential runner, stack systems, legacy explicit
+   resources/schedules, fixed stages, host control, rollback, and headless tests.
+2. **Implemented for v0.17:** ordinary member surface, lifecycle attributes,
+   attribute-driven fixed/dependency/main stages, and legacy compatibility.
+3. **Pre-v1 hardening:** imported-system metadata, richer typed frame/start/
+   close contexts, scheduler inspection/reflection, and migration tooling.
+4. **After conflict analysis:** `[Worker]`, explicit parallel groups,
+   cancellation, native callback/thread containment, and performance proof.
 
 ---
 

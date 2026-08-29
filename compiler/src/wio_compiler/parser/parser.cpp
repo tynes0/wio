@@ -109,12 +109,28 @@ namespace wio
     {
         // Application fields may use systems declared later in the same source
         // file. Collect their names before lowering either declaration.
-        for (size_t index = 0; index + 1 < tokens_.size(); ++index)
+        for (size_t index = 0; index + 2 < tokens_.size(); ++index)
         {
             if (tokens_[index].type == TokenType::kwSystem &&
                 tokens_[index + 1].type == TokenType::identifier)
             {
-                declaredSystemTypeNames_.insert(tokens_[index + 1].value);
+                bool isDeclaration = false;
+                for (size_t lookahead = index + 2; lookahead < tokens_.size(); ++lookahead)
+                {
+                    if (tokens_[lookahead].type == TokenType::leftBrace)
+                    {
+                        isDeclaration = true;
+                        break;
+                    }
+                    if (tokens_[lookahead].type == TokenType::opColon ||
+                        tokens_[lookahead].type == TokenType::semicolon ||
+                        tokens_[lookahead].type == TokenType::rightBrace)
+                    {
+                        break;
+                    }
+                }
+                if (isDeclaration)
+                    declaredSystemTypeNames_.insert(tokens_[index + 1].value);
             }
         }
 
@@ -2446,7 +2462,12 @@ namespace wio
             const std::string fieldName = name->token.value;
             consume(TokenType::opColon);
             auto type = parseType();
-            const bool inferredSystem = declaredSystemTypeNames_.contains(type->name.value);
+            const size_t typeSeparator = type->name.value.rfind("::");
+            const std::string typeTail = typeSeparator == std::string::npos
+                ? type->name.value
+                : type->name.value.substr(typeSeparator + 2u);
+            const bool inferredSystem = declaredSystemTypeNames_.contains(type->name.value) ||
+                declaredSystemTypeNames_.contains(typeTail);
             if (systemOwned || inferredSystem) ownedSystems.push_back(fieldName);
             else applicationResources.insert(fieldName);
             if (resourceOwned) applicationResources.insert(fieldName);

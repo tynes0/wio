@@ -105,6 +105,8 @@ Use these when the question is about:
 
 - [Standard library](./WIO_STD.md)
 - [Host SDK](./WIO_SDK.md)
+- [Wio 0.17 language delta](./spec/WIO_LANGUAGE_SPEC_0_17.md)
+- [Wio 0.17 application model and migration](./WIO_0_17_APPLICATION_MODEL.md)
 - [Wio 0.16 language delta](./spec/WIO_LANGUAGE_SPEC_0_16.md)
 - [SDK 0.14 parity matrix](./WIO_SDK_0_14_PARITY_MATRIX.md)
 - [SDK evolution and v1 parity plan](./WIO_SDK_EVOLUTION_PLAN.md)

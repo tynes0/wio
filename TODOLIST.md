@@ -97,6 +97,14 @@ here does not by itself mean that v1 cannot ship.
     headless execution, deterministic partial-start rollback, and fixed-step
     acceptance. Add richer typed frame/start/close contexts and parallel
     execution only after `view`/`ref` conflict analysis is stable.
+    The v0.17 candidate replaces the canonical member DSL with ordinary fields
+    and functions: conventional or `[Start]`/`[Update]`/`[Close]` lifecycle
+    binding, `[Fixed]`/`[After]`/`[Main]` stages, inferred source-module system
+    fields, and normal helper methods now lower to the existing stable runner.
+    Legacy `on`/`resource`/member-`system`/explicit-schedule syntax remains
+    compatible. Finish imported-system identity through semantic/module
+    metadata, typed resource access without legacy run clauses, scheduler
+    inspection/reflection, and conflict-proven `[Worker]` execution.
 
 15. [~] Complete the first-class Unicode-semantic `text` model.
     `text`, validated UTF-8 `u"..."` and `u$"..."` literals, code-point count
