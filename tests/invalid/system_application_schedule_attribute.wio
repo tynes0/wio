@@ -1,0 +1,12 @@
+system InvalidScheduledSystem {
+    [Main]
+    fn Update(delta: f64) {}
+}
+
+application InvalidApplication {
+    value: InvalidScheduledSystem;
+
+    fn Update(delta: f64) {
+        self.Exit(0);
+    }
+}

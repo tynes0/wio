@@ -4269,6 +4269,18 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(wio_invalid_system_update_owned_resource_parameter
         "${CMAKE_SOURCE_DIR}/tests/invalid/system_update_owned_resource_parameter.wio"
         "System update resource parameters must use ref or view")
+    add_wio_failure_test(wio_invalid_application_attribute_worker_rejected
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_attribute_worker_rejected.wio"
+        "Worker.*reserved until ref/view conflict analysis")
+    add_wio_failure_test(wio_invalid_application_attribute_unknown_dependency
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_attribute_unknown_dependency.wio"
+        "depends on unknown stage 'MissingStage'")
+    add_wio_failure_test(wio_invalid_application_attribute_fixed_frequency
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_attribute_fixed_frequency.wio"
+        "Fixed.*frequency must be greater than zero")
+    add_wio_failure_test(wio_invalid_system_application_schedule_attribute
+        "${CMAKE_SOURCE_DIR}/tests/invalid/system_application_schedule_attribute.wio"
+        "schedule application functions, not system functions")
 
     add_wio_failure_test(wio_invalid_application_with_entry
         "${CMAKE_SOURCE_DIR}/tests/invalid/application_with_entry.wio"
