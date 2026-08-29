@@ -82,3 +82,16 @@ Legacy explicit schedule syntax remains the only 0.17 surface for passing
 application resources as `ref`/`view` arguments to system updates. A later
 semantic scheduler will replace that compatibility gap with typed access
 metadata before legacy removal is considered.
+
+## 6. Host ABI v11
+
+Descriptor version 11 appends a normalized, immutable application stage table
+to the application descriptor and adds the
+`WIO_MODULE_CAP_APPLICATION_SCHEDULE_V1` capability. Each entry exposes the
+stage name, optional dependency, fixed frequency, deterministic execution
+order, and fixed/main/system/application/legacy flags. C++ hosts access the
+table through `ApplicationHost::stages()`.
+
+The stage table is inspection metadata. It does not transfer scheduler
+ownership to the host and does not weaken the main-thread, lifetime, stale
+generation, or module-lease requirements established by descriptor v10.

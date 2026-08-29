@@ -835,3 +835,6 @@ here as historical evidence rather than active work:
       cross-thread `ref`/`view` conflict analysis is available.
 - [x] Legacy v0.16 application syntax remains accepted and has a documented
       migration map instead of a flag-day removal.
+- [x] SDK ABI v11 and `ApplicationHost::stages()` expose the normalized stage
+      graph, dependencies, fixed frequencies, order, affinity, and stage kind
+      flags to native hosts.

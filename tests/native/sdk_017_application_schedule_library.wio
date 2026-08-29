@@ -1,0 +1,19 @@
+system InputSystem {
+    fn Update(delta: f64) {}
+}
+
+application InspectedApplication {
+    input: InputSystem;
+
+    [Fixed(20)]
+    [After(input)]
+    fn Physics(step: f64) {}
+
+    [After(Physics)]
+    [Main]
+    fn Render(delta: f64) {}
+
+    fn Update(delta: f64) {
+        self.Exit(0);
+    }
+}

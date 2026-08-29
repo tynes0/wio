@@ -31,7 +31,7 @@ static_assert(WIO_SDK_VERSION_MAJOR == 0);
 static_assert(WIO_SDK_VERSION_MINOR == 15);
 static_assert(wio::sdk::product_version.patch == 0);
 
-std::cout << wio::sdk::product_version_string; // 0.16.0
+std::cout << wio::sdk::product_version_string; // 0.17.0
 ```
 
 `WIO_MODULE_API_DESCRIPTOR_VERSION` remains an independent low-level ABI
@@ -1110,7 +1110,36 @@ exactly-once. A resource whose destruction is thread-affine must perform that
 dispatch inside its release function; the generic wrapper does not silently
 guess an executor.
 
-## 14. See Also
+---
+
+## 14. v0.17 Application Schedule Inspection
+
+ABI descriptor v11 appends a read-only stage table to
+`WioApplicationDescriptor` and advertises
+`WIO_MODULE_CAP_APPLICATION_SCHEDULE_V1`. The table reflects the normalized
+schedule that actually drives the application, including stages created from
+ordinary system fields and attribute-driven application functions.
+
+```cpp
+auto application = module.application();
+for (const WioApplicationStageDescriptor& stage : application.stages())
+{
+    std::cout << stage.order << ": " << stage.logicalName;
+    if (stage.afterStage[0] != '\0')
+        std::cout << " after " << stage.afterStage;
+    if ((stage.flags & WIO_APPLICATION_STAGE_FIXED) != 0u)
+        std::cout << " at " << stage.fixedHz << " hz";
+    std::cout << '\n';
+}
+```
+
+Stage metadata is immutable and remains valid for the lifetime of the
+`ApplicationHost`, whose library lease owns the descriptor storage. Flags
+distinguish fixed, explicitly main-thread-affine, system-containing,
+application-containing, and legacy explicit stages. Hosts inspect this table;
+they do not mutate or independently execute it.
+
+## 15. See Also
 
 - [`WIO_PROJECT_SYSTEM.md`](./WIO_PROJECT_SYSTEM.md)
 - [`WIO_SDK_0_14_PARITY_MATRIX.md`](./WIO_SDK_0_14_PARITY_MATRIX.md)

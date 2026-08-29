@@ -15,6 +15,7 @@
 #include <new>
 #include <optional>
 #include <sstream>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -7190,6 +7191,13 @@ namespace wio::sdk
 
         [[nodiscard]] bool started() const noexcept { return started_; }
         [[nodiscard]] bool closed() const noexcept { return closed_; }
+
+        [[nodiscard]] std::span<const WioApplicationStageDescriptor> stages() const noexcept
+        {
+            if (descriptor_ == nullptr || descriptor_->stages == nullptr)
+                return {};
+            return { descriptor_->stages, descriptor_->stageCount };
+        }
 
         void start()
         {

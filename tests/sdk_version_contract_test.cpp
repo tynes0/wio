@@ -25,7 +25,7 @@ int main()
         return 1;
     }
 
-    if (WIO_MODULE_API_DESCRIPTOR_VERSION != 10u)
+    if (WIO_MODULE_API_DESCRIPTOR_VERSION != 11u)
     {
         std::cerr << "Unexpected module ABI descriptor version.\n";
         return 2;

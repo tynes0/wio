@@ -4265,6 +4265,8 @@ namespace wio::codegen
         }
         if (hasRetainedAttributeMetadata) capabilities |= (1u << 9); // retained attribute metadata v1
         if (applicationEntry) capabilities |= (1u << 10); // host-driven application ABI v1
+        if (applicationEntry && !applicationEntry->applicationStages.empty())
+            capabilities |= (1u << 12); // application schedule inspection v1
         auto asyncResultType = [](const ExportedFunctionInfo& exportInfo) -> Ref<sema::Type>
         {
             if (!exportInfo.declaration || !exportInfo.declaration->isAsync || !exportInfo.functionType)
@@ -5771,6 +5773,40 @@ namespace wio::codegen
             const std::string closeFunction = lifecyclePrefix + "Close" + receiverSuffix;
             const std::string exitFunction = lifecyclePrefix + "Exit" + receiverSuffix + "_i32";
 
+            std::string applicationStagesExpression = "nullptr";
+            if (!applicationEntry->applicationStages.empty())
+            {
+                emitLine("static const WioApplicationStageDescriptor WIO_APPLICATION_STAGES[] =");
+                emitLine("{");
+                indent();
+                for (size_t stageIndex = 0; stageIndex < applicationEntry->applicationStages.size(); ++stageIndex)
+                {
+                    const auto& stage = applicationEntry->applicationStages[stageIndex];
+                    std::vector<std::string> flagExpressions;
+                    if (stage.fixed) flagExpressions.emplace_back("WIO_APPLICATION_STAGE_FIXED");
+                    if (stage.mainThread) flagExpressions.emplace_back("WIO_APPLICATION_STAGE_MAIN_THREAD");
+                    if (stage.containsSystem) flagExpressions.emplace_back("WIO_APPLICATION_STAGE_CONTAINS_SYSTEM");
+                    if (stage.containsApplication) flagExpressions.emplace_back("WIO_APPLICATION_STAGE_CONTAINS_APPLICATION");
+                    if (stage.legacyExplicit) flagExpressions.emplace_back("WIO_APPLICATION_STAGE_LEGACY_EXPLICIT");
+                    std::string flags = "0u";
+                    if (!flagExpressions.empty())
+                    {
+                        flags = flagExpressions.front();
+                        for (size_t flagIndex = 1; flagIndex < flagExpressions.size(); ++flagIndex)
+                            flags += " | " + flagExpressions[flagIndex];
+                    }
+                    const std::string suffix = stageIndex + 1u == applicationEntry->applicationStages.size() ? "" : ",";
+                    emitLine(
+                        "{ \"" + common::wioStringToEscapedCppString(stage.name) + "\", \"" +
+                        common::wioStringToEscapedCppString(stage.after) + "\", " +
+                        std::to_string(stage.fixedHz) + ", " + std::to_string(stage.order) + "u, " + flags + " }" + suffix);
+                }
+                dedent();
+                emitLine("};");
+                emitLine();
+                applicationStagesExpression = "WIO_APPLICATION_STAGES";
+            }
+
             emitLine("struct WioGeneratedApplicationState final");
             emitLine("{");
             indent();
@@ -6017,7 +6053,10 @@ namespace wio::codegen
             emitLine("&WioApplicationExitRequested,");
             emitLine("&WioApplicationExitCode,");
             emitLine("&WioApplicationPumpMain,");
-            emitLine("&WioApplicationLastError");
+            emitLine("&WioApplicationLastError,");
+            emitLine(std::to_string(applicationEntry->applicationStages.size()) + "u,");
+            emitLine("0u,");
+            emitLine(applicationStagesExpression);
             dedent();
             emitLine("};");
             applicationDescriptorExpression = "&WIO_MODULE_APPLICATION";

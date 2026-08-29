@@ -2964,6 +2964,44 @@ namespace wio
             makeNodePtr<BlockStatement>(std::move(entryStatements), startToken.loc), startToken.loc);
         entry->isApplicationEntry = true;
         entry->applicationName = applicationNameToken.value;
+        auto appendStageMetadata = [&](const ParsedApplicationStage& stage, const std::uint32_t order)
+        {
+            ApplicationStageMetadata metadata;
+            metadata.name = stage.name;
+            metadata.after = stage.after.value_or("");
+            metadata.fixedHz = stage.fixed ? stage.hz : 0.0;
+            metadata.order = order;
+            metadata.fixed = stage.fixed;
+            metadata.mainThread = stage.mainThread;
+            metadata.legacyExplicit = !canonicalSchedule && hasExplicitSchedule;
+            for (const auto& run : stage.runs)
+            {
+                metadata.containsApplication = metadata.containsApplication || run.target == "self";
+                metadata.containsSystem = metadata.containsSystem || run.target != "self";
+            }
+            entry->applicationStages.push_back(std::move(metadata));
+        };
+        if (hasExplicitSchedule)
+        {
+            for (std::uint32_t order = 0; order < orderedStageIndices.size(); ++order)
+                appendStageMetadata(scheduleStages[orderedStageIndices[order]], order);
+        }
+        else
+        {
+            for (std::uint32_t order = 0; order < ownedSystems.size(); ++order)
+            {
+                ApplicationStageMetadata metadata;
+                metadata.name = ownedSystems[order];
+                metadata.order = order;
+                metadata.containsSystem = true;
+                entry->applicationStages.push_back(std::move(metadata));
+            }
+            ApplicationStageMetadata updateMetadata;
+            updateMetadata.name = "Update";
+            updateMetadata.order = static_cast<std::uint32_t>(entry->applicationStages.size());
+            updateMetadata.containsApplication = true;
+            entry->applicationStages.push_back(std::move(updateMetadata));
+        }
 
         std::vector<NodePtr<Statement>> declarations;
         declarations.push_back(std::move(component));

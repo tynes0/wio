@@ -1008,7 +1008,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
             ${CMAKE_COMMAND}
             -DWIO_EXE=$<TARGET_FILE:wio_app>
             -DEXAMPLE_ROOT=${CMAKE_SOURCE_DIR}/examples/telemetry_pipeline
-            -DWIO_EXPECT=Telemetry\ pipeline:\ Wio\ 0.16.0
+            -DWIO_EXPECT=Telemetry\ pipeline:\ Wio\ 0.17.0
             -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExampleProject.cmake"
     )
     set_tests_properties(
@@ -2125,14 +2125,14 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_sdk_014_const_generic_metadata_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_const_generic_metadata_library.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_const_generic_metadata_host.cpp"
-        "SDK 0.14 const metadata: abi=10 block=4 label=sdk empty=ok"
+        "SDK 0.14 const metadata: abi=11 block=4 label=sdk empty=ok"
     )
 
     add_wio_shared_host_interop_test(
         wio_test_sdk_015_attribute_metadata_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_015_attribute_metadata_library.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_015_attribute_metadata_host.cpp"
-        "SDK 0.15 attributes: abi=10 type=Label field=Important method=Audited phase=pre"
+        "SDK 0.15 attributes: abi=11 type=Label field=Important method=Audited phase=pre"
     )
 
     add_wio_shared_host_interop_test(
@@ -2154,6 +2154,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_016_fixed_application_library.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_016_fixed_application_host.cpp"
         "sdk-fixed-application-ok frames=6 ticks=3 exit=23"
+    )
+
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_017_application_schedule_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_017_application_schedule_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_017_application_schedule_host.cpp"
+        "sdk-application-schedule-ok stages=4 fixed=20 main=Render"
     )
 
     add_wio_shared_host_interop_test(
