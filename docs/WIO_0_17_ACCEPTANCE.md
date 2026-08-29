@@ -9,6 +9,7 @@ workflow; ABI rows additionally exercise an independently compiled C++ host.
 |---|---|---|
 | Canonical application | ordinary default-initialized fields, conventional and attributed lifecycle functions, fixed and ordered stages | `wio_test_application_attribute_model_run` |
 | Mixed-source migration | v0.16 `on` handlers and v0.17 functions share one lifecycle and deterministic close order | `wio_test_application_mixed_model_run` |
+| Source migration | lifecycle/resource/system rewrites preserve comments, strings, and top-level system declarations | `wio_test_cli_migrate_application_rewrite_run` |
 | Project scheduling policy | a user attribute composes `Update`, `Fixed`, and `Main`, including argument substitution | `wio_test_application_composed_attribute_run` |
 | Host inspection | ABI v11 stage descriptors agree with normalized Wio schedule order and flags | `wio_test_sdk_017_application_schedule_interop` |
 | Lifecycle diagnostics | conflicting roles, invalid parameters, non-unit results, and invalid system delta types fail at compile time | `wio_invalid_application_attribute_multiple_lifecycle`, `wio_invalid_application_attribute_start_parameter`, `wio_invalid_application_attribute_update_return`, `wio_invalid_system_attribute_update_type` |
