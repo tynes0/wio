@@ -458,17 +458,25 @@ full profiler.
 
 ## 10. `wio migrate`
 
-Wio 0.15 ships a source-aware legacy attribute migration:
+Wio ships source-aware attribute and application migrations:
 
 ```powershell
 wio migrate attributes . --check
 wio migrate attributes . --write
+wio migrate applications . --check
+wio migrate applications . --write
 ```
 
 `--check` lists `.wio` files that need migration and exits with `1` when it
 finds any. `--write` replaces legacy `@Name`/`@Name(...)` applications with
 bracket syntax. Strings, line comments, block comments, and `.wio-build`
 directories are preserved. A file path may be supplied instead of a directory.
+
+The `applications` migration performs only semantics-preserving rewrites:
+`on start/update/close` becomes `fn Start/Update/Close`, and application
+`resource`/member `system` declarations become ordinary fields. It deliberately
+leaves explicit schedules unchanged because resource injection and written run
+order cannot always be expressed by the v0.17 attribute scheduler yet.
 
 ---
 

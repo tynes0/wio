@@ -9,7 +9,7 @@
 
 #include "wio_version.h"
 
-inline constexpr std::uint32_t WIO_MODULE_API_DESCRIPTOR_VERSION = 10u;
+inline constexpr std::uint32_t WIO_MODULE_API_DESCRIPTOR_VERSION = 11u;
 
 enum WioModuleCapability : std::uint32_t
 {
@@ -24,7 +24,8 @@ enum WioModuleCapability : std::uint32_t
     WIO_MODULE_CAP_TEXT_FIELDS = 1u << 8,
     WIO_MODULE_CAP_ATTRIBUTE_METADATA_V1 = 1u << 9,
     WIO_MODULE_CAP_APPLICATION_HOST_V1 = 1u << 10,
-    WIO_MODULE_CAP_ASYNC_TASK_HOST_V1 = 1u << 11
+    WIO_MODULE_CAP_ASYNC_TASK_HOST_V1 = 1u << 11,
+    WIO_MODULE_CAP_APPLICATION_SCHEDULE_V1 = 1u << 12
 };
 
 struct WioModuleProductVersion
@@ -549,6 +550,24 @@ enum WioApplicationFlag : std::uint32_t
     WIO_APPLICATION_NON_BLOCKING_UPDATE = 1u << 2
 };
 
+enum WioApplicationStageFlag : std::uint32_t
+{
+    WIO_APPLICATION_STAGE_FIXED = 1u << 0,
+    WIO_APPLICATION_STAGE_MAIN_THREAD = 1u << 1,
+    WIO_APPLICATION_STAGE_CONTAINS_SYSTEM = 1u << 2,
+    WIO_APPLICATION_STAGE_CONTAINS_APPLICATION = 1u << 3,
+    WIO_APPLICATION_STAGE_LEGACY_EXPLICIT = 1u << 4
+};
+
+struct WioApplicationStageDescriptor
+{
+    const char* logicalName;
+    const char* afterStage;
+    double fixedHz;
+    std::uint32_t order;
+    std::uint32_t flags;
+};
+
 using WioApplicationConstructFn = std::int32_t(*)(void* storage);
 using WioApplicationStartFn = std::int32_t(*)(void* storage);
 using WioApplicationUpdateFn = std::int32_t(*)(void* storage, double deltaSeconds);
@@ -581,6 +600,9 @@ struct WioApplicationDescriptor
     WioApplicationExitCodeFn exitCode;
     WioApplicationPumpMainFn pumpMain;
     WioApplicationLastErrorFn lastError;
+    std::uint32_t stageCount;
+    std::uint32_t scheduleReserved;
+    const WioApplicationStageDescriptor* stages;
 };
 
 enum WioAsyncTaskStatus : std::int32_t

@@ -32,7 +32,7 @@ realm SelfHostedGlobal {
             "  wio env doctor       [--wio-root DIR] [--backend-smoke]\n",
             "  wio package          [--build-dir DIR] [--config CFG] [--output-dir DIR] [--version-suffix TAG] [--generator NAME] [--no-zip] [--clean]\n",
             "  wio perf smoke       [--iterations N] [--scratch-dir DIR] [--keep-scratch]\n",
-            "  wio migrate attributes [PATH] --check|--write\n",
+            "  wio migrate attributes|applications [PATH] --check|--write\n",
             "\n",
             "Alias forms:\n",
             "\n",

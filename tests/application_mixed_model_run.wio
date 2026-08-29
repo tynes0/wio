@@ -1,0 +1,40 @@
+use std::assert as assert;
+use std::console as console;
+
+mut mixedTrace: string;
+
+system PulseSystem {
+    ticks: i32;
+
+    [Start]
+    fn Begin() {
+        mixedTrace += "system.start>";
+    }
+
+    fn Update(delta: f64) {
+        if (delta >= 0.0) { self.ticks += 1; }
+    }
+
+    on close {
+        mixedTrace += "system.close>";
+    }
+}
+
+application MixedApplication {
+    pulse: PulseSystem;
+
+    on start {
+        mixedTrace = "app.start>";
+    }
+
+    fn Update(delta: f64) {
+        assert::ExpectEqual(self.pulse.ticks, 1, "an ordinary system field updates before the application");
+        self.Exit(0);
+    }
+
+    [Close]
+    fn Finish() {
+        assert::ExpectEqual(mixedTrace, "app.start>system.start>system.close>", "legacy and attributed lifecycle forms share one order");
+        console::PrintLine("application-mixed-model-ok");
+    }
+}

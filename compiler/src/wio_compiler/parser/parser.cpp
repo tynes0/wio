@@ -74,7 +74,34 @@ namespace wio
             if (name == "module::unload") return Attribute::ModuleUnload;
             if (name == "module::save_state") return Attribute::ModuleSaveState;
             if (name == "module::restore_state") return Attribute::ModuleRestoreState;
+            if (name == "application::start") return Attribute::ApplicationStart;
+            if (name == "application::update") return Attribute::ApplicationUpdate;
+            if (name == "application::close") return Attribute::ApplicationClose;
+            if (name == "application::fixed") return Attribute::Fixed;
+            if (name == "application::after") return Attribute::After;
+            if (name == "application::main") return Attribute::Main;
+            if (name == "application::worker") return Attribute::Worker;
             return std::nullopt;
+        }
+
+        const AttributeStatement* findBuiltinAttribute(
+            const std::vector<NodePtr<AttributeStatement>>& attributes,
+            const Attribute attribute)
+        {
+            const auto found = std::ranges::find_if(
+                attributes,
+                [attribute](const NodePtr<AttributeStatement>& candidate)
+                {
+                    return candidate && matchesBuiltinAttribute(*candidate, attribute);
+                });
+            return found == attributes.end() ? nullptr : found->Get();
+        }
+
+        bool hasBuiltinAttribute(
+            const std::vector<NodePtr<AttributeStatement>>& attributes,
+            const Attribute attribute)
+        {
+            return findBuiltinAttribute(attributes, attribute) != nullptr;
         }
     }
     
@@ -2021,7 +2048,80 @@ namespace wio
         declaration->cardinalityMin = cardinalityMin;
         declaration->cardinalityMax = cardinalityMax;
         declaration->hasExplicitCardinality = hasExplicitCardinality;
+        ParserAttributeComposition parserComposition;
+        parserComposition.parameterNames.reserve(declaration->parameters.size());
+        for (const auto& parameter : declaration->parameters)
+            parserComposition.parameterNames.push_back(parameter.name->token.value);
+        parserComposition.attributes = declaration->composedAttributes;
+        declaredAttributeCompositions_.insert_or_assign(
+            declaration->name->token.value, std::move(parserComposition));
         return declaration;
+    }
+
+    std::vector<NodePtr<AttributeStatement>> Parser::expandAttributeCompositionsForLowering(
+        const std::vector<NodePtr<AttributeStatement>>& attributes) const
+    {
+        std::vector<NodePtr<AttributeStatement>> expanded = attributes;
+        std::unordered_set<std::string> active;
+
+        std::function<void(const NodePtr<AttributeStatement>&)> appendComposition;
+        appendComposition = [&](const NodePtr<AttributeStatement>& application)
+        {
+            if (!application || application->attribute != Attribute::Unknown)
+                return;
+
+            std::string localName = application->qualifiedName;
+            auto declaration = declaredAttributeCompositions_.find(localName);
+            if (declaration == declaredAttributeCompositions_.end() || !active.insert(localName).second)
+                return;
+
+            std::unordered_map<std::string, Token> arguments;
+            size_t positionalIndex = 0;
+            for (size_t index = 0; index < application->args.size(); ++index)
+            {
+                std::string parameterName;
+                if (index < application->argumentNames.size() && !application->argumentNames[index].empty())
+                    parameterName = application->argumentNames[index];
+                else if (positionalIndex < declaration->second.parameterNames.size())
+                    parameterName = declaration->second.parameterNames[positionalIndex++];
+                if (!parameterName.empty())
+                    arguments.insert_or_assign(parameterName, application->args[index]);
+            }
+
+            for (const auto& composition : declaration->second.attributes)
+            {
+                if (!composition)
+                    continue;
+                std::vector<Token> composedArguments = composition->args;
+                for (Token& argument : composedArguments)
+                {
+                    if (argument.type != TokenType::identifier)
+                        continue;
+                    const auto replacement = arguments.find(argument.value);
+                    if (replacement != arguments.end())
+                    {
+                        const Location originalLocation = argument.loc;
+                        argument = replacement->second;
+                        argument.loc = originalLocation;
+                    }
+                }
+
+                auto effective = makeNodePtr<AttributeStatement>(
+                    composition->attribute,
+                    std::move(composedArguments),
+                    composition->typeArgs,
+                    application->location(),
+                    composition->qualifiedName,
+                    composition->argumentNames);
+                expanded.push_back(effective);
+                appendComposition(effective);
+            }
+            active.erase(localName);
+        };
+
+        for (const auto& attribute : attributes)
+            appendComposition(attribute);
+        return expanded;
     }
 
     NodePtr<Statement> Parser::parseApplicationDeclaration(
@@ -2083,8 +2183,11 @@ namespace wio
             struct Run
             {
                 std::string target;
+                std::string method = "Update";
                 std::vector<NodePtr<Expression>> resourceArguments;
                 std::vector<std::string> resourceNames;
+                bool inlineApplicationUpdate = false;
+                bool acceptsDelta = true;
             };
 
             std::string name;
@@ -2096,11 +2199,137 @@ namespace wio
         };
         std::vector<ParsedApplicationStage> scheduleStages;
         std::unordered_set<std::string> applicationResources;
+        std::vector<NodePtr<FunctionDeclaration>> applicationMethods;
+        std::unordered_map<std::string, std::string> lifecycleBindings;
+        bool canonicalSchedule = false;
+        bool customUpdateScheduled = false;
         bool hasExplicitSchedule = false;
         while (peek().isValid() && !match(TokenType::rightBrace))
         {
             std::vector<NodePtr<AttributeStatement>> memberAttributes;
             parseLeadingAttributes(memberAttributes);
+            if (peek().type == TokenType::kwFn || peek().type == TokenType::kwAsync)
+            {
+                const bool isAsync = peek().type == TokenType::kwAsync;
+                auto method = parseFunctionDeclaration(std::move(memberAttributes), false, false, isAsync);
+                if (!method->body)
+                    utError("Application functions require a body.", method->location());
+                if (method->isAsync)
+                    utError("Application functions are synchronous because their mutable stack receiver cannot cross suspension; start async work explicitly from the function body.", method->location());
+
+                const auto loweringAttributes = expandAttributeCompositionsForLowering(method->attributes);
+
+                const bool explicitStart = hasBuiltinAttribute(loweringAttributes, Attribute::ApplicationStart);
+                const bool explicitUpdate = hasBuiltinAttribute(loweringAttributes, Attribute::ApplicationUpdate);
+                const bool explicitClose = hasBuiltinAttribute(loweringAttributes, Attribute::ApplicationClose);
+                const size_t lifecycleCount = static_cast<size_t>(explicitStart) +
+                    static_cast<size_t>(explicitUpdate) + static_cast<size_t>(explicitClose);
+                if (lifecycleCount > 1u)
+                    utError("An application function may declare only one of [Start], [Update], or [Close].", method->location());
+
+                const std::string sourceName = method->name->token.value;
+                std::string lifecycle;
+                if (explicitStart || (lifecycleCount == 0u && sourceName == "Start")) lifecycle = "start";
+                else if (explicitUpdate || (lifecycleCount == 0u && sourceName == "Update")) lifecycle = "update";
+                else if (explicitClose || (lifecycleCount == 0u && sourceName == "Close")) lifecycle = "close";
+
+                const auto* fixedAttribute = findBuiltinAttribute(loweringAttributes, Attribute::Fixed);
+                const auto* afterAttribute = findBuiltinAttribute(loweringAttributes, Attribute::After);
+                const bool mainThread = hasBuiltinAttribute(loweringAttributes, Attribute::Main);
+                const bool workerThread = hasBuiltinAttribute(loweringAttributes, Attribute::Worker);
+                const bool scheduled = fixedAttribute != nullptr || afterAttribute != nullptr || mainThread || workerThread;
+
+                if ((!lifecycle.empty() || scheduled) &&
+                    (!method->genericParameters.empty() || method->hasGenericParameterPack))
+                    utError("Application lifecycle and scheduled functions cannot be generic.", method->location());
+                if ((!lifecycle.empty() || scheduled) && method->returnType)
+                    utError("Application lifecycle and scheduled functions must return unit.", method->location());
+
+                if (workerThread)
+                {
+                    utError(
+                        "[Worker] application stages are reserved until ref/view conflict analysis can prove safe parallel execution; use [Main] or omit the affinity.",
+                        method->location());
+                }
+                if (scheduled && (lifecycle == "start" || lifecycle == "close"))
+                    utError("[Fixed], [After], [Main], and [Worker] apply only to update-stage functions.", method->location());
+                if (method->parameters.size() > 1u)
+                    utError("Application lifecycle and scheduled functions accept at most one f64 delta parameter.", method->location());
+                if (!method->parameters.empty())
+                {
+                    const auto& parameter = method->parameters.front();
+                    if (!parameter.type || parameter.type->name.type != TokenType::kwF64)
+                        utError("Application lifecycle and scheduled function parameters must have type f64.", parameter.name->location());
+                }
+                if ((lifecycle == "start" || lifecycle == "close") && !method->parameters.empty())
+                    utError("Application start and close functions do not accept parameters.", method->location());
+
+                if (lifecycle == "update" && sourceName == "Update" && method->parameters.empty())
+                {
+                    method->parameters.emplace_back(
+                        makeIdentifier("_wio_deltaSeconds"), makeType(TokenType::kwF64, "f64"), nullptr, false);
+                }
+
+                const bool acceptsDelta = !method->parameters.empty();
+
+                if (!lifecycle.empty())
+                {
+                    if (handlers.contains(lifecycle) || lifecycleBindings.contains(lifecycle))
+                        utError("Application lifecycle '" + lifecycle + "' is declared more than once.", method->location());
+                    method->attributeTargetOverride = "handler";
+                    const bool conventionalName =
+                        (lifecycle == "start" && sourceName == "Start") ||
+                        (lifecycle == "update" && sourceName == "Update") ||
+                        (lifecycle == "close" && sourceName == "Close");
+                    if (conventionalName)
+                        handlers.emplace(lifecycle, std::move(method));
+                    else
+                    {
+                        lifecycleBindings.emplace(lifecycle, sourceName);
+                        if (lifecycle == "update" && scheduled)
+                            customUpdateScheduled = true;
+                        applicationMethods.push_back(std::move(method));
+                    }
+                }
+                else
+                {
+                    method->attributeTargetOverride = scheduled ? "handler" : "method";
+                    applicationMethods.push_back(std::move(method));
+                }
+
+                if (scheduled)
+                {
+                    canonicalSchedule = true;
+                    hasExplicitSchedule = true;
+                    ParsedApplicationStage stage;
+                    stage.name = sourceName;
+                    stage.mainThread = mainThread;
+                    if (afterAttribute)
+                    {
+                        if (afterAttribute->args.size() != 1u)
+                            utError("[After] requires exactly one stage name.", afterAttribute->location());
+                        stage.after = afterAttribute->args.front().value;
+                    }
+                    if (fixedAttribute)
+                    {
+                        if (fixedAttribute->args.size() != 1u)
+                            utError("[Fixed] requires exactly one positive frequency.", fixedAttribute->location());
+                        try { stage.hz = std::stod(fixedAttribute->args.front().value); }
+                        catch (...) { utError("[Fixed] frequency must be a positive number.", fixedAttribute->location()); }
+                        if (stage.hz <= 0.0)
+                            utError("[Fixed] frequency must be greater than zero.", fixedAttribute->location());
+                        stage.fixed = true;
+                    }
+                    ParsedApplicationStage::Run run;
+                    run.target = "self";
+                    run.method = sourceName;
+                    run.inlineApplicationUpdate = lifecycle == "update" && sourceName == "Update";
+                    run.acceptsDelta = acceptsDelta;
+                    stage.runs.push_back(std::move(run));
+                    scheduleStages.push_back(std::move(stage));
+                }
+                continue;
+            }
             if (peek().type == TokenType::identifier && peek().value == "schedule")
             {
                 if (!memberAttributes.empty())
@@ -2169,11 +2398,13 @@ namespace wio
                         const Token target = consumeIdentifier();
                         ParsedApplicationStage::Run run;
                         run.target = target.value;
+                        run.inlineApplicationUpdate = run.target == "self";
                         if (match(TokenType::opDot, true))
                         {
                             const Token method = consumeIdentifier();
                             if (method.value != "update")
                                 utError("The sequential v0.16 scheduler supports only '.update' handlers.", method.loc);
+                            run.method = "Update";
                         }
                         if (match(TokenType::leftParen, true))
                         {
@@ -2259,29 +2490,35 @@ namespace wio
             }
 
             Mutability mutability = Mutability::Mutable;
-            bool applicationOwned = false;
             const bool systemOwned = peek().type == TokenType::kwSystem;
             const bool resourceOwned = peek().type == TokenType::identifier && peek().value == "resource";
             if ((peek().type == TokenType::identifier && peek().value == "resource") ||
                 peek().type == TokenType::kwSystem)
             {
                 advance();
-                applicationOwned = true;
             }
-            else
+            else if (matchOneOf({ TokenType::kwLet, TokenType::kwMut, TokenType::kwConst }))
             {
                 const Token qualifier = advance();
                 if (qualifier.type == TokenType::kwLet) mutability = Mutability::Immutable;
                 else if (qualifier.type == TokenType::kwConst) mutability = Mutability::Const;
-                else if (qualifier.type != TokenType::kwMut)
-                    utError("Application fields require 'mut', 'let', 'const', 'resource', or 'system'.", qualifier.loc);
             }
+            else if (peek().type != TokenType::identifier)
+                utError("Application fields require a name, optionally preceded by 'mut', 'let', 'const', 'resource', or 'system'.", peek().loc);
 
             auto name = makeNodePtr<Identifier>(consumeIdentifier());
-            if (systemOwned) ownedSystems.push_back(name->token.value);
-            if (resourceOwned) applicationResources.insert(name->token.value);
+            const std::string fieldName = name->token.value;
             consume(TokenType::opColon);
             auto type = parseType();
+            const size_t typeSeparator = type->name.value.rfind("::");
+            const std::string typeTail = typeSeparator == std::string::npos
+                ? type->name.value
+                : type->name.value.substr(typeSeparator + 2u);
+            const bool inferredSystem = declaredSystemTypeNames_.contains(type->name.value) ||
+                declaredSystemTypeNames_.contains(typeTail);
+            if (systemOwned || inferredSystem) ownedSystems.push_back(fieldName);
+            else applicationResources.insert(fieldName);
+            if (resourceOwned) applicationResources.insert(fieldName);
             NodePtr<Expression> initializer = nullptr;
             if (match(TokenType::opAssign, true)) initializer = parseExpression();
             consume(TokenType::semicolon);
@@ -2291,9 +2528,111 @@ namespace wio
                     std::move(memberAttributes), mutability, std::move(name),
                     std::move(type), std::move(initializer), false, startToken.loc)
             });
-            WIO_UNUSED(applicationOwned);
         }
         consume(TokenType::rightBrace);
+
+        auto findApplicationMethod = [&](const std::string& name) -> FunctionDeclaration*
+        {
+            const auto found = std::ranges::find_if(
+                applicationMethods,
+                [&](const NodePtr<FunctionDeclaration>& method)
+                {
+                    return method && method->name && method->name->token.value == name;
+                });
+            return found == applicationMethods.end() ? nullptr : found->Get();
+        };
+        auto makeSelfMethodCallStatement = [&](const std::string& methodName,
+                                               std::vector<NodePtr<Expression>> arguments = {}) -> NodePtr<Statement>
+        {
+            auto methodAccess = makeNodePtr<MemberAccessExpression>(
+                makeNodePtr<SelfExpression>(startToken.loc), makeIdentifier(methodName),
+                TokenType::opDot, startToken.loc);
+            auto call = makeNodePtr<FunctionCallExpression>(
+                std::move(methodAccess), std::vector<NodePtr<TypeSpecifier>>{},
+                std::move(arguments), false, false, startToken.loc);
+            return makeNodePtr<ExpressionStatement>(std::move(call), startToken.loc);
+        };
+        auto makeLifecycleForwarder = [&](const std::string& lifecycle,
+                                          const std::string& targetName,
+                                          const bool forwardCall) -> NodePtr<FunctionDeclaration>
+        {
+            const std::string methodName = lifecycle == "start" ? "Start" :
+                (lifecycle == "update" ? "Update" : "Close");
+            std::vector<Parameter> parameters;
+            if (lifecycle == "update")
+                parameters.emplace_back(
+                    makeIdentifier("_wio_deltaSeconds"), makeType(TokenType::kwF64, "f64"), nullptr, false);
+
+            std::vector<NodePtr<Statement>> statements;
+            if (forwardCall)
+            {
+                std::vector<NodePtr<Expression>> arguments;
+                const auto* target = findApplicationMethod(targetName);
+                if (lifecycle == "update" && target && !target->parameters.empty())
+                    arguments.push_back(makeIdentifier("_wio_deltaSeconds"));
+                statements.push_back(makeSelfMethodCallStatement(targetName, std::move(arguments)));
+            }
+            auto forwarder = makeNodePtr<FunctionDeclaration>(
+                std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier(methodName),
+                std::vector<NodePtr<Identifier>>{}, false, std::move(parameters), nullptr,
+                nullptr, nullptr,
+                makeNodePtr<BlockStatement>(std::move(statements), startToken.loc), startToken.loc);
+            forwarder->attributeTargetOverride = "handler";
+            return forwarder;
+        };
+
+        for (const std::string lifecycle : { "start", "update", "close" })
+        {
+            const auto binding = lifecycleBindings.find(lifecycle);
+            if (binding == lifecycleBindings.end())
+                continue;
+            const bool forwardCall = lifecycle != "update" || !customUpdateScheduled;
+            handlers.emplace(lifecycle, makeLifecycleForwarder(lifecycle, binding->second, forwardCall));
+        }
+
+        if (canonicalSchedule)
+        {
+            std::vector<ParsedApplicationStage> canonicalStages;
+            canonicalStages.reserve(ownedSystems.size() + scheduleStages.size() + 1u);
+            for (const auto& systemName : ownedSystems)
+            {
+                ParsedApplicationStage systemStage;
+                systemStage.name = systemName;
+                ParsedApplicationStage::Run run;
+                run.target = systemName;
+                run.method = "Update";
+                run.acceptsDelta = true;
+                systemStage.runs.push_back(std::move(run));
+                canonicalStages.push_back(std::move(systemStage));
+            }
+            for (auto& stage : scheduleStages)
+                canonicalStages.push_back(std::move(stage));
+            scheduleStages = std::move(canonicalStages);
+
+            const bool updateAlreadyScheduled = std::ranges::any_of(
+                scheduleStages,
+                [](const ParsedApplicationStage& stage)
+                {
+                    return std::ranges::any_of(
+                        stage.runs,
+                        [](const ParsedApplicationStage::Run& run)
+                        {
+                            return run.inlineApplicationUpdate;
+                        });
+                });
+            if (!updateAlreadyScheduled && !customUpdateScheduled)
+            {
+                ParsedApplicationStage updateStage;
+                updateStage.name = "Update";
+                ParsedApplicationStage::Run run;
+                run.target = "self";
+                run.method = "Update";
+                run.inlineApplicationUpdate = true;
+                run.acceptsDelta = true;
+                updateStage.runs.push_back(std::move(run));
+                scheduleStages.push_back(std::move(updateStage));
+            }
+        }
 
         std::vector<size_t> orderedStageIndices;
         if (hasExplicitSchedule)
@@ -2301,14 +2640,17 @@ namespace wio
             std::unordered_map<std::string, size_t> stageByName;
             size_t selfRunCount = 0;
             for (size_t index = 0; index < scheduleStages.size(); ++index)
-                stageByName.emplace(scheduleStages[index].name, index);
+            {
+                if (!stageByName.emplace(scheduleStages[index].name, index).second)
+                    utError("Application stage '" + scheduleStages[index].name + "' is declared more than once.", startToken.loc);
+            }
             for (const auto& stage : scheduleStages)
             {
                 if (stage.after.has_value() && !stageByName.contains(*stage.after))
                     utError("Schedule stage '" + stage.name + "' depends on unknown stage '" + *stage.after + "'.", startToken.loc);
                 for (const auto& run : stage.runs)
                 {
-                    if (run.target == "self")
+                    if (run.target == "self" && run.inlineApplicationUpdate)
                     {
                         ++selfRunCount;
                         if (!run.resourceArguments.empty())
@@ -2403,6 +2745,17 @@ namespace wio
         };
 
         std::vector<ExtensionMember> extensionMembers;
+
+        for (auto& method : applicationMethods)
+        {
+            addReceiver(method);
+            extensionMembers.push_back(ExtensionMember{
+                .access = AccessModifier::Public,
+                .mutableReceiver = true,
+                .method = std::move(method)
+            });
+        }
+
         std::vector<NodePtr<Statement>> firstExitStatements;
         firstExitStatements.push_back(makeNodePtr<ExpressionStatement>(
             makeNodePtr<AssignmentExpression>(
@@ -2526,11 +2879,23 @@ namespace wio
                         std::vector<NodePtr<Statement>> stageStatements;
                         for (auto& run : stage.runs)
                         {
-                            if (run.target == "self")
+                            if (run.inlineApplicationUpdate)
                             {
                                 for (auto& statement : userUpdateStatements)
                                     stageStatements.push_back(std::move(statement));
                                 userUpdateStatements.clear();
+                            }
+                            else if (run.target == "self")
+                            {
+                                std::vector<NodePtr<Expression>> arguments;
+                                if (run.acceptsDelta)
+                                {
+                                    arguments.push_back(stage.fixed
+                                        ? makeStep(stage.hz)
+                                        : makeIdentifier(deltaName));
+                                }
+                                stageStatements.push_back(
+                                    makeSelfMethodCallStatement(run.method, std::move(arguments)));
                             }
                             else
                             {
@@ -2647,6 +3012,44 @@ namespace wio
             makeNodePtr<BlockStatement>(std::move(entryStatements), startToken.loc), startToken.loc);
         entry->isApplicationEntry = true;
         entry->applicationName = applicationNameToken.value;
+        auto appendStageMetadata = [&](const ParsedApplicationStage& stage, const std::uint32_t order)
+        {
+            ApplicationStageMetadata metadata;
+            metadata.name = stage.name;
+            metadata.after = stage.after.value_or("");
+            metadata.fixedHz = stage.fixed ? stage.hz : 0.0;
+            metadata.order = order;
+            metadata.fixed = stage.fixed;
+            metadata.mainThread = stage.mainThread;
+            metadata.legacyExplicit = !canonicalSchedule && hasExplicitSchedule;
+            for (const auto& run : stage.runs)
+            {
+                metadata.containsApplication = metadata.containsApplication || run.target == "self";
+                metadata.containsSystem = metadata.containsSystem || run.target != "self";
+            }
+            entry->applicationStages.push_back(std::move(metadata));
+        };
+        if (hasExplicitSchedule)
+        {
+            for (std::uint32_t order = 0; order < orderedStageIndices.size(); ++order)
+                appendStageMetadata(scheduleStages[orderedStageIndices[order]], order);
+        }
+        else
+        {
+            for (std::uint32_t order = 0; order < ownedSystems.size(); ++order)
+            {
+                ApplicationStageMetadata metadata;
+                metadata.name = ownedSystems[order];
+                metadata.order = order;
+                metadata.containsSystem = true;
+                entry->applicationStages.push_back(std::move(metadata));
+            }
+            ApplicationStageMetadata updateMetadata;
+            updateMetadata.name = "Update";
+            updateMetadata.order = static_cast<std::uint32_t>(entry->applicationStages.size());
+            updateMetadata.containsApplication = true;
+            entry->applicationStages.push_back(std::move(updateMetadata));
+        }
 
         std::vector<NodePtr<Statement>> declarations;
         declarations.push_back(std::move(component));
@@ -2661,6 +3064,7 @@ namespace wio
         const Token startToken = consume(TokenType::kwSystem);
         auto systemName = makeNodePtr<Identifier>(consumeIdentifier());
         const Token systemNameToken = systemName->token;
+        declaredSystemTypeNames_.insert(systemNameToken.value);
         parseWithAttributeClause(attributes);
         consume(TokenType::leftBrace);
 
@@ -2677,10 +3081,95 @@ namespace wio
         };
         std::vector<ComponentMember> fields;
         std::unordered_map<std::string, NodePtr<FunctionDeclaration>> handlers;
+        std::vector<NodePtr<FunctionDeclaration>> systemMethods;
+        std::unordered_map<std::string, std::string> lifecycleBindings;
         while (peek().isValid() && !match(TokenType::rightBrace))
         {
             std::vector<NodePtr<AttributeStatement>> memberAttributes;
             parseLeadingAttributes(memberAttributes);
+            if (peek().type == TokenType::kwFn || peek().type == TokenType::kwAsync)
+            {
+                const bool isAsync = peek().type == TokenType::kwAsync;
+                auto method = parseFunctionDeclaration(std::move(memberAttributes), false, false, isAsync);
+                if (!method->body)
+                    utError("System functions require a body.", method->location());
+                if (method->isAsync)
+                    utError("System functions are synchronous because their mutable stack receiver cannot cross suspension; start async work explicitly from the function body.", method->location());
+
+                const auto loweringAttributes = expandAttributeCompositionsForLowering(method->attributes);
+
+                const bool explicitStart = hasBuiltinAttribute(loweringAttributes, Attribute::ApplicationStart);
+                const bool explicitUpdate = hasBuiltinAttribute(loweringAttributes, Attribute::ApplicationUpdate);
+                const bool explicitClose = hasBuiltinAttribute(loweringAttributes, Attribute::ApplicationClose);
+                const size_t lifecycleCount = static_cast<size_t>(explicitStart) +
+                    static_cast<size_t>(explicitUpdate) + static_cast<size_t>(explicitClose);
+                if (lifecycleCount > 1u)
+                    utError("A system function may declare only one of [Start], [Update], or [Close].", method->location());
+
+                const std::string sourceName = method->name->token.value;
+                std::string lifecycle;
+                if (explicitStart || (lifecycleCount == 0u && sourceName == "Start")) lifecycle = "start";
+                else if (explicitUpdate || (lifecycleCount == 0u && sourceName == "Update")) lifecycle = "update";
+                else if (explicitClose || (lifecycleCount == 0u && sourceName == "Close")) lifecycle = "close";
+
+                const bool hasScheduleAttribute =
+                    hasBuiltinAttribute(loweringAttributes, Attribute::Fixed) ||
+                    hasBuiltinAttribute(loweringAttributes, Attribute::After) ||
+                    hasBuiltinAttribute(loweringAttributes, Attribute::Main) ||
+                    hasBuiltinAttribute(loweringAttributes, Attribute::Worker);
+                if (hasScheduleAttribute)
+                    utError("[Fixed], [After], [Main], and [Worker] schedule application functions, not system functions.", method->location());
+
+                if (!lifecycle.empty())
+                {
+                    if (!method->genericParameters.empty() || method->hasGenericParameterPack)
+                        utError("System lifecycle functions cannot be generic.", method->location());
+                    if (method->returnType)
+                        utError("System lifecycle functions must return unit.", method->location());
+                    if ((lifecycle == "start" || lifecycle == "close") && !method->parameters.empty())
+                        utError("System start and close functions do not accept parameters.", method->location());
+                    if (lifecycle == "update")
+                    {
+                        if (explicitUpdate && sourceName != "Update" && method->parameters.size() > 1u)
+                            utError("A custom [Update] system function accepts at most one f64 delta parameter.", method->location());
+                        for (size_t parameterIndex = 0; parameterIndex < method->parameters.size(); ++parameterIndex)
+                        {
+                            const auto& parameter = method->parameters[parameterIndex];
+                            if (parameterIndex == 0 && (!parameter.type || parameter.type->name.type != TokenType::kwF64))
+                                utError("The first system update parameter must have type f64.", parameter.name->location());
+                            if (parameterIndex > 0 && parameter.type &&
+                                parameter.type->name.type != TokenType::kwRef && parameter.type->name.type != TokenType::kwView)
+                                utError("System update resource parameters must use ref or view.", parameter.name->location());
+                        }
+                        if (sourceName == "Update" && method->parameters.empty())
+                        {
+                            method->parameters.emplace_back(
+                                makeIdentifier("_wio_deltaSeconds"), makeType(TokenType::kwF64, "f64"), nullptr, false);
+                        }
+                    }
+
+                    if (handlers.contains(lifecycle) || lifecycleBindings.contains(lifecycle))
+                        utError("System lifecycle '" + lifecycle + "' is declared more than once.", method->location());
+                    method->attributeTargetOverride = "handler";
+                    const bool conventionalName =
+                        (lifecycle == "start" && sourceName == "Start") ||
+                        (lifecycle == "update" && sourceName == "Update") ||
+                        (lifecycle == "close" && sourceName == "Close");
+                    if (conventionalName)
+                        handlers.emplace(lifecycle, std::move(method));
+                    else
+                    {
+                        lifecycleBindings.emplace(lifecycle, sourceName);
+                        systemMethods.push_back(std::move(method));
+                    }
+                }
+                else
+                {
+                    method->attributeTargetOverride = "method";
+                    systemMethods.push_back(std::move(method));
+                }
+                continue;
+            }
             if (peek().type == TokenType::identifier && peek().value == "on")
             {
                 advance();
@@ -2733,12 +3222,15 @@ namespace wio
                 continue;
             }
 
-            const Token qualifier = advance();
             Mutability mutability = Mutability::Mutable;
-            if (qualifier.type == TokenType::kwLet) mutability = Mutability::Immutable;
-            else if (qualifier.type == TokenType::kwConst) mutability = Mutability::Const;
-            else if (qualifier.type != TokenType::kwMut)
-                utError("System fields require 'mut', 'let', or 'const'.", qualifier.loc);
+            if (matchOneOf({ TokenType::kwLet, TokenType::kwMut, TokenType::kwConst }))
+            {
+                const Token qualifier = advance();
+                if (qualifier.type == TokenType::kwLet) mutability = Mutability::Immutable;
+                else if (qualifier.type == TokenType::kwConst) mutability = Mutability::Const;
+            }
+            else if (peek().type != TokenType::identifier)
+                utError("System fields require a name, optionally preceded by 'mut', 'let', or 'const'.", peek().loc);
             auto name = makeNodePtr<Identifier>(consumeIdentifier());
             consume(TokenType::opColon);
             auto type = parseType();
@@ -2776,6 +3268,66 @@ namespace wio
         };
 
         std::vector<ExtensionMember> members;
+
+        auto findSystemMethod = [&](const std::string& name) -> FunctionDeclaration*
+        {
+            const auto found = std::ranges::find_if(
+                systemMethods,
+                [&](const NodePtr<FunctionDeclaration>& method)
+                {
+                    return method && method->name && method->name->token.value == name;
+                });
+            return found == systemMethods.end() ? nullptr : found->Get();
+        };
+        auto makeSelfMethodCallStatement = [&](const std::string& methodName,
+                                               std::vector<NodePtr<Expression>> arguments = {}) -> NodePtr<Statement>
+        {
+            auto methodAccess = makeNodePtr<MemberAccessExpression>(
+                makeNodePtr<SelfExpression>(startToken.loc), makeIdentifier(methodName),
+                TokenType::opDot, startToken.loc);
+            auto call = makeNodePtr<FunctionCallExpression>(
+                std::move(methodAccess), std::vector<NodePtr<TypeSpecifier>>{},
+                std::move(arguments), false, false, startToken.loc);
+            return makeNodePtr<ExpressionStatement>(std::move(call), startToken.loc);
+        };
+        for (const std::string lifecycle : { "start", "update", "close" })
+        {
+            const auto binding = lifecycleBindings.find(lifecycle);
+            if (binding == lifecycleBindings.end())
+                continue;
+            const std::string methodName = lifecycle == "start" ? "Start" :
+                (lifecycle == "update" ? "Update" : "Close");
+            std::vector<Parameter> parameters;
+            std::vector<NodePtr<Expression>> arguments;
+            const auto* target = findSystemMethod(binding->second);
+            if (lifecycle == "update")
+            {
+                parameters.emplace_back(
+                    makeIdentifier("_wio_deltaSeconds"), makeType(TokenType::kwF64, "f64"), nullptr, false);
+                if (target && !target->parameters.empty())
+                    arguments.push_back(makeIdentifier("_wio_deltaSeconds"));
+            }
+            std::vector<NodePtr<Statement>> statements;
+            statements.push_back(makeSelfMethodCallStatement(binding->second, std::move(arguments)));
+            auto forwarder = makeNodePtr<FunctionDeclaration>(
+                std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier(methodName),
+                std::vector<NodePtr<Identifier>>{}, false, std::move(parameters), nullptr,
+                nullptr, nullptr,
+                makeNodePtr<BlockStatement>(std::move(statements), startToken.loc), startToken.loc);
+            forwarder->attributeTargetOverride = "handler";
+            handlers.emplace(lifecycle, std::move(forwarder));
+        }
+
+        for (auto& method : systemMethods)
+        {
+            addReceiver(method);
+            members.push_back(ExtensionMember{
+                .access = AccessModifier::Public,
+                .mutableReceiver = true,
+                .method = std::move(method)
+            });
+        }
+
         for (const std::string lifecycle : { "start", "update", "close" })
         {
             NodePtr<FunctionDeclaration> method;

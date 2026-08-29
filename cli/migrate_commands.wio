@@ -9,8 +9,12 @@ realm SelfHostedMigrate {
         return "Wio source migration\n\n" +
             "Usage:\n" +
             "  wio migrate attributes [PATH] --check\n" +
-            "  wio migrate attributes [PATH] --write\n\n" +
-            "Converts legacy @Attribute(...) syntax to [Attribute(...)].\n" +
+            "  wio migrate attributes [PATH] --write\n" +
+            "  wio migrate applications [PATH] --check\n" +
+            "  wio migrate applications [PATH] --write\n\n" +
+            "'attributes' converts @Attribute(...) to [Attribute(...)].\n" +
+            "'applications' converts lifecycle handlers and resource/system fields to ordinary members.\n" +
+            "Explicit schedules are reported by the compiler and are not rewritten mechanically.\n" +
             "Strings and comments are never rewritten. PATH defaults to the current directory.\n";
     }
 
@@ -22,6 +26,10 @@ realm SelfHostedMigrate {
     fn IsNamePart(value: char) -> bool {
         return IsNameStart(value) or (value >= '0' and value <= '9') or
             value == ':' or value == '.';
+    }
+
+    fn IsIdentifierPart(value: char) -> bool {
+        return IsNameStart(value) or (value >= '0' and value <= '9');
     }
 
     fn AttributeEnd(source: string, start: usize) -> usize {
@@ -54,7 +62,7 @@ realm SelfHostedMigrate {
         return start;
     }
 
-    fn Rewrite(source: string) -> string {
+    fn RewriteAttributes(source: string) -> string {
         mut output = "";
         mut index = 0usize;
         mut quote: char = '"';
@@ -118,6 +126,118 @@ realm SelfHostedMigrate {
         return output;
     }
 
+    fn IsInlineSpace(value: char) -> bool {
+        return value == ' ' or value == '\t' or value == '\r';
+    }
+
+    fn HasText(source: string, start: usize, value: string) -> bool {
+        return start + value.Count() <= source.Count() and
+            source.Slice(start, value.Count()) == value;
+    }
+
+    fn IsTokenBoundary(source: string, index: usize) -> bool {
+        return index >= source.Count() or not IsNamePart(source[index]);
+    }
+
+    fn RewriteApplications(source: string) -> string {
+        mut output = "";
+        mut index = 0usize;
+        mut quote: char = '"';
+        mut quoted = false;
+        mut escaped = false;
+        mut lineComment = false;
+        mut blockComment = false;
+        while (index < source.Count()) {
+            let current = source[index];
+            let next = index + 1usize < source.Count() ? source[index + 1usize] : '\n';
+
+            if (lineComment) {
+                output.Append(source.Slice(index, 1usize));
+                if (current == '\n') { lineComment = false; }
+                index += 1usize;
+                continue;
+            }
+            if (blockComment) {
+                output.Append(source.Slice(index, 1usize));
+                if (current == '*' and next == '/') {
+                    output.Append("/");
+                    index += 2usize;
+                    blockComment = false;
+                } else { index += 1usize; }
+                continue;
+            }
+            if (quoted) {
+                output.Append(source.Slice(index, 1usize));
+                if (escaped) { escaped = false; }
+                else if (current == '\\') { escaped = true; }
+                else if (current == quote) { quoted = false; }
+                index += 1usize;
+                continue;
+            }
+            if (current == '/' and next == '/') {
+                output.Append("//"); index += 2usize; lineComment = true; continue;
+            }
+            if (current == '/' and next == '*') {
+                output.Append("/*"); index += 2usize; blockComment = true; continue;
+            }
+            if (current == '"' or current == '\'') {
+                quote = current;
+                quoted = true;
+                output.Append(source.Slice(index, 1usize));
+                index += 1usize;
+                continue;
+            }
+
+            let beforeBoundary = index == 0usize or not IsNamePart(source[index - 1usize]);
+            if (beforeBoundary and HasText(source, index, "on") and IsTokenBoundary(source, index + 2usize)) {
+                mut nameStart = index + 2usize;
+                while (nameStart < source.Count() and IsInlineSpace(source[nameStart])) { nameStart += 1usize; }
+                if (nameStart > index + 2usize) {
+                    if (HasText(source, nameStart, "start") and IsTokenBoundary(source, nameStart + 5usize)) {
+                        output.Append("fn Start()"); index = nameStart + 5usize; continue;
+                    }
+                    if (HasText(source, nameStart, "close") and IsTokenBoundary(source, nameStart + 5usize)) {
+                        output.Append("fn Close()"); index = nameStart + 5usize; continue;
+                    }
+                    if (HasText(source, nameStart, "update") and IsTokenBoundary(source, nameStart + 6usize)) {
+                        mut bodyStart = nameStart + 6usize;
+                        while (bodyStart < source.Count() and IsInlineSpace(source[bodyStart])) { bodyStart += 1usize; }
+                        output.Append(bodyStart < source.Count() and source[bodyStart] == '{' ? "fn Update()" : "fn Update");
+                        index = nameStart + 6usize;
+                        continue;
+                    }
+                }
+            }
+
+            mut fieldKeywordLength = 0usize;
+            if (beforeBoundary and HasText(source, index, "resource") and IsTokenBoundary(source, index + 8usize)) {
+                fieldKeywordLength = 8usize;
+            }
+            else if (beforeBoundary and HasText(source, index, "system") and IsTokenBoundary(source, index + 6usize)) {
+                fieldKeywordLength = 6usize;
+            }
+            if (fieldKeywordLength > 0usize) {
+                mut nameStart = index + fieldKeywordLength;
+                while (nameStart < source.Count() and IsInlineSpace(source[nameStart])) { nameStart += 1usize; }
+                mut nameEnd = nameStart;
+                if (nameStart < source.Count() and IsNameStart(source[nameStart])) {
+                    nameEnd += 1usize;
+                    while (nameEnd < source.Count() and IsIdentifierPart(source[nameEnd])) { nameEnd += 1usize; }
+                    mut colon = nameEnd;
+                    while (colon < source.Count() and IsInlineSpace(source[colon])) { colon += 1usize; }
+                    if (colon < source.Count() and source[colon] == ':') {
+                        index = nameStart;
+                        continue;
+                    }
+                }
+            }
+
+            output.Append(source.Slice(index, 1usize));
+            index += 1usize;
+        }
+        return output;
+    }
+
     fn Files(target: string) -> string[] {
         if (fs::IsFile(target)) {
             if (path::Extension(target) == ".wio") { return [target]; }
@@ -137,7 +257,7 @@ realm SelfHostedMigrate {
             console::Print(Help());
             return std::Ok<i32>(0);
         }
-        if (args[2usize] != "attributes") {
+        if (args[2usize] != "attributes" and args[2usize] != "applications") {
             return SelfHostedCli::Failure<i32>($"Unknown migration: ${args[2usize]}");
         }
         if (SelfHostedCli::Has(args, "--help") or SelfHostedCli::Has(args, "-h")) {
@@ -156,7 +276,9 @@ realm SelfHostedMigrate {
         mut changed = 0usize;
         for file in Files(target) {
             let source = fs::ReadTextRaw(file);
-            let rewritten = Rewrite(source);
+            let rewritten = args[2usize] == "attributes"
+                ? RewriteAttributes(source)
+                : RewriteApplications(source);
             if (rewritten == source) { continue; }
             changed += 1usize;
             console::PrintLine!(file);
@@ -165,7 +287,9 @@ realm SelfHostedMigrate {
             }
         }
         if (changed == 0usize) {
-            console::PrintLine!("Attribute syntax is current.");
+            console::PrintLine!(args[2usize] == "attributes"
+                ? "Attribute syntax is current."
+                : "Application syntax is current.");
             return std::Ok<i32>(0);
         }
         if (check) {

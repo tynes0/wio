@@ -81,6 +81,9 @@ set(required_files
     "${package_root}/docs/WIO_0_15_RELEASE_NOTES.md"
     "${package_root}/docs/WIO_0_16_ACCEPTANCE.md"
     "${package_root}/docs/WIO_0_16_RELEASE_NOTES.md"
+    "${package_root}/docs/WIO_0_17_ACCEPTANCE.md"
+    "${package_root}/docs/WIO_0_17_APPLICATION_MODEL.md"
+    "${package_root}/docs/WIO_0_17_RELEASE_NOTES.md"
     "${package_root}/docs/WIO_V1_RELEASE_PLAN.md"
     "${package_root}/docs/WIO_V1_FREEZE.md"
     "${package_root}/docs/spec/WIO_LANGUAGE_SPEC_0_8.md"
@@ -89,6 +92,7 @@ set(required_files
     "${package_root}/docs/spec/WIO_LANGUAGE_SPEC_0_11.md"
     "${package_root}/docs/spec/WIO_LANGUAGE_SPEC_0_15.md"
     "${package_root}/docs/spec/WIO_LANGUAGE_SPEC_0_16.md"
+    "${package_root}/docs/spec/WIO_LANGUAGE_SPEC_0_17.md"
     "${package_root}/docs/spec/WIO_STD_SPEC_0_11.md"
 )
 

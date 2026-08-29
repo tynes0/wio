@@ -1,0 +1,8 @@
+application FixedApplication {
+    [Fixed(0)]
+    fn Physics(delta: f64) {}
+
+    fn Update(delta: f64) {
+        self.Exit(0);
+    }
+}

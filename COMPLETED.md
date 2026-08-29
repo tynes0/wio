@@ -822,3 +822,19 @@ here as historical evidence rather than active work:
 - [x] Console, resource/tool, desktop event-loop, fixed game-loop, service I/O,
       callback, native-resource, and native-host scenarios entered the Windows
       and Ubuntu release acceptance matrix.
+
+## v0.17 Attribute-driven Application Surface
+
+- [x] Application and system bodies accept ordinary default-mutable fields and
+      ordinary helper functions while retaining stack-resident lowering.
+- [x] Conventional `Start`/`Update`/`Close` and descriptive
+      `[Start]`/`[Update]`/`[Close]` functions normalize to one lifecycle ABI.
+- [x] `[Fixed]`, `[After]`, and `[Main]` produce a deterministic stage graph;
+      source-module system fields enter that graph automatically.
+- [x] `[Worker]` is reserved with an explicit safety diagnostic until
+      cross-thread `ref`/`view` conflict analysis is available.
+- [x] Legacy v0.16 application syntax remains accepted and has a documented
+      migration map instead of a flag-day removal.
+- [x] SDK ABI v11 and `ApplicationHost::stages()` expose the normalized stage
+      graph, dependencies, fixed frequencies, order, affinity, and stage kind
+      flags to native hosts.

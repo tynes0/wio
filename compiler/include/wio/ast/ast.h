@@ -102,7 +102,14 @@ namespace wio
         ModuleUpdate,
         ModuleUnload,
         ModuleSaveState,
-        ModuleRestoreState
+        ModuleRestoreState,
+        ApplicationStart,
+        ApplicationUpdate,
+        ApplicationClose,
+        Fixed,
+        After,
+        Main,
+        Worker
     );
 
     FrenumClassInNamespace(wio, AttributeOrigin, uint8_t,
@@ -943,6 +950,19 @@ namespace wio
         ~TypeAliasDeclaration() override;
     };
     
+    struct ApplicationStageMetadata
+    {
+        std::string name;
+        std::string after;
+        double fixedHz = 0.0;
+        std::uint32_t order = 0;
+        bool fixed = false;
+        bool mainThread = false;
+        bool containsSystem = false;
+        bool containsApplication = false;
+        bool legacyExplicit = false;
+    };
+
     struct FunctionDeclaration : Statement
     {
         WIO_STMT_NODE_BODY(FunctionDeclaration)
@@ -963,6 +983,7 @@ namespace wio
         bool isAsync = false;
         bool isApplicationEntry = false;
         std::string applicationName;
+        std::vector<ApplicationStageMetadata> applicationStages;
         std::string attributeTargetOverride;
 
         FunctionDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,

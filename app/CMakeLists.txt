@@ -1008,7 +1008,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
             ${CMAKE_COMMAND}
             -DWIO_EXE=$<TARGET_FILE:wio_app>
             -DEXAMPLE_ROOT=${CMAKE_SOURCE_DIR}/examples/telemetry_pipeline
-            -DWIO_EXPECT=Telemetry\ pipeline:\ Wio\ 0.16.0
+            -DWIO_EXPECT=Telemetry\ pipeline:\ Wio\ 0.17.0
             -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExampleProject.cmake"
     )
     set_tests_properties(
@@ -2125,14 +2125,14 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_sdk_014_const_generic_metadata_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_const_generic_metadata_library.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_014_const_generic_metadata_host.cpp"
-        "SDK 0.14 const metadata: abi=10 block=4 label=sdk empty=ok"
+        "SDK 0.14 const metadata: abi=11 block=4 label=sdk empty=ok"
     )
 
     add_wio_shared_host_interop_test(
         wio_test_sdk_015_attribute_metadata_host_interop
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_015_attribute_metadata_library.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_015_attribute_metadata_host.cpp"
-        "SDK 0.15 attributes: abi=10 type=Label field=Important method=Audited phase=pre"
+        "SDK 0.15 attributes: abi=11 type=Label field=Important method=Audited phase=pre"
     )
 
     add_wio_shared_host_interop_test(
@@ -2154,6 +2154,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_016_fixed_application_library.wio"
         "${CMAKE_SOURCE_DIR}/tests/native/sdk_016_fixed_application_host.cpp"
         "sdk-fixed-application-ok frames=6 ticks=3 exit=23"
+    )
+
+    add_wio_shared_host_interop_test(
+        wio_test_sdk_017_application_schedule_interop
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_017_application_schedule_library.wio"
+        "${CMAKE_SOURCE_DIR}/tests/native/sdk_017_application_schedule_host.cpp"
+        "sdk-application-schedule-ok stages=4 fixed=20 main=Render"
     )
 
     add_wio_shared_host_interop_test(
@@ -4219,6 +4226,38 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     set_tests_properties(wio_test_application_schedule_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
 
     add_wio_output_test(
+        wio_test_application_attribute_model_run
+        "${CMAKE_SOURCE_DIR}/tests/application_attribute_model_run.wio"
+        "application-attribute-model-ok"
+        --run
+    )
+    set_tests_properties(wio_test_application_attribute_model_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
+    add_wio_output_test(
+        wio_test_application_mixed_model_run
+        "${CMAKE_SOURCE_DIR}/tests/application_mixed_model_run.wio"
+        "application-mixed-model-ok"
+        --run
+    )
+    set_tests_properties(wio_test_application_mixed_model_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
+    add_wio_output_test(
+        wio_test_application_composed_attribute_run
+        "${CMAKE_SOURCE_DIR}/tests/application_composed_attribute_run.wio"
+        "application-composed-attribute-ok"
+        --run
+    )
+    set_tests_properties(wio_test_application_composed_attribute_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
+    add_wio_output_test(
+        wio_test_cli_migrate_application_rewrite_run
+        "${CMAKE_SOURCE_DIR}/tests/cli_migrate_application_rewrite_run.wio"
+        "cli-migrate-application-rewrite-ok"
+        --run --module-dir "${CMAKE_SOURCE_DIR}/cli" --module-dir "${CMAKE_SOURCE_DIR}/cli/vendor"
+    )
+    set_tests_properties(wio_test_cli_migrate_application_rewrite_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
+    add_wio_output_test(
         wio_test_application_resource_schedule_run
         "${CMAKE_SOURCE_DIR}/tests/application_resource_schedule_run.wio"
         "application-resource-schedule-ok"
@@ -4261,6 +4300,30 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(wio_invalid_system_update_owned_resource_parameter
         "${CMAKE_SOURCE_DIR}/tests/invalid/system_update_owned_resource_parameter.wio"
         "System update resource parameters must use ref or view")
+    add_wio_failure_test(wio_invalid_application_attribute_worker_rejected
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_attribute_worker_rejected.wio"
+        "Worker.*reserved until ref/view conflict analysis")
+    add_wio_failure_test(wio_invalid_application_attribute_unknown_dependency
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_attribute_unknown_dependency.wio"
+        "depends on unknown stage 'MissingStage'")
+    add_wio_failure_test(wio_invalid_application_attribute_fixed_frequency
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_attribute_fixed_frequency.wio"
+        "Fixed.*frequency must be greater than zero")
+    add_wio_failure_test(wio_invalid_system_application_schedule_attribute
+        "${CMAKE_SOURCE_DIR}/tests/invalid/system_application_schedule_attribute.wio"
+        "schedule application functions, not system functions")
+    add_wio_failure_test(wio_invalid_application_attribute_multiple_lifecycle
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_attribute_multiple_lifecycle.wio"
+        "may declare only one of")
+    add_wio_failure_test(wio_invalid_application_attribute_start_parameter
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_attribute_start_parameter.wio"
+        "Application start and close functions do not accept parameters")
+    add_wio_failure_test(wio_invalid_application_attribute_update_return
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_attribute_update_return.wio"
+        "Application lifecycle and scheduled functions must return unit")
+    add_wio_failure_test(wio_invalid_system_attribute_update_type
+        "${CMAKE_SOURCE_DIR}/tests/invalid/system_attribute_update_type.wio"
+        "The first system update parameter must have type f64")
 
     add_wio_failure_test(wio_invalid_application_with_entry
         "${CMAKE_SOURCE_DIR}/tests/invalid/application_with_entry.wio"
@@ -6046,6 +6109,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(wio_invalid_async_lifecycle_method
         "${CMAKE_SOURCE_DIR}/tests/invalid/async_lifecycle_method.wio"
         "OnConstruct cannot be async")
+    add_wio_failure_test(wio_invalid_application_async_helper
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_async_helper.wio"
+        "Application functions are synchronous because their mutable stack receiver cannot cross suspension")
+    add_wio_failure_test(wio_invalid_system_async_helper
+        "${CMAKE_SOURCE_DIR}/tests/invalid/system_async_helper.wio"
+        "System functions are synchronous because their mutable stack receiver cannot cross suspension")
     add_wio_failure_test(wio_invalid_async_coroutine_arity
         "${CMAKE_SOURCE_DIR}/tests/invalid/async_coroutine_arity.wio"
         "coroutine.*requires exactly one result type")
@@ -6069,6 +6138,8 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_async_component_method
         wio_invalid_async_extension_receiver
         wio_invalid_async_lifecycle_method
+        wio_invalid_application_async_helper
+        wio_invalid_system_async_helper
         wio_invalid_async_coroutine_arity
         wio_invalid_async_run_blocking_borrow_capture
         wio_invalid_async_run_borrow_capture

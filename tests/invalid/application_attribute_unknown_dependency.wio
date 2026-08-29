@@ -1,0 +1,8 @@
+application DependencyApplication {
+    [After(MissingStage)]
+    fn Render(delta: f64) {}
+
+    fn Update(delta: f64) {
+        self.Exit(0);
+    }
+}

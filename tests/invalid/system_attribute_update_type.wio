@@ -1,0 +1,12 @@
+system InvalidSystem {
+    [Update]
+    fn Tick(delta: i32) {}
+}
+
+application InvalidSystemApplication {
+    system: InvalidSystem;
+
+    fn Update(delta: f64) {
+        self.Exit(0);
+    }
+}

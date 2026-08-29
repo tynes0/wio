@@ -197,6 +197,10 @@ own test process.
 
 Required scope:
 
+- canonical application/system bodies use ordinary fields and functions;
+  lifecycle and schedule intent use `[Start]`, `[Update]`, `[Close]`,
+  `[Fixed]`, `[After]`, and `[Main]`, with legacy v0.16 syntax retained through
+  a documented migration window;
 - method, parameter, generic, const-generic, attribute, field, and type metadata
   with stable identifiers;
 - dynamic get/set/invoke for supported stable values;

@@ -35,7 +35,8 @@ int main(int argc, char** argv)
             std::string_view(audited->processors[0].hookMode) != "no_args")
             return EXIT_FAILURE;
 
-        std::cout << "SDK 0.15 attributes: abi=10 type=Label field=Important method=Audited phase=pre\n";
+        std::cout << "SDK 0.15 attributes: abi=" << api->descriptorVersion
+                  << " type=Label field=Important method=Audited phase=pre\n";
         return EXIT_SUCCESS;
     }
     catch (const std::exception& error)

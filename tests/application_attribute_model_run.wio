@@ -1,0 +1,71 @@
+use std::assert as assert;
+use std::console as console;
+
+mut lifecycleTrace: string = "";
+
+system PulseSystem {
+    ticks: i32;
+
+    fn Start() {
+        lifecycleTrace += "system.start>";
+    }
+
+    fn Update(delta: f64) {
+        if (delta >= 0.0) {
+            self.ticks += 1;
+        }
+    }
+
+    [Close]
+    fn Shutdown() {
+        lifecycleTrace += "system.close>";
+    }
+
+    fn DoubledTicks() -> i32 {
+        return self.ticks * 2;
+    }
+}
+
+application AttributeApplication {
+    pulse: PulseSystem;
+    frames: i32;
+    fixedTicks: i32;
+    renders: i32;
+
+    [Start]
+    fn Boot() {
+        lifecycleTrace = "app.start>";
+    }
+
+    [Fixed(1000)]
+    fn Physics(step: f64) {
+        assert::Expect(step > 0.0, "fixed stages receive their fixed step");
+        self.fixedTicks += 1;
+    }
+
+    [After(Physics)]
+    [Main]
+    fn Render(delta: f64) {
+        assert::Expect(delta >= 0.0, "main stages receive frame delta");
+        self.renders += 1;
+    }
+
+    [Update]
+    fn Frame(delta: f64) {
+        assert::Expect(delta >= 0.0, "custom update receives frame delta");
+        self.frames += 1;
+        if (self.fixedTicks > 0) {
+            assert::Expect(self.pulse.ticks > 0, "ordinary system fields update automatically");
+            assert::Expect(self.pulse.DoubledTicks() >= 2, "normal system helper methods remain callable");
+            assert::Expect(self.renders > 0, "ordered main stage ran");
+            self.Exit(0);
+        }
+    }
+
+    [Close]
+    fn Shutdown() {
+        assert::Expect(self.frames > 0, "custom application update ran");
+        assert::ExpectEqual(lifecycleTrace, "app.start>system.start>system.close>", "lifecycle order is deterministic");
+        console::PrintLine("application-attribute-model-ok");
+    }
+}
