@@ -63,6 +63,11 @@ jobs:
           ctest --test-dir build --output-on-failure
           -R "^(wio_sdk_016_callback_lifetime|wio_sdk_016_native_resource|wio_test_sdk_016_application_host_interop|wio_test_sdk_016_fixed_application_host_interop|wio_test_sdk_016_application_rollback_interop|wio_test_sdk_016_async_task_host_interop|wio_test_application_lifecycle_run|wio_test_application_delta_context_run|wio_test_application_schedule_run|wio_test_application_resource_schedule_run|wio_runtime_application_start_rollback|wio_test_async_cancellable_io_surface_check|wio_test_async_cancellation_outcome_run|wio_test_async_fs_io_run|wio_test_async_process_run|wio_test_async_process_stream_run|wio_test_async_net_io_run|wio_test_async_net_accept_run)$"
 
+      - name: Validate Wio 0.17 application and SDK matrix
+        run: >
+          ctest --test-dir build --output-on-failure
+          -R "^(wio_test_(sdk_017_application_schedule_interop|application_(attribute_model_run|mixed_model_run|composed_attribute_run)|cli_migrate_application_rewrite_run)|wio_invalid_application_attribute_(worker_rejected|unknown_dependency|fixed_frequency|multiple_lifecycle|start_parameter|update_return)|wio_invalid_system_(application_schedule_attribute|attribute_update_type|async_helper)|wio_invalid_application_async_helper)$"
+
   sanitizers:
     runs-on: ubuntu-latest
 
