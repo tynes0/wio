@@ -1,0 +1,31 @@
+use migrate_commands;
+use std::assert as assert;
+use std::console as console;
+
+fn Entry() -> i32 {
+    let legacy = "system Pulse { on update(delta: f64) { } }\n" +
+        "application Tool {\n" +
+        "    resource state: State;\n" +
+        "    system pulse: Pulse;\n" +
+        "    on start { }\n" +
+        "    on update(delta: f64) { }\n" +
+        "    on close { }\n" +
+        "    // on update { }\n" +
+        "    label: string = \"resource untouched: Text\";\n" +
+        "}\n";
+    let expected = "system Pulse { fn Update(delta: f64) { } }\n" +
+        "application Tool {\n" +
+        "    state: State;\n" +
+        "    pulse: Pulse;\n" +
+        "    fn Start() { }\n" +
+        "    fn Update(delta: f64) { }\n" +
+        "    fn Close() { }\n" +
+        "    // on update { }\n" +
+        "    label: string = \"resource untouched: Text\";\n" +
+        "}\n";
+    let rewritten = SelfHostedMigrate::RewriteApplications(legacy);
+    assert::ExpectEqual(rewritten, expected,
+        "application migration preserves comments, strings, and top-level system declarations");
+    console::PrintLine("cli-migrate-application-rewrite-ok");
+    return 0;
+}

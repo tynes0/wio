@@ -82,6 +82,14 @@ The old forms remain accepted in 0.17. Explicit resource arguments in a legacy
 resource-access attribute model lands; mechanically deleting that schedule can
 change behavior.
 
+The conservative migration command rewrites lifecycle handlers and owned
+field declarations while deliberately preserving explicit schedules:
+
+```powershell
+wio migrate applications . --check
+wio migrate applications . --write
+```
+
 ## Deliberate limits
 
 - `[Worker]` produces a focused diagnostic instead of pretending application

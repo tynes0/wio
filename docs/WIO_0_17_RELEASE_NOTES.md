@@ -80,6 +80,9 @@ The v0.16 `on start/update/close`, `resource`, member `system`, and explicit
 attributes. Legacy explicit schedules remain necessary when a system update
 receives explicitly injected `ref`/`view` resources.
 
+`wio migrate applications PATH --check|--write` performs the safe lifecycle
+and field rewrites while preserving comments, strings, and explicit schedules.
+
 Automatic owned-system and compiler-consumed composed-attribute discovery are
 currently source-order local. Import-aware and forward discovery require
 application lowering to move into semantic analysis and remain tracked before
