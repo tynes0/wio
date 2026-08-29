@@ -2048,7 +2048,80 @@ namespace wio
         declaration->cardinalityMin = cardinalityMin;
         declaration->cardinalityMax = cardinalityMax;
         declaration->hasExplicitCardinality = hasExplicitCardinality;
+        ParserAttributeComposition parserComposition;
+        parserComposition.parameterNames.reserve(declaration->parameters.size());
+        for (const auto& parameter : declaration->parameters)
+            parserComposition.parameterNames.push_back(parameter.name->token.value);
+        parserComposition.attributes = declaration->composedAttributes;
+        declaredAttributeCompositions_.insert_or_assign(
+            declaration->name->token.value, std::move(parserComposition));
         return declaration;
+    }
+
+    std::vector<NodePtr<AttributeStatement>> Parser::expandAttributeCompositionsForLowering(
+        const std::vector<NodePtr<AttributeStatement>>& attributes) const
+    {
+        std::vector<NodePtr<AttributeStatement>> expanded = attributes;
+        std::unordered_set<std::string> active;
+
+        std::function<void(const NodePtr<AttributeStatement>&)> appendComposition;
+        appendComposition = [&](const NodePtr<AttributeStatement>& application)
+        {
+            if (!application || application->attribute != Attribute::Unknown)
+                return;
+
+            std::string localName = application->qualifiedName;
+            auto declaration = declaredAttributeCompositions_.find(localName);
+            if (declaration == declaredAttributeCompositions_.end() || !active.insert(localName).second)
+                return;
+
+            std::unordered_map<std::string, Token> arguments;
+            size_t positionalIndex = 0;
+            for (size_t index = 0; index < application->args.size(); ++index)
+            {
+                std::string parameterName;
+                if (index < application->argumentNames.size() && !application->argumentNames[index].empty())
+                    parameterName = application->argumentNames[index];
+                else if (positionalIndex < declaration->second.parameterNames.size())
+                    parameterName = declaration->second.parameterNames[positionalIndex++];
+                if (!parameterName.empty())
+                    arguments.insert_or_assign(parameterName, application->args[index]);
+            }
+
+            for (const auto& composition : declaration->second.attributes)
+            {
+                if (!composition)
+                    continue;
+                std::vector<Token> composedArguments = composition->args;
+                for (Token& argument : composedArguments)
+                {
+                    if (argument.type != TokenType::identifier)
+                        continue;
+                    const auto replacement = arguments.find(argument.value);
+                    if (replacement != arguments.end())
+                    {
+                        const Location originalLocation = argument.loc;
+                        argument = replacement->second;
+                        argument.loc = originalLocation;
+                    }
+                }
+
+                auto effective = makeNodePtr<AttributeStatement>(
+                    composition->attribute,
+                    std::move(composedArguments),
+                    composition->typeArgs,
+                    application->location(),
+                    composition->qualifiedName,
+                    composition->argumentNames);
+                expanded.push_back(effective);
+                appendComposition(effective);
+            }
+            active.erase(localName);
+        };
+
+        for (const auto& attribute : attributes)
+            appendComposition(attribute);
+        return expanded;
     }
 
     NodePtr<Statement> Parser::parseApplicationDeclaration(
@@ -2144,9 +2217,11 @@ namespace wio
                 if (method->isAsync)
                     utError("Application functions are synchronous because their mutable stack receiver cannot cross suspension; start async work explicitly from the function body.", method->location());
 
-                const bool explicitStart = hasBuiltinAttribute(method->attributes, Attribute::ApplicationStart);
-                const bool explicitUpdate = hasBuiltinAttribute(method->attributes, Attribute::ApplicationUpdate);
-                const bool explicitClose = hasBuiltinAttribute(method->attributes, Attribute::ApplicationClose);
+                const auto loweringAttributes = expandAttributeCompositionsForLowering(method->attributes);
+
+                const bool explicitStart = hasBuiltinAttribute(loweringAttributes, Attribute::ApplicationStart);
+                const bool explicitUpdate = hasBuiltinAttribute(loweringAttributes, Attribute::ApplicationUpdate);
+                const bool explicitClose = hasBuiltinAttribute(loweringAttributes, Attribute::ApplicationClose);
                 const size_t lifecycleCount = static_cast<size_t>(explicitStart) +
                     static_cast<size_t>(explicitUpdate) + static_cast<size_t>(explicitClose);
                 if (lifecycleCount > 1u)
@@ -2158,10 +2233,10 @@ namespace wio
                 else if (explicitUpdate || (lifecycleCount == 0u && sourceName == "Update")) lifecycle = "update";
                 else if (explicitClose || (lifecycleCount == 0u && sourceName == "Close")) lifecycle = "close";
 
-                const auto* fixedAttribute = findBuiltinAttribute(method->attributes, Attribute::Fixed);
-                const auto* afterAttribute = findBuiltinAttribute(method->attributes, Attribute::After);
-                const bool mainThread = hasBuiltinAttribute(method->attributes, Attribute::Main);
-                const bool workerThread = hasBuiltinAttribute(method->attributes, Attribute::Worker);
+                const auto* fixedAttribute = findBuiltinAttribute(loweringAttributes, Attribute::Fixed);
+                const auto* afterAttribute = findBuiltinAttribute(loweringAttributes, Attribute::After);
+                const bool mainThread = hasBuiltinAttribute(loweringAttributes, Attribute::Main);
+                const bool workerThread = hasBuiltinAttribute(loweringAttributes, Attribute::Worker);
                 const bool scheduled = fixedAttribute != nullptr || afterAttribute != nullptr || mainThread || workerThread;
 
                 if ((!lifecycle.empty() || scheduled) &&
@@ -3021,9 +3096,11 @@ namespace wio
                 if (method->isAsync)
                     utError("System functions are synchronous because their mutable stack receiver cannot cross suspension; start async work explicitly from the function body.", method->location());
 
-                const bool explicitStart = hasBuiltinAttribute(method->attributes, Attribute::ApplicationStart);
-                const bool explicitUpdate = hasBuiltinAttribute(method->attributes, Attribute::ApplicationUpdate);
-                const bool explicitClose = hasBuiltinAttribute(method->attributes, Attribute::ApplicationClose);
+                const auto loweringAttributes = expandAttributeCompositionsForLowering(method->attributes);
+
+                const bool explicitStart = hasBuiltinAttribute(loweringAttributes, Attribute::ApplicationStart);
+                const bool explicitUpdate = hasBuiltinAttribute(loweringAttributes, Attribute::ApplicationUpdate);
+                const bool explicitClose = hasBuiltinAttribute(loweringAttributes, Attribute::ApplicationClose);
                 const size_t lifecycleCount = static_cast<size_t>(explicitStart) +
                     static_cast<size_t>(explicitUpdate) + static_cast<size_t>(explicitClose);
                 if (lifecycleCount > 1u)
@@ -3036,10 +3113,10 @@ namespace wio
                 else if (explicitClose || (lifecycleCount == 0u && sourceName == "Close")) lifecycle = "close";
 
                 const bool hasScheduleAttribute =
-                    hasBuiltinAttribute(method->attributes, Attribute::Fixed) ||
-                    hasBuiltinAttribute(method->attributes, Attribute::After) ||
-                    hasBuiltinAttribute(method->attributes, Attribute::Main) ||
-                    hasBuiltinAttribute(method->attributes, Attribute::Worker);
+                    hasBuiltinAttribute(loweringAttributes, Attribute::Fixed) ||
+                    hasBuiltinAttribute(loweringAttributes, Attribute::After) ||
+                    hasBuiltinAttribute(loweringAttributes, Attribute::Main) ||
+                    hasBuiltinAttribute(loweringAttributes, Attribute::Worker);
                 if (hasScheduleAttribute)
                     utError("[Fixed], [After], [Main], and [Worker] schedule application functions, not system functions.", method->location());
 

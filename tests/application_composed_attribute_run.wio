@@ -1,0 +1,20 @@
+use std::assert as assert;
+use std::console as console;
+
+attribute FrameStep(rate: f64) for handler
+    compose [Update, Fixed(rate), Main];
+
+application ComposedAttributeApplication {
+    frames: i32;
+
+    [FrameStep(1000.0)]
+    fn Advance(delta: f64) {
+        if (delta > 0.0) { self.frames += 1; }
+        self.Exit(0);
+    }
+
+    fn Close() {
+        assert::ExpectEqual(self.frames, 1, "a composed lifecycle/schedule attribute is lowered once");
+        console::PrintLine("application-composed-attribute-ok");
+    }
+}

@@ -205,11 +205,12 @@ application Editor {
 ```
 
 A field whose type is a system declared earlier in the same source module is
-recognized as an owned system without a member `system` keyword. Systems start in field
-order, update in deterministic schedule order, and close in reverse successful
-start order. The legacy `system field: Type;` spelling remains source-compatible.
-Forward and imported-system identity must become semantic/module metadata
-rather than a parser heuristic before v1; that qualification remains open.
+recognized as an owned system without a member `system` keyword. Systems start
+in field order, update in deterministic schedule order, and close in reverse
+successful start order. The legacy `system field: Type;` spelling remains
+source-compatible. Forward and imported-system identity must become
+semantic/module metadata rather than a parser heuristic before v1; that
+qualification remains open.
 
 ### 2.5 Scheduling
 
@@ -253,6 +254,18 @@ before application stages unless dependencies state otherwise, and the
 application update lifecycle remains a final variable-step stage. A scheduled
 custom `[Update]` function occupies its declared stage instead of being run a
 second time.
+
+Scheduling policy may be composed into a project attribute:
+
+```wio
+attribute FrameStep(rate: f64) for handler
+    compose [Update, Fixed(rate), Main];
+```
+
+`[FrameStep(60.0)]` then contributes all three compiler-owned contracts. The
+v0.17 parser recognizes these compositions when their declaration precedes the
+application in the same source module. Imported and forward policy discovery
+belongs to the planned semantic application lowering.
 
 ### 2.6 Resource access and parallel work
 

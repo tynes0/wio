@@ -3,6 +3,7 @@
 #include "wio/ast/ast.h"
 
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace wio
@@ -29,6 +30,12 @@ namespace wio
         std::vector<std::string> asyncScopeNames_;
         bool requiresAsyncModule_ = false;
         std::unordered_set<std::string> declaredSystemTypeNames_;
+        struct ParserAttributeComposition
+        {
+            std::vector<std::string> parameterNames;
+            std::vector<NodePtr<AttributeStatement>> attributes;
+        };
+        std::unordered_map<std::string, ParserAttributeComposition> declaredAttributeCompositions_;
 
         Token peek(int offset = 0) const;
         Token previous() const;
@@ -73,6 +80,8 @@ namespace wio
         [[nodiscard]] bool bracketAttributeListPrecedesDeclaration() const;
         void parseWithAttributeClause(std::vector<NodePtr<AttributeStatement>>& attributes);
         NodePtr<AttributeDeclaration> parseAttributeDeclaration(std::vector<NodePtr<AttributeStatement>> metaAttributes = {});
+        [[nodiscard]] std::vector<NodePtr<AttributeStatement>> expandAttributeCompositionsForLowering(
+            const std::vector<NodePtr<AttributeStatement>>& attributes) const;
         NodePtr<Statement> parseApplicationDeclaration(std::vector<NodePtr<AttributeStatement>> attributes = {});
         NodePtr<Statement> parseSystemDeclaration(std::vector<NodePtr<AttributeStatement>> attributes = {});
         NodePtr<VariableDeclaration> parseVariableDeclaration(std::vector<NodePtr<AttributeStatement>> attributes);

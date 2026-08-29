@@ -61,6 +61,13 @@ compile-time errors. Equal-ready stages preserve declaration order.
 by attribute processor declarations. Its allowed target determines whether it
 orders processors or application stages.
 
+The compiler expands locally declared user attributes while discovering
+application lifecycle and schedule intent. This permits policies such as
+`attribute Frame(rate: f64) for handler compose [Update, Fixed(rate), Main];`.
+For 0.17, a compiler-consumed composition must be declared earlier in the same
+source module. Import-aware and forward composition requires application
+lowering to move from parsing into semantic analysis.
+
 ## 4. Default schedule
 
 Without schedule attributes, owned systems update in field order and the

@@ -44,6 +44,26 @@ extensions. There is still one host-visible application descriptor and one
 deterministic start/update/close state machine; the change is source-level
 coherence, not a second runtime.
 
+Lifecycle and scheduling attributes are composable. A project can name a
+reusable policy once and keep application bodies focused on domain behavior:
+
+```wio
+attribute FrameStep(rate: f64) for handler
+    compose [Update, Fixed(rate), Main];
+
+application Simulation {
+    [FrameStep(60.0)]
+    fn Advance(step: f64) {
+        // Update lifecycle, 60 Hz fixed stage, main-thread-affine.
+    }
+}
+```
+
+Compiler-consumed compositions currently need to be declared before the
+application or system that uses them in the same source module. General
+attribute composition remains semantic and module-aware; moving application
+lowering fully into that phase is the path to imported scheduling policies.
+
 ## Migration map
 
 | v0.16 compatibility spelling | v0.17 canonical spelling |
@@ -68,6 +88,9 @@ change behavior.
   borrows are thread-safe.
 - The first implementation recognizes source-module system types directly.
   Imported system identity will move into semantic/module metadata.
+- User-composed lifecycle/schedule policies are recognized from declarations
+  earlier in the same source module. Imported policies require semantic
+  application lowering.
 - `[Main]` is meaningful metadata but performs no dispatch in the sequential,
   already-main-thread-affine runner.
 - Fixed stages retain the 0.16 accumulator behavior. Catch-up limits and
