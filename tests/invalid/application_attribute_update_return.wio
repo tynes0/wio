@@ -1,0 +1,6 @@
+application InvalidUpdate {
+    [Update]
+    fn Tick(delta: f64) -> i32 {
+        return 1;
+    }
+}

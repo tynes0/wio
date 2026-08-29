@@ -4296,6 +4296,18 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(wio_invalid_system_application_schedule_attribute
         "${CMAKE_SOURCE_DIR}/tests/invalid/system_application_schedule_attribute.wio"
         "schedule application functions, not system functions")
+    add_wio_failure_test(wio_invalid_application_attribute_multiple_lifecycle
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_attribute_multiple_lifecycle.wio"
+        "may declare only one of")
+    add_wio_failure_test(wio_invalid_application_attribute_start_parameter
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_attribute_start_parameter.wio"
+        "Application start and close functions do not accept parameters")
+    add_wio_failure_test(wio_invalid_application_attribute_update_return
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_attribute_update_return.wio"
+        "Application lifecycle and scheduled functions must return unit")
+    add_wio_failure_test(wio_invalid_system_attribute_update_type
+        "${CMAKE_SOURCE_DIR}/tests/invalid/system_attribute_update_type.wio"
+        "The first system update parameter must have type f64")
 
     add_wio_failure_test(wio_invalid_application_with_entry
         "${CMAKE_SOURCE_DIR}/tests/invalid/application_with_entry.wio"

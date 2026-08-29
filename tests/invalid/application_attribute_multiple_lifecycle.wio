@@ -1,0 +1,9 @@
+application InvalidLifecycle {
+    [Start]
+    [Close]
+    fn Both() {}
+
+    fn Update(delta: f64) {
+        self.Exit(0);
+    }
+}

@@ -1,0 +1,8 @@
+application InvalidStart {
+    [Start]
+    fn Boot(delta: f64) {}
+
+    fn Update(delta: f64) {
+        self.Exit(0);
+    }
+}
