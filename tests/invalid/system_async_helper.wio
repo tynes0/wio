@@ -1,0 +1,5 @@
+system AsyncSystem {
+    async fn Refresh() -> i32 {
+        return 1;
+    }
+}

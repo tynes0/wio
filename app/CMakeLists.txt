@@ -6081,6 +6081,12 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_failure_test(wio_invalid_async_lifecycle_method
         "${CMAKE_SOURCE_DIR}/tests/invalid/async_lifecycle_method.wio"
         "OnConstruct cannot be async")
+    add_wio_failure_test(wio_invalid_application_async_helper
+        "${CMAKE_SOURCE_DIR}/tests/invalid/application_async_helper.wio"
+        "Application functions are synchronous because their mutable stack receiver cannot cross suspension")
+    add_wio_failure_test(wio_invalid_system_async_helper
+        "${CMAKE_SOURCE_DIR}/tests/invalid/system_async_helper.wio"
+        "System functions are synchronous because their mutable stack receiver cannot cross suspension")
     add_wio_failure_test(wio_invalid_async_coroutine_arity
         "${CMAKE_SOURCE_DIR}/tests/invalid/async_coroutine_arity.wio"
         "coroutine.*requires exactly one result type")
@@ -6104,6 +6110,8 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_invalid_async_component_method
         wio_invalid_async_extension_receiver
         wio_invalid_async_lifecycle_method
+        wio_invalid_application_async_helper
+        wio_invalid_system_async_helper
         wio_invalid_async_coroutine_arity
         wio_invalid_async_run_blocking_borrow_capture
         wio_invalid_async_run_borrow_capture
