@@ -22,17 +22,20 @@ Application lifecycle functions are synchronous, non-generic, and return unit.
 Start and close take no parameters. Update takes zero parameters or one `f64`
 delta in seconds. An omitted update parameter is normalized internally; it does
 not alter source-level name lookup. Non-lifecycle functions obey ordinary Wio
-function rules and become extension methods on the stack-resident application
-component.
+parameter, generic, and return rules and become extension methods on the
+stack-resident application component. They remain synchronous because an async
+extension cannot retain the implicit mutable application borrow across
+suspension.
 
 ## 2. Canonical system members
 
 A `system` body uses the same ordinary-field rule and lifecycle binding rules.
 System lifecycle functions are synchronous, non-generic, and return unit.
-Non-lifecycle functions remain ordinary extension methods.
+Non-lifecycle functions remain ordinary synchronous extension methods.
 
-An application field whose nominal type is a system in the source module is an
-owned system. It starts in field order, updates in deterministic schedule order,
+An application field whose nominal type is a system declared earlier in the
+same source module is an owned system. It starts in field order, updates in
+deterministic schedule order,
 and closes in reverse successful-start order. System values remain stack
 resident and do not imply object identity, virtual dispatch, or heap ownership.
 

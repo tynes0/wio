@@ -117,7 +117,10 @@ Application members are ordinary fields and functions. `Start`, `Update`, and
 one `f64` delta in seconds; the zero-parameter form is normalized to the same
 internal signature. `Start` and `Close` are parameterless. Lifecycle functions
 are synchronous, non-generic, and return unit. Other application functions
-retain ordinary Wio generic, async, parameter, and return rules.
+retain ordinary Wio generic, parameter, and return rules. Because their
+implicit receiver is a mutable borrow of stack-resident application state,
+they remain synchronous; start async work explicitly and store/observe its task
+from the frame lifecycle.
 
 Descriptive names bind to lifecycle roles with attributes:
 
@@ -201,12 +204,12 @@ application Editor {
 }
 ```
 
-A field whose type is a system declared in the source module is recognized as
-an owned system without a member `system` keyword. Systems start in field
+A field whose type is a system declared earlier in the same source module is
+recognized as an owned system without a member `system` keyword. Systems start in field
 order, update in deterministic schedule order, and close in reverse successful
 start order. The legacy `system field: Type;` spelling remains source-compatible.
-Imported-system identity must become semantic/module metadata rather than a
-parser heuristic before v1; that qualification remains open.
+Forward and imported-system identity must become semantic/module metadata
+rather than a parser heuristic before v1; that qualification remains open.
 
 ### 2.5 Scheduling
 

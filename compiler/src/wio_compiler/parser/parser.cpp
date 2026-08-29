@@ -107,33 +107,6 @@ namespace wio
     
     NodePtr<Program> Parser::parseProgram()
     {
-        // Application fields may use systems declared later in the same source
-        // file. Collect their names before lowering either declaration.
-        for (size_t index = 0; index + 2 < tokens_.size(); ++index)
-        {
-            if (tokens_[index].type == TokenType::kwSystem &&
-                tokens_[index + 1].type == TokenType::identifier)
-            {
-                bool isDeclaration = false;
-                for (size_t lookahead = index + 2; lookahead < tokens_.size(); ++lookahead)
-                {
-                    if (tokens_[lookahead].type == TokenType::leftBrace)
-                    {
-                        isDeclaration = true;
-                        break;
-                    }
-                    if (tokens_[lookahead].type == TokenType::opColon ||
-                        tokens_[lookahead].type == TokenType::semicolon ||
-                        tokens_[lookahead].type == TokenType::rightBrace)
-                    {
-                        break;
-                    }
-                }
-                if (isDeclaration)
-                    declaredSystemTypeNames_.insert(tokens_[index + 1].value);
-            }
-        }
-
         std::vector<NodePtr<Statement>> statements;
 
         while (peek().isValid())
@@ -2168,6 +2141,8 @@ namespace wio
                 auto method = parseFunctionDeclaration(std::move(memberAttributes), false, false, isAsync);
                 if (!method->body)
                     utError("Application functions require a body.", method->location());
+                if (method->isAsync)
+                    utError("Application functions are synchronous because their mutable stack receiver cannot cross suspension; start async work explicitly from the function body.", method->location());
 
                 const bool explicitStart = hasBuiltinAttribute(method->attributes, Attribute::ApplicationStart);
                 const bool explicitUpdate = hasBuiltinAttribute(method->attributes, Attribute::ApplicationUpdate);
@@ -2189,8 +2164,6 @@ namespace wio
                 const bool workerThread = hasBuiltinAttribute(method->attributes, Attribute::Worker);
                 const bool scheduled = fixedAttribute != nullptr || afterAttribute != nullptr || mainThread || workerThread;
 
-                if ((!lifecycle.empty() || scheduled) && method->isAsync)
-                    utError("Application lifecycle and scheduled functions must be synchronous; start asynchronous work explicitly from their body.", method->location());
                 if ((!lifecycle.empty() || scheduled) &&
                     (!method->genericParameters.empty() || method->hasGenericParameterPack))
                     utError("Application lifecycle and scheduled functions cannot be generic.", method->location());
@@ -3045,6 +3018,8 @@ namespace wio
                 auto method = parseFunctionDeclaration(std::move(memberAttributes), false, false, isAsync);
                 if (!method->body)
                     utError("System functions require a body.", method->location());
+                if (method->isAsync)
+                    utError("System functions are synchronous because their mutable stack receiver cannot cross suspension; start async work explicitly from the function body.", method->location());
 
                 const bool explicitStart = hasBuiltinAttribute(method->attributes, Attribute::ApplicationStart);
                 const bool explicitUpdate = hasBuiltinAttribute(method->attributes, Attribute::ApplicationUpdate);
@@ -3070,8 +3045,6 @@ namespace wio
 
                 if (!lifecycle.empty())
                 {
-                    if (method->isAsync)
-                        utError("System lifecycle functions must be synchronous; start asynchronous work explicitly from their body.", method->location());
                     if (!method->genericParameters.empty() || method->hasGenericParameterPack)
                         utError("System lifecycle functions cannot be generic.", method->location());
                     if (method->returnType)
