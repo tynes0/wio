@@ -87,7 +87,10 @@ realm std {
         attribute Exclusive(group: string) for attribute retain compile repeatable;
         attribute Cardinality(min: usize = 0usize, max: usize = 1usize) for attribute retain compile;
         attribute Before(values: string[]) for attribute retain compile;
-        attribute After(values: string[]) for attribute retain compile;
+        // Shared compile-time ordering primitive. On an attribute declaration
+        // it orders processors; on an application handler it declares a stage
+        // dependency. Symbol arguments allow the concise [After(Physics)] form.
+        attribute After(values: any[]) for attribute | handler retain compile;
         attribute Implies(values: string[]) for attribute retain compile;
         attribute Processor(processorType: string) for attribute retain compile repeatable;
         // Marks a public DeriveProcessor method as a checked generated member.
@@ -174,5 +177,32 @@ realm std {
 
         [Targets("fn")]
         attribute ModuleRestoreState();
+
+        // Application lifecycle and scheduling. Conventional Start, Update,
+        // and Close method names lower to the same normalized contracts; the
+        // explicit attributes allow descriptive method names without adding
+        // more application-specific syntax.
+        [Targets("handler")]
+        [Conflicts("Update", "Close")]
+        attribute Start();
+
+        [Targets("handler")]
+        [Conflicts("Start", "Close")]
+        attribute Update();
+
+        [Targets("handler")]
+        [Conflicts("Start", "Update")]
+        attribute Close();
+
+        [Targets("handler")]
+        attribute Fixed(hz: f64);
+
+        [Targets("handler")]
+        [Conflicts("Worker")]
+        attribute Main();
+
+        [Targets("handler")]
+        [Conflicts("Main")]
+        attribute Worker();
     }
 }

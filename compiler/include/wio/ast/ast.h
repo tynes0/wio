@@ -102,7 +102,14 @@ namespace wio
         ModuleUpdate,
         ModuleUnload,
         ModuleSaveState,
-        ModuleRestoreState
+        ModuleRestoreState,
+        ApplicationStart,
+        ApplicationUpdate,
+        ApplicationClose,
+        Fixed,
+        After,
+        Main,
+        Worker
     );
 
     FrenumClassInNamespace(wio, AttributeOrigin, uint8_t,

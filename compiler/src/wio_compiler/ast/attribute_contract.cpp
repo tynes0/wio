@@ -24,6 +24,23 @@ namespace wio
         constexpr std::array exportRequired{"std::attribute::Export"sv};
         constexpr std::array commandConflict{"std::attribute::Command"sv};
         constexpr std::array eventConflict{"std::attribute::Event"sv};
+        constexpr std::array applicationHandlerTargets{"handler"sv};
+        constexpr std::array startConflicts{
+            "std::attribute::Update"sv,
+            "std::attribute::Close"sv
+        };
+        constexpr std::array updateConflicts{
+            "std::attribute::Start"sv,
+            "std::attribute::Close"sv
+        };
+        constexpr std::array closeConflicts{
+            "std::attribute::Start"sv,
+            "std::attribute::Update"sv
+        };
+        constexpr std::array schedulingTargets{"handler"sv};
+        constexpr std::array orderingTargets{"attribute"sv, "handler"sv};
+        constexpr std::array mainConflicts{"std::attribute::Worker"sv};
+        constexpr std::array workerConflicts{"std::attribute::Main"sv};
 
         const std::array contracts{
             BuiltinAttributeContract{Attribute::ReadOnly, "std::attribute::ReadOnly", fieldTargets, none, none, none, false},
@@ -48,7 +65,14 @@ namespace wio
             BuiltinAttributeContract{Attribute::ModuleUpdate, "std::attribute::ModuleUpdate", functionOnlyTargets, none, none, none, false},
             BuiltinAttributeContract{Attribute::ModuleUnload, "std::attribute::ModuleUnload", functionOnlyTargets, none, none, none, false},
             BuiltinAttributeContract{Attribute::ModuleSaveState, "std::attribute::ModuleSaveState", functionOnlyTargets, none, none, none, false},
-            BuiltinAttributeContract{Attribute::ModuleRestoreState, "std::attribute::ModuleRestoreState", functionOnlyTargets, none, none, none, false}
+            BuiltinAttributeContract{Attribute::ModuleRestoreState, "std::attribute::ModuleRestoreState", functionOnlyTargets, none, none, none, false},
+            BuiltinAttributeContract{Attribute::ApplicationStart, "std::attribute::Start", applicationHandlerTargets, none, none, startConflicts, false},
+            BuiltinAttributeContract{Attribute::ApplicationUpdate, "std::attribute::Update", applicationHandlerTargets, none, none, updateConflicts, false},
+            BuiltinAttributeContract{Attribute::ApplicationClose, "std::attribute::Close", applicationHandlerTargets, none, none, closeConflicts, false},
+            BuiltinAttributeContract{Attribute::Fixed, "std::attribute::Fixed", schedulingTargets, none, none, none, false},
+            BuiltinAttributeContract{Attribute::After, "std::attribute::After", orderingTargets, none, none, none, false},
+            BuiltinAttributeContract{Attribute::Main, "std::attribute::Main", schedulingTargets, none, none, mainConflicts, false},
+            BuiltinAttributeContract{Attribute::Worker, "std::attribute::Worker", schedulingTargets, none, none, workerConflicts, false}
         };
 
         std::string_view tail(const std::string_view name)
@@ -95,6 +119,13 @@ namespace wio
         if (name == "module::unload") return Attribute::ModuleUnload;
         if (name == "module::save_state") return Attribute::ModuleSaveState;
         if (name == "module::restore_state") return Attribute::ModuleRestoreState;
+        if (name == "application::start") return Attribute::ApplicationStart;
+        if (name == "application::update") return Attribute::ApplicationUpdate;
+        if (name == "application::close") return Attribute::ApplicationClose;
+        if (name == "application::fixed") return Attribute::Fixed;
+        if (name == "application::after") return Attribute::After;
+        if (name == "application::main") return Attribute::Main;
+        if (name == "application::worker") return Attribute::Worker;
         return std::nullopt;
     }
 

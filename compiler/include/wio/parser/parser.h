@@ -3,6 +3,7 @@
 #include "wio/ast/ast.h"
 
 #include <string_view>
+#include <unordered_set>
 
 namespace wio
 {
@@ -27,6 +28,7 @@ namespace wio
         size_t asyncScopeCounter_ = 0;
         std::vector<std::string> asyncScopeNames_;
         bool requiresAsyncModule_ = false;
+        std::unordered_set<std::string> declaredSystemTypeNames_;
 
         Token peek(int offset = 0) const;
         Token previous() const;

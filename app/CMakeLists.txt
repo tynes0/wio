@@ -4219,6 +4219,14 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     set_tests_properties(wio_test_application_schedule_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
 
     add_wio_output_test(
+        wio_test_application_attribute_model_run
+        "${CMAKE_SOURCE_DIR}/tests/application_attribute_model_run.wio"
+        "application-attribute-model-ok"
+        --run
+    )
+    set_tests_properties(wio_test_application_attribute_model_run PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR}")
+
+    add_wio_output_test(
         wio_test_application_resource_schedule_run
         "${CMAKE_SOURCE_DIR}/tests/application_resource_schedule_run.wio"
         "application-resource-schedule-ok"
