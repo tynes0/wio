@@ -73,6 +73,18 @@ if(BUILD_TESTING)
         COMMAND wio_compiler_helper_modules_test
     )
 
+    add_executable(wio_const_evaluation_limiter_test
+        "${CMAKE_SOURCE_DIR}/tests/const_evaluation_limiter_test.cpp"
+    )
+    target_include_directories(wio_const_evaluation_limiter_test PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    )
+    target_link_libraries(wio_const_evaluation_limiter_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_const_evaluation_limiter
+        COMMAND wio_const_evaluation_limiter_test
+    )
+
     add_executable(wio_function_type_cpp_string_test
         "${CMAKE_SOURCE_DIR}/tests/function_type_cpp_string_test.cpp"
     )

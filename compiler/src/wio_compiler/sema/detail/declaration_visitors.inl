@@ -263,12 +263,9 @@
                 }
                 else
                 {
-                    ConstEvaluationBudget budget;
-                    budget.activeSymbols.insert(sym.Get());
-                    const auto limitStatus = validateConstEvaluationLimits(
-                        node.initializer,
-                        variableDeclarationsBySymbol_,
-                        budget);
+                    ConstEvaluationLimiter limiter(variableDeclarationsBySymbol_);
+                    limiter.markActive(sym.Get());
+                    const auto limitStatus = limiter.validate(node.initializer);
                     if (limitStatus == ConstEvaluationLimitStatus::Cycle)
                     {
                         WIO_LOG_ADD_ERROR(
@@ -281,7 +278,7 @@
                         WIO_LOG_ADD_ERROR(
                             node.initializer->location(),
                             "Const initializer exceeds the maximum evaluation depth of {}.",
-                            ConstEvaluationBudget::MaxDepth
+                            ConstEvaluationLimiter::MaxDepth
                         );
                     }
                     else if (limitStatus == ConstEvaluationLimitStatus::NodeLimit)
@@ -289,7 +286,7 @@
                         WIO_LOG_ADD_ERROR(
                             node.initializer->location(),
                             "Const initializer exceeds the maximum evaluation node count of {}.",
-                            ConstEvaluationBudget::MaxNodes
+                            ConstEvaluationLimiter::MaxNodes
                         );
                     }
                     else if (limitStatus == ConstEvaluationLimitStatus::TextSizeLimit)
@@ -297,7 +294,7 @@
                         WIO_LOG_ADD_ERROR(
                             node.initializer->location(),
                             "Const string/text evaluation exceeds the maximum folded size of {} bytes.",
-                            ConstEvaluationBudget::MaxTextBytes
+                            ConstEvaluationLimiter::MaxTextBytes
                         );
                     }
                     else if (!isConstEvaluableExpression(node.initializer))

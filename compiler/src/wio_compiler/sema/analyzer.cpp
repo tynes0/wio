@@ -22,6 +22,7 @@
 #include "wio/sema/generic_support.h"
 #include "wio/sema/scope_lookup.h"
 #include "wio/sema/type_queries.h"
+#include "detail/const_evaluation_limiter.h"
 #include "detail/validation_annotation_snapshot.h"
 
 #include "compiler.h"
@@ -57,6 +58,8 @@ namespace wio::sema
         using type_queries::isStdLibraryScopePath;
         using type_queries::shouldAutoReadReferenceType;
         using type_queries::unwrapAliasType;
+        using detail::ConstEvaluationLimiter;
+        using detail::ConstEvaluationLimitStatus;
         using detail::ValidationAnnotationSnapshot;
         std::vector<Attribute> getModuleLifecycleAttributes(const std::vector<NodePtr<AttributeStatement>>& attributes);
 
