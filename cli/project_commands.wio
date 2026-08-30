@@ -110,7 +110,13 @@ realm SelfHostedProject {
         return inputs;
     }
 
-    fn BuildResolved(info: ProjectInfo, forceRebuild: bool, emitCpp: bool) -> std::Result<i32> {
+    fn BuildResolved(
+        info: ProjectInfo,
+        forceRebuild: bool,
+        emitMode: string,
+        irOutput: string,
+        noBuiltin: bool
+    ) -> std::Result<i32> {
         if (not fs::IsFile(info.wioEntry)) {
             return Failure<i32>($"Wio entry file was not found: ${info.wioEntry}");
         }
@@ -121,19 +127,27 @@ realm SelfHostedProject {
             info.wioEntry, "--target", info.wioTarget, "--output", info.wioOutput
         ];
         AppendCompilerArguments(ref compileArgs, info, "");
-        if (emitCpp) {
+        if (noBuiltin) { compileArgs.Push("--no-builtin"); }
+        if (emitMode != "") {
             compileArgs.Push("--intermediate-dir");
             compileArgs.Push(info.outputDirectory);
-            compileArgs.Push("--emit-cpp");
+            if (emitMode == "cpp") { compileArgs.Push("--emit-cpp"); }
+            else if (emitMode == "typed-wir") { compileArgs.Push("--emit-typed-wir"); }
+            else if (emitMode == "lowered-wir") { compileArgs.Push("--emit-lowered-wir"); }
+            else { return Failure<i32>($"Unknown compiler emission mode: ${emitMode}"); }
+            if (irOutput != "") {
+                compileArgs.Push("--ir-output");
+                compileArgs.Push(path::AbsoluteFromRaw(info.projectRoot, irOutput));
+            }
         }
-        if (emitCpp or forceRebuild or not OutputUpToDate(info.wioOutput, ProjectCompilerInputs(info, info.wioEntry))) {
+        if (emitMode != "" or forceRebuild or not OutputUpToDate(info.wioOutput, ProjectCompilerInputs(info, info.wioEntry))) {
             let compileResult = RunProcess?(info.nativeCore, compileArgs, info.projectRoot);
             if (compileResult != 0) { return std::Ok<i32>(compileResult); }
         }
         else {
             console::PrintLine!("Project Wio compile: up to date, skipping compiler invocation.");
         }
-        if (emitCpp) { return std::Ok<i32>(0); }
+        if (emitMode != "") { return std::Ok<i32>(0); }
         if (not info.hostEnabled) { return std::Ok<i32>(0); }
 
         mut hostArgs: string[] = ["-std=c++20", "-I", info.sdkIncludeDirectory];
@@ -182,10 +196,28 @@ realm SelfHostedProject {
     }
 
     fn Build(args: string[]) -> std::Result<i32> {
+        let emitCpp = HasFlag(args, "--emit-cpp");
+        let emitTypedWir = HasFlag(args, "--emit-typed-wir");
+        let emitLoweredWir = HasFlag(args, "--emit-lowered-wir");
+        let emitCount = (emitCpp ? 1i32 : 0i32) +
+            (emitTypedWir ? 1i32 : 0i32) +
+            (emitLoweredWir ? 1i32 : 0i32);
+        if (emitCount > 1i32) {
+            return Failure<i32>("Choose only one of --emit-cpp, --emit-typed-wir, or --emit-lowered-wir.");
+        }
+        let irOutput = OptionValue(args, "--ir-output", "");
+        if (emitCount == 0i32 and irOutput != "") {
+            return Failure<i32>("--ir-output requires --emit-typed-wir or --emit-lowered-wir.");
+        }
+        let emitMode = emitCpp
+            ? "cpp"
+            : (emitTypedWir ? "typed-wir" : (emitLoweredWir ? "lowered-wir" : ""));
         return BuildResolved(
             ResolveInfo?(args),
             HasFlag(args, "--rebuild") or HasFlag(args, "--configure"),
-            HasFlag(args, "--emit-cpp")
+            emitMode,
+            irOutput,
+            HasFlag(args, "--no-builtin") or HasFlag(args, "-B")
         );
     }
 
@@ -212,6 +244,8 @@ realm SelfHostedProject {
             let buildResult = BuildResolved?(
                 info,
                 HasFlag(args, "--rebuild") or HasFlag(args, "--configure"),
+                "",
+                "",
                 false
             );
             if (buildResult != 0) { return std::Ok<i32>(buildResult); }
@@ -341,6 +375,8 @@ realm SelfHostedProject {
             let buildResult = BuildResolved?(
                 info,
                 HasFlag(args, "--rebuild") or HasFlag(args, "--configure"),
+                "",
+                "",
                 false
             );
             if (buildResult != 0) { return std::Ok<i32>(buildResult); }

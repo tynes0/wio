@@ -131,6 +131,8 @@ Supported modes:
 - `run`
 - `tokens`
 - `ast`
+- `typed-wir`
+- `lowered-wir`
 
 Examples:
 
@@ -139,6 +141,8 @@ wio file check .\playground\main.wio
 wio file run .\playground\main.wio
 wio file tokens .\playground\main.wio
 wio file ast .\playground\main.wio
+wio file typed-wir .\playground\main.wio
+wio file lowered-wir .\playground\main.wio --ir-output .\artifacts\main.lowered.wir
 ```
 
 ### 4.1 Output Policy
@@ -223,6 +227,8 @@ wio project build --project C:\Projects\MyGame
 cd C:\Projects\MyGame
 wio project build
 wio project build --emit-cpp
+wio project build --emit-typed-wir
+wio project build --emit-lowered-wir --ir-output .\.wio-build\main.lowered.wir
 ```
 
 Wio uses up-to-date checks so repeated builds can become very cheap when the
@@ -233,6 +239,13 @@ native include directories, native sources, link settings, target, and output
 paths intact. It keeps generated C++ in the resolved project output directory
 and stops before backend/host compilation. This is the project-aware C++
 inspection path used by editor tooling.
+
+`--emit-typed-wir` and `--emit-lowered-wir` expose the experimental,
+backend-neutral compiler pipeline and stop before C++ generation. The project
+output directory is used by default; `--ir-output` selects an explicit path.
+Only one emission mode may be selected. Minimal transition fixtures that do
+not need the automatically merged standard-library contracts can additionally
+use `--no-builtin`. See [the WIR pipeline contract](./WIO_WIR_PIPELINE.md).
 
 ### 5.4 `project run`
 

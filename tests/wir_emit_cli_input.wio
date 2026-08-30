@@ -1,0 +1,7 @@
+fn Choose(condition: bool) -> i32 {
+    return condition ? 21 : 42;
+}
+
+fn Entry() -> i32 {
+    return Choose(true);
+}

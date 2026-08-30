@@ -112,6 +112,23 @@ if(TARGET wio_selfhost_cli)
     list(APPEND WIO_CLI_TEST_DEPENDENCIES wio_selfhost_cli)
 endif()
 
+if(BUILD_TESTING)
+    add_test(
+        NAME wio_wir_emit_cli
+        COMMAND
+            ${CMAKE_COMMAND}
+            "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+            "-DWIO_CLI_EXECUTABLE=${WIO_SELFHOST_CLI_OUTPUT}"
+            "-DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/wir_emit_cli_input.wio"
+            "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/wir-emit-cli-test"
+            -P "${CMAKE_SOURCE_DIR}/tests/cmake/wir_emit_cli_test.cmake"
+    )
+    set_tests_properties(wio_wir_emit_cli PROPERTIES
+        LABELS "wir;cli"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+endif()
+
 function(add_wio_dev_target target_name source_file)
     add_custom_target(
         ${target_name}

@@ -41,6 +41,10 @@
 #include "wio/lexer/lexer.h"
 #include "wio/parser/parser.h"
 #include "wio/sema/analyzer.h"
+#include "wio/wir/lowered_ir_printer.h"
+#include "wio/wir/lowering_pipeline.h"
+#include "wio/wir/typed_ir_builder.h"
+#include "wio/wir/typed_ir_printer.h"
 
 namespace wio
 {
@@ -557,6 +561,150 @@ namespace wio
             std::filesystem::path cppPath = root / outputPath.stem();
             cppPath += ".wio.cpp";
             return cppPath.make_preferred();
+        }
+
+        enum class WirEmitKind : uint8_t
+        {
+            None,
+            Typed,
+            Lowered
+        };
+
+        WirEmitKind requestedWirEmitKind()
+        {
+            if (gAppData.flags.get_EmitTypedWir())
+                return WirEmitKind::Typed;
+            if (gAppData.flags.get_EmitLoweredWir())
+                return WirEmitKind::Lowered;
+            return WirEmitKind::None;
+        }
+
+        std::filesystem::path makeDefaultWirPath(
+            const std::filesystem::path& sourcePath,
+            const std::optional<std::filesystem::path>& intermediateDir,
+            const WirEmitKind kind)
+        {
+            const std::filesystem::path root = intermediateDir.has_value()
+                ? std::filesystem::absolute(*intermediateDir).make_preferred()
+                : sourcePath.parent_path().make_preferred();
+            std::filesystem::path outputPath = root / sourcePath.stem();
+            outputPath += kind == WirEmitKind::Typed ? ".typed.wir" : ".lowered.wir";
+            return outputPath.make_preferred();
+        }
+
+        bool validateWirEmitOptions()
+        {
+            const bool emitTyped = gAppData.flags.get_EmitTypedWir();
+            const bool emitLowered = gAppData.flags.get_EmitLoweredWir();
+            const bool emitsWir = emitTyped || emitLowered;
+            const bool hasIrOutput = !gAppData.argParser.GetValuesOf<std::string>("IR-OUTPUT").empty();
+
+            if (emitTyped && emitLowered)
+            {
+                WIO_LOG_FATAL("--emit-typed-wir and --emit-lowered-wir are mutually exclusive.");
+                return false;
+            }
+            if (emitsWir && gAppData.flags.get_EmitCpp())
+            {
+                WIO_LOG_FATAL("WIR emission cannot be combined with --emit-cpp.");
+                return false;
+            }
+            if (emitsWir && gAppData.flags.get_DryRun())
+            {
+                WIO_LOG_FATAL("WIR emission cannot be combined with --dry-run.");
+                return false;
+            }
+            if (emitsWir && gAppData.flags.get_Run())
+            {
+                WIO_LOG_FATAL("WIR emission cannot be combined with --run.");
+                return false;
+            }
+            if (!emitsWir && hasIrOutput)
+            {
+                WIO_LOG_FATAL("--ir-output requires --emit-typed-wir or --emit-lowered-wir.");
+                return false;
+            }
+            return true;
+        }
+
+        void reportTypedWirDiagnostics(const wir::typed::BuildResult& result)
+        {
+            for (const wir::typed::BuildDiagnostic& diagnostic : result.diagnostics())
+            {
+                WIO_LOG_ADD_ERROR(
+                    diagnostic.source.begin,
+                    "Typed WIR {}: {}",
+                    diagnostic.code,
+                    diagnostic.message);
+            }
+        }
+
+        void reportLoweringDiagnostics(const wir::LoweringResult& result)
+        {
+            for (const wir::LoweringDiagnostic& diagnostic : result.diagnostics())
+            {
+                WIO_LOG_ADD_ERROR(
+                    diagnostic.source.begin,
+                    "Lowered WIR {} ({}): {}",
+                    diagnostic.code,
+                    diagnostic.pass,
+                    diagnostic.message);
+            }
+        }
+
+        int emitWir(
+            const Ref<Program>& program,
+            const std::filesystem::path& sourcePath,
+            const WirEmitKind kind)
+        {
+            const std::vector<std::string> intermediateDirs =
+                gAppData.argParser.GetValuesOf<std::string>("INTERMEDIATE-DIR");
+            const std::optional<std::filesystem::path> intermediateDir = intermediateDirs.empty()
+                ? std::nullopt
+                : std::optional<std::filesystem::path>(
+                      std::filesystem::absolute(std::filesystem::path(intermediateDirs.front())).make_preferred());
+            const std::vector<std::string> configuredOutputs =
+                gAppData.argParser.GetValuesOf<std::string>("IR-OUTPUT");
+            const std::filesystem::path outputPath = configuredOutputs.empty()
+                ? makeDefaultWirPath(sourcePath, intermediateDir, kind)
+                : std::filesystem::absolute(std::filesystem::path(configuredOutputs.front())).make_preferred();
+
+            wir::typed::BuildResult typedResult = wir::typed::Builder{}.build(program);
+            reportTypedWirDiagnostics(typedResult);
+            WIO_LOG_PROCESS_ERRORS(CompilationError);
+
+            std::string output;
+            std::string_view outputName;
+            if (kind == WirEmitKind::Typed)
+            {
+                output = wir::typed::Printer{}.print(typedResult.module());
+                outputName = "Typed WIR";
+            }
+            else
+            {
+                wir::LoweringResult loweringResult = wir::LoweringPipeline{}.lower(typedResult.module());
+                reportLoweringDiagnostics(loweringResult);
+                WIO_LOG_PROCESS_ERRORS(CompilationError);
+                output = wir::lowered::Printer{}.print(loweringResult.module());
+                outputName = "Lowered WIR";
+            }
+
+            std::error_code directoryError;
+            if (outputPath.has_parent_path())
+                std::filesystem::create_directories(outputPath.parent_path(), directoryError);
+            if (directoryError)
+            {
+                WIO_LOG_FATAL("{} output directory could not be created: {}", outputName, outputPath.parent_path().string());
+                return EXIT_FAILURE;
+            }
+            if (!filesystem::writeFilepath(output, outputPath))
+            {
+                WIO_LOG_FATAL("{} output could not be written to: {}", outputName, outputPath.string());
+                return EXIT_FAILURE;
+            }
+
+            WIO_LOG_INFO("Generated {} output: {}", outputName, outputPath.generic_string());
+            return EXIT_SUCCESS;
         }
 
         std::string quotePath(const std::filesystem::path& path)
@@ -2502,6 +2650,18 @@ namespace wio
                     .SetDescription("Generates <file>.wio.cpp, keeps it on disk, and stops before native backend compilation.")
             )
             .Add(
+                Argonaut::Argument("EMIT-TYPED-WIR")
+                    .AddAlias("--emit-typed-wir")
+                    .Flag()
+                    .SetDescription("Generates analyzed Typed WIR and stops before backend lowering.")
+            )
+            .Add(
+                Argonaut::Argument("EMIT-LOWERED-WIR")
+                    .AddAlias("--emit-lowered-wir")
+                    .Flag()
+                    .SetDescription("Generates canonical Lowered WIR and stops before backend code generation.")
+            )
+            .Add(
                 Argonaut::Argument("SHOW-BACKEND-INFO")
                     .AddAlias("--show-backend-info")
                     .Flag()
@@ -2549,6 +2709,11 @@ namespace wio
                 Argonaut::Argument("INTERMEDIATE-DIR")
                     .AddAlias("--intermediate-dir")
                     .SetDescription("Overrides the directory used for non-emitted generated backend intermediates.")
+            )
+            .Add(
+                Argonaut::Argument("IR-OUTPUT")
+                    .AddAlias("--ir-output")
+                    .SetDescription("Overrides the output path used by --emit-typed-wir or --emit-lowered-wir.")
             )
             .Add(
                 Argonaut::Argument("INCLUDE-DIR")
@@ -2646,6 +2811,8 @@ namespace wio
             DEFINE_FLAG_VALUE("SHOW-AST", ShowAst);
             DEFINE_FLAG_VALUE("DRY-RUN", DryRun);
             DEFINE_FLAG_VALUE("EMIT-CPP", EmitCpp);
+            DEFINE_FLAG_VALUE("EMIT-TYPED-WIR", EmitTypedWir);
+            DEFINE_FLAG_VALUE("EMIT-LOWERED-WIR", EmitLoweredWir);
             DEFINE_FLAG_VALUE("SHOW-BACKEND-INFO", ShowBackendInfo);
             DEFINE_FLAG_VALUE("NO-BUILTIN", NoBuiltin);
             DEFINE_FLAG_VALUE("WARN-AS-ERROR", WarnAsError);
@@ -2835,6 +3002,17 @@ namespace wio
             // 3. Semantic Analysis
             sema::SemanticAnalyzer analyzer;
             analyzer.analyze(program);
+
+            if (!validateWirEmitOptions())
+                return EXIT_FAILURE;
+
+            const WirEmitKind wirEmitKind = requestedWirEmitKind();
+            if (wirEmitKind != WirEmitKind::None)
+            {
+                WIO_LOG_PROCESS_WARNINGS();
+                WIO_LOG_PROCESS_ERRORS(CompilationError);
+                return emitWir(program, sourcePath, wirEmitKind);
+            }
 
             std::filesystem::path runtimeIncludeDir;
             std::filesystem::path sdkIncludeDir;

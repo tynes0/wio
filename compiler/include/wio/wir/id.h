@@ -11,7 +11,7 @@ namespace wio::wir
     {
     public:
         using ValueType = std::uint32_t;
-        static constexpr ValueType InvalidValue = std::numeric_limits<ValueType>::max();
+        static constexpr ValueType InvalidValue = (std::numeric_limits<ValueType>::max)();
 
         constexpr Id() = default;
         explicit constexpr Id(const ValueType value) : value_(value) {}
