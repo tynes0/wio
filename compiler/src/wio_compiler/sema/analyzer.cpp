@@ -2,6 +2,8 @@
 
 #include <array>
 #include "wio/ast/attribute_contract.h"
+#include "wio/ast/attribute_queries.h"
+#include "wio/ast/declaration_queries.h"
 #include <cctype>
 #include <functional>
 #include <limits>
@@ -9,19 +11,51 @@
 #include <ranges>
 #include <unordered_set>
 
+#include "wio/codegen/cpp_identifier.h"
 #include "wio/codegen/mangler.h"
 #include "wio/common/exception.h"
 #include "wio/common/logger.h"
 #include "wio/common/operator_overload.h"
 #include "wio/common/utility.h"
 #include "wio/sema/intrinsic_member_resolver.h"
+#include "wio/sema/constant_evaluator.h"
+#include "wio/sema/generic_support.h"
+#include "wio/sema/scope_lookup.h"
+#include "wio/sema/type_queries.h"
 
 #include "compiler.h"
 namespace wio::sema
 {
     namespace
     {
-        const Token* getFirstAttributeArg(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr);
+        using attribute_queries::getAllAttributeArgs;
+        using attribute_queries::getAttributeStatements;
+        using attribute_queries::getFirstAttributeArg;
+        using attribute_queries::hasAttribute;
+        using codegen::cpp_identifier::isValidCppIdentifier;
+        using codegen::cpp_identifier::isValidCppSymbolPath;
+        using declaration_queries::getFixedParameterCount;
+        using declaration_queries::getRequiredParameterCount;
+        using scope_lookup::resolveQualifiedSymbol;
+        using generic_support::GenericBindingSet;
+        using generic_support::PackElementBindingKind;
+        using generic_support::ParsedPackElementBinding;
+        using generic_support::buildExtendedGenericBindings;
+        using generic_support::buildGenericTypeBindings;
+        using generic_support::getMinimumGenericArgumentCount;
+        using generic_support::makePackElementBindingName;
+        using generic_support::makePackTailElementBindingName;
+        using generic_support::tryEvaluatePackIndexBinding;
+        using generic_support::tryEvaluateStaticPackIndex;
+        using generic_support::tryGetSymbolicPackReferenceName;
+        using generic_support::tryGetNormalizedSymbolicPackName;
+        using generic_support::tryParsePackElementBindingName;
+        using generic_support::tryResolveConcretePackElementIndex;
+        using type_queries::getAutoReadableType;
+        using type_queries::isSdkValueBridgeType;
+        using type_queries::isStdLibraryScopePath;
+        using type_queries::shouldAutoReadReferenceType;
+        using type_queries::unwrapAliasType;
         std::vector<Attribute> getModuleLifecycleAttributes(const std::vector<NodePtr<AttributeStatement>>& attributes);
 
         Ref<Type> unwrapTransferType(Ref<Type> type)
@@ -173,25 +207,6 @@ namespace wio::sema
         {
             std::unordered_set<const Type*> active;
             return isExecutorTransferSafe(type, active);
-        }
-
-        const std::unordered_set<std::string>& getCppReservedIdentifiers()
-        {
-            static const std::unordered_set<std::string> keywords = {
-                "alignas", "alignof", "and", "and_eq", "asm", "auto", "bitand", "bitor", "bool", "break",
-                "case", "catch", "char", "char8_t", "char16_t", "char32_t", "class", "compl", "concept",
-                "const", "consteval", "constexpr", "constinit", "const_cast", "continue", "co_await",
-                "co_return", "co_yield", "decltype", "default", "delete", "do", "double", "dynamic_cast",
-                "else", "enum", "explicit", "export", "extern", "false", "float", "for", "friend", "goto",
-                "if", "inline", "int", "long", "mutable", "namespace", "new", "noexcept", "not", "not_eq",
-                "nullptr", "operator", "or", "or_eq", "private", "protected", "public", "reflexpr",
-                "register", "reinterpret_cast", "requires", "return", "short", "signed", "sizeof", "static",
-                "static_assert", "static_cast", "struct", "switch", "template", "this", "thread_local", "throw",
-                "true", "try", "typedef", "typeid", "typename", "union", "unsigned", "using", "virtual",
-                "void", "volatile", "wchar_t", "while", "xor", "xor_eq"
-            };
-
-            return keywords;
         }
 
         struct ValidationAnnotationSnapshot
@@ -776,51 +791,6 @@ namespace wio::sema
             }
         };
 
-        bool isValidCppIdentifier(std::string_view identifier)
-        {
-            if (identifier.empty())
-                return false;
-
-            const unsigned char first = static_cast<unsigned char>(identifier.front());
-            if (!(std::isalpha(first) || identifier.front() == '_'))
-                return false;
-
-            for (char ch : identifier)
-            {
-                const unsigned char uch = static_cast<unsigned char>(ch);
-                if (!(std::isalnum(uch) || ch == '_'))
-                    return false;
-            }
-
-            return !getCppReservedIdentifiers().contains(std::string(identifier));
-        }
-
-        bool isValidCppSymbolPath(std::string_view symbolPath, bool allowQualified)
-        {
-            if (symbolPath.empty())
-                return false;
-
-            if (!allowQualified && symbolPath.find("::") != std::string_view::npos)
-                return false;
-
-            size_t start = 0;
-            while (start <= symbolPath.size())
-            {
-                const size_t separator = symbolPath.find("::", start);
-                const size_t count = separator == std::string_view::npos ? symbolPath.size() - start : separator - start;
-                const std::string_view segment = symbolPath.substr(start, count);
-                if (!isValidCppIdentifier(segment))
-                    return false;
-
-                if (separator == std::string_view::npos)
-                    break;
-
-                start = separator + 2;
-            }
-
-            return true;
-        }
-
         std::string getModuleLifecycleExportSymbol(Attribute lifecycleAttribute)
         {
             // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
@@ -849,33 +819,6 @@ namespace wio::sema
                 return cppNameArg->value;
 
             return node.name ? node.name->token.value : "";
-        }
-
-        size_t getFixedParameterCount(const FunctionDeclaration& node)
-        {
-            const bool hasParameterPack = std::ranges::any_of(node.parameters, [](const Parameter& parameter)
-            {
-                return parameter.isParameterPack;
-            });
-
-            if (hasParameterPack && !node.parameters.empty())
-                return node.parameters.size() - 1;
-
-            return node.parameters.size();
-        }
-
-        size_t getRequiredParameterCount(const FunctionDeclaration& node)
-        {
-            size_t requiredCount = getFixedParameterCount(node);
-            while (requiredCount > 0 && node.parameters[requiredCount - 1].defaultValue)
-                --requiredCount;
-
-            return requiredCount;
-        }
-
-        size_t getRequiredParameterCount(const FunctionDeclaration* node)
-        {
-            return node ? getRequiredParameterCount(*node) : 0;
         }
 
         std::string formatExpectedArgumentCountDescription(size_t requiredCount, size_t totalCount)
@@ -919,14 +862,6 @@ namespace wio::sema
             }
 
             return parts;
-        }
-
-        Ref<Type> unwrapAliasType(Ref<Type> type)
-        {
-            while (type && type->kind() == TypeKind::Alias)
-                type = type.AsFast<AliasType>()->aliasedType;
-
-            return type;
         }
 
         bool isNullableCapableType(const Ref<Type>& type)
@@ -1173,43 +1108,6 @@ namespace wio::sema
                    isTextType(resolvedType);
         }
 
-        bool shouldAutoReadReferenceType(const Ref<Type>& type)
-        {
-            Ref<Type> current = unwrapAliasType(type);
-            if (!current || current->kind() != TypeKind::Reference)
-                return false;
-
-            while (current && current->kind() == TypeKind::Reference)
-            {
-                auto refType = current.AsFast<ReferenceType>();
-                current = unwrapAliasType(refType->referredType);
-
-                if (!current)
-                    return false;
-
-                if (current->kind() == TypeKind::Struct)
-                {
-                    auto structType = current.AsFast<StructType>();
-                    if (structType->isObject || structType->isInterface)
-                        return false;
-                }
-            }
-
-            return true;
-        }
-
-        Ref<Type> getAutoReadableType(const Ref<Type>& type)
-        {
-            Ref<Type> current = unwrapAliasType(type);
-            if (!shouldAutoReadReferenceType(type))
-                return current;
-
-            while (current && current->kind() == TypeKind::Reference)
-                current = unwrapAliasType(current.AsFast<ReferenceType>()->referredType);
-
-            return current;
-        }
-
         bool isIntegralLikeType(const Ref<Type>& type)
         {
             Ref<Type> resolved = unwrapAliasType(type);
@@ -1399,8 +1297,6 @@ namespace wio::sema
                    resolvedDestination->isNumeric() && resolvedSource->isNumeric() &&
                    !isSafeImplicitNumericConversion(resolvedDestination, resolvedSource);
         }
-
-        std::optional<std::string> tryGetNormalizedSymbolicPackName(const Ref<Type>& type);
 
         bool isAssignmentLikeCompatible(const Ref<Type>& destination, const Ref<Type>& source)
         {
@@ -1758,8 +1654,6 @@ namespace wio::sema
             return false;
         }
 
-        using ConstVariableDeclarationMap = std::unordered_map<const Symbol*, const VariableDeclaration*>;
-
         enum class ConstEvaluationLimitStatus
         {
             Valid,
@@ -1857,142 +1751,6 @@ namespace wio::sema
                 return validateChild(fit->operand);
 
             return ConstEvaluationLimitStatus::Valid;
-        }
-
-        std::optional<int64_t> tryEvaluateStaticIntegerExpression(
-            const NodePtr<Expression>& expression,
-            const ConstVariableDeclarationMap& variableDeclarationsBySymbol,
-            std::unordered_set<const Symbol*>& activeSymbols)
-        {
-            if (!expression)
-                return std::nullopt;
-
-            auto convertIntegerLiteral = [](const IntegerLiteral& literal) -> std::optional<int64_t>
-            {
-                const IntegerResult result = common::getInteger(literal.token.value);
-                if (!result.isValid)
-                    return std::nullopt;
-
-                switch (result.type)
-                {
-                case IntegerType::i8: return static_cast<int64_t>(result.value.v_i8);
-                case IntegerType::i16: return static_cast<int64_t>(result.value.v_i16);
-                case IntegerType::i32: return static_cast<int64_t>(result.value.v_i32);
-                case IntegerType::i64: return result.value.v_i64;
-                case IntegerType::u8: return static_cast<int64_t>(result.value.v_u8);
-                case IntegerType::u16: return static_cast<int64_t>(result.value.v_u16);
-                case IntegerType::u32: return static_cast<int64_t>(result.value.v_u32);
-                case IntegerType::u64:
-                    if (result.value.v_u64 > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
-                        return std::nullopt;
-                    return static_cast<int64_t>(result.value.v_u64);
-                case IntegerType::isize: return static_cast<int64_t>(result.value.v_isize);
-                case IntegerType::usize:
-                    if (result.value.v_usize > static_cast<size_t>(std::numeric_limits<int64_t>::max()))
-                        return std::nullopt;
-                    return static_cast<int64_t>(result.value.v_usize);
-                case IntegerType::Unknown: return std::nullopt;
-                }
-
-                return std::nullopt;
-            };
-
-            if (const auto* literal = expression->as<IntegerLiteral>())
-                return convertIntegerLiteral(*literal);
-
-            if (const auto* identifier = expression->as<Identifier>())
-            {
-                Ref<Symbol> symbol = identifier->referencedSymbol.Lock();
-                if (!symbol || !symbol->flags.get_isConst())
-                    return std::nullopt;
-
-                auto declarationIt = variableDeclarationsBySymbol.find(symbol.Get());
-                if (declarationIt == variableDeclarationsBySymbol.end() || !declarationIt->second || !declarationIt->second->initializer)
-                    return std::nullopt;
-
-                if (!activeSymbols.insert(symbol.Get()).second)
-                    return std::nullopt;
-
-                auto value = tryEvaluateStaticIntegerExpression(
-                    declarationIt->second->initializer,
-                    variableDeclarationsBySymbol,
-                    activeSymbols
-                );
-                activeSymbols.erase(symbol.Get());
-                return value;
-            }
-
-            if (const auto* unary = expression->as<UnaryExpression>())
-            {
-                auto operandValue = tryEvaluateStaticIntegerExpression(
-                    unary->operand,
-                    variableDeclarationsBySymbol,
-                    activeSymbols
-                );
-                if (!operandValue.has_value())
-                    return std::nullopt;
-
-                switch (unary->op.type)
-                {
-                case TokenType::opPlus:
-                    return *operandValue;
-                case TokenType::opMinus:
-                    if (*operandValue == std::numeric_limits<int64_t>::min())
-                        return std::nullopt;
-                    return -*operandValue;
-                case TokenType::opBitNot:
-                    return ~*operandValue;
-                default:
-                    return std::nullopt;
-                }
-            }
-
-            if (const auto* fit = expression->as<FitExpression>())
-            {
-                return tryEvaluateStaticIntegerExpression(
-                    fit->operand,
-                    variableDeclarationsBySymbol,
-                    activeSymbols
-                );
-            }
-
-            if (const auto* binary = expression->as<BinaryExpression>())
-            {
-                auto lhs = tryEvaluateStaticIntegerExpression(binary->left, variableDeclarationsBySymbol, activeSymbols);
-                auto rhs = tryEvaluateStaticIntegerExpression(binary->right, variableDeclarationsBySymbol, activeSymbols);
-                if (!lhs.has_value() || !rhs.has_value())
-                    return std::nullopt;
-
-                switch (binary->op.type)
-                {
-                case TokenType::opPlus: return *lhs + *rhs;
-                case TokenType::opMinus: return *lhs - *rhs;
-                case TokenType::opStar: return *lhs * *rhs;
-                case TokenType::opSlash:
-                    if (*rhs == 0)
-                        return std::nullopt;
-                    return *lhs / *rhs;
-                case TokenType::opPercent:
-                    if (*rhs == 0)
-                        return std::nullopt;
-                    return *lhs % *rhs;
-                case TokenType::opBitAnd: return *lhs & *rhs;
-                case TokenType::opBitOr: return *lhs | *rhs;
-                case TokenType::opBitXor: return *lhs ^ *rhs;
-                case TokenType::opShiftLeft:
-                    if (*rhs < 0 || *rhs >= 63)
-                        return std::nullopt;
-                    return *lhs << *rhs;
-                case TokenType::opShiftRight:
-                    if (*rhs < 0 || *rhs >= 63)
-                        return std::nullopt;
-                    return *lhs >> *rhs;
-                default:
-                    return std::nullopt;
-                }
-            }
-
-            return std::nullopt;
         }
 
         std::optional<Token> tryEvaluateStaticAttributeConstant(
@@ -2137,8 +1895,8 @@ namespace wio::sema
                 }();
             if (isIntegerExpression)
             {
-                auto value = tryEvaluateStaticIntegerExpression(
-                    expression, variableDeclarationsBySymbol, activeSymbols);
+                auto value = ConstExpressionEvaluator(variableDeclarationsBySymbol)
+                    .evaluateInteger(expression, activeSymbols);
                 if (value)
                 {
                     return Token{
@@ -2308,27 +2066,6 @@ namespace wio::sema
 
         bool isTypeDerivedFrom(const Ref<Type>& derived, const Ref<Type>& base);
 
-        std::unordered_map<std::string, Ref<Type>> buildGenericTypeBindings(const std::vector<std::string>& parameterNames,
-                                                                            const std::vector<Ref<Type>>& typeArguments)
-        {
-            std::unordered_map<std::string, Ref<Type>> bindings;
-            const size_t bindingCount = std::min(parameterNames.size(), typeArguments.size());
-            bindings.reserve(bindingCount);
-
-            for (size_t i = 0; i < bindingCount; ++i)
-                bindings.emplace(parameterNames[i], typeArguments[i]);
-
-            return bindings;
-        }
-
-        struct GenericBindingSet
-        {
-            std::unordered_map<std::string, Ref<Type>> directBindings;
-            std::unordered_map<std::string, std::vector<Ref<Type>>> packBindings;
-            std::unordered_map<std::string, std::string> packAliases;
-        };
-
-        size_t getMinimumGenericArgumentCount(const std::vector<std::string>& parameterNames, bool hasGenericParameterPack);
         bool containsGenericParameterType(const Ref<Type>& type);
         bool isNativePodInteropFieldType(const Ref<Type>& type, bool allowGenericPlaceholders = false);
         void validateInstantiatedNativePodComponent(const Ref<StructType>& structType,
@@ -2377,233 +2114,6 @@ namespace wio::sema
             }
 
             return materializedTypes;
-        }
-
-        std::string makePackElementBindingName(const std::string& packName, const size_t index)
-        {
-            return common::formatString("{}[{}]", packName, index);
-        }
-
-        std::string makePackTailElementBindingName(const std::string& packName, const size_t distanceFromEnd)
-        {
-            if (distanceFromEnd <= 1)
-                return common::formatString("{}[last]", packName);
-
-            return common::formatString("{}[last-{}]", packName, distanceFromEnd - 1);
-        }
-
-        enum class PackElementBindingKind : uint8_t
-        {
-            Absolute,
-            FromEnd
-        };
-
-        struct ParsedPackElementBinding
-        {
-            std::string packName;
-            size_t value = 0;
-            PackElementBindingKind kind = PackElementBindingKind::Absolute;
-        };
-
-        std::optional<ParsedPackElementBinding> tryParsePackElementBindingName(const std::string_view name)
-        {
-            const size_t openBracket = name.find('[');
-            if (openBracket == std::string_view::npos || !name.ends_with("]"))
-                return std::nullopt;
-
-            const std::string_view packName = name.substr(0, openBracket);
-            const std::string_view indexText = name.substr(openBracket + 1, name.size() - openBracket - 2);
-            if (packName.empty() || indexText.empty())
-                return std::nullopt;
-
-            if (indexText == "last")
-                return ParsedPackElementBinding{std::string(packName), 1, PackElementBindingKind::FromEnd};
-
-            if (indexText.starts_with("last-"))
-            {
-                const std::string_view offsetText = indexText.substr(5);
-                if (offsetText.empty())
-                    return std::nullopt;
-
-                size_t offset = 0;
-                for (const char ch : offsetText)
-                {
-                    if (ch < '0' || ch > '9')
-                        return std::nullopt;
-
-                    offset = (offset * 10) + static_cast<size_t>(ch - '0');
-                }
-
-                return ParsedPackElementBinding{
-                    std::string(packName),
-                    offset + 1,
-                    PackElementBindingKind::FromEnd
-                };
-            }
-
-            size_t index = 0;
-            for (const char ch : indexText)
-            {
-                if (ch < '0' || ch > '9')
-                    return std::nullopt;
-
-                index = (index * 10) + static_cast<size_t>(ch - '0');
-            }
-
-            return ParsedPackElementBinding{
-                std::string(packName),
-                index,
-                PackElementBindingKind::Absolute
-            };
-        }
-
-        std::string makePackElementBindingName(const ParsedPackElementBinding& binding)
-        {
-            if (binding.kind == PackElementBindingKind::FromEnd)
-                return makePackTailElementBindingName(binding.packName, binding.value);
-
-            return makePackElementBindingName(binding.packName, binding.value);
-        }
-
-        std::optional<size_t> tryResolveConcretePackElementIndex(const ParsedPackElementBinding& binding, const size_t packSize)
-        {
-            if (binding.kind == PackElementBindingKind::Absolute)
-            {
-                if (binding.value >= packSize)
-                    return std::nullopt;
-
-                return binding.value;
-            }
-
-            if (binding.value == 0 || binding.value > packSize)
-                return std::nullopt;
-
-            return packSize - binding.value;
-        }
-
-        std::optional<std::string> tryGetSymbolicPackReferenceName(const Ref<Type>& type)
-        {
-            Ref<Type> current = unwrapAliasType(type);
-            if (!current)
-                return std::nullopt;
-
-            switch (current->kind())
-            {
-            case TypeKind::GenericParameterPack:
-                return current.AsFast<GenericParameterPackType>()->name;
-            case TypeKind::ValuePackView:
-            {
-                auto packViewType = current.AsFast<ValuePackViewType>();
-                if (packViewType->elementTypes.empty())
-                    return packViewType->packName;
-                return std::nullopt;
-            }
-            case TypeKind::TypePackView:
-            {
-                auto packViewType = current.AsFast<TypePackViewType>();
-                if (packViewType->elementTypes.empty())
-                    return packViewType->packName;
-                return std::nullopt;
-            }
-            case TypeKind::PackStorage:
-            {
-                auto storageType = current.AsFast<PackStorageType>();
-                if (storageType->elementTypes.empty())
-                    return storageType->packName;
-                return std::nullopt;
-            }
-            default:
-                return std::nullopt;
-            }
-        }
-
-        std::optional<std::string> tryGetNormalizedSymbolicPackName(const Ref<Type>& type)
-        {
-            Ref<Type> current = unwrapAliasType(type);
-            if (!current)
-                return std::nullopt;
-
-            if (auto directPackName = tryGetSymbolicPackReferenceName(current))
-                return directPackName;
-
-            auto tryGetPackAliasFromElements = [](const std::vector<Ref<Type>>& elementTypes) -> std::optional<std::string>
-            {
-                if (elementTypes.size() != 1)
-                    return std::nullopt;
-                return tryGetSymbolicPackReferenceName(elementTypes.front());
-            };
-
-            switch (current->kind())
-            {
-            case TypeKind::ValuePackView:
-                return tryGetPackAliasFromElements(current.AsFast<ValuePackViewType>()->elementTypes);
-            case TypeKind::TypePackView:
-                return tryGetPackAliasFromElements(current.AsFast<TypePackViewType>()->elementTypes);
-            case TypeKind::PackStorage:
-                return tryGetPackAliasFromElements(current.AsFast<PackStorageType>()->elementTypes);
-            default:
-                return std::nullopt;
-            }
-        }
-
-        size_t getMinimumGenericArgumentCount(const std::vector<std::string>& parameterNames, const bool hasGenericParameterPack)
-        {
-            if (parameterNames.empty())
-                return 0;
-
-            return hasGenericParameterPack ? parameterNames.size() - 1 : parameterNames.size();
-        }
-
-        GenericBindingSet buildExtendedGenericBindings(const std::vector<std::string>& parameterNames,
-                                                       const bool hasGenericParameterPack,
-                                                       const std::vector<Ref<Type>>& typeArguments)
-        {
-            GenericBindingSet bindings;
-            const size_t fixedCount = getMinimumGenericArgumentCount(parameterNames, hasGenericParameterPack);
-            bindings.directBindings.reserve(fixedCount + typeArguments.size());
-
-            for (size_t i = 0; i < fixedCount && i < typeArguments.size(); ++i)
-                bindings.directBindings.emplace(parameterNames[i], typeArguments[i]);
-
-            if (!hasGenericParameterPack || parameterNames.empty())
-                return bindings;
-
-            const std::string& packName = parameterNames.back();
-            std::vector<Ref<Type>> packTypes;
-            if (typeArguments.size() > fixedCount)
-            {
-                if (typeArguments.size() == fixedCount + 1)
-                {
-                    if (auto symbolicPackName = tryGetSymbolicPackReferenceName(typeArguments[fixedCount]))
-                    {
-                        bindings.packAliases.emplace(packName, *symbolicPackName);
-                        bindings.packBindings.emplace(packName, std::move(packTypes));
-                        return bindings;
-                    }
-                }
-
-                packTypes.reserve(typeArguments.size() - fixedCount);
-                for (size_t i = fixedCount; i < typeArguments.size(); ++i)
-                {
-                    packTypes.push_back(typeArguments[i]);
-                    bindings.directBindings.emplace(makePackElementBindingName(packName, i - fixedCount), typeArguments[i]);
-                }
-            }
-
-            bindings.packBindings.emplace(packName, std::move(packTypes));
-            return bindings;
-        }
-
-        std::optional<size_t> tryEvaluateStaticPackIndex(
-            const NodePtr<Expression>& expression,
-            const ConstVariableDeclarationMap& variableDeclarationsBySymbol)
-        {
-            std::unordered_set<const Symbol*> activeSymbols;
-            auto value = tryEvaluateStaticIntegerExpression(expression, variableDeclarationsBySymbol, activeSymbols);
-            if (!value.has_value() || *value < 0)
-                return std::nullopt;
-
-            return static_cast<size_t>(*value);
         }
 
         std::optional<bool> tryEvaluateStaticTruthiness(const NodePtr<Expression>& expression)
@@ -2774,124 +2284,6 @@ namespace wio::sema
             }
 
             return false;
-        }
-
-        struct PackSizeReference
-        {
-            std::optional<std::string> packName;
-            std::optional<size_t> concreteSize;
-        };
-
-        std::optional<PackSizeReference> tryResolvePackSizeReference(const NodePtr<Expression>& expression)
-        {
-            if (!expression)
-                return std::nullopt;
-
-            const auto* memberAccess = expression->as<MemberAccessExpression>();
-            if (!memberAccess || !memberAccess->member)
-                return std::nullopt;
-
-            if (memberAccess->intrinsicMember != IntrinsicMember::PackSize &&
-                memberAccess->member->token.value != "size")
-            {
-                return std::nullopt;
-            }
-
-            Ref<Type> objectType = unwrapAliasType(memberAccess->object ? memberAccess->object->refType.Lock() : nullptr);
-            if (!objectType)
-                return std::nullopt;
-
-            PackSizeReference result;
-            switch (objectType->kind())
-            {
-            case TypeKind::GenericParameterPack:
-                result.packName = objectType.AsFast<GenericParameterPackType>()->name;
-                return result;
-            case TypeKind::ValuePackView:
-            {
-                auto packViewType = objectType.AsFast<ValuePackViewType>();
-                if (auto symbolicPackName = tryGetNormalizedSymbolicPackName(objectType))
-                    result.packName = *symbolicPackName;
-                if (!packViewType->elementTypes.empty())
-                    result.concreteSize = packViewType->elementTypes.size();
-                return result;
-            }
-            case TypeKind::TypePackView:
-            {
-                auto packViewType = objectType.AsFast<TypePackViewType>();
-                if (auto symbolicPackName = tryGetNormalizedSymbolicPackName(objectType))
-                    result.packName = *symbolicPackName;
-                if (!packViewType->elementTypes.empty())
-                    result.concreteSize = packViewType->elementTypes.size();
-                return result;
-            }
-            case TypeKind::PackStorage:
-            {
-                auto storageType = objectType.AsFast<PackStorageType>();
-                if (auto symbolicPackName = tryGetNormalizedSymbolicPackName(objectType))
-                    result.packName = *symbolicPackName;
-                if (!storageType->elementTypes.empty())
-                    result.concreteSize = storageType->elementTypes.size();
-                return result;
-            }
-            default:
-                return std::nullopt;
-            }
-        }
-
-        std::optional<ParsedPackElementBinding> tryEvaluatePackIndexBinding(
-            const NodePtr<Expression>& expression,
-            const ConstVariableDeclarationMap& variableDeclarationsBySymbol,
-            const std::optional<std::string_view> expectedPackName = std::nullopt)
-        {
-            if (!expression)
-                return std::nullopt;
-
-            if (auto absoluteIndex = tryEvaluateStaticPackIndex(expression, variableDeclarationsBySymbol))
-            {
-                ParsedPackElementBinding binding;
-                binding.packName = expectedPackName ? std::string(*expectedPackName) : std::string();
-                binding.value = *absoluteIndex;
-                binding.kind = PackElementBindingKind::Absolute;
-                return binding;
-            }
-
-            const auto* binary = expression->as<BinaryExpression>();
-            if (!binary || binary->op.type != TokenType::opMinus)
-                return std::nullopt;
-
-            auto packSizeReference = tryResolvePackSizeReference(binary->left);
-            auto rhsIndex = tryEvaluateStaticPackIndex(binary->right, variableDeclarationsBySymbol);
-            if (!packSizeReference || !rhsIndex.has_value())
-                return std::nullopt;
-
-            if (expectedPackName.has_value() &&
-                packSizeReference->packName.has_value() &&
-                *packSizeReference->packName != *expectedPackName)
-            {
-                return std::nullopt;
-            }
-
-            if (packSizeReference->concreteSize.has_value())
-            {
-                if (*rhsIndex > *packSizeReference->concreteSize)
-                    return std::nullopt;
-
-                ParsedPackElementBinding binding;
-                binding.packName = expectedPackName ? std::string(*expectedPackName) : packSizeReference->packName.value_or(std::string());
-                binding.value = *packSizeReference->concreteSize - *rhsIndex;
-                binding.kind = PackElementBindingKind::Absolute;
-                return binding;
-            }
-
-            if (!packSizeReference->packName.has_value())
-                return std::nullopt;
-
-            ParsedPackElementBinding binding;
-            binding.packName = *packSizeReference->packName;
-            binding.value = *rhsIndex;
-            binding.kind = PackElementBindingKind::FromEnd;
-            return binding;
         }
 
         Ref<Type> makeSyntheticPackElementType(const std::string& packName, const size_t index)
@@ -4617,14 +4009,6 @@ namespace wio::sema
             return false;
         }
 
-        bool hasAttribute(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
-        {
-            return std::ranges::any_of(attributes, [targetAttr](const auto& attr)
-            {
-                return attr && matchesBuiltinAttribute(*attr, targetAttr);
-            });
-        }
-
         std::string getStructIdentityKey(const Ref<StructType>& structType)
         {
             if (!structType)
@@ -4725,30 +4109,6 @@ namespace wio::sema
             }
 
             return isAccessible;
-        }
-
-        std::vector<const AttributeStatement*> getAttributeStatements(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
-        {
-            std::vector<const AttributeStatement*> matches;
-            for (const auto& attr : attributes)
-            {
-                if (attr && matchesBuiltinAttribute(*attr, targetAttr))
-                    matches.push_back(attr.Get());
-            }
-
-            return matches;
-        }
-
-        std::vector<Token> getAttributeArgs(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
-        {
-            std::vector<Token> allArgs;
-            for (const auto& attr : attributes) {
-                if (attr && matchesBuiltinAttribute(*attr, targetAttr))
-                {
-                    allArgs.insert(allArgs.end(), attr->args.begin(), attr->args.end());
-                }
-            }
-            return allArgs;
         }
 
         AccessModifier getDefaultAccessModifier(const std::vector<NodePtr<AttributeStatement>>& attributes,
@@ -5999,53 +5359,6 @@ namespace wio::sema
             return instantiations;
         }
 
-        const Token* getFirstAttributeArg(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
-        {
-            for (const auto& attr : attributes)
-            {
-                if (attr->attribute == targetAttr && !attr->args.empty())
-                    return &attr->args.front();
-            }
-
-            return nullptr;
-        }
-
-        Ref<Symbol> resolveQualifiedSymbol(const Ref<Scope>& startScope, std::string_view qualifiedName)
-        {
-            if (!startScope || qualifiedName.empty())
-                return nullptr;
-
-            size_t segmentStart = 0;
-            Ref<Scope> scope = startScope;
-            Ref<Symbol> resolvedSymbol = nullptr;
-
-            while (segmentStart < qualifiedName.size())
-            {
-                size_t separator = qualifiedName.find("::", segmentStart);
-                std::string segment = separator == std::string_view::npos
-                    ? std::string(qualifiedName.substr(segmentStart))
-                    : std::string(qualifiedName.substr(segmentStart, separator - segmentStart));
-
-                if (segment.empty())
-                    return nullptr;
-
-                resolvedSymbol = scope->resolve(segment);
-                if (!resolvedSymbol)
-                    return nullptr;
-
-                if (separator == std::string_view::npos)
-                    return resolvedSymbol;
-
-                if (!resolvedSymbol->innerScope)
-                    return nullptr;
-
-                scope = resolvedSymbol->innerScope;
-                segmentStart = separator + 2;
-            }
-
-            return resolvedSymbol;
-        }
-
         Ref<Symbol> resolveAttributeSymbol(const Ref<Scope>& startScope, const Token& token)
         {
             if (token.type != TokenType::identifier)
@@ -6095,78 +5408,6 @@ namespace wio::sema
 
             const std::string typeName = current->toString();
             return typeName != "string" && typeName != "object";
-        }
-
-        bool isStdLibraryScopePath(const std::string_view scopePath)
-        {
-            return scopePath == "std" || scopePath.starts_with("std::") || scopePath.starts_with("std_");
-        }
-
-        bool isSdkValueBridgeType(const Ref<Type>& type)
-        {
-            Ref<Type> current = type;
-            while (current && current->kind() == TypeKind::Alias)
-                current = current.AsFast<AliasType>()->aliasedType;
-
-            if (!current)
-                return false;
-
-            if (current->kind() == TypeKind::Primitive)
-            {
-                const std::string typeName = current->toString();
-                return typeName != "void" && typeName != "object" && typeName != "any" && typeName != "opaque";
-            }
-
-            if (current->kind() == TypeKind::Array)
-            {
-                auto arrayType = current.AsFast<ArrayType>();
-                return arrayType && isSdkValueBridgeType(arrayType->elementType);
-            }
-
-            if (current->kind() == TypeKind::Dictionary)
-            {
-                auto dictionaryType = current.AsFast<DictionaryType>();
-                return dictionaryType &&
-                    isSdkValueBridgeType(dictionaryType->keyType) &&
-                    isSdkValueBridgeType(dictionaryType->valueType);
-            }
-
-            if (current->kind() != TypeKind::Struct)
-                return false;
-
-            auto structType = current.AsFast<StructType>();
-            if (!structType || !isStdLibraryScopePath(structType->scopePath))
-            {
-                return false;
-            }
-
-            if (structType->name == "ResultUnit")
-                return structType->genericArguments.empty();
-
-            if (structType->name == "Span")
-                return structType->genericArguments.empty();
-
-            if (structType->name == "ByteBuffer")
-                return structType->genericArguments.empty();
-
-            if (structType->name == "Tuple")
-            {
-                return std::all_of(
-                    structType->genericArguments.begin(),
-                    structType->genericArguments.end(),
-                    [](const Ref<Type>& argument) { return isSdkValueBridgeType(argument); }
-                );
-            }
-
-            if ((structType->name == "Option" || structType->name == "Result" ||
-                 structType->name == "Queue" || structType->name == "UnorderedSet" ||
-                 structType->name == "OrderedSet") &&
-                structType->genericArguments.size() == 1)
-            {
-                return isSdkValueBridgeType(structType->genericArguments.front());
-            }
-
-            return false;
         }
 
         bool isSdkExportableFieldType(const Ref<Type>& type)
@@ -7531,11 +6772,8 @@ namespace wio::sema
                             }
                         }
 
-                        std::unordered_set<const Symbol*> activeSymbols;
-                        auto value = tryEvaluateStaticIntegerExpression(
-                            declarationIt->second->initializer,
-                            variableDeclarationsBySymbol_,
-                            activeSymbols);
+                        auto value = ConstExpressionEvaluator(variableDeclarationsBySymbol_)
+                            .evaluateInteger(declarationIt->second->initializer);
                         if (!value || *value < 0 || !isConstGenericIntegerType(sym->type))
                         {
                             WIO_LOG_ADD_ERROR(node.location(), "Const generic argument '{}' must evaluate to a non-negative integer.", node.name.value);
@@ -16978,7 +16216,7 @@ namespace wio::sema
 
         if (isCommand)
         {
-            auto commandArgs = getAttributeArgs(node.attributes, Attribute::Command);
+            auto commandArgs = getAllAttributeArgs(node.attributes, Attribute::Command);
             if (commandArgs.size() > 1)
             {
                 WIO_LOG_ADD_ERROR(node.location(), "@Command accepts at most one command name argument.");
@@ -16993,7 +16231,7 @@ namespace wio::sema
 
         if (isEvent)
         {
-            auto eventArgs = getAttributeArgs(node.attributes, Attribute::Event);
+            auto eventArgs = getAllAttributeArgs(node.attributes, Attribute::Event);
             if (eventArgs.size() != 1)
             {
                 WIO_LOG_ADD_ERROR(node.location(), "@Event expects exactly one event name argument.");
@@ -17265,7 +16503,7 @@ namespace wio::sema
 
         if (hasAttribute(node.attributes, Attribute::CppHeader))
         {
-            auto headerArgs = getAttributeArgs(node.attributes, Attribute::CppHeader);
+            auto headerArgs = getAllAttributeArgs(node.attributes, Attribute::CppHeader);
             if (!isNative)
             {
                 WIO_LOG_ADD_ERROR(node.location(), "@CppHeader can only be used together with @Native.");
@@ -17278,7 +16516,7 @@ namespace wio::sema
 
         if (hasAttribute(node.attributes, Attribute::CppName))
         {
-            auto cppNameArgs = getAttributeArgs(node.attributes, Attribute::CppName);
+            auto cppNameArgs = getAllAttributeArgs(node.attributes, Attribute::CppName);
             if (!isNative && !isExported && !hasModuleLifecycle)
             {
                 WIO_LOG_ADD_ERROR(node.location(), "@CppName can only be used together with @Native or @Export.");
@@ -18153,7 +17391,7 @@ namespace wio::sema
                 const bool inheritsNativeMapping = isExplicitSpecialization && genericPrimaryType;
                 if (hasAttribute(node.attributes, Attribute::CppHeader))
                 {
-                    auto headerArgs = getAttributeArgs(node.attributes, Attribute::CppHeader);
+                    auto headerArgs = getAllAttributeArgs(node.attributes, Attribute::CppHeader);
                     if (headerArgs.size() != 1 || headerArgs.front().type != TokenType::stringLiteral)
                     {
                         WIO_LOG_ADD_ERROR(node.location(), "@CppHeader on a native component expects exactly one string literal argument.");
@@ -18170,7 +17408,7 @@ namespace wio::sema
 
                 if (hasAttribute(node.attributes, Attribute::CppName))
                 {
-                    auto cppNameArgs = getAttributeArgs(node.attributes, Attribute::CppName);
+                    auto cppNameArgs = getAllAttributeArgs(node.attributes, Attribute::CppName);
                     if (cppNameArgs.size() != 1)
                     {
                         WIO_LOG_ADD_ERROR(node.location(), "@CppName on a native component expects exactly one target symbol argument.");
@@ -18316,7 +17554,7 @@ namespace wio::sema
             
             bool hasNoDefaultCtor = hasAttribute(node.attributes, Attribute::NoDefaultCtor);
             bool forceGenerateCtors = hasAttribute(node.attributes, Attribute::GenerateCtors);
-            auto bases = getAttributeArgs(node.attributes, Attribute::From);
+            auto bases = getAllAttributeArgs(node.attributes, Attribute::From);
             if (!bases.empty())
             {
                 WIO_LOG_ADD_ERROR(node.location(), "Components must be POD (Plain Old Data) and cannot inherit from objects or interfaces.");
@@ -19465,7 +18703,7 @@ namespace wio::sema
             {
                 if (hasAttribute(node.attributes, Attribute::CppHeader))
                 {
-                    auto headerArgs = getAttributeArgs(node.attributes, Attribute::CppHeader);
+                    auto headerArgs = getAllAttributeArgs(node.attributes, Attribute::CppHeader);
                     if (headerArgs.size() != 1 || headerArgs.front().type != TokenType::stringLiteral)
                     {
                         WIO_LOG_ADD_ERROR(node.location(), "@CppHeader on a native enum expects exactly one string literal argument.");
@@ -19478,7 +18716,7 @@ namespace wio::sema
 
                 if (hasAttribute(node.attributes, Attribute::CppName))
                 {
-                    auto cppNameArgs = getAttributeArgs(node.attributes, Attribute::CppName);
+                    auto cppNameArgs = getAllAttributeArgs(node.attributes, Attribute::CppName);
                     if (cppNameArgs.size() != 1)
                     {
                         WIO_LOG_ADD_ERROR(node.location(), "@CppName on a native enum expects exactly one target symbol argument.");
@@ -19525,7 +18763,7 @@ namespace wio::sema
             
             auto targetType = Compiler::get().getTypeContext().getI32();
            
-            if (auto typeArgs = getAttributeArgs(node.attributes, Attribute::Type); !typeArgs.empty())
+            if (auto typeArgs = getAllAttributeArgs(node.attributes, Attribute::Type); !typeArgs.empty())
             {
                 auto& ctx = Compiler::get().getTypeContext();
                 // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
@@ -19591,7 +18829,7 @@ namespace wio::sema
             {
                 if (hasAttribute(node.attributes, Attribute::CppHeader))
                 {
-                    auto headerArgs = getAttributeArgs(node.attributes, Attribute::CppHeader);
+                    auto headerArgs = getAllAttributeArgs(node.attributes, Attribute::CppHeader);
                     if (headerArgs.size() != 1 || headerArgs.front().type != TokenType::stringLiteral)
                     {
                         WIO_LOG_ADD_ERROR(node.location(), "@CppHeader on a native flagset expects exactly one string literal argument.");
@@ -19604,7 +18842,7 @@ namespace wio::sema
 
                 if (hasAttribute(node.attributes, Attribute::CppName))
                 {
-                    auto cppNameArgs = getAttributeArgs(node.attributes, Attribute::CppName);
+                    auto cppNameArgs = getAllAttributeArgs(node.attributes, Attribute::CppName);
                     if (cppNameArgs.size() != 1)
                     {
                         WIO_LOG_ADD_ERROR(node.location(), "@CppName on a native flagset expects exactly one target symbol argument.");
@@ -19650,7 +18888,7 @@ namespace wio::sema
             
             auto targetType = Compiler::get().getTypeContext().getU32();
            
-            if (auto typeArgs = getAttributeArgs(node.attributes, Attribute::Type); !typeArgs.empty())
+            if (auto typeArgs = getAllAttributeArgs(node.attributes, Attribute::Type); !typeArgs.empty())
             {
                 auto& ctx = Compiler::get().getTypeContext();
                 // NOLINTNEXTLINE(clang-diagnostic-switch-enum)

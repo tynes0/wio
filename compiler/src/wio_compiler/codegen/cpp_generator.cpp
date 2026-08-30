@@ -1,12 +1,19 @@
 ﻿#include "wio/codegen/cpp_generator.h"
 
 #include "wio/ast/attribute_contract.h"
+#include "wio/ast/attribute_queries.h"
+#include "wio/ast/declaration_queries.h"
+#include "wio/codegen/cpp_identifier.h"
 #include "wio/common/filesystem/filesystem.h"
 #include "wio/common/operator_overload.h"
 #include "wio/common/utility.h"
 #include "compiler.h"
 #include "wio/common/logger.h"
 #include "wio/sema/symbol.h"
+#include "wio/sema/scope_lookup.h"
+#include "wio/sema/constant_evaluator.h"
+#include "wio/sema/generic_support.h"
+#include "wio/sema/type_queries.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -22,64 +29,36 @@ namespace wio::codegen
 {
     namespace 
     {
-        bool isCppReservedIdentifier(std::string_view identifier)
-        {
-            static const std::unordered_set<std::string_view> reservedIdentifiers = {
-                "alignas", "alignof", "and", "and_eq", "asm", "auto", "bitand", "bitor",
-                "bool", "break", "case", "catch", "char", "char8_t", "char16_t", "char32_t",
-                "class", "compl", "concept", "const", "consteval", "constexpr", "constinit",
-                "const_cast", "continue", "co_await", "co_return", "co_yield", "decltype",
-                "default", "delete", "do", "double", "dynamic_cast", "else", "enum",
-                "explicit", "export", "extern", "false", "float", "for", "friend", "goto",
-                "if", "inline", "int", "long", "mutable", "namespace", "new", "noexcept",
-                "not", "not_eq", "nullptr", "operator", "or", "or_eq", "private",
-                "protected", "public", "register", "reinterpret_cast", "requires", "return",
-                "short", "signed", "sizeof", "static", "static_assert", "static_cast",
-                "struct", "switch", "template", "this", "thread_local", "throw", "true",
-                "try", "typedef", "typeid", "typename", "union", "unsigned", "using",
-                "virtual", "void", "volatile", "wchar_t", "while", "xor", "xor_eq"
-            };
-
-            return reservedIdentifiers.contains(identifier);
-        }
-
-        std::string sanitizeCppIdentifier(std::string_view identifier)
-        {
-            if (identifier.empty())
-                return "_wio_empty";
-
-            if (isCppReservedIdentifier(identifier))
-                return "_wio_" + std::string(identifier);
-
-            return std::string(identifier);
-        }
-
-        void replaceCppIdentifier(std::string& value, std::string_view from, std::string_view to)
-        {
-            if (from.empty() || from == to)
-                return;
-            auto isIdentifierCharacter = [](const char ch)
-            {
-                return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
-                       (ch >= '0' && ch <= '9') || ch == '_';
-            };
-            size_t position = 0;
-            while ((position = value.find(from, position)) != std::string::npos)
-            {
-                const bool startsAtBoundary = position == 0 || !isIdentifierCharacter(value[position - 1]);
-                const size_t end = position + from.size();
-                const bool endsAtBoundary = end == value.size() || !isIdentifierCharacter(value[end]);
-                if (startsAtBoundary && endsAtBoundary)
-                {
-                    value.replace(position, from.size(), to);
-                    position += to.size();
-                }
-                else
-                {
-                    position = end;
-                }
-            }
-        }
+        using attribute_queries::getFirstAttributeArgs;
+        using attribute_queries::getSingleAttributeArg;
+        using attribute_queries::hasAttribute;
+        using cpp_identifier::isCppReservedIdentifier;
+        using cpp_identifier::replaceCppIdentifier;
+        using cpp_identifier::sanitizeCppIdentifier;
+        using declaration_queries::getFixedParameterCount;
+        using declaration_queries::getRequiredParameterCount;
+        using declaration_queries::hasDefaultParameters;
+        using sema::scope_lookup::resolveQualifiedSymbol;
+        using sema::generic_support::GenericBindingSet;
+        using sema::generic_support::PackElementBindingKind;
+        using sema::generic_support::ParsedPackElementBinding;
+        using sema::generic_support::SymbolicPackNameMode;
+        using sema::generic_support::buildExtendedGenericBindings;
+        using sema::generic_support::buildGenericTypeBindings;
+        using sema::generic_support::getMinimumGenericArgumentCount;
+        using sema::generic_support::makePackElementBindingName;
+        using sema::generic_support::makePackTailElementBindingName;
+        using sema::generic_support::tryEvaluatePackIndexBinding;
+        using sema::generic_support::tryEvaluateStaticPackIndex;
+        using sema::generic_support::tryGetSymbolicPackReferenceName;
+        using sema::generic_support::tryParsePackElementBindingName;
+        using sema::generic_support::tryResolveConcretePackElementIndex;
+        using sema::type_queries::getAutoReadableReferenceDepth;
+        using sema::type_queries::getStdValueStructType;
+        using sema::type_queries::isSdkValueBridgeType;
+        using sema::type_queries::isStdLibraryScopePath;
+        using sema::type_queries::shouldAutoReadReferenceType;
+        using sema::type_queries::unwrapAliasType;
 
         std::string formatCppTemplateParameter(
             const NodePtr<Identifier>& parameter,
@@ -121,149 +100,10 @@ namespace wio::codegen
 
         Ref<sema::Type> unwrapAliasTypeForCodegen(Ref<sema::Type> type)
         {
-            while (type && type->kind() == sema::TypeKind::Alias)
-                type = type.AsFast<sema::AliasType>()->aliasedType;
-
-            return type;
+            return unwrapAliasType(std::move(type));
         }
 
-        using ConstVariableDeclarationMap = std::unordered_map<const sema::Symbol*, const VariableDeclaration*>;
-
-        std::optional<int64_t> tryEvaluateStaticIntegerExpression(
-            const NodePtr<Expression>& expression,
-            const ConstVariableDeclarationMap& variableDeclarationsBySymbol,
-            std::unordered_set<const sema::Symbol*>& activeSymbols)
-        {
-            if (!expression)
-                return std::nullopt;
-
-            auto convertIntegerLiteral = [](const IntegerLiteral& literal) -> std::optional<int64_t>
-            {
-                const IntegerResult result = common::getInteger(literal.token.value);
-                if (!result.isValid)
-                    return std::nullopt;
-
-                switch (result.type)
-                {
-                case IntegerType::i8: return static_cast<int64_t>(result.value.v_i8);
-                case IntegerType::i16: return static_cast<int64_t>(result.value.v_i16);
-                case IntegerType::i32: return static_cast<int64_t>(result.value.v_i32);
-                case IntegerType::i64: return result.value.v_i64;
-                case IntegerType::u8: return static_cast<int64_t>(result.value.v_u8);
-                case IntegerType::u16: return static_cast<int64_t>(result.value.v_u16);
-                case IntegerType::u32: return static_cast<int64_t>(result.value.v_u32);
-                case IntegerType::u64:
-                    if (result.value.v_u64 > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
-                        return std::nullopt;
-                    return static_cast<int64_t>(result.value.v_u64);
-                case IntegerType::isize: return static_cast<int64_t>(result.value.v_isize);
-                case IntegerType::usize:
-                    if (result.value.v_usize > static_cast<size_t>(std::numeric_limits<int64_t>::max()))
-                        return std::nullopt;
-                    return static_cast<int64_t>(result.value.v_usize);
-                case IntegerType::Unknown: return std::nullopt;
-                }
-
-                return std::nullopt;
-            };
-
-            if (const auto* literal = expression->as<IntegerLiteral>())
-                return convertIntegerLiteral(*literal);
-
-            if (const auto* identifier = expression->as<Identifier>())
-            {
-                Ref<sema::Symbol> symbol = identifier->referencedSymbol.Lock();
-                if (!symbol || !symbol->flags.get_isConst())
-                    return std::nullopt;
-
-                auto declarationIt = variableDeclarationsBySymbol.find(symbol.Get());
-                if (declarationIt == variableDeclarationsBySymbol.end() || !declarationIt->second || !declarationIt->second->initializer)
-                    return std::nullopt;
-
-                if (!activeSymbols.insert(symbol.Get()).second)
-                    return std::nullopt;
-
-                auto value = tryEvaluateStaticIntegerExpression(
-                    declarationIt->second->initializer,
-                    variableDeclarationsBySymbol,
-                    activeSymbols
-                );
-                activeSymbols.erase(symbol.Get());
-                return value;
-            }
-
-            if (const auto* unary = expression->as<UnaryExpression>())
-            {
-                auto operandValue = tryEvaluateStaticIntegerExpression(
-                    unary->operand,
-                    variableDeclarationsBySymbol,
-                    activeSymbols
-                );
-                if (!operandValue.has_value())
-                    return std::nullopt;
-
-                switch (unary->op.type)
-                {
-                case TokenType::opPlus:
-                    return *operandValue;
-                case TokenType::opMinus:
-                    if (*operandValue == std::numeric_limits<int64_t>::min())
-                        return std::nullopt;
-                    return -*operandValue;
-                case TokenType::opBitNot:
-                    return ~*operandValue;
-                default:
-                    return std::nullopt;
-                }
-            }
-
-            if (const auto* fit = expression->as<FitExpression>())
-            {
-                return tryEvaluateStaticIntegerExpression(
-                    fit->operand,
-                    variableDeclarationsBySymbol,
-                    activeSymbols
-                );
-            }
-
-            if (const auto* binary = expression->as<BinaryExpression>())
-            {
-                auto lhs = tryEvaluateStaticIntegerExpression(binary->left, variableDeclarationsBySymbol, activeSymbols);
-                auto rhs = tryEvaluateStaticIntegerExpression(binary->right, variableDeclarationsBySymbol, activeSymbols);
-                if (!lhs.has_value() || !rhs.has_value())
-                    return std::nullopt;
-
-                switch (binary->op.type)
-                {
-                case TokenType::opPlus: return *lhs + *rhs;
-                case TokenType::opMinus: return *lhs - *rhs;
-                case TokenType::opStar: return *lhs * *rhs;
-                case TokenType::opSlash:
-                    if (*rhs == 0)
-                        return std::nullopt;
-                    return *lhs / *rhs;
-                case TokenType::opPercent:
-                    if (*rhs == 0)
-                        return std::nullopt;
-                    return *lhs % *rhs;
-                case TokenType::opBitAnd: return *lhs & *rhs;
-                case TokenType::opBitOr: return *lhs | *rhs;
-                case TokenType::opBitXor: return *lhs ^ *rhs;
-                case TokenType::opShiftLeft:
-                    if (*rhs < 0 || *rhs >= 63)
-                        return std::nullopt;
-                    return *lhs << *rhs;
-                case TokenType::opShiftRight:
-                    if (*rhs < 0 || *rhs >= 63)
-                        return std::nullopt;
-                    return *lhs >> *rhs;
-                default:
-                    return std::nullopt;
-                }
-            }
-
-            return std::nullopt;
-        }
+        using sema::ConstVariableDeclarationMap;
 
         void collectVariableDeclarationsBySymbol(const Ref<Program>& program, ConstVariableDeclarationMap& variableDeclarationsBySymbol)
         {
@@ -582,95 +422,6 @@ namespace wio::codegen
             return current->toCppString();
         }
 
-        Ref<sema::Type> unwrapAliasType(Ref<sema::Type> type)
-        {
-            while (type && type->kind() == sema::TypeKind::Alias)
-                type = type.AsFast<sema::AliasType>()->aliasedType;
-            return type;
-        }
-
-        bool isStdLibraryScopePath(const std::string_view scopePath)
-        {
-            return scopePath == "std" || scopePath.starts_with("std::") || scopePath.starts_with("std_");
-        }
-
-        Ref<sema::StructType> getStdValueStructType(const Ref<sema::Type>& type,
-                                                    const std::string_view expectedName)
-        {
-            Ref<sema::Type> resolvedType = unwrapAliasType(type);
-            if (!resolvedType || resolvedType->kind() != sema::TypeKind::Struct)
-                return nullptr;
-
-            auto structType = resolvedType.AsFast<sema::StructType>();
-            if (!structType || structType->name != expectedName || !isStdLibraryScopePath(structType->scopePath))
-            {
-                return nullptr;
-            }
-
-            return structType;
-        }
-
-        bool isSdkValueBridgeType(const Ref<sema::Type>& type)
-        {
-            Ref<sema::Type> resolvedType = unwrapAliasType(type);
-            if (!resolvedType)
-                return false;
-
-            if (resolvedType->kind() == sema::TypeKind::Primitive)
-            {
-                const std::string& name = resolvedType.AsFast<sema::PrimitiveType>()->name;
-                return name != "void" && name != "object" && name != "any" && name != "opaque";
-            }
-
-            if (resolvedType->kind() == sema::TypeKind::Array)
-            {
-                auto arrayType = resolvedType.AsFast<sema::ArrayType>();
-                return arrayType && isSdkValueBridgeType(arrayType->elementType);
-            }
-
-            if (resolvedType->kind() == sema::TypeKind::Dictionary)
-            {
-                auto dictionaryType = resolvedType.AsFast<sema::DictionaryType>();
-                return dictionaryType &&
-                    isSdkValueBridgeType(dictionaryType->keyType) &&
-                    isSdkValueBridgeType(dictionaryType->valueType);
-            }
-
-            if (auto unitType = getStdValueStructType(resolvedType, "ResultUnit"); unitType)
-                return unitType->genericArguments.empty();
-
-            if (auto spanType = getStdValueStructType(resolvedType, "Span"); spanType)
-                return spanType->genericArguments.empty();
-
-            if (auto byteBufferType = getStdValueStructType(resolvedType, "ByteBuffer"); byteBufferType)
-                return byteBufferType->genericArguments.empty();
-
-            auto optionType = getStdValueStructType(resolvedType, "Option");
-            auto resultType = getStdValueStructType(resolvedType, "Result");
-            auto queueType = getStdValueStructType(resolvedType, "Queue");
-            auto unorderedSetType = getStdValueStructType(resolvedType, "UnorderedSet");
-            auto orderedSetType = getStdValueStructType(resolvedType, "OrderedSet");
-            auto tupleType = getStdValueStructType(resolvedType, "Tuple");
-            if (tupleType)
-            {
-                return std::all_of(
-                    tupleType->genericArguments.begin(),
-                    tupleType->genericArguments.end(),
-                    [](const Ref<sema::Type>& argument) { return isSdkValueBridgeType(argument); }
-                );
-            }
-            auto genericValueType = optionType ? optionType :
-                (resultType ? resultType :
-                 (queueType ? queueType :
-                  (unorderedSetType ? unorderedSetType : orderedSetType)));
-            if (genericValueType && genericValueType->genericArguments.size() == 1)
-            {
-                return isSdkValueBridgeType(genericValueType->genericArguments.front());
-            }
-
-            return false;
-        }
-
         Ref<sema::Type> instantiateGenericStructType(const Ref<sema::StructType>& structType,
                                                      const std::vector<Ref<sema::Type>>& explicitTypeArguments);
 
@@ -715,371 +466,9 @@ namespace wio::codegen
                    structType->isNativePodComponent;
         }
 
-        std::unordered_map<std::string, Ref<sema::Type>> buildGenericTypeBindings(
-            const std::vector<std::string>& parameterNames,
-            const std::vector<Ref<sema::Type>>& typeArguments)
-        {
-            std::unordered_map<std::string, Ref<sema::Type>> bindings;
-            const size_t bindingCount = std::min(parameterNames.size(), typeArguments.size());
-            bindings.reserve(bindingCount);
-
-            for (size_t i = 0; i < bindingCount; ++i)
-                bindings.emplace(parameterNames[i], typeArguments[i]);
-
-            return bindings;
-        }
-
-        struct GenericBindingSet
-        {
-            std::unordered_map<std::string, Ref<sema::Type>> directBindings;
-            std::unordered_map<std::string, std::vector<Ref<sema::Type>>> packBindings;
-            std::unordered_map<std::string, std::string> packAliases;
-        };
-
-        std::string makePackElementBindingName(const std::string& packName, const size_t index)
-        {
-            return packName + "[" + std::to_string(index) + "]";
-        }
-
-        std::string makePackTailElementBindingName(const std::string& packName, const size_t distanceFromEnd)
-        {
-            if (distanceFromEnd <= 1)
-                return packName + "[last]";
-
-            return packName + "[last-" + std::to_string(distanceFromEnd - 1) + "]";
-        }
-
-        enum class PackElementBindingKind : uint8_t
-        {
-            Absolute,
-            FromEnd
-        };
-
-        struct ParsedPackElementBinding
-        {
-            std::string packName;
-            size_t value = 0;
-            PackElementBindingKind kind = PackElementBindingKind::Absolute;
-        };
-
-        std::optional<ParsedPackElementBinding> tryParsePackElementBindingName(const std::string_view name)
-        {
-            const size_t openBracket = name.find('[');
-            if (openBracket == std::string_view::npos || !name.ends_with("]"))
-                return std::nullopt;
-
-            const std::string_view packName = name.substr(0, openBracket);
-            const std::string_view indexText = name.substr(openBracket + 1, name.size() - openBracket - 2);
-            if (packName.empty() || indexText.empty())
-                return std::nullopt;
-
-            if (indexText == "last")
-                return ParsedPackElementBinding{std::string(packName), 1, PackElementBindingKind::FromEnd};
-
-            if (indexText.starts_with("last-"))
-            {
-                const std::string_view offsetText = indexText.substr(5);
-                if (offsetText.empty())
-                    return std::nullopt;
-
-                size_t offset = 0;
-                for (const char ch : offsetText)
-                {
-                    if (ch < '0' || ch > '9')
-                        return std::nullopt;
-                    offset = (offset * 10) + static_cast<size_t>(ch - '0');
-                }
-
-                return ParsedPackElementBinding{
-                    std::string(packName),
-                    offset + 1,
-                    PackElementBindingKind::FromEnd
-                };
-            }
-
-            size_t index = 0;
-            for (const char ch : indexText)
-            {
-                if (ch < '0' || ch > '9')
-                    return std::nullopt;
-                index = (index * 10) + static_cast<size_t>(ch - '0');
-            }
-
-            return ParsedPackElementBinding{
-                std::string(packName),
-                index,
-                PackElementBindingKind::Absolute
-            };
-        }
-
-        std::string makePackElementBindingName(const ParsedPackElementBinding& binding)
-        {
-            if (binding.kind == PackElementBindingKind::FromEnd)
-                return makePackTailElementBindingName(binding.packName, binding.value);
-
-            return makePackElementBindingName(binding.packName, binding.value);
-        }
-
-        std::optional<size_t> tryResolveConcretePackElementIndex(const ParsedPackElementBinding& binding, const size_t packSize)
-        {
-            if (binding.kind == PackElementBindingKind::Absolute)
-            {
-                if (binding.value >= packSize)
-                    return std::nullopt;
-                return binding.value;
-            }
-
-            if (binding.value == 0 || binding.value > packSize)
-                return std::nullopt;
-
-            return packSize - binding.value;
-        }
-
-        std::optional<std::string> tryGetSymbolicPackReferenceName(const Ref<sema::Type>& type)
-        {
-            Ref<sema::Type> current = unwrapAliasTypeForCodegen(type);
-            if (!current)
-                return std::nullopt;
-
-            switch (current->kind())
-            {
-            case sema::TypeKind::GenericParameterPack:
-                return current.AsFast<sema::GenericParameterPackType>()->name;
-            case sema::TypeKind::ValuePackView:
-            {
-                auto packViewType = current.AsFast<sema::ValuePackViewType>();
-                if (packViewType->elementTypes.empty())
-                    return packViewType->packName;
-                return std::nullopt;
-            }
-            case sema::TypeKind::TypePackView:
-            {
-                auto packViewType = current.AsFast<sema::TypePackViewType>();
-                if (packViewType->elementTypes.empty())
-                    return packViewType->packName;
-                return std::nullopt;
-            }
-            case sema::TypeKind::PackStorage:
-            {
-                auto storageType = current.AsFast<sema::PackStorageType>();
-                if (storageType->elementTypes.empty())
-                    return storageType->packName;
-                return std::nullopt;
-            }
-            default:
-                return std::nullopt;
-            }
-        }
-
-        size_t getMinimumGenericArgumentCount(const std::vector<std::string>& parameterNames, const bool hasGenericParameterPack)
-        {
-            if (parameterNames.empty())
-                return 0;
-
-            return hasGenericParameterPack ? parameterNames.size() - 1 : parameterNames.size();
-        }
-
-        GenericBindingSet buildExtendedGenericBindings(
-            const std::vector<std::string>& parameterNames,
-            const bool hasGenericParameterPack,
-            const std::vector<Ref<sema::Type>>& typeArguments)
-        {
-            GenericBindingSet bindings;
-            const size_t fixedCount = getMinimumGenericArgumentCount(parameterNames, hasGenericParameterPack);
-            bindings.directBindings.reserve(fixedCount + typeArguments.size());
-
-            for (size_t i = 0; i < fixedCount && i < typeArguments.size(); ++i)
-                bindings.directBindings.emplace(parameterNames[i], typeArguments[i]);
-
-            if (!hasGenericParameterPack || parameterNames.empty())
-                return bindings;
-
-            const std::string& packName = parameterNames.back();
-            std::vector<Ref<sema::Type>> packTypes;
-            if (typeArguments.size() > fixedCount)
-            {
-                if (typeArguments.size() == fixedCount + 1)
-                {
-                    if (auto symbolicPackName = tryGetSymbolicPackReferenceName(typeArguments[fixedCount]))
-                    {
-                        bindings.packAliases.emplace(packName, *symbolicPackName);
-                        bindings.packBindings.emplace(packName, std::move(packTypes));
-                        return bindings;
-                    }
-                }
-
-                packTypes.reserve(typeArguments.size() - fixedCount);
-                for (size_t i = fixedCount; i < typeArguments.size(); ++i)
-                {
-                    packTypes.push_back(typeArguments[i]);
-                    bindings.directBindings.emplace(makePackElementBindingName(packName, i - fixedCount), typeArguments[i]);
-                }
-            }
-
-            bindings.packBindings.emplace(packName, std::move(packTypes));
-            return bindings;
-        }
-
-        std::optional<size_t> tryEvaluateStaticPackIndex(
-            const NodePtr<Expression>& expression,
-            const ConstVariableDeclarationMap& variableDeclarationsBySymbol)
-        {
-            std::unordered_set<const sema::Symbol*> activeSymbols;
-            auto value = tryEvaluateStaticIntegerExpression(expression, variableDeclarationsBySymbol, activeSymbols);
-            if (!value.has_value() || *value < 0)
-                return std::nullopt;
-
-            return static_cast<size_t>(*value);
-        }
-
-        struct PackSizeReference
-        {
-            std::optional<std::string> packName;
-            std::optional<size_t> concreteSize;
-        };
-
-        std::optional<PackSizeReference> tryResolvePackSizeReference(const NodePtr<Expression>& expression)
-        {
-            if (!expression)
-                return std::nullopt;
-
-            const auto* memberAccess = expression->as<MemberAccessExpression>();
-            if (!memberAccess || !memberAccess->member)
-                return std::nullopt;
-
-            if (memberAccess->intrinsicMember != IntrinsicMember::PackSize &&
-                memberAccess->member->token.value != "size")
-            {
-                return std::nullopt;
-            }
-
-            Ref<sema::Type> objectType = unwrapAliasTypeForCodegen(memberAccess->object ? memberAccess->object->refType.Lock() : nullptr);
-            if (!objectType)
-                return std::nullopt;
-
-            PackSizeReference result;
-            switch (objectType->kind())
-            {
-            case sema::TypeKind::GenericParameterPack:
-                result.packName = objectType.AsFast<sema::GenericParameterPackType>()->name;
-                return result;
-            case sema::TypeKind::ValuePackView:
-            {
-                auto packViewType = objectType.AsFast<sema::ValuePackViewType>();
-                if (auto symbolicPackName = tryGetSymbolicPackReferenceName(objectType))
-                    result.packName = *symbolicPackName;
-                if (!packViewType->elementTypes.empty())
-                    result.concreteSize = packViewType->elementTypes.size();
-                return result;
-            }
-            case sema::TypeKind::TypePackView:
-            {
-                auto packViewType = objectType.AsFast<sema::TypePackViewType>();
-                if (auto symbolicPackName = tryGetSymbolicPackReferenceName(objectType))
-                    result.packName = *symbolicPackName;
-                if (!packViewType->elementTypes.empty())
-                    result.concreteSize = packViewType->elementTypes.size();
-                return result;
-            }
-            case sema::TypeKind::PackStorage:
-            {
-                auto storageType = objectType.AsFast<sema::PackStorageType>();
-                if (auto symbolicPackName = tryGetSymbolicPackReferenceName(objectType))
-                    result.packName = *symbolicPackName;
-                if (!storageType->elementTypes.empty())
-                    result.concreteSize = storageType->elementTypes.size();
-                return result;
-            }
-            default:
-                return std::nullopt;
-            }
-        }
-
-        std::optional<ParsedPackElementBinding> tryEvaluatePackIndexBinding(
-            const NodePtr<Expression>& expression,
-            const ConstVariableDeclarationMap& variableDeclarationsBySymbol,
-            const std::optional<std::string_view> expectedPackName = std::nullopt)
-        {
-            if (!expression)
-                return std::nullopt;
-
-            if (auto absoluteIndex = tryEvaluateStaticPackIndex(expression, variableDeclarationsBySymbol))
-            {
-                ParsedPackElementBinding binding;
-                binding.packName = expectedPackName ? std::string(*expectedPackName) : std::string();
-                binding.value = *absoluteIndex;
-                binding.kind = PackElementBindingKind::Absolute;
-                return binding;
-            }
-
-            const auto* binary = expression->as<BinaryExpression>();
-            if (!binary || binary->op.type != TokenType::opMinus)
-                return std::nullopt;
-
-            auto packSizeReference = tryResolvePackSizeReference(binary->left);
-            auto rhsIndex = tryEvaluateStaticPackIndex(binary->right, variableDeclarationsBySymbol);
-            if (!packSizeReference || !rhsIndex.has_value())
-                return std::nullopt;
-
-            if (expectedPackName.has_value() &&
-                packSizeReference->packName.has_value() &&
-                *packSizeReference->packName != *expectedPackName)
-            {
-                return std::nullopt;
-            }
-
-            if (packSizeReference->concreteSize.has_value())
-            {
-                if (*rhsIndex > *packSizeReference->concreteSize)
-                    return std::nullopt;
-
-                ParsedPackElementBinding binding;
-                binding.packName = expectedPackName ? std::string(*expectedPackName) : packSizeReference->packName.value_or(std::string());
-                binding.value = *packSizeReference->concreteSize - *rhsIndex;
-                binding.kind = PackElementBindingKind::Absolute;
-                return binding;
-            }
-
-            if (!packSizeReference->packName.has_value())
-                return std::nullopt;
-
-            ParsedPackElementBinding binding;
-            binding.packName = *packSizeReference->packName;
-            binding.value = *rhsIndex;
-            binding.kind = PackElementBindingKind::FromEnd;
-            return binding;
-        }
-
         Ref<sema::Type> instantiateGenericType(const Ref<sema::Type>& type, const GenericBindingSet& bindings);
         Ref<sema::Type> instantiateGenericType(const Ref<sema::Type>& type,
                                                const std::unordered_map<std::string, Ref<sema::Type>>& bindings);
-
-        size_t getFixedParameterCount(const FunctionDeclaration& node)
-        {
-            const bool hasParameterPack = std::ranges::any_of(node.parameters, [](const Parameter& parameter)
-            {
-                return parameter.isParameterPack;
-            });
-
-            if (hasParameterPack && !node.parameters.empty())
-                return node.parameters.size() - 1;
-
-            return node.parameters.size();
-        }
-
-        size_t getRequiredParameterCount(const FunctionDeclaration& node)
-        {
-            size_t requiredCount = getFixedParameterCount(node);
-            while (requiredCount > 0 && node.parameters[requiredCount - 1].defaultValue)
-                --requiredCount;
-
-            return requiredCount;
-        }
-
-        bool hasDefaultParameters(const FunctionDeclaration& node)
-        {
-            return getRequiredParameterCount(node) != getFixedParameterCount(node);
-        }
 
         std::vector<Ref<sema::Type>> getLeadingParameterTypes(const Ref<sema::FunctionType>& functionType, size_t arity)
         {
@@ -1548,47 +937,6 @@ namespace wio::codegen
             return result;
         }
 
-        bool shouldAutoReadReferenceType(const Ref<sema::Type>& type)
-        {
-            Ref<sema::Type> current = unwrapAliasType(type);
-            if (!current || current->kind() != sema::TypeKind::Reference)
-                return false;
-
-            while (current && current->kind() == sema::TypeKind::Reference)
-            {
-                auto refType = current.AsFast<sema::ReferenceType>();
-                current = unwrapAliasType(refType->referredType);
-
-                if (!current)
-                    return false;
-
-                if (current->kind() == sema::TypeKind::Struct)
-                {
-                    auto structType = current.AsFast<sema::StructType>();
-                    if (structType->isObject || structType->isInterface)
-                        return false;
-                }
-            }
-
-            return true;
-        }
-
-        std::size_t getAutoReadableReferenceDepth(const Ref<sema::Type>& type)
-        {
-            if (!shouldAutoReadReferenceType(type))
-                return 0;
-
-            std::size_t depth = 0;
-            Ref<sema::Type> current = unwrapAliasType(type);
-            while (current && current->kind() == sema::TypeKind::Reference)
-            {
-                ++depth;
-                current = unwrapAliasType(current.AsFast<sema::ReferenceType>()->referredType);
-            }
-
-            return depth;
-        }
-
         bool shouldTreatReferenceAsHandleForAssignment(const Ref<sema::Type>& type)
         {
             Ref<sema::Type> resolvedType = unwrapAliasType(type);
@@ -1907,33 +1255,6 @@ namespace wio::codegen
                         if (arg.type == TokenType::identifier)
                             bases.push_back(arg.value);
             return bases;
-        }
-
-        bool hasAttribute(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
-        {
-            return std::ranges::any_of(attributes, [targetAttr](const auto& attr)
-            {
-                return attr && matchesBuiltinAttribute(*attr, targetAttr);
-            });
-        }
-
-        std::vector<Token> getAttributeArgs(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
-        {
-            for (const auto& attr : attributes) {
-                if (attr && matchesBuiltinAttribute(*attr, targetAttr)) return attr->args;
-            }
-            return {};
-        }
-
-        std::optional<Token> getSingleAttributeArg(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute targetAttr)
-        {
-            for (const auto& attr : attributes)
-            {
-                if (attr && matchesBuiltinAttribute(*attr, targetAttr) && attr->args.size() == 1)
-                    return attr->args.front();
-            }
-
-            return std::nullopt;
         }
 
         bool isNativeFunction(const FunctionDeclaration& node)
@@ -3787,42 +3108,6 @@ namespace wio::codegen
             return symbol->type.AsFast<sema::StructType>();
         }
 
-        Ref<sema::Symbol> resolveQualifiedSymbol(const Ref<sema::Scope>& startScope, std::string_view qualifiedName)
-        {
-            if (!startScope || qualifiedName.empty())
-                return nullptr;
-
-            size_t segmentStart = 0;
-            Ref<sema::Scope> scope = startScope;
-            Ref<sema::Symbol> resolvedSymbol = nullptr;
-
-            while (segmentStart < qualifiedName.size())
-            {
-                size_t separator = qualifiedName.find("::", segmentStart);
-                std::string segment = separator == std::string_view::npos
-                    ? std::string(qualifiedName.substr(segmentStart))
-                    : std::string(qualifiedName.substr(segmentStart, separator - segmentStart));
-
-                if (segment.empty())
-                    return nullptr;
-
-                resolvedSymbol = scope->resolve(segment);
-                if (!resolvedSymbol)
-                    return nullptr;
-
-                if (separator == std::string_view::npos)
-                    return resolvedSymbol;
-
-                if (!resolvedSymbol->innerScope)
-                    return nullptr;
-
-                scope = resolvedSymbol->innerScope;
-                segmentStart = separator + 2;
-            }
-
-            return resolvedSymbol;
-        }
-
         std::string mangleNamedType(const Ref<sema::Symbol>& symbol)
         {
             return mangleNamedType(getStructTypeFromSymbol(symbol));
@@ -5123,7 +4408,7 @@ namespace wio::codegen
         auto getEnumUnderlyingAbiExpr = [](const std::vector<NodePtr<AttributeStatement>>& attributes,
                                            std::string_view fallbackAbiExpr) -> std::string
         {
-            auto typeArgs = getAttributeArgs(attributes, Attribute::Type);
+            auto typeArgs = getFirstAttributeArgs(attributes, Attribute::Type);
             if (typeArgs.empty())
                 return std::string(fallbackAbiExpr);
 
@@ -6413,7 +5698,7 @@ namespace wio::codegen
         auto getEnumUnderlyingCppType = [&](const std::vector<NodePtr<AttributeStatement>>& attributes,
                                             const std::string& fallbackType) -> std::string
         {
-            auto typeArgs = getAttributeArgs(attributes, Attribute::Type);
+            auto typeArgs = getFirstAttributeArgs(attributes, Attribute::Type);
             if (typeArgs.empty())
                 return fallbackType;
 
@@ -6434,7 +5719,7 @@ namespace wio::codegen
         auto getEnumUnderlyingWioTypeName = [&](const std::vector<NodePtr<AttributeStatement>>& attributes,
                                                 std::string_view fallbackTypeName) -> std::string
         {
-            auto typeArgs = getAttributeArgs(attributes, Attribute::Type);
+            auto typeArgs = getFirstAttributeArgs(attributes, Attribute::Type);
             if (typeArgs.empty())
                 return std::string(fallbackTypeName);
 
@@ -8534,7 +7819,11 @@ namespace wio::codegen
             (objectType && objectType->kind() == sema::TypeKind::PackStorage) ? std::optional<std::string_view>(objectType.AsFast<sema::PackStorageType>()->packName) :
             (objectType && objectType->kind() == sema::TypeKind::TypePackView) ? std::optional<std::string_view>(objectType.AsFast<sema::TypePackViewType>()->packName) :
             std::nullopt;
-        const auto indexBinding = tryEvaluatePackIndexBinding(node.index, variableDeclarationsBySymbol_, expectedPackName);
+        const auto indexBinding = tryEvaluatePackIndexBinding(
+            node.index,
+            variableDeclarationsBySymbol_,
+            expectedPackName,
+            SymbolicPackNameMode::Direct);
         if (objectType && indexBinding.has_value())
         {
             auto buildTemplateIndexExpr = [&](const ParsedPackElementBinding& binding, std::string_view sizeExpr) -> std::string
@@ -11601,7 +10890,7 @@ namespace wio::codegen
         emitLine("\n{");
         indent();
     
-        auto trustArgs = getAttributeArgs(node.attributes, Attribute::Trust);
+        auto trustArgs = getFirstAttributeArgs(node.attributes, Attribute::Trust);
         for (const auto& t : trustArgs)
         {
             if (t.type == TokenType::identifier)
@@ -11887,7 +11176,7 @@ namespace wio::codegen
             objectRefFriend += ">";
         }
         emitLine("friend class wio::runtime::Ref<" + objectRefFriend + ">;");
-        auto trustArgs = getAttributeArgs(node.attributes, Attribute::Trust);
+        auto trustArgs = getFirstAttributeArgs(node.attributes, Attribute::Trust);
         for (const auto& t : trustArgs)
         {
             if (t.type == TokenType::identifier)
@@ -12027,7 +11316,7 @@ namespace wio::codegen
         std::string enumName = mangleStructTypeName(enumType);
         std::string underType = "int32_t";
         
-        auto typeArgs = getAttributeArgs(node.attributes, Attribute::Type);
+        auto typeArgs = getFirstAttributeArgs(node.attributes, Attribute::Type);
         if (!typeArgs.empty()) {
             // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
             switch (typeArgs[0].type)
@@ -12085,7 +11374,7 @@ namespace wio::codegen
 
         std::string underType = "uint32_t";
         
-        auto typeArgs = getAttributeArgs(node.attributes, Attribute::Type);
+        auto typeArgs = getFirstAttributeArgs(node.attributes, Attribute::Type);
         if (!typeArgs.empty())
         {
             // NOLINTNEXTLINE(clang-diagnostic-switch-enum)

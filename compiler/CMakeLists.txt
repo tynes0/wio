@@ -63,6 +63,15 @@ target_compile_options(wio_compiler PRIVATE
 )
 
 if(BUILD_TESTING)
+    add_executable(wio_compiler_helper_modules_test
+        "${CMAKE_SOURCE_DIR}/tests/compiler_helper_modules_test.cpp"
+    )
+    target_link_libraries(wio_compiler_helper_modules_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_compiler_helper_modules
+        COMMAND wio_compiler_helper_modules_test
+    )
+
     add_executable(wio_function_type_cpp_string_test
         "${CMAKE_SOURCE_DIR}/tests/function_type_cpp_string_test.cpp"
     )
