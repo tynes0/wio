@@ -30,6 +30,18 @@ namespace
         return false;
     }
 
+    bool hasBuildCode(
+        const wio::wir::typed::BuildResult& result,
+        const std::string_view code)
+    {
+        for (const auto& diagnostic : result.diagnostics())
+        {
+            if (diagnostic.code == code)
+                return true;
+        }
+        return false;
+    }
+
     wio::wir::typed::Module makeAddModule()
     {
         using namespace wio::wir;
@@ -141,6 +153,21 @@ int main()
             builtText.find("func @f0 \"Add\"") != std::string::npos &&
                 builtText.find("add %v0, %v1") != std::string::npos,
             "Typed WIR builder must retain resolved function and arithmetic semantics");
+    }
+
+    {
+        Lexer lexer(
+            "fn Pick() -> i32 { return 7; } "
+            "fn Entry() -> i32 { return true ? Pick() : 0; }",
+            "typed_wir_effect_boundary_test.wio");
+        Parser parser(lexer.lex());
+        const Ref<Program> program = parser.parseProgram();
+        sema::SemanticAnalyzer analyzer;
+        analyzer.analyze(program);
+
+        const BuildResult buildResult = Builder{}.build(program);
+        ok &= expect(!buildResult.succeeded(), "Initial Typed WIR builder must not eagerly lower side-effecting conditional arms");
+        ok &= expect(hasBuildCode(buildResult, "WIR2306"), "Side-effecting conditional rejection must have a stable diagnostic code");
     }
 
     return ok ? 0 : 1;

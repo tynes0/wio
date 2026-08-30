@@ -3,60 +3,26 @@
 #include "wio/wir/id.h"
 #include "wio/wir/source_span.h"
 #include "wio/wir/type.h"
+#include "wio/wir/typed_ir.h"
 
 #include <cstdint>
 #include <string>
 #include <string_view>
-#include <variant>
 #include <vector>
 
-namespace wio::wir::typed
+namespace wio::wir::lowered
 {
-    enum class UnaryOperator : std::uint8_t
-    {
-        Negate,
-        LogicalNot,
-        BitwiseNot
-    };
-
-    enum class BinaryOperator : std::uint8_t
-    {
-        Add,
-        Subtract,
-        Multiply,
-        Divide,
-        Remainder,
-        Equal,
-        NotEqual,
-        Less,
-        LessEqual,
-        Greater,
-        GreaterEqual,
-        LogicalAnd,
-        LogicalOr,
-        BitwiseAnd,
-        BitwiseOr,
-        BitwiseXor,
-        ShiftLeft,
-        ShiftRight
-    };
-
     enum class Opcode : std::uint8_t
     {
         Constant,
         Unary,
         Binary,
         Call,
-        // SSA value selection. All operands are already evaluated, so builders
-        // may only use this for side-effect-free alternatives.
-        Select,
         Return,
-        Branch,
-        CondBranch,
+        Jump,
+        CondJump,
         Unreachable
     };
-
-    using Literal = std::variant<std::monostate, bool, std::int64_t, std::uint64_t, double, std::string>;
 
     struct Parameter
     {
@@ -66,17 +32,23 @@ namespace wio::wir::typed
         SourceSpan source;
     };
 
+    struct BranchTarget
+    {
+        BlockId block;
+        std::vector<ValueId> arguments;
+    };
+
     struct Instruction
     {
         Opcode opcode = Opcode::Unreachable;
         ValueId result;
         TypeId resultType;
         std::vector<ValueId> operands;
-        std::vector<BlockId> targets;
+        std::vector<BranchTarget> targets;
         FunctionId callee;
-        Literal literal;
-        UnaryOperator unaryOperator = UnaryOperator::Negate;
-        BinaryOperator binaryOperator = BinaryOperator::Add;
+        typed::Literal literal;
+        typed::UnaryOperator unaryOperator = typed::UnaryOperator::Negate;
+        typed::BinaryOperator binaryOperator = typed::BinaryOperator::Add;
         SourceSpan source;
     };
 
@@ -111,6 +83,4 @@ namespace wio::wir::typed
     [[nodiscard]] bool isTerminator(Opcode opcode);
     [[nodiscard]] bool producesValue(Opcode opcode);
     [[nodiscard]] std::string_view opcodeName(Opcode opcode);
-    [[nodiscard]] std::string_view unaryOperatorName(UnaryOperator op);
-    [[nodiscard]] std::string_view binaryOperatorName(BinaryOperator op);
 }
