@@ -11,6 +11,11 @@
 
 namespace wio::codegen
 {
+    namespace detail
+    {
+        class ModuleApiEmitter;
+    }
+
     class CppGenerator : public ASTVisitor
     {
     public:
@@ -21,6 +26,8 @@ namespace wio::codegen
 #include "../ast/visitor_overloads.def"
 
     private:
+        friend class detail::ModuleApiEmitter;
+
         std::stringstream buffer_;
         std::stringstream header_;
         
