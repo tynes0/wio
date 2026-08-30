@@ -1,8 +1,13 @@
-// Internal compiler detail extracted from the owning translation unit.
-// This file is included inside that translation unit's anonymous namespace.
+#include "validation_annotation_snapshot.h"
 
-        struct ValidationAnnotationSnapshot
-        {
+#include "wio/ast/ast.h"
+
+#include <utility>
+
+namespace wio::sema::detail
+{
+    struct ValidationAnnotationSnapshot::State
+    {
             struct NodeState
             {
                 ASTNode* node;
@@ -582,3 +587,21 @@
                 }
             }
         };
+
+    ValidationAnnotationSnapshot::ValidationAnnotationSnapshot()
+        : state_(std::make_unique<State>())
+    {
+    }
+
+    ValidationAnnotationSnapshot::~ValidationAnnotationSnapshot() = default;
+
+    void ValidationAnnotationSnapshot::capture(ASTNode* root)
+    {
+        state_->capture(root);
+    }
+
+    void ValidationAnnotationSnapshot::restore() const
+    {
+        state_->restore();
+    }
+}

@@ -40,4 +40,3 @@
         {
             return mangleNamedType(getStructTypeFromSymbol(symbol));
         }
-    }

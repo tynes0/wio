@@ -1,29 +1,77 @@
+#include "module_api_emitter.h"
+
+#include "wio/codegen/cpp_generator.h"
+
+#include "wio/ast/attribute_contract.h"
+#include "wio/ast/attribute_queries.h"
+#include "wio/ast/declaration_queries.h"
+#include "wio/codegen/cpp_identifier.h"
+#include "wio/common/filesystem/filesystem.h"
+#include "wio/common/operator_overload.h"
+#include "wio/common/utility.h"
+#include "compiler.h"
+#include "wio/common/logger.h"
+#include "wio/sema/symbol.h"
+#include "wio/sema/scope_lookup.h"
+#include "wio/sema/constant_evaluator.h"
+#include "wio/sema/generic_support.h"
+#include "wio/sema/type_queries.h"
+
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <limits>
+#include <optional>
+#include <unordered_set>
+#include <utility>
+
+namespace wio::codegen
+{
+    namespace
+    {
+        #include "generator_support.inl"
+    }
+
 // Translation-unit-private module ABI emission helper.
 // Kept beside the generator because it consumes the generator's output primitives.
 
 namespace detail
 {
-    class ModuleApiEmitter final
+    ModuleApiEmitter::ModuleApiEmitter(CppGenerator& generator)
+        : generator_(generator)
     {
-    public:
-        explicit ModuleApiEmitter(CppGenerator& generator) : generator_(generator) {}
+    }
 
-        void emit(const Ref<Program>& program);
+    void ModuleApiEmitter::emit(const std::string& value)
+    {
+        generator_.emit(value);
+    }
 
-    private:
-        CppGenerator& generator_;
+    void ModuleApiEmitter::emitLine(const std::string& value)
+    {
+        generator_.emitLine(value);
+    }
 
-        void emit(const std::string& value) { generator_.emit(value); }
-        void emitLine(const std::string& value = {}) { generator_.emitLine(value); }
-        void emitGeneratedDirective() { generator_.emitGeneratedDirective(); }
-        void emitTabs()
-        {
-            for (int index = 0; index < generator_.indentationLevel_; ++index)
-                generator_.buffer_ << "    ";
-        }
-        void indent() { generator_.indent(); }
-        void dedent() { generator_.dedent(); }
-    };
+    void ModuleApiEmitter::emitGeneratedDirective()
+    {
+        generator_.emitGeneratedDirective();
+    }
+
+    void ModuleApiEmitter::emitTabs()
+    {
+        for (int index = 0; index < generator_.indentationLevel_; ++index)
+            generator_.buffer_ << "    ";
+    }
+
+    void ModuleApiEmitter::indent()
+    {
+        generator_.indent();
+    }
+
+    void ModuleApiEmitter::dedent()
+    {
+        generator_.dedent();
+    }
 
     void ModuleApiEmitter::emit(const Ref<Program>& program)
     {
@@ -1913,4 +1961,6 @@ namespace detail
         dedent();
         emitLine("}");
     }
+}
+
 }

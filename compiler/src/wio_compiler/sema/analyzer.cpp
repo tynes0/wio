@@ -22,6 +22,7 @@
 #include "wio/sema/generic_support.h"
 #include "wio/sema/scope_lookup.h"
 #include "wio/sema/type_queries.h"
+#include "detail/validation_annotation_snapshot.h"
 
 #include "compiler.h"
 namespace wio::sema
@@ -56,6 +57,7 @@ namespace wio::sema
         using type_queries::isStdLibraryScopePath;
         using type_queries::shouldAutoReadReferenceType;
         using type_queries::unwrapAliasType;
+        using detail::ValidationAnnotationSnapshot;
         std::vector<Attribute> getModuleLifecycleAttributes(const std::vector<NodePtr<AttributeStatement>>& attributes);
 
         Ref<Type> unwrapTransferType(Ref<Type> type)
@@ -208,8 +210,6 @@ namespace wio::sema
             std::unordered_set<const Type*> active;
             return isExecutorTransferSafe(type, active);
         }
-
-        #include "detail/validation_annotation_snapshot.inl"
 
         std::string getModuleLifecycleExportSymbol(Attribute lifecycleAttribute)
         {
