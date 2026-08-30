@@ -1,5 +1,6 @@
 file(GLOB_RECURSE WIO_SOURCES CONFIGURE_DEPENDS
     "src/*.h"
+    "src/*.inl"
     "src/*.cpp"
 )
 
