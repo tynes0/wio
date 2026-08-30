@@ -1,5 +1,12 @@
 fn Choose(condition: bool) -> i32 {
-    return condition ? 21 : 42;
+    mut value: i32;
+    if (condition) {
+        value = 21;
+    }
+    else {
+        value += 42;
+    }
+    return value;
 }
 
 fn Entry() -> i32 {

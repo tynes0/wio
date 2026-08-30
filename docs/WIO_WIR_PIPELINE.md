@@ -23,7 +23,10 @@ and diagnostics before control flow is made backend-canonical.
 
 The initial builder supports top-level functions, parameters, primitive and
 reference-family types, constants, direct calls, unary/binary expressions,
-pure conditional values, returns, and expression statements. Unsupported
+pure conditional values, local declarations and default initialization,
+identifier assignment, compound assignment, `if`/`else` control flow, returns,
+and expression statements. Mutable values crossing branches are represented
+as deterministic SSA merge-block parameters rather than hidden memory slots. Unsupported
 language constructs fail with stable `WIR2xxx` diagnostics; they never silently
 fall back or guess semantics.
 

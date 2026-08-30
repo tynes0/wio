@@ -20,8 +20,10 @@ if(NOT EXISTS "${typed_output}")
     message(FATAL_ERROR "Typed WIR emission did not create the requested nested output path")
 endif()
 file(READ "${typed_output}" typed_text)
-if(NOT typed_text MATCHES "typed-wir module" OR NOT typed_text MATCHES "select %v0")
-    message(FATAL_ERROR "Typed WIR output does not contain the expected typed select")
+if(NOT typed_text MATCHES "typed-wir module" OR
+   NOT typed_text MATCHES "cond-branch %v0" OR
+   NOT typed_text MATCHES "if.merge")
+    message(FATAL_ERROR "Typed WIR output does not contain the expected local control flow")
 endif()
 
 execute_process(
@@ -37,7 +39,7 @@ endif()
 file(READ "${lowered_output}" lowered_text)
 if(NOT lowered_text MATCHES "lowered-wir module" OR
    NOT lowered_text MATCHES "cond-jump %v0" OR
-   NOT lowered_text MATCHES "select.merge.0")
+   NOT lowered_text MATCHES "if.merge")
     message(FATAL_ERROR "Lowered WIR output does not contain canonical conditional control flow")
 endif()
 

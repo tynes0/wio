@@ -125,6 +125,17 @@ namespace wio::wir::typed
                 break;
             case Opcode::Branch:
                 stream << "branch " << blockRef(instruction.targets.at(0));
+                if (!instruction.operands.empty())
+                {
+                    stream << "(";
+                    for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                    {
+                        if (index > 0)
+                            stream << ", ";
+                        stream << valueRef(instruction.operands[index]);
+                    }
+                    stream << ")";
+                }
                 break;
             case Opcode::CondBranch:
                 stream << "cond-branch " << valueRef(instruction.operands.at(0)) << ", "

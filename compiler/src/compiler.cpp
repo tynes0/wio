@@ -45,6 +45,7 @@
 #include "wio/wir/lowering_pipeline.h"
 #include "wio/wir/typed_ir_builder.h"
 #include "wio/wir/typed_ir_printer.h"
+#include "wio/wir/typed_ir_verifier.h"
 
 namespace wio
 {
@@ -639,6 +640,18 @@ namespace wio
             }
         }
 
+        void reportTypedWirDiagnostics(const wir::typed::VerificationResult& result)
+        {
+            for (const wir::typed::VerificationDiagnostic& diagnostic : result.diagnostics())
+            {
+                WIO_LOG_ADD_ERROR(
+                    diagnostic.source.begin,
+                    "Typed WIR {}: {}",
+                    diagnostic.code,
+                    diagnostic.message);
+            }
+        }
+
         void reportLoweringDiagnostics(const wir::LoweringResult& result)
         {
             for (const wir::LoweringDiagnostic& diagnostic : result.diagnostics())
@@ -671,6 +684,10 @@ namespace wio
 
             wir::typed::BuildResult typedResult = wir::typed::Builder{}.build(program);
             reportTypedWirDiagnostics(typedResult);
+            WIO_LOG_PROCESS_ERRORS(CompilationError);
+            const wir::typed::VerificationResult typedVerification =
+                wir::typed::Verifier{}.verify(typedResult.module());
+            reportTypedWirDiagnostics(typedVerification);
             WIO_LOG_PROCESS_ERRORS(CompilationError);
 
             std::string output;

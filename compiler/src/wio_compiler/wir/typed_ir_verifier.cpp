@@ -290,6 +290,22 @@ namespace wio::wir::typed
                     {
                         if (instruction.targets.size() != 1)
                             report("WIR1414", "Typed WIR branch requires exactly one target.", instruction.source, function.id, block.id);
+                        else if (instruction.targets.front() && blocks.contains(instruction.targets.front().value()))
+                        {
+                            const BasicBlock& target = *blocks.at(instruction.targets.front().value());
+                            if (instruction.operands.size() != target.parameters.size())
+                            {
+                                report("WIR1417", "Typed WIR branch argument count does not match its target block.", instruction.source, function.id, block.id);
+                            }
+                            else
+                            {
+                                for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                                {
+                                    if (valueType(instruction.operands[index]) != target.parameters[index].type)
+                                        report("WIR1418", "Typed WIR branch argument type does not match its target block parameter.", instruction.source, function.id, block.id);
+                                }
+                            }
+                        }
                     }
                     else if (instruction.opcode == Opcode::CondBranch)
                     {
@@ -297,6 +313,17 @@ namespace wio::wir::typed
                             valueType(instruction.operands.front()) != module.types.boolType())
                         {
                             report("WIR1415", "Typed WIR conditional branch requires a bool condition and two targets.", instruction.source, function.id, block.id);
+                        }
+                        else
+                        {
+                            for (const BlockId targetId : instruction.targets)
+                            {
+                                if (targetId && blocks.contains(targetId.value()) &&
+                                    !blocks.at(targetId.value())->parameters.empty())
+                                {
+                                    report("WIR1419", "Typed WIR conditional branch targets cannot require block arguments.", instruction.source, function.id, block.id);
+                                }
+                            }
                         }
                     }
 

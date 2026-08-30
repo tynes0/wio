@@ -34,15 +34,42 @@ namespace wio::wir::typed
         struct FunctionState
         {
             Function* function = nullptr;
-            BasicBlock* block = nullptr;
+            std::size_t blockIndex = 0;
             ValueId::ValueType nextValue = 0;
+            BlockId::ValueType nextBlock = 0;
             std::unordered_map<const sema::Symbol*, ValueId> values;
+            std::vector<const sema::Symbol*> valueOrder;
         };
 
         BuildResult& result_;
         std::vector<const FunctionDeclaration*> declarations_;
         std::unordered_map<const sema::Symbol*, FunctionId> functionsBySymbol_;
         std::unordered_map<const sema::Type*, TypeId> typesBySemanticType_;
+
+        static BasicBlock& currentBlock(FunctionState& state)
+        {
+            return state.function->blocks.at(state.blockIndex);
+        }
+
+        static bool blockIsTerminated(FunctionState& state)
+        {
+            const BasicBlock& block = currentBlock(state);
+            return !block.instructions.empty() && isTerminator(block.instructions.back().opcode);
+        }
+
+        static std::size_t createBlock(
+            FunctionState& state,
+            std::string name,
+            const SourceSpan& source)
+        {
+            const std::size_t index = state.function->blocks.size();
+            state.function->blocks.push_back(BasicBlock{
+                .id = BlockId{state.nextBlock++},
+                .name = std::move(name),
+                .source = source
+            });
+            return index;
+        }
 
         void report(std::string code, std::string message, const ASTNode* node = nullptr)
         {
@@ -239,26 +266,25 @@ namespace wio::wir::typed
                     .source = SourceSpan::at(parameter.name->location())
                 });
                 state.values[parameterSymbol.Get()] = value;
+                state.valueOrder.push_back(parameterSymbol.Get());
             }
 
             if (!function.isExternal)
             {
-                function.blocks.push_back(BasicBlock{
-                    .id = BlockId{0},
-                    .name = "entry",
-                    .source = SourceSpan::at(declaration.body->location())
-                });
-                state.block = &function.blocks.back();
+                state.blockIndex = createBlock(
+                    state,
+                    "entry",
+                    SourceSpan::at(declaration.body->location()));
                 buildStatement(declaration.body, state);
-                if (state.block->instructions.empty() || !isTerminator(state.block->instructions.back().opcode))
+                if (!blockIsTerminated(state))
                 {
                     const Type* returnType = result_.module_.types.tryGet(function.returnType);
                     if (returnType && returnType->kind == TypeKind::Void)
-                        state.block->instructions.push_back(Instruction{.opcode = Opcode::Return});
+                        currentBlock(state).instructions.push_back(Instruction{.opcode = Opcode::Return});
                     else
                     {
                         report("WIR2102", "Non-void function does not end with a return in the initial Typed WIR slice.", &declaration);
-                        state.block->instructions.push_back(Instruction{.opcode = Opcode::Unreachable});
+                        currentBlock(state).instructions.push_back(Instruction{.opcode = Opcode::Unreachable});
                     }
                 }
             }
@@ -272,15 +298,48 @@ namespace wio::wir::typed
                 return;
             if (const auto* block = statement->as<BlockStatement>())
             {
+                const std::size_t visibleValueCount = state.valueOrder.size();
                 for (const auto& child : block->statements)
                 {
-                    if (!state.block->instructions.empty() && isTerminator(state.block->instructions.back().opcode))
+                    if (blockIsTerminated(state))
                     {
                         report("WIR2200", "Statement appears after a terminator.", child.Get());
                         break;
                     }
                     buildStatement(child, state);
                 }
+                while (state.valueOrder.size() > visibleValueCount)
+                {
+                    state.values.erase(state.valueOrder.back());
+                    state.valueOrder.pop_back();
+                }
+                return;
+            }
+            if (const auto* declaration = statement->as<VariableDeclaration>())
+            {
+                const Ref<sema::Symbol> symbol = declaration->name
+                    ? declaration->name->referencedSymbol.Lock()
+                    : nullptr;
+                if (!symbol)
+                {
+                    report("WIR2202", "Local variable declaration is missing its semantic symbol.", declaration);
+                    return;
+                }
+
+                ValueId value;
+                if (declaration->initializer)
+                    value = buildExpression(declaration->initializer, state);
+                else
+                    value = buildDefaultValue(mapType(symbol->type, declaration), declaration, state);
+                if (!value)
+                    return;
+                state.values[symbol.Get()] = value;
+                state.valueOrder.push_back(symbol.Get());
+                return;
+            }
+            if (const auto* ifStatement = statement->as<IfStatement>())
+            {
+                buildIfStatement(*ifStatement, state);
                 return;
             }
             if (const auto* returnStatement = statement->as<ReturnStatement>())
@@ -294,7 +353,7 @@ namespace wio::wir::typed
                     if (const ValueId value = buildExpression(returnStatement->value, state))
                         instruction.operands.push_back(value);
                 }
-                state.block->instructions.push_back(std::move(instruction));
+                currentBlock(state).instructions.push_back(std::move(instruction));
                 return;
             }
             if (const auto* expressionStatement = statement->as<ExpressionStatement>())
@@ -314,7 +373,7 @@ namespace wio::wir::typed
                 instruction.result = ValueId{state.nextValue++};
                 instruction.resultType = mapType(expression->refType.Lock(), expression.Get());
                 const ValueId result = instruction.result;
-                state.block->instructions.push_back(std::move(instruction));
+                currentBlock(state).instructions.push_back(std::move(instruction));
                 return result;
             };
 
@@ -359,6 +418,48 @@ namespace wio::wir::typed
                     return found->second;
                 report("WIR2301", "Identifier is not a value available in the current Typed WIR function.", expression.Get());
                 return {};
+            }
+            if (const auto* assignment = expression->as<AssignmentExpression>())
+            {
+                const auto* target = assignment->left
+                    ? assignment->left->as<Identifier>()
+                    : nullptr;
+                const Ref<sema::Symbol> symbol = target
+                    ? target->referencedSymbol.Lock()
+                    : nullptr;
+                const auto current = symbol
+                    ? state.values.find(symbol.Get())
+                    : state.values.end();
+                if (!symbol || current == state.values.end())
+                {
+                    report("WIR2307", "Initial Typed WIR assignments require a local identifier target.", expression.Get());
+                    return {};
+                }
+
+                const ValueId right = buildExpression(assignment->right, state);
+                if (!right)
+                    return {};
+                ValueId assigned = right;
+                if (assignment->op.type != TokenType::opAssign)
+                {
+                    const auto compoundOperator = mapCompoundAssignmentOperator(assignment->op.type);
+                    if (!compoundOperator)
+                    {
+                        report("WIR2308", "Compound assignment operator is not supported by Typed WIR.", expression.Get());
+                        return {};
+                    }
+                    assigned = ValueId{state.nextValue++};
+                    currentBlock(state).instructions.push_back(Instruction{
+                        .opcode = Opcode::Binary,
+                        .result = assigned,
+                        .resultType = mapType(symbol->type, target),
+                        .operands = {current->second, right},
+                        .binaryOperator = *compoundOperator,
+                        .source = SourceSpan::at(expression->location())
+                    });
+                }
+                state.values[symbol.Get()] = assigned;
+                return assigned;
             }
             if (const auto* unary = expression->as<UnaryExpression>())
             {
@@ -443,7 +544,7 @@ namespace wio::wir::typed
                 const Type* type = result_.module_.types.tryGet(resultType);
                 if (type && type->kind == TypeKind::Void)
                 {
-                    state.block->instructions.push_back(std::move(instruction));
+                    currentBlock(state).instructions.push_back(std::move(instruction));
                     return {};
                 }
                 return appendValue(std::move(instruction));
@@ -451,6 +552,172 @@ namespace wio::wir::typed
 
             report("WIR2305", "Expression kind '" + getKindNameStr(expression->kind()) + "' is not supported by the initial Typed WIR slice.", expression.Get());
             return {};
+        }
+
+        ValueId buildDefaultValue(
+            const TypeId typeId,
+            const ASTNode* source,
+            FunctionState& state)
+        {
+            const Type* type = result_.module_.types.tryGet(typeId);
+            if (!type)
+                return {};
+
+            Literal literal;
+            switch (type->kind)
+            {
+            case TypeKind::Bool: literal = false; break;
+            case TypeKind::I8:
+            case TypeKind::I16:
+            case TypeKind::I32:
+            case TypeKind::I64:
+            case TypeKind::ISize: literal = std::int64_t{0}; break;
+            case TypeKind::U8:
+            case TypeKind::U16:
+            case TypeKind::U32:
+            case TypeKind::U64:
+            case TypeKind::USize:
+            case TypeKind::Byte:
+            case TypeKind::Char: literal = std::uint64_t{0}; break;
+            case TypeKind::F32:
+            case TypeKind::F64: literal = 0.0; break;
+            case TypeKind::String:
+            case TypeKind::Text: literal = std::string{}; break;
+            default:
+                report(
+                    "WIR2203",
+                    "Default initialization for type '" + std::string(typeKindName(type->kind)) +
+                        "' is not supported by Typed WIR.",
+                    source);
+                return {};
+            }
+
+            const ValueId result{state.nextValue++};
+            currentBlock(state).instructions.push_back(Instruction{
+                .opcode = Opcode::Constant,
+                .result = result,
+                .resultType = typeId,
+                .literal = std::move(literal),
+                .source = source ? SourceSpan::at(source->location()) : SourceSpan{}
+            });
+            return result;
+        }
+
+        void buildIfStatement(const IfStatement& statement, FunctionState& state)
+        {
+            const ValueId condition = buildExpression(statement.condition, state);
+            if (!condition)
+                return;
+
+            const auto incomingValues = state.values;
+            const auto incomingOrder = state.valueOrder;
+            const std::size_t conditionBlockIndex = state.blockIndex;
+            const std::size_t thenBlockIndex = createBlock(
+                state, "if.then", SourceSpan::at(statement.thenBranch->location()));
+            const std::size_t elseBlockIndex = createBlock(
+                state,
+                statement.elseBranch ? "if.else" : "if.else.passthrough",
+                SourceSpan::at(statement.elseBranch ? statement.elseBranch->location() : statement.location()));
+            currentBlockAt(state, conditionBlockIndex).instructions.push_back(Instruction{
+                .opcode = Opcode::CondBranch,
+                .operands = {condition},
+                .targets = {
+                    currentBlockAt(state, thenBlockIndex).id,
+                    currentBlockAt(state, elseBlockIndex).id
+                },
+                .source = SourceSpan::at(statement.location())
+            });
+
+            FunctionState thenState = state;
+            thenState.blockIndex = thenBlockIndex;
+            thenState.values = incomingValues;
+            thenState.valueOrder = incomingOrder;
+            buildStatement(statement.thenBranch, thenState);
+            state.nextValue = thenState.nextValue;
+            state.nextBlock = thenState.nextBlock;
+
+            FunctionState elseState = state;
+            elseState.blockIndex = elseBlockIndex;
+            elseState.values = incomingValues;
+            elseState.valueOrder = incomingOrder;
+            if (statement.elseBranch)
+                buildStatement(statement.elseBranch, elseState);
+            state.nextValue = elseState.nextValue;
+            state.nextBlock = elseState.nextBlock;
+
+            const bool thenFallsThrough = !blockIsTerminated(thenState);
+            const bool elseFallsThrough = !blockIsTerminated(elseState);
+            if (!thenFallsThrough && !elseFallsThrough)
+            {
+                state.blockIndex = thenState.blockIndex;
+                state.values = incomingValues;
+                state.valueOrder = incomingOrder;
+                return;
+            }
+
+            const std::size_t mergeBlockIndex = createBlock(
+                state, "if.merge", SourceSpan::at(statement.location()));
+            BasicBlock& mergeBlock = currentBlockAt(state, mergeBlockIndex);
+            std::vector<ValueId> thenArguments;
+            std::vector<ValueId> elseArguments;
+            auto mergedValues = incomingValues;
+
+            for (const sema::Symbol* symbol : incomingOrder)
+            {
+                const ValueId incoming = incomingValues.at(symbol);
+                const ValueId thenValue = thenState.values.contains(symbol)
+                    ? thenState.values.at(symbol)
+                    : incoming;
+                const ValueId elseValue = elseState.values.contains(symbol)
+                    ? elseState.values.at(symbol)
+                    : incoming;
+
+                if (thenFallsThrough && elseFallsThrough && thenValue != elseValue)
+                {
+                    const ValueId merged{state.nextValue++};
+                    mergeBlock.parameters.push_back(Parameter{
+                        .id = merged,
+                        .name = symbol->name,
+                        .type = mapType(symbol->type, &statement),
+                        .source = SourceSpan::at(statement.location())
+                    });
+                    thenArguments.push_back(thenValue);
+                    elseArguments.push_back(elseValue);
+                    mergedValues[symbol] = merged;
+                }
+                else if (thenFallsThrough)
+                    mergedValues[symbol] = thenValue;
+                else
+                    mergedValues[symbol] = elseValue;
+            }
+
+            if (thenFallsThrough)
+            {
+                currentBlock(thenState).instructions.push_back(Instruction{
+                    .opcode = Opcode::Branch,
+                    .operands = std::move(thenArguments),
+                    .targets = {mergeBlock.id},
+                    .source = SourceSpan::at(statement.thenBranch->location())
+                });
+            }
+            if (elseFallsThrough)
+            {
+                currentBlock(elseState).instructions.push_back(Instruction{
+                    .opcode = Opcode::Branch,
+                    .operands = std::move(elseArguments),
+                    .targets = {mergeBlock.id},
+                    .source = SourceSpan::at(statement.elseBranch ? statement.elseBranch->location() : statement.location())
+                });
+            }
+
+            state.blockIndex = mergeBlockIndex;
+            state.values = std::move(mergedValues);
+            state.valueOrder = incomingOrder;
+        }
+
+        static BasicBlock& currentBlockAt(FunctionState& state, const std::size_t index)
+        {
+            return state.function->blocks.at(index);
         }
 
         static bool isSideEffectFree(const NodePtr<Expression>& expression)
@@ -513,6 +780,24 @@ namespace wio::wir::typed
             case TokenType::opBitXor: return BinaryOperator::BitwiseXor;
             case TokenType::opShiftLeft: return BinaryOperator::ShiftLeft;
             case TokenType::opShiftRight: return BinaryOperator::ShiftRight;
+            default: return std::nullopt;
+            }
+        }
+
+        static std::optional<BinaryOperator> mapCompoundAssignmentOperator(const TokenType type)
+        {
+            switch (type)
+            {
+            case TokenType::opPlusAssign: return BinaryOperator::Add;
+            case TokenType::opMinusAssign: return BinaryOperator::Subtract;
+            case TokenType::opStarAssign: return BinaryOperator::Multiply;
+            case TokenType::opSlashAssign: return BinaryOperator::Divide;
+            case TokenType::opPercentAssign: return BinaryOperator::Remainder;
+            case TokenType::opBitAndAssign: return BinaryOperator::BitwiseAnd;
+            case TokenType::opBitOrAssign: return BinaryOperator::BitwiseOr;
+            case TokenType::opBitXorAssign: return BinaryOperator::BitwiseXor;
+            case TokenType::opShiftLeftAssign: return BinaryOperator::ShiftLeft;
+            case TokenType::opShiftRightAssign: return BinaryOperator::ShiftRight;
             default: return std::nullopt;
             }
         }
