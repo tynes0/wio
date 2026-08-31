@@ -57,8 +57,6 @@ namespace wio::wir::typed
         case BinaryOperator::LessEqual: return "le";
         case BinaryOperator::Greater: return "gt";
         case BinaryOperator::GreaterEqual: return "ge";
-        case BinaryOperator::LogicalAnd: return "logical-and";
-        case BinaryOperator::LogicalOr: return "logical-or";
         case BinaryOperator::BitwiseAnd: return "bitwise-and";
         case BinaryOperator::BitwiseOr: return "bitwise-or";
         case BinaryOperator::BitwiseXor: return "bitwise-xor";

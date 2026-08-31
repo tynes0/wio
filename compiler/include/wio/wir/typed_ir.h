@@ -32,8 +32,6 @@ namespace wio::wir::typed
         LessEqual,
         Greater,
         GreaterEqual,
-        LogicalAnd,
-        LogicalOr,
         BitwiseAnd,
         BitwiseOr,
         BitwiseXor,

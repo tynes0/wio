@@ -507,6 +507,13 @@ namespace wio::wir::typed
             }
             if (const auto* binary = expression->as<BinaryExpression>())
             {
+                if (isLogicalAnd(binary->op.type) || isLogicalOr(binary->op.type))
+                {
+                    return buildShortCircuitExpression(
+                        *binary,
+                        isLogicalAnd(binary->op.type),
+                        state);
+                }
                 const auto op = mapBinaryOperator(binary->op.type);
                 const ValueId left = buildExpression(binary->left, state);
                 const ValueId right = buildExpression(binary->right, state);
@@ -628,6 +635,115 @@ namespace wio::wir::typed
                 .literal = std::move(literal),
                 .source = source ? SourceSpan::at(source->location()) : SourceSpan{}
             });
+            return result;
+        }
+
+        ValueId buildShortCircuitExpression(
+            const BinaryExpression& expression,
+            const bool logicalAnd,
+            FunctionState& state)
+        {
+            const ValueId left = buildExpression(expression.left, state);
+            if (!left)
+                return {};
+
+            const auto incomingValues = state.values;
+            const auto incomingOrder = state.valueOrder;
+            const std::size_t conditionBlockIndex = state.blockIndex;
+            const std::string prefix = logicalAnd ? "logical.and" : "logical.or";
+            const std::size_t rightBlockIndex = createBlock(
+                state, prefix + ".rhs", SourceSpan::at(expression.right->location()));
+            const std::size_t shortBlockIndex = createBlock(
+                state, prefix + ".short", SourceSpan::at(expression.left->location()));
+            const std::size_t mergeBlockIndex = createBlock(
+                state, prefix + ".merge", SourceSpan::at(expression.location()));
+
+            const BlockId rightBlock = currentBlockAt(state, rightBlockIndex).id;
+            const BlockId shortBlock = currentBlockAt(state, shortBlockIndex).id;
+            const BlockId mergeBlock = currentBlockAt(state, mergeBlockIndex).id;
+            currentBlockAt(state, conditionBlockIndex).instructions.push_back(Instruction{
+                .opcode = Opcode::CondBranch,
+                .operands = {left},
+                .targets = logicalAnd
+                    ? std::vector<BlockId>{rightBlock, shortBlock}
+                    : std::vector<BlockId>{shortBlock, rightBlock},
+                .source = SourceSpan::at(expression.location())
+            });
+
+            FunctionState rightState = state;
+            rightState.blockIndex = rightBlockIndex;
+            rightState.values = incomingValues;
+            rightState.valueOrder = incomingOrder;
+            const ValueId right = buildExpression(expression.right, rightState);
+            if (!right)
+                return {};
+            state.nextValue = rightState.nextValue;
+            state.nextBlock = rightState.nextBlock;
+
+            FunctionState shortState = state;
+            shortState.blockIndex = shortBlockIndex;
+            shortState.values = incomingValues;
+            shortState.valueOrder = incomingOrder;
+            const ValueId shortValue{shortState.nextValue++};
+            currentBlock(shortState).instructions.push_back(Instruction{
+                .opcode = Opcode::Constant,
+                .result = shortValue,
+                .resultType = result_.module_.types.boolType(),
+                .literal = !logicalAnd,
+                .source = SourceSpan::at(expression.left->location())
+            });
+            state.nextValue = shortState.nextValue;
+            state.nextBlock = shortState.nextBlock;
+
+            BasicBlock& merge = currentBlockAt(state, mergeBlockIndex);
+            const ValueId result{state.nextValue++};
+            merge.parameters.push_back(Parameter{
+                .id = result,
+                .name = "logical.result",
+                .type = mapType(expression.refType.Lock(), &expression),
+                .source = SourceSpan::at(expression.location())
+            });
+
+            std::vector<ValueId> rightArguments{right};
+            std::vector<ValueId> shortArguments{shortValue};
+            auto mergedValues = incomingValues;
+            for (const sema::Symbol* symbol : incomingOrder)
+            {
+                const ValueId incoming = incomingValues.at(symbol);
+                const ValueId rightValue = rightState.values.contains(symbol)
+                    ? rightState.values.at(symbol)
+                    : incoming;
+                if (rightValue == incoming)
+                    continue;
+
+                const ValueId merged{state.nextValue++};
+                merge.parameters.push_back(Parameter{
+                    .id = merged,
+                    .name = symbol->name + ".logical",
+                    .type = mapType(symbol->type, &expression),
+                    .source = SourceSpan::at(expression.location())
+                });
+                rightArguments.push_back(rightValue);
+                shortArguments.push_back(incoming);
+                mergedValues[symbol] = merged;
+            }
+
+            currentBlock(rightState).instructions.push_back(Instruction{
+                .opcode = Opcode::Branch,
+                .operands = std::move(rightArguments),
+                .targets = {mergeBlock},
+                .source = SourceSpan::at(expression.right->location())
+            });
+            currentBlock(shortState).instructions.push_back(Instruction{
+                .opcode = Opcode::Branch,
+                .operands = std::move(shortArguments),
+                .targets = {mergeBlock},
+                .source = SourceSpan::at(expression.left->location())
+            });
+
+            state.blockIndex = mergeBlockIndex;
+            state.values = std::move(mergedValues);
+            state.valueOrder = incomingOrder;
             return result;
         }
 
@@ -1060,6 +1176,16 @@ namespace wio::wir::typed
             }
         }
 
+        static bool isLogicalAnd(const TokenType type)
+        {
+            return type == TokenType::opLogicalAnd || type == TokenType::kwAnd;
+        }
+
+        static bool isLogicalOr(const TokenType type)
+        {
+            return type == TokenType::opLogicalOr || type == TokenType::kwOr;
+        }
+
         static std::optional<BinaryOperator> mapBinaryOperator(const TokenType type)
         {
             switch (type)
@@ -1075,10 +1201,6 @@ namespace wio::wir::typed
             case TokenType::opLessEqual: return BinaryOperator::LessEqual;
             case TokenType::opGreater: return BinaryOperator::Greater;
             case TokenType::opGreaterEqual: return BinaryOperator::GreaterEqual;
-            case TokenType::opLogicalAnd:
-            case TokenType::kwAnd: return BinaryOperator::LogicalAnd;
-            case TokenType::opLogicalOr:
-            case TokenType::kwOr: return BinaryOperator::LogicalOr;
             case TokenType::opBitAnd: return BinaryOperator::BitwiseAnd;
             case TokenType::opBitOr: return BinaryOperator::BitwiseOr;
             case TokenType::opBitXor: return BinaryOperator::BitwiseXor;
