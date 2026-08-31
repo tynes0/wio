@@ -4,6 +4,7 @@
 #include "wio/sema/symbol.h"
 #include "wio/sema/type.h"
 
+#include <algorithm>
 #include <optional>
 #include <unordered_map>
 
@@ -648,6 +649,8 @@ namespace wio::wir::typed
                     .source = SourceSpan::at(expression->location())
                 });
             }
+            if (const auto* match = expression->as<MatchExpression>())
+                return buildMatchExpression(*match, state);
             if (const auto* call = expression->as<FunctionCallExpression>())
             {
                 const Ref<sema::Symbol> calleeSymbol = call->callee
@@ -777,6 +780,353 @@ namespace wio::wir::typed
                 .literal = std::move(literal),
                 .source = source ? SourceSpan::at(source->location()) : SourceSpan{}
             });
+            return result;
+        }
+
+        ValueId appendBinaryValue(
+            const BinaryOperator op,
+            const ValueId left,
+            const ValueId right,
+            const TypeId resultType,
+            const ASTNode& source,
+            FunctionState& state)
+        {
+            const ValueId result{state.nextValue++};
+            currentBlock(state).instructions.push_back(Instruction{
+                .opcode = Opcode::Binary,
+                .result = result,
+                .resultType = resultType,
+                .operands = {left, right},
+                .binaryOperator = op,
+                .source = SourceSpan::at(source.location())
+            });
+            return result;
+        }
+
+        void buildMatchCaseTests(
+            const MatchCase& matchCase,
+            const ValueId subject,
+            const TypeId subjectType,
+            const BlockId successTarget,
+            const BlockId failureTarget,
+            FunctionState& state)
+        {
+            for (std::size_t index = 0; index < matchCase.matchValues.size(); ++index)
+            {
+                const auto& pattern = matchCase.matchValues[index];
+                const bool hasNextPattern = index + 1 < matchCase.matchValues.size();
+                const std::size_t nextPatternIndex = hasNextPattern
+                    ? createBlock(state, "match.pattern.next", SourceSpan::at(pattern->location()))
+                    : state.blockIndex;
+                const BlockId patternFailure = hasNextPattern
+                    ? currentBlockAt(state, nextPatternIndex).id
+                    : failureTarget;
+
+                if (const auto* range = pattern->as<RangeExpression>())
+                {
+                    const ValueId start = buildExpressionAs(range->start, subjectType, state);
+                    if (!start)
+                        return;
+                    const ValueId lower = appendBinaryValue(
+                        BinaryOperator::GreaterEqual,
+                        subject,
+                        start,
+                        result_.module_.types.boolType(),
+                        *pattern,
+                        state);
+                    const std::size_t upperBlockIndex = createBlock(
+                        state, "match.range.upper", SourceSpan::at(range->end->location()));
+                    const BlockId upperBlock = currentBlockAt(state, upperBlockIndex).id;
+                    currentBlock(state).instructions.push_back(Instruction{
+                        .opcode = Opcode::CondBranch,
+                        .operands = {lower},
+                        .targets = {upperBlock, patternFailure},
+                        .source = SourceSpan::at(pattern->location())
+                    });
+
+                    state.blockIndex = upperBlockIndex;
+                    const ValueId end = buildExpressionAs(range->end, subjectType, state);
+                    if (!end)
+                        return;
+                    const ValueId upper = appendBinaryValue(
+                        range->isInclusive ? BinaryOperator::LessEqual : BinaryOperator::Less,
+                        subject,
+                        end,
+                        result_.module_.types.boolType(),
+                        *pattern,
+                        state);
+                    currentBlock(state).instructions.push_back(Instruction{
+                        .opcode = Opcode::CondBranch,
+                        .operands = {upper},
+                        .targets = {successTarget, patternFailure},
+                        .source = SourceSpan::at(pattern->location())
+                    });
+                }
+                else
+                {
+                    const ValueId expected = buildExpressionAs(pattern, subjectType, state);
+                    if (!expected)
+                        return;
+                    const ValueId equal = appendBinaryValue(
+                        BinaryOperator::Equal,
+                        subject,
+                        expected,
+                        result_.module_.types.boolType(),
+                        *pattern,
+                        state);
+                    currentBlock(state).instructions.push_back(Instruction{
+                        .opcode = Opcode::CondBranch,
+                        .operands = {equal},
+                        .targets = {successTarget, patternFailure},
+                        .source = SourceSpan::at(pattern->location())
+                    });
+                }
+
+                if (hasNextPattern)
+                    state.blockIndex = nextPatternIndex;
+            }
+        }
+
+        ValueId buildMatchExpression(const MatchExpression& expression, FunctionState& state)
+        {
+            if (expression.cases.empty())
+            {
+                report("WIR2315", "Match expression requires at least one case.", &expression);
+                return {};
+            }
+            for (const MatchCase& matchCase : expression.cases)
+            {
+                if (!matchCase.variantName.empty())
+                {
+                    report(
+                        "WIR2316",
+                        "Typed WIR match currently supports literal, range, guard, and assumed cases; destructuring patterns require the data-model lowering.",
+                        &expression);
+                    return {};
+                }
+            }
+
+            const TypeId resultType = mapType(expression.refType.Lock(), &expression);
+            const Type* resultTypeInfo = result_.module_.types.tryGet(resultType);
+            if (!resultTypeInfo)
+                return {};
+            const bool producesValue = resultTypeInfo->kind != TypeKind::Void;
+            if (producesValue)
+            {
+                for (const MatchCase& matchCase : expression.cases)
+                {
+                    if (!matchCase.body || !matchCase.body->is<ExpressionStatement>())
+                    {
+                        report("WIR2317", "Value-producing Typed WIR match cases require expression bodies.", &expression);
+                        return {};
+                    }
+                }
+            }
+
+            const ValueId subject = buildExpression(expression.value, state);
+            if (!subject)
+                return {};
+            const TypeId subjectType = mapType(expression.value->refType.Lock(), expression.value.Get());
+            const auto incomingValues = state.values;
+            const auto incomingOrder = state.valueOrder;
+            const std::size_t subjectBlockIndex = state.blockIndex;
+
+            std::vector<std::size_t> caseEntryIndices;
+            std::vector<std::size_t> caseBodyIndices;
+            caseEntryIndices.reserve(expression.cases.size());
+            caseBodyIndices.reserve(expression.cases.size());
+            for (std::size_t index = 0; index < expression.cases.size(); ++index)
+            {
+                caseEntryIndices.push_back(createBlock(
+                    state, "match.case." + std::to_string(index) + ".test", SourceSpan::at(expression.location())));
+                caseBodyIndices.push_back(createBlock(
+                    state, "match.case." + std::to_string(index) + ".body", SourceSpan::at(expression.cases[index].body->location())));
+            }
+            const std::size_t unmatchedBlockIndex = createBlock(
+                state, "match.unmatched", SourceSpan::at(expression.location()));
+            const std::size_t mergeBlockIndex = createBlock(
+                state, "match.merge", SourceSpan::at(expression.location()));
+            const BlockId mergeBlock = currentBlockAt(state, mergeBlockIndex).id;
+            ValueId result;
+            if (producesValue)
+            {
+                result = ValueId{state.nextValue++};
+                currentBlockAt(state, mergeBlockIndex).parameters.push_back(Parameter{
+                    .id = result,
+                    .name = "match.result",
+                    .type = resultType,
+                    .source = SourceSpan::at(expression.location())
+                });
+            }
+            const bool hasAssumed = std::ranges::any_of(
+                expression.cases,
+                [](const MatchCase& matchCase) { return matchCase.matchValues.empty(); });
+            if (producesValue || hasAssumed)
+            {
+                currentBlockAt(state, unmatchedBlockIndex).instructions.push_back(Instruction{
+                    .opcode = Opcode::Unreachable,
+                    .source = SourceSpan::at(expression.location())
+                });
+            }
+            currentBlockAt(state, subjectBlockIndex).instructions.push_back(Instruction{
+                .opcode = Opcode::Branch,
+                .targets = {currentBlockAt(state, caseEntryIndices.front()).id},
+                .source = SourceSpan::at(expression.location())
+            });
+
+            std::vector<FunctionState> fallthroughStates;
+            std::vector<ValueId> pathResults;
+            for (std::size_t index = 0; index < expression.cases.size(); ++index)
+            {
+                const MatchCase& matchCase = expression.cases[index];
+                const BlockId bodyBlock = currentBlockAt(state, caseBodyIndices[index]).id;
+                const BlockId nextCase = index + 1 < expression.cases.size()
+                    ? currentBlockAt(state, caseEntryIndices[index + 1]).id
+                    : currentBlockAt(state, unmatchedBlockIndex).id;
+                const bool assumed = matchCase.matchValues.empty();
+
+                FunctionState testState = state;
+                testState.blockIndex = caseEntryIndices[index];
+                testState.values = incomingValues;
+                testState.valueOrder = incomingOrder;
+                if (assumed)
+                {
+                    currentBlock(testState).instructions.push_back(Instruction{
+                        .opcode = Opcode::Branch,
+                        .targets = {bodyBlock},
+                        .source = SourceSpan::at(matchCase.body->location())
+                    });
+                }
+                else
+                {
+                    BlockId successTarget = bodyBlock;
+                    std::optional<std::size_t> guardBlockIndex;
+                    if (matchCase.guard)
+                    {
+                        guardBlockIndex = createBlock(
+                            testState, "match.case." + std::to_string(index) + ".guard", SourceSpan::at(matchCase.guard->location()));
+                        successTarget = currentBlockAt(testState, *guardBlockIndex).id;
+                    }
+                    buildMatchCaseTests(
+                        matchCase, subject, subjectType, successTarget, nextCase, testState);
+                    if (guardBlockIndex)
+                    {
+                        testState.blockIndex = *guardBlockIndex;
+                        const ValueId guard = buildExpression(matchCase.guard, testState);
+                        if (!guard)
+                            return {};
+                        currentBlock(testState).instructions.push_back(Instruction{
+                            .opcode = Opcode::CondBranch,
+                            .operands = {guard},
+                            .targets = {bodyBlock, nextCase},
+                            .source = SourceSpan::at(matchCase.guard->location())
+                        });
+                    }
+                }
+                state.nextValue = testState.nextValue;
+                state.nextBlock = testState.nextBlock;
+
+                FunctionState bodyState = state;
+                bodyState.blockIndex = caseBodyIndices[index];
+                bodyState.values = incomingValues;
+                bodyState.valueOrder = incomingOrder;
+                if (producesValue)
+                {
+                    const auto* expressionBody = matchCase.body->as<ExpressionStatement>();
+                    const ValueId bodyValue = buildExpressionAs(expressionBody->expression, resultType, bodyState);
+                    if (!bodyValue)
+                        return {};
+                    fallthroughStates.push_back(bodyState);
+                    pathResults.push_back(bodyValue);
+                }
+                else
+                {
+                    buildStatement(matchCase.body, bodyState);
+                    if (!blockIsTerminated(bodyState))
+                        fallthroughStates.push_back(bodyState);
+                }
+                state.nextValue = bodyState.nextValue;
+                state.nextBlock = bodyState.nextBlock;
+            }
+
+            if (!producesValue && !hasAssumed)
+            {
+                FunctionState unmatchedState = state;
+                unmatchedState.blockIndex = unmatchedBlockIndex;
+                unmatchedState.values = incomingValues;
+                unmatchedState.valueOrder = incomingOrder;
+                fallthroughStates.push_back(std::move(unmatchedState));
+            }
+
+            if (fallthroughStates.empty())
+            {
+                currentBlockAt(state, mergeBlockIndex).instructions.push_back(Instruction{
+                    .opcode = Opcode::Unreachable,
+                    .source = SourceSpan::at(expression.location())
+                });
+                state.blockIndex = mergeBlockIndex;
+                state.values = incomingValues;
+                state.valueOrder = incomingOrder;
+                return {};
+            }
+
+            BasicBlock& merge = currentBlockAt(state, mergeBlockIndex);
+            auto mergedValues = incomingValues;
+            std::vector<const sema::Symbol*> mergedSymbols;
+            for (const sema::Symbol* symbol : incomingOrder)
+            {
+                const ValueId incoming = incomingValues.at(symbol);
+                const auto valueIn = [symbol, incoming](const FunctionState& path)
+                {
+                    const auto found = path.values.find(symbol);
+                    return found != path.values.end() ? found->second : incoming;
+                };
+                const ValueId firstValue = valueIn(fallthroughStates.front());
+                const bool differs = std::ranges::any_of(
+                    fallthroughStates,
+                    [&](const FunctionState& path) { return valueIn(path) != firstValue; });
+                if (!differs)
+                {
+                    mergedValues[symbol] = firstValue;
+                    continue;
+                }
+
+                const ValueId merged{state.nextValue++};
+                merge.parameters.push_back(Parameter{
+                    .id = merged,
+                    .name = symbol->name + ".match",
+                    .type = mapType(symbol->type, &expression),
+                    .source = SourceSpan::at(expression.location())
+                });
+                mergedSymbols.push_back(symbol);
+                mergedValues[symbol] = merged;
+            }
+
+            for (std::size_t index = 0; index < fallthroughStates.size(); ++index)
+            {
+                FunctionState& path = fallthroughStates[index];
+                std::vector<ValueId> arguments;
+                arguments.reserve(mergedSymbols.size() + (producesValue ? 1 : 0));
+                if (producesValue)
+                    arguments.push_back(pathResults[index]);
+                for (const sema::Symbol* symbol : mergedSymbols)
+                {
+                    const auto found = path.values.find(symbol);
+                    arguments.push_back(found != path.values.end()
+                        ? found->second
+                        : incomingValues.at(symbol));
+                }
+                currentBlock(path).instructions.push_back(Instruction{
+                    .opcode = Opcode::Branch,
+                    .operands = std::move(arguments),
+                    .targets = {mergeBlock},
+                    .source = SourceSpan::at(expression.location())
+                });
+            }
+
+            state.blockIndex = mergeBlockIndex;
+            state.values = std::move(mergedValues);
+            state.valueOrder = incomingOrder;
             return result;
         }
 

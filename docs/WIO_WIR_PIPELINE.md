@@ -39,6 +39,15 @@ of side effects. Calls and other effectful alternatives are placed in explicit
 `conditional.true`, `conditional.false`, and `conditional.merge` regions so an
 unselected alternative cannot execute.
 
+Value-producing primitive `match` expressions lower to ordered test and body
+blocks. Literal alternatives, multi-value alternatives, inclusive/exclusive
+ranges, guarded cases, and the final Wio `assumed` fallback are supported. The
+matched subject is evaluated once. Statement-form matches use the same control
+flow, merge mutated locals through block parameters, and preserve normal
+fallthrough when no `assumed` case is present. Option/Result, array, and
+payload-carrying patterns remain gated on the later data-model lowering rather
+than being approximated in a backend.
+
 ## Lowered WIR
 
 Lowered WIR is the shared backend contract. Its first canonicalization pass
