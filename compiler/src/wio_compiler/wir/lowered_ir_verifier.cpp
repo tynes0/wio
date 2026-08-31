@@ -1,5 +1,6 @@
 #include "wio/wir/lowered_ir_verifier.h"
 
+#include <algorithm>
 #include <unordered_map>
 #include <utility>
 
@@ -25,6 +26,11 @@ namespace wio::wir::lowered
                    kind == TypeKind::U8 || kind == TypeKind::U16 || kind == TypeKind::U32 ||
                    kind == TypeKind::U64 || kind == TypeKind::USize ||
                    kind == TypeKind::F32 || kind == TypeKind::F64;
+        }
+
+        bool isInteger(const TypeKind kind)
+        {
+            return isNumeric(kind) && kind != TypeKind::F32 && kind != TypeKind::F64;
         }
     }
 
@@ -252,6 +258,40 @@ namespace wio::wir::lowered
                             sourceType->arguments.front() != instruction.resultType)
                         {
                             report("LIR1421", "Lowered WIR array element projection must return its array element type.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::ArrayCreate)
+                    {
+                        const Type* resultType = module.types.tryGet(instruction.resultType);
+                        bool valid = resultType && resultType->kind == TypeKind::Array &&
+                            resultType->arguments.size() == 1;
+                        if (valid)
+                        {
+                            valid = std::ranges::all_of(
+                                instruction.operands,
+                                [&](const ValueId operand)
+                                {
+                                    return valueType(operand) == resultType->arguments.front();
+                                });
+                            valid = valid && (!resultType->staticExtent.has_value() ||
+                                *resultType->staticExtent == instruction.operands.size());
+                        }
+                        if (!valid)
+                            report("LIR1422", "Lowered WIR array creation requires element operands matching its array type and extent.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::ArrayGet)
+                    {
+                        const Type* arrayType = instruction.operands.size() == 2
+                            ? module.types.tryGet(valueType(instruction.operands[0]))
+                            : nullptr;
+                        const Type* indexType = instruction.operands.size() == 2
+                            ? module.types.tryGet(valueType(instruction.operands[1]))
+                            : nullptr;
+                        if (!arrayType || arrayType->kind != TypeKind::Array || arrayType->arguments.size() != 1 ||
+                            !indexType || !isInteger(indexType->kind) ||
+                            arrayType->arguments.front() != instruction.resultType)
+                        {
+                            report("LIR1423", "Lowered WIR array get requires an array, an integer index, and its element result type.", instruction.source, function.id, block.id);
                         }
                     }
                     else if (instruction.opcode == Opcode::Call)

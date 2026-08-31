@@ -35,6 +35,8 @@ namespace wio::wir
             case typed::Opcode::VariantPayload: opcode = lowered::Opcode::VariantPayload; break;
             case typed::Opcode::ArrayLength: opcode = lowered::Opcode::ArrayLength; break;
             case typed::Opcode::ArrayElement: opcode = lowered::Opcode::ArrayElement; break;
+            case typed::Opcode::ArrayCreate: opcode = lowered::Opcode::ArrayCreate; break;
+            case typed::Opcode::ArrayGet: opcode = lowered::Opcode::ArrayGet; break;
             case typed::Opcode::Return: opcode = lowered::Opcode::Return; break;
             case typed::Opcode::Unreachable: opcode = lowered::Opcode::Unreachable; break;
             case typed::Opcode::Select:

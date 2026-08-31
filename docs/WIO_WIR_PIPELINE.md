@@ -32,7 +32,8 @@ The initial builder supports top-level functions, parameters, primitive and
 reference-family types, contextually typed integer and floating-point constants,
 Unicode `text`, `string`, `char`, and nullable `null` constants, direct calls, unary/binary expressions,
 explicit clamping numeric `fit` conversions, safe implicit numeric widening, pure conditional values, local declarations and default initialization,
-identifier assignment, compound assignment, `if`/`else` control flow, returns,
+identifier assignment, compound assignment, contextually typed and inferred array
+literals, array index reads, `if`/`else` control flow, returns,
 `while` loops, C-style `for` loops, `break`, `continue`, short-circuit `and`/`or`,
 and expression statements. Logical expressions use explicit right-hand, short,
 and merge blocks, so calls in the right operand are only evaluated on the
@@ -57,6 +58,12 @@ payload-carrying patterns use explicit backend-neutral data-model operations:
 bindings are projected only on matching control-flow paths and dominate both
 their guards and bodies. This keeps C++ and future VM backends from recreating
 Option/Result or array pattern semantics independently.
+
+Ordinary array expressions use `array-create` and `array-get`. Array literal
+elements are converted against the semantic element type before construction,
+and inferred literal arrays retain their fixed extent in the WIR type table.
+Indexed mutation remains gated on the upcoming place/memory model rather than
+being represented as a misleading pure operation.
 
 ## Lowered WIR
 

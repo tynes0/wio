@@ -23,6 +23,8 @@ namespace wio::wir::lowered
         VariantPayload,
         ArrayLength,
         ArrayElement,
+        ArrayCreate,
+        ArrayGet,
         Return,
         Jump,
         CondJump,

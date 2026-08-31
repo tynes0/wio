@@ -61,6 +61,8 @@ namespace wio::wir::typed
         VariantPayload,
         ArrayLength,
         ArrayElement,
+        ArrayCreate,
+        ArrayGet,
         // SSA value selection. All operands are already evaluated, so builders
         // may only use this for side-effect-free alternatives.
         Select,

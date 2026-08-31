@@ -179,8 +179,11 @@ namespace wio::wir::typed
                 const auto array = type.AsFast<sema::ArrayType>();
                 wirType.kind = TypeKind::Array;
                 wirType.arguments.push_back(mapType(array->elementType, source));
-                if (array->arrayKind == sema::ArrayType::ArrayKind::Static)
+                if (array->arrayKind == sema::ArrayType::ArrayKind::Static ||
+                    array->arrayKind == sema::ArrayType::ArrayKind::Literal)
+                {
                     wirType.staticExtent = array->size;
+                }
                 break;
             }
             case sema::TypeKind::Dictionary:
@@ -518,6 +521,31 @@ namespace wio::wir::typed
                     .source = SourceSpan::at(expression->location())
                 });
             }
+            if (const auto* array = expression->as<ArrayLiteral>())
+            {
+                const TypeId arrayTypeId = mapType(expression->refType.Lock(), expression.Get());
+                const Type* arrayType = result_.module_.types.tryGet(arrayTypeId);
+                if (!arrayType || arrayType->kind != TypeKind::Array || arrayType->arguments.size() != 1)
+                {
+                    report("WIR2320", "Array literal requires a resolved WIR array element type.", expression.Get());
+                    return {};
+                }
+                const TypeId elementType = arrayType->arguments.front();
+
+                Instruction instruction{
+                    .opcode = Opcode::ArrayCreate,
+                    .source = SourceSpan::at(expression->location())
+                };
+                instruction.operands.reserve(array->elements.size());
+                for (const auto& element : array->elements)
+                {
+                    const ValueId value = buildExpressionAs(element, elementType, state);
+                    if (!value)
+                        return {};
+                    instruction.operands.push_back(value);
+                }
+                return appendValue(std::move(instruction));
+            }
             if (expression->is<NullExpression>())
             {
                 return appendValue(Instruction{
@@ -561,6 +589,30 @@ namespace wio::wir::typed
                     return found->second;
                 report("WIR2301", "Identifier is not a value available in the current Typed WIR function.", expression.Get());
                 return {};
+            }
+            if (const auto* access = expression->as<ArrayAccessExpression>())
+            {
+                if (access->operatorDispatchKind != OperatorDispatchKind::None)
+                {
+                    report("WIR2321", "Overloaded index access is not yet supported by Typed WIR.", expression.Get());
+                    return {};
+                }
+                const TypeId objectTypeId = mapType(access->object->refType.Lock(), access->object.Get());
+                const Type* objectType = result_.module_.types.tryGet(objectTypeId);
+                if (!objectType || objectType->kind != TypeKind::Array)
+                {
+                    report("WIR2322", "Initial Typed WIR index access supports arrays only.", expression.Get());
+                    return {};
+                }
+                const ValueId object = buildExpression(access->object, state);
+                const ValueId index = buildExpression(access->index, state);
+                if (!object || !index)
+                    return {};
+                return appendValue(Instruction{
+                    .opcode = Opcode::ArrayGet,
+                    .operands = {object, index},
+                    .source = SourceSpan::at(expression->location())
+                });
             }
             if (const auto* assignment = expression->as<AssignmentExpression>())
             {

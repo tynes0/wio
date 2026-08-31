@@ -140,6 +140,20 @@ namespace wio::wir::lowered
                 stream << "array-element " << valueRef(instruction.operands.at(0)) << ", "
                        << instruction.projectionIndex;
                 break;
+            case Opcode::ArrayCreate:
+                stream << "array-create [";
+                for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                {
+                    if (index > 0)
+                        stream << ", ";
+                    stream << valueRef(instruction.operands[index]);
+                }
+                stream << "]";
+                break;
+            case Opcode::ArrayGet:
+                stream << "array-get " << valueRef(instruction.operands.at(0)) << ", "
+                       << valueRef(instruction.operands.at(1));
+                break;
             case Opcode::Return:
                 stream << "return";
                 if (!instruction.operands.empty())
