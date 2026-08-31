@@ -31,6 +31,8 @@ namespace wio::wir::typed
 
         bool literalMatches(const Literal& literal, const TypeKind kind)
         {
+            if (std::holds_alternative<NullLiteral>(literal))
+                return kind == TypeKind::Nullable;
             if (kind == TypeKind::Bool)
                 return std::holds_alternative<bool>(literal);
             if (kind == TypeKind::I8 || kind == TypeKind::I16 || kind == TypeKind::I32 ||

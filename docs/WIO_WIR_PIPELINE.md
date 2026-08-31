@@ -22,7 +22,8 @@ It retains operations such as typed `select` that are useful to optimization
 and diagnostics before control flow is made backend-canonical.
 
 The initial builder supports top-level functions, parameters, primitive and
-reference-family types, constants, direct calls, unary/binary expressions,
+reference-family types, contextually typed integer and floating-point constants,
+Unicode `text`, `string`, `char`, and nullable `null` constants, direct calls, unary/binary expressions,
 pure conditional values, local declarations and default initialization,
 identifier assignment, compound assignment, `if`/`else` control flow, returns,
 `while` loops, C-style `for` loops, `break`, `continue`, short-circuit `and`/`or`,

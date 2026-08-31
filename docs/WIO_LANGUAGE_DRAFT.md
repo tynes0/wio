@@ -315,6 +315,12 @@ let d = 0o755;
 
 #### Integer Suffixes
 
+Integer suffixes are optional. They are useful when an inferred declaration
+must select a type other than the default, such as `let id = 3u64;`. When a
+literal appears in a typed initializer, assignment, argument, return, array,
+dictionary, conditional, or match context, the compiler uses that expected
+numeric type and validates that the suffix-free value fits.
+
 Supported integer suffixes currently include:
 
 - `i8`
@@ -397,6 +403,10 @@ let d = 4.2E-1;
 ```
 
 #### Float Suffixes
+
+Float suffixes are optional. A suffix can force an inferred declaration to
+`f32` or `f64`; otherwise typed expression contexts provide the expected type
+and an uncontextualized floating-point literal defaults to `f64`.
 
 Supported float suffixes currently include:
 

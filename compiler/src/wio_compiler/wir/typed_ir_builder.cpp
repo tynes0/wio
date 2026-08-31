@@ -171,6 +171,8 @@ namespace wio::wir::typed
                 wirType.arguments.push_back(mapType(type.AsFast<sema::NullableType>()->valueType, source));
                 break;
             }
+            case sema::TypeKind::Null:
+                return mapType(type.AsFast<sema::NullType>()->transformedType, source);
             case sema::TypeKind::Array:
             {
                 const auto array = type.AsFast<sema::ArrayType>();
@@ -407,20 +409,51 @@ namespace wio::wir::typed
 
             if (const auto* integer = expression->as<IntegerLiteral>())
             {
-                try
+                const TypeId typeId = mapType(expression->refType.Lock(), expression.Get());
+                const Type* type = result_.module_.types.tryGet(typeId);
+                const auto integerType = type ? mapIntegerType(type->kind) : std::nullopt;
+                if (!integerType)
                 {
-                    const std::string value = common::stripIntegerLiteralTypeSuffix(integer->token.value);
-                    return appendValue(Instruction{
-                        .opcode = Opcode::Constant,
-                        .literal = static_cast<std::int64_t>(std::stoll(value)),
-                        .source = SourceSpan::at(expression->location())
-                    });
+                    report("WIR2300", "Integer literal has no representable WIR integer type.", expression.Get());
+                    return {};
                 }
-                catch (...)
+                const IntegerResult parsed = common::getIntegerAsType(integer->token.value, *integerType);
+                const auto literal = integerLiteral(parsed);
+                if (!parsed.isValid || !literal)
                 {
                     report("WIR2300", "Integer literal cannot be represented by the initial Typed WIR literal model.", expression.Get());
                     return {};
                 }
+                return appendValue(Instruction{
+                    .opcode = Opcode::Constant,
+                    .literal = *literal,
+                    .source = SourceSpan::at(expression->location())
+                });
+            }
+            if (const auto* floating = expression->as<FloatLiteral>())
+            {
+                const TypeId typeId = mapType(expression->refType.Lock(), expression.Get());
+                const Type* type = result_.module_.types.tryGet(typeId);
+                const auto floatType = type ? mapFloatType(type->kind) : std::nullopt;
+                if (!floatType)
+                {
+                    report("WIR2309", "Float literal has no representable WIR floating-point type.", expression.Get());
+                    return {};
+                }
+                const FloatResult parsed = common::getFloatAsType(floating->token.value, *floatType);
+                if (!parsed.isValid)
+                {
+                    report("WIR2309", "Float literal cannot be represented by the Typed WIR literal model.", expression.Get());
+                    return {};
+                }
+                const double value = parsed.type == FloatType::f32
+                    ? static_cast<double>(parsed.value.v_f32)
+                    : parsed.value.v_f64;
+                return appendValue(Instruction{
+                    .opcode = Opcode::Constant,
+                    .literal = value,
+                    .source = SourceSpan::at(expression->location())
+                });
             }
             if (const auto* boolean = expression->as<BoolLiteral>())
             {
@@ -435,6 +468,42 @@ namespace wio::wir::typed
                 return appendValue(Instruction{
                     .opcode = Opcode::Constant,
                     .literal = string->token.value,
+                    .source = SourceSpan::at(expression->location())
+                });
+            }
+            if (const auto* character = expression->as<CharLiteral>())
+            {
+                if (character->token.value.size() != 1)
+                {
+                    report("WIR2310", "Char literal must contain exactly one byte-sized character.", expression.Get());
+                    return {};
+                }
+                return appendValue(Instruction{
+                    .opcode = Opcode::Constant,
+                    .literal = static_cast<std::uint64_t>(
+                        static_cast<unsigned char>(character->token.value.front())),
+                    .source = SourceSpan::at(expression->location())
+                });
+            }
+            if (const auto* byte = expression->as<ByteLiteral>())
+            {
+                const IntegerResult parsed = common::getIntegerAsType(byte->token.value, IntegerType::u8);
+                if (!parsed.isValid)
+                {
+                    report("WIR2311", "Byte literal is outside the u8 range.", expression.Get());
+                    return {};
+                }
+                return appendValue(Instruction{
+                    .opcode = Opcode::Constant,
+                    .literal = static_cast<std::uint64_t>(parsed.value.v_u8),
+                    .source = SourceSpan::at(expression->location())
+                });
+            }
+            if (expression->is<NullExpression>())
+            {
+                return appendValue(Instruction{
+                    .opcode = Opcode::Constant,
+                    .literal = NullLiteral{},
                     .source = SourceSpan::at(expression->location())
                 });
             }
@@ -1184,6 +1253,55 @@ namespace wio::wir::typed
         static bool isLogicalOr(const TokenType type)
         {
             return type == TokenType::opLogicalOr || type == TokenType::kwOr;
+        }
+
+        static std::optional<IntegerType> mapIntegerType(const TypeKind kind)
+        {
+            switch (kind)
+            {
+            case TypeKind::I8: return IntegerType::i8;
+            case TypeKind::I16: return IntegerType::i16;
+            case TypeKind::I32: return IntegerType::i32;
+            case TypeKind::I64: return IntegerType::i64;
+            case TypeKind::ISize: return IntegerType::isize;
+            case TypeKind::U8:
+            case TypeKind::Byte: return IntegerType::u8;
+            case TypeKind::U16: return IntegerType::u16;
+            case TypeKind::U32: return IntegerType::u32;
+            case TypeKind::U64: return IntegerType::u64;
+            case TypeKind::USize: return IntegerType::usize;
+            default: return std::nullopt;
+            }
+        }
+
+        static std::optional<FloatType> mapFloatType(const TypeKind kind)
+        {
+            if (kind == TypeKind::F32)
+                return FloatType::f32;
+            if (kind == TypeKind::F64)
+                return FloatType::f64;
+            return std::nullopt;
+        }
+
+        static std::optional<Literal> integerLiteral(const IntegerResult& value)
+        {
+            if (!value.isValid)
+                return std::nullopt;
+            switch (value.type)
+            {
+            case IntegerType::i8: return Literal{static_cast<std::int64_t>(value.value.v_i8)};
+            case IntegerType::i16: return Literal{static_cast<std::int64_t>(value.value.v_i16)};
+            case IntegerType::i32: return Literal{static_cast<std::int64_t>(value.value.v_i32)};
+            case IntegerType::i64: return Literal{static_cast<std::int64_t>(value.value.v_i64)};
+            case IntegerType::isize: return Literal{static_cast<std::int64_t>(value.value.v_isize)};
+            case IntegerType::u8: return Literal{static_cast<std::uint64_t>(value.value.v_u8)};
+            case IntegerType::u16: return Literal{static_cast<std::uint64_t>(value.value.v_u16)};
+            case IntegerType::u32: return Literal{static_cast<std::uint64_t>(value.value.v_u32)};
+            case IntegerType::u64: return Literal{static_cast<std::uint64_t>(value.value.v_u64)};
+            case IntegerType::usize: return Literal{static_cast<std::uint64_t>(value.value.v_usize)};
+            case IntegerType::Unknown: return std::nullopt;
+            }
+            return std::nullopt;
         }
 
         static std::optional<BinaryOperator> mapBinaryOperator(const TokenType type)

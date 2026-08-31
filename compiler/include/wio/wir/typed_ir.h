@@ -12,6 +12,11 @@
 
 namespace wio::wir::typed
 {
+    struct NullLiteral final
+    {
+        auto operator<=>(const NullLiteral&) const = default;
+    };
+
     enum class UnaryOperator : std::uint8_t
     {
         Negate,
@@ -54,7 +59,14 @@ namespace wio::wir::typed
         Unreachable
     };
 
-    using Literal = std::variant<std::monostate, bool, std::int64_t, std::uint64_t, double, std::string>;
+    using Literal = std::variant<
+        std::monostate,
+        NullLiteral,
+        bool,
+        std::int64_t,
+        std::uint64_t,
+        double,
+        std::string>;
 
     struct Parameter
     {

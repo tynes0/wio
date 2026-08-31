@@ -35,6 +35,8 @@ namespace wio::wir::typed
                 using Value = std::decay_t<decltype(value)>;
                 if constexpr (std::is_same_v<Value, std::monostate>)
                     return "<none>";
+                else if constexpr (std::is_same_v<Value, NullLiteral>)
+                    return "null";
                 else if constexpr (std::is_same_v<Value, bool>)
                     return value ? "true" : "false";
                 else if constexpr (std::is_same_v<Value, std::string>)
