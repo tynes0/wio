@@ -57,6 +57,13 @@ namespace wio::wir::lowered
                 if (!module.types.tryGet(argument))
                     report("LIR1002", "Lowered WIR type references an unknown type id.");
             }
+            if (type.kind != TypeKind::Named && type.nominalKind != NominalKind::None)
+                report("LIR1003", "Only named Lowered WIR types may carry a nominal kind.");
+            if (type.nominalRepresentation == NominalRepresentation::NativePod &&
+                (type.kind != TypeKind::Named || type.nominalKind != NominalKind::Component))
+            {
+                report("LIR1004", "Native POD representation requires a named component type.");
+            }
         }
 
         FunctionMap functions;

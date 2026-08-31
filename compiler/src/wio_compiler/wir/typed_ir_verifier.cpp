@@ -107,6 +107,13 @@ namespace wio::wir::typed
                 report("WIR1005", "Dictionary Typed WIR type requires key and value arguments.");
             if (type.staticExtent.has_value() && type.kind != TypeKind::Array)
                 report("WIR1006", "Only array Typed WIR types may carry a static extent.");
+            if (type.kind != TypeKind::Named && type.nominalKind != NominalKind::None)
+                report("WIR1007", "Only named Typed WIR types may carry a nominal kind.");
+            if (type.nominalRepresentation == NominalRepresentation::NativePod &&
+                (type.kind != TypeKind::Named || type.nominalKind != NominalKind::Component))
+            {
+                report("WIR1008", "Native POD representation requires a named component type.");
+            }
         }
 
         FunctionMap functions;

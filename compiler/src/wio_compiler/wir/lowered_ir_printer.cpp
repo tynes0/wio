@@ -70,6 +70,10 @@ namespace wio::wir::lowered
                 stream << " mutable";
             if (type.staticExtent.has_value())
                 stream << " extent=" << *type.staticExtent;
+            if (type.nominalKind != NominalKind::None)
+                stream << " nominal=" << nominalKindName(type.nominalKind);
+            if (type.nominalRepresentation != NominalRepresentation::Wio)
+                stream << " representation=" << nominalRepresentationName(type.nominalRepresentation);
             return stream.str();
         }
 

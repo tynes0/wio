@@ -216,6 +216,18 @@ namespace wio::wir::typed
                     : structure->scopePath + "::" + structure->name;
                 for (const auto& argument : structure->genericArguments)
                     wirType.arguments.push_back(mapType(argument, source));
+                wirType.nominalKind = structure->isFlagset
+                    ? NominalKind::Flagset
+                    : structure->isEnum
+                        ? NominalKind::Enum
+                        : structure->isInterface
+                            ? NominalKind::Interface
+                            : structure->isObject
+                                ? NominalKind::Object
+                                : NominalKind::Component;
+                wirType.nominalRepresentation = structure->isNativePodComponent
+                    ? NominalRepresentation::NativePod
+                    : NominalRepresentation::Wio;
                 break;
             }
             default:

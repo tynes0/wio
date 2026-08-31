@@ -74,4 +74,28 @@ namespace wio::wir
         }
         return "invalid";
     }
+
+    std::string_view nominalKindName(const NominalKind kind)
+    {
+        switch (kind)
+        {
+        case NominalKind::None: return "none";
+        case NominalKind::Component: return "component";
+        case NominalKind::Object: return "object";
+        case NominalKind::Interface: return "interface";
+        case NominalKind::Enum: return "enum";
+        case NominalKind::Flagset: return "flagset";
+        }
+        return "none";
+    }
+
+    std::string_view nominalRepresentationName(const NominalRepresentation representation)
+    {
+        switch (representation)
+        {
+        case NominalRepresentation::Wio: return "wio";
+        case NominalRepresentation::NativePod: return "native-pod";
+        }
+        return "wio";
+    }
 }

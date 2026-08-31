@@ -42,6 +42,22 @@ namespace wio::wir
         AsyncTask
     };
 
+    enum class NominalKind : std::uint8_t
+    {
+        None,
+        Component,
+        Object,
+        Interface,
+        Enum,
+        Flagset
+    };
+
+    enum class NominalRepresentation : std::uint8_t
+    {
+        Wio,
+        NativePod
+    };
+
     struct Type
     {
         TypeKind kind = TypeKind::Invalid;
@@ -49,6 +65,8 @@ namespace wio::wir
         std::vector<TypeId> arguments;
         bool isMutable = false;
         std::optional<std::size_t> staticExtent;
+        NominalKind nominalKind = NominalKind::None;
+        NominalRepresentation nominalRepresentation = NominalRepresentation::Wio;
 
         auto operator<=>(const Type&) const = default;
     };
@@ -78,4 +96,6 @@ namespace wio::wir
     };
 
     [[nodiscard]] std::string_view typeKindName(TypeKind kind);
+    [[nodiscard]] std::string_view nominalKindName(NominalKind kind);
+    [[nodiscard]] std::string_view nominalRepresentationName(NominalRepresentation representation);
 }

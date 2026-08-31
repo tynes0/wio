@@ -21,6 +21,13 @@ instruction has a stable strong ID, an interned type, and source provenance.
 It retains operations such as typed `select` that are useful to optimization
 and diagnostics before control flow is made backend-canonical.
 
+Named types retain their semantic category instead of collapsing to a backend
+spelling: `component`, `object`, `interface`, `enum`, and `flagset` are distinct
+nominal kinds. Components use value semantics while object/interface types are
+identity-bearing handles. Native POD components additionally carry the
+`native-pod` representation marker. These properties are copied unchanged into
+Lowered WIR so each backend receives the same ownership and layout contract.
+
 The initial builder supports top-level functions, parameters, primitive and
 reference-family types, contextually typed integer and floating-point constants,
 Unicode `text`, `string`, `char`, and nullable `null` constants, direct calls, unary/binary expressions,
