@@ -379,6 +379,50 @@ namespace wio::wir::typed
                             report("WIR1422", "Typed WIR numeric conversion requires one numeric operand and a numeric result.", instruction.source, function.id, block.id);
                         }
                     }
+                    else if (instruction.opcode == Opcode::VariantTest)
+                    {
+                        const Type* sourceType = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        if (!sourceType || sourceType->kind != TypeKind::Named ||
+                            instruction.resultType != module.types.boolType() || instruction.selector.empty())
+                        {
+                            report("WIR1423", "Typed WIR variant test requires one named value, a variant selector, and a bool result.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::VariantPayload)
+                    {
+                        const Type* sourceType = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        if (!sourceType || sourceType->kind != TypeKind::Named || instruction.selector.empty())
+                        {
+                            report("WIR1424", "Typed WIR variant payload requires one named value and a variant selector.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::ArrayLength)
+                    {
+                        const Type* sourceType = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        const Type* resultType = module.types.tryGet(instruction.resultType);
+                        if (!sourceType || sourceType->kind != TypeKind::Array ||
+                            !resultType || resultType->kind != TypeKind::USize)
+                        {
+                            report("WIR1425", "Typed WIR array length requires one array value and a usize result.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::ArrayElement)
+                    {
+                        const Type* sourceType = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        if (!sourceType || sourceType->kind != TypeKind::Array || sourceType->arguments.size() != 1 ||
+                            sourceType->arguments.front() != instruction.resultType)
+                        {
+                            report("WIR1426", "Typed WIR array element projection must return its array element type.", instruction.source, function.id, block.id);
+                        }
+                    }
                     else if (instruction.opcode == Opcode::Select)
                     {
                         if (instruction.operands.size() != 3 ||

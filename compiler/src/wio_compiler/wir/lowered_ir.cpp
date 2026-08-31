@@ -11,7 +11,9 @@ namespace wio::wir::lowered
     bool producesValue(const Opcode opcode)
     {
         return opcode == Opcode::Constant || opcode == Opcode::Unary ||
-               opcode == Opcode::Binary || opcode == Opcode::Convert || opcode == Opcode::Call;
+               opcode == Opcode::Binary || opcode == Opcode::Convert || opcode == Opcode::Call ||
+               opcode == Opcode::VariantTest || opcode == Opcode::VariantPayload ||
+               opcode == Opcode::ArrayLength || opcode == Opcode::ArrayElement;
     }
 
     std::string_view opcodeName(const Opcode opcode)
@@ -23,6 +25,10 @@ namespace wio::wir::lowered
         case Opcode::Binary: return "binary";
         case Opcode::Convert: return "convert";
         case Opcode::Call: return "call";
+        case Opcode::VariantTest: return "variant-test";
+        case Opcode::VariantPayload: return "variant-payload";
+        case Opcode::ArrayLength: return "array-length";
+        case Opcode::ArrayElement: return "array-element";
         case Opcode::Return: return "return";
         case Opcode::Jump: return "jump";
         case Opcode::CondJump: return "cond-jump";

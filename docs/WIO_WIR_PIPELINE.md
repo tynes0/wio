@@ -45,8 +45,11 @@ ranges, guarded cases, and the final Wio `assumed` fallback are supported. The
 matched subject is evaluated once. Statement-form matches use the same control
 flow, merge mutated locals through block parameters, and preserve normal
 fallthrough when no `assumed` case is present. Option/Result, array, and
-payload-carrying patterns remain gated on the later data-model lowering rather
-than being approximated in a backend.
+payload-carrying patterns use explicit backend-neutral data-model operations:
+`variant-test`, `variant-payload`, `array-length`, and `array-element`. Pattern
+bindings are projected only on matching control-flow paths and dominate both
+their guards and bodies. This keeps C++ and future VM backends from recreating
+Option/Result or array pattern semantics independently.
 
 ## Lowered WIR
 

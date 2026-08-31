@@ -203,6 +203,50 @@ namespace wio::wir::lowered
                             report("LIR1417", "Lowered WIR numeric conversion requires one numeric operand and a numeric result.", instruction.source, function.id, block.id);
                         }
                     }
+                    else if (instruction.opcode == Opcode::VariantTest)
+                    {
+                        const Type* sourceType = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        if (!sourceType || sourceType->kind != TypeKind::Named ||
+                            instruction.resultType != module.types.boolType() || instruction.selector.empty())
+                        {
+                            report("LIR1418", "Lowered WIR variant test requires one named value, a variant selector, and a bool result.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::VariantPayload)
+                    {
+                        const Type* sourceType = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        if (!sourceType || sourceType->kind != TypeKind::Named || instruction.selector.empty())
+                        {
+                            report("LIR1419", "Lowered WIR variant payload requires one named value and a variant selector.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::ArrayLength)
+                    {
+                        const Type* sourceType = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        const Type* resultType = module.types.tryGet(instruction.resultType);
+                        if (!sourceType || sourceType->kind != TypeKind::Array ||
+                            !resultType || resultType->kind != TypeKind::USize)
+                        {
+                            report("LIR1420", "Lowered WIR array length requires one array value and a usize result.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::ArrayElement)
+                    {
+                        const Type* sourceType = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        if (!sourceType || sourceType->kind != TypeKind::Array || sourceType->arguments.size() != 1 ||
+                            sourceType->arguments.front() != instruction.resultType)
+                        {
+                            report("LIR1421", "Lowered WIR array element projection must return its array element type.", instruction.source, function.id, block.id);
+                        }
+                    }
                     else if (instruction.opcode == Opcode::Call)
                     {
                         const auto calleeIt = instruction.callee ? functions.find(instruction.callee.value()) : functions.end();

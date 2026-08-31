@@ -803,6 +803,100 @@ namespace wio::wir::typed
             return result;
         }
 
+        ValueId buildDestructuringMatchTest(
+            const MatchCase& matchCase,
+            const ValueId subject,
+            const ASTNode& source,
+            FunctionState& state)
+        {
+            if (matchCase.variantName == "__array")
+            {
+                const TypeId usizeType = result_.module_.types.intern(Type{.kind = TypeKind::USize});
+                const ValueId length{state.nextValue++};
+                currentBlock(state).instructions.push_back(Instruction{
+                    .opcode = Opcode::ArrayLength,
+                    .result = length,
+                    .resultType = usizeType,
+                    .operands = {subject},
+                    .source = SourceSpan::at(source.location())
+                });
+                const ValueId expected{state.nextValue++};
+                currentBlock(state).instructions.push_back(Instruction{
+                    .opcode = Opcode::Constant,
+                    .result = expected,
+                    .resultType = usizeType,
+                    .literal = static_cast<std::uint64_t>(matchCase.bindings.size()),
+                    .source = SourceSpan::at(source.location())
+                });
+                return appendBinaryValue(
+                    BinaryOperator::Equal,
+                    length,
+                    expected,
+                    result_.module_.types.boolType(),
+                    source,
+                    state);
+            }
+
+            if (matchCase.variantName != "Some" && matchCase.variantName != "None" &&
+                matchCase.variantName != "Ok" && matchCase.variantName != "Err")
+            {
+                report(
+                    "WIR2316",
+                    "Typed WIR does not recognize destructuring variant '" + matchCase.variantName + "'.",
+                    &source);
+                return {};
+            }
+
+            const ValueId result{state.nextValue++};
+            currentBlock(state).instructions.push_back(Instruction{
+                .opcode = Opcode::VariantTest,
+                .result = result,
+                .resultType = result_.module_.types.boolType(),
+                .operands = {subject},
+                .selector = matchCase.variantName,
+                .source = SourceSpan::at(source.location())
+            });
+            return result;
+        }
+
+        bool buildMatchBindings(
+            const MatchCase& matchCase,
+            const ValueId subject,
+            FunctionState& state,
+            std::unordered_map<const sema::Symbol*, ValueId>* captured = nullptr)
+        {
+            for (std::size_t index = 0; index < matchCase.bindings.size(); ++index)
+            {
+                const auto& binding = matchCase.bindings[index];
+                const Ref<sema::Symbol> symbol = binding ? binding->referencedSymbol.Lock() : nullptr;
+                if (!symbol)
+                {
+                    report("WIR2319", "Match binding is missing its semantic symbol.", binding.Get());
+                    return false;
+                }
+
+                const TypeId bindingType = mapType(symbol->type, binding.Get());
+                if (!bindingType)
+                    return false;
+                const ValueId value{state.nextValue++};
+                currentBlock(state).instructions.push_back(Instruction{
+                    .opcode = matchCase.variantName == "__array"
+                        ? Opcode::ArrayElement
+                        : Opcode::VariantPayload,
+                    .result = value,
+                    .resultType = bindingType,
+                    .operands = {subject},
+                    .selector = matchCase.variantName,
+                    .projectionIndex = static_cast<std::uint32_t>(index),
+                    .source = SourceSpan::at(binding->location())
+                });
+                state.values[symbol.Get()] = value;
+                if (captured)
+                    (*captured)[symbol.Get()] = value;
+            }
+            return true;
+        }
+
         void buildMatchCaseTests(
             const MatchCase& matchCase,
             const ValueId subject,
@@ -894,18 +988,6 @@ namespace wio::wir::typed
                 report("WIR2315", "Match expression requires at least one case.", &expression);
                 return {};
             }
-            for (const MatchCase& matchCase : expression.cases)
-            {
-                if (!matchCase.variantName.empty())
-                {
-                    report(
-                        "WIR2316",
-                        "Typed WIR match currently supports literal, range, guard, and assumed cases; destructuring patterns require the data-model lowering.",
-                        &expression);
-                    return {};
-                }
-            }
-
             const TypeId resultType = mapType(expression.refType.Lock(), &expression);
             const Type* resultTypeInfo = result_.module_.types.tryGet(resultType);
             if (!resultTypeInfo)
@@ -960,8 +1042,24 @@ namespace wio::wir::typed
             }
             const bool hasAssumed = std::ranges::any_of(
                 expression.cases,
-                [](const MatchCase& matchCase) { return matchCase.matchValues.empty(); });
-            if (producesValue || hasAssumed)
+                [](const MatchCase& matchCase)
+                {
+                    return matchCase.matchValues.empty() && matchCase.variantName.empty();
+                });
+            const auto hasUnguardedVariant = [&](const std::string_view name)
+            {
+                return std::ranges::any_of(
+                    expression.cases,
+                    [&](const MatchCase& matchCase)
+                    {
+                        return matchCase.variantName == name && !matchCase.guard;
+                    });
+            };
+            const bool hasExhaustiveDestructuring =
+                (hasUnguardedVariant("Some") && hasUnguardedVariant("None")) ||
+                (hasUnguardedVariant("Ok") && hasUnguardedVariant("Err"));
+            const bool closesUnmatchedPath = hasAssumed || hasExhaustiveDestructuring;
+            if (producesValue || closesUnmatchedPath)
             {
                 currentBlockAt(state, unmatchedBlockIndex).instructions.push_back(Instruction{
                     .opcode = Opcode::Unreachable,
@@ -983,7 +1081,9 @@ namespace wio::wir::typed
                 const BlockId nextCase = index + 1 < expression.cases.size()
                     ? currentBlockAt(state, caseEntryIndices[index + 1]).id
                     : currentBlockAt(state, unmatchedBlockIndex).id;
-                const bool assumed = matchCase.matchValues.empty();
+                const bool destructuring = !matchCase.variantName.empty();
+                const bool assumed = matchCase.matchValues.empty() && !destructuring;
+                std::unordered_map<const sema::Symbol*, ValueId> caseBindings;
 
                 FunctionState testState = state;
                 testState.blockIndex = caseEntryIndices[index];
@@ -1007,11 +1107,32 @@ namespace wio::wir::typed
                             testState, "match.case." + std::to_string(index) + ".guard", SourceSpan::at(matchCase.guard->location()));
                         successTarget = currentBlockAt(testState, *guardBlockIndex).id;
                     }
-                    buildMatchCaseTests(
-                        matchCase, subject, subjectType, successTarget, nextCase, testState);
+                    if (destructuring)
+                    {
+                        const ValueId matched = buildDestructuringMatchTest(
+                            matchCase, subject, *matchCase.body.Get(), testState);
+                        if (!matched)
+                            return {};
+                        currentBlock(testState).instructions.push_back(Instruction{
+                            .opcode = Opcode::CondBranch,
+                            .operands = {matched},
+                            .targets = {successTarget, nextCase},
+                            .source = SourceSpan::at(matchCase.body->location())
+                        });
+                    }
+                    else
+                    {
+                        buildMatchCaseTests(
+                            matchCase, subject, subjectType, successTarget, nextCase, testState);
+                    }
                     if (guardBlockIndex)
                     {
                         testState.blockIndex = *guardBlockIndex;
+                        if (destructuring &&
+                            !buildMatchBindings(matchCase, subject, testState, &caseBindings))
+                        {
+                            return {};
+                        }
                         const ValueId guard = buildExpression(matchCase.guard, testState);
                         if (!guard)
                             return {};
@@ -1030,6 +1151,17 @@ namespace wio::wir::typed
                 bodyState.blockIndex = caseBodyIndices[index];
                 bodyState.values = incomingValues;
                 bodyState.valueOrder = incomingOrder;
+                if (destructuring)
+                {
+                    if (matchCase.guard)
+                    {
+                        bodyState.values.insert(caseBindings.begin(), caseBindings.end());
+                    }
+                    else if (!buildMatchBindings(matchCase, subject, bodyState))
+                    {
+                        return {};
+                    }
+                }
                 if (producesValue)
                 {
                     const auto* expressionBody = matchCase.body->as<ExpressionStatement>();
@@ -1049,7 +1181,7 @@ namespace wio::wir::typed
                 state.nextBlock = bodyState.nextBlock;
             }
 
-            if (!producesValue && !hasAssumed)
+            if (!producesValue && !closesUnmatchedPath)
             {
                 FunctionState unmatchedState = state;
                 unmatchedState.blockIndex = unmatchedBlockIndex;

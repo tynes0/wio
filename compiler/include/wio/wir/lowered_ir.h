@@ -19,6 +19,10 @@ namespace wio::wir::lowered
         Binary,
         Convert,
         Call,
+        VariantTest,
+        VariantPayload,
+        ArrayLength,
+        ArrayElement,
         Return,
         Jump,
         CondJump,
@@ -51,6 +55,8 @@ namespace wio::wir::lowered
         typed::UnaryOperator unaryOperator = typed::UnaryOperator::Negate;
         typed::BinaryOperator binaryOperator = typed::BinaryOperator::Add;
         typed::ConversionKind conversionKind = typed::ConversionKind::NumericWiden;
+        std::string selector;
+        std::uint32_t projectionIndex = 0;
         SourceSpan source;
     };
 

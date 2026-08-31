@@ -12,7 +12,9 @@ namespace wio::wir::typed
     {
         return opcode == Opcode::Constant || opcode == Opcode::Unary ||
                opcode == Opcode::Binary || opcode == Opcode::Convert ||
-               opcode == Opcode::Call || opcode == Opcode::Select;
+               opcode == Opcode::Call || opcode == Opcode::VariantTest ||
+               opcode == Opcode::VariantPayload || opcode == Opcode::ArrayLength ||
+               opcode == Opcode::ArrayElement || opcode == Opcode::Select;
     }
 
     std::string_view opcodeName(const Opcode opcode)
@@ -24,6 +26,10 @@ namespace wio::wir::typed
         case Opcode::Binary: return "binary";
         case Opcode::Convert: return "convert";
         case Opcode::Call: return "call";
+        case Opcode::VariantTest: return "variant-test";
+        case Opcode::VariantPayload: return "variant-payload";
+        case Opcode::ArrayLength: return "array-length";
+        case Opcode::ArrayElement: return "array-element";
         case Opcode::Select: return "select";
         case Opcode::Return: return "return";
         case Opcode::Branch: return "branch";

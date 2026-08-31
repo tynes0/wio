@@ -57,6 +57,10 @@ namespace wio::wir::typed
         Binary,
         Convert,
         Call,
+        VariantTest,
+        VariantPayload,
+        ArrayLength,
+        ArrayElement,
         // SSA value selection. All operands are already evaluated, so builders
         // may only use this for side-effect-free alternatives.
         Select,
@@ -95,6 +99,8 @@ namespace wio::wir::typed
         UnaryOperator unaryOperator = UnaryOperator::Negate;
         BinaryOperator binaryOperator = BinaryOperator::Add;
         ConversionKind conversionKind = ConversionKind::NumericWiden;
+        std::string selector;
+        std::uint32_t projectionIndex = 0;
         SourceSpan source;
     };
 

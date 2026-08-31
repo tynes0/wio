@@ -121,6 +121,21 @@ namespace wio::wir::lowered
                 }
                 stream << ")";
                 break;
+            case Opcode::VariantTest:
+                stream << "variant-test " << valueRef(instruction.operands.at(0)) << ", "
+                       << std::quoted(instruction.selector);
+                break;
+            case Opcode::VariantPayload:
+                stream << "variant-payload " << valueRef(instruction.operands.at(0)) << ", "
+                       << std::quoted(instruction.selector) << ", " << instruction.projectionIndex;
+                break;
+            case Opcode::ArrayLength:
+                stream << "array-length " << valueRef(instruction.operands.at(0));
+                break;
+            case Opcode::ArrayElement:
+                stream << "array-element " << valueRef(instruction.operands.at(0)) << ", "
+                       << instruction.projectionIndex;
+                break;
             case Opcode::Return:
                 stream << "return";
                 if (!instruction.operands.empty())

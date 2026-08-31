@@ -31,6 +31,10 @@ namespace wio::wir
             case typed::Opcode::Binary: opcode = lowered::Opcode::Binary; break;
             case typed::Opcode::Convert: opcode = lowered::Opcode::Convert; break;
             case typed::Opcode::Call: opcode = lowered::Opcode::Call; break;
+            case typed::Opcode::VariantTest: opcode = lowered::Opcode::VariantTest; break;
+            case typed::Opcode::VariantPayload: opcode = lowered::Opcode::VariantPayload; break;
+            case typed::Opcode::ArrayLength: opcode = lowered::Opcode::ArrayLength; break;
+            case typed::Opcode::ArrayElement: opcode = lowered::Opcode::ArrayElement; break;
             case typed::Opcode::Return: opcode = lowered::Opcode::Return; break;
             case typed::Opcode::Unreachable: opcode = lowered::Opcode::Unreachable; break;
             case typed::Opcode::Select:
@@ -48,6 +52,8 @@ namespace wio::wir
                 .unaryOperator = instruction.unaryOperator,
                 .binaryOperator = instruction.binaryOperator,
                 .conversionKind = instruction.conversionKind,
+                .selector = instruction.selector,
+                .projectionIndex = instruction.projectionIndex,
                 .source = instruction.source
             };
         }
